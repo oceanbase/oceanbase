@@ -8,11 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE
-#include "storage/ls/ob_ls_reserved_snapshot_mgr.h"
-#include "storage/tx_storage/ob_ls_handle.h"
+#include "ob_ls_reserved_snapshot_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "logservice/ob_log_base_type.h"
-#include "logservice/ob_log_base_header.h"
 
 namespace oceanbase
 {
@@ -26,7 +23,7 @@ ObLSReservedSnapshotMgr::ObLSReservedSnapshotMgr()
    allocator_("ResvSnapMgr"),
    min_reserved_snapshot_(0),
    next_reserved_snapshot_(0),
-   snapshot_lock_(),
+   snapshot_lock_(ObLatchIds::LS_RESERVED_SNAPSHOT_LOCK),
    sync_clog_lock_(),
    ls_(nullptr),
    ls_handle_(),
@@ -113,7 +110,9 @@ int ObLSReservedSnapshotMgr::del_dependent_medium_tablet(const ObTabletID tablet
     if (OB_FAIL(dependent_tablet_set_.erase_refactored(tablet_id.id()))) {
       LOG_WARN("failed to erase tablet id", K(ret), "ls_id", ls_->get_ls_id(),
           K(tablet_id), K(dependent_tablet_set_.size()), KP(this));
-    } else if (0 == dependent_tablet_set_.size() && next_reserved_snapshot_ > 0) {
+    } else if (0 == dependent_tablet_set_.size()
+        && next_reserved_snapshot_ > 0
+        && next_reserved_snapshot_ > min_reserved_snapshot_) {
       min_reserved_snapshot_ = next_reserved_snapshot_;
       new_snapshot_version = next_reserved_snapshot_;
       next_reserved_snapshot_ = 0;
@@ -154,6 +153,7 @@ int ObLSReservedSnapshotMgr::submit_log(
   return ret;
 }
 
+// called by ObTenantFreezeInfoMgr, sync clog in Timer
 int ObLSReservedSnapshotMgr::update_min_reserved_snapshot_for_leader(const int64_t new_snapshot_version)
 {
   int ret = OB_SUCCESS;
@@ -163,19 +163,19 @@ int ObLSReservedSnapshotMgr::update_min_reserved_snapshot_for_leader(const int64
     LOG_WARN("ObLSReservedSnapshotMgr is not inited", K(ret), KP(ls_));
   } else {
     common::TCWLockGuard lock_guard(snapshot_lock_);
-    if (0 == dependent_tablet_set_.size()) {
-      if (new_snapshot_version < min_reserved_snapshot_) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("failed to update min reserved snapshot", K(ret), "ls_id", ls_->get_ls_id(),
-          K(new_snapshot_version), K(min_reserved_snapshot_));
-      } else if (new_snapshot_version > min_reserved_snapshot_) {
+    if (new_snapshot_version < min_reserved_snapshot_) {
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_WARN("failed to update min reserved snapshot", K(ret), "ls_id", ls_->get_ls_id(),
+        K(new_snapshot_version), K(min_reserved_snapshot_));
+    } else if (0 == dependent_tablet_set_.size()) { // no dependent tablet, can push snapshot forward
+      if (new_snapshot_version > min_reserved_snapshot_) {
         // update min_reserved_snapshot and send clog
         min_reserved_snapshot_ = new_snapshot_version;
         next_reserved_snapshot_ = 0;
         send_log_flag = true;
       }
     } else if (new_snapshot_version > next_reserved_snapshot_) {
-      // wait for next call
+      // have dependent tablet, record in next_reserved_snapshot_, to sync later
       next_reserved_snapshot_ = new_snapshot_version;
     }
   } // end of lock
@@ -204,7 +204,9 @@ int ObLSReservedSnapshotMgr::try_sync_reserved_snapshot(
     LOG_WARN("invalid argument", K(ret), K(new_reserved_snapshot));
   } else if (update_flag) {
     if (OB_FAIL(update_min_reserved_snapshot_for_leader(new_reserved_snapshot))) {
-      LOG_WARN("failed to update min_reserved_snapshot", K(ret), "ls_id", ls_->get_ls_id(), K(new_reserved_snapshot));
+      if (OB_SNAPSHOT_DISCARDED != ret) {
+        LOG_WARN("failed to update min_reserved_snapshot", K(ret), "ls_id", ls_->get_ls_id(), K(new_reserved_snapshot));
+      }
     }
   } else if (OB_FAIL(sync_clog(new_reserved_snapshot))) {
     LOG_WARN("failed to send update reserved snapshot log", K(ret), K(new_reserved_snapshot));

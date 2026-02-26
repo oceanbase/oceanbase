@@ -36,26 +36,41 @@ class ObIODevice;
  */
 struct ObIOFd
 {
-  ObIOFd(ObIODevice *device_handle = nullptr, const int64_t first_id = -1, const int64_t second_id = -1);
+  ObIOFd(ObIODevice *device_handle = nullptr, const int64_t first_id = -1,
+      const int64_t second_id = -1, const int64_t third_id = -1,
+      const int64_t fd_id_ = -1, const int64_t slot_version= -1);
   bool is_super_block() const { return 0 == first_id_ && 0 == second_id_; }
+  bool is_tiered_super_block() const { return 0 == first_id_ && 2 == second_id_; }
   bool is_normal_file() const { return NORMAL_FILE_ID == first_id_ && second_id_ > 0; }
   bool is_block_file() const { return first_id_ != NORMAL_FILE_ID; }
+  bool is_backup_block_file() const;
   void reset();
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator == (const ObIOFd& other) const
   {
-    return other.first_id_ == this->first_id_ && other.second_id_ == this->second_id_ && other.device_handle_ == this->device_handle_;
+    return other.first_id_ == this->first_id_ && other.second_id_ == this->second_id_ && other.third_id_ == this->third_id_
+        && other.fd_id_ == this->fd_id_ && other.slot_version_ == this->slot_version_
+        && other.device_handle_ == this->device_handle_;
   }
   bool operator != (const ObIOFd& other) const
   {
-    return other.first_id_ != this->first_id_ || other.second_id_ != this->second_id_ || other.device_handle_ != this->device_handle_;
+    return other.first_id_ != this->first_id_ || other.second_id_ != this->second_id_ || other.third_id_ != this->third_id_
+        || other.fd_id_ != this->fd_id_ || other.slot_version_ != this->slot_version_
+        || other.device_handle_ != this->device_handle_;
   }
   bool is_valid() const;
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(first_id), K_(second_id), KP_(device_handle));
+  TO_STRING_KV(K_(first_id), K_(second_id), K_(third_id), K_(fd_id), K_(slot_version), KP_(device_handle));
   static const int64_t NORMAL_FILE_ID = 0xFFFFFFFFFFFFFFFF;// all of bit is one.
+  static const int64_t BACKUP_BLOCK_ID_MODE_FIELD_MASK = 0xFF;
+  static const int64_t BACKUP_BLOCK_ID_MODE_SHIFT_SIZE= 52LL;
+  static const int64_t BACKUP_BLOCK_ID_MODE = 1LL;
   int64_t first_id_;
   int64_t second_id_;
+  int64_t third_id_;
+  int64_t fd_id_; // used for fd simulator
+  int64_t slot_version_;  // used for fd simulator
   ObIODevice *device_handle_; // no need to serialize
 };
 
@@ -165,11 +180,27 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObIOCBPool);
 };
 
+enum ObIOCBType : uint8_t
+{
+  IOCB_TYPE_LOCAL = 0,
+  IOCB_TYPE_LOCAL_CACHE = 1,
+  IOCB_TYPE_OBJECT_DEVICE = 2
+};
+
 class ObIOCB
 {
 public:
   ObIOCB() = default;
   virtual ~ObIOCB() = default;
+  virtual ObIOCBType get_type() const = 0;
+  virtual void set_is_retry(const bool is_retry) { UNUSED(is_retry); }
+  virtual void get_is_retry(bool &is_retry) { UNUSED(is_retry); }
+};
+
+enum ObIOContextType : uint8_t
+{
+  IO_CONTEXT_TYPE_LOCAL = 0,
+  IO_CONTEXT_TYPE_LOCAL_CACHE = 1
 };
 
 class ObIOContext
@@ -177,6 +208,14 @@ class ObIOContext
 public:
   ObIOContext() = default;
   virtual ~ObIOContext() = default;
+  virtual ObIOContextType get_type() const = 0;
+};
+
+enum ObIOEventsType : uint8_t
+{
+  IO_EVENTS_TYPE_LOCAL = 0,
+  IO_EVENTS_TYPE_LOCAL_CACHE = 1,
+  IO_EVENTS_TYPE_OBJECT_DEVICE = 2
 };
 
 class ObIOEvents
@@ -184,6 +223,7 @@ class ObIOEvents
 public:
   ObIOEvents() : max_event_cnt_(0) {}
   virtual ~ObIOEvents() {}
+  virtual ObIOEventsType get_type() const = 0;
   virtual int64_t get_complete_cnt() const = 0;
   virtual int get_ith_ret_code(const int64_t i) const = 0;
   virtual int get_ith_ret_bytes(const int64_t i) const = 0;
@@ -318,11 +358,12 @@ public:
 class ObIODevice
 {
 public:
-  ObIODevice() : device_type_(OB_STORAGE_MAX_TYPE), media_id_(0) {}
+  ObIODevice() : device_type_(OB_STORAGE_MAX_TYPE), media_id_(0), ref_cnt_(0) {}
   virtual ~ObIODevice() {}
   virtual int init(const ObIODOpts &opts) = 0;
   virtual int reconfig(const ObIODOpts &opts) = 0;
   virtual int get_config(ObIODOpts &opts) = 0;
+  int get_device_name(char *buf, int32_t len);
   virtual void destroy() = 0;
 
   virtual int start(const ObIODOpts &opts) = 0;
@@ -336,6 +377,8 @@ public:
   virtual int mkdir(const char *pathname, mode_t mode) = 0;
   virtual int rmdir(const char *pathname) = 0;
   virtual int unlink(const char *pathname) = 0;
+  virtual int batch_del_files(
+      const ObIArray<ObString> &files_to_delete, ObIArray<int64_t> &failed_files_idx) = 0;
   virtual int rename(const char *oldpath, const char *newpath) = 0;
   virtual int seal_file(const ObIOFd &fd) = 0;
   virtual int scan_dir(const char *dir_name, int (*func)(const dirent *entry)) = 0;
@@ -396,6 +439,21 @@ public:
     const int64_t size,
     int64_t &write_size) = 0;
 
+  virtual int upload_part(
+    const ObIOFd &fd,
+    const char *buf,
+    const int64_t size,
+    const int64_t part_id,
+    int64_t &write_size) = 0;
+  virtual int buf_append_part(
+    const ObIOFd &fd,
+    const char *buf,
+    const int64_t size,
+    const uint64_t tenant_id,
+    bool &is_full) = 0;
+  virtual int get_part_id(const ObIOFd &fd, bool &is_exist, int64_t &part_id) = 0;
+  virtual int get_part_size(const ObIOFd &fd, const int64_t part_id, int64_t &part_size) = 0;
+
   //async io interfaces
   virtual int io_setup(
     uint32_t max_events,
@@ -426,7 +484,7 @@ public:
     int64_t min_nr,
     ObIOEvents *events,
     struct timespec *timeout) = 0;
-  virtual ObIOCB *alloc_iocb() = 0;
+  virtual ObIOCB *alloc_iocb(const uint64_t tenant_id) = 0;
   virtual ObIOEvents *alloc_io_events(const uint32_t max_events) = 0;
   virtual void free_iocb(ObIOCB *iocb) = 0;
   virtual void free_io_events(ObIOEvents *io_event) = 0;
@@ -437,15 +495,45 @@ public:
   virtual int64_t get_max_block_size(int64_t reserved_size) const = 0;
   virtual int64_t get_max_block_count(int64_t reserved_size) const = 0;
   virtual int64_t get_reserved_block_count() const = 0;
-  virtual int check_space_full(const int64_t required_size) const = 0;
+  virtual int check_space_full(
+    const int64_t required_size,
+    const bool alarm_if_space_full = true) const = 0;
   virtual int check_write_limited() const = 0;
+
+  // ref cnt
+  virtual void inc_ref();
+  virtual void dec_ref();
+  virtual int64_t get_ref_cnt();
+
+  OB_INLINE bool is_object_device() const
+  {
+    return (ObStorageType::OB_STORAGE_OSS == device_type_)
+           || (ObStorageType::OB_STORAGE_S3 == device_type_)
+           || (ObStorageType::OB_STORAGE_FILE == device_type_)
+           || (ObStorageType::OB_STORAGE_AZBLOB == device_type_)
+           || (ObStorageType::OB_STORAGE_HDFS == device_type_);
+  }
+
+  OB_INLINE bool is_local_device() const
+  {
+    return (ObStorageType::OB_STORAGE_LOCAL == device_type_);
+  }
+
+  virtual bool should_limit_net_bandwidth() const
+  {
+    return false;
+  }
+
+  virtual int64_t get_io_aligned_size() const = 0;
+  TO_STRING_KV(K_(device_type), K_(media_id), K_(ref_cnt));
 
 public:
   ObStorageType device_type_;
   int64_t media_id_;
-};
 
-extern ObIODevice *THE_IO_DEVICE;
+protected:
+  int64_t ref_cnt_;
+};
 
 }
 }

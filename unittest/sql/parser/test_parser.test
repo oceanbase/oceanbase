@@ -191,7 +191,6 @@ create tenant if not exists tt1 replica_num = 1, primary_zone = 'zone1', resourc
 select /*+max_concurrent(-10)*/* from t1;
 select /*+max_concurrent(10)*/* from t1;
 
-alter system refresh time_zone_info;
 
 ########################## test for hierarchical query ###################################
 
@@ -266,23 +265,14 @@ alter system refresh time_zone_info;
 
 
 ######################## test for merge stmt ####################################
---error 5001
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
---error 5001
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t2.id!= t1.id when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
---error 5001
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id < 3 delete where t1.id < 5 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
---error 5001
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales delete where t1.sales =2 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
---error 5001
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
---error 5001
 merge into targetTable t1 using sourceTable t2 on (1 = 2) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
---error 5001
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales;
---error 5001
 merge into targetTable using sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
---error 5001
 merge into targetTable using (select * from t1 ) sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
 
 select unique(c1), c2 from t1;
@@ -313,3 +303,44 @@ alter system cancel transfer partition ALL;
 alter system cancel transfer partition ALL tenant 'mysql';
 alter system cancel balance job;
 alter system cancel balance job tenant 'mysql';
+
+
+
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3 tenant='mysql_tenant';
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3;
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001';
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F';
+
+alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3 tenant='mysql_tenant';
+alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3;
+alter system remove replica ls=100 server='100.88.107.212:5000';
+
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3 tenant='mysql_tenant';
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3;
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F';
+
+alter system modify ls=100 paxos_replica_num=3 tenant='mysql_tenant';
+alter system modify ls=100 paxos_replica_num=3;
+
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001' tenant='mysql_tenant';
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001';
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000';
+
+alter system cancel replica task task_id = 'xxx' tenant='mysql_tenant';
+alter system cancel replica task task_id = 'xxx';
+alter system create ls unit_group 1001, primary_zone 'z1';
+alter system modify ls 1001 unit_group 1001, primary_zone  'z1';
+alter system drop ls 1001;
+
+########################## test for CNNOP ###################################
+--sql_mode oracle
+select 'hello' || 'world' from dual;
+select col1 || col2 from test_table;
+select  'prefix_' || column_name || '_suffix' from test_table;
+select  ('prefix_' || column_name) || '_suffix' from test_table;
+
+--sql_mode PIPES_AS_CONCAT
+select 'hello' || 'world';
+select col1 || col2 from test_table;
+select 'prefix_' || column_name || '_suffix' from test_table;
+select  ('prefix_' || column_name) || '_suffix' from test_table;

@@ -37,10 +37,19 @@ public:
                                       ObEvalCtx &ctx,
                                       const ObBitVector &skip,
                                       const EvalBound &bound);
+  static int calc_oracle_length_vector(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      const ObBitVector &skip,
+                                      const EvalBound &bound);
 
 private:
   template <typename ArgVec, typename ResVec>
   static int calc_mysql_length_vector_dispatch(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      const ObBitVector &skip,
+                                      const EvalBound &bound);
+  template <typename ArgVec, typename ResVec>
+  static int calc_oracle_length_vector_dispatch(const ObExpr &expr,
                                       ObEvalCtx &ctx,
                                       const ObBitVector &skip,
                                       const EvalBound &bound);

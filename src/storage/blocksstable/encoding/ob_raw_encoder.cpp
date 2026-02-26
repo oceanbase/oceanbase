@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_raw_encoder.h"
-#include "ob_bit_stream.h"
 
 namespace oceanbase
 {
@@ -129,6 +128,7 @@ int ObRawEncoder::traverse(const bool force_var_store, bool &suitable)
       case ObTextSC:
       case ObJsonSC:
       case ObGeometrySC:
+      case ObRoaringBitmapSC:
       case ObOTimestampSC:
       case ObIntervalSC: {
           if (force_var_store || fix_data_size_ < 0) {
@@ -218,6 +218,7 @@ int ObRawEncoder::get_var_length(const int64_t row_id, int64_t &length)
         case ObTextSC:
         case ObJsonSC:
         case ObGeometrySC:
+        case ObRoaringBitmapSC:
         case ObOTimestampSC:
         case ObIntervalSC: {
           length = datum.len_;

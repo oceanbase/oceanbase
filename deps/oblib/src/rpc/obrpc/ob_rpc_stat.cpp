@@ -11,9 +11,6 @@
  */
 
 #include "ob_rpc_stat.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/ob_errno.h"
-#include "lib/lock/ob_mutex.h"
 
 using namespace oceanbase;
 using namespace oceanbase::rpc;

@@ -16,12 +16,9 @@
 
 #include "obcdc_main.h"
 #include "ob_log_instance.h"    // ObLogInstance
-#include "share/ob_time_zone_info_manager.h"              // FETCH_TZ_INFO_SQL
 #include "ob_log_trans_ctx.h"
 
-#include <stdio.h>        // fprintf
 #include <getopt.h>       // getopt_long
-#include <stdlib.h>       // strtoull
 
 #define LOG_STD(str, ...) \
   do { \
@@ -406,7 +403,7 @@ void ObLogMain::run()
         if (OB_SUCC(ret)) {
           if (OB_UNLIKELY(delay_release_)) {
             static const int64_t delay_release_time = 200; // 200 us, output 5K RPS at most
-            usleep(delay_release_time);
+            ob_usleep(delay_release_time);
           }
           obcdc_instance_->release_record(br);
           br = NULL;

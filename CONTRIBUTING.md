@@ -49,15 +49,25 @@ And there are some CI checks to pass before your pull request can be merged. Cur
 > Note: If the farm failed and you think it is not related to your changes, you can ask the reviewer to re-run the farm or the reviewer will re-run the farm.
 
 ### The Flow After Your Pull Request is Merged
-In default, the pull request is merged into develop branch which is the default branch of [oceanbase](https://github.com/oceanbase/oceanabse). We will merge develop into master branch periodically. So if you want to get the latest code, you can pull the master branch.
+In default, the pull request is merged into develop branch which is the default branch of [oceanbase](https://github.com/oceanbase/oceanbase). We will merge develop into master branch periodically. So if you want to get the latest code, you can pull the master branch.
 
 ## Feature Developing
 If you want to develop a new feature, you should create a [discussion](https://github.com/oceanbase/oceanbase/discussions/new/choose) first. If your idea is accepted, you can create a new issue and start to develop your feature and we will create a feature branch for you. After you finish your feature, you can create a pull request to merge your feature branch into oceanbase feature branch. The flow like below.
 
 1. Create a [discussion](https://github.com/oceanbase/oceanbase/discussions/new/choose)
 2. Create a new issue
-3. Create a new feature branch on [oceanabse](https://github.com/oceanbase/oceanbase) for your feature
+3. Create a new feature branch on [oceanbase](https://github.com/oceanbase/oceanbase) for your feature
 4. Make your changes and commit them
 5. Push your changes to your fork
 6. Create a pull request to merge your code into feature branch
 7. After your pull request is merged, we will merge your feature branch into master
+
+## Code Style Guidelines
+
+When contributing code, please follow these guidelines:
+
+- Follow the existing code style and formatting conventions
+- Write clear and descriptive commit messages
+- Add comments for complex logic or algorithms
+- Ensure your code compiles without warnings
+- Update relevant documentation if your changes affect user-facing features

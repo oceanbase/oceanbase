@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/ob_lease_state_mgr.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_global_merge_table_operator.h"
-#include "share/ob_zone_merge_table_operator.h"
-#include "share/ob_zone_merge_info.h"
-#include "share/rc/ob_tenant_base.h"
+#include "ob_lease_state_mgr.h"
 #include "observer/ob_server.h"
-#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"

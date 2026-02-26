@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/backup/ob_archive_scheduler_service.h"
 #include "rootserver/backup/ob_tenant_archive_scheduler.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_unit_manager.h"
-#include "storage/tx/ob_ts_mgr.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/thread/ob_thread_name.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/backup/ob_tenant_archive_round.h"
+#include "share/ob_ddl_common.h"
 
 using namespace oceanbase;
 using namespace rootserver;
@@ -71,7 +65,7 @@ void ObArchiveSchedulerService::run2()
 {
   int tmp_ret = OB_SUCCESS;
   int64_t round = 0;
-  share::ObLogArchiveStatus::STATUS last_log_archive_status = ObLogArchiveStatus::INVALID;
+  ObArchiveRoundState round_state;
 
   FLOG_INFO("ObArchiveSchedulerService run start");
   if (IS_NOT_INIT) {
@@ -80,18 +74,19 @@ void ObArchiveSchedulerService::run2()
   } else {
     while (true) {
       ++round;
+      round_state.set_invalid();
       ObCurTraceId::init(GCONF.self_addr_);
       FLOG_INFO("start do ObArchiveSchedulerService round", K(round));
       if (has_set_stop()) {
         tmp_ret = OB_IN_STOP_STATE;
         LOG_WARN_RET(tmp_ret, "exit for stop state", K(tmp_ret));
         break;
-      } else if (OB_SUCCESS != (tmp_ret = process_())) {
+      } else if (OB_SUCCESS != (tmp_ret = process_(round_state))) {
         LOG_WARN_RET(tmp_ret, "failed to do process", K(tmp_ret));
       }
 
-      int64_t checkpoint_interval = 1 * 1000 * 1000L;
-      set_checkpoint_interval_(checkpoint_interval);
+      int64_t checkpoint_interval = 120 * 1000 * 1000L;
+      set_checkpoint_interval_(checkpoint_interval, round_state);
       idle();
     }
   }
@@ -259,7 +254,7 @@ int ObArchiveSchedulerService::stop_tenant_archive_(const uint64_t tenant_id)
   return ret;
 }
 
-int ObArchiveSchedulerService::process_()
+int ObArchiveSchedulerService::process_(ObArchiveRoundState &round_state)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -271,6 +266,7 @@ int ObArchiveSchedulerService::process_()
   const bool lock = false;
   bool no_dest = false;
   bool no_round = false;
+  round_state.set_invalid();
 
   ObArchiveHandler tenant_scheduler;
   const uint64_t tenant_id = tenant_id_;
@@ -307,6 +303,8 @@ int ObArchiveSchedulerService::process_()
       no_round =  true;
       ret = OB_SUCCESS;
     }
+  } else {
+    round_state = round.state_;
   }
 
   if (OB_FAIL(ret)) {
@@ -315,17 +313,23 @@ int ObArchiveSchedulerService::process_()
     if (no_round || round.state_.is_stop() || round.state_.is_stopping()) {
     } else if (OB_FAIL(tenant_scheduler.disable_archive(dest_no))) {
       LOG_WARN("failed to disable archive", K(ret), K(tenant_id), K(dest_no), K(dest_state));
+    } else {
+      round_state.set_stopping();
     }
   } else if (dest_state.is_defer()) {
     if (no_round || round.state_.is_stop() || round.state_.is_suspend() || round.state_.is_suspending()) {
     } else if (OB_FAIL(tenant_scheduler.defer_archive(dest_no))) {
       LOG_WARN("failed to defer archive", K(ret), K(tenant_id), K(dest_no), K(dest_state));
+    } else {
+      round_state.set_suspending();
     }
   } else {
     // dest is enable
     if (no_round || round.state_.is_suspend() || round.state_.is_stop()) {
       if (OB_FAIL(tenant_scheduler.enable_archive(dest_no))) {
         LOG_WARN("failed to enable archive", K(ret), K(tenant_id), K(dest_no), K(dest_state));
+      } else {
+        round_state.set_beginning();
       }
     }
   }
@@ -352,6 +356,8 @@ int ObArchiveSchedulerService::get_all_tenant_ids_(common::ObIArray<uint64_t> &t
       // do nothing
     } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
       LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(tenant_info)) { //skip
+      LOG_INFO("tenant schema is null, skip tenant which may has been dropped", K(tenant_id));
     } else if (tenant_info->is_restore()) {
       // skip restoring tenant
       LOG_INFO("skip tenant which is doing restore", K(tenant_id));
@@ -369,20 +375,31 @@ int ObArchiveSchedulerService::get_all_tenant_ids_(common::ObIArray<uint64_t> &t
   return ret;
 }
 
-void ObArchiveSchedulerService::set_checkpoint_interval_(const int64_t interval_us)
+void ObArchiveSchedulerService::set_checkpoint_interval_(const int64_t interval_us, const share::ObArchiveRoundState &round_state)
 {
-  const int64_t max_idle_us = interval_us / 2 - RESERVED_FETCH_US;
+  int64_t max_idle_us = interval_us / 2 - RESERVED_FETCH_US;
   int64_t idle_time_us = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  const int64_t lag_target = tenant_config.is_valid() ? tenant_config->archive_lag_target : 0L;
+
   if (interval_us <= 0) {
     idle_time_us = MAX_IDLE_INTERVAL_US;
   } else {
     if (max_idle_us <= MIN_IDLE_INTERVAL_US) {
-      idle_time_us = MIN_IDLE_INTERVAL_US;
+      idle_time_us = max(MIN_IDLE_INTERVAL_US, lag_target / 2);
     } else if (max_idle_us > MAX_IDLE_INTERVAL_US) {
-      idle_time_us = MAX_IDLE_INTERVAL_US;
+      idle_time_us = min(MAX_IDLE_INTERVAL_US, max(lag_target / 2, MIN_IDLE_INTERVAL_US));
     } else {
       idle_time_us = max_idle_us;
     }
+  }
+
+  if (idle_time_us > FAST_IDLE_INTERVAL_US
+    && (round_state.is_prepare()
+      || round_state.is_beginning()
+      || round_state.is_suspending()
+      || round_state.is_stopping())) {
+    idle_time_us = FAST_IDLE_INTERVAL_US;
   }
 
   if (idle_time_us != get_idle_time()) {
@@ -413,6 +430,8 @@ int ObArchiveSchedulerService::open_archive_mode(const uint64_t tenant_id, const
     } else {
       if (OB_FAIL(open_tenant_archive_mode_(archive_tenant_ids))) {
         LOG_WARN("failed to open archive mode for indicated tenants", K(ret), K(archive_tenant_ids));
+      } else if (1 == archive_tenant_ids.count()) {
+        notify_start_archive_(archive_tenant_ids.at(0));
       }
     }
   } else {
@@ -422,6 +441,8 @@ int ObArchiveSchedulerService::open_archive_mode(const uint64_t tenant_id, const
       LOG_WARN("normal tenant can only open archive mode for itself.", K(ret), K(tenant_id), K(archive_tenant_ids));
     } else if (OB_FAIL(open_tenant_archive_mode_(tenant_id))) {
       LOG_WARN("failed to open archive mode", K(ret), K(tenant_id));
+    } else {
+      notify_start_archive_(tenant_id);
     }
   }
 
@@ -434,6 +455,17 @@ int ObArchiveSchedulerService::open_tenant_archive_mode_(
 
   // TODO(wangxiaohui.wxh):4.3, return failed if any tenant failed
   int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids_array.count(); i++) {
+    bool is_no_logging = false;
+    const uint64_t &tenant_id = tenant_ids_array.at(i);
+    if (OB_FAIL(ObDDLUtil::get_no_logging_param(tenant_id, is_no_logging))) {
+      LOG_WARN("fail to check tenant no logging param", K(ret), K(tenant_id));
+    } else if (is_no_logging) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("is not allow to set archive when in no logging mode", K(ret), K(tenant_id));
+    }
+  }
+
   for (int64_t i = 0; i < tenant_ids_array.count(); i++) {
     int tmp_ret = OB_SUCCESS;
     const uint64_t &tenant_id = tenant_ids_array.at(i);
@@ -448,7 +480,16 @@ int ObArchiveSchedulerService::open_tenant_archive_mode_(const uint64_t tenant_i
 {
   int ret = OB_SUCCESS;
   ObArchiveHandler tenant_scheduler;
-  if (OB_FAIL(tenant_scheduler.init(tenant_id, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  bool is_no_logging = false;
+  if (OB_FAIL(ObDDLUtil::get_no_logging_param(tenant_id, is_no_logging))) {
+    LOG_WARN("fail to check tenant no logging param", K(ret), K(tenant_id));
+  } else if (is_no_logging) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("is not allow to set archive when in no logging mode", K(ret), K(tenant_id));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tenant_scheduler.init(tenant_id, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init tenant archive scheduler", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_scheduler.open_archive_mode())) {
     LOG_WARN("failed to open archive mode", K(ret), K(tenant_id));
@@ -478,6 +519,8 @@ int ObArchiveSchedulerService::close_archive_mode(
     } else {
       if (OB_FAIL(close_tenant_archive_mode_(archive_tenant_ids))) {
         LOG_WARN("failed to close archive mode for indicated tenants", K(ret), K(archive_tenant_ids));
+      } else if (1 == archive_tenant_ids.count()) {
+        notify_start_archive_(archive_tenant_ids.at(0));
       }
     }
   } else {
@@ -487,6 +530,8 @@ int ObArchiveSchedulerService::close_archive_mode(
       LOG_WARN("normal tenant can only close archive mode for itself.", K(ret), K(tenant_id), K(archive_tenant_ids));
     } else if (OB_FAIL(close_tenant_archive_mode_(tenant_id))) {
       LOG_WARN("failed to close archive mode", K(ret), K(tenant_id));
+    } else {
+      notify_start_archive_(tenant_id);
     }
   }
 
@@ -516,4 +561,22 @@ int ObArchiveSchedulerService::close_tenant_archive_mode_(const uint64_t tenant_
     LOG_WARN("failed to close archive mode", K(ret), K(tenant_id));
   }
   return ret;
+}
+
+void ObArchiveSchedulerService::notify_start_archive_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  common::ObAddr leader_addr;
+  obrpc::ObNotifyStartArchiveArg arg;
+  arg.set_tenant_id(tenant_id);
+
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc proxy or location service is null", KR(ret), KP(GCTX.srv_rpc_proxy_), KP(GCTX.location_service_));
+  } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
+              GCONF.cluster_id, gen_meta_tenant_id(tenant_id), ObLSID(ObLSID::SYS_LS_ID), leader_addr))) {
+    LOG_WARN("failed to get meta tenant leader address", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).by(tenant_id).notify_start_archive(arg))) {
+    LOG_WARN("failed to notify tenant archive scheduler service", KR(ret), K(leader_addr), K(tenant_id), K(arg));
+  }
 }

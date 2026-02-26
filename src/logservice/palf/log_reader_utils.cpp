@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_utility.h"
 #include "share/rc/ob_tenant_base.h"
 #include "log_define.h"
 #include "log_reader_utils.h"

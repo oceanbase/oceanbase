@@ -10,15 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define USING_LOG_PREFIX SERVER
 #define protected public
 #define private public
 
 #include "env/ob_fast_bootstrap.h"
 #include "env/ob_multi_replica_util.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "storage/tx/ob_dup_table_lease.h"
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::storage;
@@ -50,6 +47,8 @@ public:
     TRANS_LOG(INFO, "[ObMultiReplicaTestBase] invoke test on_failure", K(ret), KP(this));
     return ret;
   }
+  const char *get_cb_name() const override { return "TestExtraLogCb"; }
+
 };
 
 void submit_ddl_redo_log(transaction::ObPartTransCtx *tx_ctx)

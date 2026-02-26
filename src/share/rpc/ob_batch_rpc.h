@@ -368,16 +368,10 @@ public:
       while (nullptr != buffer_map_ && !buffer_map_->is_empty()) {
         RpcBuffer* iter = NULL;
         if (NULL != (iter = buffer_map_->quick_next(iter))) {
-          int cnt = 0;
-          while (iter->send(*rpc_, iter->get_tenant_id(), self_, 0 == cnt) > 0) {
-            cnt++;
-          }
-          if (iter->is_empty()) {
-            RpcBuffer cur_key(iter->get_tenant_id(), iter->get_server(), iter->get_dst_cluster_id(), 0, 0, 0);
-            RpcBuffer* cur_buf = NULL;
-            if (0 == buffer_map_->del(&cur_key, cur_buf)) {
-              destroy_buffer(cur_buf);
-            }
+          RpcBuffer cur_key(iter->get_tenant_id(), iter->get_server(), iter->get_dst_cluster_id(), 0, 0, 0);
+          RpcBuffer* cur_buf = NULL;
+          if (0 == buffer_map_->del(&cur_key, cur_buf)) {
+            destroy_buffer(cur_buf);
           }
         }
       }

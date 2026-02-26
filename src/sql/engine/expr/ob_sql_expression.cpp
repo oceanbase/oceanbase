@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_sql_expression.h"
-#include "lib/utility/utility.h"
-#include "lib/allocator/ob_cached_allocator.h"
-#include "lib/alloc/malloc_hook.h"
 #include "sql/parser/ob_item_type_str.h"
-#include "sql/engine/ob_phy_operator_type.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase

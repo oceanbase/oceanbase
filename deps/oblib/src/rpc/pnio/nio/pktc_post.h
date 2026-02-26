@@ -15,6 +15,7 @@ static pktc_sk_t* pktc_do_connect(pktc_t* cl, addr_t dest) {
   ef(!(sk = pktc_sk_new(&cl->sf)));
   sk->pc = cl;
   sk->dest = dest;
+  sk->peer = dest;
   ef((sk->fd = async_connect(dest, cl->dispatch_id)) < 0);
   rk_info("sk_new: sk=%p, fd=%d", sk, sk->fd);
   ef(eloop_regist(cl->ep, (sock_t*)sk, EPOLLIN|EPOLLOUT));
@@ -39,7 +40,8 @@ static pktc_sk_t* pktc_try_connect(pktc_t* cl, addr_t dest) {
   }
   return sk;
   el();
-  rk_warn("sk create fail: %s sk=%p", T2S(addr, dest), sk);
+  char dest_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
+  rk_warn("sk create fail: %s sk=%p", addr_str(dest, dest_addr_buf, sizeof(dest_addr_buf)), sk);
   if (sk) {
     pktc_sk_destroy(&cl->sf, sk);
   }
@@ -55,7 +57,6 @@ static int pktc_wq_push_pre(write_queue_t* wq, pktc_req_t* r) {
       rk_warn("too many requests in pktc write queue, wq_cnt=%ld, wq_sz=%ld, categ_id=%ld, categ_cnt=%d, socket=(ptr=%p,fd=%d)",
         wq->cnt, wq->sz, r->categ_id, bucket[id], r->sk, r->sk->fd);
     }
-    err = PNIO_DISPATCH_ERROR;
   }
   return err;
 }

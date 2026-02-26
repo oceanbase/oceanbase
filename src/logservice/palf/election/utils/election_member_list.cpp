@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_occam_time_guard.h"
 #include "election_member_list.h"
 #include "election_common_define.h"
 

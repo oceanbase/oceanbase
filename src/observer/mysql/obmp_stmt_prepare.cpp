@@ -14,25 +14,10 @@
 
 #include "observer/mysql/obmp_stmt_prepare.h"
 
-#include "lib/worker.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_session_stat.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/packet/ompk_prepare.h"
+#include "deps/oblib/src/rpc/obmysql/packet/ompk_prepare.h"
 #include "rpc/obmysql/packet/ompk_field.h"
-#include "observer/mysql/ob_mysql_result_set.h"
-#include "observer/mysql/ob_async_plan_driver.h"
-#include "observer/mysql/ob_sync_cmd_driver.h"
-#include "observer/mysql/ob_sync_plan_driver.h"
-#include "rpc/obmysql/obsm_struct.h"
 #include "observer/omt/ob_tenant.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/ob_sql_context.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
-#include "observer/ob_req_time_service.h"
-#include "observer/mysql/obmp_utils.h"
 
 namespace oceanbase
 {
@@ -191,6 +176,7 @@ int ObMPStmtPrepare::process()
     int64_t sys_version = 0;
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     int64_t packet_len = pkt.get_clen();
+    const bool enable_flt = session.get_control_info().is_valid();
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(sql), K(ret));
@@ -199,7 +185,7 @@ int ObMPStmtPrepare::process()
     } else if (OB_UNLIKELY(session.is_zombie())) {
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(sql),
-               K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+               K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
     } else if (OB_FAIL(session.get_query_timeout(query_timeout))) {
       LOG_WARN("fail to get query timeout", K_(sql), K(ret));
     } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
@@ -220,17 +206,24 @@ int ObMPStmtPrepare::process()
       ret = OB_ERR_NET_PACKET_TOO_LARGE;
       need_disconnect = false;
       LOG_WARN("packet too large than allowd for the session", K_(sql), K(ret));
+    } else if (OB_FAIL(session.check_tenant_status())) {
+      need_disconnect = false;
+      LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()));
     } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
-                            conn->proxy_cap_flags_.is_full_link_trace_support()))) {
+                            conn->proxy_cap_flags_.is_full_link_trace_support(),
+                            enable_flt))) {
       LOG_WARN("failed to init flt extra info", K(ret));
     } else {
-      FLTSpanGuard(ps_prepare);
-      FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(),
-                    receive_ts, get_receive_timestamp(),
-                    client_info, session.get_client_info(),
-                    module_name, session.get_module_name(),
-                    action_name, session.get_action_name(),
-                    sess_id, session.get_sessid());
+      FLTSpanGuardIfEnable(ps_prepare, enable_flt);
+      if (enable_flt) {
+        char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+        FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
+                      receive_ts, get_receive_timestamp(),
+                      client_info, session.get_client_info(),
+                      module_name, session.get_module_name(),
+                      action_name, session.get_action_name(),
+                      sess_id, session.get_server_sid());
+      }
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       retry_ctrl_.set_tenant_global_schema_version(tenant_version);
       retry_ctrl_.set_sys_global_schema_version(sys_version);
@@ -294,7 +287,6 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
   int64_t sys_version = 0;
   setup_wb(session);
 
-  ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var faield.", K(ret), K(multi_stmt_item));
   } else {
@@ -348,7 +340,7 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
   //清空WARNING BUFFER
-  tmp_ret = do_after_process(session, ctx_, async_resp_used);
+  tmp_ret = do_after_process(session, async_resp_used);
   tmp_ret = record_flt_trace(session);
   // need_response_error这个变量保证仅在
   // do { do_process } while(retry) 之前出错才会
@@ -398,10 +390,12 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  ObExecutingSqlStatRecord sqlstat_record;
   audit_record.try_cnt_++;
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit = GCONF.enable_sql_audit
                                 && session.get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat = session.is_sqlstat_enabled();
   single_process_timestamp_ = ObTimeUtility::current_time();
   bool is_diagnostics_stmt = false;
   bool need_response_error = true;
@@ -415,12 +409,16 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
   ObReqTimeGuard req_timeinfo_guard;
   SMART_VAR(ObMySQLResultSet, result, session, THIS_WORKER.get_allocator()) {
     ObWaitEventStat total_wait_desc;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     {
-      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
-      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
       if (enable_perf_event) {
-        audit_record.exec_record_.record_start(di);
+        audit_record.exec_record_.record_start();
+      }
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_start_value();
+        sqlstat_record.set_is_in_retry(session.get_is_in_retry());
+        session.sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
       result.set_has_more_result(has_more_result);
       ObTaskExecutorCtx *task_ctx = result.get_exec_context().get_task_executor_ctx();
@@ -488,21 +486,39 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
           bool first_record = (1 == audit_record.try_cnt_);
           ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
           audit_record.exec_timestamp_.update_stage_time();
-
-          if (enable_perf_event) {
-            audit_record.exec_record_.record_end(di);
-            audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-            audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-            audit_record.update_event_stage_state();
-            if (!THIS_THWORKER.need_retry()) {
-              const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
-              EVENT_INC(SQL_PS_PREPARE_COUNT);
-              EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
-            }
-          }
         }
       }
     } // diagnose end
+
+    if (enable_perf_event) {
+      audit_record.exec_record_.record_end();
+      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.update_event_stage_state();
+      if (!THIS_THWORKER.need_retry()) {
+        const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+        EVENT_INC(SQL_PS_PREPARE_COUNT);
+        EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
+      }
+    }
+    if (enable_sqlstat) {
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
+      sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+      sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
+      sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
+      sqlstat_record.set_is_muti_query(session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+      if (OB_NOT_NULL(session.get_cur_exec_ctx()) && OB_NOT_NULL(session.get_cur_exec_ctx()->get_sql_ctx())) {
+        sqlstat_record.set_is_muti_query_batch(session.get_cur_exec_ctx()->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt());
+      }
+      if (OB_NOT_NULL(result.get_physical_plan())) {
+        sqlstat_record.set_is_full_table_scan(result.get_physical_plan()->contain_table_scan());
+      }
+      sqlstat_record.set_is_failed(0 != ret && OB_ITER_END != ret);
+      sqlstat_record.move_to_sqlstat_cache(result.get_session(),
+                                                 ctx_.cur_sql_,
+                                                 result.get_physical_plan());
+    }
 
     // 重试需要满足一下条件：
     // 1. rs.open 执行失败

@@ -44,9 +44,8 @@ int64_t ObRawExprPrintVisitor::to_string(char* buf, const int64_t buf_len) const
 int ObRawExprPrintVisitor::visit(ObConstRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf_, buf_len_, pos_, "%s(%s)",
-                              get_type_name(expr.get_expr_type()),
-                              S(expr.get_value())))) {
+  if (OB_FAIL(databuff_print_multi_objs(buf_, buf_len_, pos_,
+      get_type_name(expr.get_expr_type()), "(", expr.get_value(), ")"))) {
     LOG_WARN("databuff print failed", K(ret));
   }
   return ret;
@@ -180,6 +179,16 @@ int ObRawExprPrintVisitor::visit(ObSetOpRawExpr &expr)
 }
 
 int ObRawExprPrintVisitor::visit(ObMatchFunRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(databuff_printf(buf_, buf_len_, pos_, "%s<%ld>|", get_type_name(expr.get_expr_type()),
+                              expr.get_param_count()))) {
+    LOG_WARN("databuff setop failed", K(ret));
+  }
+  return ret;
+}
+
+int ObRawExprPrintVisitor::visit(ObUnpivotRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(databuff_printf(buf_, buf_len_, pos_, "%s<%ld>|", get_type_name(expr.get_expr_type()),

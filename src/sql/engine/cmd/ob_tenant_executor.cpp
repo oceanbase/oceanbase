@@ -13,19 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_tenant_executor.h"
 
-#include "lib/container/ob_se_array_iterator.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "share/ob_unit_getter.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/ls/ob_ls_operator.h"
-#include "share/ob_leader_election_waiter.h"
-#include "share/ls/ob_ls_status_operator.h"       //ObLSStatusInfo, ObLSStatusOperator
-#include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
-#include "sql/session/ob_sql_session_info.h"
+#include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "sql/resolver/ddl/ob_create_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_drop_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_lock_tenant_stmt.h"
@@ -34,13 +22,11 @@
 #include "sql/resolver/ddl/ob_purge_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/resolver/cmd/ob_create_restore_point_stmt.h"
 #include "sql/resolver/cmd/ob_drop_restore_point_stmt.h"
-#include "sql/engine/expr/ob_expr_frame_info.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "share/ls/ob_ls_status_operator.h"
+#include "rootserver/ob_tenant_ddl_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -90,7 +76,7 @@ int ObCreateTenantExecutor::execute(ObExecContext &ctx, ObCreateTenantStmt &stmt
   } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed");
-  } else if (OB_FAIL(common_rpc_proxy->create_tenant(create_tenant_arg, tenant_id))) {
+  } else if (OB_FAIL(ObTenantDDLService::schedule_create_tenant(create_tenant_arg, tenant_id))) {
     LOG_WARN("rpc proxy create tenant failed", K(ret));
   } else if (!create_tenant_arg.if_not_exist_ && OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
@@ -250,7 +236,7 @@ int ObCreateStandbyTenantExecutor::execute(ObExecContext &ctx, ObCreateTenantStm
   } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed");
-  } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.check_can_create_standby_tenant(
+  } else if (OB_FAIL(OB_STANDBY_SERVICE.check_can_create_standby_tenant(
                          create_tenant_arg.log_restore_source_, compat_mode))) {
     LOG_WARN("check can create standby_tenant failed", KR(ret), K(create_tenant_arg));
   } else {
@@ -258,13 +244,13 @@ int ObCreateStandbyTenantExecutor::execute(ObExecContext &ctx, ObCreateTenantStm
   }
 
   if (OB_FAIL(ret)){
-  } else if (OB_FAIL(common_rpc_proxy->create_tenant(create_tenant_arg, tenant_id))) {
+  } else if (OB_FAIL(ObTenantDDLService::schedule_create_tenant(create_tenant_arg, tenant_id))) {
     LOG_WARN("rpc proxy create tenant failed", K(ret));
   } else if (!create_tenant_arg.if_not_exist_ && OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("if_not_exist not set and tenant_id invalid tenant_id", KR(ret), K(create_tenant_arg), K(tenant_id));
   } else if (OB_INVALID_ID != tenant_id) {
-    if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.wait_create_standby_tenant_end(tenant_id))) {
+    if (OB_FAIL(OB_STANDBY_SERVICE.wait_create_standby_tenant_end(tenant_id))) {
       LOG_WARN("failed to wait user create end", KR(ret), K(tenant_id));
     }
   }
@@ -482,7 +468,7 @@ int modify_progressive_merge_num_for_tenant(ObExecContext &ctx,
               if (table->is_tmp_table()) {
                 do_alter = false;
               }
-              if (table->get_table_id() == OB_ALL_CORE_TABLE_TID) {
+              if (is_hardcode_schema_table(table->get_table_id())) {
                 do_alter = false;
               }
               if (table->get_progressive_merge_num() == progressive_merge_num) {
@@ -611,7 +597,7 @@ int enable_extended_rowid_for_tenant_tables(ObExecContext &ctx, const int64_t te
               const ObTableSchema *table = tables.at(j);
               if (table->is_in_recyclebin()) {
                 // do nothing
-              } else if (OB_ALL_CORE_TABLE_TID == table->get_table_id()) {
+              } else if (is_hardcode_schema_table(table->get_table_id())) {
                 // do nothing
               } else if (!table->has_rowid()) {
                 // do nothing
@@ -701,8 +687,10 @@ int ObModifyTenantExecutor::execute(ObExecContext &ctx, ObModifyTenantStmt &stmt
         LOG_WARN("modify_progressive_merge_num_for_tables failed", K(ret));
       }
     } else if (OB_ISNULL(tenant_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("error unexpected, tenant schema must not be NULL", KR(ret));
+      ret = OB_TENANT_NOT_EXIST;
+      LOG_WARN("tenant not exist", K(ret), "tenant_name", modify_tenant_arg.tenant_schema_.get_tenant_name_str());
+      LOG_USER_ERROR(OB_TENANT_NOT_EXIST, modify_tenant_arg.tenant_schema_.get_tenant_name_str().length(),
+                   modify_tenant_arg.tenant_schema_.get_tenant_name_str().ptr());
     } else if (OB_FAIL(modify_progressive_merge_num_for_tenant(ctx, tenant_schema->get_tenant_id(), stmt.get_progressive_merge_num()))) {
       LOG_WARN("fail to modify progressive merge num for tenant", K(ret), "tenant_id", tenant_schema->get_tenant_id());
     }

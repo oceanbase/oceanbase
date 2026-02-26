@@ -14,7 +14,6 @@
 
 #include "rootserver/parallel_ddl/ob_tablet_balance_allocator.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
-#include "share/ob_share_util.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::lib;

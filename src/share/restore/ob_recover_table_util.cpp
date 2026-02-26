@@ -12,9 +12,6 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/restore/ob_recover_table_util.h"
 #include "share/ob_cluster_version.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_errno.h"
 #include "lib/worker.h"
 
 using namespace oceanbase;

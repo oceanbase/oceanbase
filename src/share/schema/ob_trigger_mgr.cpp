@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_trigger_mgr.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/ob_debug_sync.h"
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {

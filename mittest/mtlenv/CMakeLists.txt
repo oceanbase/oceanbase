@@ -4,6 +4,7 @@ storage_unittest(test_tx_data_table)
 #storage_unittest(test_multi_tenant test_multi_tenant.cpp)
 storage_unittest(test_buffer_ctx_node test_buffer_ctx_node.cpp)
 ob_unittest(test_htable_lock test_htable_lock.cpp)
+storage_unittest(test_vector_index_adaptor test_vector_index_adaptor.cpp)
 
 add_subdirectory(storage)
 add_subdirectory(tablelock)

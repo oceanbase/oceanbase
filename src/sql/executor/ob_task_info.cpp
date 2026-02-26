@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/executor/ob_task_info.h"
+#include "ob_task_info.h"
 #include "sql/executor/ob_task_spliter.h"
 
 using namespace oceanbase::common;
@@ -100,9 +99,12 @@ int ObGranuleTaskInfo::assign(const ObGranuleTaskInfo &other)
       LOG_WARN("assign ranges_ failed", K(ret));
     } else if (OB_FAIL(ss_ranges_.assign(other.ss_ranges_))) {
       LOG_WARN("assign ss_ranges_ failed", K(ret));
+    } else if (OB_FAIL(scan_tasks_.assign(other.scan_tasks_))) {
+      LOG_WARN("assign scan_tasks_ failed", K(ret));
     } else {
       tablet_loc_ = other.tablet_loc_;
       task_id_ = other.task_id_;
+      granule_type_ = other.granule_type_;
     }
   }
   return ret;

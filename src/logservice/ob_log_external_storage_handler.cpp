@@ -11,24 +11,25 @@
  */
 
 #include "ob_log_external_storage_handler.h"
-#include "lib/string/ob_string.h"                                 // ObString
-#include "lib/stat/ob_latch_define.h"                             // LOG_EXTERNAL_STORAGE_HANDLER_LOCK
-#include "share/rc/ob_tenant_base.h"                              // MTL_NEW
-#include "ob_log_external_storage_io_task.h"                      // ObLogExternalStorageIOTask
+#include "share/backup/ob_backup_io_adapter.h"                                // ObBackupIoAdapter
+#include "ob_log_external_storage_utils.h"                                    // get_and_init_io_device
 
 namespace oceanbase
 {
-namespace logservice
-{
 using namespace common;
 
+using namespace share;
+namespace logservice
+{
+using namespace palf;
 const int64_t ObLogExternalStorageHandler::CONCURRENCY_LIMIT = 128;
 const int64_t ObLogExternalStorageHandler::DEFAULT_RETRY_INTERVAL = 2 * 1000;
 const int64_t ObLogExternalStorageHandler::DEFAULT_TIME_GUARD_THRESHOLD = 2 * 1000;
 const int64_t ObLogExternalStorageHandler::DEFAULT_PREAD_TIME_GUARD_THRESHOLD = 100 * 1000;
 const int64_t ObLogExternalStorageHandler::DEFAULT_RESIZE_TIME_GUARD_THRESHOLD = 100 * 1000;
 const int64_t ObLogExternalStorageHandler::CAPACITY_COEFFICIENT = 64;
-const int64_t ObLogExternalStorageHandler::SINGLE_TASK_MINIMUM_SIZE = 2 * 1024 * 1024;
+int64_t ObLogExternalStorageHandler::SINGLE_TASK_MINIMUM_SIZE = 2 * 1024 * 1024;
+const int64_t ObLogExternalStorageHandler::DEFAULT_PRINT_INTERVAL = 5 * 1000 * 1000;
 
 ObLogExternalStorageHandler::ObLogExternalStorageHandler()
     : concurrency_(-1),
@@ -36,6 +37,8 @@ ObLogExternalStorageHandler::ObLogExternalStorageHandler()
       resize_rw_lock_(common::ObLatchIds::LOG_EXTERNAL_STORAGE_HANDLER_RW_LOCK),
       construct_async_task_lock_(common::ObLatchIds::LOG_EXTERNAL_STORAGE_HANDLER_LOCK),
       handle_adapter_(NULL),
+      read_size_("ReadSize", DEFAULT_PRINT_INTERVAL),
+      read_cost_("ReadCost", DEFAULT_PRINT_INTERVAL),
       is_running_(false),
       is_inited_(false)
 {}
@@ -51,12 +54,9 @@ int ObLogExternalStorageHandler::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "ObLogExternalStorageHandler inited twice", KPC(this));
-  } else if (NULL == (handle_adapter_ = MTL_NEW(ObLogExternalStorageIOTaskHandleAdapter, "ObLogEXTHandler"))) {
+  } else if (NULL == (handle_adapter_ = MTL_NEW(ObLogExternalStorageHandleAdapter, "ObLogEXTHandler"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "allocate memory failed");
-  } else if (FALSE_IT(share::ObThreadPool::set_run_wrapper(MTL_CTX()))) {
-  } else if (OB_FAIL(ObSimpleThreadPool::init(1, CAPACITY_COEFFICIENT * 1, "ObLogEXTTP", MTL_ID()))) {
-    CLOG_LOG(WARN, "invalid argument", KPC(this));
   } else {
     concurrency_ = 1;
     capacity_ = CAPACITY_COEFFICIENT;
@@ -94,13 +94,10 @@ void ObLogExternalStorageHandler::stop()
 {
   WLockGuard guard(resize_rw_lock_);
   is_running_ = false;
-  ObSimpleThreadPool::stop();
 }
 
 void ObLogExternalStorageHandler::wait()
 {
-  WLockGuard guard(resize_rw_lock_);
-  ObSimpleThreadPool::wait();
 }
 
 void ObLogExternalStorageHandler::destroy()
@@ -109,12 +106,10 @@ void ObLogExternalStorageHandler::destroy()
   is_inited_ = false;
   stop();
   wait();
-  ObSimpleThreadPool::destroy();
-  lib::ThreadPool::destroy();
   concurrency_ = -1;
   capacity_ = -1;
   if (OB_NOT_NULL(handle_adapter_)) {
-    MTL_DELETE(ObLogExternalStorageIOTaskHandleIAdapter, "ObLogEXTHandler", handle_adapter_);
+    MTL_DELETE(ObLogExternalStorageHandleAdapter, "ObLogEXTHandler", handle_adapter_);
   }
   handle_adapter_ = NULL;
 }
@@ -145,7 +140,7 @@ int ObLogExternalStorageHandler::resize(const int64_t new_concurrency,
       do {
         ret = resize_(new_concurrency);
         if (OB_FAIL(ret)) {
-          usleep(DEFAULT_RETRY_INTERVAL);
+          ob_usleep(DEFAULT_RETRY_INTERVAL);
         }
       } while (OB_FAIL(ret));
       time_guard.click("after create new thread pool");
@@ -157,19 +152,24 @@ int ObLogExternalStorageHandler::resize(const int64_t new_concurrency,
 
 int ObLogExternalStorageHandler::pread(const common::ObString &uri,
                                        const common::ObString &storage_info,
+                                       const uint64_t storage_id,
                                        const int64_t offset,
                                        char *buf,
                                        const int64_t read_buf_size,
-                                       int64_t &real_read_size)
+                                       int64_t &real_read_size,
+                                       palf::LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   int64_t async_task_count = 0;
   ObTimeGuard time_guard("slow pread", DEFAULT_PREAD_TIME_GUARD_THRESHOLD);
-  ObLogExternalStorageIOTaskCtx *async_task_ctx = NULL;
   int64_t file_size = 0;
   int64_t real_read_buf_size = 0;
+  ObLogExternalStorageCtx run_ctx;
+  real_read_size = 0;
   RLockGuard guard(resize_rw_lock_);
   time_guard.click("after hold by lock");
+  CONSUMER_GROUP_FUNC_GUARD(io_ctx.get_function_type());
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObLogExternalStorageHandler not init", K(uri), K(offset), KP(buf), K(read_buf_size));
@@ -191,49 +191,22 @@ int ObLogExternalStorageHandler::pread(const common::ObString &uri,
   } else if (FALSE_IT(time_guard.click("after get file size"))) {
     // NB: limit read size.
   } else if (FALSE_IT(real_read_buf_size = std::min(file_size - offset, read_buf_size))) {
-  } else if (OB_FAIL(construct_async_tasks_and_push_them_into_thread_pool_(
-      uri, storage_info, offset, buf, real_read_buf_size, real_read_size, async_task_ctx))) {
-    CLOG_LOG(WARN, "construct_async_task_and_push_them_into_thread_pool_ failed", K(uri),
+  } else if (OB_FAIL(construct_async_pread_tasks_(
+      uri, storage_info, storage_id, offset, buf, real_read_buf_size, run_ctx))) {
+    CLOG_LOG(WARN, "construct_async_pread+task_ failed", K(uri),
              K(offset), KP(buf), K(read_buf_size));
   } else if (FALSE_IT(time_guard.click("after construct async tasks"))) {
-  } else if (OB_FAIL(wait_async_tasks_finished_(async_task_ctx))) {
-    CLOG_LOG(WARN, "wait_async_tasks_finished_ failed", K(uri),
-             K(offset), KP(buf), K(read_buf_size), KPC(async_task_ctx));
+  } else if (OB_FAIL(run_ctx.wait(real_read_size))) {
+    CLOG_LOG(WARN, "wait async tasks finished failed", K(uri),
+             K(offset), KP(buf), K(read_buf_size), K(run_ctx));
   } else if (FALSE_IT(time_guard.click("after wait async tasks"))) {
   } else {
-    // if there is a failure of any async task, return the error of it, otherwise, return OB_SUCCESS.
-    ret  = async_task_ctx->get_ret_code();
-    if (OB_FAIL(ret)) {
-      CLOG_LOG(WARN, "pread finished", K(time_guard), K(uri), K(offset), K(read_buf_size),
-               K(real_read_size));
-    } else {
-      CLOG_LOG(TRACE, "pread finished", K(time_guard), K(uri), K(offset), K(read_buf_size),
-               K(real_read_size));
-    }
-  }
-  // FIXME: consider use shared ptr.
-  if (NULL != async_task_ctx) {
-    MTL_DELETE(ObLogExternalStorageIOTaskCtx, "ObLogEXTHandler", async_task_ctx);
-    async_task_ctx = NULL;
+    read_size_.stat(real_read_size);
+    read_cost_.stat(time_guard.get_diff());
+    CLOG_LOG(TRACE, "pread finished", K(time_guard), K(uri), K(offset), K(read_buf_size),
+             K(real_read_size));
   }
   return ret;
-}
-
-void ObLogExternalStorageHandler::handle(void *task)
-{
-  int ret = OB_SUCCESS;
-  ObLogExternalStorageIOTask *io_task = reinterpret_cast<ObLogExternalStorageIOTask*>(task);
-  if (OB_ISNULL(io_task)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "io_task is nullptr, unexpected error!!!", KP(io_task), KPC(this));
-  } else if (OB_FAIL(io_task->do_task())) {
-    CLOG_LOG(WARN, "do_task failed", KP(io_task), KPC(this));
-  } else {
-    CLOG_LOG(TRACE, "do_task success", KP(io_task), KPC(this));
-  }
-  if (OB_NOT_NULL(io_task)) {
-    MTL_DELETE(ObLogExternalStorageIOTask, "ObLogEXTHandler", io_task);
-  }
 }
 
 int64_t ObLogExternalStorageHandler::get_recommend_concurrency_in_single_file() const
@@ -257,156 +230,61 @@ int64_t ObLogExternalStorageHandler::get_async_task_count_(const int64_t total_s
   return async_task_count;
 }
 
-int ObLogExternalStorageHandler::construct_async_tasks_and_push_them_into_thread_pool_(
+int ObLogExternalStorageHandler::construct_async_pread_tasks_(
     const common::ObString &uri,
     const common::ObString &storage_info,
+    const uint64_t storage_id,
     const int64_t offset,
     char *read_buf,
     const int64_t read_buf_size,
-    int64_t &real_read_size,
-    ObLogExternalStorageIOTaskCtx *&async_task_ctx)
+    ObLogExternalStorageCtx &run_ctx)
 {
   int ret = OB_SUCCESS;
   int64_t async_task_count = get_async_task_count_(read_buf_size);
   int64_t async_task_size = (read_buf_size + async_task_count - 1) / async_task_count;
   int64_t remained_task_count = async_task_count;
   int64_t remained_total_size = read_buf_size;
-  real_read_size = 0;
-  async_task_ctx = NULL;
-  if (NULL == (async_task_ctx = MTL_NEW(ObLogExternalStorageIOTaskCtx, "ObLogEXTHandler"))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    CLOG_LOG(WARN, "allocate memory failed", KP(async_task_ctx));
-  } else if (OB_FAIL(async_task_ctx->init(async_task_count))) {
-    CLOG_LOG(WARN, "init ObLogExternalStorageIOTaskCtx failed", KP(async_task_ctx), K(async_task_count));
+  if (OB_FAIL(run_ctx.init(uri, storage_info, storage_id, async_task_count, OPEN_FLAG::READ_FLAG))) {
+    CLOG_LOG(WARN, "init ObLogExternalStorageIOTaskCtx failed", K(run_ctx), K(async_task_count));
   } else {
     CLOG_LOG(TRACE, "begin construct async tasks", K(async_task_count), K(async_task_size),
              K(remained_task_count), K(remained_total_size));
     int64_t curr_read_offset = offset;
     int64_t curr_read_buf_pos = 0;
-    // construct async task and push it into thread pool, last async task will be executed in current thread.
-    ObLogExternalStorageIOTask *last_io_task = NULL;
     int64_t curr_task_idx = 0;
-    while (remained_task_count > 0) {
-      ObLogExternalStoragePreadTask *pread_task = NULL;
+    while (remained_task_count > 0 && OB_SUCC(ret)) {
+      ObLogExternalStorageCtxItem *item = NULL;
       int64_t async_task_read_buf_size = std::min(remained_total_size, async_task_size);
-      construct_async_read_task_(uri, storage_info, curr_read_offset, read_buf + curr_read_buf_pos,
-                                 async_task_read_buf_size, real_read_size, curr_task_idx,
-                                 async_task_ctx, pread_task);
-      ++curr_task_idx;
-      curr_read_offset += async_task_read_buf_size;
-      curr_read_buf_pos += async_task_read_buf_size;
-      remained_total_size -= async_task_read_buf_size;
-      last_io_task = pread_task;
-
+      if (OB_FAIL(run_ctx.get_item(curr_task_idx, item))) {
+        CLOG_LOG(WARN, "get_item failed", KR(ret), K(curr_task_idx));
+      } else if (OB_FAIL(handle_adapter_->async_pread(curr_read_offset, read_buf + curr_read_buf_pos, async_task_read_buf_size, *item))) {
+        CLOG_LOG(WARN, "async_pread failed", KR(ret), K(curr_task_idx));
+      } else if (OB_FAIL(run_ctx.inc_count())) {
+        CLOG_LOG(WARN, "inc count failed", KR(ret), K(curr_task_idx));
+      } else {
+        ++curr_task_idx;
+        curr_read_offset += async_task_read_buf_size;
+        curr_read_buf_pos += async_task_read_buf_size;
+        remained_total_size -= async_task_read_buf_size;
+        --remained_task_count;
+      }
       CLOG_LOG(TRACE, "construct async tasks idx success", K(curr_task_idx), K(async_task_count), K(async_task_size),
                K(remained_task_count), K(remained_total_size));
-
-      // NB: use current thread to execute last io task.
-      if (--remained_task_count > 0) {
-        push_async_task_into_thread_pool_(pread_task);
-      }
     }
-    // defense code, last_io_task must not be NULL.
-    if (NULL != last_io_task) {
-      (void)last_io_task->do_task();
-      MTL_DELETE(ObLogExternalStorageIOTask, "ObLogEXTHandler", last_io_task);
-      last_io_task = NULL;
+    if (OB_FAIL(ret)) {
+      int64_t unused_read_size = 0;
+      run_ctx.wait(unused_read_size);
     }
   }
   return ret;
-}
-
-int ObLogExternalStorageHandler::wait_async_tasks_finished_(
-  ObLogExternalStorageIOTaskCtx *async_task_ctx)
-{
-  int ret = OB_SUCCESS;
-  const int64_t DEFAULT_WAIT_US = 50 * 1000;
-  int64_t print_log_interval = OB_INVALID_TIMESTAMP;
-  // if async_task_ctx->wait return OB_SUCCESS, means there is no flying task.
-  while (OB_FAIL(async_task_ctx->wait(DEFAULT_WAIT_US))) {
-    if (palf::palf_reach_time_interval(500*1000, print_log_interval)) {
-      CLOG_LOG(WARN, "wait ObLogExternalStorageIOTaskCtx failed", KPC(async_task_ctx));
-    }
-  }
-  // even if wait async_task_ctx failed, there is no flying async task at here.
-  if (OB_FAIL(ret)) {
-    CLOG_LOG(WARN, "wait ObLogExternalStorageIOTaskCtx failed", KPC(async_task_ctx));
-  }
-  return ret;
-}
-
-void ObLogExternalStorageHandler::construct_async_read_task_(
-  const common::ObString &uri,
-  const common::ObString &storage_info,
-  const int64_t offset,
-  char *read_buf,
-  const int64_t read_buf_size,
-  int64_t &real_read_size,
-  const int64_t task_idx,
-  ObLogExternalStorageIOTaskCtx *async_task_ctx,
-  ObLogExternalStoragePreadTask *&pread_task)
-{
-  int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("construct pread task", DEFAULT_TIME_GUARD_THRESHOLD);
-  int64_t print_log_interval = OB_INVALID_TIMESTAMP;
-  do {
-    RunningStatus *running_status = NULL;
-    if (OB_FAIL(async_task_ctx->get_running_status(task_idx, running_status))) {
-      CLOG_LOG(ERROR, "unexpected error!!!", K(task_idx), KP(running_status), KPC(async_task_ctx));
-    } else if (NULL == (pread_task = MTL_NEW(ObLogExternalStoragePreadTask,
-                                             "ObLogEXTHandler",
-                                             uri, storage_info,
-                                             running_status,
-                                             async_task_ctx,
-                                             handle_adapter_,
-                                             offset, read_buf_size,
-                                             read_buf, real_read_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      if (palf::palf_reach_time_interval(1*1000*1000, print_log_interval)) {
-        CLOG_LOG(WARN, "allocate memory failed", K(task_idx), KP(running_status), KPC(async_task_ctx));
-      }
-    } else {
-      CLOG_LOG(TRACE, "construct_async_read_task_ success", KPC(pread_task));
-    }
-    if (OB_FAIL(ret)) {
-      usleep(DEFAULT_RETRY_INTERVAL);
-    }
-  } while (OB_FAIL(ret));
-}
-
-void ObLogExternalStorageHandler::push_async_task_into_thread_pool_(
-  ObLogExternalStorageIOTask *io_task)
-{
-  int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("push pread task", DEFAULT_TIME_GUARD_THRESHOLD);
-  int64_t print_log_interval = OB_INVALID_TIMESTAMP;
-  do {
-    if (OB_FAIL(push(io_task))) {
-      if (palf::palf_reach_time_interval(1*1000*1000, print_log_interval)) {
-        CLOG_LOG(WARN, "push task into thread pool failed");
-      }
-    }
-    if (OB_FAIL(ret)) {
-      usleep(DEFAULT_RETRY_INTERVAL);
-    }
-  } while (OB_FAIL(ret));
 }
 
 int ObLogExternalStorageHandler::resize_(const int64_t new_concurrency)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("resize impl", 10 * 1000);
   int64_t real_concurrency = MIN(new_concurrency, CONCURRENCY_LIMIT);
-  if (real_concurrency == concurrency_) {
-    CLOG_LOG(TRACE, "no need resize_", K(new_concurrency), K(real_concurrency), KPC(this));
-  } else if (OB_FAIL(ObSimpleThreadPool::set_thread_count(real_concurrency))) {
-    CLOG_LOG(WARN, "set_thread_count failed", K(new_concurrency), KPC(this), K(real_concurrency));
-  } else {
-    CLOG_LOG_RET(INFO, OB_SUCCESS, "resize_ success", K(time_guard), KPC(this), K(new_concurrency), K(real_concurrency));
-    concurrency_ = real_concurrency;
-    capacity_ = CAPACITY_COEFFICIENT * real_concurrency;
-  }
-  time_guard.click("set thread count");
+  concurrency_ = real_concurrency;
+  capacity_ = CAPACITY_COEFFICIENT * real_concurrency;
   return ret;
 }
 
@@ -414,6 +292,23 @@ bool ObLogExternalStorageHandler::check_need_resize_(const int64_t new_concurren
 {
   RLockGuard guard(resize_rw_lock_);
   return new_concurrency != concurrency_;
+}
+
+int ObLogExternalStorageHandler::convert_ret_code_(const int ret_code)
+{
+  int ret = ret_code;
+  switch (ret_code) {
+    case OB_OBJECT_STORAGE_PERMISSION_DENIED:
+    case OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH:
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
+      break;
+    case OB_OBJECT_NOT_EXIST:
+      ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
+      break;
+    default:
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
+  }
+  return ret;
 }
 
 } // end namespace logservice

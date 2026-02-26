@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include "share/ob_version.h"
+#include "share/ob_device_manager.h"
 #include "lib/file/file_directory_utils.h"
 #include "ob_storage_perf_thread.h"
 #include "lib/stat/ob_diagnose_info.h"
@@ -397,6 +398,8 @@ int run_test() {
     if(!self.set_ip_addr("127.0.0.1", 8086)){
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to set ipv4");
+    } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+      STORAGE_LOG(WARN, "fail to init device manager", K(ret));
     } else if (OB_SUCCESS != (ret = ObTenantManager::get_instance().init(self, rpc_proxy,
                                       &req_transport, &ObServerConfig::get_instance()))){
       STORAGE_LOG(WARN, "fail to init tenant manager", K(ret));

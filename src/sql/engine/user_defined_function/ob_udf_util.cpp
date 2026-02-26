@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_udf_util.h"
 #include "observer/mysql/obsm_utils.h"
-#include "lib/file/file_directory_utils.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "sql/engine/user_defined_function/ob_user_defined_function.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/ob_i_sql_expression.h"
 
 namespace oceanbase
 {
@@ -201,11 +197,11 @@ int ObUdfUtil::calc_udf_result_type(common::ObIAllocator &allocator,
         case STRING_RESULT: {
           ObExprResType calc_type;
           calc_type.set_varchar();
-          OZ(ObExprOperator::aggregate_charsets_for_string_result(
-                  calc_type, param_types + i, 1, type_ctx.get_coll_type()));
+          OZ(ObExprOperator::aggregate_charsets_for_string_result(calc_type, param_types + i, 1, type_ctx));
           if (OB_SUCC(ret)) {
             param_types[i].set_calc_type(ObVarcharType);
             param_types[i].set_calc_collation_type(calc_type.get_collation_type());
+            param_types[i].set_calc_collation_level(calc_type.get_collation_level());
           }
           break;
         }

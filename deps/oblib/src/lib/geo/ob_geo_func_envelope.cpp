@@ -13,12 +13,9 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/geo/ob_geo_bin.h"
 #include "lib/geo/ob_geo_dispatcher.h"
 #include "lib/geo/ob_geo_func_envelope.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/ob_errno.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

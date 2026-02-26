@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include "ob_log_route_struct.h"
-#include "lib/ob_define.h"    // OB_INVALID_CLUSTER_ID, OB_INVALID_TENANT_ID
-#include "logservice/common_util/ob_log_time_utils.h"
 
 namespace oceanbase
 {

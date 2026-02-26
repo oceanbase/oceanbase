@@ -11,22 +11,6 @@
  */
 
 #include "sql/ob_sql_init.h"
-#include <iterator>
-#include <sys/time.h>
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/resolver/dml/ob_update_stmt.h"
-#include "sql/resolver/dml/ob_delete_stmt.h"
-#include "sql/resolver/tcl/ob_start_trans_stmt.h"
-#include "sql/resolver/tcl/ob_end_trans_stmt.h"
-#include "sql/resolver/dcl/ob_create_user_stmt.h"
-#include "sql/resolver/dcl/ob_grant_stmt.h"
-#include "sql/resolver/dcl/ob_revoke_stmt.h"
-#include "sql/resolver/dcl/ob_drop_user_stmt.h"
-#include "sql/resolver/dcl/ob_rename_user_stmt.h"
-#include "sql/resolver/dcl/ob_set_password_stmt.h"
-#include "sql/ob_sql_define.h"
-#include "lib/string/ob_sql_string.h"
 #include "../test_sql_utils.h"
 
 using namespace oceanbase::obrpc;

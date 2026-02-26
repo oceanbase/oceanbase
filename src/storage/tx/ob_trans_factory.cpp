@@ -10,20 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_trans_factory.h"
-#include "lib/objectpool/ob_resource_pool.h"
-#include "ob_trans_rpc.h"
-#include "ob_trans_define.h"
 
-#include "ob_trans_ctx.h"
+#include "ob_trans_factory.h"
 #include "ob_trans_part_ctx.h"
-#include "ob_trans_ctx_mgr.h"
-#include "ob_trans_version_mgr.h"
-#include "lib/objectpool/ob_server_object_pool.h"
-#include "storage/tx/ob_dup_table.h"
-#include "storage/tx/ob_gts_rpc.h"
 #include "storage/tx/ob_gti_rpc.h"
-#include "storage/tx/ob_trans_end_trans_callback.h"
 #include "storage/tx/ob_leak_checker.h"
 #include "observer/ob_server.h"
 
@@ -35,6 +25,9 @@ using namespace obrpc;
 
 namespace transaction
 {
+constexpr const char SSLogModID::OB_SSLOG_UID_RPC_PROXY[];
+constexpr const char SSLogModID::OB_SSLOG_UID_REQUEST_RPC[];
+
 int64_t ObTransCtxFactory::active_coord_ctx_count_ CACHE_ALIGNED = 0;
 int64_t ObTransCtxFactory::active_part_ctx_count_ CACHE_ALIGNED = 0;
 int64_t ObTransCtxFactory::total_release_part_ctx_count_ CACHE_ALIGNED = 0;
@@ -116,7 +109,7 @@ ObTransCtx *ObTransCtxFactory::alloc(const int64_t ctx_type)
     if (ObTransCtxType::PARTICIPANT == ctx_type) {
       // During restart, the number of transaction contexts is relatively large
       // and cannot be limited, otherwise there will be circular dependencies
-      if (ATOMIC_LOAD(&active_part_ctx_count_) > MAX_PART_CTX_COUNT && GCTX.status_ == observer::SS_SERVING) {
+      if (ATOMIC_LOAD(&active_part_ctx_count_) > MAX_PART_CTX_COUNT && GCTX.status_ == ObServiceStatus::SS_SERVING) {
         TRANS_LOG_RET(ERROR, tmp_ret, "participant context memory alloc failed", K_(active_part_ctx_count));
         tmp_ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
       } else if (NULL != (ctx = mtl_sop_borrow(ObPartTransCtx))) {
@@ -253,6 +246,11 @@ MAKE_OB_ALLOC(ObGtsRpcProxy, ObModIds::OB_GTS_RPC_PROXY)
 MAKE_OB_ALLOC(ObGtsRequestRpc, ObModIds::OB_GTS_REQUEST_RPC)
 MAKE_OB_ALLOC(ObGtiRpcProxy, ObModIds::OB_GTI_RPC_PROXY)
 MAKE_OB_ALLOC(ObGtiRequestRpc, ObModIds::OB_GTI_REQUEST_RPC)
+MAKE_OB_ALLOC(ObTxCommitCallbackTask, ObModIds::OB_END_TRANS_CB_TASK)
+#ifdef OB_BUILD_SHARED_STORAGE
+MAKE_OB_ALLOC(ObSSLogUIDRpcProxy, SSLogModID::OB_SSLOG_UID_RPC_PROXY)
+MAKE_OB_ALLOC(ObSSLogUIDRequestRpc, SSLogModID::OB_SSLOG_UID_REQUEST_RPC)
+#endif
 
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ClogBuf, ObModIds::OB_TRANS_CLOG_BUF)
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(MutatorBuf, ObModIds::OB_TRANS_MUTATOR_BUF)
@@ -267,7 +265,11 @@ MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtsRpcProxy, ObModIds::OB_GTS_RPC_PR
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtsRequestRpc, ObModIds::OB_GTS_REQUEST_RPC)
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtiRpcProxy, ObModIds::OB_GTI_RPC_PROXY)
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtiRequestRpc, ObModIds::OB_GTI_REQUEST_RPC)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObTxCommitCallbackTask, ObModIds::OB_END_TRANS_CB_TASK)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObTxCommitCallbackTask, ObModIds::OB_END_TRANS_CB_TASK)
+#ifdef OB_BUILD_SHARED_STORAGE
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObSSLogUIDRpcProxy, SSLogModID::OB_SSLOG_UID_RPC_PROXY)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObSSLogUIDRequestRpc, SSLogModID::OB_SSLOG_UID_REQUEST_RPC)
+#endif
 
 void *MultiTxDataFactory::alloc(const int64_t len, const uint64_t arg1, const uint64_t arg2)
 {

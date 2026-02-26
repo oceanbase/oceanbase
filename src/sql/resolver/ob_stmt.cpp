@@ -11,19 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/ob_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/ob_stmt_resolver.h"
-//#include "sql/resolver/ob_schema_checker.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/schema/ob_column_schema.h"
-#include "sql/ob_sql_context.h"
-#include "common/ob_field.h"
+#include "ob_stmt.h"
+#include "src/sql/resolver/ob_resolver_utils.h"
 #include "sql/parser/ob_parser.h"
-#include "common/sql_mode/ob_sql_mode.h"
 
 namespace oceanbase
 {

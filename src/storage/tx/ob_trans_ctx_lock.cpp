@@ -11,9 +11,7 @@
  */
 
 #include "ob_trans_ctx_lock.h"
-#include "ob_trans_ctx.h"
 #include "ob_trans_service.h"
-#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {

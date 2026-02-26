@@ -29,7 +29,6 @@ namespace oceanbase
 namespace share
 {
 class ObIServerTrace;
-class ObCompactionTabletMetaIterator;
 namespace schema
 {
 class ObSchemaGetterGuard;
@@ -47,8 +46,39 @@ class ObMySQLProxy;
 namespace rootserver
 {
 class ObMajorMergeInfoManager;
-typedef common::hash::ObHashMap<ObTabletID, compaction::ObTabletCompactionStatus> ObTabletStatusMap;
-class ObMajorMergeProgressChecker
+typedef common::hash::ObHashMap<ObTabletID, compaction::ObTabletCompactionStatusEnum> ObTabletStatusMap;
+
+
+class ObBasicMergeProgressChecker
+{
+public:
+  ObBasicMergeProgressChecker() = default;
+  virtual ~ObBasicMergeProgressChecker() {}
+
+  virtual int init(
+      const bool is_primary_service,
+      common::ObMySQLProxy &sql_proxy,
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      share::ObIServerTrace &server_trace,
+      ObMajorMergeInfoManager &merge_info_mgr) = 0;
+  virtual int set_basic_info(
+      const share::ObFreezeInfo &freeze_info,
+      const int64_t expected_epoch) = 0;
+  virtual int clear_cached_info() = 0;
+  virtual int check_progress() = 0;
+  virtual void reset_uncompacted_tablets() {};
+  virtual int get_uncompacted_tablets(
+    common::ObArray<share::ObTabletReplica> &uncompacted_tablets,
+    common::ObArray<uint64_t> &uncompacted_table_ids) const
+  {
+    UNUSEDx(uncompacted_tablets, uncompacted_table_ids);
+    return OB_SUCCESS;
+  }
+  virtual const compaction::ObBasicMergeProgress &get_merge_progress() const = 0;
+};
+
+
+class ObMajorMergeProgressChecker final : public ObBasicMergeProgressChecker
 {
 public:
   ObMajorMergeProgressChecker(
@@ -56,21 +86,23 @@ public:
     volatile bool &stop);
   virtual ~ObMajorMergeProgressChecker() {}
 
-  int init(const bool is_primary_service,
-           common::ObMySQLProxy &sql_proxy,
-           share::schema::ObMultiVersionSchemaService &schema_service,
-           share::ObIServerTrace &server_trace,
-           ObMajorMergeInfoManager &merge_info_mgr);
+  virtual int init(
+      const bool is_primary_service,
+      common::ObMySQLProxy &sql_proxy,
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      share::ObIServerTrace &server_trace,
+      ObMajorMergeInfoManager &merge_info_mgr) override;
 
-  int set_basic_info(
-    share::SCN global_broadcast_scn,
-    const int64_t expected_epoch); // For each round major_freeze, need invoke this once.
-  int clear_cached_info();
-  int get_uncompacted_tablets(
+  virtual int set_basic_info(
+    const share::ObFreezeInfo &freeze_info,
+    const int64_t expected_epoch) override; // For each round major_freeze, need invoke this once.
+  virtual int clear_cached_info() override;
+  virtual int get_uncompacted_tablets(
     common::ObArray<share::ObTabletReplica> &uncompacted_tablets,
-    common::ObArray<uint64_t> &uncompacted_table_ids) const;
-  OB_INLINE void reset_uncompacted_tablets() { uncompact_info_.reset(); }
-  int check_progress(compaction::ObMergeProgress &progress);
+    common::ObArray<uint64_t> &uncompacted_table_ids) const override;
+  OB_INLINE virtual void reset_uncompacted_tablets() override { uncompact_info_.reset(); }
+  virtual int check_progress() override;
+  const compaction::ObBasicMergeProgress &get_merge_progress() const override { return progress_; }
   const compaction::ObTabletLSPairCache &get_tablet_ls_pair_cache() const { return tablet_ls_pair_cache_; }
 private:
   int set_table_compaction_info_status(const uint64_t table_id, const compaction::ObTableCompactionInfo::Status status);
@@ -104,13 +136,13 @@ private:
   int loop_index_ckm_validate_array();
   int update_finish_index_cnt_for_data_table(
     const uint64_t data_table_id,
-    const uint64_t finish_index_cnt,
+    const int64_t finish_index_cnt,
     bool &idx_validate_finish);
   int deal_with_validated_table(
     const uint64_t data_table_id,
     const int64_t finish_index_cnt,
     const compaction::ObTableCkmItems &data_table_ckm);
-  int deal_with_validated_data_table(const uint64_t data_table_id);
+  int rebuild_table_compaction_map(const int64_t table_id_count);
   bool should_ignore_cur_table(const ObSimpleTableSchemaV2 *simple_schema);
   int deal_with_rest_data_table();
   bool is_extra_check_round() const { return 0 == (loop_cnt_ % 8); } // check every 8 rounds
@@ -120,14 +152,15 @@ private:
     const uint64_t table_id,
     bool &is_table_valid,
     ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas);
-  int rebuild_map_by_tablet_cnt();
+  int rebuild_tablet_status_map();
   int prepare_fts_group(
     const int64_t table_id,
     const ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas);
   int handle_fts_checksum();
+  share::SCN get_compaction_scn() const { return freeze_info_.frozen_scn_; }
+  int64_t get_compaction_scn_val() const { return get_compaction_scn().get_val_for_tx(); }
 private:
   static const int64_t ADD_RS_EVENT_INTERVAL = 10L * 60 * 1000 * 1000; // 10m
-  static const int64_t PRINT_LOG_INTERVAL = 2 * 60 * 1000 * 1000; // 2m
   static const int64_t DEAL_REST_TABLE_CNT_THRESHOLD = 100;
   static const int64_t DEAL_REST_TABLE_INTERVAL = 10 * 60 * 1000 * 1000L; // 10m
   static const int64_t ASSGIN_FAILURE_RETRY_TIMES = 10;
@@ -138,7 +171,7 @@ private:
   uint8_t loop_cnt_;
   int last_errno_;
   uint64_t tenant_id_;
-  share::SCN compaction_scn_; // check merged scn
+  share::ObFreezeInfo freeze_info_;
   uint64_t expected_epoch_;
   common::ObMySQLProxy *sql_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
@@ -152,10 +185,10 @@ private:
   // record each table compaction/verify status
   compaction::ObTableCompactionInfoMap table_compaction_map_; // <table_id, compaction_info>
   ObFTSGroupArray fts_group_array_;
+  share::ObCompactionLocalityCache ls_locality_cache_;
   ObChecksumValidator ckm_validator_;
   compaction::ObUncompactInfo uncompact_info_;
   // cache of ls_infos in __all_ls_meta_table
-  share::ObCompactionLocalityCache ls_locality_cache_;
   // statistics section
   compaction::ObRSCompactionTimeGuard total_time_guard_;
   compaction::ObCkmValidatorStatistics validator_statistics_;

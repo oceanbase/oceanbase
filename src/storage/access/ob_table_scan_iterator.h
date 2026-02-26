@@ -25,9 +25,8 @@
 #include "ob_multiple_merge.h"
 #include "ob_multiple_multi_scan_merge.h"
 #include "ob_multiple_scan_merge.h"
-#include "ob_multiple_skip_scan_merge.h"
-#include "ob_multiple_multi_skip_scan_merge.h"
 #include "ob_single_merge.h"
+#include "ob_multiple_mview_merge.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx/ob_trans_service.h"
@@ -44,14 +43,15 @@ class ObISampleIterator;
 class ObMemtableRowSampleIterator;
 class ObRowSampleIterator;
 class ObBlockSampleIterator;
+class ObDDLBlockSampleIterator;
 
-class ObTableScanIterator : public common::ObNewRowIterator
+class ObTableScanIterator : public common::ObNewRowIterator, public ObStorageCheckedObjectBase
 {
 public:
   ObTableScanIterator();
   virtual ~ObTableScanIterator();
-  int init( ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle);
-  int switch_param( ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle);
+  int init(ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle, const bool need_split_dst_table = true);
+  int switch_param(ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle, const bool need_split_dst_table = true);
   int get_next_row(blocksstable::ObDatumRow *&row);
   virtual int get_next_row(common::ObNewRow *&row) override;
   virtual int get_next_row() override { blocksstable::ObDatumRow *r = nullptr; return get_next_row(r); }
@@ -65,6 +65,8 @@ public:
   // A offline ls will disable replay status and kill all part_ctx on the follower.
   // We can not read the uncommitted data which has not replay commit log yet.
   int check_ls_offline_after_read();
+  bool need_trace() const;
+  ObStorageCheckID get_check_id() const { return ObStorageCheckID::STORAGE_ITER; }
 public:
   static constexpr int64_t RP_MAX_FREE_LIST_NUM = 1024;
   static constexpr const char LABEL[] = "RPTableScanIter";
@@ -77,7 +79,7 @@ private:
   void try_release_cached_iter_node(const ObQRIterType rescan_iter_type);
   template<typename T> int init_scan_iter(T *&iter);
   template<typename T> void reset_scan_iter(T *&iter);
-  int switch_scan_param(ObMultipleMerge &iter);
+  template<typename T> int switch_scan_param(T &iter);
   void reuse_row_iters();
   int rescan_for_iter();
   int switch_param_for_iter();
@@ -97,6 +99,7 @@ private:
   int init_and_open_row_sample_iter_();
   int init_and_open_memtable_row_sample_iter_(const ObIArray<blocksstable::ObDatumRange> &scan_ranges);
   int sort_sample_ranges();
+  int set_skip_scan_range();
 
 private:
   bool is_inited_;
@@ -105,10 +108,10 @@ private:
   ObMultipleGetMerge *get_merge_;
   ObMultipleScanMerge *scan_merge_;
   ObMultipleMultiScanMerge *multi_scan_merge_;
-  ObMultipleSkipScanMerge *skip_scan_merge_;
   ObMemtableRowSampleIterator *memtable_row_sample_iterator_;
   ObRowSampleIterator *row_sample_iterator_;
   ObBlockSampleIterator *block_sample_iterator_; // TODO: @yuanzhe refactor
+  ObMviewMergeWrapper *mview_merge_wrapper_;
   // we should consider the constructor cost
   ObTableAccessParam main_table_param_;
   ObTableAccessContext main_table_ctx_;
@@ -121,6 +124,8 @@ private:
   ObSEArray<ObDatumRange, 1> sample_ranges_;
   CachedIteratorNode *cached_iter_node_;
   ObQueryRowIterator **cached_iter_;
+  ObDDLBlockSampleIterator *ddl_block_sample_iterator_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableScanIterator);
 };

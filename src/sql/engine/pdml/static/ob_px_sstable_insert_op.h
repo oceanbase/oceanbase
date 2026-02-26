@@ -20,9 +20,14 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObSSTableInsertRowIterator;
 typedef std::pair<share::ObLSID, common::ObTabletID> LSTabletIDPair;
 struct ObInsertMonitor;
+struct ObTabletSliceParam;
+class ObDirectLoadMgrAgent;
+class ObColumnClusteredDag;
+class ObISliceWriter;
+class ObHeapCsSliceWriter;
+struct ObDDLAutoincParam;
 }
 
 namespace sql
@@ -42,6 +47,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertOpInput);
 };
 
+class ObPxMultiPartSSTableInsertVecOpInput : public ObPxMultiPartSSTableInsertOpInput
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObPxMultiPartSSTableInsertVecOpInput(ObExecContext &ctx, const ObOpSpec &spec)
+    : ObPxMultiPartSSTableInsertOpInput(ctx, spec)
+  {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertVecOpInput);
+};
+
 class ObPxMultiPartSSTableInsertSpec : public ObPxMultiPartInsertSpec
 {
   OB_UNIS_VERSION_V(1);
@@ -54,7 +70,19 @@ public:
 public:
   ObExpr *flashback_query_expr_;
   bool regenerate_heap_table_pk_;
+  int64_t ddl_slice_id_idx_; // record idx of exprs for ddl slice id
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertSpec);
+};
+
+class ObPxMultiPartSSTableInsertVecSpec : public ObPxMultiPartSSTableInsertSpec
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObPxMultiPartSSTableInsertVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObPxMultiPartSSTableInsertSpec(alloc, type)
+  {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertVecSpec);
 };
 
 class ObPxMultiPartSSTableInsertOp : public ObPxMultiPartInsertOp
@@ -65,60 +93,89 @@ public:
                                ObOpInput *input)
     : ObPxMultiPartInsertOp(exec_ctx, spec, input),
       allocator_("SSTABLE_INS"),
-      participants_(),
-      tablet_store_map_(),
-      tablet_seq_caches_(),
-      curr_tablet_store_iter_(),
-      curr_tablet_idx_(-1),
-      count_rows_finish_(false),
       is_all_partition_finished_(false),
-      curr_part_idx_(0),
-      snapshot_version_(0)
+      is_partitioned_table_(false),
+      is_vec_gen_vid_(false),
+      tablet_id_expr_(nullptr),
+      slice_info_expr_(nullptr),
+      tablet_autoinc_expr_(nullptr),
+      tablet_autoinc_column_idx_(-1),
+      ddl_dag_(nullptr),
+      need_idempotent_tablet_autoinc_(false),
+      need_idempotent_table_autoinc_(false),
+      need_idempotent_doc_id_(false)
   {}
   virtual ~ObPxMultiPartSSTableInsertOp() { destroy(); }
   const ObPxMultiPartSSTableInsertSpec &get_spec() const;
   virtual int inner_open() override;
   virtual int inner_get_next_row() override;
   virtual void destroy() override;
-  int get_next_row_with_cache();
-  int get_tablet_id_from_row(const ObExprPtrIArray &row,
-                             const int64_t part_id_idx,
-                             common::ObTabletID &tablet_id);
-private:
-  struct ObLSTabletIDPairCmp final
-  {
-    public:
-      ObLSTabletIDPairCmp() { }
-      OB_INLINE bool operator() (const LSTabletIDPair &left, const LSTabletIDPair &right)
-      {
-        if (left.second == right.second) {
-          return left.first < right.first;
-        } else {
-          return left.second < right.second;
-        }
-      }
-  };
-private:
-  int get_all_rows_and_count();
-  int create_tablet_store(common::ObTabletID &tablet_id, ObChunkDatumStore *&tablet_store);
-  bool need_count_rows() const { return MY_SPEC.regenerate_heap_table_pk_ && !count_rows_finish_; }      
-  int get_next_tablet_id(common::ObTabletID &tablet_id);
-private:
-  friend class storage::ObSSTableInsertRowIterator;
+protected:
+  int get_next_row_from_child(ObInsertMonitor *insert_monitor);
+  int get_next_batch_from_child(const int64_t max_batch_size, const ObBatchRows *&brs, ObInsertMonitor *insert_monitor);
+  int get_tablet_info_from_row(
+      const ObExprPtrIArray &row,
+      common::ObTabletID &tablet_id,
+      storage::ObTabletSliceParam *tablet_slice_param = nullptr);
+  int eval_current_row(const int64_t rowkey_column_count, blocksstable::ObDatumRow &current_row);
+  int eval_current_row(ObIArray<ObDatum *> &datums, const ObTabletID &tablet_id);
+  int eval_current_batch(ObIArray<ObIVector *> &vectors, const ObBatchRows &brs);
+  int sync_table_level_autoinc_value();
+  bool is_heap_plan() const { return MY_SPEC.regenerate_heap_table_pk_ || is_vec_gen_vid_; }
+  int write_heap_slice_by_row();
+  int write_heap_slice_by_batch();
+  int write_ordered_slice_by_row();
+  int write_ordered_slice_by_batch();
+  int finish_dag();
+  bool need_autoinc_by_row();
+  int get_data_tablet_id(const ObTabletID &tablet_id, ObTabletID &data_tablet_id);
+  int sync_tablet_doc_id(ObISliceWriter *slice_writer);
+  int init_table_autoinc_param(const ObTabletID &tablet_id, const int64_t slice_idx, ObDDLAutoincParam &autoinc_param);
+  int init_tablet_autoinc_param(const ObTabletID &tablet_id, const int64_t slice_idx, ObDDLAutoincParam &autoinc_param);
+  int locate_exprs();
+  int check_need_idempotence();
+  int get_or_create_heap_writer(const ObTabletID &tablet_id, const bool is_append_batch, ObISliceWriter *&slice_writer);
+  int generate_tablet_active_rows(const ObIVector *tablet_id_vector, const ObBatchRows &brs,
+                                  hash::ObHashMap<ObTabletID, ObHeapCsSliceWriter *, hash::NoPthreadDefendMode> &slice_writer_map);
+  int switch_slice_if_need(const ObTabletID &tablet_id, const int64_t slice_idx, const bool is_append_batch,
+                           ObISliceWriter *&slice_writer, ObDDLAutoincParam *autoinc_param = nullptr);
+  int get_continue_slice(const ObIVector *tablet_id_vector, const ObIVector *slice_info_vector_, const ObBatchRows &brs,
+                         ObTabletID &tablet_id, int64_t &slice_idx, int64_t &offset, int64_t &row_count);
+
+protected:
   static const uint64_t MAP_HASH_BUCKET_NUM = 1543L;
-  static const uint64_t TABLET_STORE_MEM_LIMIT = 2 * 1024 * 1024; // 2M
-  typedef common::hash::ObHashMap<common::ObTabletID, ObChunkDatumStore*, common::hash::NoPthreadDefendMode> TabletStoreMap;
   common::ObArenaAllocator allocator_;
-  common::ObArray<LSTabletIDPair> participants_;
-  TabletStoreMap tablet_store_map_;
-  ObArray<share::ObTabletCacheInterval> tablet_seq_caches_;
-  ObChunkDatumStore::Iterator curr_tablet_store_iter_;
-  int64_t curr_tablet_idx_;
-  bool count_rows_finish_;
   bool is_all_partition_finished_;
-  int64_t curr_part_idx_;
-  int64_t snapshot_version_; // ddl snapshot version.
+  bool is_partitioned_table_;
+  // vector index
+  bool is_vec_gen_vid_;
+
+  ObTabletID non_partitioned_tablet_id_;
+  ObExpr *tablet_id_expr_; // valid when partitioned table
+  ObExpr *slice_info_expr_; // valid when ordered tablet and idempotent ddl
+  ObExpr *tablet_autoinc_expr_; // valid when heap plan
+  int64_t tablet_autoinc_column_idx_;
+  storage::ObColumnClusteredDag *ddl_dag_;
+  // for heap plan, direct write tablet
+  typedef common::hash::ObHashMap<common::ObTabletID, ObISliceWriter *, common::hash::NoPthreadDefendMode> TabletWriterMap;
+  TabletWriterMap heap_tablet_writer_map_;
+  bool need_idempotent_tablet_autoinc_;
+  bool need_idempotent_table_autoinc_;
+  bool need_idempotent_doc_id_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertOp);
+};
+
+class ObPxMultiPartSSTableInsertVecOp : public ObPxMultiPartSSTableInsertOp
+{
+public:
+  ObPxMultiPartSSTableInsertVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
+    : ObPxMultiPartSSTableInsertOp(exec_ctx, spec, input)
+  {}
+
+  virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertVecOp);
 };
 
 }// end namespace sql

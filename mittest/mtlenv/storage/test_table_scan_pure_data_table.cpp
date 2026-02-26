@@ -1,3 +1,6 @@
+// owner: gaishun.gs
+// owner group: storage
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -16,8 +19,6 @@
 #define private public
 #define protected public
 #include "storage/test_dml_common.h"
-#include "share/schema/ob_table_dml_param.h"
-#include "storage/access/ob_table_scan_iterator.h"
 #include "storage/test_tablet_helper.h"
 
 namespace oceanbase
@@ -73,7 +74,7 @@ void TestTableScanPureDataTable::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
   // MTL(transaction::ObTransService*)->tx_desc_mgr_.tx_id_allocator_ =
   //   [](transaction::ObTransID &tx_id) { tx_id = transaction::ObTransID(1001); return OB_SUCCESS; };
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 }
 
 void TestTableScanPureDataTable::TearDownTestCase()
@@ -97,7 +98,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
   ASSERT_NE(nullptr, tablet);
 
   // insert rows
-  ObMockNewRowIterator mock_iter;
+  ObMockDatumRowIterator mock_iter;
   ObSEArray<uint64_t, 512> column_ids;
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 0); // pk
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 1); // c1
@@ -105,7 +106,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 3); // c3
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 4); // c4
 
-  ASSERT_EQ(OB_SUCCESS, mock_iter.from(TestDmlCommon::data_row_str));
+  ASSERT_EQ(OB_SUCCESS, mock_iter.from_for_datum(TestDmlCommon::data_row_str));
 
   transaction::ObTransService *tx_service = MTL(transaction::ObTransService*);
   // 1. get tx desc
@@ -133,7 +134,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
   dml_param.schema_version_ = share::OB_CORE_SCHEMA_VERSION + 1;
   dml_param.tenant_schema_version_ = share::OB_CORE_SCHEMA_VERSION + 1;
   dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
-  dml_param.snapshot_ = read_snapshot;
+  ASSERT_EQ(OB_SUCCESS, dml_param.snapshot_.assign(read_snapshot));
   dml_param.store_ctx_guard_ = &store_ctx_guard;
 
   ObArenaAllocator allocator;
@@ -141,6 +142,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
 
   share::schema::ObTableSchema table_schema;
   TestDmlCommon::build_data_table_schema(tenant_id_, table_schema);
+  table_schema.set_tablet_id(tablet_id_);
 
   ObSEArray<const ObTableSchema *, 4> index_schema_array;
 
@@ -151,6 +153,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
                                                                   *tx_desc,
                                                                   read_snapshot,
                                                                   0,/*branch_id*/
+                                                                  dml_param.write_flag_,
                                                                   store_ctx_guard));
   int64_t affected_rows = 0;
   ASSERT_EQ(OB_SUCCESS, access_service->insert_rows(ls_id_, tablet_id_,
@@ -181,6 +184,7 @@ void TestTableScanPureDataTable::table_scan(
   // prepare table schema
   share::schema::ObTableSchema table_schema;
   TestDmlCommon::build_data_table_schema(tenant_id_, table_schema);
+  table_schema.set_tablet_id(tablet_id_);
 
   // 1. get tx desc
   transaction::ObTxDesc *tx_desc = nullptr;

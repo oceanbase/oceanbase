@@ -11,15 +11,9 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tenant_snapshot/ob_ls_snapshot_defs.h"
-#include "storage/tenant_snapshot/ob_tenant_snapshot_defs.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_task.h"
-#include "storage/tenant_snapshot/ob_tenant_snapshot_meta_table.h"
-#include "lib/lock/mutex.h"
 
 namespace oceanbase
 {
@@ -135,7 +129,7 @@ void ObTenantSnapshotService::wait()
 {
   int ret = OB_SUCCESS;
   while(OB_FAIL(wait_())) {
-    usleep(100000);
+    ob_usleep(100000);
   }
 }
 
@@ -252,7 +246,7 @@ int ObTenantSnapshotService::common_env_check_()
   } else if (!ATOMIC_LOAD(&is_running_)) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ObTenantSnapshotService is not running", KR(ret), KPC(this));
-  } else if (OB_UNLIKELY(!ObServerCheckpointSlogHandler::get_instance().is_started())) {
+  } else if (OB_UNLIKELY(!SERVER_STORAGE_META_SERVICE.is_started())) {
     ret = OB_NOT_RUNNING;
     LOG_INFO("ObTenantSnapshotService does not work before server slog replay finished",
         KR(ret), KPC(this));
@@ -788,6 +782,7 @@ void ObTenantSnapshotService::run1()
     {
       ObThreadCondGuard guard(cond_);
       const uint64_t idle_time = calculate_idle_time_();
+      ObBKGDSessInActiveGuard inactive_guard;
       cond_.wait(idle_time);
     }
   }

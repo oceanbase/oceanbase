@@ -12,7 +12,6 @@
 
 #include <gtest/gtest.h>
 #include "share/redolog/ob_log_local_store.h"
-#include "share/redolog/ob_log_file_reader.h"
 #include "lib/file/file_directory_utils.h"
 #include "lib/file/ob_file.h"
 #include "lib/container/ob_se_array.h"

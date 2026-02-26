@@ -15,7 +15,6 @@
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "share/ob_ddl_common.h"
 #include "sql/ob_sql_utils.h"
-#include "sql/parser/parse_node.h"
 #include "storage/ob_common_id_utils.h"
 
 namespace oceanbase
@@ -213,6 +212,8 @@ bool ObMViewExecutorUtil::is_mview_refresh_retry_ret_code(int ret_code)
 {
   return OB_OLD_SCHEMA_VERSION == ret_code || OB_EAGAIN == ret_code ||
          OB_INVALID_QUERY_TIMESTAMP == ret_code || OB_TASK_EXPIRED == ret_code ||
+         OB_REPLICA_NOT_READABLE == ret_code || OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST == ret_code ||
+         OB_SCHEMA_ERROR == ret_code ||
          is_master_changed_error(ret_code) || is_partition_change_error(ret_code) ||
          is_ddl_stmt_packet_retry_err(ret_code);
 }

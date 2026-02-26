@@ -28,6 +28,7 @@
 #include "src/storage/tx_storage/ob_ls_handle.h"
 #include "src/storage/tx_storage/ob_ls_service.h"
 #include "src/storage/tablet/ob_tablet.h"
+#include "src/storage/meta_store/ob_tenant_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -185,7 +186,7 @@ int SimpleObStorageModule::replay(const ObRedoModuleReplayParam &param)
 
   const int64_t cmd = param.cmd_;
   const char *buf = param.buf_;
-  const int64_t buf_len = param.disk_addr_.size_;
+  const int64_t buf_len = param.disk_addr_.size();
   enum ObRedoLogMainType main_type;
   enum ObRedoLogSubType sub_type;
   int64_t pos = 0;
@@ -244,13 +245,15 @@ int SimpleObStorageModule::inner_replay_empty_shell_tablet(const ObRedoModuleRep
   int64_t buf_len = 0;
   ObEmptyShellTabletLog slog;
   ObTabletTransferInfo tablet_transfer_info;
+  ObUpdateTabletPointerParam upd_tablet_ptr_param;
+  upd_tablet_ptr_param.resident_info_.addr_ = param.disk_addr_;
   if (OB_FAIL(slog.deserialize_id(param.buf_, param.disk_addr_.size(), pos))) {
     STORAGE_LOG(WARN, "failed to serialize tablet_id_", K(ret), K(param.disk_addr_.size()), K(pos));
   } else if (OB_FAIL(read_from_disk(param.disk_addr_, allocator, buf, buf_len))) {
     STORAGE_LOG(WARN, "read from disk failed", K(ret), K(param.disk_addr_), K(buf_len));
   } else if (OB_FAIL(get_tablet_svr(slog.ls_id_, ls_tablet_svr, ls_handle))) {
     STORAGE_LOG(WARN, "get tablet svr failed", K(ret), K(slog.ls_id_));
-  } else if (OB_FAIL(ls_tablet_svr->replay_create_tablet(param.disk_addr_, buf, buf_len, slog.tablet_id_, tablet_transfer_info))) {
+  } else if (OB_FAIL(ls_tablet_svr->replay_create_tablet(upd_tablet_ptr_param, buf, buf_len, slog.tablet_id_, tablet_transfer_info))) {
     STORAGE_LOG(WARN, "replay empty shell tablet failed", K(ret), K(param.disk_addr_), K(slog.tablet_id_));
   }
 
@@ -329,15 +332,14 @@ int SimpleObStorageModule::read_from_slog(const ObMetaDiskAddr &addr,
     char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  ObStorageLogger *logger = MTL(ObStorageLogger*);
+  ObStorageLogger &logger = MTL(ObTenantStorageMetaService*)->get_slogger();
 
   if (OB_UNLIKELY(!addr.is_valid()
                || !addr.is_file()
                || buf_len < addr.size())
-               || OB_ISNULL(buf)
-               || OB_ISNULL(logger)) {
+               || OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(addr), KP(buf), K(buf_len), KP(logger));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(addr), KP(buf), K(buf_len));
   } else {
     // The reason for retrying, here, is that the current SLOG didn't handle the read and write
     // concurrency for the latest item, and an -4103 error will be returned. At present, the
@@ -345,8 +347,8 @@ int SimpleObStorageModule::read_from_slog(const ObMetaDiskAddr &addr,
     int64_t retry_count = 2;
     do {
       int64_t tmp_pos = pos;
-      if (OB_FAIL(ObStorageLogReader::read_log(logger->get_dir(), addr, buf_len, buf, tmp_pos, MTL_ID()))) {
-        STORAGE_LOG(WARN, "fail to read slog", K(ret), "logger directory", logger->get_dir(), K(addr),
+      if (OB_FAIL(ObStorageLogReader::read_log(logger.get_dir(), addr, buf_len, buf, tmp_pos, MTL_ID()))) {
+        STORAGE_LOG(WARN, "fail to read slog", K(ret), "logger directory", logger.get_dir(), K(addr),
             K(buf_len), KP(buf));
         if (retry_count > 1) {
           sleep(1); // sleep 1s

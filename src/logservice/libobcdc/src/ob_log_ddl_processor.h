@@ -204,6 +204,12 @@ private:
       const int64_t new_schema,
       const bool need_update_tic,
       volatile bool &stop_flag);
+  int handle_ddl_stmt_recover_table_end_(
+      ObLogTenant &tenant,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
+      const bool need_update_tic,
+      volatile bool &stop_flag);
 
   /*************** Index related DDL ***************/
   // Support global index, unique index

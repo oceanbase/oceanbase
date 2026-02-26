@@ -12,8 +12,6 @@
 
 #include "ob_direct_load_table_guard.h"
 
-#include "storage/ob_protected_memtable_mgr_handle.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
@@ -70,7 +68,7 @@ int ObDirectLoadTableGuard::prepare_memtable(ObDDLKV *&res_memtable)
   bool tried_freeze = false;
   bool need_retry = false;
   const int64_t INC_MACRO_BLOCK_COUNT_FREEZE_TRIGGER =
-      10 * 10L * 1024L * 1024L * 1024L / OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      10 * 10L * 1024L * 1024L * 1024L / OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   const int64_t INC_MACRO_BLOCK_MEMORY_FREEZE_TRIGGER = 50 * 1024 * 1024;  // 50M;
   const int64_t start_time = ObClockGenerator::getClock();
 
@@ -135,7 +133,7 @@ int ObDirectLoadTableGuard::acquire_memtable_once_()
       }
 
       if (OB_FAIL(ret)) {
-        if ((OB_ALLOCATE_MEMORY_FAILED == ret || OB_MINOR_FREEZE_NOT_ALLOW == ret) &&
+        if ((OB_EAGAIN == ret || OB_ALLOCATE_MEMORY_FAILED == ret || OB_MINOR_FREEZE_NOT_ALLOW == ret) &&
             (ObClockGenerator::getClock() - start_time < MAX_RETRY_CREATE_MEMTABLE_TIME)) {
           ret = OB_SUCCESS;
           need_create_new_memtable = true;
@@ -155,6 +153,9 @@ int ObDirectLoadTableGuard::do_create_memtable_(ObLSHandle &ls_handle)
   ObTabletHandle tablet_handle;
   SCN clog_checkpoint_scn;
 
+  CreateMemtableArg arg;
+  arg.for_inc_direct_load_ = true;
+  arg.for_replay_ = for_replay_;
   if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
           tablet_id_, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     STORAGE_LOG(WARN, "fail to get tablet", K(ret), KPC(this));
@@ -162,8 +163,8 @@ int ObDirectLoadTableGuard::do_create_memtable_(ObLSHandle &ls_handle)
   } else if (ddl_redo_scn_ <= clog_checkpoint_scn) {
     is_write_filtered_ = true;
     ret = OB_SUCCESS;
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(
-                 tablet_id_, 0 /* schema version */, true /* for_direct_load */, for_replay_, clog_checkpoint_scn))) {
+  } else if (FALSE_IT(arg.clog_checkpoint_scn_ = clog_checkpoint_scn)) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(tablet_id_, arg))) {
     STORAGE_LOG(WARN, "fail to create a boundary memtable", K(ret), KPC(this));
   }
   return ret;
@@ -242,7 +243,11 @@ void ObDirectLoadTableGuard::async_freeze_()
     STORAGE_LOG(ERROR, "ls should not be null", K(ret), KPC(this));
   } else {
     const bool is_sync = false;
-    (void)ls->tablet_freeze(tablet_id_, is_sync);
+    (void)ls->tablet_freeze(tablet_id_,
+                            is_sync,
+                            0, /*timeout, useless for async one*/
+                            false, /*need_rewrite_meta*/
+                            ObFreezeSourceFlag::DIRECT_INC_FREEZE);
   }
 }
 

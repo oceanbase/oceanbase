@@ -11,51 +11,18 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/backup/ob_backup_store.h"
-#include "lib/alloc/alloc_assist.h"
+#include "ob_backup_store.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_connectivity.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/backup/ob_backup_path.h"
+#include "lib/random/ob_mysql_random.h"
+#include "share/location_cache/ob_location_service.h"
 
 using namespace oceanbase;
 using namespace common;
 using namespace share;
-
-static const char *type_strs[] = {
-    "backup_data",
-    "archive_log",
-    "backup_key"
-};
-
-const char *ObBackupDestType::get_str(const TYPE &type)
-{
-  const char *str = nullptr;
-
-  if (type < 0 || type >= TYPE::DEST_TYPE_MAX) {
-    str = "UNKNOWN";
-  } else {
-    str = type_strs[type];
-  }
-  return str;
-}
-
-ObBackupDestType::TYPE ObBackupDestType::get_type(const char *type_str)
-{
-  ObBackupDestType::TYPE type = ObBackupDestType::TYPE::DEST_TYPE_MAX;
-
-  const int64_t count = ARRAYSIZEOF(type_strs);
-  STATIC_ASSERT(static_cast<int64_t>(ObBackupDestType::TYPE::DEST_TYPE_MAX) == count, "type count mismatch");
-  for (int64_t i = 0; i < count; ++i) {
-    if (0 == strcmp(type_str, type_strs[i])) {
-      type = static_cast<ObBackupDestType::TYPE>(i);
-      break;
-    }
-  }
-  return type;
-}
 /**
  * ------------------------------ObBackupFormatDesc---------------------
  */
@@ -133,6 +100,64 @@ uint16_t ObBackupCheckDesc::get_data_type() const
 uint16_t ObBackupCheckDesc::get_data_version() const
 {
   return FILE_VERSION;
+}
+
+// --------------------------ObBackupConsistencyCheckDesc------------------
+OB_SERIALIZE_MEMBER(ObBackupConsistencyCheckDesc, tenant_id_, random_content_);
+ObBackupConsistencyCheckDesc::ObBackupConsistencyCheckDesc()
+  : tenant_id_(OB_INVALID_TENANT_ID)
+{
+  MEMSET(random_content_, 0, sizeof(random_content_));
+}
+
+bool ObBackupConsistencyCheckDesc::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_)
+         && strlen(random_content_) > 0;
+}
+
+uint16_t ObBackupConsistencyCheckDesc::get_data_type() const
+{
+  return ObBackupFileType::BACKUP_CHECK_FILE;
+}
+
+uint16_t ObBackupConsistencyCheckDesc::get_data_version() const
+{
+  return FILE_VERSION;
+}
+
+int ObBackupConsistencyCheckDesc::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id));
+  } else if (OB_FAIL(generate_random_content_())) {
+    LOG_WARN("fail to generate random content", K(ret));
+  } else {
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+void ObBackupConsistencyCheckDesc::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  MEMSET(random_content_, 0, sizeof(random_content_));
+}
+
+int ObBackupConsistencyCheckDesc::generate_random_content_()
+{
+  int ret = OB_SUCCESS;
+  common::ObMysqlRandom rand;
+  int64_t len = sizeof(random_content_);
+  uint64_t seed1 = reinterpret_cast<uint64_t>(this);
+  uint64_t seed2 = static_cast<uint64_t>(ObTimeUtility::current_time());
+  rand.init(seed1, seed2);
+  if (OB_FAIL(rand.create_random_string(random_content_, len))) {
+    LOG_WARN("fail to create random string", K(ret), K(len));
+  }
+  return ret;
 }
 
 /**
@@ -307,6 +332,30 @@ int ObBackupStore::read_check_file(const ObBackupPathString &full_path, ObBackup
   return ret; 
 }
 
+int ObBackupStore::write_rw_consistency_check_file(const ObBackupPathString &full_path, const ObBackupConsistencyCheckDesc &desc) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupStore not init", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, desc))) {
+    LOG_WARN("failed to write single file", K(ret), K(full_path));
+  }
+  return ret;
+}
+
+int ObBackupStore::read_rw_consistency_check_file(const ObBackupPathString &full_path, ObBackupConsistencyCheckDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupStore not init", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, desc))) {
+    LOG_WARN("failed to write single file", K(ret), K(full_path));
+  }
+  return ret;
+}
+
 int ObBackupStore::write_single_file(const ObBackupPathString &full_path, const ObIBackupSerializeProvider &serializer) const
 {
   int ret = OB_SUCCESS;
@@ -329,7 +378,9 @@ int ObBackupStore::write_single_file(const ObBackupPathString &full_path, const 
     LOG_WARN("serialized size not match.", K(ret), K(pos), K(buf_size), K(full_path), K(serializer));
   } else if (OB_FAIL(util.mk_parent_dir(full_path.str(), storage_info))) {
     LOG_WARN("failed to mk dir.", K(ret), K(full_path), K(serializer));
-  } else if (OB_FAIL(util.write_single_file(full_path.str(), storage_info, buf, buf_size))) {
+  // TODO(yangyi.yyy & zhaoyongheng.zyh) use valid dest_id for QoS, including ObBackupDataStore & ObArchiveStore
+  } else if (OB_FAIL(util.write_single_file(full_path.str(), storage_info, buf, buf_size,
+                                            ObStorageIdMod::get_default_backup_id_mod()))) {
     LOG_WARN("failed to write single file.", K(ret), K(full_path), K(serializer));
   } else {
     FLOG_INFO("succeed to write single file.", K(full_path), K(serializer));
@@ -352,7 +403,7 @@ int ObBackupStore::read_single_file(const ObBackupPathString &full_path, ObIBack
   const ObBackupStorageInfo *storage_info = get_storage_info();
 
   if (OB_FAIL(util.get_file_length(full_path.ptr(), storage_info, file_length))) {
-    if (OB_BACKUP_FILE_NOT_EXIST != ret) {
+    if (OB_OBJECT_NOT_EXIST != ret) {
       LOG_WARN("failed to get file length.", K(ret), K(full_path));
     } else {
       LOG_INFO("file not exist.", K(ret), K(full_path));
@@ -363,7 +414,9 @@ int ObBackupStore::read_single_file(const ObBackupPathString &full_path, ObIBack
   } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(full_path), K(file_length));
-  } else if (OB_FAIL(util.read_single_file(full_path.str(), storage_info, buf, file_length, read_size))) {
+  // TODO(yangyi.yyy & zhaoyongheng.zyh) use valid dest_id for QoS, including ObBackupDataStore & ObArchiveStore
+  } else if (OB_FAIL(util.read_single_file(full_path.str(), storage_info, buf, file_length, read_size,
+                                           ObStorageIdMod::get_default_backup_id_mod()))) {
     LOG_WARN("failed to read file.", K(ret), K(full_path), K(file_length));
   } else if (file_length != read_size) {
     ret = OB_ERR_UNEXPECTED;
@@ -380,9 +433,12 @@ int ObBackupStore::read_single_file(const ObBackupPathString &full_path, ObIBack
 ObBackupDestMgr::ObBackupDestMgr()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
+    max_iops_(),
+    max_bandwidth_(),
     dest_type_(ObBackupDestType::TYPE::DEST_TYPE_MAX),
     backup_dest_(),
-    sql_proxy_(NULL)
+    sql_proxy_(NULL),
+    is_remote_execute_(false)
 {
 } 
 
@@ -403,9 +459,26 @@ int ObBackupDestMgr::init(
     LOG_WARN("invalid backup dest", K(ret), K(dest_type));
   } else {
     tenant_id_ = tenant_id;
+    max_iops_ = backup_dest_.get_storage_info()->max_iops_;
+    max_bandwidth_ = backup_dest_.get_storage_info()->max_bandwidth_;
     dest_type_ = dest_type;
     sql_proxy_ = &sql_proxy;
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObBackupDestMgr::init_for_rpc(
+    const uint64_t tenant_id,
+    const ObBackupDestType::TYPE &dest_type,
+    const share::ObBackupPathString &backup_dest_str,
+    common::ObISQLClient &sql_proxy)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init(tenant_id, dest_type, backup_dest_str, sql_proxy))) {
+    LOG_WARN("fail to init", K(ret), K(tenant_id), K(dest_type));
+  } else {
+    is_remote_execute_ = true;
   }
   return ret;
 }
@@ -420,7 +493,7 @@ int ObBackupDestMgr::check_dest_connectivity(obrpc::ObSrvRpcProxy &rpc_proxy)
   } else if (OB_FAIL(check_mgr.init(tenant_id_, rpc_proxy, *sql_proxy_))) {
     LOG_WARN("fail to init connectivity check mgr", K(ret), K_(tenant_id));
   } else if (OB_FAIL(check_mgr.check_backup_dest_connectivity(backup_dest_))) {
-    LOG_WARN("fail to check backup dest connectivity", K(ret), K_(tenant_id));
+    LOG_WARN("fail to check backup dest connectivity", K(ret), K_(tenant_id), K_(backup_dest));
   }
   return ret;
 }
@@ -432,9 +505,16 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
   int64_t dest_id = 0;
   bool is_empty = true;
   bool is_exist = false;
+  bool need_remote_execute = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDestMgr not init", K(ret));
+  } else if (OB_FAIL(remote_execute_if_need_(rpc_proxy,
+                                             need_format_file,
+                                             RemoteExecuteType::CHECK_DEST_VALIDITY,
+                                             need_remote_execute))) {
+    LOG_WARN("fail to remote execute if need", K(ret));
+  } else if (need_remote_execute) { //do nothing
   } else if (OB_FAIL(store.init(backup_dest_))) {
     LOG_WARN("fail to init store", K(ret), K_(backup_dest));
   } else if (OB_FAIL(store.dest_is_empty_directory(is_empty))) {
@@ -487,6 +567,57 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
       LOG_USER_ERROR(OB_BACKUP_FORMAT_FILE_NOT_EXIST, ", try to set a new directory.");
     }
   }
+  return ret;
+}
+
+int ObBackupDestMgr::remote_execute_if_need_(obrpc::ObSrvRpcProxy &rpc_proxy,
+                                             const bool need_format_file,
+                                             const RemoteExecuteType type,
+                                             bool &need_remote_execute)
+{
+  int ret = OB_SUCCESS;
+  bool is_self_tenant_server = true;
+  common::ObArray<ObAddr> server_list;
+  if (!is_valid_type(type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid remote execute type", K(ret), K(type));
+  } else if (OB_FAIL(ObBackupUtils::get_tenant_backup_servers(backup_dest_.get_storage_info()->extension_,
+                                                             tenant_id_,
+                                                             server_list,
+                                                             is_self_tenant_server))) {
+    LOG_WARN("fail to get tenant alive servers", K(ret), K_(tenant_id), K(backup_dest_));
+  } else if (OB_FALSE_IT(need_remote_execute = !is_self_tenant_server)) {
+  } else if (need_remote_execute) {  // then forward request to a tenant server
+    if (is_remote_execute_) { // but reciever can not foward this request again
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("self not in tenant alive servers is unexpected, should not remote execute again",
+               KR(ret),
+               K(is_self_tenant_server),
+               K(server_list));
+    } else {
+      LOG_INFO("self not in tenant alive servers, remote execute on meta_tenant's leader", K(type));
+      obrpc::ObRemoteCheckBackupDestValidityArg args;
+      char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+      common::ObAddr dest;
+      if (OB_FAIL(backup_dest_.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)))) {
+        LOG_WARN("fail to get backup dest str", K(ret), K_(backup_dest));
+      } else if (OB_FAIL(args.init(tenant_id_, dest_type_, ObString(backup_dest_str), need_format_file))) {
+        LOG_WARN("fail to init ObRemoteCheckBackupDestValidityArg", K(ret));
+      } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
+          GCONF.cluster_id, gen_meta_tenant_id(tenant_id_), ObLSID(ObLSID::SYS_LS_ID), dest))) {
+        LOG_WARN("fail to get meta tenant leader addr", K(ret), K(tenant_id_));
+      } else if (CHECK_DEST_VALIDITY == type) {
+        if (OB_FAIL(rpc_proxy.to(dest).check_backup_dest_validity(args))) {
+          LOG_WARN("fail to check dest validity on server", K(ret), K(dest), K(args));
+        }
+      } else if (WRITE_FORMAT_FILE == type) {
+        if (OB_FAIL(rpc_proxy.to(dest).write_backup_dest_format_file(args))) {
+          LOG_WARN("fail to send rpc to write format file", K(ret), K(dest), K(args));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -583,9 +714,17 @@ int ObBackupDestMgr::write_format_file()
   share::ObBackupFormatDesc format_desc;
   bool is_exist = false;
   int64_t dest_id = 0;
+  common::ObArray<ObAddr> server_list;
+  bool need_remote_execute = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDestMgr not init", K(ret));
+  } else if (OB_FAIL(remote_execute_if_need_(*GCTX.srv_rpc_proxy_,
+                                              false /*unused*/,
+                                              RemoteExecuteType::WRITE_FORMAT_FILE,
+                                              need_remote_execute))) {
+    LOG_WARN("fail to remote execute if need", K(ret));
+  } else if (need_remote_execute) { // do nothing
   } else if (OB_FAIL(store.init(backup_dest_))) {
     LOG_WARN("fail to init store", K(ret), K_(backup_dest));
   } else if (OB_FAIL(store.is_format_file_exist(is_exist))) {
@@ -600,7 +739,8 @@ int ObBackupDestMgr::write_format_file()
     LOG_WARN("fail to generate format desc", K(ret), K(dest_id));
   } else if (OB_FAIL(store.write_format_file(format_desc))) {
     LOG_WARN("fail to write format file", K(ret), K(format_desc));
-  } else if (OB_FAIL(ObBackupStorageInfoOperator::insert_backup_storage_info(*sql_proxy_, tenant_id_, backup_dest_, dest_type_, dest_id))) {
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::insert_backup_storage_info(
+      *sql_proxy_, tenant_id_, backup_dest_, dest_type_, dest_id, max_iops_, max_bandwidth_))) {
     LOG_WARN("fail to insert backup storage info", K(ret), K(backup_dest_)); 
   }
   return ret;

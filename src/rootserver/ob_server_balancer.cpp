@@ -12,20 +12,8 @@
 
 #define USING_LOG_PREFIX RS_LB
 #include "ob_server_balancer.h"
-#include "ob_balance_info.h"
-#include "lib/container/ob_array_iterator.h"
-#include "observer/ob_server_struct.h"
-#include "storage/ob_file_system_router.h"
-#include "rootserver/ob_zone_manager.h"
-#include "rootserver/ob_unit_stat_manager.h"
-#include "rootserver/ob_root_utils.h"
 #include "rootserver/ob_root_service.h"
-#include "storage/ob_file_system_router.h"
-#include "share/ob_all_server_tracer.h"
-#include "share/ob_server_table_operator.h"
-#include "rootserver/ob_heartbeat_service.h"
-#include "share/ob_share_util.h" // ObShareUtil
-#include "lib/utility/ob_tracepoint.h"
+#include "share/ob_share_util.h" // for ObMatrix
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -333,9 +321,12 @@ int ObServerBalancer::distribute_for_standalone_sys_unit()
   } else if (!enable_sys_unit_standalone) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("sys unit standalone deployment is disabled", K(ret));
-  } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers(
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
+  } else if (OB_FAIL(GCTX.root_service_->get_unit_mgr().get_tenant_unit_servers(
           OB_SYS_TENANT_ID, empty_zone, sys_unit_server_array))) {
-    LOG_WARN("fail to get tenant unit server array", K(ret));
+    LOG_WARN("fail to get tenant unit server array", KR(ret));
   } else {
     ObHashMap<uint64_t, share::ObResourcePool *>::const_iterator iter = unit_mgr_->get_id_pool_map().begin();
     ObHashMap<uint64_t, share::ObResourcePool *>::const_iterator end = unit_mgr_->get_id_pool_map().end();
@@ -477,7 +468,7 @@ int ObServerBalancer::distribute_zone_unit(const ObUnitManager::ZoneUnit &zone_u
     ObServerInfoInTable server_info;
     FOREACH_CNT_X(unit_info, zone_unit.unit_infos_, OB_SUCCESS == ret) {
       server_info.reset();
-      if (ObUnit::UNIT_STATUS_ACTIVE != unit_info->unit_.status_) {
+      if (ObUnit::UNIT_STATUS_DELETING == unit_info->unit_.status_) {
         // ignore the unit that is in deleting
       } else if (OB_FAIL(SVR_TRACER.get_server_info(unit_info->unit_.server_, server_info))) {
         LOG_WARN("get_server_info failed", "server", unit_info->unit_.server_, KR(ret));
@@ -669,7 +660,7 @@ int ObServerBalancer::distribute_for_migrate_in_blocked(const ObUnitInfo &unit_i
               unit_info.unit_.migrate_from_server_, server_info))) {
     LOG_WARN("get_server_status failed",
              "server", unit_info.unit_.migrate_from_server_, K(ret));
-  } else if (ObUnit::UNIT_STATUS_ACTIVE != unit_info.unit_.status_) {
+  } else if (ObUnit::UNIT_STATUS_DELETING == unit_info.unit_.status_) {
     // ignore the unit which is in deleting
   } else {
     if (server_info.can_migrate_in()) {
@@ -878,7 +869,8 @@ int ObServerBalancer::check_can_execute_rebalance(
         } else if (OB_UNLIKELY(nullptr == unit_loads)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unit loads ptr is null", K(ret));
-        } else if (OB_FAIL(unit_mgr_->calc_sum_load(unit_loads, sum_load))) {
+        } else if (OB_FAIL(unit_mgr_->calc_sum_load(unit_loads, sum_load,
+                                                    false/*include_ungranted_unit*/))) {
           LOG_WARN("fail to calc sum load", K(ret));
         }
         if (OB_FAIL(ret)) {
@@ -923,7 +915,7 @@ int ObServerBalancer::rebalance_servers_v2(
     const common::ObZone &zone)
 {
   int ret = OB_SUCCESS;
-  common::ObArray<Matrix<uint64_t> > group_tenant_array;
+  common::ObArray<ObMatrix<uint64_t> > group_tenant_array;
   common::ObArray<uint64_t> standalone_tenant_array;
   common::ObArray<ObUnitManager::ObUnitLoad> not_grant_units;
   common::ObArray<ObUnitManager::ObUnitLoad> standalone_units;
@@ -947,7 +939,7 @@ int ObServerBalancer::rebalance_servers_v2(
 }
 
 int ObServerBalancer::generate_single_tenant_group(
-    Matrix<uint64_t> &tenant_id_matrix,
+    ObMatrix<uint64_t> &tenant_id_matrix,
     const ObTenantGroupParser::TenantNameGroup &tenant_name_group)
 {
   int ret = OB_SUCCESS;
@@ -999,7 +991,7 @@ int ObServerBalancer::generate_single_tenant_group(
 
 int ObServerBalancer::generate_group_tenant_array(
     const common::ObIArray<ObTenantGroupParser::TenantNameGroup> &tenant_groups,
-    common::ObIArray<Matrix<uint64_t> > &group_tenant_array)
+    common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -1008,7 +1000,7 @@ int ObServerBalancer::generate_group_tenant_array(
   } else {
     group_tenant_array.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_groups.count(); ++i) {
-      Matrix<uint64_t> tenant_id_matrix;
+      ObMatrix<uint64_t> tenant_id_matrix;
       const ObTenantGroupParser::TenantNameGroup &tenant_name_group = tenant_groups.at(i);
       if (OB_FAIL(generate_single_tenant_group(tenant_id_matrix, tenant_name_group))) {
         LOG_WARN("fail to generate single tenant group", K(ret));
@@ -1022,11 +1014,11 @@ int ObServerBalancer::generate_group_tenant_array(
 
 bool ObServerBalancer::has_exist_in_group_tenant_array(
      const uint64_t tenant_id,
-     const common::ObIArray<Matrix<uint64_t> > &group_tenant_array)
+     const common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array)
 {
   bool exist = false;
   for (int64_t i = 0; !exist && i < group_tenant_array.count(); ++i) {
-    const Matrix<uint64_t> &tenant_group = group_tenant_array.at(i);
+    const ObMatrix<uint64_t> &tenant_group = group_tenant_array.at(i);
     if (tenant_group.is_contain(tenant_id)) {
       exist = true;
     } else {} // not contain, go on next
@@ -1035,7 +1027,7 @@ bool ObServerBalancer::has_exist_in_group_tenant_array(
 }
 
 int ObServerBalancer::generate_standalone_tenant_array(
-    const common::ObIArray<Matrix<uint64_t> > &group_tenant_array,
+    const common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array,
     common::ObIArray<uint64_t> &standalone_tenant_array)
 {
   int ret = OB_SUCCESS;
@@ -1069,7 +1061,7 @@ int ObServerBalancer::generate_standalone_tenant_array(
 
 int ObServerBalancer::generate_tenant_array(
     const common::ObZone &zone,
-    common::ObIArray<Matrix<uint64_t> > &group_tenant_array,
+    common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array,
     common::ObIArray<uint64_t> &standalone_tenant_array)
 {
   int ret = OB_SUCCESS;
@@ -1230,9 +1222,9 @@ int ObServerBalancer::generate_available_servers(
     } else if (OB_UNLIKELY(zone.is_empty())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(zone));
-    } else if (OB_ISNULL(zone_mgr_) || OB_ISNULL(unit_mgr_)) {
+    } else if (OB_ISNULL(zone_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("zone_mgr_ or unit_mgr_ is null", K(ret), KP(unit_mgr_), KP(zone_mgr_));
+      LOG_WARN("zone_mgr_ is null", K(ret), KP(zone_mgr_));
     } else if (OB_FAIL(zone_mgr_->get_zone(zone, zone_info))) {
       LOG_WARN("fail to get zone info", K(ret), K(zone));
     } else if (ObZoneStatus::ACTIVE != zone_info.status_) {
@@ -1240,9 +1232,12 @@ int ObServerBalancer::generate_available_servers(
       LOG_WARN("zone is not in active", K(ret), K(zone_info));
     } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(zone, server_list))) {
       LOG_WARN("fail to get servers of zone", K(ret), K(zone));
-    } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers(
+    } else if (OB_ISNULL(GCTX.root_service_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
+    } else if (OB_FAIL(GCTX.root_service_->get_unit_mgr().get_tenant_unit_servers(
             OB_SYS_TENANT_ID, zone, sys_unit_server_array))) {
-      LOG_WARN("fail to get tenant unit server array", K(ret));
+      LOG_WARN("fail to get tenant unit server array", KR(ret), K(zone));
     } else {
       available_servers.reset();
       for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
@@ -1390,7 +1385,7 @@ int ObServerBalancer::try_balance_single_unit_by_disk(
           LOG_WARN("fail to push back", K(ret));
         } else {
           ServerTotalLoadCmp cmp;
-          std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+          lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
           if (OB_FAIL(cmp.get_ret())) {
             LOG_WARN("fail to sort server loads", K(ret));
           }
@@ -1421,9 +1416,6 @@ int ObServerBalancer::do_update_src_server_load(
   } else if (OB_UNLIKELY(NULL == unit)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit ptr is null", K(ret));
-  } else if (common::REPLICA_TYPE_LOGONLY == unit->replica_type_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Replica type LOGONLY is unexpected", KR(ret), KP(unit));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(zone_disk_statistic_.reduce_server_disk_use(
@@ -1457,9 +1449,6 @@ int ObServerBalancer::do_update_dst_server_load(
   } else if (OB_UNLIKELY(NULL == unit)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit ptr is null", K(ret));
-  } else if (common::REPLICA_TYPE_LOGONLY == unit->replica_type_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Replica type LOGONLY is unexpected", KR(ret), KP(unit));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(pool_occupation.push_back(
@@ -1535,7 +1524,7 @@ int ObServerBalancer::try_balance_single_unit_by_cm(
           LOG_WARN("fail to push back", K(ret));
         } else {
           ServerTotalLoadCmp cmp;
-          std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+          lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
           if (OB_FAIL(cmp.get_ret())) {
             LOG_WARN("fail to sort server loads", K(ret));
           }
@@ -1608,7 +1597,7 @@ int ObServerBalancer::do_balance_sys_tenant_units(
     }
     if (OB_SUCC(ret)) {
       ServerTotalLoadCmp cmp;
-      std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+      lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
       if (OB_FAIL(cmp.get_ret())) {
         LOG_WARN("fail to sort", K(ret));
       }
@@ -1689,13 +1678,13 @@ int ObServerBalancer::try_balance_sys_tenant_units(
 
 int ObServerBalancer::try_balance_non_sys_tenant_units(
     const common::ObZone &zone,
-    const common::ObIArray<Matrix<uint64_t> > &group_tenant_array,
+    const common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array,
     const common::ObIArray<ObUnitManager::ObUnitLoad> &standalone_units,
     const common::ObIArray<ObUnitManager::ObUnitLoad> &not_grant_units)
 {
   int ret = OB_SUCCESS;
   ObArray<TenantGroupBalanceInfo> balance_info_array;
-  ObArray<Matrix<uint64_t> > degraded_tenant_group_array;
+  ObArray<ObMatrix<uint64_t> > degraded_tenant_group_array;
   common::ObArray<common::ObAddr> available_servers;
   const bool enable_sys_unit_standalone = GCONF.enable_sys_unit_standalone;
   if (OB_UNLIKELY(!inited_)) {
@@ -1744,12 +1733,12 @@ int ObServerBalancer::try_balance_non_sys_tenant_units(
 
 int ObServerBalancer::generate_tenant_balance_info_array(
     const common::ObZone &zone,
-    const common::ObIArray<Matrix<uint64_t> > &group_tenant_array,
-    common::ObIArray<Matrix<uint64_t> > &degraded_tenant_group_array,
+    const common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array,
+    common::ObIArray<ObMatrix<uint64_t> > &degraded_tenant_group_array,
     common::ObIArray<TenantGroupBalanceInfo> &balance_info_array)
 {
   int ret = OB_SUCCESS;
-  ObArray<const Matrix<uint64_t> *> unit_num_not_match_array;
+  ObArray<const ObMatrix<uint64_t> *> unit_num_not_match_array;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1788,8 +1777,8 @@ int ObServerBalancer::generate_tenant_balance_info_array(
 }
 
 int ObServerBalancer::do_degrade_tenant_group_matrix(
-    const Matrix<uint64_t> &source_tenant_group,
-    common::ObIArray<Matrix<uint64_t> > &degraded_tenant_group_array)
+    const ObMatrix<uint64_t> &source_tenant_group,
+    common::ObIArray<ObMatrix<uint64_t> > &degraded_tenant_group_array)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -1798,7 +1787,7 @@ int ObServerBalancer::do_degrade_tenant_group_matrix(
   } else {
     LOG_INFO("start degrade tenant group matrix", K(source_tenant_group));
     for (int64_t i = 0; OB_SUCC(ret) && i < source_tenant_group.get_row_count(); ++i) {
-      Matrix<uint64_t> tenant_id_vector;
+      ObMatrix<uint64_t> tenant_id_vector;
       const int64_t VECTOR_ROW_CNT = 1;
       const int64_t VECTOR_ROW_IDX = 0;
       if (OB_FAIL(tenant_id_vector.init(VECTOR_ROW_CNT, source_tenant_group.get_column_count()))) {
@@ -1829,8 +1818,8 @@ int ObServerBalancer::do_degrade_tenant_group_matrix(
 
 int ObServerBalancer::try_generate_degraded_balance_info_array(
     const common::ObZone &zone,
-    const common::ObIArray<const Matrix<uint64_t> *> &unit_num_not_match_array,
-    common::ObIArray<Matrix<uint64_t> > &degraded_tenant_group_array,
+    const common::ObIArray<const ObMatrix<uint64_t> *> &unit_num_not_match_array,
+    common::ObIArray<ObMatrix<uint64_t> > &degraded_tenant_group_array,
     common::ObIArray<TenantGroupBalanceInfo> &balance_info_array)
 {
   int ret = OB_SUCCESS;
@@ -1842,7 +1831,7 @@ int ObServerBalancer::try_generate_degraded_balance_info_array(
     LOG_WARN("invalid argument", K(ret), K(zone));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < unit_num_not_match_array.count(); ++i) {
-      const Matrix<uint64_t> *this_tenant_group = unit_num_not_match_array.at(i);
+      const ObMatrix<uint64_t> *this_tenant_group = unit_num_not_match_array.at(i);
       if (OB_UNLIKELY(NULL == this_tenant_group)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("this tenant group ptr is null", K(ret));
@@ -1875,7 +1864,7 @@ int ObServerBalancer::try_generate_degraded_balance_info_array(
 
 int ObServerBalancer::do_rebalance_servers_v2(
     const common::ObZone &zone,
-    const common::ObIArray<Matrix<uint64_t> > &group_tenant_array,
+    const common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array,
     const common::ObIArray<ObUnitManager::ObUnitLoad> &standalone_units,
     const common::ObIArray<ObUnitManager::ObUnitLoad> &not_grant_units)
 {
@@ -1995,7 +1984,7 @@ int ObServerBalancer::generate_simple_ug_loads(
 
 int ObServerBalancer::get_ug_exchange_excluded_dst_servers(
     const int64_t ug_idx,
-    const Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    const ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     common::ObIArray<common::ObAddr> &excluded_servers)
 {
   int ret = OB_SUCCESS;
@@ -2087,7 +2076,7 @@ int ObServerBalancer::check_exchange_ug_make_sense(
     const int64_t left_idx,
     const int64_t right_idx,
     common::ObIArray<SimpleUgLoad> &simple_ug_loads,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     bool &do_make_sense)
 {
   int ret = OB_SUCCESS;
@@ -2209,7 +2198,7 @@ int ObServerBalancer::coordinate_unit_migrate_stat_matrix(
     const int64_t left_idx,
     const int64_t right_idx,
     common::ObIArray<SimpleUgLoad> &simple_ug_loads,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix)
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -2252,7 +2241,7 @@ int ObServerBalancer::generate_exchange_ug_migrate_task(
     const int64_t left_idx,
     const int64_t right_idx,
     common::ObIArray<SimpleUgLoad> &simple_ug_loads,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     common::ObIArray<UnitMigrateStat> &task_array)
 {
   int ret = OB_SUCCESS;
@@ -2902,7 +2891,7 @@ int ObServerBalancer::do_amend_inter_ttg_balance(
     }
     if (OB_SUCC(ret)) {
       InterServerLoadCmp cmp;
-      std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+      lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
       if (OB_FAIL(cmp.get_ret())) {
         LOG_WARN("fail to sort server load ptrs", K(ret));
       } else if (OB_FAIL(sort_server_loads_for_balance(
@@ -3192,7 +3181,7 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_inter_ttg_lo
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(left_inter_load);
-      std::sort(left_inter_load.unitgroup_loads_.begin(),
+      lib::ob_sort(left_inter_load.unitgroup_loads_.begin(),
                 left_inter_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -3201,7 +3190,7 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_inter_ttg_lo
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(right_inter_load);
-      std::sort(right_inter_load.unitgroup_loads_.begin(),
+      lib::ob_sort(right_inter_load.unitgroup_loads_.begin(),
                 right_inter_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -3265,7 +3254,7 @@ int ObServerBalancer::CountBalanceStrategy::try_move_single_ug_balance_inter_ttg
       }
       if (OB_SUCC(ret)) {
         UnitGroupLoadCmp unitgroup_load_cmp(src_inter_load);
-        std::sort(src_inter_load.unitgroup_loads_.begin(),
+        lib::ob_sort(src_inter_load.unitgroup_loads_.begin(),
                   src_inter_load.unitgroup_loads_.end(),
                   unitgroup_load_cmp);
         if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -3274,7 +3263,7 @@ int ObServerBalancer::CountBalanceStrategy::try_move_single_ug_balance_inter_ttg
       }
       if (OB_SUCC(ret)) {
         UnitGroupLoadCmp unitgroup_load_cmp(dst_inter_load);
-        std::sort(dst_inter_load.unitgroup_loads_.begin(),
+        lib::ob_sort(dst_inter_load.unitgroup_loads_.begin(),
                   dst_inter_load.unitgroup_loads_.end(),
                   unitgroup_load_cmp);
         if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -3632,7 +3621,7 @@ int ObServerBalancer::check_servers_resource_enough(
 }
 
 int ObServerBalancer::try_generate_square_task_from_ttg_matrix(
-    Matrix<UnitMigrateStat> &unit_migrate_stat_task,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_task,
     common::ObIArray<UnitMigrateStat *> &task_array)
 {
   int ret = OB_SUCCESS;
@@ -3674,7 +3663,7 @@ int ObServerBalancer::try_generate_square_task_from_ttg_matrix(
       // previous procedure failed
     } else if (tenant_unit_collide) {
       task_array.reset();
-      // Matrix task cannot be executed at the same time, clear task
+      // ObMatrix task cannot be executed at the same time, clear task
     } else if (OB_FAIL(check_servers_resource_enough(server_load_sums, enough))) {
       LOG_WARN("fail to check server resource capacity", K(ret));
     } else if (enough) {
@@ -3682,14 +3671,14 @@ int ObServerBalancer::try_generate_square_task_from_ttg_matrix(
     } else {
       LOG_INFO("server resource not enough");
       task_array.reset();
-      // Matrix task cannot be executed at the same time, clear task
+      // ObMatrix task cannot be executed at the same time, clear task
     }
   }
   return ret;
 }
 
 int ObServerBalancer::try_generate_line_task_from_ttg_matrix(
-    Matrix<UnitMigrateStat> &unit_migrate_stat_task,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_task,
     common::ObIArray<UnitMigrateStat *> &task_array)
 {
   int ret = OB_SUCCESS;
@@ -3784,7 +3773,7 @@ int ObServerBalancer::try_generate_dot_task_from_migrate_stat(
 }
 
 int ObServerBalancer::try_generate_dot_task_from_ttg_matrix(
-    Matrix<UnitMigrateStat> &unit_migrate_stat_task,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_task,
     common::ObIArray<UnitMigrateStat *> &task_array)
 {
   int ret = OB_SUCCESS;
@@ -3875,7 +3864,7 @@ int ObServerBalancer::vacate_space_for_ttg_balance(
     LOG_WARN("fail to generate complete server loads", K(ret));
   } else {
     bool find = false;
-    Matrix<UnitMigrateStat> &migrate_matrix = balance_info.unit_migrate_stat_matrix_;
+    ObMatrix<UnitMigrateStat> &migrate_matrix = balance_info.unit_migrate_stat_matrix_;
     for (int64_t i = 0;
          !find && OB_SUCC(ret) && i < migrate_matrix.get_row_count();
          ++i) {
@@ -3995,7 +3984,7 @@ int ObServerBalancer::do_migrate_out_collide_unit(
           LOG_WARN("fail to push back", K(ret));
         } else {
           ServerTotalLoadCmp cmp;
-          std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+          lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
           if (OB_FAIL(cmp.get_ret())) {
             LOG_WARN("fail to sort server loads", K(ret));
           }
@@ -4041,7 +4030,7 @@ int ObServerBalancer::pick_vacate_server_load(
     }
     if (OB_SUCC(ret)) {
       ServerTotalLoadCmp cmp;
-      if (FALSE_IT(std::sort(server_load_ptrs_sorted.begin(),
+      if (FALSE_IT(lib::ob_sort(server_load_ptrs_sorted.begin(),
                              server_load_ptrs_sorted.end(),
                              cmp))) {
       } else if (OB_FAIL(cmp.get_ret())) {
@@ -4281,9 +4270,6 @@ int ObServerBalancer::check_single_server_resource_enough(
     } else if (OB_UNLIKELY(NULL == unit)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unit ptr is null", K(ret));
-    } else if (common::REPLICA_TYPE_LOGONLY == unit->replica_type_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Replica type LOGONLY is unexpected", KR(ret), KP(unit));
     }
   }
   if (OB_SUCC(ret)) {
@@ -4297,8 +4283,10 @@ int ObServerBalancer::check_single_server_resource_enough(
               && (static_cast<double>(this_load.load_sum_.log_disk_size())
                   + static_cast<double>(server_load.load_sum_.load_sum_.log_disk_size())
                 <= static_cast<double>(server_load.resource_info_.log_disk_total_))
-              && (static_cast<double>(my_unit_stat.get_required_size() + disk_statistic.disk_in_use_)
-                <= static_cast<double>(disk_statistic.disk_total_) * disk_waterlevel));
+              && (GCTX.is_shared_storage_mode() ||   // in shared-storage mode, skip check disk_usage
+                  (static_cast<double>(my_unit_stat.get_required_size() + disk_statistic.disk_in_use_)
+                  <= static_cast<double>(disk_statistic.disk_total_) * disk_waterlevel))
+             );
   }
   return ret;
 }
@@ -4359,7 +4347,7 @@ int ObServerBalancer::vacate_space_by_single_unit(
           LOG_WARN("fail to push back", K(ret));
         } else {
           ServerTotalLoadCmp cmp;
-          std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+          lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
           if (OB_FAIL(cmp.get_ret())) {
             LOG_WARN("fail to sort server loads", K(ret));
           }
@@ -4461,7 +4449,7 @@ int ObServerBalancer::generate_complete_server_loads(
       }
       if (OB_SUCC(ret)) {
         ServerTotalLoadCmp cmp;
-        std::sort(server_loads.begin(), server_loads.end(), cmp);
+        lib::ob_sort(server_loads.begin(), server_loads.end(), cmp);
         if (OB_FAIL(cmp.get_ret())) {
           LOG_WARN("fail to sort", K(ret));
         }
@@ -4589,7 +4577,7 @@ int ObServerBalancer::make_single_wild_server_empty_by_units(
     } else if (OB_FAIL(get_pool_occupation_excluded_dst_servers(
             unit_load, pool_occupation, excluded_servers))) {
       LOG_WARN("fail to get excluded servers", K(ret));
-    } else if (FALSE_IT(std::sort(available_server_loads.begin(),
+    } else if (FALSE_IT(lib::ob_sort(available_server_loads.begin(),
                                   available_server_loads.end(),
                                   cmp))) {
       // sort cannot fail
@@ -4811,7 +4799,7 @@ int ObServerBalancer::make_available_servers_balance_by_disk(
     }
     if (OB_SUCC(ret)) {
       UnitLoadDiskCmp cmp(unit_stat_mgr_);
-      std::sort(standalone_unit_ptrs.begin(), standalone_unit_ptrs.end(), cmp);
+      lib::ob_sort(standalone_unit_ptrs.begin(), standalone_unit_ptrs.end(), cmp);
       if (OB_FAIL(cmp.get_ret())) {
         LOG_WARN("fail to get ret", K(ret));
       }
@@ -4831,8 +4819,7 @@ int ObServerBalancer::make_available_servers_balance_by_disk(
         } else if (src_server != unit_load->unit_->server_) {
           // no this server
         } else if (common::REPLICA_TYPE_LOGONLY == unit_load->unit_->replica_type_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Replica type LOGONLY is unexpected", KR(ret), KP(unit_load));
+          // logonly replica required_disk_size is 0, cannot balance the disk, ignore this unit
         } else if (OB_FAIL(pick_server_load(
                 src_server, available_server_loads, src_server_load))) {
           LOG_WARN("fail to pick server load", K(ret));
@@ -4929,11 +4916,11 @@ int ObServerBalancer::make_available_servers_balance_by_cm(
   } else {
     common::ObArray<UnitMigrateStat> task_array;
     if (OB_FAIL(do_non_ttg_unit_balance_by_cm(
-            task_array, not_grant_units, over_server_loads, under_server_loads,
+            task_array, standalone_units, over_server_loads, under_server_loads,
             upper_lmt, g_res_weights, weights_count))) {
       LOG_WARN("fail to do non ttg unit balance by units", K(ret));
     } else if (OB_FAIL(do_non_ttg_unit_balance_by_cm(
-            task_array, standalone_units, over_server_loads, under_server_loads,
+            task_array, not_grant_units, over_server_loads, under_server_loads,
             upper_lmt, g_res_weights, weights_count))) {
       LOG_WARN("fail to do non ttg unit balance by units", K(ret));
     } else if (task_array.count() > 0) {
@@ -4967,7 +4954,7 @@ int ObServerBalancer::generate_sort_available_servers_disk_statistic(
     }
     if (OB_SUCC(ret)) {
       ServerDiskPercentCmp cmp;
-      std::sort(available_servers_disk_statistic.begin(),
+      lib::ob_sort(available_servers_disk_statistic.begin(),
                 available_servers_disk_statistic.end(),
                 cmp);
       if (OB_FAIL(cmp.get_ret())) {
@@ -5099,7 +5086,7 @@ int ObServerBalancer::make_server_disk_underload_by_unit(
             LOG_WARN("fail to update dst server load", K(ret));
           } else if (OB_FAIL(task_array.push_back(unit_migrate))) {
             LOG_WARN("fail to push back", K(ret));
-          } else if (FALSE_IT(std::sort(under_disk_statistic.begin(),
+          } else if (FALSE_IT(lib::ob_sort(under_disk_statistic.begin(),
                                         under_disk_statistic.end(),
                                         cmp))) {
           } else if (OB_FAIL(cmp.get_ret())) {
@@ -5136,7 +5123,7 @@ int ObServerBalancer::make_server_disk_underload(
     }
     if (OB_SUCC(ret)) {
       UnitLoadDiskCmp cmp(unit_stat_mgr_);
-      std::sort(standalone_unit_ptrs.begin(), standalone_unit_ptrs.end(), cmp);
+      lib::ob_sort(standalone_unit_ptrs.begin(), standalone_unit_ptrs.end(), cmp);
       if (OB_FAIL(cmp.get_ret())) {
         LOG_WARN("fail to get ret", K(ret));
       }
@@ -5234,38 +5221,47 @@ int ObServerBalancer::make_available_servers_balance(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(get_server_balance_critical_disk_waterlevel(disk_waterlevel))) {
-    LOG_WARN("fail to get disk waterlevel", K(ret));
-  } else if (OB_FAIL(zone_disk_statistic_.check_all_available_servers_over_disk_waterlevel(
-          disk_waterlevel, all_available_servers_disk_over))) {
-    LOG_WARN("fail to check all available servers over disk waterlevel", K(ret));
-  } else if (all_available_servers_disk_over) {
-    // The disk usage of all servers exceeds the warning water mark,
-    // used a complete disk balancing strategy.
-    // balance the disk usage when the cpu and memory can be accommodated.
-    ObArray<ServerTotalLoad *> available_server_loads;
-    if (OB_FAIL(generate_available_server_loads(
-            over_server_loads, under_server_loads, available_server_loads))) {
-      LOG_WARN("fail to generate available server loads", K(ret));
-    } else if (OB_FAIL(make_available_servers_disk_balance(
-            standalone_units, available_server_loads, balance_task_count))) {
-      LOG_WARN("fail to make available servers disk balance", K(ret));
-    } else {
-      balance_reason = "disk_balance_as_all_server_disk_over";
+  }
+  // check need balance by disk waterlevel
+  if (OB_SUCC(ret) && 0 == balance_task_count
+      && ! GCTX.is_shared_storage_mode()) {
+    // in shared_nothing mode, high disk waterlevel is allowed, no need to balance.
+    if (OB_FAIL(get_server_balance_critical_disk_waterlevel(disk_waterlevel))) {
+      LOG_WARN("fail to get disk waterlevel", K(ret));
+    } else if (OB_FAIL(zone_disk_statistic_.check_all_available_servers_over_disk_waterlevel(
+            disk_waterlevel, all_available_servers_disk_over))) {
+      LOG_WARN("fail to check all available servers over disk waterlevel", K(ret));
+    } else if (all_available_servers_disk_over) {
+      // The disk usage of all servers exceeds the warning water mark,
+      // used a complete disk balancing strategy.
+      // balance the disk usage when the cpu and memory can be accommodated.
+      ObArray<ServerTotalLoad *> available_server_loads;
+      if (OB_FAIL(generate_available_server_loads(
+              over_server_loads, under_server_loads, available_server_loads))) {
+        LOG_WARN("fail to generate available server loads", K(ret));
+      } else if (OB_FAIL(make_available_servers_disk_balance(
+              standalone_units, available_server_loads, balance_task_count))) {
+        LOG_WARN("fail to make available servers disk balance", K(ret));
+      } else {
+        balance_reason = "disk_balance_as_all_server_disk_over";
+      }
+    } else if (zone_disk_statistic_.over_disk_waterlevel()) {
+      // No need to deal with not grant, because they do not occupy disk
+      ObArray<ServerTotalLoad *> available_server_loads;
+      if (OB_FAIL(generate_available_server_loads(
+              over_server_loads, under_server_loads, available_server_loads))) {
+        LOG_WARN("fail to generate available server loads", K(ret));
+      } else if (OB_FAIL(make_available_servers_balance_by_disk(
+              standalone_units, available_server_loads, balance_task_count))) {
+        LOG_WARN("fail to make available servers balance by disk", K(ret));
+      } else {
+        balance_reason = "disk_balance_as_over_disk_waterlevel";
+      }
     }
-  } else if (zone_disk_statistic_.over_disk_waterlevel()) {
-    // No need to deal with not grant, because they do not occupy disk
-    ObArray<ServerTotalLoad *> available_server_loads;
-    if (OB_FAIL(generate_available_server_loads(
-            over_server_loads, under_server_loads, available_server_loads))) {
-      LOG_WARN("fail to generate available server loads", K(ret));
-    } else if (OB_FAIL(make_available_servers_balance_by_disk(
-            standalone_units, available_server_loads, balance_task_count))) {
-      LOG_WARN("fail to make available servers balance by disk", K(ret));
-    } else {
-      balance_reason = "disk_balance_as_over_disk_waterlevel";
-    }
-  } else {
+  }
+
+  // check need balance by cpu, mem, log_disk
+  if (OB_SUCC(ret) && 0 == balance_task_count) {
     if (OB_FAIL(make_available_servers_balance_by_cm(
             standalone_units, not_grant_units, over_server_loads, under_server_loads,
             upper_lmt, g_res_weights, weights_count, balance_task_count))) {
@@ -5625,12 +5621,13 @@ int ObServerBalancer::calc_global_balance_resource_weights(
       "cpu_weights", resource_weights[RES_CPU],
       "mem_weights", resource_weights[RES_MEM],
       "log_disk_weights", resource_weights[RES_LOG_DISK],
+      "data_disk_weights", resource_weights[RES_DATA_DISK],
       K(available_servers));
   return ret;
 }
 
 int ObServerBalancer::check_and_get_tenant_matrix_unit_num(
-    const Matrix<uint64_t> &tenant_id_matrix,
+    const ObMatrix<uint64_t> &tenant_id_matrix,
     const common::ObZone &zone,
     bool &unit_num_match,
     ObIArray<int64_t> &column_unit_num_array)
@@ -5717,10 +5714,10 @@ int ObServerBalancer::check_and_get_tenant_column_unit_num(
 }
 
 int ObServerBalancer::generate_original_unit_matrix(
-    const Matrix<uint64_t> &tenant_id_matrix,
+    const ObMatrix<uint64_t> &tenant_id_matrix,
     const common::ObZone &zone,
     const ObIArray<int64_t> &column_unit_num_array,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix)
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -5785,7 +5782,7 @@ int ObServerBalancer::generate_original_unit_matrix(
 }
 
 int ObServerBalancer::fill_unit_migrate_stat_matrix(
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     const uint64_t tenant_id,
     const int64_t row,
     const int64_t start_column_id,
@@ -5832,7 +5829,7 @@ int ObServerBalancer::single_unit_migrate_stat_matrix_balance(
 {
   int ret = OB_SUCCESS;
   const ObIArray<int64_t> &column_unit_num_array = balance_info.column_unit_num_array_;
-  Matrix<UnitMigrateStat> &unit_migrate_stat_matrix = balance_info.unit_migrate_stat_matrix_;
+  ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix = balance_info.unit_migrate_stat_matrix_;
   ObIArray<UnitGroupLoad> &unitgroup_loads = balance_info.unitgroup_load_array_;
   ObIArray<ServerLoad> &server_loads = balance_info.server_load_array_;
   if (OB_UNLIKELY(!inited_)) {
@@ -5854,7 +5851,7 @@ int ObServerBalancer::single_unit_migrate_stat_matrix_balance(
 
 int ObServerBalancer::InnerTenantGroupBalanceStrategy::coordinate_all_column_unit_group(
     const common::ObIArray<int64_t> &column_unit_num_array,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     const common::ObIArray<UnitGroupLoad> &unitgroup_loads)
 {
   int ret = OB_SUCCESS;
@@ -5882,7 +5879,7 @@ int ObServerBalancer::InnerTenantGroupBalanceStrategy::coordinate_all_column_uni
 int ObServerBalancer::InnerTenantGroupBalanceStrategy::coordinate_single_column_unit_group(
     const int64_t start_column_idx,
     const int64_t this_column_count,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     const common::ObIArray<UnitGroupLoad> &unitgroup_loads)
 {
   int ret = OB_SUCCESS;
@@ -5918,7 +5915,7 @@ int ObServerBalancer::InnerTenantGroupBalanceStrategy::coordinate_single_column_
 int ObServerBalancer::InnerTenantGroupBalanceStrategy::do_coordinate_single_column_unit_group(
     const int64_t start_column_idx,
     const int64_t column_count,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     const common::ObIArray<common::ObAddr> &dest_servers)
 {
   int ret = OB_SUCCESS;
@@ -5963,7 +5960,7 @@ int ObServerBalancer::InnerTenantGroupBalanceStrategy::do_coordinate_single_unit
     const int64_t start_column_idx,
     const int64_t column_count,
     const common::ObIArray<common::ObAddr> &candidate_servers,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix)
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix)
 {
   int ret = OB_SUCCESS;
   if (row < 0 || start_column_idx < 0 || column_count <= 0
@@ -6056,7 +6053,7 @@ int ObServerBalancer::InnerTenantGroupBalanceStrategy::arrange_unit_migrate_stat
 int ObServerBalancer::balance_row_units(
     TenantGroupBalanceInfo &balance_info,
     const common::ObIArray<int64_t> &column_unit_num_array,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     common::ObIArray<UnitGroupLoad> &unitgroup_loads,
     common::ObIArray<ServerLoad> &server_loads,
     const common::ObIArray<common::ObAddr> &available_servers)
@@ -6090,7 +6087,7 @@ int ObServerBalancer::balance_row_units(
 }
 
 int ObServerBalancer::generate_unitgroup_and_server_load(
-    const Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    const ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     const common::ObIArray<int64_t> &column_unit_num_array,
     const common::ObIArray<common::ObAddr> &available_servers,
     common::ObIArray<UnitGroupLoad> &unitgroup_loads,
@@ -6116,7 +6113,7 @@ int ObServerBalancer::generate_unitgroup_and_server_load(
 }
 
 int ObServerBalancer::generate_unitgroup_load(
-    const Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    const ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     const common::ObIArray<int64_t> &column_unit_num_array,
     common::ObIArray<UnitGroupLoad> &unitgroup_loads)
 {
@@ -6147,7 +6144,7 @@ int ObServerBalancer::generate_unitgroup_load(
 
 int ObServerBalancer::generate_column_unitgroup_load(
     const int64_t column,
-    const Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    const ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     const int64_t start_column_idx,
     const int64_t column_count,
     common::ObIArray<UnitGroupLoad> &unitgroup_loads)
@@ -6454,7 +6451,7 @@ int ObServerBalancer::update_server_load_value(
 
 int ObServerBalancer::do_balance_row_units(
     TenantGroupBalanceInfo &balance_info,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     common::ObIArray<UnitGroupLoad> &unitgroup_loads,
     common::ObIArray<ServerLoad> &server_loads)
 {
@@ -6471,7 +6468,7 @@ int ObServerBalancer::do_balance_row_units(
 
 int ObServerBalancer::CountBalanceStrategy::do_balance_row_units(
     TenantGroupBalanceInfo &balance_info,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     common::ObIArray<UnitGroupLoad> &unitgroup_loads,
     common::ObIArray<ServerLoad> &server_loads)
 {
@@ -6515,7 +6512,7 @@ int ObServerBalancer::CountBalanceStrategy::move_or_exchange_ug_balance_ttg_load
       double tolerance = sum_load / 100;
       // Sort by intra load descending order
       IntraServerLoadCmp cmp;
-      std::sort(server_load_ptrs_sorted.begin(),
+      lib::ob_sort(server_load_ptrs_sorted.begin(),
                 server_load_ptrs_sorted.end(),
                 cmp);
       if (OB_FAIL(cmp.get_ret())) {
@@ -6588,7 +6585,7 @@ int ObServerBalancer::CountBalanceStrategy::do_move_or_exchange_ug_balance_ttg_l
       } else {
         times++;
         IntraServerLoadCmp cmp;
-        std::sort(server_load_ptrs_sorted.begin(),
+        lib::ob_sort(server_load_ptrs_sorted.begin(),
                   server_load_ptrs_sorted.end(),
                   cmp);
         if (OB_FAIL(cmp.get_ret())) {
@@ -6637,7 +6634,7 @@ int ObServerBalancer::CountBalanceStrategy::try_move_ug_balance_ttg_load_foreach
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(max_server_load);
-      std::sort(max_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(max_server_load.unitgroup_loads_.begin(),
                 max_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -6646,7 +6643,7 @@ int ObServerBalancer::CountBalanceStrategy::try_move_ug_balance_ttg_load_foreach
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(min_server_load);
-      std::sort(min_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(min_server_load.unitgroup_loads_.begin(),
                 min_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -6727,7 +6724,7 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_ttg_load_for
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(max_server_load);
-      std::sort(max_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(max_server_load.unitgroup_loads_.begin(),
                 max_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -6736,7 +6733,7 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_ttg_load_for
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(min_server_load);
-      std::sort(min_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(min_server_load.unitgroup_loads_.begin(),
                 min_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -6751,7 +6748,7 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_ttg_load_for
 // until the difference between the largest server load and the smallest server load is less than or equal to 1 unitgroup
 int ObServerBalancer::CountBalanceStrategy::make_count_balanced(
     TenantGroupBalanceInfo &balance_info,
-    Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+    ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
     common::ObIArray<UnitGroupLoad> &unitgroup_loads,
     common::ObIArray<ServerLoad> &server_loads)
 {
@@ -6771,7 +6768,7 @@ int ObServerBalancer::CountBalanceStrategy::make_count_balanced(
     if (OB_SUCC(ret)) {
       // Sort by the number of unitgroups on the server in ascending order
       ServerLoadUgCntCmp cmp;
-      std::sort(server_cnt_ptrs_sorted.begin(),
+      lib::ob_sort(server_cnt_ptrs_sorted.begin(),
                 server_cnt_ptrs_sorted.end(),
                 cmp);
       if (OB_FAIL(cmp.get_ret())) {
@@ -6814,7 +6811,7 @@ int ObServerBalancer::CountBalanceStrategy::do_make_count_balanced(
       } else {
         times++;
         ServerLoadUgCntCmp cmp;
-        std::sort(server_cnt_ptrs_sorted.begin(),
+        lib::ob_sort(server_cnt_ptrs_sorted.begin(),
                   server_cnt_ptrs_sorted.end(),
                   cmp);
         if (OB_FAIL(cmp.get_ret())) {
@@ -6859,7 +6856,7 @@ int ObServerBalancer::CountBalanceStrategy::do_make_count_balanced_foreach(
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(src_server_load);
-      std::sort(src_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(src_server_load.unitgroup_loads_.begin(),
                 src_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -6868,7 +6865,7 @@ int ObServerBalancer::CountBalanceStrategy::do_make_count_balanced_foreach(
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(dst_server_load);
-      std::sort(dst_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(dst_server_load.unitgroup_loads_.begin(),
                 dst_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -7256,6 +7253,9 @@ double ObServerBalancer::ServerResourceLoad::get_true_capacity(const ObResourceT
   case RES_LOG_DISK:
     ret = static_cast<double>(resource_info_.log_disk_total_);
     break;
+  case RES_DATA_DISK:
+    ret = static_cast<double>(resource_info_.data_disk_total_);
+    break;
   default:
     ret = -1;
     break;
@@ -7276,6 +7276,9 @@ double ObServerBalancer::ServerLoad::get_intra_ttg_resource_capacity(
     break;
   case RES_LOG_DISK:
     ret = static_cast<double>(intra_ttg_resource_info_.log_disk_total_);
+    break;
+  case RES_DATA_DISK:
+    ret = static_cast<double>(intra_ttg_resource_info_.data_disk_total_);
     break;
   default:
     ret = -1;
@@ -7511,7 +7514,8 @@ bool ObServerBalancer::LoadSum::is_valid() const
   return load_sum_.min_cpu() >= 0
          && load_sum_.max_cpu() >= load_sum_.min_cpu()
          && load_sum_.memory_size() >= 0
-         && load_sum_.log_disk_size() >= 0;
+         && load_sum_.log_disk_size() >= 0
+         && load_sum_.data_disk_size() >= 0;
 }
 
 void ObServerBalancer::LoadSum::reset()
@@ -7531,6 +7535,9 @@ double ObServerBalancer::LoadSum::get_required(const ObResourceType resource_typ
     break;
   case RES_LOG_DISK:
     ret = static_cast<double>(load_sum_.log_disk_size());
+    break;
+  case RES_DATA_DISK:
+    ret = static_cast<double>(load_sum_.data_disk_size());
     break;
   default:
     ret = -1;
@@ -7628,8 +7635,7 @@ int ObServerBalancer::LoadSum::append_load(
 bool ObServerBalancer::ResourceSum::is_valid() const
 {
   return resource_sum_.cpu_ > 0
-         && resource_sum_.mem_total_ > 0
-         && resource_sum_.disk_total_ > 0;
+         && resource_sum_.mem_total_ > 0;
 }
 
 void ObServerBalancer::ResourceSum::reset()
@@ -7650,6 +7656,9 @@ double ObServerBalancer::ResourceSum::get_capacity(const ObResourceType resource
   case RES_LOG_DISK:
     ret = static_cast<double>(resource_sum_.log_disk_total_);
     break;
+  case RES_DATA_DISK:
+    ret = static_cast<double>(resource_sum_.data_disk_total_);
+    break;
   default:
     ret = -1;
     break;
@@ -7663,7 +7672,7 @@ int ObServerBalancer::ResourceSum::append_resource(
   int ret = OB_SUCCESS;
   resource_sum_.cpu_ += resource.cpu_;
   resource_sum_.mem_total_ += resource.mem_total_;
-  resource_sum_.disk_total_ += resource.disk_total_;
+  resource_sum_.data_disk_total_ += resource.data_disk_total_;
   resource_sum_.log_disk_total_ += resource.log_disk_total_;
   return ret;
 }
@@ -7674,7 +7683,7 @@ int ObServerBalancer::ResourceSum::append_resource(
   int ret = OB_SUCCESS;
   resource_sum_.cpu_ += resource.resource_sum_.cpu_;
   resource_sum_.mem_total_ += resource.resource_sum_.mem_total_;
-  resource_sum_.disk_total_ += resource.resource_sum_.disk_total_;
+  resource_sum_.data_disk_total_ += resource.resource_sum_.data_disk_total_;
   resource_sum_.log_disk_total_ += resource.resource_sum_.log_disk_total_;
   return ret;
 }
@@ -7873,7 +7882,7 @@ int ObServerBalancer::generate_zone_server_disk_statistic(
         disk_statistic.server_ = server;
         disk_statistic.wild_server_ = false;
         if (OB_SUCC(ERRSIM_SERVER_DISK_ASSIGN)) {
-          disk_statistic.disk_in_use_ = server_resource_info.disk_in_use_;
+          disk_statistic.disk_in_use_ = server_resource_info.data_disk_in_use_;
         } else {
           // ONLY FOR TEST, errsim triggered, make disk_in_use equal to (1GB * unit_num)
           ObArray<ObUnitManager::ObUnitLoad> *unit_loads_ptr;
@@ -7888,7 +7897,7 @@ int ObServerBalancer::generate_zone_server_disk_statistic(
           }
           LOG_ERROR("errsim triggered, assign server disk_in_use as unit count * 1GB", KR(ret), K(disk_statistic));
         }
-        disk_statistic.disk_total_ = server_resource_info.disk_total_;
+        disk_statistic.disk_total_ = server_resource_info.data_disk_total_;
         if (static_cast<double>(disk_statistic.disk_in_use_)
             > disk_waterlevel * static_cast<double>(disk_statistic.disk_total_)) {
           zone_disk_statistic_.over_disk_waterlevel_ = true;
@@ -7896,8 +7905,8 @@ int ObServerBalancer::generate_zone_server_disk_statistic(
       } else if (server_info.is_deleting() || server_info.is_permanent_offline()) {
         disk_statistic.server_ = server;
         disk_statistic.wild_server_ = true;
-        disk_statistic.disk_in_use_ = server_resource_info.disk_in_use_;
-        disk_statistic.disk_total_ = server_resource_info.disk_total_;
+        disk_statistic.disk_in_use_ = server_resource_info.data_disk_in_use_;
+        disk_statistic.disk_total_ = server_resource_info.data_disk_total_;
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknow server_info", K(ret), K(server_info));
@@ -7945,7 +7954,7 @@ int ObServerBalancer::ZoneServerDiskStatistic::append(
     LOG_WARN("fail to push back", K(ret));
   } else {
     ServerDiskStatisticCmp cmp;
-    std::sort(server_disk_statistic_array_.begin(),
+    lib::ob_sort(server_disk_statistic_array_.begin(),
               server_disk_statistic_array_.end(),
               cmp);
   }
@@ -7979,7 +7988,7 @@ int ObServerBalancer::ZoneServerDiskStatistic::raise_server_disk_use(
       LOG_WARN("server not exist", K(ret), K(server));
     } else {
       ServerDiskStatisticCmp cmp;
-      std::sort(server_disk_statistic_array_.begin(),
+      lib::ob_sort(server_disk_statistic_array_.begin(),
                 server_disk_statistic_array_.end(),
                 cmp);
     }
@@ -8014,7 +8023,7 @@ int ObServerBalancer::ZoneServerDiskStatistic::reduce_server_disk_use(
       LOG_WARN("server not exist", K(ret), K(server));
     } else {
       ServerDiskStatisticCmp cmp;
-      std::sort(server_disk_statistic_array_.begin(),
+      lib::ob_sort(server_disk_statistic_array_.begin(),
                 server_disk_statistic_array_.end(),
                 cmp);
     }

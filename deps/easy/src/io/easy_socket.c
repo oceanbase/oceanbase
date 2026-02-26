@@ -1,5 +1,4 @@
 #include "io/easy_socket.h"
-#include "io/easy_io.h"
 #include "util/easy_inet.h"
 #include "util/easy_string.h"
 #include <sys/ioctl.h>

@@ -2428,6 +2428,20 @@
   select st_distance(ST_GEOMFROMTEXT('POINT(0 0)', 4053), ST_GEOMFROMTEXT('POINT(0 45)', 4053), "Indian yard");
   select st_distance(ST_GEOMFROMTEXT('POINT(0 0)', 4053), ST_GEOMFROMTEXT('POINT(0 45)', 4053), "Indian yard (1937)");
 
+  # 2 layers of GEOMETRYCOLLECTION nested
+  SET @coll1 = ST_GEOMFROMTEXT(@star_collection_multilinestr);
+  SET @coll2 = ST_GEOMFROMTEXT(@star_collection_elems_3);
+  # 10 layers of GEOMETRYCOLLECTION nested
+  SELECT ST_DISTANCE(
+    GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(@coll1, @coll1),@coll1),@coll1),@coll1),@coll1),@coll1),@coll1),@coll1),
+    GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(@coll2, @coll2),@coll2),@coll2),@coll2),@coll2),@coll2),@coll2),@coll2)
+  );
+  # long geometrycollection
+  SELECT ST_DISTANCE(
+    GEOMETRYCOLLECTION(@coll1, @coll1, @coll1, @coll1, @coll1, @coll1, @coll1, @coll1, @coll1, @coll1),
+    GEOMETRYCOLLECTION(@coll2, @coll2, @coll2, @coll2, @coll2, @coll2, @coll2, @coll2, @coll2, @coll2)
+  );
+  
 --echo bugfix: 54168045
 # case 1
 --error 3037

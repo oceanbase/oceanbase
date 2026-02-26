@@ -13,9 +13,7 @@
 #include "ob_all_virtual_tenant_parameter_stat.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
 {
@@ -197,7 +195,7 @@ int ObAllVirtualTenantParameterStat::update_seed()
       SERVER_LOG(WARN, "seed config init failed", K(ret));
     } else if (OB_FAIL(sql_client_retry_weak.read(result, OB_SYS_TENANT_ID, from_seed))) {
       SERVER_LOG(WARN, "read config from __all_seed_parameter failed", K(from_seed), K(ret));
-    } else if (OB_FAIL(seed_config_.update_local(ObSystemConfig::INIT_VERSION, result, false))) {
+    } else if (OB_FAIL(seed_config_.update_local(ObSystemConfig::INIT_VERSION, result))) {
       SERVER_LOG(WARN, "update seed config failed", K(ret));
     } else {
       tenant_iter_ = seed_config_.get_container().begin();
@@ -270,11 +268,40 @@ int ObAllVirtualTenantParameterStat::fill_row_(common::ObNewRow *&row,
             break;
           }
           case VALUE: {
-            if (0 == ObString("compatible").case_compare(iter->first.str())
-                && !iter->second->value_updated()) {
-              // `compatible` is used for tenant compatibility,
-              // default value should not be used when `compatible` is not loaded yet.
-              cells[i].set_varchar("0.0.0.0");
+            if (0 == ObString("compatible").case_compare(iter->first.str())) {
+              const uint64_t tenant_id = tenant_id_list_.at(cur_tenant_idx_);
+              uint64_t data_version = 0;
+              char *dv_buf = NULL;
+              if (GET_MIN_DATA_VERSION(tenant_id, data_version) != OB_SUCCESS) {
+                // `compatible` is used for tenant compatibility,
+                // default value should not be used when `compatible` is not
+                // loaded yet.
+                cells[i].set_varchar("0.0.0.0");
+              } else if (OB_ISNULL(dv_buf = (char *)allocator_->alloc(OB_SERVER_VERSION_LENGTH))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                SERVER_LOG(ERROR, "fail to alloc buf", K(ret), K(tenant_id),
+                           K(OB_SERVER_VERSION_LENGTH));
+              } else if (OB_INVALID_INDEX ==
+                         VersionUtil::print_version_str(
+                             dv_buf, OB_SERVER_VERSION_LENGTH, data_version)) {
+                ret = OB_INVALID_ARGUMENT;
+                SERVER_LOG(ERROR, "fail to print data_version", K(ret),
+                           K(tenant_id), K(data_version));
+              } else {
+                cells[i].set_varchar(dv_buf);
+              }
+            } else if (0 == ObString("_parallel_ddl_control").case_compare(iter->first.str())) {
+              ObParallelDDLControlMode ddl_mode;
+              if (OB_FAIL(ddl_mode.parse_from_config_string(iter->second->str()))) {
+                SERVER_LOG(WARN, "fail to parse config", KR(ret));
+              } else {
+                ObString deep_str;
+                if (OB_FAIL(ddl_mode.to_config_string(*allocator_, deep_str))) {
+                  SERVER_LOG(WARN, "fail to build string", KR(ret));
+                } else {
+                  cells[i].set_varchar(deep_str);
+                }
+              }
             } else {
               if (!is_sys_tenant(effective_tenant_id_) &&
                   (0 == ObString(SSL_EXTERNAL_KMS_INFO).case_compare(iter->first.str()) ||

@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include <algorithm>            // std::max
 #include "ob_archive_piece.h"
 
 namespace oceanbase

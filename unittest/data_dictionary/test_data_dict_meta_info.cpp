@@ -13,9 +13,7 @@
  */
 
 #include "gtest/gtest.h"
-#include "lib/oblog/ob_log.h"
 #include "logservice/palf/log_define.h"
-#include "share/ob_errno.h"
 
 #define private public
 #include "logservice/data_dictionary/ob_data_dict_meta_info.h"

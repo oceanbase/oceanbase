@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_state_mgr.h"
-#include "common/ob_clock_generator.h"
-#include "rpc/obrpc/ob_rpc_net_handler.h"
-#include "palf_callback_wrapper.h"
 #include "log_io_task_cb_utils.h"
 #include "log_engine.h"
-#include "log_meta_info.h"
 #include "log_config_mgr.h"
 #include "log_reconfirm.h"
 #include "log_sliding_window.h"

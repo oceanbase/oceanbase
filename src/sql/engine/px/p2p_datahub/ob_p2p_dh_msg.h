@@ -39,6 +39,7 @@ public:
   ACT(BLOOM_FILTER_VEC_MSG, )                                                                      \
   ACT(RANGE_FILTER_VEC_MSG, )                                                                      \
   ACT(IN_FILTER_VEC_MSG, )                                                                         \
+  ACT(PD_TOPN_FILTER_MSG, )                                                                           \
   ACT(MAX_TYPE, )
 
   DECLARE_ENUM(ObP2PDatahubMsgType, p2p_datahub_msg_type, P2P_DATAHUB_MSG_TYPE, static);
@@ -68,6 +69,24 @@ static int transform_vec_p2p_msg_type(const ObP2PDatahubMsgType &in_type, ObP2PD
   return ret;
 }
 
+static inline bool is_bloom_filter(ObP2PDatahubMsgType msg_type)
+{
+  return msg_type == ObP2PDatahubMsgBase::BLOOM_FILTER_MSG
+         || msg_type == ObP2PDatahubMsgBase::BLOOM_FILTER_VEC_MSG;
+}
+
+static inline bool is_range_filter(ObP2PDatahubMsgType msg_type)
+{
+  return msg_type == ObP2PDatahubMsgBase::RANGE_FILTER_MSG
+         || msg_type == ObP2PDatahubMsgBase::RANGE_FILTER_VEC_MSG;
+}
+
+static inline bool is_in_filter(ObP2PDatahubMsgType msg_type)
+{
+  return msg_type == ObP2PDatahubMsgBase::IN_FILTER_MSG
+         || msg_type == ObP2PDatahubMsgBase::IN_FILTER_VEC_MSG;
+}
+
 public:
   ObP2PDatahubMsgBase() : trace_id_(), p2p_datahub_id_(OB_INVALID_ID),
       px_sequence_id_(OB_INVALID_ID), task_id_(OB_INVALID_ID),
@@ -78,6 +97,9 @@ public:
       is_ready_(false), is_empty_(true), ref_count_(0),
       register_dm_info_(), dm_cb_node_seq_id_(0) {}
   virtual ~ObP2PDatahubMsgBase() {}
+
+  // this interface will be used both in send and receive process, ensure copy all
+  // members that need to been serialize.
   virtual int assign(const ObP2PDatahubMsgBase &);
   virtual int merge(ObP2PDatahubMsgBase &) = 0;
   virtual int deep_copy_msg(ObP2PDatahubMsgBase *&new_msg_ptr) = 0;
@@ -126,7 +148,9 @@ public:
       uint64_t *batch_hash_values)
   { return OB_SUCCESS; }
   virtual void after_process() {}
-  virtual int try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges)
+  virtual int try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                                      bool need_deep_copy = false,
+                                      common::ObIAllocator *allocator = nullptr)
   {
     return OB_SUCCESS;
   }
@@ -163,7 +187,7 @@ public:
   int64_t get_msg_receive_cur_cnt() const { return msg_receive_cur_cnt_; }
   void set_msg_cur_cnt(int64_t cnt) { msg_receive_cur_cnt_ = cnt; }
   void set_msg_expect_cnt(int64_t cnt) { msg_receive_expect_cnt_ = cnt; }
-  bool is_valid_type() { return NOT_INIT < msg_type_ < MAX_TYPE; }
+  bool is_valid_type() { return NOT_INIT < msg_type_ && msg_type_ < MAX_TYPE; }
   common::ObCurTraceId::TraceId get_trace_id() const { return trace_id_; }
   int64_t get_start_time() const { return start_time_; }
   int64_t get_px_seq_id() const { return px_sequence_id_; }
@@ -216,6 +240,34 @@ struct ObP2PDatahubMsgGuard
   void release();
   ObP2PDatahubMsgBase *msg_;
 };
+
+template <typename ResVec>
+static int proc_filter_not_active(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound);
+
+template <>
+int proc_filter_not_active<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
+                                          const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBitVector::flip_foreach(
+          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
+            res_vec->set_int(idx, 1);
+            return OB_SUCCESS;
+          }))) {
+    SQL_LOG(WARN, "fail to do for each operation", K(ret));
+  }
+  return ret;
+}
+
+template <>
+int proc_filter_not_active<IntegerFixedVec>(IntegerFixedVec *res_vec, const ObBitVector &skip,
+                                            const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
+  MEMSET(data + bound.start(), 1, (bound.range_size() * res_vec->get_length(0)));
+  return ret;
+}
 
 }
 }

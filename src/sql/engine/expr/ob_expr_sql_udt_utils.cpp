@@ -12,12 +12,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_user_type.h"
 #include "src/pl/ob_pl_resolver.h"
 
 using namespace oceanbase::common;
@@ -873,6 +868,35 @@ int ObSqlUdtUtils::convert_sql_udt_to_string(ObObj &sql_udt_obj,
   return ret;
 }
 
+int ObSqlUdtUtils::convert_collection_to_string(ObObj &coll_obj, const ObSqlCollectionInfo &coll_meta,
+                                                common::ObIAllocator *allocator, ObString &res_str)
+{
+  int ret = OB_SUCCESS;
+  ObIArrayType *arr_obj = NULL;
+  ObString coll_data = coll_obj.get_string();
+  ObStringBuffer buf(allocator);
+  ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_meta.collection_meta_);
+  if (OB_FAIL(ObTextStringHelper::read_real_string_data(&lob_allocator,
+                                                        ObLongTextType,
+                                                        CS_TYPE_BINARY,
+                                                        true, coll_data))) {
+    LOG_WARN("fail to get real string data", K(ret), K(coll_data));
+  } else if (OB_FAIL(ObArrayTypeObjFactory::construct(*allocator, *arr_type, arr_obj, true))) {
+    LOG_WARN("construct array obj failed", K(ret),  K(coll_meta));
+  } else {
+    if (OB_FAIL(arr_obj->init(coll_data))) {
+      LOG_WARN("failed to init array", K(ret));
+    } else if (OB_FAIL(arr_obj->print(buf))) {
+      LOG_WARN("failed to format array", K(ret));
+    } else {
+      res_str.assign_ptr(buf.ptr(), buf.length());
+    }
+  }
+
+  return ret;
+}
+
 int ObSqlUdtUtils::cast_pl_varray_to_sql_varray(common::ObIAllocator &res_allocator,
                                                 ObString &res,
                                                 const ObObj root_obj,
@@ -1067,12 +1091,13 @@ int ObSqlUdtUtils::cast_sql_udt_varray_to_pl_varray(sql::ObExecContext *exec_ctx
       elem_desc.set_field_count(1); // varray with basic type elements, field count is 1.
       coll->set_element_desc(elem_desc);
       coll->set_not_null(false); // should from udt meta
+      OZ (coll->init_allocator(alloc, true));
     }
 
     ObObj *varray_objs = NULL;
     uint64_t element_count = varray_handler.get_varray_element_count();
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObSPIService::spi_set_collection(0, NULL, alloc, *coll, element_count))) {
+    } else if (OB_FAIL(ObSPIService::spi_set_collection(0, NULL, *coll, element_count))) {
       LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
     } else if (OB_ISNULL(varray_objs = coll->get_data())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1101,17 +1126,16 @@ int ObSqlUdtUtils::cast_sql_udt_varray_to_pl_varray(sql::ObExecContext *exec_ctx
     }
 
     // is nested varray needs add to pl ctx? may not needed for obobj cast
-    if (OB_SUCC(ret)) {
-      res_obj.set_extend(reinterpret_cast<int64_t>(coll), coll->get_type());
-      if (OB_NOT_NULL(coll->get_allocator())) {
-        if (OB_ISNULL(exec_ctx->get_pl_ctx())) {
-          if (OB_FAIL(exec_ctx->init_pl_ctx() || OB_ISNULL(exec_ctx->get_pl_ctx()))) {
-            LOG_ERROR("fail to init pl ctx", K(ret));
-          }
+    OX (res_obj.set_extend(reinterpret_cast<int64_t>(coll), coll->get_type()));
+    if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {
+      if (OB_ISNULL(exec_ctx->get_pl_ctx())) {
+        if (OB_FAIL(exec_ctx->init_pl_ctx() || OB_ISNULL(exec_ctx->get_pl_ctx()))) {
+          LOG_ERROR("fail to init pl ctx", K(ret));
         }
-        if (OB_SUCC(ret) && OB_FAIL(exec_ctx->get_pl_ctx()->add(res_obj))) {
-          LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(ret));
-        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(exec_ctx->get_pl_ctx()->add(res_obj))) {
+        int tmp = pl::ObUserDefinedType::destruct_obj(res_obj, nullptr);
+        LOG_WARN("fail to collect pl collection allocator, try to free memory", K(ret), K(tmp));
       }
     }
   }
@@ -1145,6 +1169,7 @@ int ObSqlUdtUtils::cast_sql_udt_attributes_to_pl_record(sql::ObExecContext *exec
       LOG_WARN("failed to alloc memory", K(ret));
     } else {
       new(record)pl::ObPLRecord(udt_meta.udt_id_, top_level_attr_count);
+      OZ (record->init_data(allocator, true));
     }
     ObObj obj;
     for (int64_t i = 0; OB_SUCC(ret) && i < top_level_attr_count; i++) {
@@ -1215,12 +1240,25 @@ int ObSqlUdtUtils::cast_sql_udt_attributes_to_pl_record(sql::ObExecContext *exec
           obj.meta_.set_ext();
           obj.meta_.set_extend_type(type == ObUserDefinedSQLType ? pl::PL_RECORD_TYPE : pl::PL_VARRAY_TYPE);
         }
-        record->get_element()[i] = obj;
+        //record->get_element()[i] = obj;
+        OZ (deep_copy_obj(*record->get_allocator(), obj, record->get_element()[i]));
       }
     }
-    if (OB_SUCC(ret)) {
-      res_obj.set_extend(reinterpret_cast<int64_t>(record),
-                        pl::PL_RECORD_TYPE, pl::ObRecordType::get_init_size(top_level_attr_count));
+    OX (res_obj.set_extend(reinterpret_cast<int64_t>(record),
+                        pl::PL_RECORD_TYPE, pl::ObRecordType::get_init_size(top_level_attr_count)));
+    if (OB_NOT_NULL(record) && OB_NOT_NULL(record->get_allocator())) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_ISNULL(exec_ctx->get_pl_ctx())) {
+        tmp_ret = exec_ctx->init_pl_ctx();
+      }
+      if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(exec_ctx->get_pl_ctx())) {
+        tmp_ret = exec_ctx->get_pl_ctx()->add(res_obj);
+      }
+      if (OB_SUCCESS != tmp_ret) {
+        int tmp = pl::ObUserDefinedType::destruct_obj(res_obj, nullptr);
+        LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
+      }
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
 #endif
@@ -1504,7 +1542,7 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
     udt_meta.udt_id_ = udt_id;
     if (root_udt_info->is_object_type()) {
       pl_type = static_cast<int32_t>(pl::PL_RECORD_TYPE);
-      child_attrs_cnt = root_udt_info->get_local_attrs();
+      child_attrs_cnt = root_udt_info->get_attributes();
     } else if (root_udt_info->is_varray()) {
       pl_type = static_cast<int32_t>(pl::PL_VARRAY_TYPE);
       if (OB_NOT_NULL(root_udt_info->get_coll_info())) {

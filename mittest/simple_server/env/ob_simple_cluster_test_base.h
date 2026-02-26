@@ -32,7 +32,8 @@ public:
   // set_bootstrap_and_create_tenant_warn_log 默认bootstrap和创建租户使用WARN日志，加速启动
   ObSimpleClusterTestBase(const std::string &env_prefix = "run_",
                           const char *log_disk_size = "10G",
-                          const char *memory_limit = "16G");
+                          const char *memory_limit = "16G",
+                          const char *datafile_size = "10G");
   virtual ~ObSimpleClusterTestBase();
 
   int start();
@@ -40,11 +41,17 @@ public:
   observer::ObServer& get_curr_observer() { return cluster_->get_observer(); }
   observer::ObSimpleServer& get_curr_simple_server() { return *cluster_; }
 
+  int create_tenant_with_retry(const char *tenant_name = "tt1",
+                               const char *memory_size = "4G",
+                               const char *log_disk_size = "4G",
+                               const bool oracle_mode = false,
+                               int64_t tenant_cpu = 2);
   int create_tenant(const char *tenant_name = "tt1",
                     const char *memory_size = "4G",
                     const char *log_disk_size = "4G",
                     const bool oracle_mode = false,
-                    int64_t tenant_cpu = 2);
+                    int64_t tenant_cpu = 2,
+                    const char *data_disk_size = nullptr);
   int delete_tenant(const char *tenant_name = "tt1");
   int get_tenant_id(uint64_t &tenant_id, const char *tenant_name = "tt1");
   int exec_write_sql_sys(const char *sql_str, int64_t &affected_rows);

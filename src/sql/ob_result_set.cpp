@@ -11,48 +11,16 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "sql/ob_result_set.h"
-#include "lib/oblog/ob_trace_log.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "rpc/obmysql/ob_mysql_global.h"
+#include "ob_result_set.h"
 #include "rpc/obmysql/ob_mysql_field.h"
-#include "lib/oblog/ob_log_module.h"
-#include "engine/ob_physical_plan.h"
-#include "sql/parser/parse_malloc.h"
-#include "share/system_variable/ob_system_variable.h"
-#include "share/system_variable/ob_system_variable_alias.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ob_cmd.h"
 #include "sql/engine/px/ob_px_admission.h"
 #include "sql/engine/cmd/ob_table_direct_insert_service.h"
-#include "sql/executor/ob_executor.h"
-#include "sql/executor/ob_cmd_executor.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/cmd/ob_call_procedure_stmt.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/ob_sql_trans_util.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/profile/ob_perf_event.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "share/ob_cluster_version.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_event.h"
-#include "pl/ob_pl_user_type.h"
-#include "pl/ob_pl_stmt.h"
-#include "observer/ob_server_struct.h"
-#include "storage/tx/wrs/ob_weak_read_service.h"       // ObWeakReadService
-#include "storage/tx/wrs/ob_i_weak_read_service.h"     // WRS_LEVEL_SERVER
-#include "storage/tx/wrs/ob_weak_read_util.h"          // ObWeakReadUtil
-#include "observer/ob_req_time_service.h"
-#include "sql/dblink/ob_dblink_utils.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "src/sql/plan_cache/ob_plan_cache.h"
 #include "sql/dblink/ob_tm_service.h"
 #include "storage/tx/ob_xa_ctx.h"
-#include "sql/engine/dml/ob_link_op.h"
-#include <cctype>
-#include "sql/engine/expr/ob_expr_last_refresh_scn.h"
+#include "src/rootserver/mview/ob_mview_maintenance_service.h"
+#include "src/sql/ob_sql_ccl_rule_manager.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -64,7 +32,8 @@ using namespace oceanbase::transaction;
 ObResultSet::~ObResultSet()
 {
   bool is_remote_sql = false;
-  if (OB_NOT_NULL(get_exec_context().get_sql_ctx())) {
+  sql::ObSqlCtx *sql_ctx = NULL;
+  if (OB_NOT_NULL(sql_ctx = get_exec_context().get_sql_ctx())) {
     is_remote_sql = get_exec_context().get_sql_ctx()->is_remote_sql_;
   }
   ObPhysicalPlan* physical_plan = get_physical_plan();
@@ -72,18 +41,44 @@ ObResultSet::~ObResultSet()
       && OB_UNLIKELY(physical_plan->is_limited_concurrent_num())) {
     physical_plan->dec_concurrent_num();
   }
+
+  if (my_session_.has_ccl_rule_checked() && my_session_.is_enable_sql_ccl_rule()) {
+    sql::ObSQLCCLRuleManager *sql_ccl_rule_mgr = MTL(sql::ObSQLCCLRuleManager *);
+    if (!is_inner_result_set_ && sql_ccl_rule_mgr->is_inited() && OB_NOT_NULL(sql_ccl_rule_mgr) && OB_NOT_NULL(get_exec_context().get_sql_ctx())) {
+      FOREACH(p_value_wrapper, get_exec_context().get_sql_ctx()->matched_ccl_rule_level_values_) {
+        sql_ccl_rule_mgr->dec_rule_level_concurrency(*p_value_wrapper);
+      }
+      FOREACH(p_value_wrapper,
+              get_exec_context().get_sql_ctx()->matched_ccl_format_sqlid_level_values_) {
+        sql_ccl_rule_mgr->dec_format_sqlid_level_concurrency(*p_value_wrapper);
+      }
+    }
+  }
+
   // when ObExecContext is destroyed, it also depends on the physical plan, so need to ensure
   // that inner_exec_ctx_ is destroyed before cache_obj_guard_
   if (NULL != inner_exec_ctx_) {
     inner_exec_ctx_->~ObExecContext();
     inner_exec_ctx_ = NULL;
   }
-  ObPlanCache *pc = my_session_.get_plan_cache_directly();
-  if (OB_NOT_NULL(pc)) {
-    cache_obj_guard_.force_early_release(pc);
+#ifdef OB_BUILD_SPM
+  if (OB_NOT_NULL(sql_ctx) && sql_ctx->spm_ctx_.evo_plan_added_
+      && OB_NOT_NULL(cache_obj_guard_.get_cache_obj())) {
+    sql_ctx->spm_ctx_.evo_plan_guard_.swap(cache_obj_guard_);
+    sql_ctx->spm_ctx_.evo_plan_added_ = false;
+  } else
+#endif
+  {
+    ObPlanCache *pc = my_session_.get_plan_cache_directly();
+    if (OB_NOT_NULL(pc)) {
+      cache_obj_guard_.force_early_release(pc);
+    }
+    if (OB_NOT_NULL(pc)) {
+      temp_cache_obj_guard_.force_early_release(pc);
+    }
+    // Always called at the end of the ObResultSet destructor
+    update_end_time();
   }
-  // Always called at the end of the ObResultSet destructor
-  update_end_time();
   is_init_ = false;
 }
 
@@ -135,10 +130,17 @@ OB_INLINE int ObResultSet::open_plan()
                  "start_time", my_session_.get_query_start_time());
       } else if (stmt::T_PREPARE != stmt_type_) {
         int64_t retry = 0;
-        if (OB_SUCC(ret)) {
-          do {
-            ret = do_open_plan(get_exec_context());
-          } while (transaction_set_violation_and_retry(ret, retry));
+        if (OB_UNLIKELY(my_session_.is_zombie())) {
+          //session has been killed some moment ago
+          ret = OB_ERR_SESSION_INTERRUPTED;
+          LOG_WARN("session has been killed", K(ret), K(my_session_.get_session_state()),
+                  K(my_session_.get_server_sid()), "proxy_sessid", my_session_.get_proxy_sessid());
+        } else {
+          if (OB_SUCC(ret)) {
+            do {
+              ret = do_open_plan(get_exec_context());
+            } while (transaction_set_violation_and_retry(ret, retry));
+          }
         }
       }
     }
@@ -215,11 +217,16 @@ int ObResultSet::open_result()
       }
     } else if (OB_FAIL(drive_dml_query())) {
       LOG_WARN("fail to drive dml query", K(ret));
-    } else if ((stmt::T_INSERT == get_stmt_type())
-        && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
-      // for insert /*+ append */ into select clause
-      if (OB_FAIL(ObTableDirectInsertService::commit_direct_insert(get_exec_context(), *physical_plan_))) {
-        LOG_WARN("fail to commit direct insert", KR(ret));
+    } else {
+      ObPhysicalPlanCtx *plan_ctx = NULL;
+      if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("physical plan ctx is null");
+      } else if (plan_ctx->get_is_direct_insert_plan()) {
+        // for insert /*+ append */ into select clause
+        if (OB_FAIL(ObTableDirectInsertService::commit_direct_insert(get_exec_context(), *physical_plan_))) {
+          LOG_WARN("fail to commit direct insert", KR(ret));
+        }
       }
     }
   }
@@ -295,16 +302,10 @@ int ObResultSet::implicit_commit_before_cmd_execute(ObSQLSessionInfo &session_in
     }
     exec_ctx.set_need_disconnect(false);
   } else {
-    // implicit end transaction and start transaction will not clear next scope transaction settings by:
-    // a. set by `set transaction read only`
-    // b. set by `set transaction isolation level XXX`
-    bool keep_trans_variable = (cmd_type == stmt::T_START_TRANS);
-    if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false, NULL, !keep_trans_variable))) {
-      LOG_WARN("fail end implicit trans on cmd execute", K(ret));
-    } else if (session_info.need_recheck_txn_readonly() && session_info.get_tx_read_only()) {
-      ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
-      LOG_WARN("cmd can not execute because txn is read only", K(ret), K(cmd_type));
-    }
+    ret = ObSqlTransControl::end_trans_before_cmd_execute(session_info,
+                                                          exec_ctx.get_need_disconnect_for_update(),
+                                                          exec_ctx.get_trans_state(),
+                                                          cmd_type);
   }
   return ret;
 }
@@ -438,7 +439,7 @@ int ObResultSet::end_stmt(const bool is_rollback)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid inner state", K(physical_plan_));
     } else if (physical_plan_->is_need_trans()) {
-      if (OB_FAIL(ObSqlTransControl::end_stmt(get_exec_context(), is_rollback))) {
+      if (OB_FAIL(ObSqlTransControl::end_stmt(get_exec_context(), is_rollback, is_will_retry_()))) {
         SQL_LOG(WARN, "fail to end stmt", K(ret), K(is_rollback));
       }
     }
@@ -575,6 +576,8 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
   int ret = OB_SUCCESS;
   ctx.reset_op_env();
   exec_result_ = &(ctx.get_task_exec_ctx().get_execute_result());
+  rootserver::ObMViewMaintenanceService *mview_maintenance_service =
+                                        MTL(rootserver::ObMViewMaintenanceService*);
   if (stmt::T_PREPARE != stmt_type_) {
     if (OB_FAIL(ctx.init_phy_op(physical_plan_->get_phy_operator_size()))) {
       LOG_WARN("fail init exec phy op ctx", K(ret));
@@ -591,20 +594,24 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
 
 
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(mview_maintenance_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mview_maintenance_service is null", K(ret), KP(mview_maintenance_service));
   } else if (OB_FAIL(start_stmt())) {
     LOG_WARN("fail start stmt", K(ret));
   } else if (!physical_plan_->get_mview_ids().empty() && OB_PHY_PLAN_REMOTE != physical_plan_->get_plan_type()
-             && OB_FAIL(ObExprLastRefreshScn::set_last_refresh_scns(physical_plan_->get_mview_ids(),
-                                                                    ctx.get_sql_proxy(),
-                                                                    ctx.get_my_session(),
-                                                                    ctx.get_das_ctx().get_snapshot().core_.version_,
-                                                                    ctx.get_physical_plan_ctx()->get_mview_ids(),
-                                                                    ctx.get_physical_plan_ctx()->get_last_refresh_scns()))) {
+             && OB_FAIL((mview_maintenance_service->get_mview_refresh_info(physical_plan_->get_mview_ids(),
+                                                                           ctx.get_sql_proxy(),
+                                                                           ctx.get_das_ctx().get_snapshot().core_.version_,
+                                                                           ctx.get_physical_plan_ctx()->get_mview_ids(),
+                                                                           ctx.get_physical_plan_ctx()->get_last_refresh_scns())))) {
     LOG_WARN("fail to set last_refresh_scns", K(ret), K(physical_plan_->get_mview_ids()));
   } else {
-    // for insert /*+ append */ into select clause
-    if ((stmt::T_INSERT == get_stmt_type())
-        && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
+    ObPhysicalPlanCtx *plan_ctx = NULL;
+    if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("physical plan ctx is null");
+    } else if (plan_ctx->get_is_direct_insert_plan()) {
       if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
         LOG_WARN("fail to start direct insert", KR(ret));
       }
@@ -653,8 +660,14 @@ int ObResultSet::set_mysql_info()
       }
     }
   } else if (stmt::T_LOAD_DATA == get_stmt_type()) {
-    int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_LOAD_DATA_MSG_FMT, plan_ctx->get_row_matched_count(),
-                              plan_ctx->get_row_deleted_count(), plan_ctx->get_row_duplicated_count(), warning_count_);
+    int64_t warning_cnt = warning_count_;
+    ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
+    if (OB_NOT_NULL(buffer)) {
+      warning_cnt = buffer->get_total_warning_count();
+    }
+    int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_LOAD_DATA_MSG_FMT,
+                              plan_ctx->get_row_matched_count(), plan_ctx->get_row_deleted_count(),
+                              plan_ctx->get_row_duplicated_count(), warning_cnt);
     if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to snprintf to buff", K(ret));
@@ -808,6 +821,28 @@ bool ObResultSet::need_rollback(int ret, int errcode, bool is_error_ignored) con
   return bret;
 }
 
+int ObResultSet::deal_feedback_info(ObPhysicalPlan *physical_plan, bool is_rollback, ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *physical_ctx = get_exec_context().get_physical_plan_ctx();
+  if (ctx.get_feedback_info().is_valid() && physical_plan->get_logical_plan().is_valid()) {
+    if (physical_ctx != nullptr && !is_rollback && physical_ctx->get_check_pdml_affected_rows()) {
+      if (OB_FAIL(physical_plan->check_pdml_affected_rows(ctx))) {
+        LOG_WARN("fail to check pdml affected_rows", K(ret));
+      }
+    }
+    if (physical_plan->try_record_plan_info()) {
+      if (OB_FAIL(physical_plan->set_feedback_info(ctx))) {
+        LOG_WARN("fail to set feed_back info", K(ret));
+      } else {
+        physical_plan->set_record_plan_info(false);
+      }
+    }
+  }
+
+  return ret;
+}
+
 OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 {
   int ret = common::OB_SUCCESS;
@@ -850,8 +885,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 
     ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), get_stmt_type(), *get_physical_plan());
     // Finishing direct-insert must be executed after ObPxTargetMgr::release_target()
-    if ((stmt::T_INSERT == get_stmt_type()) &&
-        (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
+    if (plan_ctx->get_is_direct_insert_plan()) {
       // for insert /*+ append */ into select clause
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(ObTableDirectInsertService::finish_direct_insert(
@@ -890,14 +924,8 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
       ret = sret;
     }
     if (OB_SUCC(ret)) {
-      if (physical_plan_->need_record_plan_info()) {
-        if (ctx.get_feedback_info().is_valid() &&
-            physical_plan_->get_logical_plan().is_valid() &&
-            OB_FAIL(physical_plan_->set_feedback_info(ctx))) {
-          LOG_WARN("failed to set feedback info", K(ret));
-        } else {
-          physical_plan_->set_record_plan_info(false);
-        }
+      if (OB_FAIL(deal_feedback_info(physical_plan_, rollback, ctx))) {
+        LOG_WARN("fail to deal feedback info", K(ret));
       }
     }
   } else {
@@ -953,6 +981,11 @@ int ObResultSet::do_close(int *client_ret)
       ret = OB_NOT_INIT;
       LOG_WARN("result set isn't init", K(ret));
     } else {
+      if (OB_NOT_NULL(get_physical_plan()) && get_physical_plan()->is_returning()) {
+        // In the returning scenario, affected_rows_ can only be determined after returning the data,
+        // so fill in affected_rows when closing.
+        affected_rows_ = plan_ctx->get_affected_rows();
+      }
       store_affected_rows(*plan_ctx);
       store_found_rows(*plan_ctx);
     }
@@ -1134,6 +1167,7 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
             ObSecurityAuditUtils::handle_security_audit(*this,
                                                         sql_ctx->schema_guard_,
                                                         sql_ctx->cur_stmt_,
+                                                        sql_ctx->cur_sql_,
                                                         ObString::make_empty_string(),
                                                         ret);
           }
@@ -1305,19 +1339,24 @@ void ObResultSet::force_refresh_location_cache(bool is_nonblock, int err)
 }
 
 // 告诉mysql是否要传入一个EndTransCallback
-bool ObResultSet::need_end_trans_callback() const
+bool ObResultSet::need_end_trans_callback(bool force_sync_resp) const
 {
   int ret = OB_SUCCESS;
   bool need = false;
   ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
-  if (stmt::T_SELECT == get_stmt_type()) {
+  my_session_.set_is_pl_async_commit(false);
+  my_session_.set_has_async_query_sender(false);
+  bool has_temp_table = my_session_.get_has_temp_table_flag() || my_session_.has_tx_level_temp_table();
+  if (force_sync_resp) {
+    // skip
+  } else if (stmt::T_SELECT == get_stmt_type()) {
     // 对于select语句，总不走callback，无论事务状态如何
     need = false;
   } else if (is_returning_) {
     need = false;
-  } else if (my_session_.get_has_temp_table_flag()
-             || my_session_.has_tx_level_temp_table()
+  } else if (has_temp_table
              || (OB_NOT_NULL(physical_plan_) && physical_plan_->is_contain_oracle_trx_level_temporary_table())) {
+    // temporary table will be committed synchronously, and then drop_temp_tables will be called to delete the data.
     need = false;
   } else if (stmt::T_END_TRANS == get_stmt_type()) {
     need = true;
@@ -1327,7 +1366,20 @@ bool ObResultSet::need_end_trans_callback() const
     if (OB_FAIL(my_session_.get_autocommit(ac))) {
       LOG_ERROR("fail to get autocommit", K(ret));
     } else {}
-    if (stmt::T_ANONYMOUS_BLOCK == get_stmt_type() && is_oracle_mode()) {
+    if (my_session_.get_local_ob_enable_pl_async_commit()
+        && OB_SYS_TENANT_ID != my_session_.get_effective_tenant_id()
+        && !my_session_.is_inner()
+        && my_session_.is_user_session()) {
+      if ((stmt::T_CALL_PROCEDURE == get_stmt_type() || stmt::T_ANONYMOUS_BLOCK == get_stmt_type())
+          && OB_ISNULL(my_session_.get_pl_profiler())
+          && OB_ISNULL(my_session_.get_pl_code_coverage())) {
+        // PL with result set should use sync driver, not async driver
+        // Only PL without result set can use async commit callback
+        need = !is_with_rows();
+        my_session_.set_is_pl_async_commit(true);
+        my_session_.set_has_async_query_sender(need);
+      }
+    } else if (stmt::T_ANONYMOUS_BLOCK == get_stmt_type() && is_oracle_mode()) {
       need = ac && !explicit_start_trans && !is_with_rows();
     } else if (OB_LIKELY(NULL != physical_plan_) &&
                OB_LIKELY(physical_plan_->is_need_trans()) &&
@@ -1351,6 +1403,7 @@ int ObResultSet::ExternalRetrieveInfo::build_into_exprs(
     }
     is_select_for_update_ = (static_cast<ObSelectStmt&>(stmt)).has_for_update();
     has_hidden_rowid_ = (static_cast<ObSelectStmt&>(stmt)).has_hidden_rowid();
+    rowid_table_id_ = (static_cast<ObSelectStmt&>(stmt)).get_for_update_table_id();
     is_skip_locked_ = (static_cast<ObSelectStmt&>(stmt)).is_skip_locked();
   } else if (stmt.is_insert_stmt() || stmt.is_update_stmt() || stmt.is_delete_stmt()) {
     ObDelUpdStmt &dml_stmt = static_cast<ObDelUpdStmt&>(stmt);
@@ -1378,7 +1431,7 @@ int ObResultSet::ExternalRetrieveInfo::check_into_exprs(ObStmt &stmt,
         if (basic_types.count() > select_stmt.get_select_item_size()
             || into_exprs_.count() > select_stmt.get_select_item_size()) {
           ret = OB_ERR_TOO_MANY_VALUES;
-          LOG_WARN("ORA-00913: too many values",
+          LOG_WARN("OBE-00913: too many values",
                    K(ret), K(basic_types.count()), K(select_stmt.get_select_item_size()));
         } else if (basic_types.count() < select_stmt.get_select_item_size()
                    || into_exprs_.count() < select_stmt.get_select_item_size()) {
@@ -1392,7 +1445,7 @@ int ObResultSet::ExternalRetrieveInfo::check_into_exprs(ObStmt &stmt,
       const ObIArray<ObRawExpr*> &returning_exprs = dml_stmt.get_returning_exprs();
       if (basic_types.count() > returning_exprs.count()) {
         ret = OB_ERR_TOO_MANY_VALUES;
-        LOG_WARN("ORA-00913: too many values",
+        LOG_WARN("OBE-00913: too many values",
                  K(ret), K(basic_types.count()), K(returning_exprs.count()));
       } else if (basic_types.count() < returning_exprs.count()) {
         ret = OB_ERR_NOT_ENOUGH_VALUES;
@@ -1440,7 +1493,7 @@ int ObResultSet::ExternalRetrieveInfo::recount_dynamic_param_info(
     }
   }
   if (OB_SUCC(ret) && recount_params.count() >= 2) {
-    std::sort(recount_params.begin(), recount_params.end(),
+    lib::ob_sort(recount_params.begin(), recount_params.end(),
         [](ObConstRawExpr *a, ObConstRawExpr *b) {
           return a->get_value().get_unknown() < b->get_value().get_unknown();
         });
@@ -1454,15 +1507,88 @@ int ObResultSet::ExternalRetrieveInfo::recount_dynamic_param_info(
   return ret;
 }
 
+// Check if the statement is a simple SELECT INTO FROM DUAL statement
+// that can be optimized (no WHERE, GROUP BY, HAVING, aggregation, window functions, etc.)
+static bool is_simple_select_into_from_dual(const ObSelectStmt &select_stmt,
+                                             int64_t into_exprs_count,
+                                             const ObFixedArray<ObRawExpr*, ObIAllocator> &into_exprs)
+{
+  bool can_transform = true;
+  // Check if select items count matches into expressions count
+  if (select_stmt.get_select_items().count() != into_exprs_count) {
+    can_transform = false;
+  } else {
+    // Check that it's a simple SELECT FROM DUAL without complex features
+    can_transform = 0 == select_stmt.get_condition_exprs().count()           // No WHERE clause
+        && 0 == select_stmt.get_from_item_size()                    // FROM DUAL (no explicit FROM)
+        && 0 == select_stmt.get_aggr_item_size()                     // No aggregation functions
+        && !select_stmt.has_group_by()                              // No GROUP BY
+        && !select_stmt.has_having()                                // No HAVING
+        && !select_stmt.has_window_function()                      // No window functions
+        && !select_stmt.is_set_stmt();                             // No UNION/INTERSECT/EXCEPT
+  }
+  return can_transform;
+}
+
+int ObResultSet::ExternalRetrieveInfo::build_value_exprs(ObStmt &stmt,
+                                                        common::ObIArray<ExternalParamInfo> &param_info,
+                                                        ObSQLSessionInfo &session_info,
+                                                        bool is_dynamic_sql,
+                                                        ObRawExprFactory &expr_factory)
+{
+  int ret = OB_SUCCESS;
+  bool can_transform = false;
+  OZ (session_info.check_feature_enable(
+                      ObCompatFeatureType::PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
+                      can_transform));
+  if (stmt.is_select_stmt()
+      && is_oracle_mode()
+      && can_transform
+      && session_info.get_local_plsql_can_transform_sql_to_assign()
+      && !is_dynamic_sql) {
+    ObSelectStmt &select_stmt = static_cast<ObSelectStmt&>(stmt);
+    int64_t into_exprs_count = into_exprs_.count();
+    int64_t select_exprs_count = select_stmt.get_select_items().count();
+    // Only optimize simple SELECT INTO FROM DUAL statements
+    if (is_simple_select_into_from_dual(select_stmt, into_exprs_count, into_exprs_)) {
+      // Save the original value expressions for potential optimization in execute phase
+      // DO NOT modify stmt here to avoid breaking code generation
+      OZ (value_exprs_.reserve(select_exprs_count));
+      for (int64_t j = 0; OB_SUCC(ret) && j < param_info.count(); ++j) {
+        ObRawExpr *new_expr = param_info.at(j).element<1>();
+        ObRawExpr *old_expr = param_info.at(j).element<0>();
+        CK (OB_NOT_NULL(old_expr) && OB_NOT_NULL(new_expr));
+        OX (old_expr->set_result_type(new_expr->get_result_type()));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs_count; ++i) {
+        ObRawExpr *value_expr = select_stmt.get_select_item(i).expr_;
+        ObRawExpr *new_value_expr = NULL;
+        OZ (ObPLExprCopier::copy_expr(expr_factory, value_expr, new_value_expr));
+        CK (OB_NOT_NULL(new_value_expr));
+        // restore src pl expr from replaced question mark expr
+        for (int64_t j = 0; OB_SUCC(ret) && j < param_info.count(); ++j) {
+          OZ (ObRawExprUtils::replace_ref_column(value_expr,
+              param_info.at(j).element<1>(), param_info.at(j).element<0>()));
+        }
+        OZ (value_exprs_.push_back(value_expr));
+        OX (select_stmt.get_select_item(i).expr_ = new_value_expr);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObResultSet::ExternalRetrieveInfo::build(
   ObStmt &stmt,
   ObSQLSessionInfo &session_info,
   pl::ObPLBlockNS *ns,
   bool is_dynamic_sql,
-  common::ObIArray<ExternalParamInfo> &param_info)
+  common::ObIArray<ExternalParamInfo> &param_info,
+  ObRawExprFactory &expr_factory)
 {
   int ret = OB_SUCCESS;
   OZ (build_into_exprs(stmt, ns, is_dynamic_sql));
+  OZ (build_value_exprs(stmt, param_info, session_info, is_dynamic_sql, expr_factory));
   CK (OB_NOT_NULL(session_info.get_cur_exec_ctx()));
   CK (OB_NOT_NULL(session_info.get_cur_exec_ctx()->get_sql_ctx()));
   OX (is_bulk_ = session_info.get_cur_exec_ctx()->get_sql_ctx()->is_bulk_);
@@ -1505,6 +1631,8 @@ int ObResultSet::ExternalRetrieveInfo::build(
         OX (param_info.pop_back());
       }
       OX (external_params_.set_capacity(param_info.count()));
+      OX (external_params_cnt_ = param_info.count());
+      OX (into_exprs_cnt_ = into_exprs_.count());
       for (int64_t i = 0; OB_SUCC(ret) && i < param_info.count(); ++i) {
         if (OB_ISNULL(param_info.at(i).element<0>()) || OB_ISNULL(param_info.at(i).element<1>())) {
           ret = OB_ERR_UNEXPECTED;
@@ -1805,9 +1933,26 @@ int ObResultSet::construct_display_field_name(common::ObField &field,
     } else if (lib::is_oracle_mode()) {
       pos = pos < MAX_COLUMN_CHAR_LENGTH ? pos : MAX_COLUMN_CHAR_LENGTH;
       //field.cname_.assign(buf, pos);
-      if (OB_FAIL(ob_write_string(get_mem_pool(), ObString(pos, buf), field.cname_))) {
-        LOG_WARN("failed to copy paramed cname", K(ret));
+      //if (OB_FAIL(ob_write_string(get_mem_pool(), ObString(pos, buf), field.cname_))) {
+      //  LOG_WARN("failed to copy paramed cname", K(ret));
+      //}
+      ObCollationType connection_collation = CS_TYPE_UTF8MB4_BIN;
+      ObCollationType nls_collation = CS_TYPE_UTF8MB4_BIN;
+      ObCollationType result_collation = CS_TYPE_UTF8MB4_BIN;
+      if (OB_NOT_NULL(get_exec_context().get_my_session())) {
+        ObCharsetType result_charset = CHARSET_INVALID;
+        connection_collation = get_exec_context().get_my_session()->get_local_collation_connection();
+        nls_collation = get_exec_context().get_my_session()->get_nls_collation();
+        get_exec_context().get_my_session()->get_character_set_results(result_charset);
+        if (ObCharset::is_valid_charset(result_charset)) {
+          result_collation = ObCharset::get_default_collation(result_charset);
+        }
       }
+      OZ (ObCharset::charset_convert(get_mem_pool(), ObString(pos, buf), connection_collation,
+            nls_collation, field.cname_, ObCharset::REPLACE_UNKNOWN_CHARACTER_ON_SAME_CHARSET));
+      OZ (ObCharset::charset_convert(get_mem_pool(), field.cname_, nls_collation,
+            result_collation, field.cname_, ObCharset::REPLACE_UNKNOWN_CHARACTER_ON_SAME_CHARSET));
+      LOG_DEBUG("check cname", K(field.cname_));
     } else {
       // do nothing
     }
@@ -1932,6 +2077,7 @@ int ObResultSet::switch_implicit_cursor(int64_t &affected_rows)
     }
   } else {
     affected_rows = plan_ctx->get_affected_rows();
+    set_last_insert_id_to_client(plan_ctx->get_last_insert_id_to_client());
     memset(message_, 0, sizeof(message_));
     if (OB_FAIL(set_mysql_info())) {
       LOG_WARN("set mysql info failed", K(ret));
@@ -1984,7 +2130,8 @@ int ObRemoteResultSet::reset_and_init_remote_resp_handler()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObInnerSqlRpcStreamHandle", K(ret));
   } else {
-    remote_resp_handler_ = new (buffer) ObInnerSqlRpcStreamHandle();
+    remote_resp_handler_ = new (buffer) ObInnerSqlRpcStreamHandle("InnerSqlRpcStream",
+                                                                  get_tenant_id_for_result_memory());
   }
 
   return ret;
@@ -2061,7 +2208,7 @@ int ObRemoteResultSet::setup_next_scanner()
         } else if (OB_ISNULL(transmit_result = remote_resp_handler_->get_result())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc result, but result scanner is NULL", K(ret));
-        } else if (FALSE_IT(transmit_result->set_tenant_id(OB_SERVER_TENANT_ID))) {
+        } else if (FALSE_IT(transmit_result->set_tenant_id(get_tenant_id_for_result_memory()))) {
           // Only when the local machine has no tenant resources will it be sent to the remote end
           // for execution. Therefore, the local machine can only use the resources of 500 tenants.
           // The scanner will limit the package size to no more than 64M.

@@ -50,6 +50,11 @@ public:
                const int64_t new_schema_version,
                common::ObISQLClient &sql_client,
                const common::ObString *ddl_stmt_str = NULL);
+  int alter_udt(ObUDTTypeInfo &udt_info,
+                const ObUDTTypeInfo *old_udt_info,
+                const int64_t del_param_schema_version,
+                ObISQLClient *sql_client,
+                const ObString *ddl_stmt_str = NULL);
   int update_type_schema_version(common::ObISQLClient &sql_client,
                                   const ObUDTTypeInfo &udt_info,
                                   const common::ObString *ddl_stmt_str);

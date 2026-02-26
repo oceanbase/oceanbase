@@ -49,6 +49,7 @@ public:
   virtual int process() override;
   virtual int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
+      const ObAddr &addr,
       const int64_t snapshot_version,
       const int64_t execution_id,
       const int ret_code,
@@ -65,9 +66,8 @@ public:
   int assign(const ObTableRedefinitionTask *table_redef_task);
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual bool support_longops_monitoring() const override { return true; }
-  virtual void flt_set_task_span_tag() const override;
-  virtual void flt_set_status_span_tag() const override;
   static bool check_task_status_is_pending(const share::ObDDLTaskStatus task_status);
+  virtual bool is_ddl_task_can_be_cancelled() const;
   INHERIT_TO_STRING_KV("ObDDLRedefinitionTask", ObDDLRedefinitionTask,
       K(has_rebuild_index_), K(has_rebuild_constraint_), K(has_rebuild_foreign_key_),
       K(is_copy_indexes_), K(is_copy_triggers_), K(is_copy_constraints_),
@@ -82,6 +82,7 @@ protected:
                                 const int64_t row_inserted);
   int repending(const share::ObDDLTaskStatus next_task_status);
   virtual bool task_can_retry() const override { return share::ObDDLTaskStatus::REDEFINITION == task_status_ ? is_ddl_retryable_ : true; }
+  virtual bool is_ddl_retryable() const override { return is_ddl_retryable_; }
 private:
   inline bool get_is_copy_indexes() const {return is_copy_indexes_;}
   inline bool get_is_copy_triggers() const {return is_copy_triggers_;}
@@ -102,6 +103,13 @@ private:
   int check_target_cg_cnt();
   int check_ddl_can_retry(const bool ddl_need_retry_at_executor, const share::schema::ObTableSchema *table_schema);
   int check_take_effect_succ(bool &has_took_effect_succ);
+  virtual bool is_error_need_retry(const int ret_code) override
+  {
+    //we should always retry when the redefinition task is split recovery redefinition
+    return is_partition_split_recovery_table_redefinition(task_type_) || ObDDLTask::is_error_need_retry(ret_code);
+  }
+  int collect_longops_stat_redefinition(int64_t &pos);
+  int collect_longops_stat_redefinition_recv_tbl(int64_t &pos);
 private:
   static const int64_t OB_TABLE_REDEFINITION_TASK_VERSION = 1L;
   bool has_rebuild_index_;
@@ -117,6 +125,7 @@ private:
   int64_t target_cg_cnt_;
   bool use_heap_table_ddl_plan_;
   bool is_ddl_retryable_;
+  bool has_rebuild_domain_indexes_;
 };
 
 }  // end namespace rootserver

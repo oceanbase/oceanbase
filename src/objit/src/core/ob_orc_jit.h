@@ -20,14 +20,52 @@
 #include "llvm/ExecutionEngine/ObjectCache.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
+#include "llvm/ExecutionEngine/Orc/LLJIT.h"
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/IR/Mangler.h"
+#include "llvm/ExecutionEngine/Orc/Shared/ExecutorAddress.h"
+#include "llvm/ExecutionEngine/Orc/Shared/ExecutorSymbolDef.h"
 
-#include <map>
 #include <string>
 
 #include "core/ob_jit_memory_manager.h"
+#include "lib/hash/ob_hashmap.h"
+
+// This must be kept in sync with gdb/gdb/jit.h .
+extern "C" {
+
+  typedef enum {
+    JIT_NOACTION = 0,
+    JIT_REGISTER_FN,
+    JIT_UNREGISTER_FN
+  } jit_actions_t;
+
+  struct jit_code_entry {
+    struct jit_code_entry *next_entry;
+    struct jit_code_entry *prev_entry;
+    const char *symfile_addr;
+    uint64_t symfile_size;
+  };
+
+  struct jit_descriptor {
+    uint32_t version;
+    // This should be jit_actions_t, but we want to be specific about the
+    // bit-width.
+    uint32_t action_flag;
+    struct jit_code_entry *relevant_entry;
+    struct jit_code_entry *first_entry;
+  };
+
+  // We put information about the JITed function in this global, which the
+  // debugger reads.  Make sure to specify the version statically, because the
+  // debugger checks the version before we can set it during runtime.
+  extern struct jit_descriptor __jit_debug_descriptor;
+
+  // Debuggers puts a breakpoint in this function.
+  extern void __jit_debug_register_code();
+
+}
 
 namespace oceanbase {
 namespace jit {
@@ -40,19 +78,51 @@ enum class ObPLOptLevel : int
   O2 = 2,
   O3 = 3
 };
+template<typename T, typename ...Args>
+static inline int ob_jit_make_unique(std::unique_ptr<T> &ptr, Args&&... args) {
+  int ret = OB_SUCCESS;
+
+  std::unique_ptr<T> result = nullptr;
+
+  try {
+    result = std::make_unique<T>(std::forward<Args>(args)...);
+  } catch (const std::bad_alloc &e) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SERVER_LOG(WARN, "failed to allocate memory", K(ret), K(e.what()));
+  } catch (...) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "unexpected exception in std::make_unique", K(ret), K(lbt()));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(result)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "unexpected NULL ptr of std::make_unque", K(ret), K(lbt()));
+  } else {
+    ptr = std::move(result);
+  }
+
+  return ret;
+}
 
 namespace core {
 using namespace llvm;
+using namespace llvm::orc;
 
 typedef ::llvm::LLVMContext ObLLVMContext;
 typedef ::llvm::orc::ExecutionSession ObExecutionSession;
-typedef ::llvm::orc::SymbolResolver ObSymbolResolver;
 typedef ::llvm::TargetMachine ObTargetMachine;
 typedef ::llvm::DataLayout ObDataLayout;
-typedef ::llvm::orc::VModuleKey ObVModuleKey;
 typedef ::llvm::JITSymbol ObJITSymbol;
+typedef ::llvm::JITEventListener ObJitEventListener;
 
-class ObNotifyLoaded
+typedef ::llvm::orc::DefinitionGenerator ObJitDefinitionGenerator;
+using ObObjectKey = ObJitEventListener::ObjectKey;
+using ObSymbolDef = ::llvm::orc::ExecutorSymbolDef;
+using ObExecutorAddr = ::llvm::orc::ExecutorAddr;
+
+class ObNotifyLoaded: public ObJitEventListener
 {
 public:
   explicit ObNotifyLoaded(
@@ -60,9 +130,29 @@ public:
       : Allocator(Allocator), DebugBuf(DebugBuf), DebugLen(DebugLen), SoObject(SoObject) {}
   virtual ~ObNotifyLoaded() {}
 
-  void operator()(ObVModuleKey Key,
-                  const object::ObjectFile &Obj,
-                  const RuntimeDyld::LoadedObjectInfo &Info);
+  void notifyObjectLoaded(ObObjectKey Key,
+                          const object::ObjectFile &Obj,
+                          const RuntimeDyld::LoadedObjectInfo &Info) override;
+  void notifyFreeingObject(ObObjectKey Key) override;
+
+  static int initGdbHelper();
+
+private:
+  void registerDebugInfoToGdb(ObObjectKey Key);
+  void deregisterDebugInfoFromGdb(ObObjectKey Key);
+
+private:
+  using KeyEntryMap = common::hash::ObHashMap<
+                        ObObjectKey, jit_code_entry,
+                        common::hash::NoPthreadDefendMode,
+                        common::hash::hash_func<ObObjectKey>,
+                        common::hash::equal_to<ObObjectKey>,
+                        common::hash::SimpleAllocer<common::hash::ObHashTableNode<
+                          common::hash::HashMapPair<ObObjectKey, jit_code_entry>>>,
+                        common::hash::NormalPointer,
+                        common::ObMalloc,
+                        2>;
+  static std::pair<lib::ObMutex, KeyEntryMap> AllGdbReg;
 private:
   common::ObIAllocator &Allocator;
   char* &DebugBuf;
@@ -70,127 +160,101 @@ private:
   ObString &SoObject;
 };
 
+class ObJitGlobalSymbolGenerator: public ObJitDefinitionGenerator {
+public:
 
-#ifndef ORC2
+  Error tryToGenerate(orc::LookupState &LS,
+                      orc::LookupKind K,
+                      orc::JITDylib &JD,
+                      orc::JITDylibLookupFlags JDLookupFlags,
+                      const orc::SymbolLookupSet &LookupSet) override
+  {
+    for (const auto &sym : LookupSet) {
+      auto res = symbol_table.find(*sym.first);
+
+      if (res != symbol_table.end()) {
+        Error err = JD.define(orc::absoluteSymbols(
+                      {{sym.first, ObSymbolDef(ObExecutorAddr(res->second), {})}}));
+
+        if (err) {
+          StringRef name = *sym.first;
+          std::string msg = toString(std::move(err));
+
+          SERVER_LOG_RET(WARN, OB_ERR_UNEXPECTED,
+                         "failed to define SPI interface symbol",
+                         "name", ObString(name.size(), name.data()),
+                         "msg", msg.c_str(),
+                         K(lbt()));
+
+          return err;
+        }
+      }
+    }
+
+    return Error::success();
+  }
+
+  static void add_symbol(StringRef name, void *addr) {
+    symbol_table[name] = pointerToJITTargetAddress(addr);
+  }
+
+private:
+  static DenseMap<StringRef, JITTargetAddress> symbol_table;
+};
+
 class ObOrcJit
 {
 public:
-  using ObObjLayerT = llvm::orc::LegacyRTDyldObjectLinkingLayer;
-  using ObCompileLayerT = llvm::orc::LegacyIRCompileLayer<ObObjLayerT, llvm::orc::SimpleCompiler>;
+  using ObLLJITBuilder = llvm::orc::LLJITBuilder;
+  using ObJitEngineT = llvm::orc::LLJIT;
 
   explicit ObOrcJit(common::ObIAllocator &Allocator);
   virtual ~ObOrcJit() {};
 
-  ObVModuleKey addModule(std::unique_ptr<Module> M);
-  ObJITSymbol lookup(const std::string Name);
-  uint64_t get_function_address(const std::string Name);
+  int addModule(std::unique_ptr<Module> M, std::unique_ptr<ObLLVMContext> TheContext);
+  int get_function_address(const std::string &name, uint64_t &addr);
 
-  ObLLVMContext &getContext() { return TheContext; }
   const ObDataLayout &getDataLayout() const { return ObDL; }
 
   char* get_debug_info_data() { return DebugBuf; }
   int64_t get_debug_info_size() { return DebugLen; }
 
-  void add_compiled_object(size_t length, const char *ptr);
+  int add_compiled_object(size_t length, const char *ptr);
 
   const ObString& get_compiled_object() const { return SoObject; }
 
+  int init();
+
+  const ObDataLayout &get_DL() const { return ObDL; }
+
   int set_optimize_level(ObPLOptLevel level);
 
-private:
-  std::string mangle(const std::string &Name)
-  {
-    std::string MangledName; {
-      raw_string_ostream MangledNameStream(MangledName);
-      Mangler::getNameWithPrefix(MangledNameStream, Name, ObDL);
-    }
-    return MangledName;
-  }
-
-  ObJITSymbol findMangledSymbol(const std::string &Name)
-  {
-    const bool ExportedSymbolsOnly = true;
-    for (auto H : make_range(ObModuleKeys.rbegin(), ObModuleKeys.rend())) {
-      if (auto Sym = ObCompileLayer.findSymbolIn(H, Name, ExportedSymbolsOnly)) {
-        return Sym;
-      }
-    }
-    if (auto SymAddr = RTDyldMemoryManager::getSymbolAddressInProcess(Name)) {
-      return ObJITSymbol(SymAddr, JITSymbolFlags::Exported);
-    }
-    return nullptr;
-  }
+  inline void update_stack_size(uint64_t stack_size) { StackSize = std::max(StackSize, stack_size); }
+  inline uint64_t get_stack_size() const { return StackSize; }
 
 private:
+  int lookup(const std::string &name, ObJITSymbol &symbol);
+
+  int create_jit_engine();
+
+  static ObJitGlobalSymbolGenerator symbol_generator;
+
   char *DebugBuf;
   int64_t DebugLen;
 
   ObJitAllocator JITAllocator;
   ObNotifyLoaded NotifyLoaded;
 
-  ObLLVMContext TheContext;
-  ObExecutionSession ObES;
-  std::shared_ptr<ObSymbolResolver> ObResolver;
   std::unique_ptr<ObTargetMachine> ObTM;
   const ObDataLayout ObDL;
-  ObObjLayerT ObObjectLayer;
-  ObCompileLayerT ObCompileLayer;
-  std::vector<ObVModuleKey> ObModuleKeys;
 
   ObString SoObject;
+
+  ObLLJITBuilder ObEngineBuilder;
+  std::unique_ptr<ObJitEngineT> ObJitEngine;
+
+  uint64_t StackSize = 0;
 };
-
-#else
-class ObOrcJit
-{
-public:
-  explicit ObOrcJit(
-    common::ObIAllocator &Allocator, llvm::orc::JITTargetMachineBuilder JTMB, ObDataLayout ObDL);
-  virtual ~ObOrcJit() {};
-
-  Error addModule(std::unique_ptr<Module> M);
-  Expected<JITEvaluatedSymbol> lookup(StringRef Name);
-  uint64_t get_function_address(const std::string Name);
-
-  static ObOrcJit* create(ObIAllocator &allocator)
-  {
-    auto JTMB = llvm::orc::JITTargetMachineBuilder::detectHost();
-
-    if (!JTMB)
-      return nullptr;
-
-    auto ObDL = JTMB->getDefaultDataLayoutForTarget();
-    if (!ObDL)
-      return nullptr;
-
-    return OB_NEWx(ObOrcJit, (&allocator), allocator, std::move(*JTMB), std::move(*ObDL));
-  }
-
-  ObLLVMContext &getContext() { return *Ctx.getContext(); }
-
-  const ObDataLayout &getDataLayout() const { return ObDL; }
-
-  char* get_debug_info_data() { return DebugBuf; }
-  int64_t get_debug_info_size() { return DebugLen; }
-
-private:
-  char *DebugBuf;
-  int64_t DebugLen;
-
-  ObJitAllocator JITAllocator;
-  ObNotifyLoaded NotifyLoaded;
-
-  llvm::orc::ObExecutionSession ObES;
-  llvm::orc::RTDyldObjectLinkingLayer ObObjectLayer;
-  llvm::orc::IRCompileLayer ObCompileLayer;
-
-  llvm::ObDataLayout ObDL;
-  llvm::orc::MangleAndInterner Mangle;
-  llvm::orc::ThreadSafeContext Ctx;
-
-  llvm::orc::JITDylib &MainJD;
-};
-#endif
 
 } // core
 } // jit

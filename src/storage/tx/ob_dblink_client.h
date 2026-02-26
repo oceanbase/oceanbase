@@ -34,6 +34,8 @@ enum class ObDBLinkClientState
   ROLLBACKED,
 };
 
+const int64_t SavePointArraySize = 10;
+typedef ObSEArray<common::ObFixedLengthString<128>, SavePointArraySize> SavePointArray;
 // this class is used to maintain trans state of dblink client
 // 1. commit (only two phase)
 //    the state switch of a committed dblink trans is as follows.
@@ -56,7 +58,7 @@ public:
       state_(ObDBLinkClientState::IDLE),
       dblink_type_(common::sqlclient::DblinkDriverProto::DBLINK_UNKNOWN), dblink_conn_(NULL),
       impl_(NULL), tx_timeout_us_(-1),
-      dblink_statistics_(NULL)
+      savepoint_array_(), dblink_statistics_(NULL)
   {}
   ~ObDBLinkClient() { destroy(); }
   void reset();
@@ -72,6 +74,8 @@ public:
   int rm_xa_prepare();
   int rm_xa_commit();
   int rm_xa_rollback();
+  int rm_create_savepoint(const ObString &savepoint_name);
+  int rm_rollback_savepoint(const ObString &savepoint_name);
 public:
   const transaction::ObXATransID &get_xid() const { return xid_; }
   uint32_t get_index() const { return index_; }
@@ -83,9 +87,13 @@ public:
 private:
   int rm_xa_end_();
   int init_query_impl_(const ObTxIsolationLevel isolation);
+  int rm_create_savepoint_(const ObString &savepoint_name);
+  int rm_rollback_savepoint_(const ObString &savepoint_name);
+  int create_explicit_savepoint_(const ObString &savepoint_name);
+  int rollback_to_explicit_savepoint_(const ObString &savepoint_name);
 public:
   TO_STRING_KV(KP(this), K_(is_inited), K_(index), K_(xid), K_(state),
-      K_(dblink_type), KP_(dblink_conn), K_(tx_timeout_us));
+      K_(dblink_type), KP_(dblink_conn), K_(tx_timeout_us), K_(savepoint_array));
 protected:
   common::ObSpinLock lock_;
   bool is_inited_;
@@ -96,6 +104,7 @@ protected:
   common::sqlclient::ObISQLConnection *dblink_conn_;
   transaction::ObXAQuery *impl_;
   int64_t tx_timeout_us_;
+  SavePointArray savepoint_array_;
   ObDBLinkTransStatistics *dblink_statistics_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBLinkClient);

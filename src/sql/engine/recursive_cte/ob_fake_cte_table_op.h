@@ -33,13 +33,13 @@ class ObFakeCTETableSpec : public ObOpSpec
 public:
   explicit ObFakeCTETableSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type), column_involved_offset_(alloc), column_involved_exprs_(alloc),
-        is_bulk_search_(false), identify_seq_expr_(nullptr)
+        is_bulk_search_(false), identify_seq_expr_(nullptr), is_union_distinct_(false)
   {
   }
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
       K_(column_involved_offset), K_(column_involved_exprs),
-      K_(is_bulk_search), K_(identify_seq_expr));
+      K_(is_bulk_search), K_(identify_seq_expr), K_(is_union_distinct));
 
   virtual ~ObFakeCTETableSpec() {}
 
@@ -49,6 +49,7 @@ public:
   //for breadth search first
   bool is_bulk_search_;
   ObExpr *identify_seq_expr_;
+  bool is_union_distinct_;
 };
 
 class ObFakeCTETableOp : public ObOperator

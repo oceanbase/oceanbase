@@ -49,7 +49,7 @@ public:
   int64_t max_data_block_size_;
 };
 
-class ObDirectLoadExternalTable : public ObIDirectLoadPartitionTable
+class ObDirectLoadExternalTable : public ObDirectLoadITable
 {
 public:
   ObDirectLoadExternalTable();
@@ -59,7 +59,6 @@ public:
   const common::ObTabletID &get_tablet_id() const override { return meta_.tablet_id_; }
   int64_t get_row_count() const override { return meta_.row_count_; }
   bool is_valid() const override { return is_inited_; }
-  void release_data() override;
   int copy(const ObDirectLoadExternalTable &other);
   const ObDirectLoadExternalTableMeta &get_meta() const { return meta_; }
   const ObDirectLoadExternalFragmentArray &get_fragments() const { return fragments_; }

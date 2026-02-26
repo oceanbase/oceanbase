@@ -10,13 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
 #include "ob_storage_schema.h"
-#include "blocksstable/ob_block_sstable_struct.h"
-#include "ob_sstable_struct.h"
-#include "share/ob_encryption_util.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "storage/ob_storage_struct.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
 
 namespace oceanbase
 {
@@ -26,6 +23,7 @@ using namespace share::schema;
 
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_NOT_TRIM_FOR_DEFALUT_CHECKSUM);
 
 /*
  * ObStorageRowkeyColumnSchema
@@ -96,18 +94,27 @@ bool ObStorageColumnSchema::is_valid() const
   return common::ob_is_valid_obj_type(static_cast<ObObjType>(meta_type_.get_type()));
 }
 
-int ObStorageColumnSchema::construct_column_param(share::schema::ObColumnParam &column_param) const
+int ObStorageColumnSchema::construct_column_param(
+    const uint64_t data_version,
+    share::schema::ObColumnParam &column_param) const
 {
   int ret = OB_SUCCESS;
   column_param.set_meta_type(meta_type_);
+  if (data_version >= DATA_VERSION_4_3_5_1 && meta_type_.is_decimal_int()) {
+    ObAccuracy accuracy;
+    accuracy.set_precision(meta_type_.get_stored_precision());
+    accuracy.set_scale(meta_type_.get_scale());
+    column_param.set_accuracy(accuracy);
+  }
   if (orig_default_value_.is_fixed_len_char_type()) {
     blocksstable::ObStorageDatum datum;
     ObObj obj;
     if (OB_FAIL(datum.from_obj(orig_default_value_))) {
       STORAGE_LOG(WARN, "fail to covent datum from obj", K(ret), K(orig_default_value_));
     } else {
-      (void) ObStorageSchema::trim(orig_default_value_.get_collation_type(), datum);
-      if (OB_FAIL(datum.to_obj_enhance(obj, orig_default_value_.get_meta()))) {
+      if (OB_FAIL(ObStorageSchema::trim(orig_default_value_.get_collation_type(), datum))) {
+        STORAGE_LOG(WARN, "failed to trim datum", K(ret), K_(orig_default_value), K(datum));
+      } else if (OB_FAIL(datum.to_obj_enhance(obj, orig_default_value_.get_meta()))) {
         STORAGE_LOG(WARN, "failed to transfer datum to obj", K(ret), K(datum));
       } else if (OB_FAIL(column_param.set_orig_default_value(obj))) {
         STORAGE_LOG(WARN, "fail to set orig default value", K(ret));
@@ -327,6 +334,9 @@ int ObStorageColumnGroupSchema::copy_from(ObIArray<ObColDesc> &column_ids,
   } else if (OB_UNLIKELY(cg_schema.get_column_id_count() > column_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected error for cg schema", K(ret), K(column_ids), K(cg_schema));
+  } else if (share::schema::SINGLE_COLUMN_GROUP == cg_schema.get_column_group_type() && cg_schema.get_column_id_count() > 1) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "get unexpected single cg schema", K(ret), K(cg_schema));
   } else {
     const bool is_normal_cg_schema = cg_schema.is_normal_column_group();
     version_ = COLUMN_GRUOP_SCHEMA_VERSION;
@@ -392,6 +402,54 @@ int ObStorageColumnGroupSchema::copy_from(ObIArray<ObColDesc> &column_ids,
 }
 
 /*
+ * ObUpdateCSReplicaSchemaParam
+ * */
+ObUpdateCSReplicaSchemaParam::ObUpdateCSReplicaSchemaParam()
+  : tablet_id_(),
+    major_column_cnt_(0),
+    update_type_(UpdateType::MAX_TYPE),
+    is_inited_(false)
+{
+
+}
+
+ObUpdateCSReplicaSchemaParam::~ObUpdateCSReplicaSchemaParam()
+{
+
+}
+
+int ObUpdateCSReplicaSchemaParam::init(
+    const ObTabletID &tablet_id,
+    const int64_t major_column_cnt,
+    const UpdateType update_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    STORAGE_LOG(WARN, "ObUpdateCSReplicaSchemaParam has been inited", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || update_type >= UpdateType::MAX_TYPE
+             || major_column_cnt <= ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tablet_id), K(major_column_cnt), K(update_type));
+  } else {
+    tablet_id_ = tablet_id;
+    major_column_cnt_ = major_column_cnt;
+    update_type_ = update_type;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+bool ObUpdateCSReplicaSchemaParam::is_valid() const
+{
+  return is_inited_
+      && tablet_id_.is_valid()
+      && major_column_cnt_ > ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()
+      && update_type_ >= UpdateType::REFRESH_TABLE_SCHEMA
+      && update_type_ < UpdateType::MAX_TYPE;
+}
+
+/*
  * ObStorageSchema
  * */
 
@@ -411,6 +469,7 @@ ObStorageSchema::ObStorageSchema()
     progressive_merge_round_(0),
     progressive_merge_num_(0),
     master_key_id_(INVALID_ID),
+    micro_block_format_version_(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION),
     compressor_type_(ObCompressorType::NONE_COMPRESSOR),
     encryption_(),
     encrypt_key_(),
@@ -420,6 +479,12 @@ ObStorageSchema::ObStorageSchema()
     skip_idx_attr_array_(),
     store_column_cnt_(0),
     has_all_column_group_(false),
+    mv_mode_(),
+    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE),
+    semistruct_encoding_type_(),
+    semistruct_properties_(),
+    minor_row_store_type_(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE),
+    skip_index_level_(ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY),
     is_inited_(false)
 {
 }
@@ -429,12 +494,34 @@ ObStorageSchema::~ObStorageSchema()
   reset();
 }
 
+// move storage_schema_version calculation here
+int ObStorageSchema::set_storage_schema_version(const uint64_t tenant_data_version)
+{
+  int ret = OB_SUCCESS;
+  if (tenant_data_version < DATA_VERSION_4_2_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    STORAGE_LOG(WARN, "tenant data version not supported", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_3_0_0) {
+    storage_schema_version_ = STORAGE_SCHEMA_VERSION_V2;
+  } else if (tenant_data_version < DATA_VERSION_4_3_4_0) {
+    storage_schema_version_ = STORAGE_SCHEMA_VERSION_V3;
+  } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
+    storage_schema_version_ = STORAGE_SCHEMA_VERSION_V4;
+  } else if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+    storage_schema_version_ = STORAGE_SCHEMA_VERSION_V5;
+  } else {
+    storage_schema_version_ = STORAGE_SCHEMA_VERSION_LATEST;
+  }
+  return ret;
+}
+
 int ObStorageSchema::init(
     common::ObIAllocator &allocator,
     const ObTableSchema &input_schema,
     const lib::Worker::CompatMode compat_mode,
     const bool skip_column_info/* = false*/,
-    const int64_t compat_version/* = STORAGE_SCHEMA_VERSION_V3*/)
+    const uint64_t tenant_data_version/* = DATA_CURRENT_VERSION */,
+    const bool generate_cs_replica_cg_array/* = false*/)
 {
   int ret = OB_SUCCESS;
 
@@ -444,37 +531,55 @@ int ObStorageSchema::init(
   } else if (OB_UNLIKELY(!input_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), K(input_schema), K(skip_column_info));
+  } else if (OB_FAIL(copy_from(input_schema))) {
+    STORAGE_LOG(WARN, "failed to copy from table schema", K(ret), K(input_schema));
+  } else if (FALSE_IT(column_info_simplified_ = skip_column_info)) {
+  } else if (OB_UNLIKELY(generate_cs_replica_cg_array && column_info_simplified_)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument to init storage schema", K(ret));
   } else {
     allocator_ = &allocator;
     rowkey_array_.set_allocator(&allocator);
     column_array_.set_allocator(&allocator);
     column_group_array_.set_allocator(&allocator);
     skip_idx_attr_array_.set_allocator(&allocator);
-
-    storage_schema_version_ = compat_version;
-    copy_from(input_schema);
+    if (OB_FAIL(set_storage_schema_version(tenant_data_version))) {
+      STORAGE_LOG(WARN, "cal storage schema version failed, not suppert this tenant data version", K(ret), K(tenant_data_version));
+    }
     compat_mode_ = static_cast<uint32_t>(compat_mode);
   }
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_str(input_schema))) {
     STORAGE_LOG(WARN, "failed to generate string", K(ret), K(input_schema));
-  } else if (FALSE_IT(column_info_simplified_ = skip_column_info)) {
-  } else if (OB_FAIL(generate_column_array(input_schema))) {
-    STORAGE_LOG(WARN, "failed to generate column array", K(ret), K(input_schema));
+  } else if (OB_FAIL(generate_column_array(input_schema, tenant_data_version > DATA_VERSION_4_3_5_2 /*need_trim_default_val*/))) {
+    STORAGE_LOG(WARN, "failed to generate column array", K(ret), K(input_schema), K(tenant_data_version));
+  } else if (generate_cs_replica_cg_array) {
+    if (OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
+      STORAGE_LOG(WARN, "failed to generate_cs_replica_cg_array", K(ret));
+    }
   } else if (OB_FAIL(generate_column_group_array(input_schema, allocator))) {
     STORAGE_LOG(WARN, "Failed to generate column group array", K(ret));
+  }
+
+  bool is_column_table_schema = false;
+  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!ObStorageSchema::is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "storage schema is invalid", K(ret));
+  } else if (OB_FAIL(input_schema.get_is_column_store(is_column_table_schema))) {
+    STORAGE_LOG(WARN, "fail to check is column store", K(ret));
   } else {
+    is_column_table_schema_ = is_column_table_schema;
+    is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
+    enable_macro_block_bloom_filter_ = input_schema.get_enable_macro_block_bloom_filter();
+    micro_block_format_version_ = input_schema.get_micro_block_format_version();
     is_inited_ = true;
   }
 
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
   }
-
   return ret;
 }
 
@@ -482,7 +587,9 @@ int ObStorageSchema::init(
     common::ObIAllocator &allocator,
     const ObStorageSchema &old_schema,
     const bool skip_column_info/* = false*/,
-    const ObStorageSchema *column_group_schema)
+    const ObStorageSchema *column_group_schema/* = nullptr*/,
+    const bool generate_cs_replica_cg_array/* = false*/,
+    const ObUpdateCSReplicaSchemaParam *update_param/* = nullptr*/)
 {
   int ret = OB_SUCCESS;
 
@@ -492,6 +599,24 @@ int ObStorageSchema::init(
   } else if (OB_UNLIKELY(!old_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), K(old_schema), K(skip_column_info));
+  } else if (OB_FAIL(copy_from(old_schema))) {
+    STORAGE_LOG(WARN, "failed to copy from old schema", K(ret), K(old_schema));
+  } else if (FALSE_IT(column_info_simplified_ = (skip_column_info || old_schema.column_info_simplified_))) {
+  } else if (OB_UNLIKELY(generate_cs_replica_cg_array && column_group_schema != nullptr)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args to init storage schema", K(ret), KPC(column_group_schema));
+  } else if (nullptr != update_param) {
+    if (OB_UNLIKELY(!update_param->is_valid() || nullptr != column_group_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid args", K(ret), K(update_param), KPC(column_group_schema));
+    } else if (OB_UNLIKELY(update_param->need_refresh_schema() && !column_info_simplified_
+                        || update_param->need_truncate_column_array() && column_info_simplified_)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid args", K(ret), K(update_param), K(skip_column_info), K(old_schema));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else {
     allocator_ = &allocator;
     rowkey_array_.set_allocator(&allocator);
@@ -500,17 +625,17 @@ int ObStorageSchema::init(
     skip_idx_attr_array_.set_allocator(&allocator);
 
     storage_schema_version_ = old_schema.storage_schema_version_;
-    copy_from(old_schema);
     compat_mode_ = old_schema.compat_mode_;
     compressor_type_ = old_schema.compressor_type_;
     column_cnt_ = old_schema.column_cnt_;
     store_column_cnt_ = old_schema.store_column_cnt_;
-    column_info_simplified_ = (skip_column_info || old_schema.column_info_simplified_);
 
     if (OB_FAIL(deep_copy_str(old_schema.encryption_, encryption_))) {
       STORAGE_LOG(WARN, "failed to deep copy encryption", K(ret), K(old_schema));
     } else if (OB_FAIL(deep_copy_str(old_schema.encrypt_key_, encrypt_key_))) {
       STORAGE_LOG(WARN, "failed to deep copy encryption key", K(ret), K(old_schema));
+    } else if (OB_FAIL(deep_copy_str(old_schema.semistruct_properties_, semistruct_properties_))) {
+      STORAGE_LOG(WARN, "failed to deep copy semistruct properties", K(ret), K(old_schema));
     } else if (OB_FAIL(rowkey_array_.reserve(old_schema.rowkey_array_.count()))) {
       STORAGE_LOG(WARN, "failed to reserve for rowkey array", K(ret), K(old_schema));
     } else if (OB_FAIL(rowkey_array_.assign(old_schema.rowkey_array_))) {
@@ -521,14 +646,27 @@ int ObStorageSchema::init(
       STORAGE_LOG(WARN, "failed to copy skip idx attr array", K(ret), K(old_schema));
     } else if (!column_info_simplified_ && OB_FAIL(deep_copy_column_array(allocator, old_schema, old_schema.column_array_.count()))) {
       STORAGE_LOG(WARN, "failed to deep copy column array", K(ret), K(old_schema));
+    } else if (!column_info_simplified_ && generate_cs_replica_cg_array) {
+      // skip deep copy if column group schema array need generated from column array
     } else if (NULL != column_group_schema && OB_FAIL(deep_copy_column_group_array(allocator, *column_group_schema))) {
       STORAGE_LOG(WARN, "failed to deep copy column array from column group schema", K(ret), K(old_schema), KPC(column_group_schema));
     } else if (NULL == column_group_schema && OB_FAIL(deep_copy_column_group_array(allocator, old_schema))) {
       STORAGE_LOG(WARN, "failed to deep copy column array", K(ret), K(old_schema));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (nullptr != update_param && OB_FAIL(refactor_storage_schema(allocator, old_schema, *update_param))) {
+      STORAGE_LOG(WARN, "failed to rebuild column array", K(ret), K(old_schema), KPC(update_param));
+    } else if (!column_info_simplified_ && generate_cs_replica_cg_array && OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
+      STORAGE_LOG(WARN, "failed to generate_cs_replica_cg_array", K(ret));
     } else if (OB_UNLIKELY(!is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "storage schema is invalid", K(ret));
     } else {
+      is_column_table_schema_ = old_schema.is_column_table_schema_;
+      is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
+      enable_macro_block_bloom_filter_ = old_schema.get_enable_macro_block_bloom_filter();
+      micro_block_format_version_ = old_schema.get_micro_block_format_version();
       is_inited_ = true;
     }
   }
@@ -549,7 +687,7 @@ int ObStorageSchema::deep_copy_column_array(
   if (OB_UNLIKELY(copy_array_cnt <= 0 || copy_array_cnt > src_schema.column_array_.count())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(copy_array_cnt), K(src_schema.column_array_));
-  } else if (OB_FAIL(column_array_.reserve(src_schema.column_array_.count()))) {
+  } else if (OB_FAIL(column_array_.reserve(copy_array_cnt))) {
     STORAGE_LOG(WARN, "failed to reserve for column array", K(ret), K(src_schema));
   }
   for (int i = 0; OB_SUCC(ret) && i < copy_array_cnt; ++i) {
@@ -564,6 +702,98 @@ int ObStorageSchema::deep_copy_column_array(
       STORAGE_LOG(WARN, "failed to push back col schema", K(ret), K(i), K(copy_array_cnt),
           K(src_schema.column_array_.count()), K(col_schema));
       col_schema.destroy(allocator);
+    }
+  }
+  return ret;
+}
+
+int ObStorageSchema::refactor_storage_schema(
+    common::ObIAllocator &allocator,
+    const ObStorageSchema &src_schema,
+    const ObUpdateCSReplicaSchemaParam &update_param)
+{
+  int ret = OB_SUCCESS;
+  int64_t expected_stored_column_cnt = 0;
+  if (OB_UNLIKELY(!update_param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(update_param));
+  } else if (FALSE_IT(expected_stored_column_cnt = update_param.major_column_cnt_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt())) {
+  } else if (update_param.need_refresh_schema()) {
+    if (OB_UNLIKELY(!src_schema.is_column_info_simplified())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "src schema is not simplified", K(ret), K(src_schema));
+    } else if (OB_FAIL(ObCSReplicaUtil::get_full_column_array_from_table_schema(allocator, update_param, src_schema, column_array_))) {
+      STORAGE_LOG(WARN, "failed to get full column array from table schema", K(ret), K(update_param));
+    } else {
+      column_info_simplified_ = false;
+      column_cnt_ = column_array_.count();
+      store_column_cnt_ = expected_stored_column_cnt;
+      STORAGE_LOG(INFO, "rebuild column array from table schema", K(ret), K(update_param), K(src_schema), K_(column_array));
+    }
+  } else if (update_param.need_truncate_column_array()) {
+    const int64_t original_column_cnt = column_array_.count();
+    int64_t stored_column_cnt = 0;
+    bool finish_truncate = false;
+    for (int64_t i = 0; i < original_column_cnt; ++i) {
+      if (column_array_.at(i).is_column_stored_in_sstable()) {
+        stored_column_cnt++;
+        if (stored_column_cnt == expected_stored_column_cnt) {
+          for (int64_t j = i + 1; j < original_column_cnt; ++j) {
+            column_array_.pop_back();
+          }
+          finish_truncate = true;
+          column_cnt_ = column_array_.count();
+          store_column_cnt_ = expected_stored_column_cnt;
+          STORAGE_LOG(INFO, "truncate column array for convert co merge", K(ret), K(update_param), K_(column_array));
+          break;
+        }
+      }
+    }
+    if (!finish_truncate) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "failed to truncate column array", K(ret), K(update_param), K_(column_array));
+    } else {
+      if (!skip_idx_attr_array_.empty()) {
+        /*
+         * Remain the skip indexes on old columns(we can not decide whether the skip index is added before or after lastest major compacted).
+         * Since adding primary key is offline ddl, we only consider online adding column with skip index here.
+         * New column is added to the end of column array, and the skip index array is asc with col_idx(begin with 0),
+         * so the skip index with col_idx_ >= column_cnt_ means the it is added after the latest major compacted.
+         */
+        const int64_t original_skip_idx_count = skip_idx_attr_array_.count();
+        for (int64_t i = 0; i < original_skip_idx_count; ++i) {
+          if (skip_idx_attr_array_.at(i).col_idx_ >= column_cnt_) {
+            for (int64_t j = i; j < original_skip_idx_count; ++j) {
+              skip_idx_attr_array_.pop_back();
+            }
+            STORAGE_LOG(INFO, "finish truncate skip idx array", K(ret), K(update_param), K_(skip_idx_attr_array));
+            break;
+          }
+        }
+      }
+      if (!column_group_array_.empty()) {
+        /*
+         * Used for column store tablet split in the future.
+         * Similar to truncate skip_idx_attr_array_, the cg of newly added column is added at the end.
+         * The column idx calculation takes 2 multi-version column, so use update_param.major_column_cnt_ to truncate.
+         */
+        const int64_t original_cg_array_count = column_group_array_.count();
+        for (int64_t i = 0; OB_SUCC(ret) && i < original_cg_array_count; ++i) {
+          const ObStorageColumnGroupSchema &column_group = column_group_array_.at(i);
+          if (column_group.is_single_column_group()) {
+            if (OB_UNLIKELY(column_group.get_column_count() <= 0)) {
+              ret = OB_ERR_UNEXPECTED;
+              STORAGE_LOG(WARN, "invalid column group schema", K(ret), K(column_group));
+            } else if (column_group.get_column_idx(0) >= update_param.major_column_cnt_) {
+              for (int64_t j = i; j < original_cg_array_count; ++j) {
+                column_group_array_.pop_back();
+              }
+              STORAGE_LOG(INFO, "finish truncate cg array", K(ret), K(update_param), K_(column_group_array));
+              break;
+            }
+          }
+        }
+      }
     }
   }
   return ret;
@@ -616,6 +846,7 @@ void ObStorageSchema::reset()
   info_ = 0;
   table_type_ = MAX_TABLE_TYPE;
   table_mode_.reset();
+  mv_mode_.reset();
   index_type_ = INDEX_TYPE_IS_NOT;
   row_store_type_ = ObStoreFormat::get_default_row_store_type();
   schema_version_ = OB_INVALID_VERSION;
@@ -628,10 +859,12 @@ void ObStorageSchema::reset()
   progressive_merge_num_ = 0;
   master_key_id_ = INVALID_ID;
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  minor_row_store_type_ = ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE;
   if (nullptr != allocator_) {
     reset_string(encryption_);
     reset_string(encrypt_key_);
-
+    reset_string(semistruct_properties_);
     rowkey_array_.reset();
     for (int i = 0; i < column_array_.count(); ++i) {
       column_array_.at(i).destroy(*allocator_);
@@ -642,6 +875,10 @@ void ObStorageSchema::reset()
     has_all_column_group_ = false;
     allocator_ = nullptr;
   }
+  semistruct_encoding_type_.reset();
+  semistruct_properties_.reset();
+  micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
+  skip_index_level_ = ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY;
   is_inited_ = false;
 }
 
@@ -663,6 +900,7 @@ bool ObStorageSchema::is_valid() const
       || pctfree_ < 0
       || table_type_ >= MAX_TABLE_TYPE
       || !table_mode_.is_valid()
+      || !mv_mode_.is_valid()
       || index_type_ >= INDEX_TYPE_MAX
       || !check_column_array_valid(rowkey_array_)
       || !check_column_array_valid(column_array_)
@@ -705,7 +943,7 @@ int ObStorageSchema::serialize(char *buf, const int64_t buf_len, int64_t &pos) c
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), K(buf), K(buf_len), K(pos));
   } else if (STORAGE_SCHEMA_VERSION <= storage_schema_version_
-      && STORAGE_SCHEMA_VERSION_V3 >= storage_schema_version_) {
+      && STORAGE_SCHEMA_VERSION_LATEST >= storage_schema_version_) {
     LST_DO_CODE(OB_UNIS_ENCODE,
         storage_schema_version_,
         info_,
@@ -740,6 +978,21 @@ int ObStorageSchema::serialize(char *buf, const int64_t buf_len, int64_t &pos) c
         STORAGE_LOG(WARN, "failed to serialize skip idx attr array", K_(skip_idx_attr_array));
       }
     }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V4) {
+      OB_UNIS_ENCODE(mv_mode_);
+    }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V5) {
+      OB_UNIS_ENCODE(merge_engine_type_);
+      OB_UNIS_ENCODE(semistruct_encoding_type_);
+    }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V6) {
+      OB_UNIS_ENCODE(semistruct_properties_);
+      OB_UNIS_ENCODE(micro_block_format_version_);
+    }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V7) {
+      OB_UNIS_ENCODE(minor_row_store_type_);
+      OB_UNIS_ENCODE(skip_index_level_);
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "invalid storage schema version", K(ret), K_(storage_schema_version));
@@ -759,13 +1012,10 @@ int ObStorageSchema::serialize_column_array(char *buf, const int64_t data_len, i
       if (OB_FAIL(column_array_.at(i).legacy_serialize(buf, data_len, pos))) {
         STORAGE_LOG(WARN, "Fail to serialize column schema for legacy version", K(ret), K(i), K_(column_array));
       }
-    } else if (STORAGE_SCHEMA_VERSION_V3 == storage_schema_version_) {
+    } else if (STORAGE_SCHEMA_VERSION_V3 <= storage_schema_version_) {
       if (OB_FAIL(column_array_.at(i).serialize(buf, data_len, pos))) {
         STORAGE_LOG(WARN, "Fail to serialize column schema", K(ret), K(i), K_(column_array));
       }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected storage schema version", K(ret), K_(storage_schema_version));
     }
   }
   return ret;
@@ -801,7 +1051,7 @@ int ObStorageSchema::deserialize(
   } else if (OB_FAIL(serialization::decode(buf, data_len, pos, storage_schema_version_))) {
     STORAGE_LOG(WARN, "failed to deserialize version", K(ret), K(data_len), K(pos));
   } else if (STORAGE_SCHEMA_VERSION <= storage_schema_version_
-      && STORAGE_SCHEMA_VERSION_V3 >= storage_schema_version_) {
+      && STORAGE_SCHEMA_VERSION_LATEST >= storage_schema_version_) {
     ObString tmp_encryption;
     ObString tmp_encrypt_key;
     LST_DO_CODE(OB_UNIS_DECODE,
@@ -854,7 +1104,27 @@ int ObStorageSchema::deserialize(
     } else if (OB_FAIL(deserialize_skip_idx_attr_array(buf, data_len, pos))) {
       STORAGE_LOG(WARN, "failed to deserialize skip idx attr array", K(ret));
     } // TODO(@lixia.yq) need to add compat log for column_group after transfer refresh
-
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V4) {
+      OB_UNIS_DECODE(mv_mode_);
+    }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V5) {
+      OB_UNIS_DECODE(merge_engine_type_);
+      OB_UNIS_DECODE(semistruct_encoding_type_);
+    }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V6) {
+      ObString tmp_semi_properties;
+      OB_UNIS_DECODE(tmp_semi_properties);
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(deep_copy_str(tmp_semi_properties, semistruct_properties_))) {
+        STORAGE_LOG(WARN, "failed to deep copy string", K(ret), K(tmp_semi_properties));
+      } else {
+        OB_UNIS_DECODE(micro_block_format_version_);
+      }
+    }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V7) {
+      OB_UNIS_DECODE(minor_row_store_type_);
+      OB_UNIS_DECODE(skip_index_level_);
+    }
     if (OB_SUCC(ret)) {
       is_inited_ = true;
     }
@@ -940,13 +1210,10 @@ int ObStorageSchema::deserialize_column_array(
         if (OB_FAIL(column.legacy_deserialize(buf, data_len, pos))) {
           STORAGE_LOG(WARN, "Fail to deserialize column schema for legacy version", K(ret));
         }
-      } else if (STORAGE_SCHEMA_VERSION_V3 == storage_schema_version_) {
+      } else if (STORAGE_SCHEMA_VERSION_V3 <= storage_schema_version_) {
         if (OB_FAIL(column.deserialize(buf, data_len, pos))) {
           STORAGE_LOG(WARN, "Fail to deserialize column schema", K(ret));
         }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected storage schema version", K(ret), K_(storage_schema_version));
       }
 
       if (OB_SUCC(ret) && column.orig_default_value_.get_deep_copy_size() > 0) {
@@ -1042,6 +1309,148 @@ int ObStorageSchema::generate_all_column_group_schema(ObStorageColumnGroupSchema
   return ret;
 }
 
+int ObStorageSchema::generate_cs_replica_cg_array(common::ObIAllocator &allocator, ObIArray<ObStorageColumnGroupSchema> &cg_schemas) const
+{
+  int ret = OB_SUCCESS;
+  int schema_rowkey_column_cnt = get_rowkey_column_num();
+  cg_schemas.reset();
+  ObStorageColumnGroupSchema column_group;
+  uint16_t normal_column_start_idx = schema_rowkey_column_cnt + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+
+  /*
+   * column idx in ObStorageColumnGroupSchema means the offset in column_ids(row keys in the front and according to the definition order).
+   * rowkey_array_ init with the definition order, so need sort to decide the column idx.
+   *
+   * For example, if create a table with (v1, k1, v2, k2, v3, k3, primary key(k3, k1, k2))
+   *                                [v1, k1, v2, k2, v3, k3]
+   * the column id from v1 to k3 is [16, 17, 18, 19, 20, 21]
+   *
+   *                                [k3, k1, k2, tid, sql, v1, v2, v3]
+   *          array idx is          [ 0,  1,  2,   3,   4,  5,  6,  7]
+   * but the column_ids is          [21, 17, 19,   7,   8, 16, 18, 20]
+   *
+   * so the column group is         [rowkey cg0,      cg1(v1), cg2(k1), cg3(v2), cg4(k2), cg5(v3), cg6(k3)]
+   *       with column_idxs         [[0, 1, 2, 3, 4],     [5],     [1],     [6],     [2],     [7],     [0]]
+   */
+
+  if (FAILEDx(cg_schemas.reserve(store_column_cnt_ + 1))) {
+    STORAGE_LOG(WARN, "failed to reserve for column group array", K(ret), K_(store_column_cnt));
+  } else if (OB_FAIL(generate_rowkey_column_group_schema(column_group, ObRowStoreType::CS_ENCODING_ROW_STORE, allocator))) {
+    STORAGE_LOG(WARN, "failed to generate_rowkey_column_group_schema", K(ret));
+  } else if (OB_FAIL(cg_schemas.push_back(column_group))) {
+    STORAGE_LOG(WARN, "failed to add column group", K(ret), K(column_group));
+    column_group.destroy(allocator);
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_array_.count(); i++) {
+    const ObStorageColumnSchema &column = column_array_.at(i);
+    uint16_t column_idx = UINT16_MAX;
+    if (OB_UNLIKELY(!column.is_column_stored_in_sstable())) {
+    } else {
+      if (column.is_rowkey_column()) {
+        const uint32_t column_id = i + OB_APP_MIN_COLUMN_ID;
+        for (int16_t j = 0; j < rowkey_array_.count(); j++) {
+          if (rowkey_array_.at(j).column_idx_ == column_id) {
+            column_idx = j;
+            break;
+          }
+        }
+        if (OB_UNLIKELY(column_idx == UINT16_MAX)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "failed to find column idx in rowkey array", K(ret), K_(rowkey_array), K(column_id));
+        }
+      } else {
+        column_idx = normal_column_start_idx++;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(generate_single_column_group_schema(column_group, ObRowStoreType::CS_ENCODING_ROW_STORE, column_idx, allocator))) {
+        STORAGE_LOG(WARN, "failed to generate_single_column_group_schema", K(ret), K(i));
+      } else if (OB_FAIL(cg_schemas.push_back(column_group))) {
+        STORAGE_LOG(WARN, "failed to add column group", K(ret), K(column_group));
+        column_group.destroy(allocator);
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    for (int64_t i = 0; i < cg_schemas.count(); i++) {
+      cg_schemas.at(i).destroy(allocator);
+    }
+  }
+
+  return ret;
+}
+
+int ObStorageSchema::generate_cs_replica_cg_array()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(column_info_simplified_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "column info is simplified", K(ret), KPC(this));
+  } else if (OB_FAIL(generate_cs_replica_cg_array(*allocator_, column_group_array_))) {
+    STORAGE_LOG(WARN, "Failed to generate column store cg array", K(ret), KPC(this));
+  } else {
+    is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
+    STORAGE_LOG(INFO, "[CS-Replica] Success to generate cs replica cg array", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObStorageSchema::generate_single_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type, const uint16_t column_idx, common::ObIAllocator &allocator) const
+{
+  int ret = OB_SUCCESS;
+  column_group.reset();
+  column_group.version_ = ObStorageColumnGroupSchema::COLUMN_GRUOP_SCHEMA_VERSION;
+  column_group.type_ = SINGLE_COLUMN_GROUP;
+  column_group.schema_column_cnt_ = 1;
+  column_group.rowkey_column_cnt_ = 0;
+  column_group.schema_rowkey_column_cnt_ = column_group.rowkey_column_cnt_;
+  column_group.column_cnt_ = column_group.schema_column_cnt_;
+
+  uint16_t *column_idxs = nullptr;
+  if (OB_ISNULL(column_idxs = reinterpret_cast<uint16_t *> (allocator_->alloc(sizeof(uint16_t) * column_group.column_cnt_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "Failed to alloc memory", K(ret), K(column_cnt_));
+  } else {
+    column_idxs[0] = column_idx;
+    column_group.column_idxs_ = column_idxs;
+    column_group.block_size_ = block_size_;
+    column_group.compressor_type_ = compressor_type_;
+    column_group.row_store_type_ = row_store_type;
+  }
+
+  return ret;
+}
+
+int ObStorageSchema::generate_rowkey_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type, common::ObIAllocator &allocator) const
+{
+  int ret = OB_SUCCESS;
+  column_group.reset();
+  column_group.version_ = ObStorageColumnGroupSchema::COLUMN_GRUOP_SCHEMA_VERSION;
+  column_group.type_ = ROWKEY_COLUMN_GROUP;
+  column_group.schema_column_cnt_ = get_rowkey_column_num();
+  column_group.rowkey_column_cnt_ = get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  column_group.schema_rowkey_column_cnt_ = column_group.schema_column_cnt_;
+  column_group.column_cnt_ = column_group.rowkey_column_cnt_;
+
+  uint16_t *column_idxs = nullptr;
+  if (OB_ISNULL(column_idxs = reinterpret_cast<uint16_t *> (allocator_->alloc(sizeof(uint16_t) * column_group.column_cnt_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "Failed to alloc memory", K(ret), K(column_cnt_));
+  } else {
+    for (int64_t i = 0; i < column_group.column_cnt_; ++i) {
+      column_idxs[i] = i;
+    }
+    column_group.column_idxs_ = column_idxs;
+    column_group.block_size_ = block_size_;
+    column_group.compressor_type_ = compressor_type_;
+    column_group.row_store_type_ = row_store_type;
+  }
+
+  return ret;
+}
+
 int ObStorageSchema::mock_row_store_cg(ObStorageColumnGroupSchema &mocked_row_store_cg) const
 {
   // if cache mocked_row_store_cg in storage schema, cached value will become invalid when ddl happen, so re-build every time
@@ -1052,6 +1461,36 @@ int ObStorageSchema::mock_row_store_cg(ObStorageColumnGroupSchema &mocked_row_st
   return ret;
 }
 
+int ObStorageSchema::transform_from_row_to_columnar()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
+  } else if (!is_row_store()) {
+    // do nothing
+  } else {
+    is_inited_ = false;
+    (void) reset_column_group_array();
+    has_all_column_group_ = false;
+    if (OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
+      STORAGE_LOG(WARN, "failed to generate_cs_replica_cg_array", K(ret));
+    } else if (OB_UNLIKELY(!is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "invalid storage schema", K(ret), KPC(this));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  STORAGE_LOG(INFO, "[CS-Replica] finish transform row store storage schema", K(ret), KPC(this));
+  return ret;
+}
+
+/*
+ * base_cg of column store schema can only be ROWKEY_CG OR ALL_CG
+ * "with column group(all columns, each column)" -> ALL_CG + each_cg
+ * "with column group(each column)" -> ROWKEY_CG + each_cg
+*/
 int ObStorageSchema::get_base_rowkey_column_group_index(int32_t &cg_idx) const
 {
   int ret = OB_SUCCESS;
@@ -1127,6 +1566,17 @@ int ObStorageSchema::get_column_group_index(
   }
 
   return ret;
+}
+
+bool ObStorageSchema::is_cg_array_generated_in_cs_replica() const
+{
+  bool bret = false;
+  if (column_group_array_.count() <= 1 || is_column_table_schema_) {
+    // row store or column store table schema after v435 (all/rowkey cg is placed in the front of cg array)
+  } else {
+    bret = column_group_array_.at(0).is_rowkey_column_group(); // cs replica will set rowkey cg in the front of cg array
+  }
+  return bret;
 }
 
 int ObStorageSchema::deserialize_column_group_array(ObIAllocator &allocator,
@@ -1223,6 +1673,21 @@ int64_t ObStorageSchema::get_serialize_size() const
     len += get_array_serialize_length(column_group_array_);
     len += get_array_serialize_length(skip_idx_attr_array_);
   }
+  if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V4) {
+    OB_UNIS_ADD_LEN(mv_mode_);
+  }
+  if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V5) {
+    OB_UNIS_ADD_LEN(merge_engine_type_);
+    OB_UNIS_ADD_LEN(semistruct_encoding_type_);
+  }
+  if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V6) {
+    OB_UNIS_ADD_LEN(semistruct_properties_);
+    OB_UNIS_ADD_LEN(micro_block_format_version_);
+  }
+  if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V7) {
+    OB_UNIS_ADD_LEN(minor_row_store_type_);
+    OB_UNIS_ADD_LEN(skip_index_level_);
+  }
   return len;
 }
 
@@ -1233,15 +1698,20 @@ int ObStorageSchema::generate_str(const ObTableSchema &input_schema)
     STORAGE_LOG(WARN, "failed to deep copy string", K(ret), K(*this));
   } else if (OB_FAIL(deep_copy_str(input_schema.get_encrypt_key(), encrypt_key_))) {
     STORAGE_LOG(WARN, "failed to deep copy string", K(ret), K(*this));
+  } else if (OB_FAIL(deep_copy_str(input_schema.get_semistruct_properties(), semistruct_properties_))) {
+    STORAGE_LOG(WARN, "failed to deep copy string", K(ret), K(*this));
   }
   return ret;
 }
 
-int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
+int ObStorageSchema::generate_column_array(
+    const ObTableSchema &input_schema,
+    const bool need_trim_default_val)
 {
   int ret = OB_SUCCESS;
   // build column schema map
   common::hash::ObHashMap<uint64_t, uint64_t> tmp_map; // column_id -> index
+
   if (OB_FAIL(tmp_map.create(input_schema.get_column_count(), "StorageSchema"))) {
     STORAGE_LOG(WARN, "failed to create map", K(ret));
   } else if (OB_FAIL(input_schema.check_column_array_sorted_by_column_id(true/*skip_rowkey*/))) {
@@ -1274,17 +1744,40 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       if (meta_type.is_decimal_int()) {
         meta_type.set_stored_precision(col->get_accuracy().get_precision());
         meta_type.set_scale(col->get_accuracy().get_scale());
+      } else if (ob_is_real_type(meta_type.get_type())) {
+        meta_type.set_scale(col->get_accuracy().get_scale());
       }
       col_schema.meta_type_ = meta_type;
-      if (ob_is_large_text(col->get_data_type())) {
-        col_schema.default_checksum_ = 0;
-      } else if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
+      const ObObj &orig_default_val = col->get_orig_default_value();
+      if (OB_FAIL(datum.from_obj_enhance(orig_default_val))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+      } else if (is_lob_storage(col->get_data_type()) && !datum.has_lob_header()
+              && OB_FAIL(ObLobManager::fill_lob_header(*allocator_, datum))) {
+        STORAGE_LOG(WARN, "failed to fill lob header", K(ret), K(datum));
+      } else if (need_trim_default_val && orig_default_val.is_fixed_len_char_type()
+              && OB_FAIL(trim(orig_default_val.get_collation_type(), datum))) {
+        STORAGE_LOG(WARN, "failed to trim default value", K(ret), K(orig_default_val), K(datum));
       } else {
         col_schema.default_checksum_ = datum.checksum(0);
+#ifdef ERRSIM
+        if (need_trim_default_val && orig_default_val.is_fixed_len_char_type()) {
+          const int64_t original_checksum = col_schema.default_checksum_;
+          const int64_t errsim_code = EN_NOT_TRIM_FOR_DEFALUT_CHECKSUM;
+          if (OB_SUCCESS != errsim_code) {
+            blocksstable::ObStorageDatum errsim_datum;
+            if (OB_FAIL(errsim_datum.from_obj_enhance(orig_default_val))) {
+              STORAGE_LOG(WARN, "Failed to transfer obj to errsim_datum", K(ret));
+            } else {
+              col_schema.default_checksum_ = errsim_datum.checksum(0);
+            }
+          }
+          STORAGE_LOG(INFO, "ERRSIM: whether to trim space for default checksum", K(ret), K(errsim_code), K(need_trim_default_val),
+                            K(original_checksum), "current_checksum", col_schema.default_checksum_);
+        }
+#endif
       }
-      if (OB_FAIL(col_schema.deep_copy_default_val(*allocator_, col->get_orig_default_value()))) {
-        STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(col->get_orig_default_value()));
+      if (FAILEDx(col_schema.deep_copy_default_val(*allocator_, orig_default_val))) {
+        STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(orig_default_val));
       } else if (OB_FAIL(column_array_.push_back(col_schema))) {
         STORAGE_LOG(WARN, "Fail to push into column array", K(ret), K(col_schema));
         col_schema.destroy(*allocator_);
@@ -1337,6 +1830,8 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       ObObjMeta meta_type = rowkey_column->type_;
       if (meta_type.is_decimal_int()) {
         meta_type.set_stored_precision(rowkey_col_schema->get_accuracy().get_precision());
+        meta_type.set_scale(rowkey_col_schema->get_accuracy().get_scale());
+      } else if (ob_is_real_type(meta_type.get_type())) {
         meta_type.set_scale(rowkey_col_schema->get_accuracy().get_scale());
       }
       rowkey_schema.meta_type_ = meta_type;
@@ -1543,6 +2038,7 @@ int ObStorageSchema::init_column_meta_array(
 {
   int ret = OB_SUCCESS;
   ObArray<ObColDesc> columns;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
@@ -1625,19 +2121,25 @@ int ObStorageSchema::get_orig_default_row(
       } else if (OB_FAIL(default_row.storage_datums_[i].from_obj_enhance(col_schema->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
       } else if (need_trim && col_schema->get_orig_default_value().is_fixed_len_char_type()) {
-        trim(col_schema->get_orig_default_value().get_collation_type(), default_row.storage_datums_[i]);
+        if (OB_FAIL(trim(col_schema->get_orig_default_value().get_collation_type(), default_row.storage_datums_[i]))) {
+          STORAGE_LOG(WARN, "Failed to trim default value", K(ret), KPC(col_schema), K(default_row));
+        }
       }
     }
   }
   return ret;
 }
 
-void ObStorageSchema::trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum)
+int ObStorageSchema::trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum)
 {
+  int ret = OB_SUCCESS;
+  ObString space_pattern = ObCharsetUtils::get_const_str(type, ' ');
+  if (OB_UNLIKELY(!ObCharset::is_valid_collation(type) || (0 == space_pattern.length()))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid collation type", K(ret), K(type), K(space_pattern));
+  } else {
     const char *str = storage_datum.ptr_;
     int32_t len = storage_datum.len_;
-    ObString space_pattern = ObCharsetUtils::get_const_str(type, ' ');
-
     for (; len >= space_pattern.length(); len -= space_pattern.length()) {
       if (0 != MEMCMP(str + len - space_pattern.length(),
             space_pattern.ptr(),
@@ -1646,6 +2148,8 @@ void ObStorageSchema::trim(const ObCollationType type, blocksstable::ObStorageDa
       }
     }
     storage_datum.len_ = len;
+  }
+  return ret;
 }
 
 const ObStorageColumnSchema *ObStorageSchema::get_column_schema(const int64_t column_idx) const
@@ -1678,22 +2182,35 @@ int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<ObColDesc> 
   return ret;
 }
 
-void ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema)
+int ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema)
 {
-  is_use_bloomfilter_ = input_schema.is_use_bloomfilter();
-  table_type_ = input_schema.get_table_type();
-  table_mode_ = input_schema.get_table_mode_struct();
-  index_type_ = input_schema.get_index_type();
-  row_store_type_ = input_schema.get_row_store_type();
-  schema_version_ = input_schema.get_schema_version();
-  column_cnt_ = input_schema.get_column_count();
-  tablet_size_ = input_schema.get_tablet_size();
-  pctfree_ = input_schema.get_pctfree();
-  block_size_ = input_schema.get_block_size();
-  progressive_merge_round_ = input_schema.get_progressive_merge_round();
-  progressive_merge_num_ = input_schema.get_progressive_merge_num();
-  master_key_id_ = input_schema.get_master_key_id();
-  compressor_type_ = input_schema.get_compressor_type();
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(input_schema.get_mv_mode_struct(mv_mode_))) {
+    STORAGE_LOG(WARN, "Fail to get mv mode struct", K(ret));
+  } else if (OB_FAIL(input_schema.get_semistruct_encoding_type(semistruct_encoding_type_))) {
+    STORAGE_LOG(WARN, "Fail to get semistruct encoding options", K(ret));
+  } else {
+    is_use_bloomfilter_ = input_schema.is_use_bloomfilter();
+    table_type_ = input_schema.get_table_type();
+    table_mode_ = input_schema.get_table_mode_struct();
+    index_type_ = input_schema.get_index_type();
+    row_store_type_ = input_schema.get_row_store_type();
+    schema_version_ = input_schema.get_schema_version();
+    column_cnt_ = input_schema.get_column_count();
+    tablet_size_ = input_schema.get_tablet_size();
+    pctfree_ = input_schema.get_pctfree();
+    block_size_ = input_schema.get_block_size();
+    progressive_merge_round_ = input_schema.get_progressive_merge_round();
+    progressive_merge_num_ = input_schema.get_progressive_merge_num();
+    master_key_id_ = input_schema.get_master_key_id();
+    compressor_type_ = input_schema.get_compressor_type();
+    merge_engine_type_ = input_schema.get_merge_engine_type();
+    minor_row_store_type_ = input_schema.get_minor_row_store_type();
+    skip_index_level_ = input_schema.get_skip_index_level();
+  }
+
+  return ret;
 }
 
 int ObStorageSchema::deep_copy_str(const ObString &src, ObString &dest)
@@ -1728,13 +2245,24 @@ void ObStorageSchema::reset_string(ObString &str)
   str.reset();
 }
 
-void ObStorageSchema::update_column_cnt(const int64_t input_col_cnt)
+void ObStorageSchema::update_column_cnt_and_schema_version(
+    const int64_t input_col_cnt,
+    const int64_t input_store_col_cnt,
+    const int64_t input_schema_version)
 {
+  const int64_t origin_column_cnt = column_cnt_;
+  const int64_t origin_store_column_cnt = store_column_cnt_;
+  const int64_t origin_schema_version = schema_version_;
   column_cnt_ = MAX(column_cnt_, input_col_cnt);
-  store_column_cnt_ = MAX(store_column_cnt_, input_col_cnt);
-  if (column_cnt_ != column_array_.count()) {
+  store_column_cnt_ = MAX(store_column_cnt_, input_store_col_cnt);
+  schema_version_ = MAX(schema_version_, input_schema_version);
+  if (column_cnt_ != column_array_.count() || origin_store_column_cnt != store_column_cnt_) {
     column_info_simplified_ = true;
-    STORAGE_LOG(INFO, "update column cnt", K(column_cnt_), K(store_column_cnt_), K(column_cnt_), K(column_array_.count()));
+    STORAGE_LOG(INFO, "update column cnt",
+      K(origin_column_cnt), K_(column_cnt),
+      K(origin_store_column_cnt), K_(store_column_cnt),
+      "column_array_size", column_array_.count(),
+      K(origin_schema_version), K_(schema_version));
   }
 }
 
@@ -1778,10 +2306,10 @@ int ObCreateTabletSchema::init(
     const share::schema::ObTableSchema &input_schema,
     const lib::Worker::CompatMode compat_mode,
     const bool skip_column_info,
-    const int64_t compat_version)
+    const uint64_t tenant_data_version)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObStorageSchema::init(allocator, input_schema, compat_mode, skip_column_info, compat_version))) {
+  if (OB_FAIL(ObStorageSchema::init(allocator, input_schema, compat_mode, skip_column_info, tenant_data_version))) {
     STORAGE_LOG(WARN, "failed to init", K(ret), KPC(this));
   } else {
     table_id_ = input_schema.get_table_id();

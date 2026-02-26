@@ -34,14 +34,14 @@ typedef void (*dict_var_batch_decode_func)(
                 const char *base_data,
                 const char *base_data_end,
                 const int64_t dict_cnt,
-                const int64_t *row_ids, const int64_t row_cap,
+                const int32_t *row_ids, const int64_t row_cap,
                 common::ObDatum *datums);
 
 typedef void (*dict_fix_batch_decode_func)(
                   const char *ref_data, const char *base_data,
                   const int64_t fixed_len,
                   const int64_t dict_cnt,
-                  const int64_t *row_ids, const int64_t row_cap,
+                  const int32_t *row_ids, const int64_t row_cap,
                   common::ObDatum *datums);
 
 typedef void (*dict_cmp_ref_func)(
@@ -71,7 +71,7 @@ public:
   virtual int batch_decode(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex* row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       common::ObDatum *datums) const override;
@@ -84,7 +84,7 @@ public:
   virtual int get_null_count(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex *row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const override;
 
@@ -137,22 +137,22 @@ public:
   virtual int read_distinct(
     const ObColumnDecoderCtx &ctx,
     const char **cell_datas,
-    storage::ObGroupByCell &group_by_cell) const;
+    storage::ObGroupByCellBase &group_by_cell) const;
 
   virtual int read_reference(
       const ObColumnDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
-      storage::ObGroupByCell &group_by_cell) const override;
+      storage::ObGroupByCellBase &group_by_cell) const override;
   int batch_read_distinct(
       const ObColumnDecoderCtx &ctx,
       const char **cell_datas,
       const int64_t meta_length,
-      storage::ObGroupByCell &group_by_cell) const;
+      storage::ObGroupByCellBase &group_by_cell) const;
 
 public:
-  ObDictDecoderIterator begin(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
-  ObDictDecoderIterator end(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
+  ObDictDecoderIterator begin(const ObColumnDecoderCtx *ctx, const bool is_padding_mode, const int64_t meta_length) const;
+  ObDictDecoderIterator end(const ObColumnDecoderCtx *ctx, const bool is_padding_mode, const int64_t meta_length) const;
 
 private:
   static const int DICT_SKIP_THRESHOLD = 32;
@@ -172,13 +172,13 @@ private:
 
   // unpacked refs should be stores in datums.pack_
   int batch_get_bitpacked_refs(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const unsigned char *col_data,
       common::ObDatum *datums) const;
 
   int batch_get_null_count(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const unsigned char *col_data,
     int64_t &null_count) const;
@@ -222,11 +222,12 @@ private:
       const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
+  template <typename ObFilterExecutor>
   int in_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
-      const sql::ObWhiteFilterExecutor &filter,
+      const ObFilterExecutor &filter,
       const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
@@ -313,7 +314,7 @@ template <typename RefType>
 struct ObFixedDictDataLocator_T
 {
   explicit ObFixedDictDataLocator_T(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char *dict_payload,
       const int64_t dict_len,
       const int64_t dict_cnt,
@@ -338,7 +339,7 @@ struct ObFixedDictDataLocator_T
     is_null = ref == dict_cnt_;
   }
 
-  const int64_t *__restrict row_ids_;
+  const int32_t *__restrict row_ids_;
   const char *__restrict dict_payload_;
   const int64_t dict_cnt_;
   const int64_t dict_len_;
@@ -349,7 +350,7 @@ template <typename RefType, typename OffType>
 struct ObVarDictDataLocator_T
 {
   explicit ObVarDictDataLocator_T(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char *dict_payload,
       const int64_t last_dict_entry_len,
       const int64_t dict_cnt,
@@ -376,7 +377,7 @@ struct ObVarDictDataLocator_T
     is_null = ref == dict_cnt_;
   }
 
-  const int64_t *__restrict row_ids_;
+  const int32_t *__restrict row_ids_;
   const char *__restrict dict_payload_;
   const int64_t dict_cnt_;
   const int64_t last_dict_entry_len_;
@@ -556,31 +557,34 @@ public:
   typedef std::random_access_iterator_tag iterator_category;
 public:
   ObDictDecoderIterator() : decoder_(nullptr), ctx_(nullptr),
-                            index_(0), meta_length_(0), cell_() {}
-  explicit ObDictDecoderIterator(
+                            index_(0), meta_length_(0), cell_(), is_padding_mode_(false) {}
+  ObDictDecoderIterator(
       const ObDictDecoder *decoder,
       const ObColumnDecoderCtx *ctx,
-      int64_t index,
-      int64_t meta_length)
-      : decoder_(decoder), ctx_(ctx), index_(index), meta_length_(meta_length), cell_() {}
-  explicit ObDictDecoderIterator(
+      const int64_t index,
+      const int64_t meta_length,
+      const bool is_padding_mode)
+      : decoder_(decoder), ctx_(ctx), index_(index), meta_length_(meta_length), cell_(), is_padding_mode_(is_padding_mode) {}
+  ObDictDecoderIterator(
       const ObDictDecoder *decoder,
       const ObColumnDecoderCtx *ctx,
-      int64_t index,
-      int64_t meta_length,
-      ObStorageDatum& cell)
+      const int64_t index,
+      const int64_t meta_length,
+      const ObStorageDatum& cell,
+      const bool is_padding_mode)
   {
     decoder_ = decoder;
     ctx_ = ctx;
     index_ = index;
     meta_length_ = meta_length;
     cell_ = cell;
+    is_padding_mode_ = is_padding_mode;
   }
   inline value_type &operator*()
   {
     OB_ASSERT(nullptr != decoder_);
     OB_ASSERT(OB_SUCCESS == decoder_->decode(ctx_->obj_meta_.get_type(), cell_, index_, meta_length_));
-    if (ctx_->obj_meta_.is_fixed_len_char_type() && nullptr != ctx_->col_param_) {
+    if (decoder_->need_padding(is_padding_mode_, ctx_->obj_meta_)) {
       OB_ASSERT(OB_SUCCESS == storage::pad_column(ctx_->obj_meta_, ctx_->col_param_->get_accuracy(),
                                                   *(ctx_->allocator_), cell_));
     }
@@ -590,7 +594,7 @@ public:
   {
     OB_ASSERT(nullptr != decoder_);
     OB_ASSERT(OB_SUCCESS == decoder_->decode(ctx_->obj_meta_.get_type(), cell_, index_, meta_length_));
-    if (ctx_->obj_meta_.is_fixed_len_char_type() && nullptr != ctx_->col_param_) {
+    if (decoder_->need_padding(is_padding_mode_, ctx_->obj_meta_)) {
       OB_ASSERT(OB_SUCCESS == storage::pad_column(ctx_->obj_meta_, ctx_->col_param_->get_accuracy(),
                                                   *(ctx_->allocator_), cell_));
     }
@@ -599,7 +603,7 @@ public:
   inline ObDictDecoderIterator operator--(int)
   {
     OB_ASSERT(nullptr != decoder_);
-    return ObDictDecoderIterator(decoder_, ctx_, index_--, meta_length_, cell_);
+    return ObDictDecoderIterator(decoder_, ctx_, index_--, meta_length_, cell_, is_padding_mode_);
   }
   inline ObDictDecoderIterator operator--()
   {
@@ -610,7 +614,7 @@ public:
   inline ObDictDecoderIterator operator++(int)
   {
     OB_ASSERT(nullptr != decoder_);
-    return ObDictDecoderIterator(decoder_, ctx_, index_++, meta_length_, cell_);
+    return ObDictDecoderIterator(decoder_, ctx_, index_++, meta_length_, cell_, is_padding_mode_);
   }
   inline ObDictDecoderIterator &operator++()
   {
@@ -662,6 +666,7 @@ private:
   int64_t index_;
   int64_t meta_length_;
   value_type cell_;
+  bool is_padding_mode_;
 };
 
 template <int32_t REF_LEN, int32_t CMP_TYPE>

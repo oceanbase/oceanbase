@@ -14,7 +14,6 @@
 
 #include "ob_expr_validate_password_strength.h"
 
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;

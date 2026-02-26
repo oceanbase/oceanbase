@@ -11,8 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/rc/ob_tenant_base.h"
-#include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
+#include "ob_resource_limit_calculator.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase

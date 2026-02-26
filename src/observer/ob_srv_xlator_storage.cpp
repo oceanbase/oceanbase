@@ -9,35 +9,12 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SERVER
 
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "observer/ob_srv_xlator.h"
 
-#include "share/ob_tenant_mgr.h"
-#include "share/schema/ob_schema_service_rpc_proxy.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "share/rpc/ob_batch_processor.h"
-#include "share/rpc/ob_blacklist_req_processor.h"
-#include "share/rpc/ob_blacklist_resp_processor.h"
-#include "sql/executor/ob_executor_rpc_processor.h"
-#include "sql/engine/cmd/ob_kill_executor.h"
-#include "sql/engine/cmd/ob_load_data_rpc.h"
-#include "sql/engine/px/ob_px_rpc_processor.h"
-#include "sql/dtl/ob_dtl_rpc_processor.h"
-#include "storage/tx/ob_trans_rpc.h"
-#include "storage/tx/ob_gts_rpc.h"
-#include "storage/tx/ob_dup_table_rpc.h"
-#include "storage/tx/ob_ts_response_handler.h"
-#include "storage/tx/wrs/ob_weak_read_service_rpc_define.h"  // weak_read_service
-#include "observer/ob_rpc_processor_simple.h"
-#include "observer/ob_srv_task.h"
 
-#include "observer/table/ob_table_rpc_processor.h"
-#include "observer/table/ob_table_execute_processor.h"
-#include "observer/table/ob_table_batch_execute_processor.h"
-#include "observer/table/ob_table_query_processor.h"
-#include "observer/table/ob_table_query_and_mutate_processor.h"
+#include "src/observer/table/ob_table_filter.h"
 
 using namespace oceanbase;
 using namespace oceanbase::observer;
@@ -58,6 +35,8 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     //RPC_PROCESSOR(ObRpcRemoveReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcMinorFreezeP, gctx_);
     RPC_PROCESSOR(ObRpcCheckSchemaVersionElapsedP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckMemtableCntP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckMediumCompactionInfoListP, gctx_);
     RPC_PROCESSOR(ObRpcCheckCtxCreateTimestampElapsedP, gctx_);
     RPC_PROCESSOR(ObRpcUpdateBaselineSchemaVersionP, gctx_);
     RPC_PROCESSOR(ObRpcSwitchLeaderP, gctx_);
@@ -67,11 +46,17 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcRefreshMemStatP, gctx_);
     RPC_PROCESSOR(ObRpcWashMemFragmentationP, gctx_);
     RPC_PROCESSOR(ObRpcBootstrapP, gctx_);
-    RPC_PROCESSOR(ObRpcIsEmptyServerP, gctx_);
-    RPC_PROCESSOR(ObRpcCheckServerForAddingServerP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckServerEmptyP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckServerEmptyWithResultP, gctx_);
+    RPC_PROCESSOR(ObRpcPrepareServerForAddingServerP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckServerMachineStatusP, gctx_);
+    RPC_PROCESSOR(ObAllServerTracerP, gctx_);
     RPC_PROCESSOR(ObRpcCheckDeploymentModeP, gctx_);
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(ObRpcWaitMasterKeyInSyncP, gctx_);
+#ifdef OB_BUILD_SHARED_STORAGE
+    RPC_PROCESSOR(ObRpcUploadRootKeyP, gctx_);
+#endif
 #endif
     RPC_PROCESSOR(ObRpcSyncAutoincValueP, gctx_);
     RPC_PROCESSOR(ObRpcClearAutoincCacheP, gctx_);
@@ -89,6 +74,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcBackupBuildIndexP, gctx_);
     RPC_PROCESSOR(ObRpcBackupLSCleanP, gctx_);
     RPC_PROCESSOR(ObRpcBackupMetaP, gctx_);
+    RPC_PROCESSOR(ObRpcBackupFuseTabletMetaP, gctx_);
     RPC_PROCESSOR(ObRpcBackupLSDataResP, gctx_);
     RPC_PROCESSOR(ObRpcBackupCleanLSResP, gctx_);
     RPC_PROCESSOR(ObRpcNotifyArchiveP, gctx_);
@@ -98,13 +84,22 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObPreProcessServerP, gctx_);
     RPC_PROCESSOR(ObRpcBroadcastRsListP, gctx_);
     RPC_PROCESSOR(ObRpcBuildDDLSingleReplicaRequestP, gctx_);
+    RPC_PROCESSOR(ObRpcBuildSplitTabletDataStartRequestP, gctx_);
+    RPC_PROCESSOR(ObRpcBuildSplitTabletDataFinishRequestP, gctx_);
+    RPC_PROCESSOR(ObRpcFreezeSplitSrcTabletP, gctx_);
+    RPC_PROCESSOR(ObRpcFetchSplitTabletInfoP, gctx_);
     RPC_PROCESSOR(ObRpcFetchTabletAutoincSeqCacheP, gctx_);
     RPC_PROCESSOR(ObRpcBatchGetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcBatchSetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcClearTabletAutoincSeqCacheP, gctx_);
+    RPC_PROCESSOR(ObRpcBatchGetTabletBindingP, gctx_);
+    RPC_PROCESSOR(ObRpcBatchGetTabletSplitP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLRedoLogP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLCommitLogP, gctx_);
+    RPC_PROCESSOR(ObRpcSetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLIncCommitLogP, gctx_);
+    RPC_PROCESSOR(ObRpcDRTaskReplyToMetaP, gctx_);
+    RPC_PROCESSOR(ObRpcLSCancelReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSMigrateReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSAddReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSTypeTransformP, gctx_);
@@ -112,8 +107,12 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcLSRemoveNonPaxosReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSModifyPaxosReplicaNumberP, gctx_);
     RPC_PROCESSOR(ObRpcLSCheckDRTaskExistP, gctx_);
+    RPC_PROCESSOR(ObAdminSwitchReplicaRoleP, gctx_);
     RPC_PROCESSOR(ObAdminDRTaskP, gctx_);
+    RPC_PROCESSOR(ObRpcTriggerPartitionBalanceP, gctx_);
+    RPC_PROCESSOR(ObRpcLSReplaceReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcCreateTenantUserLSP, gctx_);
+    RPC_PROCESSOR(ObRpcLoadTenantTableSchemaP, gctx_);
     RPC_PROCESSOR(ObRpcGenUniqueIDP, gctx_);
     RPC_PROCESSOR(ObRpcStartTransferTaskP, gctx_);
     RPC_PROCESSOR(ObRpcFinishTransferTaskP, gctx_);
@@ -130,6 +129,53 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcNotifyCloneSchedulerP, gctx_);
     RPC_PROCESSOR(ObRpcNotifyTenantThreadP, gctx_);
     RPC_PROCESSOR(ObRpcTabletMajorFreezeP, gctx_);
+    RPC_PROCESSOR(ObRpcAlterLSP, gctx_);
     RPC_PROCESSOR(ObRpcDetectSessionAliveP, gctx_);
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
+    RPC_PROCESSOR(ObCollectMvMergeInfoP, gctx_);
+    RPC_PROCESSOR(ObFetchStableMemberListP, gctx_);
+    RPC_PROCESSOR(ObRpcPrepareTabletSplitTaskRangesP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckStorageOperationStatusP, gctx_);
+#ifdef OB_BUILD_SHARED_STORAGE
+    RPC_PROCESSOR(ObRpcRemoteWriteDDLFinishLogP, gctx_);
+    RPC_PROCESSOR(ObFetchReplicaPrewarmMicroBlockP, gctx_.bandwidth_throttle_);
+    RPC_PROCESSOR(ObGetSSMacroBlockP, gctx_);
+    RPC_PROCESSOR(ObGetSSPhyBlockInfoP, gctx_);
+    RPC_PROCESSOR(ObGetSSMicroBlockMetaP, gctx_);
+    RPC_PROCESSOR(ObRpcSyncHotMicroKeyP, gctx_);
+    RPC_PROCESSOR(ObGetSSMacroBlockByURIP, gctx_);
+    RPC_PROCESSOR(ObDelSSTabletMetaP, gctx_);
+    RPC_PROCESSOR(ObEnableSSMicroCacheP, gctx_);
+    RPC_PROCESSOR(ObGetSSMicroCacheInfoP, gctx_);
+    RPC_PROCESSOR(ObRpcClearSSMicroCacheP, gctx_);
+    RPC_PROCESSOR(ObRpcFlushSSLocalCacheP, gctx_);
+    RPC_PROCESSOR(ObDelSSLocalTmpFileP, gctx_);
+    RPC_PROCESSOR(ObDelSSLocalMajorP, gctx_);
+    RPC_PROCESSOR(ObCalibrateSSDiskSpaceP, gctx_);
+    RPC_PROCESSOR(ObDelSSTabletMicroP, gctx_);
+    RPC_PROCESSOR(ObSetSSCkptCompressorP, gctx_);
+    RPC_PROCESSOR(ObSetSSCacheSizeRatioP, gctx_);
+    RPC_PROCESSOR(ObTriggerStorageCacheP, gctx_);
+    RPC_PROCESSOR(ObRpcTabletSplitScheduleP, gctx_);
+    RPC_PROCESSOR(ObRpcGetMinSSGCLastSuccScnP, gctx_);
+    RPC_PROCESSOR(ObRpcGetSSGCLastSuccScnsP, gctx_);
+    RPC_PROCESSOR(ObRpcPushSSGCLastSuccScnP, gctx_);
+    RPC_PROCESSOR(ObDelSSMacroCacheP, gctx_);
+    RPC_PROCESSOR(ObDelSSTabletMacroCacheP, gctx_);
+#endif
+    RPC_PROCESSOR(ObRebuildTabletP, gctx_);
+    RPC_PROCESSOR(ObNotifySharedStorageInfoP, gctx_);
+    RPC_PROCESSOR(ObNotifyLogServiceAccessPointP, gctx_);
+    RPC_PROCESSOR(ObRpcBroadcastConfigVersionP, gctx_);
+    RPC_PROCESSOR(ObRpcNotifyLSRestoreFinishP, gctx_);
+#ifdef OB_BUILD_ARBITRATION
+    RPC_PROCESSOR(ObFetchArbMemberP, gctx_);
+#endif
+    RPC_PROCESSOR(ObRpcStartArchiveP, gctx_);
+    RPC_PROCESSOR(ObCheckSysTableSchemaP, gctx_);
+    RPC_PROCESSOR(ObWriteInnerTabletP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckBackupDestRWConsistencyP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckBackupDestVaildityP, gctx_);
+    RPC_PROCESSOR(ObRpcWriteBackupDestFormatFileP, gctx_);
+    RPC_PROCESSOR(ObRpcFetchTabletPhysicalRowCntP, gctx_);
 }

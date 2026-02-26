@@ -13,13 +13,9 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_recover_table_job_scheduler.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/restore/ob_recover_table_initiator.h"
 #include "rootserver/restore/ob_restore_service.h"
 #include "share/backup/ob_backup_data_table_operator.h"
-#include "share/ob_primary_standby_service.h"
-#include "share/location_cache/ob_location_service.h"
-#include "share/restore/ob_physical_restore_table_operator.h"
+#include "rootserver/standby/ob_standby_service.h"
 #include "share/restore/ob_import_util.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "observer/ob_inner_sql_connection.h"
@@ -126,6 +122,7 @@ int ObRecoverTableJobScheduler::check_compatible_() const
 int ObRecoverTableJobScheduler::try_advance_status_(share::ObRecoverTableJob &job, const int err_code)
 {
   int ret = OB_SUCCESS;
+  const share::ObRecoverTableStatus cur_status = job.get_status();
   share::ObRecoverTableStatus next_status;
   const uint64_t tenant_id = job.get_tenant_id();
   const int64_t job_id = job.get_job_id();
@@ -140,6 +137,8 @@ int ObRecoverTableJobScheduler::try_advance_status_(share::ObRecoverTableJob &jo
       } else if (OB_FAIL(job.get_result().set_result(
           err_code, trace_id, GCONF.self_addr_))) {
         LOG_WARN("failed to set result", K(ret));
+      } else if (OB_FALSE_IT(job.get_result().set_tables_import_result(ObImportResult::FAILED))) {
+        LOG_WARN("failed to set recover table result", K(ret));
       }
       LOG_WARN("[RECOVER_TABLE]recover table job failed", K(err_code), K(job));
       ROOTSERVICE_EVENT_ADD("recover_table", "recover_table_failed", K(tenant_id), K(job_id), K(err_code), K(trace_id));
@@ -152,12 +151,14 @@ int ObRecoverTableJobScheduler::try_advance_status_(share::ObRecoverTableJob &jo
   if (next_status.is_finish()) {
     job.set_end_ts(ObTimeUtility::current_time());
   }
-  if (OB_FAIL(ret)) {
-  } else if (need_advance_status && OB_FAIL(helper_.advance_status(*sql_proxy_, job, next_status))) {
-    LOG_WARN("failed to advance statsu", K(ret), K(job), K(next_status));
-  } else {
-    wakeup_();
-    ROOTSERVICE_EVENT_ADD("recover_table", "advance_status", K(tenant_id), K(job_id), K(next_status));
+  /* normal finshed job has already filled the result. */
+  if (OB_SUCC(ret) && need_advance_status) {
+    if (FAILEDx(helper_.advance_status(*sql_proxy_, job, next_status))) {
+      LOG_WARN("failed to advance statsu", K(ret), K(job), K(next_status));
+    } else {
+      wakeup_();
+      ROOTSERVICE_EVENT_ADD("recover_table", "advance_status", K(tenant_id), K(job_id), K(cur_status), K(next_status));
+    }
   }
   return ret;
 }
@@ -504,6 +505,7 @@ int ObRecoverTableJobScheduler::canceling_(share::ObRecoverTableJob &job)
   int ret = OB_SUCCESS;
   share::ObImportTableJobPersistHelper helper;
   share::ObImportTableJob import_job;
+  share::ObImportTableJob import_job_history;
   bool cancel_import_job_finish = false;
   if (OB_FAIL(helper.init(job.get_tenant_id()))) {
     LOG_WARN("failed to init helper", K(ret));
@@ -517,10 +519,31 @@ int ObRecoverTableJobScheduler::canceling_(share::ObRecoverTableJob &job)
     }
   }
 
+  /* if user import job exist, assign the result of import job to the result of recover job. */
   if (OB_SUCC(ret) && cancel_import_job_finish) {
     share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
     job.get_result().set_result(OB_CANCELED, trace_id, GCONF.self_addr_);
-    if (OB_FAIL(try_advance_status_(job, OB_CANCELED))) {
+    bool exist_import_table_job = true;
+    if (OB_FAIL(helper.get_import_table_job_history_by_initiator(
+      *sql_proxy_, job.get_tenant_id(), job.get_job_id(), import_job_history))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        exist_import_table_job = false;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get import table job history by initiator", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      const ObImportResult &import_result = import_job_history.get_result();
+      if (exist_import_table_job) {
+        job.get_result().set_tables_import_result(import_result.get_tables_import_result_str());
+      } else {
+        job.get_result().set_tables_import_result(ObImportResult::FAILED);
+      }
+    }
+
+    if (FAILEDx(try_advance_status_(job, OB_CANCELED))) {
       LOG_WARN("failed to advance status", K(ret));
     } else {
       LOG_INFO("[RECOVER_TABLE]cancel recover table job finish", K(job), K(import_job));
@@ -573,9 +596,10 @@ int ObRecoverTableJobScheduler::restore_aux_tenant_(share::ObRecoverTableJob &jo
     schema::ObSchemaGetterGuard guard;
     schema::ObTenantStatus status;
     if (!restore_history_info.is_restore_success()) {
-      ret = OB_LS_RESTORE_FAILED;  // TODO(zeyong) adjust error code to restore tenant failed later.
+      ret = OB_RESTORE_TENANT_FAILED;
       LOG_WARN("[RECOVER_TABLE]restore aux tenant failed", K(ret), K(restore_history_info), K(job));
       job.get_result().set_result(false, restore_history_info.comment_);
+      job.get_result().set_tables_import_result(ObImportResult::FAILED);
     } else if (OB_FAIL(check_aux_tenant_(job, aux_tenant_id))) {
       LOG_WARN("failed to check aux tenant", K(ret), K(aux_tenant_id));
     }
@@ -602,7 +626,8 @@ int ObRecoverTableJobScheduler::active_aux_tenant_(share::ObRecoverTableJob &job
         "initiator_job_id", job.get_job_id(), "initiator_tenant_id", job.get_tenant_id());
   } else if (OB_FAIL(ban_multi_version_recycling_(job, restore_history_info.restore_tenant_id_))) {
     LOG_WARN("failed to ban multi version cecycling", K(ret));
-  } else if (OB_FAIL(failover_to_primary_(job, restore_history_info.restore_tenant_id_))) {
+  } else if (restore_history_info.get_restore_type().is_full_restore()
+    && OB_FAIL(failover_to_primary_(job, restore_history_info.restore_tenant_id_))) {
     LOG_WARN("failed to failover to primary", K(ret), K(restore_history_info));
   }
   if (OB_FAIL(ret)) {
@@ -652,7 +677,7 @@ int ObRecoverTableJobScheduler::failover_to_primary_(
   MTL_SWITCH(OB_SYS_TENANT_ID) {
     if (OB_FAIL(switch_tenant_arg.init(aux_tenant_id, obrpc::ObSwitchTenantArg::OpType::FAILOVER_TO_PRIMARY, "", false))) {
       LOG_WARN("failed to init switch tenant arg", K(ret), K(aux_tenant_id));
-    } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.switch_tenant(switch_tenant_arg))) {
+    } else if (OB_FAIL(OB_STANDBY_SERVICE.switch_tenant(switch_tenant_arg))) {
       LOG_WARN("failed to switch_tenant", KR(ret), K(switch_tenant_arg));
     } else {
       LOG_INFO("[RECOVER_TABLE]succeed to switch aux tenant role to primary", K(aux_tenant_id), K(job));
@@ -683,6 +708,7 @@ int ObRecoverTableJobScheduler::check_aux_tenant_(share::ObRecoverTableJob &job,
         LOG_WARN("failed to databuff printf", K(ret));
       } else {
         job.get_result().set_result(false, comment);
+        job.get_result().set_tables_import_result(ObImportResult::FAILED);
       }
     }
     LOG_WARN("failed to get tenant schema guard", K(ret), K(aux_tenant_id));
@@ -700,6 +726,8 @@ int ObRecoverTableJobScheduler::check_aux_tenant_(share::ObRecoverTableJob &job,
     LOG_WARN("recover from different compatibility tenant is not supported", K(ret));
     if (OB_TMP_FAIL(job.get_result().set_result(false, "recover from different compatibility tenant is not supported"))) {
       LOG_WARN("failed to set result", K(ret), K(tmp_ret));
+    } else {
+      job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
   } else if (OB_FAIL(check_case_sensitive_compatibility(aux_tenant_guard, recover_tenant_guard, is_compatible))) {
     LOG_WARN("failed to check case sensitive compatibility", K(ret));
@@ -708,6 +736,8 @@ int ObRecoverTableJobScheduler::check_aux_tenant_(share::ObRecoverTableJob &job,
     LOG_WARN("recover from different case sensitive compatibility tenant is not supported", K(ret));
     if (OB_TMP_FAIL(job.get_result().set_result(false, "recover from different case sensitive compatibility tenant is not supported"))) {
       LOG_WARN("failed to set result", K(ret), K(tmp_ret));
+    } else {
+      job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
   }
   return ret;
@@ -798,6 +828,7 @@ int ObRecoverTableJobScheduler::gen_import_job_(share::ObRecoverTableJob &job)
         LOG_WARN("failed to databuff printf", K(ret));
       } else {
         job.get_result().set_result(false, comment);
+        job.get_result().set_tables_import_result(ObImportResult::FAILED);
       }
     }
     LOG_WARN("failed to get tenant id", K(ret), "aux_tenant_name", job.get_aux_tenant_name());

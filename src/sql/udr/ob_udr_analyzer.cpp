@@ -12,9 +12,7 @@
 
 
 #define USING_LOG_PREFIX SQL_QRR
-#include "lib/utility/ob_print_utils.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "common/ob_smart_call.h"
 #include "sql/plan_cache/ob_sql_parameterization.h"
 #include "sql/udr/ob_udr_analyzer.h"
 
@@ -220,11 +218,11 @@ int ObUDRAnalyzer::parse_and_check(const common::ObString &pattern,
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "question marks are not equal");
       LOG_WARN("question marks are not equal not supported");
     } else if (l_question_mark_ctx.count_ > 0 && l_question_mark_ctx.by_name_) {
-      std::sort(l_question_mark_ctx.name_, l_question_mark_ctx.name_ + l_question_mark_ctx.count_,
+      lib::ob_sort(l_question_mark_ctx.name_, l_question_mark_ctx.name_ + l_question_mark_ctx.count_,
                 [](char const *lhs, char const *rhs) {
                   return STRCASECMP(lhs, rhs) < 0;
                 });
-      std::sort(r_question_mark_ctx.name_, r_question_mark_ctx.name_ + r_question_mark_ctx.count_,
+      lib::ob_sort(r_question_mark_ctx.name_, r_question_mark_ctx.name_ + r_question_mark_ctx.count_,
                 [](char const *lhs, char const *rhs) {
                   return STRCASECMP(lhs, rhs) < 0;
                 });
@@ -305,7 +303,7 @@ int ObUDRAnalyzer::cons_raw_param_infos(
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(dynamic_param_infos.begin(), dynamic_param_infos.end(),
+    lib::ob_sort(dynamic_param_infos.begin(), dynamic_param_infos.end(),
               [](DynamicParamInfo &l, DynamicParamInfo &r)
               {
                 return (l.question_mark_idx_  < r.question_mark_idx_);

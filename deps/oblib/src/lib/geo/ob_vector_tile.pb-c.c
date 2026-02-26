@@ -92,7 +92,7 @@ static const ProtobufCFieldDescriptor vector_tile__tile__value__field_descriptor
     offsetof(VectorTile__Tile__Value, string_value),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -104,7 +104,7 @@ static const ProtobufCFieldDescriptor vector_tile__tile__value__field_descriptor
     offsetof(VectorTile__Tile__Value, float_value),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -116,7 +116,7 @@ static const ProtobufCFieldDescriptor vector_tile__tile__value__field_descriptor
     offsetof(VectorTile__Tile__Value, double_value),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -128,7 +128,7 @@ static const ProtobufCFieldDescriptor vector_tile__tile__value__field_descriptor
     offsetof(VectorTile__Tile__Value, int_value),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -140,7 +140,7 @@ static const ProtobufCFieldDescriptor vector_tile__tile__value__field_descriptor
     offsetof(VectorTile__Tile__Value, uint_value),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -152,7 +152,7 @@ static const ProtobufCFieldDescriptor vector_tile__tile__value__field_descriptor
     offsetof(VectorTile__Tile__Value, sint_value),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -164,7 +164,7 @@ static const ProtobufCFieldDescriptor vector_tile__tile__value__field_descriptor
     offsetof(VectorTile__Tile__Value, bool_value),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -222,7 +222,7 @@ static const ProtobufCFieldDescriptor vector_tile__tile__feature__field_descript
     offsetof(VectorTile__Tile__Feature, tags),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -246,7 +246,7 @@ static const ProtobufCFieldDescriptor vector_tile__tile__feature__field_descript
     offsetof(VectorTile__Tile__Feature, geometry),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

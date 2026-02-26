@@ -13,21 +13,14 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_json_table_op.h"
-#include "share/object/ob_obj_cast_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/ob_json_access_utils.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 #include "sql/engine/expr/ob_expr_json_value.h"
 #include "sql/engine/expr/ob_expr_json_query.h"
 #include "sql/engine/expr/ob_expr_json_exists.h"
 #include "lib/xml/ob_binary_aggregate.h"
-#include "lib/xml/ob_xpath.h"
-
+#include "sql/engine/expr/ob_expr_rb_func_helper.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
+#include "lib/roaringbitmap/ob_rb_utils.h"
 
 namespace oceanbase
 {
@@ -325,7 +318,7 @@ OB_DEF_SERIALIZE(ObJsonTableSpec)
 {
   INIT_SUCC(ret);
   BASE_SER((ObJsonTableSpec, ObOpSpec));
-  OB_UNIS_ENCODE(value_expr_);
+  OB_UNIS_ENCODE(value_exprs_.at(0));
   OB_UNIS_ENCODE(column_exprs_);
   OB_UNIS_ENCODE(emp_default_exprs_);
   OB_UNIS_ENCODE(err_default_exprs_);
@@ -336,9 +329,28 @@ OB_DEF_SERIALIZE(ObJsonTableSpec)
     const ObJtColInfo& info = *cols_def_.at(i);
     OB_UNIS_ENCODE(info);
   }
-  if (table_type_ == MulModeTableType::OB_ORA_XML_TABLE_TYPE) {
+  if (OB_FAIL(ret)) {
+  } else if (table_type_ == MulModeTableType::OB_ORA_XML_TABLE_TYPE) {
     OB_UNIS_ENCODE(table_type_);
     OB_UNIS_ENCODE(namespace_def_);
+  } else if (table_type_ == MulModeTableType::OB_RB_ITERATE_TABLE_TYPE
+             || table_type_ == MulModeTableType::OB_UNNEST_TABLE_TYPE) {
+    OB_UNIS_ENCODE(table_type_);
+    int32_t value_exprs_count = value_exprs_.count() - 1;
+    OB_UNIS_ENCODE(value_exprs_count);
+    for (size_t i = 1; OB_SUCC(ret) && i < value_exprs_.count(); ++i) {
+      OB_UNIS_ENCODE(value_exprs_.at(i));
+    }
+  } else if (table_type_ == MulModeTableType::OB_INDEX_DATA_GEN_TABLE_TYPE) {
+    OB_UNIS_ENCODE(table_type_);
+    int32_t value_exprs_count = value_exprs_.count() - 1;
+    OB_UNIS_ENCODE(value_exprs_count);
+    for (size_t i = 1; OB_SUCC(ret) && i < value_exprs_.count(); ++i) {
+      OB_UNIS_ENCODE(value_exprs_.at(i));
+    }
+    OB_UNIS_ENCODE(inc_pk_proj_);
+    OB_UNIS_ENCODE(index_column_cnt_);
+    OB_UNIS_ENCODE(search_idx_included_cid_idxes_);
   }
 
   return ret;
@@ -348,7 +360,7 @@ OB_DEF_SERIALIZE_SIZE(ObJsonTableSpec)
 {
   int64_t len = 0;
   BASE_ADD_LEN((ObJsonTableSpec, ObOpSpec));
-  OB_UNIS_ADD_LEN(value_expr_);
+  OB_UNIS_ADD_LEN(value_exprs_.at(0));
   OB_UNIS_ADD_LEN(column_exprs_);
   OB_UNIS_ADD_LEN(emp_default_exprs_);
   OB_UNIS_ADD_LEN(err_default_exprs_);
@@ -363,6 +375,24 @@ OB_DEF_SERIALIZE_SIZE(ObJsonTableSpec)
   if (table_type_ == MulModeTableType::OB_ORA_XML_TABLE_TYPE) {
     OB_UNIS_ADD_LEN(table_type_);
     OB_UNIS_ADD_LEN(namespace_def_);
+  } else if (table_type_ == MulModeTableType::OB_RB_ITERATE_TABLE_TYPE
+             || table_type_ == MulModeTableType::OB_UNNEST_TABLE_TYPE) {
+    OB_UNIS_ADD_LEN(table_type_);
+    int32_t value_exprs_count = value_exprs_.count() - 1;
+    OB_UNIS_ADD_LEN(value_exprs_count);
+    for (size_t i = 1; i < value_exprs_.count(); ++i) {
+      OB_UNIS_ADD_LEN(value_exprs_.at(i));
+    }
+  } else if (table_type_ == MulModeTableType::OB_INDEX_DATA_GEN_TABLE_TYPE) {
+    OB_UNIS_ADD_LEN(table_type_);
+    int32_t value_exprs_count = value_exprs_.count() - 1;
+    OB_UNIS_ADD_LEN(value_exprs_count);
+    for (size_t i = 1; i < value_exprs_.count(); ++i) {
+      OB_UNIS_ADD_LEN(value_exprs_.at(i));
+    }
+    OB_UNIS_ADD_LEN(inc_pk_proj_);
+    OB_UNIS_ADD_LEN(index_column_cnt_);
+    OB_UNIS_ADD_LEN(search_idx_included_cid_idxes_);
   }
   return len;
 }
@@ -371,7 +401,8 @@ OB_DEF_DESERIALIZE(ObJsonTableSpec)
 {
   INIT_SUCC(ret);
   BASE_DESER((ObJsonTableSpec, ObOpSpec));
-  OB_UNIS_DECODE(value_expr_);
+  ObExpr* value_expr = NULL;
+  OB_UNIS_DECODE(value_expr);
   OB_UNIS_DECODE(column_exprs_);
   OB_UNIS_DECODE(emp_default_exprs_);
   OB_UNIS_DECODE(err_default_exprs_);
@@ -397,12 +428,59 @@ OB_DEF_DESERIALIZE(ObJsonTableSpec)
       *col_info = tmp_col_info;
       if (OB_FAIL(cols_def_.push_back(col_info))) {
         LOG_WARN("fail to store col info.", K(ret), K(cols_def_.count()));
-      } else if (col_info->col_type_ >= COL_TYPE_VAL_EXTRACT_XML) {
+      } else if (col_info->col_type_ == COL_TYPE_VAL_EXTRACT_XML
+                 || col_info->col_type_ == COL_TYPE_XMLTYPE_XML
+                 || col_info->col_type_ == COL_TYPE_ORDINALITY_XML) {
         table_type_flag = OB_XML_TABLE;
+      } else if (col_info->col_type_ == COL_TYPE_RB_ITERATE) {
+        table_type_flag = OB_RB_ITERATE_TABLE;
+      } else if (col_info->col_type_ == COL_TYPE_UNNEST) {
+        table_type_flag = OB_UNNEST_TABLE;
       }
     }
   }
-  if (table_type_flag == OB_XML_TABLE) {
+
+  if (OB_FAIL(ret)) {
+  } else if (table_type_flag == OB_RB_ITERATE_TABLE || table_type_flag == OB_UNNEST_TABLE) {
+    OB_UNIS_DECODE(table_type_);
+    int32_t value_exprs_count = 0;
+    OB_UNIS_DECODE(value_exprs_count);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(value_exprs_.init(value_exprs_count + 1))) {
+      LOG_WARN("fail to init value_exprs_ array.", K(ret));
+    } else if (OB_FAIL(value_exprs_.push_back(value_expr))) {
+      LOG_WARN("fail to store value expr.", K(ret));
+    }
+    for (size_t i = 0; OB_SUCC(ret) && i < value_exprs_count; ++i) {
+      OB_UNIS_DECODE(value_expr);
+      if (OB_SUCC(ret) && OB_FAIL(value_exprs_.push_back(value_expr))) {
+        LOG_WARN("fail to store value expr.", K(ret));
+      }
+    }
+  } else if (table_type_flag == OB_INDEX_DATA_GEN_TABLE_TYPE) {
+    OB_UNIS_DECODE(table_type_);
+     int32_t value_exprs_count = 0;
+    OB_UNIS_DECODE(value_exprs_count);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(value_exprs_.init(value_exprs_count + 1))) {
+      LOG_WARN("fail to init value_exprs_ array.", K(ret));
+    } else if (OB_FAIL(value_exprs_.push_back(value_expr))) {
+      LOG_WARN("fail to store value expr.", K(ret));
+    }
+    for (size_t i = 0; OB_SUCC(ret) && i < value_exprs_count; ++i) {
+      OB_UNIS_DECODE(value_expr);
+      if (OB_SUCC(ret) && OB_FAIL(value_exprs_.push_back(value_expr))) {
+        LOG_WARN("fail to store value expr.", K(ret));
+      }
+    }
+    OB_UNIS_DECODE(inc_pk_proj_);
+    OB_UNIS_DECODE(index_column_cnt_);
+    OB_UNIS_DECODE(search_idx_included_cid_idxes_);
+  } else if (OB_FAIL(value_exprs_.init(1))) {
+    LOG_WARN("fail to init value_exprs_ array.", K(ret));
+  } else if (OB_FAIL(value_exprs_.push_back(value_expr))) {
+    LOG_WARN("fail to store value expr.", K(ret));
+  } else if (table_type_flag == OB_XML_TABLE) {
     OB_UNIS_DECODE(table_type_);
     OB_UNIS_DECODE(namespace_def_);
   }
@@ -596,7 +674,7 @@ int ObJsonTableOp::inner_open()
   INIT_SUCC(ret);
   if (OB_FAIL(init())) {
     LOG_WARN("failed to init.", K(ret));
-  } else if (OB_ISNULL(MY_SPEC.value_expr_)) {
+  } else if (MY_SPEC.value_exprs_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to open iter, value expr is null.", K(ret));
   } else if (OB_FAIL(root_->open(&jt_ctx_))) {
@@ -629,15 +707,20 @@ int ObJsonTableOp::reset_variable()
   jt_ctx_.is_cover_error_ = false;
   jt_ctx_.error_code_ = 0;
   jt_ctx_.is_need_end_ = 0;
-
-  if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&jt_ctx_.row_alloc_, jt_ctx_.mem_ctx_))) {
-    LOG_WARN("fail to create tree memory context", K(ret));
+  MultimodeAlloctor *tmp_allocator = nullptr;
+  if (OB_ISNULL(tmp_allocator = static_cast<MultimodeAlloctor*>(jt_ctx_.row_alloc_.alloc(sizeof(MultimodeAlloctor))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate Multimode alloc buf", K(ret));
+  } else {
+    new (tmp_allocator)MultimodeAlloctor(jt_ctx_.row_alloc_, T_XML_TABLE_EXPRESSION, ret);
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(MY_SPEC.value_expr_)) {
+  } else if (MY_SPEC.value_exprs_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to open iter, value expr is null.", K(ret));
+  } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(tmp_allocator, jt_ctx_.mem_ctx_))) {
+    LOG_WARN("fail to create tree memory context", K(ret));
   } else if (OB_FAIL(root_->reset(&jt_ctx_))) {
     LOG_WARN("failed to open table func xml column node.", K(ret));
   } else {
@@ -656,6 +739,7 @@ int ObJsonTableOp::switch_iterator()
 int ObJsonTableOp::init()
 {
   INIT_SUCC(ret);
+  uint64_t tenant_id = -1;
   if (!is_inited_) {
     const ObJsonTableSpec* spec_ptr = reinterpret_cast<const ObJsonTableSpec*>(&spec_);
     jt_ctx_.spec_ptr_ = const_cast<ObJsonTableSpec*>(spec_ptr);
@@ -663,7 +747,6 @@ int ObJsonTableOp::init()
       LOG_WARN("fail to init json table op, as generate exec tree occur error.", K(ret));
     } else {
       const sql::ObSQLSessionInfo *session = get_exec_ctx().get_my_session();
-      uint64_t tenant_id = -1;
       if (OB_ISNULL(session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session is NULL", K(ret));
@@ -693,6 +776,24 @@ int ObJsonTableOp::init()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to new json array node", K(ret));
       }
+    } else if (jt_ctx_.is_rb_iterate_table_func()) {
+      table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(RbIterateTableFunc));
+      if (OB_ISNULL(table_func_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate table func buf", K(ret));
+      } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) RbIterateTableFunc())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to new rb iterate node", K(ret));
+      }
+    } else if (jt_ctx_.is_unnest_table_func()) {
+      table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(UnnestTableFunc));
+      if (OB_ISNULL(table_func_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate table func buf", K(ret));
+      } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) UnnestTableFunc())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to new unnest node", K(ret));
+      }
     } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(jt_ctx_.op_exec_alloc_, jt_ctx_.xpath_ctx_))) {
       LOG_WARN("fail to create xpath memory context", K(ret));
     } else if (jt_ctx_.is_xml_table_func()) {
@@ -709,7 +810,15 @@ int ObJsonTableOp::init()
   jt_ctx_.is_cover_error_ = false;
   jt_ctx_.error_code_ = 0;
   jt_ctx_.is_need_end_ = 0;
-  if (OB_SUCC(ret) && OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&jt_ctx_.row_alloc_, jt_ctx_.mem_ctx_))) {
+  MultimodeAlloctor *tmp_allocator = nullptr;
+  if (OB_ISNULL(tmp_allocator = static_cast<MultimodeAlloctor*>(jt_ctx_.row_alloc_.alloc(sizeof(MultimodeAlloctor))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate Multimode alloc buf", K(ret));
+  } else {
+    new (tmp_allocator)MultimodeAlloctor(jt_ctx_.row_alloc_, T_XML_TABLE_EXPRESSION, ret);
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(ObXmlUtil::create_mulmode_tree_context(tmp_allocator, jt_ctx_.mem_ctx_))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   }
   return ret;
@@ -719,6 +828,9 @@ int ObJsonTableOp::inner_close()
 {
   INIT_SUCC(ret);
   if (OB_NOT_NULL(root_)) {
+    if (OB_FAIL(root_->reset(&jt_ctx_))) {
+      LOG_WARN("failed to reset root node", K(ret));
+    }
     root_->destroy();
   }
   if (OB_NOT_NULL(def_root_)) {
@@ -740,7 +852,7 @@ void ObJsonTableOp::reset_columns()
     ObExpr* col_expr = jt_ctx_.spec_ptr_->column_exprs_.at(i);
     col_expr->locate_datum_for_write(*jt_ctx_.eval_ctx_).reset();
     col_expr->locate_datum_for_write(*jt_ctx_.eval_ctx_).set_null();
-    col_expr->get_eval_info(*jt_ctx_.eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*jt_ctx_.eval_ctx_).set_evaluated(true);
   }
 }
 
@@ -750,7 +862,7 @@ void ScanNode::reset_reg_columns(JtScanCtx* ctx)
     ObExpr* col_expr = ctx->spec_ptr_->column_exprs_.at(reg_col_node(i)->col_info_.output_column_idx_);
     col_expr->locate_datum_for_write(*ctx->eval_ctx_).reset();
     col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
-    col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*ctx->eval_ctx_).set_evaluated(true);
   }
 }
 
@@ -850,9 +962,9 @@ int RegularCol::eval_value_col(ObRegCol &col_node, JtScanCtx* ctx, ObExpr* col_e
     ret = OB_ERR_BOOL_CAST_NUMBER;
     LOG_WARN("boolean cast number cast not support");
     SET_COVER_ERROR(ctx, ret);
-  } else if ((in->json_type() == ObJsonNodeType::J_INT
-              || in->json_type() == ObJsonNodeType::J_INT)
-            && (ob_is_datetime_tc(col_node.col_info_.data_type_.get_obj_type()))) {
+  } else if ((in->json_type() == ObJsonNodeType::J_INT || in->json_type() == ObJsonNodeType::J_INT)
+             && (ob_is_datetime_tc(col_node.col_info_.data_type_.get_obj_type())
+                 || ob_is_mysql_datetime_tc(col_node.col_info_.data_type_.get_obj_type()))) {
     char* res_ptr = ctx->buf;
     int len = snprintf(ctx->buf, sizeof(ctx->buf), "%ld", in->get_int());
     if (len > 0) {
@@ -918,6 +1030,294 @@ int RegularCol::eval_xml_type_col(ObRegCol &col_node, JtScanCtx* ctx, ObExpr* co
   return ret;
 }
 
+int RegularCol::eval_unnest_col(ObRegCol &col_node, void* in, JtScanCtx* ctx, ObExpr* col_expr)
+{
+  INIT_SUCC(ret);
+  col_node.cur_pos_++;
+  ObIArrayType **arr_stucts = reinterpret_cast<ObIArrayType**>(in);
+  ObIArrayType *arr_obj = arr_stucts[col_node.col_info_.output_column_idx_];
+  int32_t idx = col_node.cur_pos_;
+  ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_node.col_info_.output_column_idx_);
+  ObDatum& res_datum = expr->locate_datum_for_write(*ctx->eval_ctx_);
+
+  if (OB_ISNULL(arr_obj) || arr_obj->is_null(idx)) {
+    res_datum.set_null();
+  } else if (arr_obj->get_format() == Nested_Array) {
+    ObArrayNested *arr = static_cast<ObArrayNested*>(arr_obj);
+    ObIArrayType* child_arr = NULL;
+    ObString res_str;
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(*ctx->eval_ctx_);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dynamic_cast<const ObCollectionArrayType*>(arr_obj->get_array_type())->element_type_, child_arr))) {
+      LOG_WARN("failed to add null to array", K(ret));
+    } else if (OB_FAIL(arr->at(idx, *child_arr))) {
+      LOG_WARN("failed to get elem", K(ret), K(idx));
+    } else if (OB_FAIL(ObArrayExprUtils::set_array_res(child_arr, child_arr->get_raw_binary_len(), *expr, *ctx->eval_ctx_, res_str))) {
+      LOG_WARN("get array binary string failed", K(ret));
+    } else {
+      res_datum.set_string(res_str);
+    }
+  } else {
+    ObObj elem_obj;
+    if (OB_FAIL(arr_obj->elem_at(idx, elem_obj))) {
+      LOG_WARN("failed to get element", K(ret), K(idx));
+    } else {
+      res_datum.from_obj(elem_obj);
+    }
+  }
+
+  return ret;
+}
+
+int RbIterateTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx &ctx, ObEvalCtx &eval_ctx)
+{
+  INIT_SUCC(ret);
+  ObRoaringBitmap **rbs = NULL;
+  int64_t col_num = ctx.spec_ptr_->value_exprs_.count();
+  bool is_all_null = true;
+  if (!ctx.is_rb_iterate_table_func()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid table func", K(ret));
+  } else if (OB_ISNULL(rbs = static_cast<ObRoaringBitmap **>(ctx.row_alloc_.alloc(col_num * sizeof(ObRoaringBitmap *))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for rbs", K(ret));
+  } else {
+    jt.reset_columns();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_num; ++i) {
+    ObExpr *value_expr = ctx.spec_ptr_->value_exprs_.at(i);
+    ObObjType obj_type = value_expr->datum_meta_.type_;
+    ObRoaringBitmap *rb = NULL;
+    bool is_null = false;
+    if (obj_type == ObNullType) {
+      is_null = true;
+    } else if (!ob_is_roaringbitmap(obj_type) && obj_type != ObHexStringType) {
+      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+      LOG_WARN("invalid roaringbitmap data type provided.", K(ret), K(i), K(obj_type));
+    } else if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(eval_ctx, ctx.row_alloc_, value_expr, rb, is_null))) {
+      LOG_WARN("fail to get roaringbitmap from expr", K(ret), K(i));
+    }
+    if (OB_FAIL(ret)) {
+      for (int64_t j = 0; j < i; ++j) {
+        ObRbUtils::rb_destroy(rbs[j]);
+      }
+    } else {
+      rbs[i] = rb;
+      is_all_null &= is_null;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_all_null) {
+    ret = OB_ITER_END;
+  } else {
+    jt.input_ = rbs;
+  }
+  return ret;
+}
+
+int RbIterateTableFunc::reset_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(scan_node.iter_)) {
+    // do nothing
+  } else {
+    int col_num = ctx->spec_ptr_->value_exprs_.count();
+    ObRoaringBitmapIter **rb_iters = reinterpret_cast<ObRoaringBitmapIter **>(scan_node.iter_);
+    for (int64_t i = 0; i < col_num; ++i) {
+      if (OB_NOT_NULL(rb_iters[i])) {
+        rb_iters[i]->destory();
+        rb_iters[i] = NULL;
+      }
+    }
+  }
+  return ret;
+}
+
+int RbIterateTableFunc::init_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
+{
+  INIT_SUCC(ret);
+  scan_node.tab_type_ = MulModeTableType::OB_RB_ITERATE_TABLE_TYPE;
+  return ret;
+}
+
+int RbIterateTableFunc::reset_path_iter(ObRegCol &scan_node, void* in, JtScanCtx*& ctx, ScanType init_flag, bool &is_null_value)
+{
+  INIT_SUCC(ret);
+  is_null_value = true;
+  ObRoaringBitmap **rbs = reinterpret_cast<ObRoaringBitmap **>(in);
+  int col_num = ctx->spec_ptr_->value_exprs_.count();
+  ObRoaringBitmapIter **rb_iters = NULL;
+  if (OB_ISNULL(rb_iters = static_cast<ObRoaringBitmapIter **>(ctx->row_alloc_.alloc(col_num * sizeof(ObRoaringBitmapIter *))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for rbs", K(ret));
+  } else {
+    MEMSET(rb_iters, 0, col_num * sizeof(ObRoaringBitmapIter *));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_num; ++i) {
+    ObRoaringBitmapIter* rb_iter = NULL;
+    ObRoaringBitmap* rb = rbs[i];
+    if (OB_ISNULL(rb)) {
+      rb_iters[i] = NULL;
+    } else if (OB_ISNULL(rb_iter = OB_NEWx(ObRoaringBitmapIter, &ctx->row_alloc_, (rb)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create alloc memory to roaringbitmap iterator", K(ret), K(i));
+    } else if (OB_FAIL(rb_iter->init())) {
+      if (ret == OB_ITER_END) {
+        ret = OB_SUCCESS;
+        rb_iter->destory();
+        rb_iters[i] = NULL;
+      } else {
+        LOG_WARN("failed to init roaringbitmap iter", K(ret), K(i));
+      }
+    } else {
+      rb_iters[i] = rb_iter;
+      is_null_value = false;
+    }
+  }
+  if (OB_FAIL(ret)) {
+    for (int64_t i = 0; i < col_num; ++i) {
+      if (OB_NOT_NULL(rb_iters[i])) {
+        rb_iters[i]->destory();
+        rb_iters[i] = NULL;
+      } else {
+        ObRbUtils::rb_destroy(rbs[i]);
+      }
+    }
+  } else {
+    scan_node.iter_ = rb_iters;
+  }
+  return ret;
+}
+
+int RbIterateTableFunc::get_iter_value(ObRegCol &col_node, JtScanCtx* ctx, bool &is_null_value)
+{
+  UNUSED(is_null_value);
+  INIT_SUCC(ret);
+  bool all_iter_end = true;
+  ObRoaringBitmapIter **rb_iters = reinterpret_cast<ObRoaringBitmapIter **>(col_node.iter_);
+  int64_t col_num = ctx->spec_ptr_->value_exprs_.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_num; ++i) {
+    ObRoaringBitmapIter* rb_iter = rb_iters[i];
+    if (OB_ISNULL(rb_iter)) {
+      // do nothing
+    } else if (OB_FAIL(rb_iter->get_next())) {
+      if (ret == OB_ITER_END) {
+        ret = OB_SUCCESS;
+        rb_iter->destory();
+        rb_iters[i] = NULL;
+      } else {
+        LOG_WARN("failed to get next value on roaringbitmap iter", K(ret), K(i));
+      }
+    } else {
+      all_iter_end = false;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (all_iter_end) {
+    ret = OB_ITER_END;
+  } else {
+    col_node.cur_pos_ ++;
+  }
+  return ret;
+}
+
+int UnnestTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx &ctx, ObEvalCtx &eval_ctx)
+{
+  INIT_SUCC(ret);
+  ObIArrayType **arr_objs = NULL;
+  int64_t col_num = ctx.spec_ptr_->value_exprs_.count();
+  bool is_all_null = true;
+  if (!ctx.is_unnest_table_func()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid table func", K(ret));
+  } else if (OB_ISNULL(arr_objs = static_cast<ObIArrayType**>(ctx.row_alloc_.alloc(col_num * sizeof(ObIArrayType*))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for array objects", K(ret));
+  } else {
+    jt.reset_columns();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_num; ++i) {
+    ObExpr *value_expr = ctx.spec_ptr_->value_exprs_.at(i);
+    ObDataType data_type = ctx.spec_ptr_->cols_def_.at(i)->data_type_;
+    ObObjType obj_type = value_expr->datum_meta_.type_;
+    ObDatum *datum = NULL;
+    const uint16_t meta_id = value_expr->obj_meta_.get_subschema_id();
+    ObIArrayType *arr_obj = NULL;
+    bool is_null = false;
+    if (obj_type == ObNullType) {
+      is_null = true;
+    } else if (!ob_is_collection_sql_type(obj_type)) {
+      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+      LOG_WARN("invalid array data type provided.", K(ret), K(i), K(obj_type));
+    } else if (OB_FAIL(value_expr->eval(eval_ctx, datum))) {
+      LOG_WARN("failed to eval args", K(ret));
+    } else if (datum->is_null()) {
+      is_null = true;
+    } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(ctx.row_alloc_, eval_ctx, meta_id, datum->get_string(), arr_obj))) {
+      LOG_WARN("construct array obj failed", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      arr_objs[i] = arr_obj;
+      is_all_null &= is_null;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_all_null) {
+    ret = OB_ITER_END;
+  } else {
+    jt.input_ = arr_objs;
+  }
+  return ret;
+}
+
+int UnnestTableFunc::reset_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
+{
+  INIT_SUCC(ret);
+  return ret;
+}
+
+int UnnestTableFunc::init_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
+{
+  INIT_SUCC(ret);
+  scan_node.tab_type_ = MulModeTableType::OB_UNNEST_TABLE_TYPE;
+  return ret;
+}
+
+int UnnestTableFunc::reset_path_iter(ObRegCol &scan_node, void* in, JtScanCtx*& ctx, ScanType init_flag, bool &is_null_value)
+{
+  INIT_SUCC(ret);
+  scan_node.iter_ = in;
+  if (OB_FAIL(get_iter_value(scan_node, ctx, is_null_value))) {
+    LOG_WARN("failed to get iter value", K(ret));
+  }
+  return ret;
+}
+
+int UnnestTableFunc::get_iter_value(ObRegCol &col_node, JtScanCtx* ctx, bool &is_null_value)
+{
+  UNUSED(is_null_value);
+  INIT_SUCC(ret);
+  bool all_iter_end = true;
+  col_node.cur_pos_++;
+  ObIArrayType **arr_objs = reinterpret_cast<ObIArrayType **>(col_node.iter_);
+  int64_t col_num = ctx->spec_ptr_->value_exprs_.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_num; ++i) {
+    ObIArrayType *arr_obj = arr_objs[i];
+    if (OB_ISNULL(arr_obj)) {
+      // do nothing
+    } else if (col_node.cur_pos_ < arr_obj->size()) {
+      all_iter_end = false;
+    } else {
+      arr_objs[i] = NULL;
+    }
+  }
+  if (OB_SUCC(ret) && all_iter_end) {
+    ret = OB_ITER_END;
+  }
+  return ret;
+}
+
 // xmltable expr function
 int XmlTableFunc::container_at(void* in, void *&out, int32_t pos)
 {
@@ -935,24 +1335,33 @@ int XmlTableFunc::container_at(void* in, void *&out, int32_t pos)
 int XmlTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx &ctx, ObEvalCtx &eval_ctx)
 {
   INIT_SUCC(ret);
-  common::ObObjMeta& doc_obj_datum = ctx.spec_ptr_->value_expr_->obj_meta_;
-  ObDatumMeta& doc_datum = ctx.spec_ptr_->value_expr_->datum_meta_;
+  common::ObObjMeta& doc_obj_datum = ctx.spec_ptr_->value_exprs_.at(0)->obj_meta_;
+  ObDatumMeta& doc_datum = ctx.spec_ptr_->value_exprs_.at(0)->datum_meta_;
   ObObjType doc_type = doc_datum.type_;
   ObCollationType doc_cs_type = doc_datum.cs_type_;
   ObString j_str;
   bool is_null = false;
   ObIMulModeBase *input_node = NULL;
+  ObDatum *t_datum = nullptr;
 
   if (doc_type == ObNullType) {
     ret = OB_ITER_END;
   } else if (ctx.is_xml_table_func()) {
-    if (!doc_obj_datum.is_xml_sql_type() && !ob_is_string_type(doc_type)) {
+    if (ob_is_extend(doc_type)) {
+      if (OB_FAIL(ctx.spec_ptr_->value_exprs_.at(0)->eval(eval_ctx, t_datum))) {
+        LOG_WARN("eval xml arg failed", K(ret));
+      } else if (t_datum->is_null()) {
+        ret = OB_ITER_END;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!doc_obj_datum.is_xml_sql_type() && !ob_is_string_type(doc_type)) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("inconsistent datatypes", K(ret), K(ob_obj_type_str(doc_type)));
     } else {
       jt.reset_columns();
       // get input_node
-      if (OB_FAIL(ObXMLExprHelper::get_xml_base_from_expr(ctx.spec_ptr_->value_expr_, ctx.mem_ctx_, eval_ctx, input_node))) {
+      if (OB_FAIL(ObXMLExprHelper::get_xml_base_from_expr(ctx.spec_ptr_->value_exprs_.at(0), ctx.mem_ctx_, eval_ctx, input_node))) {
         LOG_WARN("get real data failed", K(ret));
       } else {
         jt.input_ = input_node;
@@ -1451,7 +1860,7 @@ int XmlTableFunc::cast_to_result(ObRegCol& col_node, JtScanCtx* ctx, bool enable
   ObCollationType dst_coll_type = col_info.data_type_.get_collation_type();
   ObCollationType in_coll_type = ctx->is_charset_converted_
                                  ? CS_TYPE_UTF8MB4_BIN
-                                 : ctx->spec_ptr_->value_expr_->datum_meta_.cs_type_;
+                                 : ctx->spec_ptr_->value_exprs_.at(0)->datum_meta_.cs_type_;
   ObCollationLevel dst_coll_level = col_info.data_type_.get_collation_level();
   ObString xml_str;
 
@@ -1683,6 +2092,19 @@ int ObRegCol::eval_regular_col(void *in, JtScanCtx* ctx, bool& is_null_value)
     need_cast_res = false;
     curr_ = nullptr;
     col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
+  } else if (col_type == COL_TYPE_RB_ITERATE) {
+    this->cur_pos_++;
+    ObRoaringBitmapIter **rb_iters = reinterpret_cast<ObRoaringBitmapIter **>(in);
+    ObRoaringBitmapIter *rb_iter = rb_iters[this->col_info_.output_column_idx_];
+    if (OB_ISNULL(rb_iter) || rb_iter->get_val_idx() != this->cur_pos_) {
+      col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
+    } else {
+      col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_uint(rb_iter->get_curr_value());
+    }
+  } else if (col_type == COL_TYPE_UNNEST) {
+    if (OB_FAIL(RegularCol::eval_unnest_col(*this, in, ctx, col_expr))) {
+      LOG_WARN("fail to eval unnest col", K(ret), K(col_type), K(cur_pos_), K(col_info_.output_column_idx_));
+    }
   } else if (col_type == COL_TYPE_ORDINALITY
             || col_type == COL_TYPE_ORDINALITY_XML) {
     if (OB_ISNULL(in)) {
@@ -1690,7 +2112,7 @@ int ObRegCol::eval_regular_col(void *in, JtScanCtx* ctx, bool& is_null_value)
     } else {
       col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_int(ctx->ord_val_);
     }
-    col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*ctx->eval_ctx_).set_evaluated(true);
   } else {
     if (OB_FAIL(ctx->table_func_->col_res_type_check(*this, ctx))) {
       LOG_WARN("check column res type failed", K(ret), K(col_info_.data_type_), K(col_info_.col_type_));
@@ -1780,7 +2202,7 @@ int ObRegCol::eval_regular_col(void *in, JtScanCtx* ctx, bool& is_null_value)
   }
   if (OB_SUCC(ret)) {
     res_flag_ = NOT_DATUM;
-    col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
+    col_expr->get_eval_info(*ctx->eval_ctx_).set_evaluated(true);
   }
 
   return ret;
@@ -1821,32 +2243,36 @@ int ScanNode::get_next_iter(void* in, JtScanCtx* ctx, bool& is_null_value)
   is_null_value = false;
   bool is_null_iter = false;
   if (!is_evaled_ || in_ != in) {
-    in_ = in;
-    is_null_result_ = false;
-    if (OB_ISNULL(in_)) {
-      is_null_value = is_null_result_ = true;
-      seek_node_.curr_ = seek_node_.iter_ = nullptr;
-      seek_node_.cur_pos_ = 0;
-      seek_node_.total_ = 0;
-    } else if (OB_FAIL(ctx->table_func_->reset_path_iter(seek_node_, in_, ctx, ScanType::SCAN_NODE_TYPE, is_null_iter))) {   // reset path & get first result
-      RESET_COVER_CODE(ctx);
-      LOG_WARN("fail to init path", K(ret), K(ctx->spec_ptr_->table_type_), K(ctx->table_func_));
-    } else if (is_null_iter) {
-      is_null_value = is_null_result_ = true;
-      seek_node_.curr_ = seek_node_.iter_ = nullptr;
-      seek_node_.total_ = 1;
-      seek_node_.cur_pos_ = 0;
-      // 1. if root node seek result is NULL, but input(in) not null,then return end.
-      if (seek_node_.col_info_.parent_id_ == common::OB_INVALID_ID
-          || (ctx->jt_op_->get_root_param() == in  // 2. if path == '$' && root scan node not have regular column,
-              && ctx->jt_op_->get_root_entry()->get_scan_node()->reg_column_count() == 0
-              && ctx->jt_op_->get_root_entry()->get_scan_node() == this)) {
-        ret = OB_ITER_END;
+    if (OB_FAIL(seek_node_.reset(ctx))) {
+      LOG_WARN("failed to reset seek_node", K(ret));
+    } else {
+      in_ = in;
+      is_null_result_ = false;
+      if (OB_ISNULL(in_)) {
+        is_null_value = is_null_result_ = true;
+        seek_node_.curr_ = seek_node_.iter_ = nullptr;
+        seek_node_.cur_pos_ = 0;
+        seek_node_.total_ = 0;
+      } else if (OB_FAIL(ctx->table_func_->reset_path_iter(seek_node_, in_, ctx, ScanType::SCAN_NODE_TYPE, is_null_iter))) {   // reset path & get first result
+        RESET_COVER_CODE(ctx);
+        LOG_WARN("fail to init path", K(ret), K(ctx->spec_ptr_->table_type_), K(ctx->table_func_));
+      } else if (is_null_iter) {
+        is_null_value = is_null_result_ = true;
+        seek_node_.curr_ = seek_node_.iter_ = nullptr;
+        seek_node_.total_ = 1;
+        seek_node_.cur_pos_ = 0;
+        // 1. if root node seek result is NULL, but input(in) not null,then return end.
+        if (seek_node_.col_info_.parent_id_ == common::OB_INVALID_ID
+            || (ctx->jt_op_->get_root_param() == in  // 2. if path == '$' && root scan node not have regular column,
+                && ctx->jt_op_->get_root_entry()->get_scan_node()->reg_column_count() == 0
+                && ctx->jt_op_->get_root_entry()->get_scan_node() == this)) {
+          ret = OB_ITER_END;
+        }
       }
-    }
-    if (OB_SUCC(ret)) {
-      is_evaled_= true;
-      seek_node_.cur_pos_ = 0;
+      if (OB_SUCC(ret)) {
+        is_evaled_= true;
+        seek_node_.cur_pos_ = 0;
+      }
     }
   } else {
     is_null_iter = false;
@@ -2023,7 +2449,9 @@ int ObJsonTableOp::inner_get_next_row()
   INIT_SUCC(ret);
   bool is_root_null = false;
   if (!(jt_ctx_.is_xml_table_func()
-        || jt_ctx_.is_json_table_func())) {
+        || jt_ctx_.is_json_table_func()
+        || jt_ctx_.is_rb_iterate_table_func()
+        || jt_ctx_.is_unnest_table_func())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unsupport table function", K(ret));
   } else if (is_evaled_) {
@@ -2164,7 +2592,7 @@ int RegularCol::check_default_value_inner_mysql(JtScanCtx* ctx,
   ObObjType dst_type = expr->datum_meta_.type_;
   ObJsonCastParam cast_param(dst_type, default_expr->datum_meta_.cs_type_, expr->datum_meta_.cs_type_, false);
   cast_param.is_only_check_ = true;
-  cast_param.is_json_table_ = true;
+  cast_param.relaxed_time_convert_ = true;
   cast_param.rt_expr_ = expr;
 
   if (OB_ISNULL(j_base)) {
@@ -2432,13 +2860,13 @@ int JsonTableFunc::cast_to_result(ObRegCol& col_node, JtScanCtx* ctx, bool enabl
   ObCollationType dst_coll_type = col_info.data_type_.get_collation_type();
   ObCollationType in_coll_type = ctx->is_charset_converted_
                                  ? CS_TYPE_UTF8MB4_BIN
-                                 : ctx->spec_ptr_->value_expr_->datum_meta_.cs_type_;
+                                 : ctx->spec_ptr_->value_exprs_.at(0)->datum_meta_.cs_type_;
   ObCollationLevel dst_coll_level = col_info.data_type_.get_collation_level();
   bool is_quote = (col_info.col_type_ == COL_TYPE_QUERY && js_val->json_type() == ObJsonNodeType::J_STRING);
   ObJsonCastParam cast_param(dst_type, in_coll_type, dst_coll_type, ascii_type);
   cast_param.is_const_ = ctx->is_const_input_;
   cast_param.is_trunc_ = is_truncate;
-  cast_param.is_json_table_ = true;
+  cast_param.relaxed_time_convert_ = true;
   cast_param.rt_expr_ = expr;
   switch (col_type) {
     case JtColType::COL_TYPE_VALUE: {
@@ -2734,13 +3162,14 @@ int JsonTableFunc::get_iter_value(ObRegCol &col_node, JtScanCtx* ctx, bool &is_n
 int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval_ctx)
 {
   INIT_SUCC(ret);
-  common::ObObjMeta& doc_obj_datum = ctx.spec_ptr_->value_expr_->obj_meta_;
-  ObDatumMeta& doc_datum = ctx.spec_ptr_->value_expr_->datum_meta_;
+  common::ObObjMeta& doc_obj_datum = ctx.spec_ptr_->value_exprs_.at(0)->obj_meta_;
+  ObDatumMeta& doc_datum = ctx.spec_ptr_->value_exprs_.at(0)->datum_meta_;
   ObObjType doc_type = doc_datum.type_;
   ObCollationType doc_cs_type = doc_datum.cs_type_;
   ObString j_str;
   bool is_null = false;
   ObIJsonBase* in = NULL;
+  MultimodeAlloctor tmp_allocator(ctx.row_alloc_, T_JSON_TABLE_EXPRESSION, ret);
 
   if (doc_type == ObNullType) {
     ret = OB_ITER_END;
@@ -2752,12 +3181,13 @@ int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval
     LOG_WARN("fail to get json base", K(ret), K(doc_type));
   } else {
     jt.reset_columns();
-    if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(ctx.spec_ptr_->value_expr_, eval_ctx,
-                                                        ctx.row_alloc_, j_str, is_null))) {
+    if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(ctx.spec_ptr_->value_exprs_.at(0), eval_ctx,
+                                                        tmp_allocator, j_str, is_null))) {
       ret = OB_ERR_INPUT_JSON_TABLE;
       LOG_WARN("get real data failed", K(ret));
     } else if (is_null) {
       ret = OB_ITER_END;
+    } else if (OB_FALSE_IT(tmp_allocator.set_baseline_size(j_str.length()))) {
     } else if ((ob_is_string_type(doc_type) || doc_type == ObLobType)
                 && (doc_cs_type != CS_TYPE_BINARY)
                 && (ObCharset::charset_type_by_coll(doc_cs_type) != CHARSET_UTF8MB4)) {
@@ -2767,7 +3197,7 @@ int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval
       int64_t buf_len = j_str.length() * factor;
       uint32_t result_len = 0;
 
-      if (OB_ISNULL(buf = static_cast<char*>(ctx.row_alloc_.alloc(buf_len)))) {
+      if (OB_ISNULL(buf = static_cast<char*>(tmp_allocator.alloc(buf_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FAIL(ObCharset::charset_convert(doc_cs_type, j_str.ptr(),
@@ -2788,7 +3218,7 @@ int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval
 
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&ctx.row_alloc_, j_str, j_in_type, expect_type, in, parse_flag))
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, j_str, j_in_type, expect_type, in, parse_flag, ObJsonExprHelper::get_json_max_depth_config()))
                 || (in->json_type() != ObJsonNodeType::J_ARRAY && in->json_type() != ObJsonNodeType::J_OBJECT)) {
       if (OB_FAIL(ret) || (is_ensure_json)) {
         in= nullptr;

@@ -75,10 +75,10 @@ inline int init_sql_expr_static_var()
     SQL_LOG(ERROR, "failed to init ObNumberConstValue", K(ret));
   } else if (OB_FAIL(ARITH_RESULT_TYPE_ORACLE.init())) {
     SQL_LOG(ERROR, "failed to init ORACLE_ARITH_RESULT_TYPE", K(ret));
-  } else if (OB_FAIL(ObCharsetUtils::init(*allocator))) {
-    SQL_LOG(ERROR, "fail to init ObCharsetUtils", K(ret));
   } else if (OB_FAIL(ObCharset::init_charset())) {
     SQL_LOG(ERROR, "fail to init charset", K(ret));
+  } else if (OB_FAIL(ObCharsetUtils::init(*allocator))) {
+    SQL_LOG(ERROR, "fail to init ObCharsetUtils", K(ret));
   } else if (OB_FAIL(wide::ObDecimalIntConstValue::init_const_values(*allocator, attr))) {
     SQL_LOG(ERROR, "failed to init ObDecimalIntConstValue", K(ret));
   }

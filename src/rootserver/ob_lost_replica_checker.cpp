@@ -12,20 +12,9 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_lost_replica_checker.h"
 
-#include "lib/time/ob_time_utility.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/container/ob_se_array.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
+#include "ob_lost_replica_checker.h"
 #include "share/ls/ob_ls_table_iterator.h"//ObTenantLSTableIterator
-#include "share/ls/ob_ls_info.h"//ObLSInfo
-#include "share/ob_all_server_tracer.h"
-#include "share/ob_unit_table_operator.h"
-#include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
 namespace oceanbase
 {
@@ -37,7 +26,7 @@ namespace rootserver
 {
 
 ObLostReplicaChecker::ObLostReplicaChecker()
-  : inited_(false), cond_(),
+  : inited_(false),
     lst_operator_(NULL),
     schema_service_(NULL)
 {
@@ -72,9 +61,7 @@ int ObLostReplicaChecker::init(ObLSTableOperator &lst_operator, ObMultiVersionSc
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(cond_.init(ObWaitEventIds::THREAD_IDLING_COND_WAIT))) {
-    LOG_WARN("fail to init thread cond, ", K(ret));
-  } else if (OB_FAIL(create(thread_cnt, "LostRepCheck"))) {
+  } else if (OB_FAIL(create(thread_cnt, "LostRepCheck", ObWaitEventIds::THREAD_IDLING_COND_WAIT))) {
     LOG_WARN("create empty server checker thread failed", K(ret), K(thread_cnt));
   } else {
     lst_operator_ = &lst_operator;
@@ -95,11 +82,11 @@ void ObLostReplicaChecker::run3()
     const int64_t wait_time_ms = 10 * 1000;//10s;
     while (!stop_) {
       ret = OB_SUCCESS;
-      ObThreadCondGuard guard(cond_);
+      ObThreadCondGuard guard(get_cond());
       if (OB_FAIL(check_lost_replicas())) {
         LOG_WARN("failed to check lost replica", KR(ret));
       }
-      if (OB_SUCCESS != cond_.wait(wait_time_ms)) {
+      if (OB_SUCCESS != idle_wait(wait_time_ms)) {
           LOG_DEBUG("wait timeout", K(wait_time_ms));
       }
     }
@@ -224,7 +211,7 @@ int ObLostReplicaChecker::check_lost_replica_(const ObLSInfo &ls_info,
   } else if (!ls_info.is_valid() || !replica.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls_info or invalid replica", KR(ret), K(ls_info), K(replica));
-  } else if (OB_FAIL(check_lost_server_(replica.get_server(), is_lost_server))) {
+  } else if (OB_FAIL(ObLostReplicaChecker::check_lost_server(replica.get_server(), is_lost_server))) {
     LOG_WARN("check lost server failed", "server", replica.get_server(), K(ret));
   } else if (is_lost_server) {
     /*
@@ -265,15 +252,12 @@ int ObLostReplicaChecker::check_lost_replica_(const ObLSInfo &ls_info,
 }
 
 
-int ObLostReplicaChecker::check_lost_server_(const ObAddr &server, bool &is_lost_server) const
+int ObLostReplicaChecker::check_lost_server(const ObAddr &server, bool &is_lost_server)
 {
   int ret = OB_SUCCESS;
   share::ObUnitTableOperator ut_operator;
   is_lost_server = false;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ut_operator.init(*GCTX.sql_proxy_))) {
@@ -316,7 +300,7 @@ void ObLostReplicaChecker::wakeup()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    cond_.broadcast();
+    get_cond().broadcast();
   }
 }
 
@@ -328,8 +312,8 @@ void ObLostReplicaChecker::stop()
     LOG_WARN("not init", K(ret));
   } else {
     ObRsReentrantThread::stop();
-    ObThreadCondGuard guard(cond_);
-    cond_.broadcast();
+    ObThreadCondGuard guard(get_cond());
+    get_cond().broadcast();
   }
 }
 

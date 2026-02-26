@@ -1,3 +1,6 @@
+// owner: handora.qc
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -11,16 +14,10 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
-#include <thread>
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/mockcontainer/mock_ob_iterator.h"
-#include "storage/mockcontainer/mock_ob_end_trans_callback.h"
-#include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
-#include "share/schema/ob_table_dml_param.h"
 #include "storage/ob_dml_running_ctx.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
 {
@@ -105,7 +102,7 @@ public:
     ObClusterVersion::get_instance().tenant_config_mgr_ = &omt::ObTenantConfigMgr::get_instance();
 
     ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-    ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+    SERVER_STORAGE_META_SERVICE.is_started_ = true;
   }
   static void TearDownTestCase()
   {
@@ -118,7 +115,7 @@ public:
     ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   }
   void create_ls(uint64_t tenant_id, ObLSID &ls_id, ObLS *&ls);
-  void insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_desc, ObTxReadSnapshot snapshot, const char* in_str);
+  void insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_desc, ObTxReadSnapshot &snapshot, const char* in_str);
   void prepare_tx_desc(ObTxDesc *&tx_desc, ObTxReadSnapshot &snapshot);
 private:
   static share::schema::ObTableSchema table_schema_;
@@ -161,11 +158,11 @@ void TestTrans::create_ls(uint64_t tenant_id, ObLSID &ls_id, ObLS *&ls)
   }
 }
 
-void TestTrans::insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_desc, ObTxReadSnapshot snapshot, const char* ins_str)
+void TestTrans::insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_desc, ObTxReadSnapshot &snapshot, const char* ins_str)
 {
   int64_t affected_rows = 0;
-  ObMockNewRowIterator ins_iter;
-  ASSERT_EQ(OB_SUCCESS, ins_iter.from(ins_str));
+  ObMockDatumRowIterator ins_iter;
+  ASSERT_EQ(OB_SUCCESS, ins_iter.from_for_datum(ins_str));
 
   ObArenaAllocator allocator;
   share::schema::ObTableDMLParam table_dml_param(allocator);
@@ -179,7 +176,7 @@ void TestTrans::insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_d
   dml_param.timeout_ = ObTimeUtility::current_time() + 100000000;
   dml_param.schema_version_ = 1000;
   dml_param.table_param_ = &table_dml_param;
-  dml_param.snapshot_ = snapshot;
+  ASSERT_EQ(OB_SUCCESS, dml_param.snapshot_.assign(snapshot));
   dml_param.store_ctx_guard_ = &store_ctx_guard;
 
   auto as = MTL(ObAccessService*);
@@ -189,6 +186,7 @@ void TestTrans::insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_d
                                                       tx_desc,
                                                       snapshot,
                                                       0,/*branch_id*/
+                                                      dml_param.write_flag_,
                                                       store_ctx_guard));
   ASSERT_EQ(OB_SUCCESS, as->insert_rows(ls_id,
                                          tablet_id,
@@ -276,7 +274,10 @@ TEST_F(TestTrans, basic)
   memtable::ObMemtable *mt;
   ASSERT_EQ(OB_SUCCESS, mt_handle.get_data_memtable(mt));
 
-  printf("mt size=%ld occ_size=%ld bree_item_count=%ld rec_scn=%s end_scn=%s\n", mt->get_size(), mt->get_occupied_size(), mt->get_btree_item_count(), to_cstring(mt->get_rec_scn()),to_cstring(mt->get_max_end_scn()));
+  ObCStringHelper helper;
+  printf("mt size=%ld occ_size=%ld bree_item_count=%ld rec_scn=%s end_scn=%s\n",
+      mt->get_size(), mt->get_occupied_size(), mt->get_btree_item_count(),
+      helper.convert(mt->get_rec_scn()),helper.convert(mt->get_max_end_scn()));
 
   /*
   ObStoreRow store_row;
@@ -506,7 +507,7 @@ TEST_F(TestTrans, tablet_to_ls_cache)
     ASSERT_EQ(true, is_local);
     // tablet not exist
     const ObTabletID &tablet_id_2 = tablet_ids_2.at(i);
-    ASSERT_EQ(OB_ENTRY_NOT_EXIST, tx_service->check_and_get_ls_info(tablet_id_2, ls_id, is_local));
+    ASSERT_EQ(OB_SUCCESS, tx_service->check_and_get_ls_info(tablet_id_2, ls_id, is_local));
   }
   ASSERT_EQ(TABLET_NUM + base_size, tx_service->tablet_to_ls_cache_.size());
 
@@ -521,7 +522,7 @@ TEST_F(TestTrans, tablet_to_ls_cache)
     ASSERT_EQ(ls_id_1, ls_id);
     ASSERT_EQ(true, is_local);
     tx_service->remove_tablet(tablet_id, ls_id);
-    ASSERT_EQ(OB_ENTRY_NOT_EXIST, tx_service->check_and_get_ls_info(tablet_id, ls_id, is_local));
+    ASSERT_EQ(OB_SUCCESS, tx_service->check_and_get_ls_info(tablet_id, ls_id, is_local));
   }
   ASSERT_EQ(0, tx_service->tablet_to_ls_cache_.size());
   ASSERT_EQ(base_ref, ls_tx_ctx_mgr->get_ref());

@@ -14,10 +14,6 @@
 
 #include "mock_access_service.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/ob_errno.h"
-#include "storage/access/ob_dml_param.h"
 
 using namespace oceanbase::storage;
 
@@ -32,7 +28,7 @@ int MockObAccessService::insert_rows(
     transaction::ObTxDesc &tx_desc,
     const ObDMLBaseParam &dml_param,
     const common::ObIArray<uint64_t> &column_ids,
-    common::ObNewRowIterator *row_iter,
+    blocksstable::ObDatumRowIterator *row_iter,
     int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;

@@ -11,18 +11,9 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "ob_storage_schema_recorder.h"
 
-#include "lib/utility/ob_tracepoint.h"
-#include "logservice/ob_log_base_header.h"
-#include "logservice/ob_log_base_type.h"
-#include "logservice/ob_log_handler.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_table_schema.h"
+#include "ob_storage_schema_recorder.h"
 #include "share/schema/ob_tenant_schema_service.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "share/scn.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
@@ -190,7 +181,7 @@ int ObStorageSchemaRecorder::try_update_storage_schema(
   } else if (OB_UNLIKELY(ignore_storage_schema_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported to update storage schema", K(ret), K_(tablet_id));
-  } else if (OB_FAIL(MTL(ObTenantTabletScheduler*)->get_min_data_version(compat_version))) {
+  } else if (OB_FAIL(MERGE_SCHEDULER_PTR->get_min_data_version(compat_version))) {
     LOG_WARN("fail to get data version", K(ret));
   } else if (compat_version >= DATA_VERSION_4_2_0_0) {
     // for compat, before all server upgrade to 4.2, need sync storage schema

@@ -14,9 +14,7 @@
 
 #include "sql/engine/expr/ob_expr_to_temporal_base.h"
 
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/timezone/ob_time_convert.h"
 
 namespace oceanbase
 {

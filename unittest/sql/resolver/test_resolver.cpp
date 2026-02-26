@@ -92,9 +92,11 @@ bool TestResolver::is_show_sql(const ParseNode &node) const
     case T_SHOW_PROCESSLIST:
     case T_SHOW_SERVER_STATUS:
     case T_SHOW_WARNINGS:
+    case T_SHOW_ERRORS:
     case T_SHOW_RESTORE_PREVIEW:
     case T_SHOW_SEQUENCES:
-    case T_SHOW_GRANTS:{
+    case T_SHOW_GRANTS:
+    case T_SHOW_CREATE_USER:{
       ret = true;
       break;
     }
@@ -338,7 +340,8 @@ void TestResolver::do_join_order_test()
                                                      table_id,
                                                      *idx_schema,
                                                      index_keys,
-                                                     ordering);
+                                                     ordering,
+                                                     &session_info_);
         ASSERT_EQ(ret, OB_SUCCESS);
         std::string idx_name_with_column;
         get_index_name(idx_name_with_column, *idx_schema);

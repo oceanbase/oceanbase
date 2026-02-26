@@ -43,6 +43,32 @@ public:
       const ObDatumMeta &in_meta, const ObDatumMeta &out_meta,
       ObDatum &res_datum);
 
+  template <typename T, bool IS_FLOOR, bool NEG>
+  static T ceil_floor_trival(T in, const T in_scale_power, const T in_scale_power_minus_one);
+
+  template <typename LeftVec, typename ResVec>
+  static int inner_calc_ceil_floor_vector(const ObExpr &expr,
+                                         int intput_type,
+                                         ObEvalCtx &ctx,
+                                         const ObBitVector &skip,
+                                         const EvalBound &bound);
+
+  static int calc_ceil_floor_vector(const ObExpr &expr,
+                           ObEvalCtx &ctx,
+                           const ObBitVector &skip,
+                           const EvalBound &bound);
+
+  template <typename LeftVec, typename ResVec, bool IS_FLOOR>
+  static int ceil_floor_decint_vector(const ObDatumMeta &in_meta,
+                                              const ObDatumMeta &out_meta,
+                                              LeftVec *left_vec,
+                                              ResVec *res_vec,
+                                              const int64_t &idx);
+
+  static int inner_calc_ceil_floor_fixed_vector(const ObExpr &expr,
+                                                 ObEvalCtx &ctx,
+                                                 const ObBitVector &skip,
+                                                 const EvalBound &bound);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCeilFloor);

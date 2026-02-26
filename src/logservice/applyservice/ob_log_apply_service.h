@@ -17,6 +17,8 @@
 #include "lib/queue/ob_link_queue.h"
 #include "lib/thread/ob_thread_lease.h"
 #include "logservice/palf/palf_callback.h"
+#include "logservice/ipalf/ipalf_handle.h"
+#include "logservice/ipalf/ipalf_env.h"
 #include "logservice/palf/palf_handle.h"
 #include "share/scn.h"
 #include "share/ob_ls_id.h"
@@ -150,14 +152,14 @@ private:
   int64_t idx_;
 };
 
-class ObApplyStatus
+class ObApplyStatus : public common::LinkHashValue<palf::LSKey>
 {
 public:
   ObApplyStatus();
   ~ObApplyStatus();
 public:
   int init(const share::ObLSID &id,
-           palf::PalfEnv *palf_env,
+           ipalf::IPalfEnv *palf_env,
            ObLogApplyService *ap_sv);
   void destroy();
   int stop();
@@ -256,8 +258,8 @@ private:
   share::SCN max_applied_cb_scn_; //该位点前的cb保证都已经回调完成
   ObApplyServiceSubmitTask submit_task_;
   ObApplyServiceQueueTask cb_queues_[APPLY_TASK_QUEUE_SIZE];
-  palf::PalfEnv *palf_env_;
-  palf::PalfHandle palf_handle_;
+  ipalf::IPalfEnv *palf_env_;
+  ipalf::IPalfHandle *palf_handle_;
   ObApplyFsCb fs_cb_;
   mutable RWLock lock_; //保护role_, proposal_id_及is_in_stop_state_
   mutable lib::ObMutex mutex_; //互斥获取最大连续位点不会被并发调用
@@ -270,13 +272,48 @@ private:
   ObMiniStat::ObStatItem cb_stat_; //cb从产生到执行on_success的耗时
 };
 
+class ObApplyStatusHandlerAlloc
+{
+public:
+  ObApplyStatusHandlerAlloc()
+    : ret_code_(common::OB_SUCCESS) {}
+  ~ObApplyStatusHandlerAlloc() {}
+  int get_ret_code() const { return ret_code_; }
+  TO_STRING_KV(K(ret_code_));
+public:
+  typedef common::LinkHashNode<palf::LSKey> ObApplyStatusNode;
+  ObApplyStatus *alloc_value() { return nullptr; }
+  void free_value(ObApplyStatus *apply_status) {
+    if (0 == apply_status->dec_ref()) {
+      CLOG_LOG(INFO, "free apply status", KPC(apply_status));
+      apply_status->~ObApplyStatus();
+      mtl_free(apply_status);
+    }
+  }
+  ObApplyStatusNode *alloc_node(ObApplyStatus *apply_status)
+  {
+    UNUSED(apply_status);
+    return MTL_NEW(ObApplyStatusNode, "ApplyStatus");
+  }
+  void free_node(ObApplyStatusNode *node)
+  {
+    if (NULL != node) {
+      MTL_DELETE(ObApplyStatusNode, "ApplyStatus", node);
+      node = NULL;
+    }
+  }
+private:
+  int ret_code_;
+};
+
+typedef common::ObLinkHashMap<palf::LSKey, ObApplyStatus, ObApplyStatusHandlerAlloc> LogApplyMap;
 class ObLogApplyService : public lib::TGTaskHandler
 {
 public:
   ObLogApplyService();
   virtual ~ObLogApplyService();
 public:
-  int init(palf::PalfEnv *palf_env,
+  int init(ipalf::IPalfEnv *palf_env,
            ObLSAdapter *ls_adapter);
   void destroy();
   int start();
@@ -300,26 +337,13 @@ public:
   int stat_for_each(const common::ObFunction<int (const ObApplyStatus &)> &func);
   int diagnose(const share::ObLSID &id, ApplyDiagnoseInfo &diagnose_info);
 public:
-  class GetApplyStatusFunctor
-  {
-  public:
-    GetApplyStatusFunctor(ObApplyStatusGuard &guard)
-        : ret_code_(common::OB_SUCCESS), guard_(guard){}
-    ~GetApplyStatusFunctor(){}
-    bool operator()(const share::ObLSID &id, ObApplyStatus *apply_status);
-    int get_ret_code() const { return ret_code_; }
-    TO_STRING_KV(K(ret_code_));
-  private:
-    int ret_code_;
-    ObApplyStatusGuard &guard_;
-  };
   class RemoveApplyStatusFunctor
   {
   public:
     explicit RemoveApplyStatusFunctor()
         : ret_code_(common::OB_SUCCESS) {}
     ~RemoveApplyStatusFunctor(){}
-    bool operator()(const share::ObLSID &id, ObApplyStatus *replay_status);
+    bool operator()(const palf::LSKey &id, ObApplyStatus *replay_status);
     int get_ret_code() const { return ret_code_; }
     TO_STRING_KV(K(ret_code_));
   private:
@@ -332,11 +356,24 @@ public:
     explicit ResetApplyStatusFunctor()
         : ret_code_(common::OB_SUCCESS) {}
     ~ResetApplyStatusFunctor(){}
-    bool operator()(const share::ObLSID &id, ObApplyStatus *replay_status);
+    bool operator()(const palf::LSKey &id, ObApplyStatus *replay_status);
     int get_ret_code() const { return ret_code_; }
     TO_STRING_KV(K(ret_code_));
   private:
     int ret_code_;
+  };
+  class StatApplyStatusFunctor
+  {
+  public:
+    explicit StatApplyStatusFunctor(const common::ObFunction<int (const ObApplyStatus &)> &func)
+        : ret_code_(common::OB_SUCCESS), func_(func) {}
+    ~StatApplyStatusFunctor(){}
+    bool operator()(const palf::LSKey &id, ObApplyStatus *replay_status);
+    int get_ret_code() const { return ret_code_; }
+    TO_STRING_KV(K(ret_code_));
+  private:
+    int ret_code_;
+    const common::ObFunction<int (const ObApplyStatus &)> func_;
   };
 private:
   int handle_cb_queue_(ObApplyStatus *apply_status,
@@ -348,9 +385,9 @@ private:
   bool is_inited_;
   bool is_running_;
   int tg_id_;
-  palf::PalfEnv *palf_env_;
+  ipalf::IPalfEnv *palf_env_;
   ObLSAdapter *ls_adapter_;
-  common::ObLinearHashMap<share::ObLSID, ObApplyStatus*> apply_status_map_;
+  LogApplyMap apply_status_map_;
   DISALLOW_COPY_AND_ASSIGN(ObLogApplyService);
 };
 
@@ -364,7 +401,7 @@ public:
 private:
   void set_apply_status_(ObApplyStatus *apply_status);
 private:
-  friend class ObLogApplyService::GetApplyStatusFunctor;
+  friend class ObLogApplyService;
   ObApplyStatus *apply_status_;
   DISALLOW_COPY_AND_ASSIGN(ObApplyStatusGuard);
 };

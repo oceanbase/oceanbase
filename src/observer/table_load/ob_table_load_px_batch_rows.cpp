@@ -1,0 +1,344 @@
+/**
+ * Copyright (c) 2025 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+#define USING_LOG_PREFIX SERVER
+
+#include "observer/table_load/ob_table_load_px_batch_rows.h"
+#include "share/ob_batch_selector.h"
+#include "sql/das/ob_das_utils.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
+
+namespace oceanbase
+{
+namespace observer
+{
+using namespace blocksstable;
+using namespace common;
+using namespace share;
+using namespace share::schema;
+using namespace sql;
+using namespace storage;
+
+ObTableLoadPXBatchRows::ObTableLoadPXBatchRows()
+  : reshape_allocator_("TLD_Reshape"), need_reshape_(false), is_inited_(false)
+{
+  col_descs_.set_tenant_id(MTL_ID());
+  col_accuracys_.set_tenant_id(MTL_ID());
+  reshape_allocator_.set_tenant_id(MTL_ID());
+}
+
+ObTableLoadPXBatchRows::~ObTableLoadPXBatchRows() { reset(); }
+
+void ObTableLoadPXBatchRows::reset()
+{
+  is_inited_ = false;
+  col_descs_.reset();
+  col_accuracys_.reset();
+  reshape_allocator_.reset();
+  batch_rows_.reset();
+  need_reshape_ = false;
+}
+
+void ObTableLoadPXBatchRows::reuse()
+{
+  reshape_allocator_.reset_remain_one_page();
+  batch_rows_.reuse();
+}
+
+int ObTableLoadPXBatchRows::init(const ObIArray<ObColDesc> &col_descs,
+                                 const ObIArray<ObAccuracy> &col_accuracys,
+                                 const ObBitVector *col_nullables,
+                                 const ObDirectLoadRowFlag &row_flag,
+                                 const int64_t max_batch_size,
+                                 const bool need_reshape)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObTableLoadPXBatchRows init twice", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(col_descs.empty() || col_accuracys.empty() ||
+                         col_descs.count() != col_accuracys.count() ||
+                         nullptr == col_nullables || max_batch_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(col_descs), K(col_accuracys),
+             KP(col_nullables), K(row_flag), K(max_batch_size));
+  } else if (OB_FAIL(col_descs_.assign(col_descs))) {
+    LOG_WARN("fail to assign col descs", KR(ret));
+  } else if (OB_FAIL(col_accuracys_.assign(col_accuracys))) {
+    LOG_WARN("fail to assign col accuracys", KR(ret));
+  } else if (OB_FAIL(batch_rows_.init(col_descs, col_nullables, max_batch_size, row_flag))) {
+    LOG_WARN("fail to init batch rows", KR(ret));
+  } else {
+    need_reshape_ = need_reshape;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObTableLoadPXBatchRows::append_batch(const IVectorPtrs &vectors, const int64_t offset,
+                                         const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadPXBatchRows not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(vectors.count() != get_column_count() || size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(this), K(vectors), K(size));
+  } else if (OB_UNLIKELY(size > remain_size())) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("size overflow", KR(ret), K(remain_size()), K(size));
+  } else {
+    const int64_t batch_idx = batch_rows_.size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+      const ObColDesc &col_desc = col_descs_.at(i);
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+        ObIVector *vector = vectors.at(i);
+        ObBatchSelector batch_selector(offset, size);
+        if (need_reshape_ &&
+            OB_FAIL(ObDASUtils::reshape_vector_value(col_desc.col_type_, col_accuracys_.at(i), false,
+                                                     reshape_allocator_, vector, batch_selector))) {
+          LOG_WARN("fail to reshape vector value", KR(ret));
+        } else if (OB_FAIL(batch_rows_.get_vectors().at(i)->append_batch(batch_idx, vector, offset, size))) {
+          LOG_WARN("fail to append batch", KR(ret));
+        } else {
+          reshape_allocator_.reuse();
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      batch_rows_.set_size(batch_idx + size);
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadPXBatchRows::append_batch(const ObIArray<ObDatumVector> &datum_vectors,
+                                         const int64_t offset, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadPXBatchRows not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(datum_vectors.count() != get_column_count() || size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(this), K(datum_vectors), K(size));
+  } else if (OB_UNLIKELY(size > remain_size())) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("size overflow", KR(ret), K(remain_size()), K(size));
+  } else {
+    const int64_t batch_idx = batch_rows_.size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+      const ObColDesc &col_desc = col_descs_.at(i);
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+        const ObDatumVector &datum_vector = datum_vectors.at(i);
+        ObBatchSelector batch_selector(offset, size);
+        if (need_reshape_ && OB_FAIL(ObDASUtils::reshape_datum_vector_value(
+                                col_desc.col_type_, col_accuracys_.at(i), reshape_allocator_,
+                                datum_vector, batch_selector))) {
+          LOG_WARN("fail to reshape datum vector value", KR(ret));
+        } else if (OB_FAIL(batch_rows_.get_vectors().at(i)->append_batch(batch_idx, datum_vector, offset, size))) {
+          LOG_WARN("fail to append batch", KR(ret));
+        } else {
+          reshape_allocator_.reuse();
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      batch_rows_.set_size(batch_idx + size);
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadPXBatchRows::append_selective(const IVectorPtrs &vectors, const uint16_t *selector,
+                                             int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadPXBatchRows not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(vectors.count() != get_column_count() || nullptr == selector || size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(this), K(vectors), KP(selector), K(size));
+  } else if (OB_UNLIKELY(size > remain_size())) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("size overflow", KR(ret), K(remain_size()), K(size));
+  } else {
+    const int64_t batch_idx = batch_rows_.size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+      const ObColDesc &col_desc = col_descs_.at(i);
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+        ObIVector *vector = vectors.at(i);
+        ObBatchSelector batch_selector(selector, size);
+        if (need_reshape_ &&
+            OB_FAIL(ObDASUtils::reshape_vector_value(col_desc.col_type_, col_accuracys_.at(i), false,
+                                                     reshape_allocator_, vector, batch_selector))) {
+          LOG_WARN("fail to reshape vector value", KR(ret));
+        } else if (OB_FAIL(batch_rows_.get_vectors().at(i)->append_selective(batch_idx, vector, selector, size))) {
+          LOG_WARN("fail to append selective", KR(ret));
+        } else {
+          reshape_allocator_.reuse();
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      batch_rows_.set_size(batch_idx + size);
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadPXBatchRows::append_selective(const ObIArray<ObDatumVector> &datum_vectors,
+                                             const uint16_t *selector, int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadBatchRows not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(datum_vectors.count() != get_column_count() || nullptr == selector ||
+                         size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(this), K(datum_vectors), KP(selector), K(size));
+  } else if (OB_UNLIKELY(size > remain_size())) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("size overflow", KR(ret), K(remain_size()), K(size));
+  } else {
+    const int64_t batch_idx = batch_rows_.size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+      const ObColDesc &col_desc = col_descs_.at(i);
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+        const ObDatumVector &datum_vector = datum_vectors.at(i);
+        ObBatchSelector batch_selector(selector, size);
+        if (need_reshape_ && OB_FAIL(ObDASUtils::reshape_datum_vector_value(
+                                col_desc.col_type_, col_accuracys_.at(i), reshape_allocator_,
+                                datum_vector, batch_selector))) {
+          LOG_WARN("fail to reshape datum vector value", KR(ret));
+        } else if (OB_FAIL(batch_rows_.get_vectors().at(i)->append_selective(batch_idx, datum_vectors.at(i),
+                                                            selector, size))) {
+          LOG_WARN("fail to append selective", KR(ret));
+        } else {
+          reshape_allocator_.reuse();
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      batch_rows_.set_size(batch_idx + size);
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadPXBatchRows::append_row(const ObDirectLoadDatumRow &datum_row)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadPXBatchRows not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(datum_row.get_column_count() != get_column_count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(this), K(datum_row));
+  } else if (OB_UNLIKELY(batch_rows_.remain_size() <= 0)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("size overflow", KR(ret), K(batch_rows_.remain_size()));
+  } else {
+    const int64_t batch_idx = batch_rows_.size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+      ObStorageDatum &datum = datum_row.storage_datums_[i];
+      const ObColDesc &col_desc = col_descs_.at(i);
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+        if (need_reshape_ &&
+            OB_FAIL(ObDASUtils::reshape_datum_value(
+              col_desc.col_type_, col_accuracys_.at(i),
+              false /*enable_oracle_empty_char_reshape_to_null*/, reshape_allocator_, datum))) {
+          LOG_WARN("fail to reshape datum value", KR(ret));
+        } else if (OB_FAIL(batch_rows_.get_vectors().at(i)->append_datum(batch_idx, datum))) {
+          LOG_WARN("fail to append datum", KR(ret), K(i), K(datum));
+        } else {
+          reshape_allocator_.reuse();
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      batch_rows_.set_size(batch_idx + 1);
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadPXBatchRows::shallow_copy(const IVectorPtrs &vectors, const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadPXBatchRows not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(vectors.count() != get_column_count() || batch_size <= 0 ||
+                         batch_size > batch_rows_.get_max_batch_size())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(this), K(vectors), K(batch_size));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+      const ObColDesc &col_desc = col_descs_.at(i);
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+        ObIVector *vector = vectors.at(i);
+        ObBatchSelector batch_selector(0L, batch_size);
+        if (need_reshape_ &&
+            OB_FAIL(ObDASUtils::reshape_vector_value(col_desc.col_type_, col_accuracys_.at(i), false,
+                                                     reshape_allocator_, vector, batch_selector))) {
+          LOG_WARN("fail to reshape vector value", KR(ret));
+        } else if (OB_FAIL(batch_rows_.get_vectors().at(i)->shallow_copy(vector, batch_size))) {
+          LOG_WARN("fail to shallow copy vector", KR(ret), K(i));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      batch_rows_.set_size(batch_size);
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadPXBatchRows::shallow_copy(const ObIArray<ObDatumVector> &datum_vectors,
+                                         const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadPXBatchRows not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(datum_vectors.count() != get_column_count() || batch_size <= 0 ||
+                         batch_size > batch_rows_.get_max_batch_size())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(this), K(datum_vectors), K(batch_size));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+      const ObColDesc &col_desc = col_descs_.at(i);
+      if (!ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+        const ObDatumVector &datum_vector = datum_vectors.at(i);
+        ObBatchSelector batch_selector(0L, batch_size);
+        if (need_reshape_ && OB_FAIL(ObDASUtils::reshape_datum_vector_value(
+                                col_desc.col_type_, col_accuracys_.at(i), reshape_allocator_,
+                                datum_vector, batch_selector))) {
+          LOG_WARN("fail to reshape datum vector value", KR(ret));
+        } else if (OB_FAIL(batch_rows_.get_vectors().at(i)->shallow_copy(datum_vectors.at(i), batch_size))) {
+          LOG_WARN("fail to shallow copy vector", KR(ret), K(i));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      batch_rows_.set_size(batch_size);
+    }
+  }
+  return ret;
+}
+
+} // namespace observer
+} // namespace oceanbase

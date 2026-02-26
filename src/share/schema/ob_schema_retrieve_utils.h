@@ -419,9 +419,12 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(database);
   RETRIEVE_SCHEMA_FUNC_DECLARE(tablegroup);
   RETRIEVE_SCHEMA_FUNC_DECLARE(outline);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(catalog_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(db_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(table_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(routine_priv);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(obj_mysql_priv);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(sensitive_rule_priv);
 
   RETRIEVE_SCHEMA_FUNC_DECLARE(column_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(package);
@@ -454,6 +457,7 @@ public:
 
   RETRIEVE_SCHEMA_FUNC_DECLARE(dblink);
   RETRIEVE_SCHEMA_FUNC_DECLARE(directory);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(location);
   RETRIEVE_SCHEMA_FUNC_DECLARE(context);
   RETRIEVE_SCHEMA_FUNC_DECLARE(mock_fk_parent_table);
   RETRIEVE_SCHEMA_FUNC_DECLARE(rls_policy);
@@ -461,6 +465,15 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(rls_context);
   //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy);
   //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy_role);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(catalog);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(ccl_rule);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(ai_model);
+
+  template <typename T>
+  static int retrieve_external_resource_schema(const uint64_t tenant_id, T &result, ObIArray<ObSimpleExternalResourceSchema> &schema_array);
+
+  RETRIEVE_SCHEMA_FUNC_DECLARE(sensitive_rule);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(sensitive_column);
   template<typename T>
   static int retrieve_object_list(const uint64_t tenant_id, T &result, common::ObIArray<uint64_t> &trigger_list);
   template<typename T>
@@ -525,12 +538,17 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(audit, ObSAuditSchema);
   FILL_SCHEMA_FUNC_DECLARE(dblink, ObDbLinkSchema);
   FILL_SCHEMA_FUNC_DECLARE(directory, ObDirectorySchema);
+  FILL_SCHEMA_FUNC_DECLARE(location, ObLocationSchema);
   FILL_SCHEMA_FUNC_DECLARE(context, ObContextSchema);
   FILL_SCHEMA_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
   FILL_SCHEMA_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
   FILL_SCHEMA_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
   FILL_SCHEMA_FUNC_DECLARE(rls_context, ObRlsContextSchema);
   FILL_SCHEMA_FUNC_DECLARE(rls_column, ObRlsSecColumnSchema);
+  FILL_SCHEMA_FUNC_DECLARE(catalog, ObCatalogSchema);
+  FILL_SCHEMA_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
+  FILL_SCHEMA_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
+  FILL_SCHEMA_FUNC_DECLARE(sensitive_column, ObSensitiveColumnSchema);
 
   //for full schema
   template<typename T>
@@ -541,6 +559,8 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(database, ObDatabaseSchema);
   FILL_SCHEMA_FUNC_DECLARE(tablegroup, ObTablegroupSchema);
   FILL_SCHEMA_FUNC_DECLARE(outline, ObOutlineInfo);
+  FILL_SCHEMA_FUNC_DECLARE(catalog_priv, ObCatalogPriv);
+  FILL_SCHEMA_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
   FILL_SCHEMA_FUNC_DECLARE(db_priv, ObDBPriv);
   FILL_SCHEMA_FUNC_DECLARE(table_priv, ObTablePriv);
   FILL_SCHEMA_FUNC_DECLARE(routine_priv, ObRoutinePriv);
@@ -561,6 +581,14 @@ public:
   // link table
   FILL_SCHEMA_FUNC_DECLARE(link_table, ObTableSchema);
   FILL_SCHEMA_FUNC_DECLARE(link_column, ObColumnSchemaV2);
+
+  // external resource
+  FILL_SCHEMA_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
+  // ai model
+  FILL_SCHEMA_FUNC_DECLARE(ai_model, ObAiModelSchema);
+
+  // ccl
+  FILL_SCHEMA_FUNC_DECLARE(ccl_rule, ObCCLRuleSchema);
   template<typename T>
   static int fill_mock_fk_parent_table_column_info(
       const uint64_t tenant_id, T &result, uint64_t &parent_column_id, ObString &parent_column_name,
@@ -582,6 +610,12 @@ public:
                                   bool &is_deleted,
                                   ObRawObjPriv &raw_p_id,
                                   uint64_t &option);
+
+  template<typename T>
+  static int fill_obj_mysql_priv_schema(const uint64_t tenant_id,
+                                        T &result,
+                                        ObObjMysqlPriv &obj_mysql_priv,
+                                        bool &is_deleted);
 
   template<typename T>
   static int fill_trigger_id(const uint64_t tenant_id, T &result,
@@ -696,6 +730,12 @@ public:
   template<typename T>
   static int fill_object_id(const uint64_t tenant_id, T &result,
                             uint64_t &object_id, bool &is_deleted);
+  template<typename T>
+  static int find_sensitive_rule_schema(const uint64_t sensitive_rule_id,
+                                        ObArray<T *> sensitive_rule_schema_array,
+                                        T *&sensitive_rule_schema);
+  template<typename T>
+  static bool compare_sensitive_rule_id(const T *sensitive_rule_schema,const uint64_t sensitive_rule_id);
 
   // template<typename T>
   // static bool compare_proxy_id(const T *proxy_schema, const uint64_t proxy_id);

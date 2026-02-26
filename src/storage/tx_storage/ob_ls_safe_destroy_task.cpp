@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_ls_safe_destroy_task.h"
 #include "storage/tx_storage/ob_ls_service.h"
 

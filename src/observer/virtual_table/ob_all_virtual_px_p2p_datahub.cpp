@@ -12,7 +12,6 @@
 
 #include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
 #include "observer/ob_server_utils.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 
 namespace oceanbase
 {

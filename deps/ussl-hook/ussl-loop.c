@@ -162,6 +162,7 @@ static void handle_client_timeout_event(clientfd_sk_t *client_sk)
     ussl_log_warn("give back fd to original epoll failed, fd:%d, origin_epfd:%d, errno:%d",
                    client_sk->fd, client_sk->fd_info.org_epfd, errno);
   }
+  client_sk->fd = -1;
   clientfd_fty->destroy(clientfd_fty, (ussl_sock_t *)client_sk);
 }
 

@@ -11,33 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_REWRITE
-#include "lib/allocator/ob_allocator.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_common_utility.h"
-#include "common/ob_smart_call.h"
-#include "share/ob_unit_getter.h"
-#include "share/schema/ob_column_schema.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/expr/ob_expr_xmlparse.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/config/ob_server_config.h"
-#include "sql/rewrite/ob_transform_utils.h"
+#include "src/sql/resolver/dml/ob_insert_stmt.h"
 #include "sql/rewrite/ob_transform_udt_utils.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/resolver/dml/ob_insert_all_stmt.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/resolver/dml/ob_merge_stmt.h"
-#include "pl/ob_pl_stmt.h"
 
 
 using namespace oceanbase::common;
@@ -109,7 +87,6 @@ int ObTransformUdtUtils::transform_make_xml_binary(ObTransformerCtx *ctx, ObRawE
     ObObj val;
     val.set_int(0);
     c_expr->set_value(val);
-    c_expr->set_param(val);
     if (OB_FAIL(make_xml_expr->set_param_exprs(c_expr, old_expr))) {
       LOG_WARN("set param expr fail", K(ret));
     } else {
@@ -269,7 +246,7 @@ int ObTransformUdtUtils::replace_udt_assignment_exprs(ObTransformerCtx *ctx, ObD
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("old_expr_type invalid ObLongTextType type", K(ret), K(param_store.at(param_idx).get_type()));
           } else {
-            ObExprResType res_type;
+            ObRawExprResType res_type;
             res_type.set_varchar();
             res_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
             value_expr->set_result_type(res_type);
@@ -414,7 +391,6 @@ int ObTransformUdtUtils::transform_sys_makexml(ObTransformerCtx *ctx, ObRawExpr 
     ObObj val;
     val.set_int(0);
     c_expr->set_value(val);
-    c_expr->set_param(val);
     if (OB_FAIL(sys_makexml->set_param_exprs(c_expr, hidden_blob_expr))) {
       LOG_WARN("set param expr fail", K(ret));
     } else if (FALSE_IT(sys_makexml->set_func_name(ObString::make_string("SYS_MAKEXML")))) {
@@ -621,7 +597,8 @@ int ObTransformUdtUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
             col_expr = column_item->expr_;
             need_transform = true;
           }
-        } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *hidden_cols.at(i), col_expr))) {
+        } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *hidden_cols.at(i),
+                                                             ctx->session_info_, col_expr))) {
           LOG_WARN("build column expr failed", K(ret));
         } else if (OB_ISNULL(col_expr)) {
           ret = OB_ERR_UNEXPECTED;
@@ -726,10 +703,8 @@ int ObTransformUdtUtils::check_skip_child_select_view(const ObIArray<ObParentDML
   } else if (OB_ISNULL(parent_stmt = parent_stmts.at(0).stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get parent stmt", K(ret));
-  } else if (parent_stmt->get_table_size() != 1 ||
-             !(parent_stmt->is_delete_stmt() || parent_stmt->is_update_stmt())) {
-    // do nothing
-  } else {
+  } else if (((parent_stmt->is_delete_stmt() || parent_stmt->is_update_stmt()) && parent_stmt->get_table_size() == 1) ||
+             (parent_stmt->is_merge_stmt() && parent_stmt->get_table_size() >= 1)) {
     const sql::TableItem *basic_table_item = stmt->get_table_item(0);
     const sql::TableItem *view_table_item = parent_stmt->get_table_item(0);
     if (OB_ISNULL(basic_table_item) || OB_ISNULL(view_table_item)) {
@@ -773,7 +748,8 @@ int ObTransformUdtUtils::transform_query_udt_columns_exprs(ObTransformerCtx *ctx
   } else {
     FastUdtExprChecker expr_checker(replace_exprs);
     if (OB_FAIL(scopes.push_back(SCOPE_DML_COLUMN)) ||
-        (stmt->get_stmt_type() != stmt::T_MERGE && OB_FAIL(scopes.push_back(SCOPE_DML_VALUE))) ||
+        (stmt->get_stmt_type() != stmt::T_MERGE && stmt->get_stmt_type() != stmt::T_UPDATE &&
+         OB_FAIL(scopes.push_back(SCOPE_DML_VALUE))) ||
         OB_FAIL(scopes.push_back(SCOPE_DML_CONSTRAINT)) ||
         OB_FAIL(scopes.push_back(SCOPE_INSERT_DESC)) ||
         OB_FAIL(scopes.push_back(SCOPE_BASIC_TABLE)) ||

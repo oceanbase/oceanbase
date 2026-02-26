@@ -10,14 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/ls/ob_ls.h"
+#include "ob_ls_member_list_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/high_availability/ob_storage_ha_utils.h"
-#include "storage/high_availability/ob_ls_member_list_service.h"
 #include "storage/high_availability/ob_storage_ha_src_provider.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tablet/ob_tablet.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -174,15 +171,17 @@ int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
 {
   int ret = OB_SUCCESS;
   const bool need_initial_state = false;
-  ObHALSTabletIDIterator iter(ls_->get_ls_id(), need_initial_state);
+  const bool need_sorted_tablet_id = false;
+  ObHALSTabletIDIterator iter(ls_->get_ls_id(), need_initial_state, need_sorted_tablet_id);
   share::SCN max_transfer_scn = share::SCN::min_scn();
   static const int64_t LOCK_TIMEOUT = 100_ms; // 100ms
+  const int64_t abs_timeout_us = ObTimeUtility::current_time() + LOCK_TIMEOUT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(ls_->build_tablet_iter(iter))) {
     STORAGE_LOG(WARN, "failed to build tablet iter", K(ret));
-  } else if (OB_FAIL(transfer_scn_iter_lock_.lock(LOCK_TIMEOUT))) {
+  } else if (OB_FAIL(transfer_scn_iter_lock_.lock(abs_timeout_us))) {
     STORAGE_LOG(WARN, "failed to lock transfer scn iter lock", K(ret));
   } else {
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -204,7 +203,7 @@ int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
       } else if (OB_FALSE_IT(key.tablet_id_ = tablet_id)) {
       } else if (OB_FAIL(t3m->get_tablet(priority, key, tablet_handle))) {
         STORAGE_LOG(WARN, "failed to get tablet", K(ret), K(key));
-      } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), mds_data, 0/*timeout*/))) {
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_latest_committed_tablet_status(mds_data))) {
         if (OB_EMPTY_RESULT == ret) {
           STORAGE_LOG(INFO, "committed tablet_status does not exist", K(ret), K(key));
           ret = OB_SUCCESS;
@@ -267,6 +266,9 @@ int ObLSMemberListService::get_leader_config_version_and_transfer_scn_(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "cnt not match", KR(ret),
                       "return_cnt", return_code_array.count());
+  } else if (OB_SUCCESS != return_code_array.at(0)) {
+    ret = return_code_array.at(0);
+    STORAGE_LOG(WARN, "rpc to leader failed", KR(ret), K(addr));
   } else if (OB_FAIL(process_result_from_async_rpc_(proxy,
                                                     addr,
                                                     return_code_array,
@@ -313,6 +315,9 @@ int ObLSMemberListService::check_ls_transfer_scn_(const share::SCN &transfer_scn
   if (OB_ISNULL(ls_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls should not be null", K(ret), KP_(ls));
+  } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(ls_->get_ls_meta().get_replica_type())) {
+    check_pass = true;
+    STORAGE_LOG(INFO, "replica without ssstore, no need check", KPC_(ls));
   } else if (OB_FAIL(ls_->get_transfer_scn(local_transfer_scn))) {
     STORAGE_LOG(WARN, "failed to get transfer scn", K(ret), KP_(ls));
   } else if (transfer_scn > local_transfer_scn) {
@@ -331,6 +336,8 @@ int ObLSMemberListService::get_ls_member_list_(common::ObIArray<common::ObAddr> 
   ObStorageHAGetMemberHelper get_member_helper;
   ObLSService *ls_svr = NULL;
   ObStorageRpc *storage_rpc = NULL;
+  common::ObMemberList member_list;
+  addr_list.reset();
   if (OB_ISNULL(ls_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls should not be null", K(ret), KP_(ls));
@@ -342,8 +349,19 @@ int ObLSMemberListService::get_ls_member_list_(common::ObIArray<common::ObAddr> 
     STORAGE_LOG(WARN, "storage rpc should not be NULL", K(ret), KP(storage_rpc));
   } else if (OB_FAIL(get_member_helper.init(storage_rpc))) {
     STORAGE_LOG(WARN, "failed to init palf helper", K(ret), KP_(ls));
-  } else if (OB_FAIL(get_member_helper.get_ls_member_list(ls_->get_tenant_id(), ls_->get_ls_id(), addr_list))) {
+  } else if (OB_FAIL(get_member_helper.get_ls_member_list(ls_->get_tenant_id(), ls_->get_ls_id(), member_list))) {
     STORAGE_LOG(WARN, "failed to get ls member list", K(ret), KP_(ls));
+  } else { //filter L replica
+    for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
+      common::ObMember member;
+      if (OB_FAIL(member_list.get_member_by_index(i, member))) {
+        STORAGE_LOG(WARN, "failed to get member by index", K(ret), K(i), K(member_list));
+      } else if (member.is_logonly()) {
+        //do nothing
+      } else if (OB_FAIL(addr_list.push_back(member.get_server()))) {
+        STORAGE_LOG(WARN, "failed to push addr into array", K(ret), K(member));
+      }
+    }
   }
   return ret;
 }

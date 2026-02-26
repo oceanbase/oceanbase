@@ -58,13 +58,18 @@ public:
     return other_client_ls_cnt_;
   }
 
-  int64_t get_valid_client_ls_cnt() const {
-    return valid_client_ls_cnt_;
+  int64_t get_valid_client_ls_v1_cnt() const {
+    return valid_client_ls_cnt_v1_;
+  }
+
+    int64_t get_valid_client_ls_v2_cnt() const {
+    return valid_client_ls_cnt_v2_;
   }
 
 private:
   int64_t current_time_us_;
-  int64_t valid_client_ls_cnt_;
+  int64_t valid_client_ls_cnt_v1_;
+  int64_t valid_client_ls_cnt_v2_;
   int64_t other_client_ls_cnt_;
 };
 
@@ -88,6 +93,15 @@ private:
   bool is_inited_;
   ObBackupDest dest_;
   int64_t dest_ver_;
+};
+
+class CtxSnapshotFunctor {
+public:
+  CtxSnapshotFunctor(ClientLSCtxMap &map):
+      map_(map) {}
+  bool operator()(const ClientLSKey &key, ClientLSCtx *value);
+private:
+  ClientLSCtxMap &map_;
 };
 
 class ObCdcService: public lib::TGRunnable
@@ -144,7 +158,8 @@ public:
       const ObLSID &ls_id,
       const int8_t flag,
       const int64_t client_progress,
-      const FetchLogProtocolType proto_type,
+      const obrpc::ObCdcFetchLogProtocolType proto_type,
+      const obrpc::ObCdcClientType client_type,
       ClientLSCtx *&ctx);
 
   int revert_client_ls_ctx(ClientLSCtx *ctx);
@@ -168,6 +183,18 @@ private:
   int recycle_expired_ctx_(const int64_t cur_ts);
 
   int resize_log_ext_handler_();
+
+  int snapshot_traffic_info_();
+
+  template <class RpcRequest>
+  obrpc::ObCdcClientType get_client_type_from_req_(const RpcRequest &req) {
+    obrpc::ObCdcClientType client_type = req.get_client_type();
+    if (obrpc::ObCdcClientType::CLIENT_TYPE_UNKNOWN == client_type) {
+      client_type = OB_INVALID_TENANT_ID == req.get_tenant_id() ?
+          obrpc::ObCdcClientType::CLIENT_TYPE_CDC : obrpc::ObCdcClientType::CLIENT_TYPE_STANDBY;
+    }
+    return client_type;
+  }
 
   void do_monitor_stat_(const int64_t start_ts,
       const int64_t end_ts,

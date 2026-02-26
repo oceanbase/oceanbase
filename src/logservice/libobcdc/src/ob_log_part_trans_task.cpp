@@ -14,8 +14,8 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include "ob_log_part_trans_task.h"
 
+#include "ob_log_part_trans_task.h"
 #include "lib/string/ob_string.h"                   // ObString
 #include "share/schema/ob_schema_service.h"         // OB_INVALID_DDL_OP
 #include "share/schema/ob_table_schema.h"           // ObTableSchema
@@ -26,11 +26,9 @@
 #include "storage/blocksstable/ob_row_reader.h"     // ObRowReader
 #include "storage/lob/ob_ext_info_callback.h"       // ObExtInfoLog
 
-#include "ob_log_binlog_record.h"                   // ObLogBR
 #include "ob_log_binlog_record_pool.h"              // ObLogBRPool
 #include "ob_log_utils.h"                           // obj2str
 #include "ob_log_common.h"                          // ALL_DDL_OPERATION_TABLE_DDL_STMT_STR_COLUMN_ID
-#include "ob_obj2str_helper.h"                      // ObObj2strHelper
 #include "ob_log_instance.h"                        // TCTX
 #include "ob_log_part_trans_dispatcher.h"           // PartTransDispatcher
 #include "storage/tx/ob_clog_encrypt_info.h"
@@ -38,11 +36,9 @@
 #include "ob_log_ls_op_processor.h"                 // ObLogLSOpProcessor
 #include "ob_log_part_trans_parser.h"               // IObLogPartTransParser
 #include "ob_log_batch_buffer.h"                    // IObLogBatchBuffer
-#include "ob_log_store_task.h"                      // ObLogStoreTask
 #include "ob_log_factory.h"                         // ObLogStoreTaskFactory ReadLogBufFactory
 #include "ob_log_resource_collector.h"              // IObLogResourceCollector
 #include "ob_cdc_lob_data_merger.h"                 // IObCDCLobDataMerger
-#include "ob_log_schema_cache_info.h"               // ColumnSchemaInfo
 #include "ob_cdc_udt.h"                             // ObCDCUdtValueMap
 
 #define PARSE_INT64(name, obj, val, INVALID_VALUE, check_value) \
@@ -108,6 +104,7 @@ int MutatorRow::parse_columns_(
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool enable_output_hidden_primary_key,
     const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
+    const bool is_macroblock_row,
     ColValueList &cols)
 {
   int ret = OB_SUCCESS;
@@ -129,7 +126,7 @@ int MutatorRow::parse_columns_(
     int64_t column_offset = 0;
 
     for (int64_t column_stored_idx = 0; OB_SUCC(ret) && column_stored_idx < datum_row.get_column_count(); column_stored_idx++) {
-      if (dml_flag.is_delete_insert()) {
+      if (is_macroblock_row) {
         // filter extra rowkey column
         if (column_stored_idx >= rowkey_cnt && column_stored_idx < macroblock_row_user_column_idx) continue;
         if (column_stored_idx == macroblock_row_user_column_idx) {
@@ -180,7 +177,7 @@ int MutatorRow::parse_columns_(
         bool ignore_column = false;
         if (OB_NOT_NULL(tb_schema_info)) {
           // for normal column which is not belong to some udt, is_usr_column is true and is_udt_column is false
-          // for udt column
+          // for udt column that is not deleted
           // if is main column of group, is_usr_column is true , is_udt_column is also true.
           // if is hidden column of udt, is_usr_column is false, is_udt_column is true.
           if (! (column_schema_info->is_usr_column() || column_schema_info->is_udt_column())) {
@@ -189,6 +186,20 @@ int MutatorRow::parse_columns_(
                 K(tenant_id), K(table_id), K(column_stored_idx), K(is_parse_new_col), K(column_schema_info));
 
             ignore_column = true;
+          // when udt is fast deleted, main column is marked as hidden and is_usr_column is false, but not real delete.
+          // so need ignore all column of udt when main column of udt is_usr_column is false
+          } else if (column_schema_info->is_udt_column()) {
+            ColumnSchemaInfo *udt_main_column_schema_info = nullptr;
+            if (OB_FAIL(tb_schema_info->get_main_column_of_udt(column_schema_info->get_udt_set_id(), udt_main_column_schema_info))) {
+              LOG_ERROR("get udt main column schema fail", KR(ret), K(tenant_id), K(table_id), K(column_stored_idx),
+                  KPC(column_schema_info), KPC(tb_schema_info));
+            } else if (! udt_main_column_schema_info->is_usr_column()) {
+              ignore_column = true;
+              LOG_DEBUG("ignore udt column", K(tenant_id), K(table_id), K(column_stored_idx), KPC(column_schema_info));
+            } else {
+              ignore_column = false;
+              LOG_DEBUG("not ignore udt column", K(tenant_id), K(table_id), K(column_stored_idx), KPC(column_schema_info));
+            }
           } else {
             ignore_column = false;
           }
@@ -227,42 +238,14 @@ int MutatorRow::parse_columns_(
 
               if (! is_out_row) {
                 OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage in row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common), K(obj));
-                obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
-              } else {
-                const ObLobData &lob_data = *(reinterpret_cast<const ObLobData *>(lob_common.buffer_));
-
-                const ObLobDataOutRowCtx *lob_data_out_row_ctx =
-                  reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data.buffer_);
-
-                OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage out row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common),
-                    K(lob_data), K(obj), KPC(lob_data_out_row_ctx));
-
-                if (is_parse_new_col) {
-                  ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
-
-                  if (OB_ISNULL(lob_data_get_ctx)) {
-                    ret = OB_ALLOCATE_MEMORY_FAILED;
-                    LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
-                  } else {
-                    new(lob_data_get_ctx) ObLobDataGetCtx();
-                    lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag, &lob_data);
-
-                    new_lob_ctx_cols_.add(lob_data_get_ctx);
-                  }
-                } else {
-                  if (OB_FAIL(new_lob_ctx_cols_.set_old_lob_data(column_id, &lob_data))) {
-                    if (OB_ENTRY_NOT_EXIST != ret) {
-                      LOG_ERROR("new_lob_ctx_cols_ set_old_lob_data failed", KR(ret), K(column_id), K(lob_data));
-                    } else {
-                      // Not finding it is a possibility, eg:
-                      // LOB old row is out row storage, but new row is in row storage
-                      ret = OB_SUCCESS;
-                    }
-                  }
+                // only DML needs to reserve lob header
+                if (OB_NOT_NULL(all_ddl_operation_table_schema_info)) {
+                  obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
                 }
+              } else if (OB_FAIL(parse_outrow_lob_column_(is_parse_new_col, dml_flag, column_id, lob_common))) {
+                LOG_ERROR("parse_outrow_lob_column_ failed", K(ret), K(obj), K(column_id));
               }
             } // is_lob_storage
-
             if (OB_SUCC(ret) && OB_FAIL(add_column_(
                 column_id,
                 &obj,
@@ -283,6 +266,75 @@ int MutatorRow::parse_columns_(
     } // for
 
     ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+  }
+
+  return ret;
+}
+
+int MutatorRow::parse_outrow_lob_column_(
+    const bool is_parse_new_col,
+    const blocksstable::ObDmlRowFlag &dml_flag,
+    const uint64_t column_id,
+    const ObLobCommon &lob_common)
+{
+  int ret = OB_SUCCESS;
+
+  const ObLobData &lob_data = *(reinterpret_cast<const ObLobData *>(lob_common.buffer_));
+
+  const ObLobDataOutRowCtx *lob_data_out_row_ctx =
+    reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data.buffer_);
+
+  OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage out row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common),
+                    K(lob_data), KPC(lob_data_out_row_ctx));
+
+  if (is_parse_new_col) {
+    // new_cols in MutatorRow for delete operation expect nop data, however delete_insert table mode set data(copy from old_cols), should skip such data;
+    if (OB_LIKELY(!dml_flag.is_delete())) {
+      ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
+
+      if (OB_ISNULL(lob_data_get_ctx)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
+      } else {
+        new(lob_data_get_ctx) ObLobDataGetCtx();
+        if (OB_FAIL(lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag, &lob_data, true/*is_new_col*/))) {
+          LOG_ERROR("lob_data_get_ctx reset failed", K(new_lob_ctx_cols_));
+        } else {
+          new_lob_ctx_cols_.add(lob_data_get_ctx);
+        }
+      }
+    }
+  } else {
+    if (OB_FAIL(new_lob_ctx_cols_.set_old_lob_data(column_id, &lob_data))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("new_lob_ctx_cols_ set_old_lob_data failed", KR(ret), K(column_id), K(lob_data));
+      } else {
+        // Not finding it is a possibility, eg:
+        //   1. LOB old row is out row storage, but new row is in row storage.
+        //   2. Delete outrow lob.
+        ret = OB_SUCCESS;
+
+        if (! dml_flag.is_delete() && ! dml_flag.is_update()) {
+          // If neither of the above two possibilities, do nothing.
+        } else if (!lob_data_out_row_ctx->is_valid_old_value() && !lob_data_out_row_ctx->is_valid_old_value_ext_info_log()) {
+          // Among the two possibilities above, the lob_data_out_row_ctx op_type will be set to either 'VALID_OLD_VALUE' or
+          // 'VALID_OLD_VALUE_EXT_INFO_LOG'. If it is neither of these two types, do nothing.
+        } else {
+          ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
+          if (OB_ISNULL(lob_data_get_ctx)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
+          } else {
+            new(lob_data_get_ctx) ObLobDataGetCtx();
+            if(OB_FAIL(lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag, &lob_data, false/*is_new_col*/))) {
+              LOG_ERROR("lob data get ctx reset failed", KR(ret));
+            } else {
+              new_lob_ctx_cols_.add(lob_data_get_ctx);
+            }
+          }
+        }
+      }
+    }
   }
 
   return ret;
@@ -365,11 +417,12 @@ int MutatorRow::add_column_(
     common::ObArrayHelper<common::ObString> extended_type_info;
     common::ObAccuracy accuracy;
     common::ObCollationType collation_type = ObCollationType::CS_TYPE_BINARY;
-
+    const common::ObSqlCollectionInfo *collection_info = nullptr;
     // Set meta information and scale information if column schema is valid
     if (NULL != column_schema_info) {
-      column_cast(cv_node->value_, *column_schema_info);
+      column_cast(cv_node->value_, *column_schema_info, is_out_row);
       column_schema_info->get_extended_type_info(extended_type_info);
+      collection_info = column_schema_info->get_collection_info();
       accuracy = column_schema_info->get_accuracy();
       collation_type = column_schema_info->get_collation_type();
     }
@@ -397,6 +450,16 @@ int MutatorRow::add_column_(
           "old_obj_len", value->get_string_len(),
           "new_obj_ptr", (void *)cv_node->value_.get_string_ptr(),
           "new_obj_len", cv_node->value_.get_string_len());
+    } else if (value->is_roaringbitmap() && value->get_string_len() > 2 * _M_) { // RoaringBitmap may exceed 2M
+      OBLOG_FORMATTER_LOG(DEBUG, "column_cast: ", "old_obj_ptr", (void *)value->get_string_ptr(),
+          "old_obj_len", value->get_string_len(),
+          "new_obj_ptr", (void *)cv_node->value_.get_string_ptr(),
+          "new_obj_len", cv_node->value_.get_string_len());
+    } else if (value->is_collection_sql_type() && value->get_string_len() > 2 * _M_) { // Array may exceed 2M
+      OBLOG_FORMATTER_LOG(DEBUG, "column_cast: ", "old_obj_ptr", (void *)value->get_string_ptr(),
+          "old_obj_len", value->get_string_len(),
+          "new_obj_ptr", (void *)cv_node->value_.get_string_ptr(),
+          "new_obj_len", cv_node->value_.get_string_len());
     } else {
       OBLOG_FORMATTER_LOG(DEBUG, "column_cast: ", "old_obj", *value, "new_obj",
           cv_node->value_);
@@ -413,6 +476,7 @@ int MutatorRow::add_column_(
         allocator_,
         false,
         extended_type_info,
+        collection_info,
         accuracy,
         collation_type,
         tz_info_wrap))) {
@@ -546,7 +610,9 @@ template<class CDC_INNER_TABLE_SCHEMA>
 int MutatorRow::parse_columns_(
     const bool is_parse_new_col,
     const blocksstable::ObDatumRow &datum_row,
+    const int64_t rowkey_cnt,
     const CDC_INNER_TABLE_SCHEMA &inner_table_schema,
+    const bool is_macroblock_row,
     ColValueList &cols)
 {
   int ret = OB_SUCCESS;
@@ -560,11 +626,25 @@ int MutatorRow::parse_columns_(
     OBLOG_FORMATTER_LOG(DEBUG, "parse_columns_", K(is_parse_new_col), K(datum_row));
 
     // Iterate through all Cells using Cell Reader
+    // The normal row and macroblock row is different:
+    //   Normal Row: [rowkey column | user column]
+    //   MacroBlock Row: [rowkey column | extra rowkey column | user column]
+    // Formatter need to filter the extra rowkey column
+    const int64_t macroblock_row_user_column_idx = rowkey_cnt + OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER;
+    // record the offset of the stored column between column
+    int64_t column_offset = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_row.get_column_count(); i++) {
+      if (is_macroblock_row) {
+        // filter extra rowkey column
+        if (i >= rowkey_cnt && i < macroblock_row_user_column_idx) continue;
+        if (i == macroblock_row_user_column_idx) {
+          column_offset = OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER;
+        }
+      }
       uint64_t column_id = OB_INVALID_ID;
       const ObObj *value = NULL;
       blocksstable::ObStorageDatum &datum = datum_row.storage_datums_[i];
-      column_id = col_des_array[i].col_id_;
+      column_id = col_des_array[i - column_offset].col_id_;
 
       if (OB_FAIL(deep_copy_encoded_column_value_(datum))) {
         LOG_ERROR("deep_copy_encoded_column_value_ failed", KR(ret), "column_stored_idx", i, K(datum), K(is_parse_new_col));
@@ -579,7 +659,7 @@ int MutatorRow::parse_columns_(
           ObObjMeta obj_meta;
           ObObj obj;
 
-          if (OB_FAIL(set_obj_propertie_(column_id, i, table_schema, obj_meta, obj))) {
+          if (OB_FAIL(set_obj_propertie_(column_id, i - column_offset, table_schema, obj_meta, obj))) {
             LOG_ERROR("set_obj_propertie_ failed", K(column_id), K(i), K(obj_meta), K(obj));
           } else if (OB_FAIL(datum.to_obj_enhance(obj, obj_meta))) {
             LOG_ERROR("transfer datum to obj failed", KR(ret), K(datum), K(obj_meta));
@@ -859,6 +939,7 @@ int MacroBlockMutatorRow::parse_cols(
       tz_info_wrap,
       enable_output_hidden_primary_key,
       all_ddl_operation_table_schema_info,
+      true/*is_macroblock_row*/,
       new_cols_))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(tenant_id), K(table_id), K(obj2str_helper),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
@@ -912,7 +993,9 @@ int MacroBlockMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_tab
     if (OB_FAIL(parse_columns_(
         true/*is_parse_new_col*/,
         row_,
+        row_key_.get_obj_cnt(),
         inner_table_schema_info,
+        true/*is_macroblock_row*/,
         new_cols_))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(table_schema));
     } else {
@@ -920,10 +1003,14 @@ int MacroBlockMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_tab
     }
   }
 
+  if (OB_SUCC(ret)) {
+    cols_parsed_ = true;
+  }
+
   return ret;
 }
 
-int MacroBlockMutatorRow::parse_ext_info_log(ObString &ext_info_log)
+int MacroBlockMutatorRow::parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log)
 {
   int ret = OB_NOT_SUPPORTED;
   LOG_WARN("macroblock mutator row parse_ext_info_log is not supported", KR(ret));
@@ -1065,7 +1152,7 @@ int MemtableMutatorRow::parse_cols(
     ret = OB_STATE_NOT_MATCH;
   }
 
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   blocksstable::ObDatumRow datum_row(tenant_id);
 
   // parse value of new column
@@ -1088,6 +1175,7 @@ int MemtableMutatorRow::parse_cols(
         tz_info_wrap,
         enable_output_hidden_primary_key,
         all_ddl_operation_table_schema_info,
+        false/*is_macroblock_row*/,
         new_cols_))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(tenant_id), K(table_id), K(new_row_), K(obj2str_helper),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
@@ -1115,6 +1203,7 @@ int MemtableMutatorRow::parse_cols(
         tz_info_wrap,
         enable_output_hidden_primary_key,
         all_ddl_operation_table_schema_info,
+        false/*is_macroblock_row*/,
         old_cols_))) {
       LOG_ERROR("parse old columns fail", KR(ret), K(tenant_id), K(table_id), K(old_row_), K(obj2str_helper),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
@@ -1163,7 +1252,7 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
     LOG_ERROR("row has not been deserialized", KR(ret));
   }
 
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   blocksstable::ObDatumRow datum_row(OB_SERVER_TENANT_ID);
 
   // parse value of new column
@@ -1177,7 +1266,9 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
     } else if (OB_FAIL(parse_columns_(
         true/*is_parse_new_col*/,
         datum_row,
+        rowkey_.get_obj_cnt(),
         inner_table_schema_info,
+        false/*is_macroblock_row*/,
         new_cols_))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(new_row_), K(table_schema));
     } else {
@@ -1195,7 +1286,9 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
     } else if (OB_FAIL(parse_columns_(
         false/*is_parse_new_col*/,
         datum_row,
+        rowkey_.get_obj_cnt(),
         inner_table_schema_info,
+        false/*is_macroblock_row*/,
         old_cols_))) {
       LOG_ERROR("parse old columns fail", KR(ret), K(old_row_), K(table_schema));
     } else {
@@ -1221,10 +1314,10 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
   return ret;
 }
 
-int MemtableMutatorRow::parse_ext_info_log(ObString &ext_info_log)
+int MemtableMutatorRow::parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log)
 {
   int ret = OB_SUCCESS;
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   blocksstable::ObDatumRow datum_row;
   bool is_found = false;
   if (OB_UNLIKELY(cols_parsed_)) {
@@ -1242,12 +1335,28 @@ int MemtableMutatorRow::parse_ext_info_log(ObString &ext_info_log)
     LOG_ERROR("column value list is not reseted", KR(ret), K(new_cols_));
   } else if (OB_FAIL(row_reader.read_row(new_row_.data_, new_row_.size_, nullptr, datum_row))) {
     LOG_ERROR("Failed to read datum row", K(ret));
-  } else if (datum_row.get_column_count() != storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_COUNT) {
+  } else if (datum_row.get_column_count() < storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_MIN_COUNT) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("ext info mutator column count invalid", KR(ret), "column_count", datum_row.get_column_count());
   } else {
     ext_info_log = datum_row.storage_datums_[storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_VALUE_IDX].get_string();
-    cols_parsed_ = true;
+
+    // lod id field add in new version, may be not exist in old version
+    // so here need to check column count
+    if (datum_row.get_column_count() >= storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_COUNT) {
+      blocksstable::ObStorageDatum &datum = datum_row.storage_datums_[storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_LOB_ID_IDX];
+      ObString lob_id_data = datum.get_string();
+      if (lob_id_data.length() != sizeof(ObLobId)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid lob id data", KR(ret), K(datum));
+      } else {
+        lob_id = *reinterpret_cast<ObLobId*>(lob_id_data.ptr());
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      cols_parsed_ = true;
+    }
   }
   return ret;
 }
@@ -1396,7 +1505,7 @@ int DmlStmtTask::parse_col(
   common::ObArrayHelper<common::ObString> extended_type_info;
   common::ObAccuracy accuracy;
   common::ObCollationType collation_type = ObCollationType::CS_TYPE_BINARY;
-
+  const common::ObSqlCollectionInfo *collection_info = column_schema_info.get_collection_info();
   column_schema_info.get_extended_type_info(extended_type_info);
   accuracy = column_schema_info.get_accuracy();
   collation_type = column_schema_info.get_collation_type();
@@ -1409,6 +1518,7 @@ int DmlStmtTask::parse_col(
       row_.get_allocator(),
       false,
       extended_type_info,
+      collection_info,
       accuracy,
       collation_type,
       tz_info_wrap))) {
@@ -1559,6 +1669,16 @@ bool DdlStmtTask::is_sub_tls_id_alter_ddl_(const int64_t ddl_operation_type)
   return bool_ret;
 }
 
+bool DdlStmtTask::is_table_recover_end_ddl_(const int64_t ddl_operation_type)
+{
+  bool bool_ret = false;
+
+  ObSchemaOperationType op_type = static_cast<ObSchemaOperationType>(ddl_operation_type);
+  bool_ret = (OB_DDL_RECOVER_TABLE_END == op_type);
+
+  return bool_ret;
+}
+
 int DdlStmtTask::parse_ddl_info(
     ObLogBR *br,
     const uint64_t row_index,
@@ -1666,6 +1786,11 @@ int DdlStmtTask::parse_ddl_info(
       if (is_sub_tls_id_alter_ddl_(ddl_operation_type_)) {
         is_valid_ddl = true;
       }
+
+      // table revoer
+      if (is_table_recover_end_ddl_(ddl_operation_type_)) {
+        is_valid_ddl = true;
+      }
     }
 
     if (OB_SUCCESS == ret && is_valid_ddl) {
@@ -1692,14 +1817,15 @@ int DdlStmtTask::parse_ddl_info(
   }
 
   if (OB_SUCCESS == ret) {
+    ObCStringHelper helper;
     _LOG_INFO("[STAT] [DDL] [PARSE] OP_TYPE=%s(%ld) SCHEMA_VERSION=%ld "
-        "VERSION_DELAY=%.3lf(sec) EXEC_TENANT_ID=%ld TABLE_ID=%ld TENANT_ID=%ld DB_ID=%ld "
+        "VERSION_DELAY=%s EXEC_TENANT_ID=%ld TABLE_ID=%ld TENANT_ID=%ld DB_ID=%ld "
         "TG_ID=%ld DDL_STMT=[%s] CONTAIN_DDL=%d IS_VALID=%d",
         ObSchemaOperation::type_str((ObSchemaOperationType)ddl_operation_type_),
-        ddl_operation_type_, ddl_op_schema_version_, get_delay_sec(ddl_op_schema_version_),
+        ddl_operation_type_, ddl_op_schema_version_, TS_TO_DELAY(ddl_op_schema_version_),
         ddl_exec_tenant_id_, ddl_op_table_id_, ddl_op_tenant_id_,
         ddl_op_database_id_, ddl_op_tablegroup_id_,
-        to_cstring(ddl_stmt_str_), contain_ddl_stmt, is_valid_ddl);
+        helper.convert(ddl_stmt_str_), contain_ddl_stmt, is_valid_ddl);
   }
 
   return ret;
@@ -1905,8 +2031,7 @@ int DdlStmtTask::init_ddl_unique_id_(common::ObString &ddl_unique_id)
     if (OB_ISNULL(buf)) {
       LOG_ERROR("allocate memory for trans id buffer fail", K(buf));
       ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-            "%s", to_cstring(ddl_stmt_unique_id)))) {
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ddl_stmt_unique_id))) {
       LOG_ERROR("init_ddl_unique_id_ fail", KR(ret), K(buf), K(buf_len), K(pos),
           K(ddl_stmt_unique_id));
     } else {
@@ -2436,6 +2561,8 @@ void ObLogEntryTask::set_row_ref_cnt(const int64_t row_ref_cnt)
 
 PartTransTask::PartTransTask() :
     ObLogResourceRecycleTask(ObLogResourceRecycleTask::PART_TRANS_TASK),
+    allocator_(),
+    log_entry_task_base_allocator_(),
     serve_state_(SERVED),
     cluster_id_(0),
     type_(TASK_TYPE_UNKNOWN),
@@ -2455,8 +2582,8 @@ PartTransTask::PartTransTask() :
     participants_(),
     trace_id_(),
     trace_info_(),
-    sorted_log_entry_info_(),
-    sorted_redo_list_(),
+    sorted_log_entry_info_(allocator_),
+    sorted_redo_list_(allocator_),
     part_tx_fetch_state_(0),
     rollback_list_(),
     ref_cnt_(0),
@@ -2475,9 +2602,7 @@ PartTransTask::PartTransTask() :
     wait_data_ready_cond_(),
     wait_formatted_cond_(NULL),
     output_br_count_by_turn_(0),
-    tic_update_infos_(),
-    allocator_(),
-    log_entry_task_base_allocator_()
+    tic_update_infos_()
 {
 }
 
@@ -3449,11 +3574,11 @@ int PartTransTask::commit(
         } else if (OB_FAIL(ObLogLSOpProcessor::process_ls_op(
             tls_id_.get_tenant_id(),
             commit_log_lsn,
-            commit_log_submit_ts,
+            trans_commit_version,
             ls_attr))) {
           if (OB_ENTRY_NOT_EXIST != ret) {
             LOG_ERROR("ObLogLSOpProcessor process_ls_op failed", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
-                K(commit_log_submit_ts), K(ls_attr));
+                K(trans_commit_version), K(commit_log_submit_ts), K(ls_attr));
           } else {
             if (is_data_dict_mode) {
               // In Data dictionary, it need to fetch the log of the baseline data dict before adding a tenant,
@@ -3496,6 +3621,8 @@ int PartTransTask::commit(
           K(trans_commit_version), K(trans_type), K(ls_info_array), K(commit_log_lsn), KPC(this));
     } else if (OB_FAIL(to_string_part_trans_info_())) {
       LOG_ERROR("to_string_part_trans_info_str failed", KR(ret), K(trans_commit_version), K(cluster_id), K(commit_log_lsn), KPC(this));
+    } else if (OB_FAIL(untreeify_redo_list_())) {
+      LOG_ERROR("untreeify redo_list failed", KR(ret), K(trans_commit_version), K(cluster_id), K(commit_log_lsn), KPC(this));
     } else {
       // 3. trans_version, cluster_id and commit_log_lsn
       commit_ts_ = commit_log_submit_ts;
@@ -3520,6 +3647,7 @@ int PartTransTask::commit(
 
   return ret;
 }
+
 
 int PartTransTask::try_to_set_data_ready_status()
 {
@@ -3554,6 +3682,7 @@ int PartTransTask::try_to_set_data_ready_status()
 int PartTransTask::handle_log_callback()
 {
   int ret = OB_SUCCESS;
+  bool can_be_reverted = false;
 
   if (OB_UNLIKELY(is_sys_ls_part_trans())) {
     LOG_ERROR("Not a dml part is unexcepted", KPC(this));
@@ -3572,10 +3701,22 @@ int PartTransTask::handle_log_callback()
         }
       }
     } else {
-      if (OB_FAIL(handle_unserved_trans_())) {
+      if (OB_FAIL(handle_unserved_trans_(can_be_reverted))) {
         LOG_ERROR("handle_unserved_trans_ fail", KR(ret), KPC(this));
       }
     }
+  }
+
+  if (OB_SUCC(ret) && can_be_reverted) {
+    IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
+    if (OB_ISNULL(resource_collector)) {
+      LOG_ERROR("resource_collector is NULL");
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(resource_collector->revert(this))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("revert PartTransTask fail", KR(ret));
+      }
+    } else {}
   }
 
   return ret;
@@ -3606,30 +3747,42 @@ int PartTransTask::check_dml_redo_node_ready_and_handle_()
 int PartTransTask::handle_unserved_trans()
 {
   int ret = OB_SUCCESS;
+  bool can_be_reverted = false;
+
   // Ensure the correctness of concurrent processing of Storager and PartTransDispatcher
-  ObByteLockGuard guard(data_ready_lock_);
+  {
+    ObByteLockGuard guard(data_ready_lock_);
 
-  // set unserved statue
-  set_unserved_();
+    // set unserved statue
+    set_unserved_();
 
-  if (OB_FAIL(handle_unserved_trans_())) {
-    LOG_ERROR("handle_unserved_trans_ fail", KR(ret), KPC(this));
+    if (OB_FAIL(handle_unserved_trans_(can_be_reverted))) {
+      LOG_ERROR("handle_unserved_trans_ fail", KR(ret), KPC(this));
+    }
+  }
+
+  if (OB_SUCC(ret) && can_be_reverted) {
+    IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
+    if (OB_ISNULL(resource_collector)) {
+      LOG_ERROR("resource_collector is NULL");
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(resource_collector->revert(this))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("revert PartTransTask fail", KR(ret));
+      }
+    } else {}
   }
 
   return ret;
 }
 
-int PartTransTask::handle_unserved_trans_()
+int PartTransTask::handle_unserved_trans_(bool &can_be_reverted)
 {
   int ret = OB_SUCCESS;
-  IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
 
   if (OB_UNLIKELY(is_sys_ls_part_trans())) {
     LOG_ERROR("Not a dml part is unexcepted", KPC(this));
     ret = OB_STATE_NOT_MATCH;
-  } else if (OB_ISNULL(resource_collector)) {
-    LOG_ERROR("resource_collector is NULL");
-    ret = OB_ERR_UNEXPECTED;
   } else if (is_data_ready()) {
     LOG_ERROR("data is already ready, not expected", KPC(this));
     ret = OB_ERR_UNEXPECTED;
@@ -3637,11 +3790,10 @@ int PartTransTask::handle_unserved_trans_()
     if (OB_FAIL(check_dml_redo_node_ready_and_handle_())) {
       LOG_ERROR("check_dml_redo_node_ready_and_handle_ fail", KR(ret), KPC(this));
     } else if (is_data_ready()) {
-      if (OB_FAIL(resource_collector->revert(this))) {
-        if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("revert PartTransTask fail", KR(ret));
-        }
-      }
+      // In handle_unserved_trans_, the part_trans_task can be reverted by ResourceCollector
+      // which is asynchronous process. If the asynchronous is fast enouth, the part_trans_task
+      // may be destructed which leads to the unlock core of ObByteLockGuard.
+      can_be_reverted = true;
     } else {}
   }
 
@@ -3707,6 +3859,32 @@ int PartTransTask::parse_tablet_change_mds_(
     } else {
       LOG_DEBUG("get tablet_change_info", K_(tls_id), K_(trans_id), K(tablet_change_info), K(multi_data_source_node));
     }
+  }
+
+  return ret;
+}
+
+int PartTransTask::treeify_redo_list_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(sorted_log_entry_info_.treeify_fetched_log_entry_list())) {
+    LOG_ERROR("treeify fetched_log_entry_list failed", KR(ret), KPC(this));
+  } else if (OB_FAIL(sorted_redo_list_.treeify())) {
+    LOG_ERROR("treeify sorted_redo_list failed", KR(ret), KPC(this));
+  }
+
+  return ret;
+}
+
+int PartTransTask::untreeify_redo_list_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(sorted_log_entry_info_.untreeify_fetched_log_entry_list())) {
+    LOG_ERROR("untreeify fetched_log_entry_list failed", KR(ret), KPC(this));
+  } else if (OB_FAIL(sorted_redo_list_.untreeify())) {
+    LOG_ERROR("untreeify sorted_redo_list failed", KR(ret), KPC(this));
   }
 
   return ret;

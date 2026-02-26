@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <pthread.h>
-#include "lib/utility/ob_template_utils.h"
 #include "gtest/gtest.h"
 #define private public
 #include "lib/lock/ob_bucket_lock.h"

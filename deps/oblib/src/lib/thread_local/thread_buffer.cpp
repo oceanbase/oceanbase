@@ -11,8 +11,6 @@
  */
 
 #include "lib/thread_local/thread_buffer.h"
-#include <stdint.h>
-#include "lib/oblog/ob_log.h"
 #include "lib/allocator/ob_malloc.h"
 
 namespace

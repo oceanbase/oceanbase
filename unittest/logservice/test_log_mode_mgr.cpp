@@ -11,13 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/ob_define.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/rc/ob_tenant_module_init_ctx.h"
 #define private public
 #include "logservice/palf/log_mode_mgr.h"
 #include "mock_logservice_container/mock_election.h"
-#include "mock_logservice_container/mock_log_state_mgr.h"
 #include "mock_logservice_container/mock_log_sliding_window.h"
 #include "mock_logservice_container/mock_log_engine.h"
 #include "mock_logservice_container/mock_log_config_mgr.h"
@@ -321,7 +317,7 @@ TEST_F(TestLogModeMgr, test_can_switch_access_mode)
 
   src_access_mode_list.push_back(AccessMode::FLASHBACK);
   dst_access_mode_list.push_back(AccessMode::RAW_WRITE);
-  ret_list.push_back(false);
+  ret_list.push_back(true);
 
   for (int i = 0; i < src_access_mode_list.size(); i++) {
     const bool expected = (ret_list[i] == can_switch_access_mode_(src_access_mode_list[i], dst_access_mode_list[i]));

@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_merge_stmt.h"
-#include "lib/utility/ob_print_utils.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 
@@ -80,6 +77,9 @@ int64_t ObMergeStmt::to_string(char *buf, const int64_t buf_len) const
        N_TABLE, table_items_,
        N_PARTITION_EXPR, part_expr_items_,
        K_(table_info),
+       K_(condition_exprs),
+       K_(sharding_conditions),
+       K_(dml_source_from_join),
        N_QUERY_CTX, stmt_hint_);
   J_OBJ_END();
   return pos;
@@ -145,7 +145,7 @@ int ObMergeStmt::get_value_exprs(ObIArray<ObRawExpr *> &value_exprs) const
       if (OB_ISNULL(param)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param expr is null", K(ret));
-      } else if (ObRawExprUtils::need_column_conv(column_expr->get_result_type(), *param)) {
+      } else if (ObRawExprUtils::need_column_conv(column_expr->get_result_type(), *param, false)) {
         param = column_conv_expr;
       }
     }

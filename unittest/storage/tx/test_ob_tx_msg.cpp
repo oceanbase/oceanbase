@@ -13,9 +13,6 @@
 #define protected public
 #include "storage/tx/ob_tx_msg.h"
 #include <gtest/gtest.h>
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {

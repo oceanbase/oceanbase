@@ -11,14 +11,12 @@
  */
 
 #include "sql/parser/parse_node.h"
-#include <stdio.h>
 #include <string.h>
-#include <ctype.h>
 #include "lib/alloc/alloc_assist.h"
-#include "sql/parser/parse_malloc.h"
 #include "sql/parser/parse_node_hash.h"
-#include "sql/parser/parse_define.h"
 #include "sql/parser/sql_parser_base.h"
+#include "sql/executor/ob_memory_tracker_wrapper.h"
+
 extern const char *get_type_name(int type);
 
 #ifdef SQL_PARSER_COMPILATION
@@ -96,7 +94,7 @@ int get_deep_copy_size(const ParseNode *node, int64_t *size)
   return ret;
 }
 
-int deep_copy_parse_node(void *malloc_pool, const ParseNode *src_node, ParseNode *dst_node)
+int deep_copy_parse_node_base(void *malloc_pool, const ParseNode *src_node, ParseNode *dst_node)
 {
   int ret = OB_PARSER_SUCCESS;
   if (OB_UNLIKELY(NULL == src_node) || OB_UNLIKELY(NULL == dst_node)) {
@@ -143,60 +141,78 @@ int deep_copy_parse_node(void *malloc_pool, const ParseNode *src_node, ParseNode
         dst_node->raw_text_ = buf;
       }
     }
-    if (OB_PARSER_SUCCESS == ret && src_node->num_child_ > 0) {
-      if (OB_UNLIKELY(NULL == src_node->children_)) {
+  }
+  return ret;
+}
+
+int deep_copy_parse_node(void *malloc_pool, const ParseNode *src_node, ParseNode *dst_node)
+{
+  int ret = OB_PARSER_SUCCESS;
+  if (OB_UNLIKELY(OB_PARSER_SUCCESS != (ret = deep_copy_parse_node_base(malloc_pool, src_node, dst_node)))) {
+    (void)fprintf(stderr, "ERROR failed to copy parse node base\n");
+  } else if (src_node->num_child_ > 0) {
+    if (OB_UNLIKELY(NULL == src_node->children_)) {
+      ret = OB_PARSER_ERR_UNEXPECTED;
+      (void)fprintf(stderr, "ERROR children is null\n");
+    } else if (OB_UNLIKELY(NULL == (dst_node->children_ = (ParseNode **)parser_alloc(
+                                    malloc_pool, sizeof(ParseNode*) * src_node->num_child_)))) {
+      ret = OB_PARSER_ERR_NO_MEMORY;
+      (void)fprintf(stderr, "ERROR failed to allocate memory\n");
+    }
+    for (int64_t i = 0; OB_PARSER_SUCCESS == ret && i < src_node->num_child_; ++i) {
+      ParseNode *tmp_node = NULL;
+      ParseNode *child_node = src_node->children_[i];
+      if (OB_UNLIKELY(NULL == child_node)) {
         ret = OB_PARSER_ERR_UNEXPECTED;
-        (void)fprintf(stderr, "ERROR children is null\n");
-      } else if (OB_UNLIKELY(NULL == (dst_node->children_ = (ParseNode **)parser_alloc(
-                                      malloc_pool, sizeof(ParseNode*) * src_node->num_child_)))) {
+        (void)fprintf(stderr, "ERROR child node is null\n");
+      } else if (OB_UNLIKELY(NULL == (tmp_node =
+                (ParseNode *)parser_alloc(malloc_pool, sizeof(ParseNode))))) {
         ret = OB_PARSER_ERR_NO_MEMORY;
         (void)fprintf(stderr, "ERROR failed to allocate memory\n");
-      }
-      for (int64_t i = 0; OB_PARSER_SUCCESS == ret && i < src_node->num_child_; ++i) {
-        ParseNode *tmp_node = NULL;
-        ParseNode *child_node = src_node->children_[i];
-        if (OB_UNLIKELY(NULL == child_node)) {
-          ret = OB_PARSER_ERR_UNEXPECTED;
-          (void)fprintf(stderr, "ERROR child node is null\n");
-        } else if (OB_UNLIKELY(NULL == (tmp_node =
-                  (ParseNode *)parser_alloc(malloc_pool, sizeof(ParseNode))))) {
-          ret = OB_PARSER_ERR_NO_MEMORY;
-          (void)fprintf(stderr, "ERROR failed to allocate memory\n");
-        } else if (OB_PARSER_SUCCESS != (ret = deep_copy_parse_node(malloc_pool, child_node, tmp_node))) {
-          (void)fprintf(stderr, "ERROR failed to deep copy parse node\n");
-        } else {
-          dst_node->children_[i] = tmp_node;
-        }
+      } else if (OB_PARSER_SUCCESS != (ret = deep_copy_parse_node(malloc_pool, child_node, tmp_node))) {
+        (void)fprintf(stderr, "ERROR failed to deep copy parse node\n");
+      } else {
+        dst_node->children_[i] = tmp_node;
       }
     }
   }
   return ret;
 }
 
+int __attribute__((weak)) check_mem_status() { return OB_PARSER_SUCCESS; }
+int __attribute__((weak)) try_check_mem_status(int64_t check_try_times) { return OB_PARSER_SUCCESS; }
+
 ParseNode *new_node(void *malloc_pool, ObItemType type, int num)
 {
+  int ret = OB_PARSER_SUCCESS;
+  const int64_t check_try_times = 1024;
+  ParseNode *node = NULL;
   // the mem alloced by parse_malloc has been memset;
-  ParseNode *node = (ParseNode *)parse_malloc(sizeof(ParseNode), malloc_pool);
-  if (OB_UNLIKELY(NULL == node)) {
-    (void)printf("malloc memory failed\n");
+  if (OB_UNLIKELY((OB_PARSER_SUCCESS != (ret = try_check_mem_status(check_try_times))))) {
+    (void)printf("Exceeded memory usage limit\n");
   } else {
-    node->type_ = type;
-    node->num_child_ = num;
-    node->value_ = INT64_MAX;
-    node->pl_str_off_ = -1;
-#ifdef SQL_PARSER_COMPILATION
-    node->token_off_ = -1;
-    node->token_len_ = -1;
-#endif
-    if (num > 0) {
-      int64_t alloc_size = sizeof(ParseNode *) * num ;
-      node->children_ = (ParseNode **)parse_malloc(alloc_size, malloc_pool);
-      if (OB_UNLIKELY(NULL == node->children_)) {
-        parse_free(node);
-        node = NULL;
-      }
+    node = (ParseNode *)parse_malloc(sizeof(ParseNode), malloc_pool);
+    if (OB_UNLIKELY(NULL == node)) {
+      (void)printf("malloc memory failed\n");
     } else {
-      node->children_ = NULL;
+      node->type_ = type;
+      node->num_child_ = num;
+      node->value_ = INT64_MAX;
+      node->pl_str_off_ = -1;
+  #ifdef SQL_PARSER_COMPILATION
+      node->token_off_ = -1;
+      node->token_len_ = -1;
+  #endif
+      if (num > 0) {
+        int64_t alloc_size = sizeof(ParseNode *) * num ;
+        node->children_ = (ParseNode **)parse_malloc(alloc_size, malloc_pool);
+        if (OB_UNLIKELY(NULL == node->children_)) {
+          parse_free(node);
+          node = NULL;
+        }
+      } else {
+        node->children_ = NULL;
+      }
     }
   }
   return node;
@@ -384,6 +400,28 @@ ParseNode *new_non_terminal_node(void *malloc_pool, ObItemType node_tag, int num
   return ret_node;
 }
 
+ParseNode *new_list_node(void *malloc_pool, ObItemType node_tag, int capacity, int num, ...)
+{
+  ParseNode *ret_node = NULL;
+  if (OB_UNLIKELY(capacity <= 0 || num <= 0 || num > capacity)) {
+    (void)fprintf(stderr, "ERROR invalid num:%d capacity:%d\n", num, capacity);
+  } else {
+    int32_t i = 0;
+    va_list va;
+    ret_node = new_node(malloc_pool, node_tag, capacity);
+    if (OB_LIKELY(NULL != ret_node)) {
+      ret_node->value_ = capacity;
+      ret_node->num_child_ = num;
+      va_start(va, num);
+      for (; i < num; ++i) {
+        ret_node->children_[i] = va_arg(va, ParseNode *);
+      }
+      va_end(va);
+    }
+  }
+  return ret_node;
+}
+
 char *copy_expr_string(ParseResult *p, int expr_start, int expr_end)
 {
   char *expr_string = NULL;
@@ -500,6 +538,7 @@ int64_t ob_parse_binary_len(int64_t len)
   return (len + 1) / 2;
 }
 
+extern void ob_parse_binary_simd(const char **src, const char *end, char **dest);
 void ob_parse_binary(const char *src, int64_t len, char *dest)
 {
   if (OB_UNLIKELY(NULL == src || len <= 0 || NULL == dest)) {
@@ -518,6 +557,9 @@ void ob_parse_binary(const char *src, int64_t len, char *dest)
     } else {
       //for odd number, we have copy the first char,  so we should minus 2;
       const char *end = src + len - (is_odd ? 2 : 1);
+#if defined(__GNUC__) && defined(__x86_64__)
+      ob_parse_binary_simd(&src, end, &dest);
+#endif
       for (; src <= end; src += 2)
       {
         *dest = (char)(16*char_int(src[0]) + char_int(src[1]));
@@ -587,7 +629,7 @@ char *str_toupper(char *buff, int64_t len)
 {
   if (OB_LIKELY(NULL != buff)) {
     char *ptr = buff;
-	char *end = buff + len;
+	  char *end = buff + len;
     unsigned char ch = *ptr;
     while (ptr != end) {
       ch = *ptr;
@@ -824,4 +866,191 @@ extern bool nodename_is_sdo_geometry_type(const ParseNode *node)
     result = false;
   }
   return result;
+}
+
+int64_t get_need_reserve_capacity(int64_t n)
+{
+  int64_t capacity = 0;
+   // equal to OB_MALLOC_BIG_BLOCK_SIZE in ob_define.h
+  const int64_t max_delta_capacity = (1LL << 21) / sizeof(ParseNode*); // 2MB
+  if (n <= 2) {
+    capacity = 2;
+  } else if ((n & (n - 1)) == 0) {
+    capacity = n;
+  } else if (n > max_delta_capacity) {
+    int64_t i = n / max_delta_capacity;
+    capacity = max_delta_capacity * (i + 1);
+  } else {
+    capacity = 4;
+    while (capacity < n) {
+      capacity <<= 1;
+    }
+  }
+  return capacity;
+}
+
+// (A OR B) OR C --> OR (A, B, C)
+ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *node)
+{
+  ParseNode *ret_node = NULL;
+  if (OB_ISNULL(error_code)) {
+    (void)fprintf(stderr, "ERROR parser result is NULL\n");
+  } else if (OB_ISNULL(malloc_pool) ||
+             OB_ISNULL(left_node) ||
+             OB_ISNULL(node) ||
+             OB_UNLIKELY(INT64_MAX == left_node->value_)) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else if (OB_UNLIKELY(!(T_OP_OR == left_node->type_ ||
+                           T_OP_AND == left_node->type_ ||
+                           T_EXPR_LIST == left_node->type_ ||
+                           T_SET_UNION == left_node->type_ ||
+                           T_SET_UNION_ALL == left_node->type_ ||
+                           T_VALUE_VECTOR == left_node->type_ ||
+                           T_VALUE_LIST == left_node->type_ ||
+                           T_OP_CNN == left_node->type_))) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else {
+    int64_t capacity = get_need_reserve_capacity(left_node->num_child_ + 1);
+    if (left_node->value_ < capacity) {
+      if (NULL == left_node->children_) {
+        left_node->children_ = parse_malloc(capacity * sizeof(ParseNode*), malloc_pool);
+      } else {
+        left_node->children_ = parse_realloc(left_node->children_, capacity * sizeof(ParseNode*), malloc_pool);
+      }
+      if (OB_ISNULL(left_node->children_)) {
+        *error_code = OB_PARSER_ERR_NO_MEMORY;
+      } else {
+        left_node->children_[left_node->num_child_] = node;
+        left_node->num_child_ = left_node->num_child_ + 1;
+        left_node->value_ = capacity;
+        ret_node = left_node;
+      }
+    } else {
+      left_node->children_[left_node->num_child_] = node;
+      left_node->num_child_ += 1;
+      ret_node = left_node;
+    }
+  }
+  return ret_node;
+}
+
+// A OR (B OR C) --> OR (A, B, C)
+ParseNode *push_front_child(void *malloc_pool, int *error_code, ParseNode *right_node, ParseNode *node)
+{
+  ParseNode *ret_node = NULL;
+  if (OB_ISNULL(error_code)) {
+    (void)fprintf(stderr, "ERROR parser result is NULL\n");
+  } else if (OB_ISNULL(malloc_pool) ||
+             OB_ISNULL(right_node) ||
+             OB_ISNULL(node) ||
+             OB_UNLIKELY(INT64_MAX == right_node->value_)) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else if (OB_UNLIKELY(!(T_OP_OR == right_node->type_ ||
+                           T_OP_AND == right_node->type_ ||
+                           T_EXPR_LIST == right_node->type_ ||
+                           T_SET_UNION == right_node->type_ ||
+                           T_SET_UNION_ALL == right_node->type_ ||
+                           T_OP_CNN == right_node->type_))) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else {
+    int64_t capacity = get_need_reserve_capacity(right_node->num_child_ + 1);
+    ParseNode *new_op = new_node(malloc_pool, right_node->type_, capacity);
+    if (OB_ISNULL(new_op)) {
+      *error_code = OB_PARSER_ERR_NO_MEMORY;
+    } else {
+      new_op->children_[0] = node;
+      MEMCPY(new_op->children_ + 1, right_node->children_, sizeof(ParseNode*) * right_node->num_child_);
+      new_op->value_ = capacity;
+      new_op->num_child_ = right_node->num_child_ + 1;
+      ret_node = new_op;
+    }
+  }
+  return ret_node;
+}
+
+// (A OR B) OR (C OR D) --> OR (A, B, C, D)
+ParseNode *append_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *right_node)
+{
+  ParseNode *ret_node = NULL;
+  if (OB_ISNULL(error_code)) {
+    (void)fprintf(stderr, "ERROR parser result is NULL\n");
+  } else if (OB_ISNULL(malloc_pool) ||
+             OB_ISNULL(left_node) ||
+             OB_ISNULL(right_node) ||
+             OB_UNLIKELY(left_node->type_ != right_node->type_)) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else if (OB_UNLIKELY(!(T_OP_OR == left_node->type_ ||
+                           T_OP_AND == left_node->type_ ||
+                           T_EXPR_LIST == left_node->type_ ||
+                           T_SET_UNION == left_node->type_ ||
+                           T_SET_UNION_ALL == left_node->type_ ||
+                           T_OP_CNN == left_node->type_))) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+
+  } else {
+    int64_t num_child = left_node->num_child_ + right_node->num_child_;
+    int64_t capacity = get_need_reserve_capacity(num_child);
+    if (left_node->value_ < capacity) {
+      ParseNode *new_op = new_node(malloc_pool, left_node->type_, capacity);
+      if (OB_ISNULL(new_op)) {
+        *error_code = OB_PARSER_ERR_NO_MEMORY;
+      } else {
+        MEMCPY(new_op->children_, left_node->children_, sizeof(ParseNode*) * left_node->num_child_);
+        MEMCPY(new_op->children_ + left_node->num_child_, right_node->children_, sizeof(ParseNode*) * right_node->num_child_);
+        new_op->num_child_ = num_child;
+        new_op->value_ = capacity;
+        ret_node = new_op;
+      }
+    } else {
+      MEMCPY(left_node->children_ + left_node->num_child_, right_node->children_, sizeof(ParseNode*) * right_node->num_child_);
+      left_node->num_child_ = num_child;
+      ret_node = left_node;
+    }
+  }
+  return ret_node;
+}
+
+ParseNode *adjust_inner_join_inner(int *error_code, ParseNode *inner_join, ParseNode *table_node)
+{
+  ParseNode *ret_node = NULL;
+  if (OB_ISNULL(error_code)) {
+    (void)fprintf(stderr, "ERROR parser error code is NULL\n");
+  } else if (OB_ISNULL(inner_join) || OB_ISNULL(table_node)) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else if (table_node->type_ == T_JOINED_TABLE && table_node->value_ != 1) {
+    // table_node is a join table and without a parenthese.
+    table_node->children_[1] = adjust_inner_join_inner(error_code, inner_join, table_node->children_[1]);
+    if (OB_PARSER_SUCCESS != *error_code) {
+      /* do nothing */
+    } else if (OB_ISNULL(table_node->children_[1])) {
+      *error_code = OB_PARSER_ERR_UNEXPECTED;
+    } else {
+      ret_node = table_node;
+    }
+  } else {
+    inner_join->children_[2] = table_node;
+    ret_node = inner_join;
+  }
+  return ret_node;
+}
+
+ParseNodeOptParens *new_parse_node_opt_parens(void *malloc)
+{
+  ParseNodeOptParens *new_node = (ParseNodeOptParens *)parse_malloc(sizeof(ParseNodeOptParens), malloc);
+  if (NULL == new_node) {
+    (void)printf("ERROR malloc memory failed\n");
+  } else {
+    new_node->select_node_ = NULL;
+    new_node->is_parenthesized_ = false;
+  }
+  return new_node;
+}
+
+extern int ob_backtrace_c(void **buffer, int size);
+extern char *parray_c(char *buf, int64_t len, int64_t *array, int size);
+char *parser_lbt(void **addr_buff, const size_t addr_size,
+                 char *str_buff, const size_t str_size)
+{
+  int size = ob_backtrace_c(addr_buff, addr_size);
+  return parray_c(str_buff, str_size, (int64_t *)addr_buff, size);
 }

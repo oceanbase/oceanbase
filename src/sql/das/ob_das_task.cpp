@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_task.h"
-#include "sql/das/ob_das_scan_op.h"
-#include "sql/ob_sql_trans_control.h"
+#include "ob_das_task.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/engine/px/ob_px_util.h"
 
@@ -36,6 +34,7 @@ struct EnumEncoder<false, sql::ObDASBaseRtDef*> : sql::DASRtEncoder<sql::ObDASBa
 } // end namespace common
 
 using namespace common;
+using namespace transaction;
 namespace sql
 {
 OB_DEF_SERIALIZE(ObDASRemoteInfo)
@@ -49,12 +48,12 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(snapshot_);
   }
-  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_)) {
+  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_ || has_attach_ctdef_)) {
     OB_UNIS_ENCODE(session->get_effective_tenant_id());
     OB_UNIS_ENCODE(*session);
   }
   if (OB_SUCC(ret) && has_expr_) {
-    OZ(ObPxTreeSerializer::serialize_expr_frame_info(
+    OZ(ObPxTreeSerializer::serialize_expr_frame_info<true>(
         buf, buf_len, pos, *exec_ctx_, const_cast<ObExprFrameInfo &>(*frame_info_)));
   }
   OB_UNIS_ENCODE(ctdefs_.count());
@@ -101,6 +100,15 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
       OB_UNIS_ENCODE(child_rtdef);
     }
   }
+  if (need_subschema_ctx_) {
+    if (OB_NOT_NULL(exec_ctx_->get_physical_plan_ctx()->get_phy_plan())) {
+      OB_UNIS_ENCODE(exec_ctx_->get_physical_plan_ctx()->get_phy_plan()->get_subschema_ctx());
+    } else {
+      OB_UNIS_ENCODE(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
+    }
+  }
+  OB_UNIS_ENCODE(detectable_id_);
+  OB_UNIS_ENCODE(stmt_type_);
   return ret;
 }
 
@@ -129,7 +137,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE(snapshot_);
   }
-  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_)) {
+  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_ || has_attach_ctdef_)) {
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
     ObDesExecContext *des_exec_ctx = static_cast<ObDesExecContext*>(exec_ctx_);
     OB_UNIS_DECODE(tenant_id);
@@ -139,8 +147,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
       //notice: can't unlink exec context and session info here
       typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
       des_exec_ctx->get_my_session()->set_is_remote(true);
-      MyExecCtxSessionRegister ctx_register(*des_exec_ctx->get_my_session(), *des_exec_ctx);
-      // for remote das, we use thread local ash stat to record ash.
+      MyExecCtxSessionRegister ctx_register(*des_exec_ctx->get_my_session(), des_exec_ctx);
       //   des_exec_ctx->get_my_session()->set_session_type_with_flag();
       // if (OB_FAIL(des_exec_ctx->get_my_session()->set_session_active(
       //     ObString::make_string("REMOTE/DISTRIBUTE DAS PLAN EXECUTING"),
@@ -162,7 +169,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   }
   OZ(exec_ctx_->create_physical_plan_ctx());
   if (OB_SUCC(ret) && has_expr_) {
-    OZ(ObPxTreeSerializer::deserialize_expr_frame_info(
+    OZ(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
         buf, data_len, pos, *exec_ctx_, const_cast<ObExprFrameInfo &>(*frame_info_)));
     OZ(exec_ctx_->init_expr_op(frame_info_->rt_exprs_.count()));
     if (OB_SUCC(ret)) {
@@ -241,6 +248,11 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
       }
     }
   }
+  if (need_subschema_ctx_) {
+    OB_UNIS_DECODE(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
+  }
+  OB_UNIS_DECODE(detectable_id_);
+  OB_UNIS_DECODE(stmt_type_);
   return ret;
 }
 
@@ -253,12 +265,12 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
     OB_UNIS_ADD_LEN(*trans_desc_);
   }
   OB_UNIS_ADD_LEN(snapshot_);
-  if (need_calc_expr_ || need_calc_udf_) {
+  if (need_calc_expr_ || need_calc_udf_ || has_attach_ctdef_) {
     OB_UNIS_ADD_LEN(session->get_effective_tenant_id());
     OB_UNIS_ADD_LEN(*session);
   }
   if (has_expr_) {
-    len += ObPxTreeSerializer::get_serialize_expr_frame_info_size(*exec_ctx_,
+    len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_,
              const_cast<ObExprFrameInfo&>(*frame_info_));
   }
   OB_UNIS_ADD_LEN(ctdefs_.count());
@@ -298,7 +310,33 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
       OB_UNIS_ADD_LEN(child_rtdef);
     }
   }
+  if (need_subschema_ctx_) {
+    if (OB_NOT_NULL(exec_ctx_->get_physical_plan_ctx()->get_phy_plan())) {
+      OB_UNIS_ADD_LEN(exec_ctx_->get_physical_plan_ctx()->get_phy_plan()->get_subschema_ctx());
+    } else {
+      OB_UNIS_ADD_LEN(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
+    }
+  }
+  OB_UNIS_ADD_LEN(detectable_id_);
+  OB_UNIS_ADD_LEN(stmt_type_);
   return len;
+}
+
+int ObIDASTaskOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
+{
+  int ret = OB_SUCCESS;
+  if (remote_info != nullptr) {
+    snapshot_ = &remote_info->snapshot_;
+    if (das_gts_opt_info_.use_specify_snapshot_) {
+      if (OB_ISNULL(das_gts_opt_info_.get_specify_snapshot())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr of specify_snapshot", K(ret));
+      } else {
+        snapshot_ = das_gts_opt_info_.get_specify_snapshot();
+      }
+    }
+  }
+  return ret;
 }
 
 int ObIDASTaskOp::start_das_task()
@@ -306,6 +344,7 @@ int ObIDASTaskOp::start_das_task()
   int &ret = errcode_;
   int simulate_error = EVENT_CALL(EventTable::EN_DAS_SIMULATE_OPEN_ERROR);
   int need_dump = EVENT_CALL(EventTable::EN_DAS_SIMULATE_DUMP_WRITE_BUFFER);
+  das_task_start_timestamp_ = common::ObTimeUtility::current_time();
   if (OB_UNLIKELY(!is_in_retry() && OB_SUCCESS != simulate_error)) {
     ret = simulate_error;
   } else {
@@ -341,13 +380,24 @@ int ObIDASTaskOp::end_das_task()
   //release op，then rollback transcation
   if (task_started_) {
     if (OB_SUCCESS != (tmp_ret = release_op())) {
-      LOG_WARN("release das task op failed", K(ret), K_(errcode));
+      LOG_WARN("release das task op failed", K(tmp_ret), K_(errcode));
     }
     ret = COVER_SUCC(tmp_ret);
   }
+
   task_started_ = false;
-  ret = COVER_SUCC(tmp_ret);
   errcode_ = OB_SUCCESS;
+  return ret;
+}
+
+int ObIDASTaskOp::init_das_gts_opt_info(transaction::ObTxIsolationLevel isolation_level)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_das_gts_opt_info().init(isolation_level))) {
+    LOG_WARN("fail to init das gts opt", K(ret), K(isolation_level));
+  } else {
+    snapshot_ = get_das_gts_opt_info().get_specify_snapshot();
+  }
   return ret;
 }
 
@@ -362,7 +412,8 @@ OB_SERIALIZE_MEMBER(ObIDASTaskOp,
                     related_tablet_ids_,
                     attach_ctdef_,
                     attach_rtdef_,
-                    das_gts_opt_info_);
+                    das_gts_opt_info_,
+                    plan_line_id_);
 
 OB_DEF_SERIALIZE(ObDASGTSOptInfo)
 {
@@ -415,17 +466,18 @@ int ObDASGTSOptInfo::init(transaction::ObTxIsolationLevel isolation_level)
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   void *buf2 = nullptr;
-  if (OB_ISNULL(buf = alloc_.alloc(sizeof(ObTxReadSnapshot)))) {
+  int64_t mem_size = sizeof(transaction::ObTxReadSnapshot);
+  if (OB_ISNULL(buf = alloc_.alloc(mem_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(sizeof(ObTxReadSnapshot)));
-  } else if (OB_ISNULL(buf2 = alloc_.alloc(sizeof(ObTxReadSnapshot)))) {
+    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(mem_size));
+  } else if (OB_ISNULL(buf2 = alloc_.alloc(mem_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(sizeof(ObTxReadSnapshot)));
+    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(mem_size));
   } else {
     use_specify_snapshot_ = true;
     isolation_level_ = isolation_level;
-    specify_snapshot_ = new(buf) ObTxReadSnapshot();
-    response_snapshot_ = new(buf2) ObTxReadSnapshot();
+    specify_snapshot_ = new(buf) transaction::ObTxReadSnapshot();
+    response_snapshot_ = new(buf2) transaction::ObTxReadSnapshot();
   }
   return ret;
 }
@@ -531,11 +583,11 @@ int ObIDASTaskOp::state_advance()
   OB_ASSERT(cur_agg_list_ != nullptr);
   OB_ASSERT(task_status_ != ObDasTaskStatus::UNSTART);
   if (task_status_ == ObDasTaskStatus::FINISHED) {
-    if (OB_FAIL(get_agg_tasks()->move_to_success_tasks(this))) {
+    if (OB_FAIL(get_agg_task()->move_to_success_tasks(this))) {
       LOG_WARN("failed to move task to success tasks", KR(ret));
     }
   } else if (task_status_ == ObDasTaskStatus::FAILED) {
-    if (OB_FAIL(get_agg_tasks()->move_to_failed_tasks(this))) {
+    if (OB_FAIL(get_agg_task()->move_to_failed_tasks(this))) {
       LOG_WARN("failed to move task to success tasks", KR(ret));
     }
   } else {
@@ -689,8 +741,9 @@ OB_SERIALIZE_MEMBER(ObDASDataFetchRes,
                     enable_rich_format_, vec_row_store_,
                     io_read_bytes_,
                     ssstore_read_bytes_,
-                    ssstore_read_row_cnt_,
-                    memstore_read_row_cnt_);
+                    base_read_row_cnt_,  // FARM COMPAT WHITELIST
+                    delta_read_row_cnt_, // FARM COMPAT WHITELIST
+                    das_execute_remote_info_);
 
 ObDASDataFetchRes::ObDASDataFetchRes()
         : datum_store_("DASDataFetch"),
@@ -701,8 +754,9 @@ ObDASDataFetchRes::ObDASDataFetchRes()
           vec_row_store_(),
           io_read_bytes_(0),
           ssstore_read_bytes_(0),
-          ssstore_read_row_cnt_(0),
-          memstore_read_row_cnt_(0)
+          base_read_row_cnt_(0),
+          delta_read_row_cnt_(0),
+          das_execute_remote_info_()
 {
 }
 
@@ -793,7 +847,7 @@ int DASOpResultIter::reset_wild_datums_ptr()
         (*e)->locate_datums_for_update(wild_datum_info_->eval_ctx_,
                                        wild_datum_info_->max_output_rows_);
         ObEvalInfo &info = (*e)->get_eval_info(wild_datum_info_->eval_ctx_);
-        info.point_to_frame_ = true;
+        info.set_point_to_frame(true);
       }
       wild_datum_info_->exprs_ = nullptr;
       wild_datum_info_->max_output_rows_ = 0;
@@ -809,5 +863,6 @@ int DASOpResultIter::reset_wild_datums_ptr()
   }
   return ret;
 }
+
 }  // namespace sql
 }  // namespace oceanbase

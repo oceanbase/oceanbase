@@ -11,13 +11,8 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/tablet/ob_tablet_memtable_mgr.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/memtable/ob_multi_source_data.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/ls/ob_freezer.h"
+#include "ob_tablet_memtable_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
 {
@@ -167,42 +162,43 @@ int ObTabletMemtableMgr::try_resolve_boundary_on_create_memtable_for_leader_(
         can_resolve = true;
       }
     }
-    if (!can_resolve && !double_check) {
-      last_frozen_tablet_memtable->clear_resolved_active_memtable_left_boundary();
+    if (OB_SUCC(ret)) {
+      if (!can_resolve && !double_check) {
+        last_frozen_tablet_memtable->clear_resolved_active_memtable_left_boundary();
+      }
+      double_check = !double_check;
     }
-    double_check = !double_check;
-  } while (!can_resolve && double_check);
+  } while (!can_resolve && double_check && OB_SUCC(ret));
 
-  if (write_ref > 0) {
+  if (OB_FAIL(ret)) {
+  } else if (write_ref > 0) {
     // NB: for the leader, if the write ref on the frozen memtable is greater
     // than 0, we cannot create a new memtable. Otherwise we may finish the
     // write on the new memtable before finishing the write on the frozen
     // memtable and cause the writes and callbacks on memtable_ctx out of order.
     ret = OB_EAGAIN;
-    TRANS_LOG(INFO,
+    TRANS_LOG(WARN,
               "last frozen's write flag is not 0 during create new memtable",
               KPC(last_frozen_tablet_memtable),
               KPC(new_tablet_memtable));
   } else if (can_resolve) {
     SCN new_start_scn;
     last_frozen_tablet_memtable->resolve_right_boundary();
-    last_frozen_tablet_memtable->set_resolved_active_memtable_left_boundary();
     if (new_tablet_memtable != last_frozen_tablet_memtable) {
       new_start_scn = MAX(last_frozen_tablet_memtable->get_end_scn(),
-                                     last_frozen_tablet_memtable->get_migration_clog_checkpoint_scn());
-      int tmp_ret = new_tablet_memtable->resolve_left_boundary(new_start_scn);
-      if (OB_SUCCESS != tmp_ret) {
-        TRANS_LOG(ERROR, "resolve left boundary failed", KR(tmp_ret), K(new_start_scn), KPC(new_tablet_memtable));
+                          new_tablet_memtable->get_start_scn());
+      if (OB_FAIL(new_tablet_memtable->resolve_left_boundary(new_start_scn))) {
+        TRANS_LOG(ERROR, "resolve left boundary failed", KR(ret), K(new_start_scn), KPC(new_tablet_memtable));
+      } else {
+        last_frozen_tablet_memtable->set_resolved_active_memtable_left_boundary();
       }
     }
-    TRANS_LOG(INFO,
-              "[resolve_right_boundary] in create_memtable on leader",
-              K(new_start_scn),
-              KPC(last_frozen_tablet_memtable),
-              KPC(new_tablet_memtable));
+    TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on leader", K(ret),
+              K(new_start_scn), KPC(last_frozen_tablet_memtable), KPC(new_tablet_memtable));
   } else if (unsubmitted_cnt > 0) {
     new_tablet_memtable->set_logging_blocked();
-    TRANS_LOG(INFO, "set new memtable logging blocked", KPC(last_frozen_tablet_memtable), KPC(new_tablet_memtable));
+    TRANS_LOG(INFO, "set new memtable logging blocked", KPC(last_frozen_tablet_memtable),
+              KPC(new_tablet_memtable));
   }
   return ret;
 }
@@ -271,9 +267,10 @@ int ObTabletMemtableMgr::check_boundary_memtable_(const uint32_t logstream_freez
   } else if (tablet_memtable->is_direct_load_memtable()) {
     if (tablet_memtable->get_end_scn().is_max()) {
       PAUSE();
-      // if end_scn of direct load memtable has not decided, return OB_ENTRY_EXIST and Tablet will reset it to
-      // OB_SUCCESS. Then refresh_and_protect_table(refresh_and_protect_memtable) in StorageTableGuard will retry create
-      // memtable
+      // if end_scn of direct load memtable has not decided, return
+      // OB_ENTRY_EXIST and Tablet will reset it to OB_SUCCESS. Then
+      // refresh_and_protect_memtable_for_write(refresh_and_protect_memtable_for_replay)
+      // in StorageTableGuard will retry create memtable
       ret = OB_ENTRY_EXIST;
     }
   } else if (tablet_memtable->is_data_memtable()) {
@@ -307,6 +304,8 @@ int ObTabletMemtableMgr::create_memtable_(const CreateMemtableArg &arg,
   ObITabletMemtable *new_tablet_memtable = NULL;
   ObLSHandle ls_handle;
   retry_times_ = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  const bool use_memtable_hash_index = tenant_config->_enable_memtable_hash_index;
 
   if (OB_FAIL(acquire_tablet_memtable_(arg.for_inc_direct_load_, memtable_handle))) {
     LOG_WARN("failed to create memtable", K(ret), K(ls_id), K(tablet_id_));
@@ -320,7 +319,7 @@ int ObTabletMemtableMgr::create_memtable_(const CreateMemtableArg &arg,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, invalid ls handle", K(ret), K(ls_handle), K(ls_id), K(tablet_id_));
   } else if (OB_FAIL(new_tablet_memtable->init(
-                 table_key, ls_handle, freezer_, this, arg.schema_version_, logstream_freeze_clock))) {
+                 table_key, ls_handle, freezer_, this, arg.schema_version_, logstream_freeze_clock, use_memtable_hash_index))) {
     LOG_WARN("failed to init memtable",
              K(ret),
              K(ls_id),
@@ -329,6 +328,8 @@ int ObTabletMemtableMgr::create_memtable_(const CreateMemtableArg &arg,
              KP(this),
              K(arg),
              K(logstream_freeze_clock));
+  } else if (FALSE_IT(new_tablet_memtable->set_delete_insert_flag(arg.is_delete_insert_))) {
+  } else if (FALSE_IT(new_tablet_memtable->set_micro_block_format_version(arg.micro_block_format_version_))) {
   } else if (OB_FAIL(resolve_boundary_(new_tablet_memtable, arg))) {
     LOG_WARN("failed to add memtable", K(ret), K(ls_id), K(tablet_id_), K(memtable_handle));
   } else if (FALSE_IT(tg.click("init memtable"))) {
@@ -368,58 +369,66 @@ int ObTabletMemtableMgr::resolve_boundary_(ObITabletMemtable *new_tablet_memtabl
   if (OB_FAIL(ret)) {
   } else if (OB_NOT_NULL(last_frozen_tablet_memtable)) {
     if (last_frozen_tablet_memtable->is_data_memtable()) {
-      (void)resolve_data_memtable_boundary_(last_frozen_tablet_memtable, new_tablet_memtable, arg);
+      ret = resolve_data_memtable_boundary_(last_frozen_tablet_memtable, new_tablet_memtable, arg);
     } else if (last_frozen_tablet_memtable->is_direct_load_memtable()) {
-      (void)resolve_direct_load_memtable_boundary_(last_frozen_tablet_memtable, new_tablet_memtable, arg);
+      ret = resolve_direct_load_memtable_boundary_(last_frozen_tablet_memtable, new_tablet_memtable, arg);
     } else {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "Invalid table type", KR(ret), KPC(last_frozen_tablet_memtable));
     }
   } else {
     // use new clog_checkpoint_scn as start_scn for new memtable
-    (void)new_tablet_memtable->resolve_left_boundary(arg.new_clog_checkpoint_scn_);
+    ret = new_tablet_memtable->resolve_left_boundary(arg.new_clog_checkpoint_scn_);
   }
 
   return ret;
 }
 
-void ObTabletMemtableMgr::resolve_data_memtable_boundary_(ObITabletMemtable *frozen_tablet_memtable,
-                                                          ObITabletMemtable *new_tablet_memtable,
-                                                          const CreateMemtableArg &arg)
+int ObTabletMemtableMgr::resolve_data_memtable_boundary_(ObITabletMemtable *frozen_tablet_memtable,
+                                                         ObITabletMemtable *new_tablet_memtable,
+                                                         const CreateMemtableArg &arg)
 {
   int ret = OB_SUCCESS;
   if (arg.for_replay_) {
-    SCN new_memtable_start_scn;
     frozen_tablet_memtable->resolve_right_boundary();
     if (new_tablet_memtable != frozen_tablet_memtable) {
-      new_memtable_start_scn =
-          MAX(frozen_tablet_memtable->get_end_scn(), frozen_tablet_memtable->get_migration_clog_checkpoint_scn());
-      (void)new_tablet_memtable->resolve_left_boundary(new_memtable_start_scn);
+      if (OB_FAIL(new_tablet_memtable->resolve_left_boundary(
+                    MAX(frozen_tablet_memtable->get_end_scn(),
+                        new_tablet_memtable->get_start_scn())))) {
+        TRANS_LOG(WARN, "resolve left boundary fail", K(ret), K(arg),
+                  KPC(new_tablet_memtable), KPC(frozen_tablet_memtable));
+      }
     }
-    TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on replay", KPC(frozen_tablet_memtable));
-  }
-  // for leader, decide the right boundary of frozen memtable
-  else if (OB_FAIL(try_resolve_boundary_on_create_memtable_for_leader_(frozen_tablet_memtable, new_tablet_memtable))) {
+    TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on replay",
+              KPC(frozen_tablet_memtable), KPC(new_tablet_memtable), K(arg));
+  } else if (OB_FAIL(try_resolve_boundary_on_create_memtable_for_leader_(
+                       frozen_tablet_memtable, new_tablet_memtable))) {
     TRANS_LOG(WARN, "try resolve boundary fail", K(ret));
   }
+  return ret;
 }
 
-void ObTabletMemtableMgr::resolve_direct_load_memtable_boundary_(ObITabletMemtable *frozen_tablet_memtable,
-                                                                 ObITabletMemtable *active_tablet_memtable,
-                                                                 const CreateMemtableArg &arg)
+int ObTabletMemtableMgr::resolve_direct_load_memtable_boundary_(ObITabletMemtable *frozen_tablet_memtable,
+                                                                ObITabletMemtable *active_tablet_memtable,
+                                                                const CreateMemtableArg &arg)
 {
+  int ret = OB_SUCCESS;
   int64_t start_ts = ObClockGenerator::getClock();
 
   SCN new_memtable_start_scn;
   if (frozen_tablet_memtable->get_end_scn().is_max()) {
-    int ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "frozen direct load memtable must have a valid end_scn", KPC(frozen_tablet_memtable));
   } else if (active_tablet_memtable != frozen_tablet_memtable) {
     new_memtable_start_scn =
-        MAX(frozen_tablet_memtable->get_end_scn(), frozen_tablet_memtable->get_migration_clog_checkpoint_scn());
-    (void)active_tablet_memtable->resolve_left_boundary(new_memtable_start_scn);
-    (void)frozen_tablet_memtable->set_resolved_active_memtable_left_boundary();
+      MAX(frozen_tablet_memtable->get_end_scn(), active_tablet_memtable->get_start_scn());
+    if (OB_FAIL(active_tablet_memtable->resolve_left_boundary(new_memtable_start_scn))) {
+      STORAGE_LOG(ERROR, "fail to resolve left boundary", KPC(active_tablet_memtable));
+    } else {
+      (void)frozen_tablet_memtable->set_resolved_active_memtable_left_boundary();
+    }
   }
+  return ret;
 }
 
 void ObTabletMemtableMgr::block_freeze_if_memstore_full_(ObITabletMemtable *new_tablet_memtable)
@@ -490,6 +499,36 @@ int ObTabletMemtableMgr::get_active_memtable(ObTableHandleV2 &handle) const
       LOG_WARN("fail to get active memtable", K(ret));
     }
   }
+  return ret;
+}
+
+int ObTabletMemtableMgr::try_get_active_memtable(ObTableHandleV2 &handle,
+                                                 const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+
+  handle.reset();
+
+  while (OB_SUCC(ret)) {
+    if (ObTimeUtility::current_time() - start_ts > timeout) {
+      ret = OB_EAGAIN;
+    } else if (OB_SUCCESS == lock_.try_rdlock()) {
+      if (OB_UNLIKELY(!is_inited_)) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("not inited", K(ret), K_(is_inited));
+      } else if (OB_FAIL(get_active_memtable_(handle))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("fail to get active memtable", K(ret));
+        }
+      }
+      lock_.rdunlock();
+      break;
+    } else {
+      ob_usleep(10 * 1000);
+    }
+  }
+
   return ret;
 }
 
@@ -577,15 +616,15 @@ int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(ObITabletMemt
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_active_memtable(handle))) {
+  } else if (OB_FAIL(try_get_active_memtable(handle, 1_s/*timeout*/))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get active memtable", K(ret));
     }
   } else if (OB_FAIL(handle.get_tablet_memtable(active_tablet_memtable))) {
     LOG_WARN("fail to get active memtable", K(ret));
   } else {
-    // set the start_scn of the new memtable
-    int tmp_ret = active_tablet_memtable->resolve_left_boundary(start_scn);
+    int tmp_ret = active_tablet_memtable->resolve_left_boundary(
+      MAX(start_scn, active_tablet_memtable->get_start_scn()));
     if (OB_SUCCESS != tmp_ret) {
       TRANS_LOG(ERROR, "resolve left boundary failed", K(start_scn), KPC(active_tablet_memtable), KPC(tablet_memtable));
     }
@@ -676,19 +715,21 @@ int ObTabletMemtableMgr::get_memtable_for_replay(const SCN &replay_scn, ObTableH
     STORAGE_LOG(WARN, "ls is null", K(ret));
   } else {
     const share::ObLSID &ls_id = ls_->get_ls_id();
-    MemMgrRLockGuard lock_guard(lock_);
     int64_t i = 0;
-    for (i = memtable_tail_ - 1; OB_SUCC(ret) && i >= memtable_head_; --i) {
-      if (OB_FAIL(get_ith_memtable(i, handle))) {
-        STORAGE_LOG(WARN, "fail to get ith memtable", K(ret), K(i));
-      } else if (OB_FAIL(handle.get_tablet_memtable(tablet_memtable))) {
-        handle.reset();
-        LOG_WARN("fail to get data memtable", K(ret));
-      } else {
-        if (replay_scn > tablet_memtable->get_start_scn() && replay_scn <= tablet_memtable->get_end_scn()) {
-          break;
-        } else {
+    {
+      MemMgrRLockGuard lock_guard(lock_);
+      for (i = memtable_tail_ - 1; OB_SUCC(ret) && i >= memtable_head_; --i) {
+        if (OB_FAIL(get_ith_memtable(i, handle))) {
+          STORAGE_LOG(WARN, "fail to get ith memtable", K(ret), K(i));
+        } else if (OB_FAIL(handle.get_tablet_memtable(tablet_memtable))) {
           handle.reset();
+          LOG_WARN("fail to get data memtable", K(ret));
+        } else {
+          if (replay_scn > tablet_memtable->get_start_scn() && replay_scn <= tablet_memtable->get_end_scn()) {
+            break;
+          } else {
+            handle.reset();
+          }
         }
       }
     }
@@ -753,7 +794,6 @@ int ObTabletMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
     const int64_t idx = get_memtable_idx(memtable_head_);
     int64_t occupy_size = 0;
     if (nullptr != tables_[idx] && memtable == tables_[idx]) {
-      LOG_INFO("release head memtable", K(ret), K(ls_id), KPC(memtable));
       ObMtStat& mt_stat = memtable->get_mt_stat();
       occupy_size = memtable->get_occupied_size();
       if (0 == mt_stat.release_time_) {
@@ -773,14 +813,15 @@ int ObTabletMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
       }
       memtable->set_frozen();
       memtable->report_memtable_diagnose_info(UpdateReleaseTime());
+
+      FLOG_INFO("succeed to release head data memtable", K(ret), K(occupy_size), KPC(memtable));
       release_head_memtable();
+
       ObITabletMemtable *active_memtable = get_active_memtable_();
       if (OB_NOT_NULL(active_memtable) && !active_memtable->allow_freeze()) {
         active_memtable->set_allow_freeze(true);
         FLOG_INFO("allow active memtable to be freezed", K(ls_id), KPC(active_memtable));
       }
-
-      FLOG_INFO("succeed to release head data memtable", K(ret), K(ls_id), K(tablet_id_), K(occupy_size));
     }
   }
 

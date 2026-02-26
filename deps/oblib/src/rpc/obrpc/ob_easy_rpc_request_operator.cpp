@@ -12,17 +12,12 @@
 
 #include "rpc/obrpc/ob_easy_rpc_request_operator.h"
 #include "lib/utility/utility.h"
+#include "rpc/obmysql/ob_mysql_request_utils.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::common;
 namespace oceanbase
 {
-
-namespace obmysql
-{
-  void __attribute__((weak)) request_finish_callback() {}
-}
-
 namespace obrpc
 {
 void* ObEasyRpcRequestOperator::alloc_response_buffer(ObRequest* req, int64_t size)

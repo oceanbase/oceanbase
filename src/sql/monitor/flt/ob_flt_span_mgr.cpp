@@ -13,20 +13,9 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "sql/monitor/flt/ob_flt_span_mgr.h"
-#include "share/ob_define.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/allocator/ob_concurrent_fifo_allocator.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/alloc/alloc_func.h"
-#include "lib/thread/thread_mgr.h"
+#include "ob_flt_span_mgr.h"
 #include "lib/rc/ob_rc.h"
-#include "share/rc/ob_context.h"
 #include "observer/ob_server.h"
-#include "sql/session/ob_basic_session_info.h"
-#include "lib/trace/ob_trace.h"
 
 namespace oceanbase
 {

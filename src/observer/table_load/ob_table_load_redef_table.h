@@ -30,7 +30,8 @@ struct ObTableLoadRedefTableStartArg
 public:
   ObTableLoadRedefTableStartArg()
     : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID), parallelism_(0),
-      is_load_data_(false), is_insert_overwrite_(false)
+      is_load_data_(false), is_insert_overwrite_(false), tablet_ids_(),
+      enable_hidden_table_partition_pruning_(false)
   {
   }
   ~ObTableLoadRedefTableStartArg() = default;
@@ -41,26 +42,32 @@ public:
     parallelism_ = 0;
     is_load_data_ = false;
     is_insert_overwrite_ = false;
+    tablet_ids_.reset();
+    enable_hidden_table_partition_pruning_ = false;
   }
   bool is_valid() const
   {
     return common::OB_INVALID_ID != tenant_id_ && common::OB_INVALID_ID != table_id_ &&
            0 != parallelism_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallelism), K_(is_load_data), K_(is_insert_overwrite));
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallelism),
+               K_(is_load_data), K_(is_insert_overwrite), K_(tablet_ids),
+               K_(enable_hidden_table_partition_pruning));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
   uint64_t parallelism_;
   bool is_load_data_;
   bool is_insert_overwrite_;
+  common::ObArray<common::ObTabletID> tablet_ids_;
+  bool enable_hidden_table_partition_pruning_;
 };
 
 struct ObTableLoadRedefTableStartRes
 {
 public:
   ObTableLoadRedefTableStartRes()
-    : dest_table_id_(common::OB_INVALID_ID), task_id_(0), schema_version_(0), snapshot_version_(0), data_format_version_(0)
+    : dest_table_id_(common::OB_INVALID_ID), task_id_(0), schema_version_(0), snapshot_version_(0), data_format_version_(0), is_no_logging_(false)
   {
   }
   ~ObTableLoadRedefTableStartRes() = default;
@@ -71,14 +78,16 @@ public:
     schema_version_ = 0;
     snapshot_version_ = 0;
     data_format_version_ = 0;
+    is_no_logging_ = false;
   }
-  TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(snapshot_version), K_(data_format_version));
+  TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(snapshot_version), K_(data_format_version), K(is_no_logging_));
 public:
   uint64_t dest_table_id_;
   int64_t task_id_;
   int64_t schema_version_;
   int64_t snapshot_version_;
   uint64_t data_format_version_;
+  bool is_no_logging_;
 };
 
 struct ObTableLoadRedefTableFinishArg
@@ -139,6 +148,28 @@ public:
                    sql::ObSQLSessionInfo &session_info);
   static int finish(const ObTableLoadRedefTableFinishArg &arg, sql::ObSQLSessionInfo &session_info);
   static int abort(const ObTableLoadRedefTableAbortArg &arg, sql::ObSQLSessionInfo &session_info);
+  static int create_hidden_table(const ObTableLoadRedefTableStartArg &arg,
+                                 ObTableLoadRedefTableStartRes &res,
+                                 sql::ObSQLSessionInfo &session_info,
+                                 obrpc::ObCreateHiddenTableRes &create_table_res);
+private:
+  // 检查原表和隐藏表是否一致
+  static int check_table_consistency(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const uint64_t dest_table_id,
+                                     const int64_t schema_version);
+};
+
+class ObTableLoadErrorMessageGuard
+{
+public:
+  ObTableLoadErrorMessageGuard();
+  ~ObTableLoadErrorMessageGuard();
+private:
+  ObArenaAllocator allocator_;
+  int error_code_;
+  char *error_message_;
+  bool need_reset_;
 };
 
 } // namespace observer

@@ -13,13 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "sql/optimizer/ob_log_temp_table_access.h"
-#include "sql/optimizer/ob_opt_est_cost.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_join_order.h"
 
 using namespace oceanbase::sql;
@@ -98,6 +91,7 @@ int ObLogTempTableAccess::do_re_est_cost(EstimateCostInfo &param, double &card, 
   cost = get_cost();
   double selectivity = 1.0;
   const int64_t parallel = param.need_parallel_;
+  get_plan()->get_selectivity_ctx().init_op_ctx(NULL, -1);
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()),K(ret));

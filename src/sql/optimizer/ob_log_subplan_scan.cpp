@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_subplan_scan.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
-#include "common/ob_smart_call.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
@@ -34,7 +31,6 @@ int ObLogSubPlanScan::generate_access_exprs()
         LOG_WARN("get unexpected null", K(col_item), K(ret));
       } else if (col_item->table_id_ == subquery_id_ &&
                  col_item->expr_->is_explicited_reference() &&
-                 !col_item->expr_->is_unpivot_mocked_column() &&
                  OB_FAIL(access_exprs_.push_back(col_item->expr_))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else { /*do nothing*/ }

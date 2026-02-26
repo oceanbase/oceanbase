@@ -11,19 +11,11 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/blocksstable/cs_encoding/ob_cs_micro_block_transformer.h"
-#include "lib/compress/ob_compressor_pool.h"
-#include "share/ob_encryption_util.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "ob_macro_block.h"
-#include "ob_macro_block_bare_iterator.h"
+#include "index_block/ob_index_block_row_struct.h"
 #include "ob_macro_block_reader.h"
-#include "ob_micro_block_reader.h"
-#include "ob_sstable_printer.h"
-#include "ob_micro_block_header.h"
+#include "ob_macro_block_bare_iterator.h"
+#include "ob_macro_block_meta.h"
+#include "index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {
@@ -217,6 +209,7 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
     const ObSSTableMacroBlockHeader &block_header,
     const char *buf,
     const int64_t size,
+    const bool need_deep_copy,
     const char *&uncomp_buf,
     int64_t &uncomp_size,
     bool &is_compressed)
@@ -236,7 +229,38 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
         block_header.fixed_header_.master_key_id_,
         block_header.fixed_header_.encrypt_key_);
     if (OB_FAIL(decrypt_and_decompress_data(deserialize_meta, buf, size, uncomp_buf, uncomp_size,
-        is_compressed, false/*need_deep_copy*/, nullptr/*ext_allocator*/))) {
+        is_compressed, need_deep_copy, nullptr/*ext_allocator*/))) {
+      STORAGE_LOG(WARN, "fail to decrypt and decompress data", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMacroBlockReader::decrypt_and_decompress_data(
+    const ObSimplifiedSSTableMacroBlockHeader &block_header,
+    const char *buf,
+    const int64_t size,
+    const bool need_deep_copy,
+    const char *&uncomp_buf,
+    int64_t &uncomp_size,
+    bool &is_compressed)
+{
+  int ret = OB_SUCCESS;
+  int64_t header_size = 0;
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(!block_header.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid arguments to decompress data",
+        K(ret), KP(buf), K(size), K(block_header));
+  } else {
+    ObMicroBlockDesMeta deserialize_meta(
+        block_header.compressor_type_,
+        static_cast<common::ObRowStoreType>(block_header.row_store_type_),
+        block_header.encrypt_id_,
+        block_header.master_key_id_,
+        block_header.encrypt_key_);
+    if (OB_FAIL(decrypt_and_decompress_data(deserialize_meta, buf, size, uncomp_buf, uncomp_size,
+        is_compressed, need_deep_copy, nullptr/*ext_allocator*/))) {
       STORAGE_LOG(WARN, "fail to decrypt and decompress data", K(ret));
     }
   }
@@ -368,7 +392,7 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
     LOG_WARN("invalid input size", K(ret), K(size), K(header));
   } else if (OB_FAIL(do_decrypt_and_decompress_data(header, deserialize_meta, input, size,
       uncomp_buf, uncomp_size, is_compressed, need_deep_copy, ext_allocator))) {
-    LOG_WARN("fail to do_decrypt_and_decompress_data", K(ret), K(header));
+    LOG_WARN("fail to do_decrypt_and_decompress_data", K(ret), K(header), K(deserialize_meta));
   }
 
   return ret;
@@ -552,9 +576,9 @@ int ObMacroBlockReader::decrypt_buf(
       deserialize_meta.master_key_id_,
       deserialize_meta.encrypt_key_,
       share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH))) {
-    LOG_WARN("Fail to init micro block encryption", K(ret));
+    LOG_WARN("Fail to init micro block encryption", K(ret), K(deserialize_meta));
   } else if (OB_FAIL(encryption_->decrypt(buf, size, decrypt_buf, decrypt_size))) {
-    LOG_WARN("Fail to decrypt data", K(ret));
+    LOG_WARN("Fail to decrypt data", K(ret), K(deserialize_meta));
   }
   return ret;
 }
@@ -564,7 +588,8 @@ ObSSTableDataBlockReader::ObSSTableDataBlockReader()
   : data_(NULL), size_(0), common_header_(), macro_header_(), linked_header_(),
     bloomfilter_header_(NULL), column_types_(NULL), column_orders_(NULL),
     column_checksum_(NULL), macro_reader_(), allocator_(ObModIds::OB_CS_SSTABLE_READER),
-    hex_print_buf_(nullptr), is_trans_sstable_(false), is_inited_(false), column_type_array_cnt_(0)
+    hex_print_buf_(nullptr), is_trans_sstable_(false), is_inited_(false), column_type_array_cnt_(0),
+    printer_(), print_hex_length_(tools::ObDumpMacroBlockContext::DEFUALT_DUMP_HEX_LENGTH)
 {
 }
 
@@ -572,7 +597,7 @@ ObSSTableDataBlockReader::~ObSSTableDataBlockReader()
 {
 }
 
-int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const bool hex_print)
+int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const int64_t hex_length, const bool hex_print, FILE *fd)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -587,9 +612,12 @@ int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const b
     LOG_ERROR("deserialize common header fail", K(ret), KP(data), K(size), K(pos));
   } else if (OB_FAIL(common_header_.check_integrity())) {
     LOG_ERROR("invalid common header", K(ret), K_(common_header));
+  } else if (OB_FAIL(check_macro_crc_(data, size))) {
+    LOG_ERROR("invalid macro payload", K(ret), K_(common_header));
   } else {
     data_ = data;
     size_ = size;
+    print_hex_length_ = hex_length;
     switch (common_header_.get_type()) {
     case ObMacroBlockCommonHeader::SSTableData:
     case ObMacroBlockCommonHeader::SSTableIndex: {
@@ -635,6 +663,8 @@ int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const b
   }
 
   if (OB_SUCC(ret)) {
+    FILE *output_fd = (NULL == fd ? stderr : fd);
+    printer_.set_fd(output_fd);
     is_inited_ = true;
   }
   if (IS_NOT_INIT) {
@@ -667,35 +697,40 @@ int ObSSTableDataBlockReader::dump(const uint64_t tablet_id, const int64_t scn)
     ret = OB_NOT_INIT;
     LOG_WARN("ObSSTableDataBlockReader is not inited", K(ret));
   } else if (check_need_print(tablet_id, scn)) {
-    ObSSTablePrinter::print_common_header(&common_header_);
+    printer_.print_common_header(&common_header_);
     switch (common_header_.get_type()) {
     case ObMacroBlockCommonHeader::SSTableData:
-      ObSSTablePrinter::print_macro_block_header(&macro_header_);
+      printer_.print_macro_block_header(&macro_header_);
       if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.get_col_type_array_cnt()))) {
         LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
-      } else if (OB_FAIL(dump_sstable_macro_block(false))) {
+      } else if (OB_FAIL(dump_sstable_macro_block(MicroBlockType::DATA))) {
         LOG_WARN("Failed to dump sstable macro block", K(ret));
       }
       break;
     case ObMacroBlockCommonHeader::LinkedBlock:
-      ObSSTablePrinter::print_macro_block_header(&linked_header_);
+      printer_.print_macro_block_header(&linked_header_);
       break;
     case ObMacroBlockCommonHeader::BloomFilterData:
-      ObSSTablePrinter::print_macro_block_header(bloomfilter_header_);
+      printer_.print_macro_block_header(bloomfilter_header_);
       if (OB_FAIL(dump_bloom_filter_data_block())) {
         LOG_WARN("Failed to dump bloomfilter macro block", K(ret));
       }
       break;
     case ObMacroBlockCommonHeader::SSTableIndex:
-      ObSSTablePrinter::print_macro_block_header(&macro_header_);
+      printer_.print_macro_block_header(&macro_header_);
       if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.column_count_))) {
         LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
-      } else if (OB_FAIL(dump_sstable_macro_block(true))) {
+      } else if (OB_FAIL(dump_sstable_macro_block(MicroBlockType::INDEX))) {
         LOG_WARN("Failed to dump sstable macro block", K(ret));
       }
       break;
     case ObMacroBlockCommonHeader::SSTableMacroMeta:
-      // Only Dump Header
+      printer_.print_macro_block_header(&macro_header_);
+      if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.column_count_))) {
+        LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
+      } else if (OB_FAIL(dump_sstable_macro_block(MicroBlockType::MACRO_META))) {
+        LOG_WARN("Failed to dump sstable macro block", K(ret));
+      }
       break;
     default:
       ret = OB_NOT_SUPPORTED;
@@ -718,7 +753,26 @@ bool ObSSTableDataBlockReader::check_need_print(const uint64_t tablet_id, const 
   return need_print;
 }
 
-int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block)
+int ObSSTableDataBlockReader::check_macro_crc_(const char *data, const int64_t size) const
+{
+  int ret = OB_SUCCESS;
+  const int32_t payload_size = common_header_.get_payload_size();
+  const int64_t common_header_size = common_header_.get_serialize_size();
+  if (OB_UNLIKELY(common_header_size + payload_size > size)) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("macro block buffer not enough", K(ret), K_(common_header), K(common_header_size), K(size));
+  } else {
+    const char *payload_buf = data + common_header_size;
+    const int32_t calculated_checksum = static_cast<int32_t>(ob_crc64(payload_buf, payload_size));
+    if (OB_UNLIKELY(calculated_checksum != common_header_.get_payload_checksum())) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("macro block checksum inconsistant", K(ret), K(calculated_checksum), K_(common_header));
+    }
+  }
+  return ret;
+}
+
+int ObSSTableDataBlockReader::dump_sstable_macro_block(const MicroBlockType block_type)
 {
   int ret = OB_SUCCESS;
 
@@ -732,7 +786,7 @@ int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block
     int64_t micro_idx = 0;
 
     do {
-      if (OB_FAIL(dump_sstable_micro_block(micro_idx, is_index_block, macro_iter))) {
+      if (OB_FAIL(dump_sstable_micro_block(micro_idx, block_type, macro_iter))) {
         LOG_WARN("Fail to dump sstable micro block", K(ret));
       } else {
         ++micro_idx;
@@ -742,11 +796,11 @@ int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block
     if (OB_FAIL(ret) && OB_ITER_END != ret) {
       LOG_WARN("Fail to iterate all rows in macro block", K(ret));
     } else if (FALSE_IT(ret = OB_SUCCESS)) {
-    } else if (!is_index_block) {
+    } else if (MicroBlockType::DATA == block_type) {
       // dump leaf index block
       if (OB_FAIL(macro_iter.open_leaf_index_micro_block())) {
         LOG_WARN("Fail to open leaf index micro block", K(ret));
-      } else if (OB_FAIL(dump_sstable_micro_block(0, true, macro_iter))) {
+      } else if (OB_FAIL(dump_sstable_micro_block(0, MicroBlockType::INDEX, macro_iter))) {
         LOG_WARN("Fail to dump leaf index micro block", K(ret));
       } else if (OB_FAIL(dump_macro_block_meta_block(macro_iter))) {
         LOG_WARN("Fail to dump macro meta block in macro block", K(ret));
@@ -759,7 +813,7 @@ int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block
 
 int ObSSTableDataBlockReader::dump_sstable_micro_block(
     const int64_t micro_idx,
-    const bool is_index_block,
+    const MicroBlockType block_type,
     ObMacroBlockRowBareIterator &macro_iter)
 {
   int ret = OB_SUCCESS;
@@ -769,9 +823,9 @@ int ObSSTableDataBlockReader::dump_sstable_micro_block(
   } else if (OB_ISNULL(micro_data) || OB_UNLIKELY(!micro_data->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected invalid micro block data", K(ret), KPC(micro_data));
-  } else if (OB_FAIL(dump_sstable_micro_header(*micro_data, micro_idx, is_index_block ? MicroBlockType::INDEX : MicroBlockType::DATA))) {
+  } else if (OB_FAIL(dump_sstable_micro_header(*micro_data, micro_idx, block_type))) {
     LOG_ERROR("Failed to dump sstble micro block header", K(ret));
-  } else if (OB_FAIL(dump_sstable_micro_data(is_index_block, macro_iter))) {
+  } else if (OB_FAIL(dump_sstable_micro_data(block_type, macro_iter))) {
     LOG_ERROR("Failed to dump sstble micro block data", K(ret));
   }
   return ret;
@@ -780,7 +834,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_block(
 int ObSSTableDataBlockReader::dump_sstable_micro_header(
     const ObMicroBlockData &micro_data,
     const int64_t micro_idx,
-    const MicroBlockType type)
+    const MicroBlockType block_type)
 {
   int ret = OB_SUCCESS;
   const char *micro_block_buf = micro_data.get_buf();
@@ -794,21 +848,21 @@ int ObSSTableDataBlockReader::dump_sstable_micro_header(
   if (OB_FAIL(micro_block_header.deserialize(micro_block_buf, micro_block_size, pos))) {
     LOG_ERROR("Failed to deserialize sstble micro block header", K(ret), K(micro_data));
   } else {
-    if (MicroBlockType::DATA == type) {
-      ObSSTablePrinter::print_title("Data Micro Block", micro_idx, 1);
-    } else if (MicroBlockType::INDEX == type) {
-      ObSSTablePrinter::print_title("Index Micro Block", micro_idx, 1);
+    if (MicroBlockType::DATA == block_type) {
+      printer_.print_title("Data Micro Block", micro_idx, 1);
+    } else if (MicroBlockType::INDEX == block_type) {
+      printer_.print_title("Index Micro Block", micro_idx, 1);
     } else {
-      ObSSTablePrinter::print_title("Macro Meta Micro Block", micro_idx, 1);
+      printer_.print_title("Macro Meta Micro Block", micro_idx, 1);
     }
 
-    ObSSTablePrinter::print_micro_header(&micro_block_header);
+    printer_.print_micro_header(&micro_block_header);
     row_cnt = micro_block_header.row_count_;
-    if (ObRowStoreType::FLAT_ROW_STORE == row_store_type) {
+    if (ObStoreFormat::is_row_store_type_with_flat(row_store_type)) {
     } else if (ObStoreFormat::is_row_store_type_with_pax_encoding(row_store_type)) {
       const ObColumnHeader *encode_col_header = reinterpret_cast<const ObColumnHeader *>(micro_block_buf + pos);
       for (int64_t i = 0; i < macro_header_.fixed_header_.column_count_; ++i) {
-        ObSSTablePrinter::print_encoding_column_header(&encode_col_header[i], i);
+        printer_.print_encoding_column_header(&encode_col_header[i], i);
       }
     } else if (ObStoreFormat::is_row_store_type_with_cs_encoding(row_store_type)) {
       ObCSMicroBlockTransformer transformer;
@@ -824,14 +878,14 @@ int ObSSTableDataBlockReader::dump_sstable_micro_header(
   }
 
   if (OB_SUCC(ret)) {
-    ObSSTablePrinter::print_title("Total Rows", row_cnt, 1);
+    printer_.print_title("Total Rows", row_cnt, 1);
   }
 
   return ret;
 }
 
 int ObSSTableDataBlockReader::dump_sstable_micro_data(
-    const bool is_index_block,
+    const MicroBlockType block_type,
     ObMacroBlockRowBareIterator &macro_bare_iter)
 {
   int ret = OB_SUCCESS;
@@ -841,6 +895,8 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
   const ObMicroBlockHeader *block_header = nullptr;
   const ObIndexBlockRowHeader *idx_row_header = nullptr;
   const ObIndexBlockRowMinorMetaInfo *minor_meta = nullptr;
+  const char *agg_row_buf = nullptr;
+  int64_t agg_row_buf_size = 0;
   if (OB_FAIL(macro_bare_iter.get_curr_micro_block_row_cnt(row_cnt))) {
     LOG_WARN("Fail to get row count of current micro block", K(ret));
   } else if (OB_FAIL(macro_bare_iter.get_curr_micro_block_data(block_data))) {
@@ -858,18 +914,18 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
       LOG_WARN("Fail to get next row from iter", K(ret), K(row_idx), K(row_cnt));
     } else {
       if (!is_trans_sstable_) {
-        ObSSTablePrinter::print_row_title(row, row_idx);
+        printer_.print_row_title(row, row_idx);
       } else {
-        fprintf(stderr, "ROW[%ld]:", row_idx);
+        fprintf(printer_.fd_, "ROW[%ld]:", row_idx);
       }
       if (OB_NOT_NULL(hex_print_buf_) && !is_trans_sstable_) {
-        ObSSTablePrinter::print_store_row_hex(row, column_types_, OB_DEFAULT_MACRO_BLOCK_SIZE, hex_print_buf_);
+        printer_.print_store_row_hex(row, column_types_, OB_DEFAULT_MACRO_BLOCK_SIZE, hex_print_buf_);
       } else {
-        ObSSTablePrinter::print_store_row(
-            row, column_types_, column_type_array_cnt_, is_index_block, is_trans_sstable_);
+        printer_.print_store_row(
+            row, column_types_, column_type_array_cnt_, print_hex_length_, MicroBlockType::INDEX == block_type, is_trans_sstable_);
       }
 
-      if (is_index_block) {
+      if (MicroBlockType::INDEX == block_type) {
         idx_row_parser.reset();
         if (OB_FAIL(idx_row_parser.init(block_header->rowkey_column_count_, *row))) {
           LOG_WARN("Fail to init idx row parser", K(ret));
@@ -878,35 +934,28 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
         } else if (OB_ISNULL(idx_row_header)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Null pointer to index block row header", K(ret));
-        } else if (FALSE_IT(ObSSTablePrinter::print_index_row_header(idx_row_header))) {
-        } else if (idx_row_header->is_major_node()) {
-          // skip
-        } else if (OB_FAIL(idx_row_parser.get_minor_meta(minor_meta))) {
-          LOG_WARN("Fail to get index row minor meta info", K(ret));
-        } else if (OB_ISNULL(minor_meta)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Null pointer to minor meta", K(ret));
+        } else if (FALSE_IT(printer_.print_index_row_header(idx_row_header))) {
+        } else if (OB_FAIL(idx_row_parser.parse_minor_meta_and_agg_row(
+            minor_meta, agg_row_buf, agg_row_buf_size))) {
+          LOG_WARN("Fail to parse minor meta and agg row", K(ret));
         } else {
-          ObSSTablePrinter::print_index_minor_meta(minor_meta);
-        }
-
-        if (OB_SUCC(ret) && idx_row_header->is_pre_aggregated()) {
-          const char *agg_row_buf = nullptr;
-          int64_t agg_row_buf_size = 0;
-          ObAggRowReader agg_row_reader;
-          if (OB_FAIL(idx_row_parser.get_agg_row(agg_row_buf, agg_row_buf_size))) {
-            LOG_WARN("Failed to get agg row", K(ret), KP(agg_row_buf), K(agg_row_buf_size));
-          } else if (OB_FAIL(agg_row_reader.init(agg_row_buf, agg_row_buf_size))) {
-            LOG_WARN("Failed to init agg row reader", K(ret));
-          } else {
-            ObSSTablePrinter::print_pre_agg_row(macro_header_.fixed_header_.column_count_, agg_row_reader);
+          if (nullptr != minor_meta) {
+            printer_.print_index_minor_meta(minor_meta);
+          }
+          if (nullptr != agg_row_buf) {
+            ObAggRowReader agg_row_reader;
+            if (OB_FAIL(agg_row_reader.init(agg_row_buf, agg_row_buf_size))) {
+              LOG_WARN("Failed to init agg row reader", K(ret));
+            } else {
+              printer_.print_pre_agg_row(macro_header_.fixed_header_.column_count_, agg_row_reader);
+            }
           }
         }
       }
     }
   }
   if (nullptr != hex_print_buf_) {
-    ObSSTablePrinter::print_hex_micro_block(*block_data, hex_print_buf_, OB_DEFAULT_MACRO_BLOCK_SIZE);
+    printer_.print_hex_micro_block(*block_data, hex_print_buf_, OB_DEFAULT_MACRO_BLOCK_SIZE);
   }
   return ret;
 }
@@ -931,9 +980,9 @@ int ObSSTableDataBlockReader::dump_macro_block_meta_block(ObMacroBlockRowBareIte
   } else if (OB_FAIL(macro_meta.parse_row(*const_cast<ObDatumRow *>(row)))) {
     LOG_WARN("Failed to parse macro block meta", K(ret));
   } else {
-    ObSSTablePrinter::print_store_row(
-            row, column_types_, micro_data->get_micro_header()->rowkey_column_count_, true, is_trans_sstable_);
-    ObSSTablePrinter::print_macro_meta(&macro_meta);
+    printer_.print_store_row(
+            row, column_types_, micro_data->get_micro_header()->rowkey_column_count_, print_hex_length_, true, is_trans_sstable_);
+    printer_.print_macro_meta(&macro_meta);
   }
   return ret;
 }
@@ -961,8 +1010,8 @@ int ObSSTableDataBlockReader::dump_bloom_filter_data_block()
       STORAGE_LOG(WARN, "Unexcepted micro data", K(micro_data), K(ret));
     } else {
       const ObBloomFilterMicroBlockHeader *header = reinterpret_cast<const ObBloomFilterMicroBlockHeader *>(micro_data.get_buf());
-      ObSSTablePrinter::print_bloom_filter_micro_header(header);
-      ObSSTablePrinter::print_bloom_filter_micro_block(micro_data.get_buf() + sizeof(ObBloomFilterMicroBlockHeader),
+      printer_.print_bloom_filter_micro_header(header);
+      printer_.print_bloom_filter_micro_block(micro_data.get_buf() + sizeof(ObBloomFilterMicroBlockHeader),
           micro_data.get_buf_size() - sizeof(ObBloomFilterMicroBlockHeader));
     }
   }
@@ -981,17 +1030,17 @@ int ObSSTableDataBlockReader::dump_column_info(const int64_t col_cnt, const int6
     LOG_WARN("Invalid column info", K(ret), K(col_cnt),
         KP_(column_types), KP_(column_orders), KP_(column_checksum));
   } else if (col_cnt > 0) {
-    ObSSTablePrinter::print_cols_info_start("column_index", "column_type", "column_order", "column_checksum", "collation_type");
+    printer_.print_cols_info_start("column_index", "column_type", "column_order", "column_checksum", "collation_type");
     int64_t i = 0;
     for (; i < type_array_col_cnt; ++i) {
-      ObSSTablePrinter::print_cols_info_line(i, column_types_[i].get_type(), column_orders_[i],
+      printer_.print_cols_info_line(i, column_types_[i].get_type(), column_orders_[i],
           column_checksum_[i], column_types_[i].get_collation_type());
     }
     for (; i < col_cnt; ++i) {
-      ObSSTablePrinter::print_cols_info_line(i, ObUnknownType, ASC,
+      printer_.print_cols_info_line(i, ObUnknownType, ObOrderType::ASC,
           column_checksum_[i], column_types_[i].get_collation_type());
     }
-    ObSSTablePrinter::print_end_line();
+    printer_.print_end_line();
   }
   return ret;
 }

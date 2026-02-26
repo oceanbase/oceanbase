@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ddl_heart_beat_task.h"
-#include "lib/oblog/ob_log_module.h"
 #include "share/ob_common_rpc_proxy.h"
 
 

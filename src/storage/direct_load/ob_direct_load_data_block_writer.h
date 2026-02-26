@@ -43,6 +43,7 @@ public:
   int write_item(const T &item) override;
   int close() override;
   OB_INLINE int64_t get_file_size() const { return offset_; }
+  OB_INLINE int64_t get_item_count() const { return item_count_; }
   OB_INLINE int64_t get_block_count() const { return block_count_; }
   OB_INLINE int64_t get_max_block_size() const { return max_block_size_; }
 protected:
@@ -57,6 +58,7 @@ protected:
   int64_t io_timeout_ms_;
   ObDirectLoadTmpFileIOHandle file_io_handle_;
   int64_t offset_;
+  int64_t item_count_;
   int64_t block_count_;
   int64_t max_block_size_;
   ObIDirectLoadDataBlockFlushCallback *callback_;
@@ -72,8 +74,10 @@ ObDirectLoadDataBlockWriter<Header, T, align>::ObDirectLoadDataBlockWriter()
     extra_buf_size_(0),
     io_timeout_ms_(0),
     offset_(0),
+    item_count_(0),
     block_count_(0),
     max_block_size_(0),
+    callback_(nullptr),
     is_opened_(false),
     is_inited_(false)
 {
@@ -91,6 +95,7 @@ void ObDirectLoadDataBlockWriter<Header, T, align>::reuse()
   data_block_writer_.reuse();
   file_io_handle_.reset();
   offset_ = 0;
+  item_count_ = 0;
   block_count_ = 0;
   max_block_size_ = 0;
   is_opened_ = false;
@@ -106,6 +111,7 @@ void ObDirectLoadDataBlockWriter<Header, T, align>::reset()
   io_timeout_ms_ = 0;
   file_io_handle_.reset();
   offset_ = 0;
+  item_count_ = 0;
   block_count_ = 0;
   max_block_size_ = 0;
   callback_ = nullptr;
@@ -122,7 +128,7 @@ int ObDirectLoadDataBlockWriter<Header, T, align>::init(
   ObIDirectLoadDataBlockFlushCallback *callback)
 {
   int ret = common::OB_SUCCESS;
-  if (IS_INIT) {
+  if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObDirectLoadDataBlockWriter init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(data_block_size <= 0 || data_block_size % DIO_ALIGN_SIZE != 0 ||
@@ -195,6 +201,9 @@ int ObDirectLoadDataBlockWriter<Header, T, align>::write_item(const T &item)
         STORAGE_LOG(WARN, "fail to write item", KR(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      ++item_count_;
+    }
   }
   return ret;
 }
@@ -243,6 +252,8 @@ int ObDirectLoadDataBlockWriter<Header, T, align>::close()
       STORAGE_LOG(WARN, "fail to flush buffer", KR(ret));
     } else if (OB_FAIL(file_io_handle_.wait())) {
       STORAGE_LOG(WARN, "fail to wait io finish", KR(ret));
+    } else if (OB_FAIL(file_io_handle_.seal())) {
+      STORAGE_LOG(WARN, "failed to seal tmp file", KR(ret));
     } else {
       max_block_size_ = ALIGN_UP(max_block_size_, DIO_ALIGN_SIZE); // 这个值目前没什么用了, 这里是为了过参数检查
       is_opened_ = false;

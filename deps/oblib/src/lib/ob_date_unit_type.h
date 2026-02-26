@@ -43,6 +43,8 @@ enum ObDateUnitType
   DATE_UNIT_TIMEZONE_MINUTE,
   DATE_UNIT_TIMEZONE_REGION,
   DATE_UNIT_TIMEZONE_ABBR,
+  DATE_UNIT_MILLISECOND,        // for ClickHouse compatibility
+  DATE_UNIT_NANOSECOND,         // for ClickHouse compatibility
   DATE_UNIT_MAX
 };
 

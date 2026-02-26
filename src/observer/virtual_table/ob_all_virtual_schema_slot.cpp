@@ -13,8 +13,6 @@
 # define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_all_virtual_schema_slot.h"
 #include "observer/ob_server_struct.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/schema/ob_schema_mgr_cache.h"
 
 namespace oceanbase
 {

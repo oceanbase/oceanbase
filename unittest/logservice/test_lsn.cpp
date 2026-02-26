@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "logservice/palf/log_define.h"
 #include "logservice/palf/lsn.h"
 #include <gtest/gtest.h>
 

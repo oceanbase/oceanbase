@@ -200,9 +200,9 @@ public:
   bool is_empty() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
-  int find_next(const int64_t start_pos, int64_t &pos);
-  int find_prev(const int64_t start_pos, int64_t &pos);
-  int find_first(int64_t &pos);
+  int find_next(const int64_t start_pos, int64_t &pos) const;
+  int find_prev(const int64_t start_pos, int64_t &pos) const;
+  int find_first(int64_t &pos) const;
   void clear_all()
   {
     for (int64_t i = 0; i < MAX_BITSETWORD; i++) {
@@ -340,7 +340,7 @@ int64_t ObFixedBitSet<N>::to_string(char *buf, const int64_t buf_len) const
 }
 
 template <int64_t N>
-int ObFixedBitSet<N>::find_next(const int64_t start_pos, int64_t &find_pos)
+int ObFixedBitSet<N>::find_next(const int64_t start_pos, int64_t &find_pos) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(-1 > start_pos)) {
@@ -380,7 +380,7 @@ int ObFixedBitSet<N>::find_next(const int64_t start_pos, int64_t &find_pos)
 //        \___ delta = 15 __/
 //
 template <int64_t N>
-int ObFixedBitSet<N>::find_prev(const int64_t start_pos, int64_t &find_pos)
+int ObFixedBitSet<N>::find_prev(const int64_t start_pos, int64_t &find_pos) const
 {
   int ret = OB_SUCCESS;
   int64_t bitset_word_cnt = MAX_BITSETWORD;
@@ -422,7 +422,7 @@ int ObFixedBitSet<N>::find_prev(const int64_t start_pos, int64_t &find_pos)
 }
 
 template <int64_t N>
-int ObFixedBitSet<N>::find_first(int64_t &find_pos)
+int ObFixedBitSet<N>::find_first(int64_t &find_pos) const
 {
   return find_next(-1, find_pos);
 }
@@ -560,9 +560,9 @@ public:
 
   virtual int64_t to_string(char *buf, const int64_t buf_len) const;
   BitSetWord get_bitset_word(int64_t index) const;
-  int find_next(const int64_t start_pos, int64_t &pos);
-  int find_prev(const int64_t start_pos, int64_t &pos);
-  int find_first(int64_t &pos);
+  int find_next(const int64_t start_pos, int64_t &pos) const;
+  int find_prev(const int64_t start_pos, int64_t &pos) const;
+  int find_first(int64_t &pos) const;
   void clear_all()
   {
     for (int64_t i = 0; i < bitset_word_array_.count(); i++) {
@@ -967,7 +967,7 @@ int64_t ObBitSet<N, BlockAllocatorT, auto_free>::get_serialize_size() const
 }
 
 template <int64_t N, typename BlockAllocatorT, bool auto_free>
-int ObBitSet<N, BlockAllocatorT, auto_free>::find_next(const int64_t start_pos, int64_t &find_pos)
+int ObBitSet<N, BlockAllocatorT, auto_free>::find_next(const int64_t start_pos, int64_t &find_pos) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(-1 > start_pos)) {
@@ -1007,7 +1007,7 @@ int ObBitSet<N, BlockAllocatorT, auto_free>::find_next(const int64_t start_pos, 
 //        \___ delta = 15 __/
 //
 template <int64_t N, typename BlockAllocatorT, bool auto_free>
-int ObBitSet<N, BlockAllocatorT, auto_free>::find_prev(const int64_t start_pos, int64_t &find_pos)
+int ObBitSet<N, BlockAllocatorT, auto_free>::find_prev(const int64_t start_pos, int64_t &find_pos) const
 {
   int ret = OB_SUCCESS;
   int64_t bitset_word_cnt = bitset_word_count();
@@ -1049,7 +1049,7 @@ int ObBitSet<N, BlockAllocatorT, auto_free>::find_prev(const int64_t start_pos, 
 }
 
 template <int64_t N, typename BlockAllocatorT, bool auto_free>
-int ObBitSet<N, BlockAllocatorT, auto_free>::find_first(int64_t &find_pos)
+int ObBitSet<N, BlockAllocatorT, auto_free>::find_first(int64_t &find_pos) const
 {
   return find_next(-1, find_pos);
 }

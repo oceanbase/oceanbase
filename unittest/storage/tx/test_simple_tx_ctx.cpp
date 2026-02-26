@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <vector>
 #define private public
 #define protected public
 #define UNITTEST
@@ -302,6 +301,16 @@ TEST_F(TestMockObTxCtx, test_transfer_tx_ctx)
   TRANS_LOG(INFO, "qianchen debug", K(id1), K(id2), K(ctx1));
 }
 }
+
+namespace storage
+{
+
+void ObTxData::dec_ref()
+{
+  return;
+}
+
+} // namespace storage
 
 namespace transaction
 {

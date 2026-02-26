@@ -29,20 +29,21 @@ public:
   virtual ~ObDualMacroMetaIterator() {}
 
   void reset() override;
-  virtual int open(
+  int open(
       ObSSTable &sstable,
       const ObDatumRange &query_range,
       const ObITableReadInfo &rowkey_read_info,
       ObIAllocator &allocator,
       const bool is_reverse_scan = false,
       const bool need_record_micro_info = false) override;
-  virtual int get_next_macro_block(blocksstable::ObMacroBlockDesc &block_desc) override;
-
-  virtual const ObIArray<blocksstable::ObMicroIndexInfo> &get_micro_index_infos() const
+  int get_next_macro_block(blocksstable::ObMacroBlockDesc &block_desc) override;
+  int get_current_clustered_index_info(
+      const blocksstable::ObMicroBlockData *&clustered_micro_block_data) override;
+  const ObIArray<blocksstable::ObMicroIndexInfo> &get_micro_index_infos() const override
   {
     return macro_iter_.get_micro_index_infos();
   }
-  virtual const ObIArray<ObDatumRowkey> &get_micro_endkeys() const
+  const ObIArray<ObDatumRowkey> &get_micro_endkeys() const override
   {
     return macro_iter_.get_micro_endkeys();
   }

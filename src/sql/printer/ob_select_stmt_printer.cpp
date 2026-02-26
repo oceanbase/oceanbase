@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "sql/printer/ob_select_stmt_printer.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "lib/allocator/page_arena.h"
 namespace oceanbase
 {
 using namespace common;
@@ -54,12 +50,7 @@ int ObSelectStmtPrinter::do_print()
                         schema_guard_,
                         print_params_,
                         param_store_);
-      if (stmt_->is_unpivot_select()) {
-        if (OB_FAIL(print_unpivot())) {
-          LOG_WARN("fail to print_unpivot",
-                   KPC(stmt_->get_transpose_item()), K(ret));
-        }
-      } else if (OB_FAIL(SMART_CALL(print()))) {
+      if (OB_FAIL(SMART_CALL(print()))) {
         LOG_WARN("fail to print stmt", KPC(stmt_), K(ret));
       }
     }
@@ -101,153 +92,6 @@ int ObSelectStmtPrinter::print()
   return ret;
 }
 
-int ObSelectStmtPrinter::print_unpivot()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt_ should not be NULL", K(ret));
-  } else if (OB_UNLIKELY(!stmt_->is_select_stmt())
-             || OB_UNLIKELY(!stmt_->is_unpivot_select())
-             || OB_UNLIKELY(stmt_->get_table_items().count() != 1)
-             || OB_ISNULL(stmt_->get_table_item(0)->ref_query_)
-             || OB_UNLIKELY(stmt_->get_table_item(0)->ref_query_->get_table_items().count() != 1)
-             ) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Not a valid select stmt", K(stmt_->get_stmt_type()),
-             K(stmt_->get_table_items().count()), K(ret));
-  } else {
-    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
-
-    if (OB_FAIL(print_temp_table_as_cte())) {
-      LOG_WARN("failed to print cte", K(ret));
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(print_select())) {
-        LOG_WARN("fail to print select", K(ret), K(*stmt_));
-      }
-    }
-
-    DATA_PRINTF(" FROM ");
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(print_table(stmt_->get_table_item(0)->ref_query_->get_table_item(0)))) {
-        LOG_WARN("fail to print table", K(ret));
-      }
-    }
-
-    const TransposeItem &transpose_item = *select_stmt->get_transpose_item();
-
-    if (OB_SUCC(ret)) {
-      DATA_PRINTF(" UNPIVOT %s (",
-          (transpose_item.is_include_null() ? "INCLUDE NULLS" : "EXCLUDE NULLS"));
-    }
-
-    if (OB_SUCC(ret)) {
-      if (transpose_item.unpivot_columns_.count() == 1) {
-        DATA_PRINTF("%.*s", transpose_item.unpivot_columns_[0].length(),
-                            transpose_item.unpivot_columns_[0].ptr());
-      } else {
-        DATA_PRINTF("(");
-        for (int64_t i = 0; i < transpose_item.unpivot_columns_.count() && OB_SUCC(ret); ++i) {
-          DATA_PRINTF("%.*s,", transpose_item.unpivot_columns_[i].length(),
-                              transpose_item.unpivot_columns_[i].ptr());
-        }
-        if (OB_SUCC(ret)) {
-          --(*pos_);
-          DATA_PRINTF(")");
-        }
-      }
-    }
-
-    DATA_PRINTF(" FOR ");
-
-    if (OB_SUCC(ret)) {
-      if (transpose_item.for_columns_.count() == 1) {
-        DATA_PRINTF("%.*s", transpose_item.for_columns_[0].length(),
-                            transpose_item.for_columns_[0].ptr());
-      } else {
-        DATA_PRINTF("(");
-        for (int64_t i = 0; i < transpose_item.for_columns_.count() && OB_SUCC(ret); ++i) {
-          DATA_PRINTF("%.*s,", transpose_item.for_columns_[i].length(),
-                               transpose_item.for_columns_[i].ptr());
-        }
-        if (OB_SUCC(ret)) {
-          --(*pos_);
-          DATA_PRINTF(")");
-        }
-      }
-    }
-
-    DATA_PRINTF(" IN (");
-
-    if (OB_SUCC(ret)) {
-      for (int64_t i = 0; i < transpose_item.in_pairs_.count() && OB_SUCC(ret); ++i) {
-        const TransposeItem::InPair &in_pair = transpose_item.in_pairs_[i];
-        if (in_pair.column_names_.count() == 1) {
-          DATA_PRINTF("%.*s", in_pair.column_names_[0].length(),
-                               in_pair.column_names_[0].ptr());
-        } else {
-          DATA_PRINTF("(");
-          for (int64_t j = 0; j < in_pair.column_names_.count() && OB_SUCC(ret); ++j) {
-            DATA_PRINTF("%.*s,", in_pair.column_names_[j].length(),
-                                 in_pair.column_names_[j].ptr());
-          }
-          if (OB_SUCC(ret)) {
-            --(*pos_);
-            DATA_PRINTF(")");
-          }
-        }
-
-        if (OB_SUCC(ret) && !in_pair.exprs_.empty()) {
-          DATA_PRINTF(" AS ");
-          if (OB_SUCC(ret)) {
-            HEAP_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_str_buf) {
-              MEMSET(expr_str_buf, 0 , sizeof(expr_str_buf));
-              if (in_pair.exprs_.count() == 1) {
-                ObRawExpr *expr = in_pair.exprs_.at(0);
-                int64_t pos = 0;
-                ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
-                                              schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
-                if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
-                  LOG_WARN("print expr definition failed", KPC(expr), K(ret));
-                } else {
-                  DATA_PRINTF("%.*s", static_cast<int32_t>(pos), expr_str_buf);
-                }
-              } else {
-                DATA_PRINTF("(");
-                for (int64_t j = 0; j < in_pair.exprs_.count() && OB_SUCC(ret); ++j) {
-                  ObRawExpr *expr = in_pair.exprs_.at(j);
-                  int64_t pos = 0;
-                  ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
-                                                schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
-                  if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
-                    LOG_WARN("print expr definition failed", KPC(expr), K(ret));
-                  } else {
-                    DATA_PRINTF("%.*s,", static_cast<int32_t>(pos), expr_str_buf);
-                  }
-                }
-                if (OB_SUCC(ret)) {
-                  --(*pos_);
-                  DATA_PRINTF(")");
-                }
-              }
-            }
-          }
-        }
-        if (i != transpose_item.in_pairs_.count() - 1) {
-          DATA_PRINTF(",");
-        }
-      }
-      DATA_PRINTF(" )");
-    }
-
-    DATA_PRINTF(" )");
-  }
-
-  return ret;
-}
 int ObSelectStmtPrinter::print_set_op_stmt()
 {
   int ret = OB_SUCCESS;
@@ -389,8 +233,12 @@ int ObSelectStmtPrinter::print_basic_stmt()
     LOG_WARN("fail to print having", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_order_by())) {
     LOG_WARN("fail to print order by", K(ret), K(*stmt_));
+  } else if (OB_FAIL(print_approx())) {
+    LOG_WARN("fail to print order by", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_limit())) {
     LOG_WARN("fail to print limit", K(ret), K(*stmt_));
+  } else if (OB_FAIL(print_vector_index_query_param())) {
+    LOG_WARN("fail to print vector index query params", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_fetch())) {
     LOG_WARN("fail to print fetch", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_with_check_option())) {
@@ -422,8 +270,6 @@ int ObSelectStmtPrinter::print_select()
       bool is_oracle_mode = lib::is_oracle_mode();
       if (OB_FAIL(print_hint())) { // hint
         LOG_WARN("fail to print hint", K(ret), K(*select_stmt));
-      } else if (select_stmt->is_unpivot_select()) {
-        DATA_PRINTF(" * ");
       } else {
         if (select_stmt->is_select_straight_join()) { // straight_join
           DATA_PRINTF("straight_join ");
@@ -664,7 +510,7 @@ int ObSelectStmtPrinter::print_group_by()
       }
       // print rollup
       if (OB_SUCC(ret)) {
-        if (lib::is_mysql_mode() && rollup_exprs_size > 0) {
+        if (lib::is_mysql_mode() && !select_stmt->is_oracle_compat_groupby() && rollup_exprs_size > 0) {
           for (int64_t i = 0; OB_SUCC(ret) && i < rollup_exprs_size; ++i) {
             if (OB_FAIL(print_expr_except_const_number(rollup_exprs.at(i), T_GROUP_SCOPE))) {
               LOG_WARN("fail to print group expr", K(ret));
@@ -675,7 +521,7 @@ int ObSelectStmtPrinter::print_group_by()
             --*pos_;
           }
           DATA_PRINTF(" with rollup ");
-        } else if (lib::is_oracle_mode() && (rollup_size > 0 || rollup_exprs_size > 0)) {
+        } else if (rollup_size > 0 || rollup_exprs_size > 0) {
           if (OB_FAIL(print_rollup_items(rollup_items))) {
             LOG_WARN("failed to print rollup items", K(ret));
           } else if (rollup_exprs_size > 0) {
@@ -812,33 +658,42 @@ int ObSelectStmtPrinter::print_order_by()
       for (int64_t i = 0; OB_SUCC(ret) && i < order_item_size; ++i) {
         const OrderItem &order_item = select_stmt->get_order_item(i);
         ObRawExpr *order_expr = order_item.expr_;
-        int64_t sel_item_pos = -1;
+        int64_t sel_item_pos = 1;
+        bool found = false;
         if (OB_ISNULL(order_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
         } else if (T_FUN_SYS_CAST == order_expr->get_expr_type() &&
-                   CM_IS_IMPLICIT_CAST(order_expr->get_extra())) {
+                   CM_IS_IMPLICIT_CAST(order_expr->get_cast_mode())) {
           order_expr = order_expr->get_param_expr(0);
         }
-        for (int64_t j = 0; OB_SUCC(ret) && j < select_stmt->get_select_item_size(); ++j) {
-          ObRawExpr *select_expr = select_stmt->get_select_item(j).expr_;
+        for (int64_t j = 0; OB_SUCC(ret) && !found && j < select_stmt->get_select_item_size(); ++j) {
+          const SelectItem &select_item = select_stmt->get_select_item(j);
+          ObRawExpr *select_expr = select_item.expr_;
+          bool skip = false;
           if (OB_ISNULL(select_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null", K(ret));
+          } else if (select_item.is_implicit_added_ || select_item.implicit_filled_) {
+            skip = true;
           } else if (T_FUN_SYS_CAST == select_expr->get_expr_type() &&
-                     CM_IS_IMPLICIT_CAST(select_expr->get_extra())) {
+                     CM_IS_IMPLICIT_CAST(select_expr->get_cast_mode())) {
             select_expr = select_expr->get_param_expr(0);
           }
-          if (order_expr == select_expr) {
-            sel_item_pos = j + 1;
-            break;
+          if (OB_SUCC(ret)) {
+            if (skip) {
+            } else if (order_expr == select_expr) {
+              found = true;
+            } else {
+              sel_item_pos ++;
+            }
           }
         }
-        if (sel_item_pos != -1) {
+        if (found) {
           DATA_PRINTF(" %ld", sel_item_pos);
         } else {
           DATA_PRINTF(" ");
-          if (OB_FAIL(print_expr_except_const_number(order_item.expr_, T_ORDER_SCOPE))) {
+          if (FAILEDx(print_expr_except_const_number(order_item.expr_, T_ORDER_SCOPE))) {
             LOG_WARN("fail to print order by expr", K(ret));
           }
         }

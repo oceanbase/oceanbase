@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX LOGMNR
 
 #include "ob_log_miner_resource_collector.h"
-#include "ob_log_miner_recyclable_task.h"
-#include "ob_log_miner_br.h"
-#include "ob_log_miner_record.h"
 #include "ob_log_miner_batch_record.h"
 #include "ob_log_miner_data_manager.h"
 #include "ob_log_miner_logger.h"

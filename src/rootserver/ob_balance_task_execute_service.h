@@ -72,7 +72,7 @@ public:
   }
 private:
   int load_all_balance_task_();
-  int execute_task_();
+  int execute_task_(bool &task_need_process);
   int get_balance_job_task_for_update_(const share::ObBalanceTask &task,
       share::ObBalanceJob &job,  share::ObBalanceTask &task_in_trans,
       ObMySQLTransaction &trans);
@@ -91,6 +91,11 @@ private:
                                   const share::ObBalanceJob &job,
                                   ObMySQLTransaction &trans,
                                   bool &skip_next_status);
+  int suspend_current_task_(const share::ObBalanceTask &task,
+      const share::ObBalanceJob &job,
+      ObMySQLTransaction &trans);
+  int cancel_transfer_task_(const share::ObBalanceTask &task,
+      const share::ObBalanceJob &job, ObMySQLTransaction &trans, bool &skip_next_status);
   int cancel_other_init_task_(const share::ObBalanceTask &task, ObMySQLTransaction &trans);
   int process_init_task_(const share::ObBalanceTask &task, ObMySQLTransaction &trans,
       bool &skip_next_status);

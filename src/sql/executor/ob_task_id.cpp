@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_define.h"
-#include "lib/utility/serialization.h"
 #include "sql/executor/ob_task_id.h"
 
 using namespace oceanbase::common;

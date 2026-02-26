@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_rpc_intrusion_detect.h"
 #include "util/easy_mod_stat.h"
-#include "share/ob_i_server_auth.h"
 #include "lib/utility/utility.h"
 
 namespace oceanbase

@@ -11,12 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include <thread>
 #define private public
 #define protected public
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 #define USING_LOG_PREFIX TRANS
 #include "tx_node.h"
 #include "../mock_utils/async_util.h"
@@ -35,7 +31,7 @@ namespace share {
 
 ObTxDataThrottleGuard::~ObTxDataThrottleGuard() {}
 
-int ObTenantTxDataAllocator::init(const char *label)
+int ObTenantTxDataAllocator::init(const char *label, TxShareThrottleTool* throttle_tool)
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr;
@@ -312,7 +308,7 @@ TEST_F(ObTestTx, rollback_savepoint_with_uncertain_participants)
   ASSERT_EQ(0, tx.parts_.count());
 }
 
-TEST_F(ObTestTx, rollback_savepoint_with_need_retry_error)
+TEST_F(ObTestTx, rollback_savepoint_with_keep_tx)
 {
   START_ONE_TX_NODE(n1);
   PREPARE_TX(n1, tx);
@@ -323,7 +319,7 @@ TEST_F(ObTestTx, rollback_savepoint_with_need_retry_error)
     CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp);
     ASSERT_TRUE(sp.is_valid());
     ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 200));
-    ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr, OB_TRANSACTION_SET_VIOLATION));
+    ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr, ObTxCleanPolicy::KEEP));
     ASSERT_EQ(ObTxDesc::State::IMPLICIT_ACTIVE, tx.state_);
     ASSERT_EQ(ObTxSEQ::INVL(), tx.active_scn_);
     ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr));
@@ -333,7 +329,7 @@ TEST_F(ObTestTx, rollback_savepoint_with_need_retry_error)
     CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp);
     ASSERT_TRUE(sp.is_valid());
     ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 200));
-    ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr, OB_TRY_LOCK_ROW_CONFLICT));
+    ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr, ObTxCleanPolicy::KEEP));
     ASSERT_EQ(ObTxDesc::State::IMPLICIT_ACTIVE, tx.state_);
     ASSERT_EQ(ObTxSEQ::INVL(), tx.active_scn_);
     ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr));
@@ -2532,12 +2528,16 @@ int main(int argc, char **argv)
   uint64_t checksum2 = ob_crc64(c, (void*)&checksum, sizeof(uint64_t));
   int64_t tx_id = 21533427;
   uint64_t h = murmurhash(&tx_id, sizeof(tx_id), 0);
-  system("rm -rf test_tx.log*");
+  std::string log_file_name = "test_tx.log";
+  #ifdef TX_NODE_MEMTABLE_USE_HASH_INDEX_FLAG
+      log_file_name = "test_tx_no_hash_index.log";
+  #endif
+  system(std::string("rm -rf " + log_file_name + "*").c_str());
   ObLogger &logger = ObLogger::get_logger();
-  logger.set_file_name("test_tx.log", true, false,
-                       "test_tx.log", // rs
-                       "test_tx.log", // election
-                       "test_tx.log"); // audit
+  logger.set_file_name(log_file_name.c_str(), true, false,
+                       log_file_name.c_str(), // rs
+                       log_file_name.c_str(), // election
+                       log_file_name.c_str()); // audit
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   ::testing::InitGoogleTest(&argc, argv);
   TRANS_LOG(INFO, "mmhash:", K(h), K(checksum1), K(checksum2));

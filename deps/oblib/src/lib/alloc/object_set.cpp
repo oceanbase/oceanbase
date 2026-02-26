@@ -11,15 +11,9 @@
  */
 
 #include "object_set.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/alloc/ob_tenant_ctx_allocator.h"
-#include "lib/alloc/alloc_failed_reason.h"
-#include "lib/ob_abort.h"
-#include "lib/ob_define.h"
-#include "lib/utility/utility.h"
-#include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/rc/context.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/alloc/ob_malloc_time_monitor.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -55,7 +49,7 @@ AObject *ObjectSet::alloc_object(
     const uint64_t size, const ObMemAttr &attr)
 {
   const uint64_t adj_size = MAX(size, MIN_AOBJECT_SIZE);
-  const uint64_t meta_size = AOBJECT_META_SIZE + (attr.alloc_extra_info_ ? AOBJECT_EXTRA_INFO_SIZE : 0);
+  const uint64_t meta_size = AOBJECT_META_SIZE + attr.extra_size_;
   const uint64_t all_size = align_up2(adj_size + meta_size, 16);
 
   const int64_t ctx_id = blk_mgr_->get_ctx_id();
@@ -65,7 +59,11 @@ AObject *ObjectSet::alloc_object(
   }
 
   AObject *obj = NULL;
-  if (OB_UNLIKELY(size >= UINT32_MAX) || OB_UNLIKELY(0 == size)) {
+  if (OB_UNLIKELY((int64_t)size <= 0)) {
+    auto &afc = g_alloc_failed_ctx();
+    afc.reason_ = INVALID_ALLOC_SIZE;
+    afc.alloc_size_ = size;
+  } else if (OB_UNLIKELY(size >= UINT32_MAX)) {
     // not support
     auto &afc = g_alloc_failed_ctx();
     afc.reason_ = SINGLE_ALLOC_SIZE_OVERFLOW;
@@ -106,11 +104,12 @@ AObject *ObjectSet::realloc_object(
     abort_unless(obj->is_valid());
     uint64_t copy_size = MIN(obj->alloc_bytes_, size);
     new_obj = alloc_object(size, attr);
-    if (NULL != new_obj && copy_size != 0) {
-      memmove(new_obj->data_, obj->data_, copy_size);
+    if (NULL != new_obj) {
+      if (copy_size != 0) {
+        memmove(new_obj->data_, obj->data_, copy_size);
+      }
+      do_free_object(obj);
     }
-
-    do_free_object(obj);
   }
 
   return new_obj;
@@ -295,7 +294,7 @@ ABlock *ObjectSet::alloc_block(const uint64_t size, const ObMemAttr &attr)
     }
     block->obj_set_ = this;
     block->ablock_size_ = ablock_size_;
-    block->mem_context_ = reinterpret_cast<int64_t>(mem_context_);
+    block->is_malloc_v2_ = false;
   }
 
   return block;
@@ -452,6 +451,37 @@ void ObjectSet::do_free_dirty_list()
   }
 }
 
+bool ObjectSet::check_has_unfree(ABlock* block, char *first_label, char *first_bt)
+{
+  bool has_unfree = false;
+  AObject *obj = reinterpret_cast<AObject *>(block->data());
+  int64_t cells_per_block = AllocHelper::cells_per_block(block->ablock_size_);
+  while (true) {
+    bool tmp_has_unfree = obj->in_use_;
+    if (OB_UNLIKELY(tmp_has_unfree)) {
+      if ('\0' == first_label[0]) {
+        STRCPY(first_label, obj->label_);
+      }
+      if (obj->on_malloc_sample_ && '\0' == first_bt[0]) {
+        void *addrs[AOBJECT_BACKTRACE_COUNT];
+        MEMCPY((char*)addrs, obj->bt(), AOBJECT_BACKTRACE_SIZE);
+        IGNORE_RETURN parray(first_bt, MAX_BACKTRACE_LENGTH, (int64_t*)addrs, AOBJECT_BACKTRACE_COUNT);
+      }
+      if (!has_unfree) {
+        has_unfree = true;
+      }
+    }
+    // It will jump out directly if one case is found is_large indicates that
+    // the object occupies a block exclusively, and the effect is equivalent to is_last
+    if (has_unfree || obj->is_large_ || obj->is_last(cells_per_block)) {
+      break;
+    }
+    obj = obj->phy_next(obj->nobjs_);
+  }
+  return has_unfree;
+}
+
+
 bool ObjectSet::check_has_unfree(char *first_label, char *first_bt)
 {
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
@@ -469,29 +499,7 @@ bool ObjectSet::check_has_unfree(char *first_label, char *first_bt)
     // Check whether the objects of the block are all! in_use (object_set may cache an 8k block)
     do {
       if (block != free_list_block) {
-        AObject *obj = reinterpret_cast<AObject *>(block->data());
-        while (true) {
-          bool tmp_has_unfree = obj->in_use_;
-          if (OB_UNLIKELY(tmp_has_unfree)) {
-            if ('\0' == first_label[0]) {
-              STRCPY(first_label, obj->label_);
-            }
-            if (obj->on_malloc_sample_ && '\0' == first_bt[0]) {
-              void *addrs[AOBJECT_BACKTRACE_COUNT];
-              MEMCPY((char*)addrs, obj->bt(), AOBJECT_BACKTRACE_SIZE);
-              IGNORE_RETURN parray(first_bt, MAX_BACKTRACE_LENGTH, (int64_t*)addrs, AOBJECT_BACKTRACE_COUNT);
-            }
-            if (!has_unfree) {
-              has_unfree = true;
-            }
-          }
-          // It will jump out directly if one case is found is_large indicates that
-          // the object occupies a block exclusively, and the effect is equivalent to is_last
-          if (has_unfree || obj->is_large_ || obj->is_last(cells_per_block_)) {
-            break;
-          }
-          obj = obj->phy_next(obj->nobjs_);
-        }
+        has_unfree = check_has_unfree(block, first_label, first_bt);
         if (has_unfree) {
           break;
         }
@@ -551,6 +559,7 @@ bool ObjectSet::build_free_lists()
   ObMemAttr attr;
   attr.tenant_id_ = blk_mgr_->get_tenant_id();
   attr.ctx_id_ = blk_mgr_->get_ctx_id();
+  attr.numa_id_ = blk_mgr_->get_numa_id();
   attr.label_ = common::ObModIds::OB_OBJ_FREELISTS;
   ABlock *new_block = alloc_block(sizeof (FreeList) * (cells_per_block_ + 1) +
       sizeof (BitMap) + BitMap::buf_len(cells_per_block_ + 1), attr);
@@ -686,4 +695,245 @@ AObject *ObjectSet::merge_obj(AObject *obj)
   }
 
   return head;
+}
+
+void ObjectSetV2::do_cleanup()
+{
+  for (int i = 0; i < NORMAL_SC_CNT; ++i) {
+    // clean local_free
+    AObject *obj = NULL;
+    {
+      SizeClass &sc = scs[i];
+      sc.lock_.lock();
+      DEFER(sc.lock_.unlock());
+      obj = sc.local_free_;
+      sc.local_free_ = NULL;
+    }
+    if (NULL != obj) {
+      ABlock *block = obj->block();
+      while (obj != NULL) {
+        AObject *next = obj->next_;
+        do_free_object(obj, block);
+        obj = next;
+      }
+    }
+  }
+}
+
+bool ObjectSetV2::check_has_unfree(char *first_label, char *first_bt)
+{
+  SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
+  bool has_unfree = false;
+  for (int i = 0; i < ARRAYSIZEOF(scs) && !has_unfree; ++i) {
+    SizeClass &sc = scs[i];
+    sc.lock_.lock();
+    DEFER(sc.lock_.unlock());
+    ABlock *block = sc.avail_blist_;
+    if (NULL == block) {
+      block = sc.full_blist_;
+    }
+    if (NULL != block) {
+      has_unfree = true;
+      ObjectSet::check_has_unfree(block, first_label, first_bt);
+    }
+  }
+  return has_unfree;
+}
+
+
+void ObjectSetV2::reset()
+{
+  do_cleanup();
+  const static int buf_len = 512;
+  char buf[buf_len] = {'\0'};
+  char first_label[AOBJECT_LABEL_SIZE + 1] = {'\0'};
+  char first_bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+  bool has_unfree = check_has_unfree(first_label, first_bt);
+  if (has_unfree) {
+    snprintf(buf, buf_len, "label: %s, backtrace: %s", first_label, first_bt);
+    has_unfree_callback(buf);
+  }
+  for (int i = 0; i < ARRAYSIZEOF(scs); ++i) {
+    ABlock *block = NULL;
+    while (OB_NOT_NULL(block = scs[i].pop_avail())) {
+      free_block(block);
+    }
+    while (OB_NOT_NULL(block = scs[i].pop_full())) {
+      free_block(block);
+    }
+  }
+}
+
+ObjectSetV2::~ObjectSetV2()
+{
+  reset();
+}
+AObject *ObjectSetV2::alloc_object(const uint64_t size, const ObMemAttr &attr)
+{
+  AObject *obj = NULL;
+  const uint64_t all_size = size + AOBJECT_META_SIZE + attr.extra_size_;
+  if (OB_UNLIKELY(all_size >= ABLOCK_SIZE)) {
+    ABlock *block = alloc_block(all_size, attr);
+    if (NULL != block) {
+      obj = new (block->data()) AObject();
+      obj->is_large_ = true;
+      obj->block_ = block;
+      SizeClass &sc = scs[LARGE_SC_IDX];
+      sc.lock_.lock();
+      DEFER(sc.lock_.unlock());
+      sc.push_full(block);
+    }
+  } else {
+    const int sc_idx = calc_sc_idx(all_size);
+    DEBUG_ASSERT(sc_idx < NORMAL_SC_CNT);
+    const int bin_size = BIN_SIZE_MAP(sc_idx);
+    SizeClass &sc = scs[sc_idx];
+    sc.lock_.lock();
+    DEFER(sc.lock_.unlock());
+    AObject *&local_free = sc.local_free_;
+    if (OB_LIKELY(local_free != NULL)) {
+l_local:
+      obj = local_free;
+      local_free = obj->next_;
+    } else if (OB_LIKELY(sc.avail_blist_ != NULL)) {
+      int64_t freelist_cnt = 0;
+      ABlock *block = sc.pop_avail();
+      AObject *freelist = block->freelist_.popall(&freelist_cnt);
+      if (OB_LIKELY(freelist_cnt != block->max_cnt_)) {
+        local_free = freelist;
+        block->status_ = ABlock::FULL;
+        sc.push_full(block);
+        goto l_local;
+      } else {
+        block->freelist_.reset(freelist, freelist_cnt);
+        sc.push_avail(block);
+        goto l_new;
+      }
+    } else {
+l_new:
+      int64_t ablock_size = BLOCK_SIZE_MAP(sc_idx);
+      ABlock *block = alloc_block(ablock_size, attr);
+      if (OB_LIKELY(block != NULL)) {
+        block->sc_idx_ = sc_idx;
+        block->freelist_.reset();
+        block->max_cnt_ = ablock_size/bin_size;
+        char *data = block->data();
+        int32_t cls = bin_size/AOBJECT_CELL_BYTES;
+        AObject *freelist = NULL;
+        AObject *cur = NULL;
+        for (int i = 0; i < block->max_cnt_; i++) {
+          cur = new (data + bin_size * i) AObject();
+          cur->block_ = block;
+          cur->nobjs_ = cls;
+          cur->obj_offset_ = cls * i;
+          cur->next_ = freelist;
+          freelist = cur;
+        }
+        cur->nobjs_ = ablock_size/AOBJECT_CELL_BYTES - cur->obj_offset_;
+        block->status_ = ABlock::FULL;
+        sc.push_full(block);
+        local_free = freelist;
+        goto l_local;
+      }
+    }
+  }
+  if (obj) {
+    reinterpret_cast<uint64_t&>(obj->data_[size]) = AOBJECT_TAIL_MAGIC_CODE;
+    obj->alloc_bytes_ = size;
+    obj->in_use_ = true;
+  }
+  return obj;
+}
+
+void ObjectSetV2::free_object(AObject *obj, ABlock *block)
+{
+  do_free_object(obj, block);
+}
+
+void ObjectSetV2::do_free_object(AObject *obj, ABlock *block)
+{
+  obj->in_use_ = false;
+  obj->on_malloc_sample_ = false;
+  if (OB_UNLIKELY(obj->is_large_)) {
+    SizeClass &sc = scs[LARGE_SC_IDX];
+    sc.lock_.lock();
+    DEFER(sc.lock_.unlock());
+    sc.remove_full(block);
+    free_block(block);
+  } else {
+    int64_t max_cnt = block->max_cnt_;
+    int64_t freelist_cnt = block->freelist_.push(obj);
+    if (OB_LIKELY(1 != freelist_cnt && max_cnt != freelist_cnt)) {
+      return;
+    }
+    const int sc_idx = block->sc_idx_;
+    DEBUG_ASSERT(sc_idx < NORMAL_SC_CNT);
+    bool need_free = false;
+    {
+      SizeClass &sc = scs[sc_idx];
+      sc.lock_.lock();
+      DEFER(sc.lock_.unlock());
+      if (1 == freelist_cnt) {
+        if (ABlock::FULL == block->status_) {
+          block->status_ = ABlock::PARTITIAL;
+          sc.remove_full(block);
+          sc.push_avail(block);
+        } else if (ABlock::EMPTY == block->status_ ) {
+          need_free = true;
+        }
+      } else if (max_cnt == freelist_cnt) {
+        if (ABlock::FULL == block->status_) {
+          block->status_ = ABlock::EMPTY;
+          sc.remove_full(block);
+        } else if (ABlock::PARTITIAL == block->status_) {
+          block->status_ = ABlock::EMPTY;
+          sc.remove_avail(block);
+          need_free = true;
+        }
+      }
+    }
+    if (need_free) {
+      free_block(block);
+    }
+  }
+}
+
+ABlock *ObjectSetV2::alloc_block(const uint64_t size, const ObMemAttr &attr)
+{
+  if (OB_UNLIKELY(errsim_alloc(attr))) { return NULL; }
+  BASIC_TIME_GUARD(time_guard, "ALLOC_BLOCK");
+  DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, attr));
+  ABlock *block = blk_mgr_->alloc_block(size, attr);
+  if (OB_LIKELY(block != NULL)) {
+    block->obj_set_v2_ = this;
+    block->ablock_size_ = size;
+    block->is_malloc_v2_ = true;
+  }
+  return block;
+}
+
+void ObjectSetV2::free_block(ABlock *block)
+{
+  blk_mgr_->free_block(block);
+}
+
+AObject *ObjectSetV2::realloc_object(AObject *obj, const uint64_t size, const ObMemAttr &attr)
+{
+  AObject *new_obj = NULL;
+
+  if (NULL == obj) {
+    new_obj = alloc_object(size, attr);
+  } else {
+    abort_unless(obj->is_valid());
+    uint64_t copy_size = MIN(obj->alloc_bytes_, size);
+    new_obj = alloc_object(size, attr);
+    if (NULL != new_obj) {
+      if (copy_size != 0) {
+        memmove(new_obj->data_, obj->data_, copy_size);
+      }
+      do_free_object(obj, obj->block());
+    }
+  }
+
+  return new_obj;
 }

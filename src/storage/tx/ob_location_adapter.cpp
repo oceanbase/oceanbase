@@ -11,8 +11,6 @@
  */
 
 #include "ob_location_adapter.h"
-#include "share/location_cache/ob_location_service.h"
-#include "share/ls/ob_ls_status_operator.h"
 
 namespace oceanbase
 {

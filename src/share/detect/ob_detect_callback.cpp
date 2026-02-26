@@ -9,20 +9,20 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SHARE
 
-#include "share/detect/ob_detect_callback.h"
-#include "share/detect/ob_detect_manager.h"
-#include "sql/dtl/ob_dtl_basic_channel.h"
+#include "ob_detect_callback.h"
+#include "src/share/detect/ob_detect_rpc_proxy.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/dtl/ob_dtl_rpc_channel.h"
+#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase {
 namespace common {
-
-const int64_t DM_INTERRUPT_MSG_MAX_LENGTH = 128;
+DEFINE_ENUM_FUNC(DetectCallBackType, detect_callback_type, DETECT_CALLBACK_TYPE);
 
 ObIDetectCallback::ObIDetectCallback(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states)
-    : ref_count_(0), d_node_()
+    : ref_count_(0), sequence_id_(0), executed_(false), d_node_()
 {
   int ret = OB_SUCCESS;
   peer_states_.set_attr(ObMemAttr(tenant_id, "DmCbStArr"));
@@ -299,6 +299,35 @@ int ObP2PDataHubDetectCB::do_callback()
   ret = PX_P2P_DH.erase_msg_if(key_, msg, is_erased, false/* need unregister dm */);
   ret = ret == OB_HASH_NOT_EXIST ? OB_SUCCESS : ret;
   LIB_LOG(WARN, "[DM] p2p dh erase p2p msg", K(ret), K(key_), K_(trace_id), K(is_erased));
+  return ret;
+}
+
+int ObDASRemoteTaskDetectCB::do_callback()
+{
+  int ret = OB_SUCCESS;
+  ObInterruptCode int_code(OB_RPC_CONNECT_ERROR,
+                           GETTID(),
+                           from_svr_addr_,
+                           "Dm interrupt das task");
+  // In this function, we no longer clean up tcb resources here,
+  // because the result manager will be destroyed before the detect manager.
+  // In some abnormal cases, this may lead to access of invalid memory.
+  // Therefore, all tcb cleanup work is solely handled by the result manager and the GC thread.
+  if (OB_FAIL(ObGlobalInterruptManager::getInstance()->interrupt(tid_, int_code))) {
+    LIB_LOG(WARN, "[DM] fail to send interrupt message", K(int_code), K(tid_), K_(trace_id));
+  }
+  LIB_LOG(WARN, "[DM] interrupt das task and erase extra result", K(ret), K(tid_), K(key_), K(trace_id_));
+  return ret;
+}
+
+int ObRemoteSqlDetectCB::do_callback()
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
+  if (OB_NOT_NULL(session_mgr)) {
+    ret = session_mgr->kill_query(*session_);
+  }
+  LIB_LOG(WARN, "[DM] Remote Sql kill session", K(ret), K(session_->get_server_sid()), K_(trace_id));
   return ret;
 }
 

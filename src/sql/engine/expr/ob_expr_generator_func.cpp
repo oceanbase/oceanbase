@@ -81,6 +81,27 @@ int ObExprGeneratorFunc::eval_next_value(const ObExpr &expr,
   return ret;
 }
 
+int ObExprGeneratorFunc::reset_curr_value(const ObExpr &expr,
+                                          ObEvalCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObExprGeneratorFuncCtx *generator_ctx = NULL;
+  uint64_t op_id = expr.expr_ctx_id_;
+  ObExecContext &exec_ctx = ctx.exec_ctx_;
+  if (OB_ISNULL(generator_ctx = static_cast<ObExprGeneratorFuncCtx *>(
+              exec_ctx.get_expr_op_ctx(op_id)))) {
+    if (OB_FAIL(exec_ctx.create_expr_op_ctx(op_id, generator_ctx))) {
+      LOG_WARN("failed to create operator ctx", K(ret), K(op_id));
+    } else if (OB_ISNULL(generator_ctx)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("generator ctx is NULL", K(ret));
+    }
+  } else {
+    generator_ctx->curr_value_ = 0;
+  }
+  return ret;
+}
+
 int ObExprGeneratorFunc::cg_expr(ObExprCGCtx &expr_cg_ctx,
                              const ObRawExpr &raw_expr,
                              ObExpr &rt_expr) const

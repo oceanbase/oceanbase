@@ -12,9 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "common/ob_segmented_buffer.h"
-#include "lib/allocator/ob_mod_define.h"
 #include "lib/oblog/ob_log.h"
-#include "lib/ob_define.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;

@@ -11,8 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/ob_define.h"
-#include <sys/time.h>
 #include "lib/time/ob_time_utility.h"
 
 namespace oceanbase

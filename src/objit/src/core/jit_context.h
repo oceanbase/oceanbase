@@ -31,26 +31,27 @@ struct JitContext
 {
 public:
   explicit JitContext()
-      : Compile(false), TheContext(nullptr), TheJIT(nullptr)
-  {
-  }
+      : Compile(false),
+        TheContext(nullptr),
+        Builder(nullptr),
+        TheModule(nullptr),
+        TheFPM(nullptr)
+  { }
 
-  int InitializeModule(ObOrcJit &jit);
-  void compile();
+  int InitializeModule(const ObDataLayout &DL);
+  int compile(ObOrcJit &jit);
   int optimize();
 
   ObLLVMContext& get_context() { return *TheContext; }
   IRBuilder<>& get_builder() { return *Builder; }
   Module& get_module() { return *TheModule; }
-  ObOrcJit* get_jit() { return TheJIT; }
 
 public:
   bool Compile;
   
-  ObLLVMContext *TheContext;
+  std::unique_ptr<ObLLVMContext> TheContext;
   std::unique_ptr<IRBuilder<>> Builder;
   std::unique_ptr<Module> TheModule;
-  ObOrcJit *TheJIT;
   std::unique_ptr<legacy::FunctionPassManager> TheFPM;
 };
 

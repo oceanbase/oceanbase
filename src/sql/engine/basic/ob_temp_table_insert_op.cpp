@@ -13,13 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_temp_table_insert_op.h"
-#include "sql/engine/ob_operator_reg.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_dfo.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "share/detect/ob_detect_manager_utils.h"
 namespace oceanbase
@@ -120,6 +113,7 @@ int ObTempTableInsertOp::inner_close()
 
 void ObTempTableInsertOp::destroy()
 {
+  interm_result_ids_.reset();
   sql_mem_processor_.unregister_profile_if_necessary();
   destroy_mem_context();
   ObOperator::destroy();
@@ -268,7 +262,8 @@ int ObTempTableInsertOp::init_chunk_row_store(ObDTLIntermResultInfo *&chunk_row_
                                             MY_INPUT.qc_id_,
                                             MY_INPUT.dfo_id_,
                                             MY_INPUT.sqc_id_
-                                          )))) {
+                                          ),
+                                          ObDTLIntermResultInfo::StoreType::DATUM))) {
       LOG_WARN("failed to create row store.", K(ret));
     } else if (FALSE_IT(chunk_row_store = result_info_guard.result_info_)) {
     } else if (OB_FAIL(chunk_row_store->datum_store_->init(UINT64_MAX,

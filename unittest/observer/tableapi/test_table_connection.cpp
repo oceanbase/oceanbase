@@ -9,12 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
 #include "observer/table/ob_table_connection_mgr.h"
-#include "lib/time/ob_time_utility.h"
-#include "rpc/ob_request.h"
 #include "rpc/frame/ob_net_easy.cpp"
 #include "share/ob_thread_pool.h"
 #include "lib/container/ob_array.h"
@@ -127,7 +124,7 @@ TEST_F(TestTableConnection, test_table_connection)
   int64_t first_active_time = conn.get_first_active_time();
   ASSERT_EQ(first_active_time, conn.get_last_active_time());
   int64_t new_active_time = ObTimeUtility::current_time();
-  conn.update_last_active_time(new_active_time);
+  conn.set_last_active_time(new_active_time);
   ASSERT_EQ(first_active_time, conn.get_first_active_time());
   ASSERT_EQ(new_active_time, conn.get_last_active_time());
 

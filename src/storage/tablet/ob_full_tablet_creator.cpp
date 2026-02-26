@@ -10,12 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tablet/ob_full_tablet_creator.h"
-#include "storage/tablet/ob_tablet_persister.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "ob_full_tablet_creator.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -111,7 +107,7 @@ int ObFullTabletCreator::throttle_tablet_creation()
       break;
     } else {
       need_wait = true;
-      if (REACH_TENANT_TIME_INTERVAL(log_timeout)) {
+      if (REACH_THREAD_TIME_INTERVAL(log_timeout)) {
         const int64_t wait_create_tablets_cnt = ATOMIC_LOAD(&wait_create_tablets_cnt_);
         LOG_WARN("prepare create tablet timeout",
             K_(created_tablets_cnt), K(wait_create_tablets_cnt), K(limit_size),
@@ -124,10 +120,9 @@ int ObFullTabletCreator::throttle_tablet_creation()
   return ret;
 }
 
-int ObFullTabletCreator::create_tablet(ObTabletHandle &tablet_handle)
+int ObFullTabletCreator::create_tablet(ObTablet *&tablet)
 {
   int ret = OB_SUCCESS;
-  ObTablet *tablet = nullptr;
   ObArenaAllocator *allocator = nullptr;
   ObMetaDiskAddr mem_addr;
   const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE;
@@ -149,11 +144,7 @@ int ObFullTabletCreator::create_tablet(ObTabletHandle &tablet_handle)
     tablet->set_tablet_addr(mem_addr);
     ATOMIC_INC(&created_tablets_cnt_);
   }
-  if (OB_SUCC(ret)) {
-    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
-    tablet_handle.set_obj(tablet, allocator, t3m);
-    tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
-  } else {
+  if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(tablet)) {
       tablet->~ObTablet();
       tablet = nullptr;

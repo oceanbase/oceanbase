@@ -10,17 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/utility/ob_macro_utils.h"
+#include "storage/ob_storage_leak_checker.h"
 #define USING_LOG_PREFIX COMMON
 
 #include "share/cache/ob_kv_storecache.h"
-#include "share/ob_tenant_mgr.h"
 #include "share/ob_task_define.h"
-#include "lib/stat/ob_latch_define.h"
-#include "lib/trace/ob_trace_event.h"
-#include "lib/alloc/alloc_func.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "share/ob_debug_sync.h"             // DEBUG_SYNC
-#include "share/ob_debug_sync_point.h"
 #include "share/ob_thread_mgr.h"
 #include "share/config/ob_server_config.h"
 
@@ -29,55 +25,58 @@ namespace oceanbase
 using namespace lib;
 namespace common
 {
+
+ERRSIM_POINT_DEF(ERRSIM_CACHE_HANDLE_TRACE);
+
 ObKVCacheHandle::ObKVCacheHandle()
-  : mb_handle_(NULL)
+  : hazptr_holder_()
 {
 }
 
 ObKVCacheHandle::~ObKVCacheHandle()
 {
   reset();
+  hazptr_holder_.reset();
 }
 
-ObKVCacheHandle::ObKVCacheHandle(const ObKVCacheHandle &other)
-  : mb_handle_(NULL)
-{
-  *this = other;
-}
-
-ObKVCacheHandle &ObKVCacheHandle::operator =(const ObKVCacheHandle &other)
+void ObKVCacheHandle::move_from(ObKVCacheHandle &other)
 {
   if (&other != this) {
     int ret = OB_SUCCESS;
-    if (NULL != mb_handle_) {
-#ifdef ENABLE_DEBUG_LOG
-      storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::ALL_CACHE);
-#endif
-      ObKVGlobalCache::get_instance().revert(mb_handle_);
-    }
-    mb_handle_ = other.mb_handle_;
-    if (NULL != mb_handle_) {
-      if (OB_FAIL(mb_handle_->handle_ref_.check_and_inc_ref_cnt())) {
-        //should not happen
-        COMMON_LOG(ERROR, "Fail to add handle ref, ", K(ret));
-      }
-#ifdef ENABLE_DEBUG_LOG
-      storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::ALL_CACHE);
-#endif
+    reset();
+    if (OB_UNLIKELY(other.is_traced())) {
+      storage::ObStorageLeakChecker::get_instance().handle_reset(&other);
+      hazptr_holder_.move_from(other.hazptr_holder_);
+      storage::ObStorageLeakChecker::get_instance().handle_hold(this, true);
+    } else {
+      hazptr_holder_.move_from(other.hazptr_holder_);
     }
   }
-  return *this;
+}
+
+int ObKVCacheHandle::assign(const ObKVCacheHandle& other)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_FAIL(this->hazptr_holder_.assign(other.hazptr_holder_))) {
+    COMMON_LOG(WARN, "Fail to assign hazptr_holder, ", K(ret));
+  } else {
+    storage::ObStorageLeakChecker::get_instance().handle_hold(this);
+  }
+  return ret;
 }
 
 void ObKVCacheHandle::reset()
 {
-  if (NULL != mb_handle_) {
-#ifdef ENABLE_DEBUG_LOG
-   storage:: ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::ALL_CACHE);
-#endif
-    ObKVGlobalCache::get_instance().revert(mb_handle_);
-    mb_handle_ = NULL;
+  if (hazptr_holder_.is_valid()) {
+    storage::ObStorageLeakChecker::get_instance().handle_reset(this);
+    hazptr_holder_.release();
   }
+}
+
+bool ObKVCacheHandle::need_trace() const
+{
+  return is_valid() && OB_SUCCESS != ERRSIM_CACHE_HANDLE_TRACE;
 }
 
 
@@ -125,7 +124,6 @@ void ObKVCacheIterator::reset()
 /*
  * -------------------------------------------------------ObKVGlobalCache---------------------------------------------------------------
  */
-const double ObKVGlobalCache::MAX_RESERVED_MEMORY_RATIO = 0.3;
 //TODO bucket num level map should be system parameter
 const int64_t ObKVGlobalCache::bucket_num_array_[MAX_BUCKET_NUM_LEVEL] =
     {
@@ -209,6 +207,8 @@ int ObKVGlobalCache::init(
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument, ", K(ret), K(mem_limit_getter),
                K(bucket_num), K(max_cache_size), K(block_size), K(cache_wash_interval));
+  } else if (OB_FAIL(hazard_domain_.init(ObKVCacheStore::compute_mb_handle_num(max_cache_size, block_size)))) {
+    COMMON_LOG(WARN, "Fail to init hazard domain, ", K(ret));
   } else if (OB_FAIL(store_.init(insts_,
                                  max_cache_size,
                                  block_size,
@@ -237,12 +237,10 @@ int ObKVGlobalCache::init(
     }
     map_once_replace_num_ = min(MAX_MAP_ONCE_REPLACE_NUM, bucket_num / MAP_ONCE_REPLACE_RATIO);
     inited_ = true;
-#ifdef ENABLE_DEBUG_LOG
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(set_storage_leak_check_mod(GCONF._storage_leak_check_mod.str()))) {
       COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to set check cache name", K(tmp_ret));
     }
-#endif
   }
 
   if (OB_UNLIKELY(!inited_)) {
@@ -280,9 +278,9 @@ void ObKVGlobalCache::destroy()
     // cache in wash thread.
     stop();
     wait();
-    ws_mgr_.destroy();
     map_.destroy();
     store_.destroy();
+    hazard_domain_.reset_retire_list();
     insts_.destroy();
     for (int64_t i = 0; i < MAX_CACHE_NUM; ++i) {
       configs_[i].reset();
@@ -300,44 +298,19 @@ int ObKVGlobalCache::put(
   const ObIKVCacheKey &key,
   const ObIKVCacheValue &value,
   const ObIKVCacheValue *&pvalue,
-  ObKVMemBlockHandle *&mb_handle,
+  HazptrHolder &hazptr_holder,
   bool overwrite)
 {
-  return put(store_, cache_id, key, value, pvalue, mb_handle, overwrite);
+  return put(store_, cache_id, key, value, pvalue, hazptr_holder, overwrite);
 }
 
 int ObKVGlobalCache::put(
-  ObWorkingSet *working_set,
-  const ObIKVCacheKey &key,
-  const ObIKVCacheValue &value,
-  const ObIKVCacheValue *&pvalue,
-  ObKVMemBlockHandle *&mb_handle,
-  bool overwrite)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (NULL == working_set) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(working_set));
-  } else {
-    const int64_t cache_id = working_set->get_cache_id();
-    if (OB_FAIL(put(*working_set, cache_id, key, value, pvalue, mb_handle, overwrite))) {
-      LOG_WARN("put failed", K(ret), K(cache_id));
-    }
-  }
-  return ret;
-}
-
-template<typename MBWrapper>
-int ObKVGlobalCache::put(
-    ObIKVCacheStore<MBWrapper> &store,
+    ObIKVCacheStore &store,
     const int64_t cache_id,
     const ObIKVCacheKey &key,
     const ObIKVCacheValue &value,
     const ObIKVCacheValue *&pvalue,
-    ObKVMemBlockHandle *&mb_handle,
+    HazptrHolder &hazptr_holder,
     bool overwrite)
 {
   int ret = OB_SUCCESS;
@@ -345,27 +318,34 @@ int ObKVGlobalCache::put(
   ObKVCacheInstHandle inst_handle;
   ObKVCachePair *kvpair = NULL;
   pvalue = NULL;
-  mb_handle = NULL;
-  MBWrapper *mb_wrapper = NULL;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited, ", K(ret));
   } else if (OB_UNLIKELY(!inst_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "The tenant_id is too large, ", K(inst_key), K(ret));
+    COMMON_LOG(WARN, "invalid inst_key", K(inst_key), K(ret));
   } else if (OB_FAIL(insts_.get_cache_inst(inst_key, inst_handle))) {
     COMMON_LOG(WARN, "Fail to get cache inst, ", K(ret));
   } else if (NULL == inst_handle.get_inst()) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "The inst is NULL, ", K(ret));
-  } else if (!overwrite && (OB_SUCC(map_.get(cache_id, key, pvalue, mb_handle)))) {
-    ret = OB_ENTRY_EXIST;
-  } else if (OB_FAIL(store.store(*inst_handle.get_inst(), key, value, kvpair, mb_wrapper))) {
+  } else if (!overwrite) {
+    if (OB_FAIL(map_.get(cache_id, key, pvalue, hazptr_holder))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        COMMON_LOG(WARN, "KVCacheMap::get failed", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else {
+      ret = OB_ENTRY_EXIST;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(store.store(*inst_handle.get_inst(), key, value, kvpair, hazptr_holder))) {
     COMMON_LOG(WARN, "Fail to store kvpair to store, ", K(ret));
   } else {
-    mb_handle = mb_wrapper->get_mb_handle();
     pvalue = kvpair->value_;
-    if (OB_FAIL(map_.put(*inst_handle.get_inst(), key, kvpair, mb_handle, overwrite))) {
+    if (OB_FAIL(map_.put(*inst_handle.get_inst(), key, kvpair, hazptr_holder, overwrite))) {
       if (OB_ENTRY_EXIST != ret) {
         COMMON_LOG(WARN, "Fail to put kvpair to map, ", K(ret));
       }
@@ -374,8 +354,7 @@ int ObKVGlobalCache::put(
 
   if (OB_FAIL(ret)) {
     if (OB_ENTRY_EXIST != ret) {
-      revert(mb_handle);
-      mb_handle = NULL;
+      revert(hazptr_holder);
       pvalue = NULL;
     }
   }
@@ -389,62 +368,38 @@ int ObKVGlobalCache::alloc(
     const int64_t key_size,
     const int64_t value_size,
     ObKVCachePair *&kvpair,
-    ObKVMemBlockHandle *&mb_handle,
+    HazptrHolder &hazptr_holder,
     ObKVCacheInstHandle &inst_handle)
 {
-  return alloc(store_, cache_id, tenant_id, key_size, value_size, kvpair, mb_handle, inst_handle);
+  return alloc(store_, cache_id, tenant_id, key_size, value_size, kvpair, hazptr_holder, inst_handle);
 }
 
 int ObKVGlobalCache::alloc(
-    ObWorkingSet *working_set,
-    const uint64_t tenant_id,
-    const int64_t key_size,
-    const int64_t value_size,
-    ObKVCachePair *&kvpair,
-    ObKVMemBlockHandle *&mb_handle,
-    ObKVCacheInstHandle &inst_handle)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(working_set)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arguemnt", K(ret), KP(working_set));
-  } else if (OB_FAIL(alloc(*working_set, working_set->get_cache_id(), tenant_id,
-          key_size, value_size, kvpair, mb_handle, inst_handle))) {
-    COMMON_LOG(WARN, "failed to alloc kvpair", K(ret));
-  }
-  return ret;
-}
-
-template <typename MBWrapper>
-int ObKVGlobalCache::alloc(
-    ObIKVCacheStore<MBWrapper> &store,
+    ObIKVCacheStore &store,
     const int64_t cache_id,
     const uint64_t tenant_id,
     const int64_t key_size,
     const int64_t value_size,
     ObKVCachePair *&kvpair,
-    ObKVMemBlockHandle *&mb_handle,
+    HazptrHolder &hazptr_holder,
     ObKVCacheInstHandle &inst_handle)
 {
   int ret = OB_SUCCESS;
   ObKVCacheInstKey inst_key(cache_id, tenant_id);
-  MBWrapper *mb_wrapper = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVCache has not been inited, ", K(ret));
-  } else if (nullptr != mb_handle) {
+  } else if (hazptr_holder.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(WARN, "Cannot overwrite valid mb_handle", K(ret), KP(mb_handle));
+    COMMON_LOG(WARN, "Cannot overwrite valid hazptr_holder", K(ret), K(hazptr_holder));
   } else if (OB_FAIL(insts_.get_cache_inst(inst_key, inst_handle))) {
     COMMON_LOG(WARN, "Fail to get cache inst, ", K(ret));
   } else if (OB_ISNULL(inst_handle.get_inst())) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "The inst is NULL, ", K(ret));
   } else if (OB_FAIL(store.alloc_kvpair(*inst_handle.get_inst(),
-          key_size, value_size, kvpair, mb_wrapper))) {
+          key_size, value_size, kvpair, hazptr_holder))) {
     COMMON_LOG(WARN, "Fail to store kvpair, ", K(ret));
-  } else {
-    mb_handle = mb_wrapper->get_mb_handle();
   }
   return ret;
 }
@@ -453,14 +408,14 @@ int ObKVGlobalCache::get(
   const int64_t cache_id,
   const ObIKVCacheKey &key,
   const ObIKVCacheValue *&pvalue,
-  ObKVMemBlockHandle *&mb_handle)
+  HazptrHolder &hazptr_holder)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited, ", K(ret));
-  } else if (FALSE_IT(revert(mb_handle))) {
-  } else if (OB_FAIL(map_.get(cache_id, key, pvalue, mb_handle))) {
+  } else if (FALSE_IT(revert(hazptr_holder))) {
+  } else if (OB_FAIL(map_.get(cache_id, key, pvalue, hazptr_holder))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       COMMON_LOG(WARN, "fail to get value from map, ", K(ret));
     }
@@ -475,7 +430,12 @@ int ObKVGlobalCache::erase(const int64_t cache_id, const ObIKVCacheKey &key)
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited, ", K(ret));
   } else if (OB_FAIL(map_.erase(cache_id, key))) {
-    COMMON_LOG(WARN, "Fail to erase key from cache, ", K(cache_id), K(ret));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      COMMON_LOG(WARN, "Fail to erase key from cache, ", K(cache_id), K(ret));
+    } else {
+      // has been erased via wash()
+      ret = OB_SUCCESS;
+    }
   }
   return ret;
 }
@@ -487,8 +447,9 @@ int ObKVGlobalCache::erase_cache()
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVCacheMap has not been inited, ", K(ret));
   } else {
-    store_.flush_washable_mbs();
-    if (OB_FAIL(map_.erase_all())) {
+    if (OB_FAIL(store_.flush_washable_mbs())) {
+      COMMON_LOG(WARN, "failed to flush washable mbs");
+    } else if (OB_FAIL(map_.erase_all())) {
       COMMON_LOG(WARN, "fail to erase cache, ", K(ret));
     }
   }
@@ -502,8 +463,9 @@ int ObKVGlobalCache::erase_cache(const uint64_t tenant_id)
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVCacheMap has not been inited, ", K(ret));
   } else {
-    store_.flush_washable_mbs(tenant_id);
-    if (OB_FAIL(map_.erase_tenant(tenant_id))) {
+    if (OB_FAIL(store_.flush_washable_mbs(tenant_id))) {
+      COMMON_LOG(WARN, "failed to flush washable mbs", K(tenant_id));
+    } else if (OB_FAIL(map_.erase_tenant(tenant_id))) {
       COMMON_LOG(WARN, "fail to erase cache, ", K(ret), K(tenant_id));
     }
   }
@@ -661,44 +623,6 @@ void ObKVGlobalCache::deregister_cache(const int64_t cache_id)
   }
 }
 
-int ObKVGlobalCache::create_working_set(const ObKVCacheInstKey &inst_key, ObWorkingSet *&working_set)
-{
-  int ret = OB_SUCCESS;
-  int64_t lower_limit = 0;
-  int64_t upper_limit = 0;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (!inst_key.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(inst_key));
-  } else if (OB_FAIL(mem_limit_getter_->get_tenant_mem_limit(
-      inst_key.tenant_id_, lower_limit, upper_limit))) {
-    LOG_WARN("get_tenant_mem_limit failed", K(ret), K(inst_key));
-  } else {
-    const int64_t limit = upper_limit * WORKING_SET_LIMIT_PERCENTAGE / 100;
-    if (OB_FAIL(ws_mgr_.create_working_set(inst_key, limit, working_set))) {
-      LOG_WARN("create_working_set failed", K(ret), K(inst_key), K(limit));
-    }
-  }
-  return ret;
-}
-
-int ObKVGlobalCache::delete_working_set(ObWorkingSet *working_set)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (NULL == working_set) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(working_set));
-  } else if (OB_FAIL(ws_mgr_.delete_working_set(working_set))) {
-    LOG_WARN("delete_working_set failed", K(ret));
-  }
-  return ret;
-}
-
 int ObKVGlobalCache::set_priority(const int64_t cache_id, const int64_t priority)
 {
   int ret = OB_SUCCESS;
@@ -737,6 +661,8 @@ int ObKVGlobalCache::set_mem_limit_pct(const int64_t cache_id, const int64_t mem
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_FLUSH_KVCACHE, "flush kvcache every ERROR_CODE s");
+
 void ObKVGlobalCache::wash()
 {
   if (OB_LIKELY(inited_ && !stopped_)) {
@@ -745,6 +671,10 @@ void ObKVGlobalCache::wash()
     if (store_.wash() || (++wash_count >= MAP_WASH_CLEAN_INTERNAL)) {
       map_.clean_garbage_node(map_clean_pos_, map_once_clean_num_);
       wash_count = 0;
+    }
+    int sec = -ERRSIM_FLUSH_KVCACHE;
+    if (sec != 0 && REACH_TIME_INTERVAL(sec * 1000000)) {
+      store_.flush_washable_mbs();
     }
   }
 }
@@ -767,10 +697,11 @@ void ObKVGlobalCache::replace_map()
   }
 }
 
-void ObKVGlobalCache::revert(ObKVMemBlockHandle *mb_handle)
+void ObKVGlobalCache::revert(HazptrHolder& hazptr_holder)
 {
+  ObKVMemBlockHandle* mb_handle = hazptr_holder.get_mb_handle();
   if (inited_ && NULL != mb_handle) {
-    store_.de_handle_ref(mb_handle);
+    hazptr_holder.release();
   }
 }
 
@@ -798,6 +729,10 @@ void ObKVGlobalCache::reload_priority()
         priority = common::ObServerConfig::get_instance().fuse_row_cache_priority;
       } else if (0 == STRNCMP(configs_[i].cache_name_, "bf_cache", MAX_CACHE_NAME_LENGTH)) {
         priority = common::ObServerConfig::get_instance().bf_cache_priority;
+      } else if (0 == STRNCMP(configs_[i].cache_name_, "opt_external_table_stat_cache", MAX_CACHE_NAME_LENGTH)) {
+        priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
+      } else if (0 == STRNCMP(configs_[i].cache_name_, "opt_external_column_stat_cache", MAX_CACHE_NAME_LENGTH)) {
+        priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
       } else {
         priority = 0;
       }
@@ -936,39 +871,8 @@ int ObKVGlobalCache::sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_
 
 int ObKVGlobalCache::set_storage_leak_check_mod(const char *check_mod)
 {
-  int ret = OB_SUCCESS;
-  int64_t cache_id = INVALID_CACHE_ID;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] The ObKVGlobalCache has not been inited", K(ret));
-  } else if (OB_UNLIKELY(nullptr == check_mod)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] Invalid argument", K(ret), KP(check_mod));
-  } else {
-    if (0 == STRNCMP(check_mod, storage::ObStorageLeakChecker::IO_HANDLE_CHECKER_NAME, MAX_CACHE_NAME_LENGTH)) {
-      cache_id = storage::ObStorageCheckID::IO_HANDLE;
-    } else if (0 == STRNCMP(check_mod, storage::ObStorageLeakChecker::ITER_CHECKER_NAME, MAX_CACHE_NAME_LENGTH)) {
-      cache_id = storage::ObStorageCheckID::STORAGE_ITER;
-    } else if (0 == STRNCMP(check_mod, storage::ObStorageLeakChecker::ALL_CACHE_NAME, MAX_CACHE_NAME_LENGTH)) {
-      cache_id = storage::ObStorageCheckID::ALL_CACHE;
-    } else {
-      lib::ObMutexGuard guard(mutex_);
-      for (int64_t i = 0 ; OB_SUCC(ret) && i < cache_num_ ; ++i) {
-        if (configs_[i].is_valid_) {
-          if (0 == STRNCMP(check_mod, configs_[i].cache_name_, MAX_CACHE_NAME_LENGTH)) {
-            cache_id = i;
-            break;
-          }
-        }
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(storage::ObStorageLeakChecker::get_instance().set_check_id( cache_id))) {
-      COMMON_LOG(WARN, "Fail to set cache handle checker cache id", K(ret), K(cache_id));
-    }
-    COMMON_LOG(INFO, "[STORAGE-CHECKER] set checker type details", K(ret), K(cache_id), K(check_mod));
-  }
-  return ret;
+  storage::ObStorageLeakChecker::get_instance().reset();
+  return OB_SUCCESS;
 }
 
 void ObKVGlobalCache::print_all_cache_info()
@@ -978,6 +882,7 @@ void ObKVGlobalCache::print_all_cache_info()
   } else {
     insts_.print_all_cache_info();
     map_.print_hazard_version_info();
+    HazardDomain::get_instance().print_info();
   }
 }
 
@@ -991,7 +896,7 @@ int ObKVGlobalCache::get_cache_inst_info(const uint64_t tenant_id, ObIArray<ObKV
   } else if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id));
-  } else if (OB_FAIL(insts_.get_cache_info(tenant_id, inst_handles))) {
+  } else if (OB_FAIL(insts_.get_cache_info(inst_handles, &tenant_id))) {
     COMMON_LOG(WARN, "Fail to get all cache info", K(ret));
   }
 
@@ -1057,6 +962,14 @@ int ObKVGlobalCache::get_cache_name(const int64_t cache_id, char *cache_name)
   return ret;
 }
 
+int64_t ObKVGlobalCache::get_block_size() const
+{
+  int64_t block_size = 0;
+  if (inited_) {
+    block_size = store_.get_block_size();
+  }
+  return block_size;
+}
 
 } // namespace common
 } // namespace oceanbase

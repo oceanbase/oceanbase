@@ -1,3 +1,6 @@
+// owner: muwei.ym
+// owner group: storage_ha
+
 /**
  * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -9,7 +12,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define USING_LOG_PREFIX SHARE
@@ -17,14 +19,8 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "share/transfer/ob_transfer_task_operator.h" // ObTransferTaskOperator
-#include "storage/high_availability/ob_transfer_handler.h"  //ObTransferHandler
-#include "lib/utility/utility.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
@@ -108,14 +104,15 @@ int TestTransferHandler::gen_mock_data(const ObTransferTaskID task_id, const ObT
   share::SCN start_scn;
   share::SCN finish_scn;
   ObTableLockOwnerID owner_id;
-  owner_id.convert_from_value(999);
+  owner_id.convert_from_value(static_cast<ObLockOwnerType>(0), 999);
   start_scn.convert_for_inner_table_field(1666844202200632);
   finish_scn.convert_for_inner_table_field(1666844202208490);
   ObCurTraceId::TraceId trace_id;
   trace_id.init(GCONF.self_addr_);
+  uint64_t data_version = 0;
   ret = task.init(task_id, src_ls, dest_ls, ObString::make_string("500016:500014"), ObString("500030:500031"), ObString("500016:500015"),
       ObString::make_string("1152921504606846983"), ObString::make_string("1152921504606846983:0"), start_scn, finish_scn, status, trace_id, OB_SUCCESS,
-      ObTransferTaskComment::EMPTY_COMMENT, ObBalanceTaskID(123), owner_id);
+      ObTransferTaskComment::EMPTY_COMMENT, ObBalanceTaskID(123), owner_id, data_version);
   return ret;
 }
 

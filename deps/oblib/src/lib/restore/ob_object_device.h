@@ -47,7 +47,7 @@ there are two read mode, but alse use pread interface(only provide pread interfa
 class ObObjectDevice : public common::ObIODevice
 {
 public:
-  ObObjectDevice();
+  ObObjectDevice(const bool is_local_disk = false);
   virtual ~ObObjectDevice();
  
   /*the interface need override*/
@@ -62,11 +62,13 @@ public:
   virtual int close(const ObIOFd &fd) override;
   virtual int mkdir(const char *pathname, mode_t mode) override;
   virtual int rmdir(const char *pathname) override;
-  // When attempting to delete a non-existent file, NFS will return an OB_BACKUP_FILE_NOT_EXIST error.
+  // When attempting to delete a non-existent file, NFS will return an OB_OBJECT_NOT_EXIST error.
   // OSS/COS/S3/OBS will not report any error, while GCS will return a 'file not found' error.
   // Since GCS is accessed using the S3 SDK, to maintain consistency across different object storage services
   // that are accessed via the S3 SDK, no error code is returned when attempting to delete a non-existent object.
   virtual int unlink(const char *pathname) override;
+  virtual int batch_del_files(
+      const ObIArray<ObString> &files_to_delete, ObIArray<int64_t> &failed_files_idx) override;
   virtual int exist(const char *pathname, bool &is_exist) override;
   //sync io interfaces
   virtual int pread(const ObIOFd &fd, const int64_t offset, const int64_t size,
@@ -86,25 +88,58 @@ public:
   int adaptive_unlink(const char *pathname);
   int adaptive_scan_dir(const char *dir_name, ObBaseDirEntryOperator &op);
 
+  virtual int upload_part(
+      const ObIOFd &fd,
+      const char *buf,
+      const int64_t size,
+      const int64_t part_id,
+      int64_t &write_size) override;
+  virtual int buf_append_part(
+      const ObIOFd &fd,
+      const char *buf,
+      const int64_t size,
+      const uint64_t tenant_id,
+      bool &is_full) override;
+  virtual int get_part_id(const ObIOFd &fd, bool &is_exist, int64_t &part_id) override;
+  virtual int get_part_size(const ObIOFd &fd, const int64_t part_id, int64_t &part_size) override;
+
+  void set_storage_id_mod(const ObStorageIdMod &storage_id_mod);
+  const ObStorageIdMod &get_storage_id_mod() const;
+  int release_fd(const ObIOFd &fd);
+  // Add new : setup storage info
+  virtual int setup_storage_info(const ObIODOpts &opts);
+  virtual common::ObObjectStorageInfo &get_storage_info() { return storage_info_; }
+
+  virtual int64_t get_io_aligned_size() const override { return 1; }
+
+  virtual bool should_limit_net_bandwidth() const override { return !is_local_disk_; }
+
+  // only object storage have file content digest
+  int get_file_content_digest(
+      const char *pathname, char *digest_buf, const int64_t digest_buf_len);
+
 public:
   common::ObFdSimulator& get_fd_mng() {return fd_mng_;}                 
 
-private:
+protected:
   int get_access_type(ObIODOpts *opts, ObStorageAccessType& access_type);
-  int open_for_reader(const char *pathname, void*& ctx);
+  // The nohead_reader does not perform a head operation to obtain the file length when opened,
+  // hence the caller must ensure the validity of the read range during pread operations.
+  int open_for_reader(const char *pathname, void *&ctx, const bool head_meta = true);
   int open_for_adaptive_reader_(const char *pathname, void *&ctx);
   int open_for_overwriter(const char *pathname, void*& ctx);
   int open_for_appender(const char *pathname, ObIODOpts *opts, void*& ctx);
   int open_for_multipart_writer_(const char *pathname, void *&ctx);
+  int open_for_parallel_multipart_writer_(const char *pathname, void *&ctx);
+  int open_for_buffered_multipart_writer_(const char *pathname, void *&ctx);
   int release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType access_type);
-
   int inner_exist_(const char *pathname, bool &is_exist, const bool is_adaptive = false);
   int inner_stat_(const char *pathname, ObIODFileStat &statbuf, const bool is_adaptive = false);
   int inner_unlink_(const char *pathname, const bool is_adaptive = false);
   int inner_scan_dir_(const char *dir_name,
       ObBaseDirEntryOperator &op, const bool is_adaptive = false);
 
-private:
+protected:
   //maybe fd mng can be device level
   common::ObFdSimulator    fd_mng_;
   
@@ -115,12 +150,15 @@ private:
   common::ObPooledAllocator<ObStorageAppender, ObMalloc, ObSpinLock> appender_ctx_pool_;
   common::ObPooledAllocator<ObStorageWriter, ObMalloc, ObSpinLock> overwriter_ctx_pool_;
   common::ObPooledAllocator<ObStorageMultiPartWriter, ObMalloc, ObSpinLock> multipart_writer_ctx_pool_;
+  common::ObPooledAllocator<ObStorageDirectMultiPartWriter, ObMalloc, ObSpinLock> direct_multiwriter_ctx_pool_;
+  common::ObPooledAllocator<ObStorageBufferedMultiPartWriter, ObMalloc, ObSpinLock> buffered_multiwriter_ctx_pool_;
   common::ObObjectStorageInfo storage_info_;
   bool is_started_;
   char storage_info_str_[OB_MAX_URI_LENGTH];
   common::ObSpinLock lock_;
+  ObStorageIdMod storage_id_mod_;
 
-private:
+protected:
   /*Object device will not use this interface, just return not support error code*/
   virtual int reconfig(const ObIODOpts &opts) override;
   virtual int rename(const char *oldpath, const char *newpath) override;
@@ -183,7 +221,7 @@ private:
     int64_t min_nr,
     ObIOEvents *events,
     struct timespec *timeout) override;
-  virtual ObIOCB *alloc_iocb() override;
+  virtual ObIOCB *alloc_iocb(const uint64_t tenant_id) override;
   virtual ObIOEvents *alloc_io_events(const uint32_t max_events) override;
   virtual void free_iocb(ObIOCB *iocb) override;
   virtual void free_io_events(ObIOEvents *io_event) override;
@@ -194,8 +232,14 @@ private:
   virtual int64_t get_max_block_size(int64_t reserved_size) const override;
   virtual int64_t get_max_block_count(int64_t reserved_size) const override;
   virtual int64_t get_reserved_block_count() const override;
-  virtual int check_space_full(const int64_t required_size) const override;
+  virtual int check_space_full(
+    const int64_t required_size,
+    const bool alarm_if_space_full = true) const override;
   virtual int check_write_limited() const override;
+private:
+  // This variable is used to identify the local disk. When the path is indicated with the
+  // file:// prefix and the destination is a local disk, ObIOManager does not need to perform rate limiting.
+  const bool is_local_disk_;
 };
 
 

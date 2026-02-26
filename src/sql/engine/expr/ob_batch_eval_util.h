@@ -18,7 +18,8 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "share/vector/ob_uniform_base.h"
 #include "share/vector/ob_discrete_base.h"
-#include "ob_expr_add.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -155,7 +156,7 @@ struct ObDoArithBatchEval
       }
     }
     if (OB_SUCC(ret) && desc.is_null()) {
-      expr.get_eval_info(ctx).notnull_ = false;
+      expr.get_eval_info(ctx).set_notnull(false);
     }
     return ret;
   }
@@ -279,7 +280,7 @@ struct ObDoArithFixedConstVectorEval
       }
       res_vec->get_nulls()->unset_all(bound.start(), bound.end());
       if (expr.may_not_need_raw_check_ && ob_is_int_less_than_64(expr.args_[0]->datum_meta_.type_)
-          && INT_MIN < *right_val < INT_MAX) {
+          && (INT_MIN < *right_val && *right_val < INT_MAX)) {
         // do nothing
       } else {
         for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
@@ -325,7 +326,7 @@ struct ObDoArithConstFixedVectorEval
         ArithOp::raw_op(res_arr[idx], *left_val, right_arr[idx], args...);
       }
       res_vec->get_nulls()->unset_all(bound.start(), bound.end());
-      if (expr.may_not_need_raw_check_ && INT_MIN < *left_val < INT_MAX
+      if (expr.may_not_need_raw_check_ && (INT_MIN < *left_val && *left_val < INT_MAX)
           && ob_is_int_less_than_64(expr.args_[1]->datum_meta_.type_)) {
       } else {
         // do nothing
@@ -620,9 +621,7 @@ int def_fixed_len_vector_arith_op(VECTOR_EVAL_FUNC_ARG_DECL, Args &... args)
     }
   }
   if (OB_SUCC(ret)) {
-    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, pvt_bound)));
-    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, pvt_bound)));
-    SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(expr.args_[1]->get_vector_header(ctx), *expr.args_[1], &skip, pvt_bound)));
+    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr, ctx, &skip, pvt_bound)));
   }
   return ret;
 }
@@ -665,9 +664,60 @@ int def_variable_len_vector_arith_op(VECTOR_EVAL_FUNC_ARG_DECL, Args &... args)
     }
   }
   if (OB_SUCC(ret)) {
-    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, pvt_bound)));
-    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, pvt_bound)));
-    SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(expr.args_[1]->get_vector_header(ctx), *expr.args_[1], &skip, pvt_bound)));
+    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr, ctx, &skip, pvt_bound)));
+  }
+  return ret;
+}
+
+template <typename ArithOp, typename... Args>
+int def_nested_vector_arith_op(VECTOR_EVAL_FUNC_ARG_DECL, Args &... args)
+{
+  int ret = OB_SUCCESS;
+  EvalBound pvt_bound = bound;
+  bool right_evaluated = true;
+  if (OB_FAIL(binary_operand_vector_eval(expr, ctx, skip, pvt_bound, lib::is_oracle_mode(),
+                                         right_evaluated))) {
+    SQL_LOG(WARN, "binary operand vector evaluate failed", K(ret), K(expr));
+  } else {
+    const ObExpr &left = *expr.args_[0];
+    const ObExpr &right = *expr.args_[1];
+    const VectorFormat left_format = left.get_format(ctx);
+    const VectorFormat right_format = right.get_format(ctx);
+    if (!is_uniform_format(left_format) && !is_uniform_format(right_format)
+        && (left.attrs_cnt_ == 0 || left.attrs_cnt_ != right.attrs_cnt_)) {
+      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+      SQL_LOG(WARN, "nested type is mismatch", K(ret), K(expr));
+    } else {
+      const VectorFormat res_format = expr.get_format(ctx);
+      const int64_t cond = GET_FORMAT_CONDITION(VEC_DISCRETE, res_format, left_format, right_format);
+      switch (cond)
+      {
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Uniform, Uniform, Uniform, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Uniform, Const, Uniform, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Uniform, Uniform, Const, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Uniform, Discrete, Discrete, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Uniform, Const, Discrete, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Uniform, Discrete, Const, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Uniform, Uniform, Discrete, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Const, Const, Const, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Discrete, Uniform, Uniform, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Discrete, Discrete, Discrete, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Discrete, Discrete, Uniform, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Discrete, Discrete, Const, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Discrete, Uniform, Discrete, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Discrete, Uniform, Const, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Discrete, Const, Uniform, ArithOp);
+        FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Discrete, Const, Discrete, ArithOp);
+        default:
+          ret = ObDoArithVectorBaseEval<ObVectorBase, ObVectorBase, ObVectorBase, ArithOp>()(
+            VEC_ARG_LIST, args...);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr, ctx, &skip, pvt_bound)));
+      SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(*expr.args_[0], ctx, &skip, pvt_bound)));
+      SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(*expr.args_[1], ctx, &skip, pvt_bound)));
+    }
   }
   return ret;
 }
@@ -693,6 +743,23 @@ struct ObArithOpBase : public ObArithOpRawType<char, char, char>
   }
 };
 
+template <typename Res, typename Left, typename Right>
+struct ObArithTypedBase : public ObArithOpRawType<Res, Left, Right>
+{
+  constexpr static bool is_raw_op_supported()
+  {
+    return false;
+  }
+
+  template <typename... Args>
+  static void raw_op(Res &, const Left &, const Right, Args &...args)
+  {}
+  static int raw_check(const Res &, const Left &, const Right &)
+  {
+    return common::OB_ERR_UNEXPECTED;
+  }
+};
+
 // Wrap arith operate with null check.
 template <typename DatumFunctor>
 struct ObWrapArithOpNullCheck: public ObArithOpBase
@@ -711,8 +778,8 @@ struct ObWrapArithOpNullCheck: public ObArithOpBase
 };
 
 // Wrap arith operate with null check for vector.
-template <typename VectorFunctor>
-struct ObWrapVectorArithOpNullCheck: public ObArithOpBase
+template <typename VectorFunctor, typename Base>
+struct ObWrapVectorArithOpNullCheck: public Base
 {
   template <typename ResVector, typename LeftVector, typename RightVector, typename... Args>
   static int vector_op(ResVector &res_vec, const LeftVector &left_vec,
@@ -742,20 +809,51 @@ int def_batch_arith_op_by_datum_func(BATCH_EVAL_FUNC_ARG_DECL, Args &...args)
       BATCH_EVAL_FUNC_ARG_LIST, args...);
 }
 
-template <typename VectorFunctor, typename... Args>
+template <typename VectorFunctor, typename ArithBase, typename... Args>
 int def_fixed_len_vector_arith_op_func(VECTOR_EVAL_FUNC_ARG_DECL, Args &...args)
 {
-  return def_fixed_len_vector_arith_op<ObWrapVectorArithOpNullCheck<VectorFunctor>, Args...>(
+  return def_fixed_len_vector_arith_op<ObWrapVectorArithOpNullCheck<VectorFunctor, ArithBase>, Args...>(
       VECTOR_EVAL_FUNC_ARG_LIST, args...);
 }
 
-template <typename VectorFunctor, typename... Args>
+template <typename VectorFunctor, typename ArithBase, typename... Args>
 int def_variable_len_vector_arith_op_func(VECTOR_EVAL_FUNC_ARG_DECL, Args &...args)
 {
-  return def_variable_len_vector_arith_op<ObWrapVectorArithOpNullCheck<VectorFunctor>, Args...>(
+  return def_variable_len_vector_arith_op<ObWrapVectorArithOpNullCheck<VectorFunctor, ArithBase>, Args...>(
       VECTOR_EVAL_FUNC_ARG_LIST, args...);
 }
 
+template <typename VectorFunctor>
+struct ObWrapNestedVectorArithOpNullCheck
+{
+  template <typename ResVector, typename LeftVector, typename RightVector>
+  static int vector_op(ResVector &res_vec, const LeftVector &left_vec, const RightVector &right_vec,
+                       const int64_t idx, const ObExpr &expr, ObEvalCtx &ctx)
+  {
+    return VectorFunctor()(res_vec, left_vec, right_vec, idx, expr, ctx);
+  }
+
+  template <typename ResVector, typename LeftVector, typename RightVector>
+  static int null_check_vector_op(ResVector &res_vec, const LeftVector &left_vec, const RightVector &right_vec,
+                                  const int64_t idx, const ObExpr &expr, ObEvalCtx &ctx)
+  {
+    int ret = OB_SUCCESS;
+    if (left_vec.is_null(idx) || right_vec.is_null(idx)) {
+      res_vec.set_null(idx);
+      VectorFunctor::set_attrs_null(expr, ctx, idx);
+    } else {
+      ret = VectorFunctor()(res_vec, left_vec, right_vec, idx, expr, ctx);
+    }
+    return ret;
+  }
+};
+
+template <typename VectorFunctor, typename... Args>
+int def_nested_vector_arith_op_func(VECTOR_EVAL_FUNC_ARG_DECL, Args &...args)
+{
+  return def_nested_vector_arith_op<ObWrapNestedVectorArithOpNullCheck<VectorFunctor>, Args...>(
+      VECTOR_EVAL_FUNC_ARG_LIST, args...);
+}
 
 // Wrap arith datum operate from raw operate.
 template <typename Base>
@@ -832,6 +930,105 @@ struct ObVectorArithOpWrap : public Base
     }
     return ret;
   }
+};
+
+template <typename Base>
+struct ObNestedVectorArithOpFunc : public Base
+{
+  template <typename ResVector, typename LeftVector, typename RightVector>
+  int operator()(ResVector &res_vec, const LeftVector &l_vec, const RightVector &r_vec,
+                 const int64_t idx, const ObExpr &expr, ObEvalCtx &ctx) const
+  {
+    int ret = OB_SUCCESS;
+
+    ObString left = l_vec.get_string(idx);
+    ObString right = r_vec.get_string(idx);
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+    const uint16_t left_meta_id = expr.args_[0]->obj_meta_.get_subschema_id();
+    const uint16_t right_meta_id = expr.args_[1]->obj_meta_.get_subschema_id();
+    const uint16_t res_meta_id = expr.obj_meta_.get_subschema_id();
+    ObIArrayType *left_obj = NULL;
+    ObIArrayType *right_obj = NULL;
+    ObIArrayType *res_obj = NULL;
+    ObString res_str;
+    if (OB_FAIL(Base::construct_param(tmp_allocator, ctx, left_meta_id, left, left_obj))) {
+      SQL_ENG_LOG(WARN, "get array failed", K(ret));
+    } else if (OB_FAIL(Base::construct_param(tmp_allocator, ctx, right_meta_id, right, right_obj))) {
+      SQL_ENG_LOG(WARN, "get array failed", K(ret));
+    } else if (OB_FAIL(Base::construct_res_obj(tmp_allocator, ctx, res_meta_id, res_obj))) {
+      SQL_ENG_LOG(WARN, "get array failed", K(ret));
+    } else if (OB_FAIL(Base()(*res_obj, *left_obj, *right_obj))) {
+      SQL_ENG_LOG(WARN, "exec calculate func failed", K(ret));
+    } else if (OB_FAIL(res_obj->init())) {
+      SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
+    } else if (OB_FAIL(Base::get_res_batch(ctx, res_obj, expr, idx, &res_vec))) {
+      SQL_ENG_LOG(WARN, "get array binary string failed", K(ret));
+    }
+    return ret;
+  }
+
+  static void set_attrs_null(const ObExpr &expr, ObEvalCtx &ctx, const int64_t idx)
+  {
+    Base::set_expr_attrs_null(expr, ctx, idx);
+  }
+};
+
+template <typename Base>
+struct ObNestedArithOpWrap : public Base
+{
+  int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx) const
+  {
+    int ret = OB_SUCCESS;
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+    ObString left = l.get_string();
+    ObString right = r.get_string();
+    const uint16_t left_meta_id = expr.args_[0]->obj_meta_.get_subschema_id();
+    const uint16_t right_meta_id = expr.args_[1]->obj_meta_.get_subschema_id();
+    const uint16_t res_meta_id = expr.obj_meta_.get_subschema_id();
+    ObIArrayType *left_obj = NULL;
+    ObIArrayType *right_obj = NULL;
+    ObIArrayType *res_obj = NULL;
+    ObString res_str;
+    if (OB_FAIL(Base::construct_params(tmp_allocator, ctx, left_meta_id, right_meta_id, res_meta_id,
+                                          left, right, left_obj, right_obj, res_obj))) {
+      SQL_ENG_LOG(WARN, "get array failed", K(ret));
+    } else if (OB_FAIL(Base()(*res_obj, *left_obj, *right_obj))) {
+      SQL_ENG_LOG(WARN, "exec calculate func failed", K(ret));
+    } else if (OB_FAIL(Base::get_res(ctx, res_obj, expr, res_str))) {
+      SQL_ENG_LOG(WARN, "get array binary string failed", K(ret));
+    } else {
+      res.set_string(res_str);
+    }
+
+    return ret;
+  }
+};
+
+struct ObNestedArithOpBaseFunc
+{
+  static int construct_param(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t meta_id,
+                             ObString &str_data, ObIArrayType *&param_obj);
+  static int construct_res_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t meta_id, ObIArrayType *&res_obj);
+  static int construct_params(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t left_meta_id,
+                              const uint16_t right_meta_id, const uint16_t res_meta_id, ObString &left, ObString right,
+                              ObIArrayType *&left_obj, ObIArrayType *&right_obj, ObIArrayType *&res_obj);
+  static int get_res(ObEvalCtx &ctx, ObIArrayType *res_obj, const ObExpr &expr, ObString &res_str);
+  template <typename ResVec>
+  static int get_res_batch(ObEvalCtx &ctx, ObIArrayType *res_obj, const ObExpr &expr, const int64_t row_idx, ResVec *res_vec)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(res_obj->init())) {
+      LOG_WARN("array init failed", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::set_array_res(res_obj, expr, ctx, res_vec, row_idx))) {
+      LOG_WARN("set array res failed", K(ret));
+    }
+    return ret;
+  }
+
+  static int distribute_expr_attrs(const ObExpr &expr, ObEvalCtx &ctx, const int64_t idx, ObIArrayType &res_obj);
+  static void set_expr_attrs_null(const ObExpr &expr, ObEvalCtx &ctx, const int64_t idx);
 };
 
 } // end namespace sql

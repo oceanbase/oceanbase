@@ -1,3 +1,6 @@
+// owner: zjf225077
+// owner group: log
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,10 +13,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include <share/scn.h>
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
@@ -38,6 +37,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 
 int pwrite_one_log_by_log_storage(PalfHandleImplGuard &leader, const LogGroupEntry &entry, const LSN &lsn)
 {

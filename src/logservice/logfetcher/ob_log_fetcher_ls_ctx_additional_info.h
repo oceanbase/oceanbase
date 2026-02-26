@@ -63,9 +63,9 @@ class ObILogFetcherLSCtxAddInfo
 public:
   virtual ~ObILogFetcherLSCtxAddInfo() {}
 
-   virtual int init(
-       const logservice::TenantLSID &ls_id,
-       const int64_t start_commit_version) = 0;
+  virtual int init(
+      const logservice::TenantLSID &ls_id,
+      const int64_t start_commit_version) = 0;
 
   /// get tps info of current LS
   virtual double get_tps() = 0;

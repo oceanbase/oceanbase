@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_virtual_ash.h"
-#include "common/ob_smart_call.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "observer/ob_server.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -23,8 +20,12 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::omt;
 using namespace oceanbase::share;
 
+#define META_TENANT_ID(tenant_id) (tenant_id - 1)
 ObVirtualASH::ObVirtualASH() :
     ObVirtualTableScannerIterator(),
+    reverse_iterator_(),
+    forward_iterator_(),
+    iterator_(&forward_iterator_),
     addr_(),
     ipstr_(),
     port_(0),
@@ -75,16 +76,16 @@ int ObVirtualASH::set_ip(const common::ObAddr &addr)
 int ObVirtualASH::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
   if (is_first_get_) {
     is_first_get_ = false;
-    iterator_ = ObActiveSessHistList::get_instance().create_iterator();
+    reverse_iterator_ = ObActiveSessHistList::get_instance().create_reverse_iterator();
+    iterator_ = &reverse_iterator_;
   }
 
   do {
-    if (iterator_.has_next()) {
-      const ActiveSessionStat &node = iterator_.next();
-      if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_) {
+    if (iterator_->has_next()) {
+      const ObActiveSessionStatItem &node = iterator_->next();
+      if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_ || node.tenant_id_ == META_TENANT_ID(effective_tenant_id_)) {
         if (OB_FAIL(convert_node_to_row(node, row))) {
           LOG_WARN("fail convert row", K(ret));
         }
@@ -98,7 +99,7 @@ int ObVirtualASH::inner_get_next_row(common::ObNewRow *&row)
   return ret;
 }
 
-int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&row)
+int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObObj *cells = cur_row_.cells_;
@@ -138,7 +139,11 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
         break;
       }
       case SESSION_ID: {
-        cells[cell_idx].set_int(node.session_id_);
+        if (node.session_type_ == 0 && node.client_sid_ != INVALID_SESSID) {
+          cells[cell_idx].set_int(node.client_sid_);
+        } else {
+          cells[cell_idx].set_int(node.session_id_);
+        }
         break;
       }
       case SESSION_TYPE: {
@@ -147,17 +152,21 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
       }
       case SQL_ID: {
         if ('\0' == node.sql_id_[0]) {
-          cells[cell_idx].set_varchar("");
+          cells[cell_idx].set_null();
         } else {
           cells[cell_idx].set_varchar(node.sql_id_, static_cast<ObString::obstr_size_t>(OB_MAX_SQL_ID_LENGTH));
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         }
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case TRACE_ID: {
-        int len = node.trace_id_.to_string(trace_id_, sizeof(trace_id_));
-        cells[cell_idx].set_varchar(trace_id_, len);
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        if (node.trace_id_.is_valid()) {
+          int len = node.trace_id_.to_string(trace_id_, sizeof(trace_id_));
+          cells[cell_idx].set_varchar(trace_id_, len);
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case EVENT_NO: {
@@ -217,21 +226,36 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
         break;
       }
       case MODULE: {
-        cells[cell_idx].set_null(); // impl. later
+        if (node.module_[0] == '\0') {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.module_, static_cast<ObString::obstr_size_t>(STRLEN(node.module_)));
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case ACTION: {
-        cells[cell_idx].set_null(); // impl. later
+        if (node.action_[0] == '\0') {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.action_, static_cast<ObString::obstr_size_t>(STRLEN(node.action_)));
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case CLIENT_ID: {
-        cells[cell_idx].set_null(); // impl. later
+        if (node.client_id_[0] == '\0') {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.client_id_, static_cast<ObString::obstr_size_t>(STRLEN(node.client_id_)));
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case BACKTRACE: {
 #ifndef NDEBUG
         if (node.bt_[0] == '\0') {
-          cells[cell_idx].set_varchar("");
+          cells[cell_idx].set_null();
         } else {
           cells[cell_idx].set_varchar(node.bt_);
         }
@@ -270,87 +294,187 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
         break;
       }
       case PROGRAM: {
-        cells[cell_idx].set_null();
+        if ('\0' == node.program_[0]) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.program_, static_cast<ObString::obstr_size_t>(STRLEN(node.program_)));
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case TM_DELTA_TIME: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_time_);
         break;
       }
       case TM_DELTA_CPU_TIME: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_cpu_time_);
         break;
       }
       case TM_DELTA_DB_TIME: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_db_time_);
         break;
       }
       case TOP_LEVEL_SQL_ID: {
-        cells[cell_idx].set_null();
+        if ('\0' == node.top_level_sql_id_[0]) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.top_level_sql_id_);
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case IN_PLSQL_COMPILATION: {
-        cells[cell_idx].set_bool(false);
+        cells[cell_idx].set_bool(node.in_plsql_compilation_);
         break;
       }
       case IN_PLSQL_EXECUTION: {
-        cells[cell_idx].set_bool(false);
+        cells[cell_idx].set_bool(node.in_plsql_execution_);
         break;
       }
       case PLSQL_ENTRY_OBJECT_ID: {
-        cells[cell_idx].set_null();
+        if (OB_INVALID_ID == node.plsql_entry_object_id_) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_int(node.plsql_entry_object_id_);
+        }
         break;
       }
       case PLSQL_ENTRY_SUBPROGRAM_ID: {
-        cells[cell_idx].set_null();
+        if (OB_INVALID_ID == node.plsql_entry_subprogram_id_) {
+          if (OB_INVALID_ID != node.plsql_entry_object_id_) {
+            cells[cell_idx].set_int(1);
+          } else {
+            cells[cell_idx].set_null();
+          }
+        } else {
+          cells[cell_idx].set_int(node.plsql_entry_subprogram_id_);
+        }
         break;
       }
       case PLSQL_ENTRY_SUBPROGRAM_NAME: {
-        cells[cell_idx].set_null();
+        if ('\0' == node.plsql_entry_subprogram_name_[0]) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.plsql_entry_subprogram_name_);
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case PLSQL_OBJECT_ID: {
-        cells[cell_idx].set_null();
+        if (OB_INVALID_ID == node.plsql_object_id_) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_int(node.plsql_object_id_);
+        }
         break;
       }
       case PLSQL_SUBPROGRAM_ID: {
-        cells[cell_idx].set_null();
+        if (OB_INVALID_ID == node.plsql_subprogram_id_) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_int(node.plsql_subprogram_id_);
+        }
         break;
       }
       case PLSQL_SUBPROGRAM_NAME: {
-        cells[cell_idx].set_null();
+        if ('\0' == node.plsql_subprogram_name_[0]) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.plsql_subprogram_name_);
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case EVENT_ID: {
-        cells[cell_idx].set_null();
+        if (OB_LIKELY(node.event_no_ == 0)) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_int(OB_WAIT_EVENTS[node.event_no_].event_id_);
+        }
         break;
       }
       case IN_FILTER_ROWS: {
-        cells[cell_idx].set_bool(false);
+        cells[cell_idx].set_bool(node.in_filter_rows_);
         break;
       }
       case GROUP_ID: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.group_id_);
         break;
       }
       case TX_ID: {
-        cells[cell_idx].set_null();
+        if (node.tx_id_ != 0) {
+          cells[cell_idx].set_int(node.tx_id_);
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case BLOCKING_SESSION_ID: {
-        cells[cell_idx].set_null();
+        if (node.block_sessid_ != 0) {
+          cells[cell_idx].set_int(node.block_sessid_);
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case PLAN_HASH: {
-        cells[cell_idx].set_null();
+        if (node.plan_hash_ != 0) {
+          cells[cell_idx].set_uint64(node.plan_hash_);
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case THREAD_ID: {
-        cells[cell_idx].set_null();
+        if (node.tid_ != 0) {
+          cells[cell_idx].set_int(node.tid_);
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case STMT_TYPE: {
-        cells[cell_idx].set_null();
+        if (node.stmt_type_ != 0) {
+          cells[cell_idx].set_int(node.stmt_type_);
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case TABLET_ID: {
+        if (node.tablet_id_ != 0) {
+          cells[cell_idx].set_int(node.tablet_id_);
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case PROXY_SID: {
+        cells[cell_idx].set_int(node.proxy_sid_);
+        break;
+      }
+      case DELTA_READ_IO_REQUESTS: {
+        cells[cell_idx].set_int(node.delta_read_.count_);
+        break;
+      }
+      case DELTA_READ_IO_BYTES: {
+        cells[cell_idx].set_int(node.delta_read_.size_);
+        break;
+      }
+      case DELTA_WRITE_IO_REQUESTS: {
+        cells[cell_idx].set_int(node.delta_write_.count_);
+        break;
+      }
+      case DELTA_WRITE_IO_BYTES: {
+        cells[cell_idx].set_int(node.delta_write_.size_);
+        break;
+      }
+      case WEIGHT: {
+        cells[cell_idx].set_int(node.weight_);
+        break;
+      }
+      case IS_WR_WEIGHT_SAMPLE: {
+        cells[cell_idx].set_bool(node.is_wr_weight_sample_);
         break;
       }
       default: {
@@ -371,9 +495,9 @@ int ObVirtualASHI1::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   do {
-    if (iterator_.has_next()) {
-      const ActiveSessionStat &node = iterator_.next();
-      if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_) {
+    if (iterator_->has_next()) {
+      const ObActiveSessionStatItem &node = iterator_->next();
+      if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_ || node.tenant_id_ == META_TENANT_ID(effective_tenant_id_)) {
         if (OB_FAIL(convert_node_to_row(node, row))) {
           LOG_WARN("fail convert row", K(ret));
         }
@@ -416,13 +540,24 @@ int ObVirtualASHI1::init_next_query_range()
       if (cur_range.end_key_.is_max_row()) {
         right = INT64_MAX;  // maximum sample time is INT64_MAX
       }
+      if (lib::is_oracle_mode() && cur_range.end_key_.get_obj_ptr()->is_null()) {
+        // oracle null last
+        right = INT64_MAX;  // sample time cannot be null.
+      }
       if (OB_UNLIKELY(cur_range.end_key_.is_min_row() || cur_range.start_key_.is_max_row())) {
         left = INT64_MAX;
         right = 0;
       }
       ++current_key_range_index_;
-      iterator_ = ObActiveSessHistList::get_instance().create_iterator();
-      iterator_.init_with_sample_time_index(left, right);
+      if (common::ObQueryFlag::ScanOrder::Reverse == scan_flag_.scan_order_) {
+        reverse_iterator_ = ObActiveSessHistList::get_instance().create_reverse_iterator();
+        iterator_ = &reverse_iterator_;
+      } else {
+        // we treat every thing else as forward order.
+        forward_iterator_ = ObActiveSessHistList::get_instance().create_forward_iterator();
+        iterator_ = &forward_iterator_;
+      }
+      iterator_->init_with_sample_time_index(left, right);
       LOG_DEBUG("current ash query range", K(key_ranges_), K(left), K(right), K_(iterator));
     }
   }

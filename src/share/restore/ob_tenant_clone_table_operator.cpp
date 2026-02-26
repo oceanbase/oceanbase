@@ -620,6 +620,32 @@ int ObTenantCloneTableOperator::get_clone_job_by_clone_tenant_name(
   return ret;
 }
 
+int ObTenantCloneTableOperator::get_clone_job_by_clone_tenant_id(
+    const uint64_t clone_tenant_id,
+    ObCloneJob &job)
+{
+   int ret = OB_SUCCESS;
+  job.reset();
+  ObSqlString sql;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tenant clone table operator not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(clone_tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(clone_tenant_id));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE tenant_id = %lu AND clone_tenant_id = %lu",
+                     OB_ALL_CLONE_JOB_TNAME, tenant_id_, clone_tenant_id))) {
+    LOG_WARN("assign sql failed", KR(ret), K(tenant_id_), K(clone_tenant_id));
+  } else if (OB_FAIL(read_only_exist_one_job_(sql, job))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to read job", KR(ret), K(sql));
+    } else {
+      LOG_INFO("clone job not exist", KR(ret), K(sql));
+    }
+  }
+  return ret;
+}
+
 int ObTenantCloneTableOperator::get_all_clone_jobs(ObArray<ObCloneJob> &jobs)
 {
   int ret = OB_SUCCESS;
@@ -948,7 +974,7 @@ int ObTenantCloneTableOperator::insert_clone_job_history(const ObCloneJob &job)
     LOG_WARN("assign select_sql failed", KR(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(proxy_->read(res, gen_meta_tenant_id(job.get_tenant_id()), select_sql.ptr()))) {
         LOG_WARN("failed to execute select_sql", KR(ret), K(select_sql), K(job));
       } else if (NULL == (result = res.get_result())) {
@@ -1072,7 +1098,7 @@ int ObTenantCloneTableOperator::get_job_failed_message(
         LOG_WARN("assign sql failed", KR(ret), K(job_id));
       } else {
         SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-          ObMySQLResult *result = NULL;
+          common::sqlclient::ObMySQLResult *result = NULL;
           if (OB_FAIL(proxy_->read(res, gen_meta_tenant_id(tenant_id_), sql.ptr()))) {
             LOG_WARN("failed to execute sql", KR(ret), K(gen_meta_tenant_id(tenant_id_)), K(sql));
           } else if (NULL == (result = res.get_result())) {
@@ -1149,7 +1175,7 @@ int ObTenantCloneTableOperator::read_jobs_(
     LOG_WARN("invalid argument", KR(ret), K(sql), KP(proxy_));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(proxy_->read(res, gen_meta_tenant_id(tenant_id_), sql.ptr()))) {
         LOG_WARN("failed to execute sql", KR(ret), K(gen_meta_tenant_id(tenant_id_)), K(sql));
       } else if (NULL == (result = res.get_result())) {
@@ -1219,29 +1245,19 @@ int ObTenantCloneTableOperator::build_insert_dml_(
     LOG_WARN("add column failed", KR(ret));
   } else if (OB_FAIL(dml.add_column("job_type", get_job_type_str(job.get_job_type())))) {
     LOG_WARN("add column failed", K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(share::ObShareUtil::check_compat_version_for_clone_standby_tenant(
-                         job.get_source_tenant_id(), is_compatible_with_clone_standby_tenant))) {
-    LOG_WARN("fail to check whether tenant is compatible to clone standby tenant", KR(ret), K(job));
-  } else if (is_compatible_with_clone_standby_tenant) {
-    if (OB_FAIL(dml.add_column("data_version", job.get_data_version()))) {
-      LOG_WARN("add data_version column failed", KR(ret), K(job));
-    } else if (OB_FAIL(dml.add_column("min_cluster_version", job.get_min_cluster_version()))) {
-      LOG_WARN("add min_cluster_version failed", KR(ret), K(job));
-    }
-  } else {
-    // check data_version and min_cluster_version is 0 when clone standby tenant not supported
-    if (OB_UNLIKELY(0 != job.get_data_version()) || OB_UNLIKELY(0 != job.get_min_cluster_version())) {
-      ret = OB_STATE_NOT_MATCH;
-      LOG_WARN("data version should equals to 0 when not compatible with cloning standby tenant", KR(ret), K(job));
-    }
+  } else if (0 != job.get_data_version()
+             && OB_FAIL(dml.add_column("data_version", job.get_data_version()))) {
+    // data_version not 0 means (sys/meta/user)tenant's data_version must promoted to 4.3.2
+    LOG_WARN("add data_version column failed", KR(ret), K(job));
+  } else if (0 != job.get_min_cluster_version()
+             && OB_FAIL(dml.add_column("min_cluster_version", job.get_min_cluster_version()))) {
+    // min_cluster_version not 0 means (sys/meta/user)tenant's data_version must promoted to 4.3.2
+    LOG_WARN("add min_cluster_version failed", KR(ret), K(job));
   }
   return ret;
 }
 
-int ObTenantCloneTableOperator::fill_job_from_result_(const ObMySQLResult *result,
+int ObTenantCloneTableOperator::fill_job_from_result_(const common::sqlclient::ObMySQLResult *result,
                                                       ObCloneJob &job)
 {
   int ret = OB_SUCCESS;

@@ -1146,7 +1146,11 @@ BEGIN
   RETURN arg;
 END|
 SELECT f1(-2500);
-ERROR 22003: Out of range value for column
++-----------+
+| f1(-2500) |
++-----------+
+|         0 |
++-----------+
 
 ## SET @@sql_mode = 'traditional';
 SET @@sql_mode = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES';
@@ -1185,7 +1189,11 @@ BEGIN
 END|
 
 SELECT f1(8388699);
-ERROR 22003: Out of range value for column
++-------------+
+| f1(8388699) |
++-------------+
+|     8388607 |
++-------------+
 
 ## SET @@sql_mode = 'traditional';
 SET @@sql_mode = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES';

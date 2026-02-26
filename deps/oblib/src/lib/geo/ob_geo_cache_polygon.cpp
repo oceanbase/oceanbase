@@ -14,7 +14,6 @@
 #include "lib/geo/ob_geo_cache_polygon.h"
 #include "lib/geo/ob_point_location_analyzer.h"
 #include "lib/geo/ob_geo_segment_intersect_analyzer.h"
-#include "lib/geo/ob_geo_point_location_visitor.h"
 #include "lib/geo/ob_geo_segment_collect_visitor.h"
 #include "lib/geo/ob_geo_vertex_collect_visitor.h"
 
@@ -79,7 +78,7 @@ int ObCachedGeoPolygon::init_point_analyzer()
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc point location analyzer failed", K(ret));
       } else {
-        pAnalyzer_ = new(buf) ObPointLocationAnalyzer(this, &seg_rtree_);
+        pAnalyzer_ = new(buf) ObPointLocationAnalyzer(this, seg_rtree_);
       }
     }
   }
@@ -228,7 +227,7 @@ int ObCachedGeoPolygon::init_line_analyzer()
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc line segment intersection analyzer failed", K(ret));
     } else {
-      lAnalyzer_ = new(buf) ObLineIntersectionAnalyzer(this, &rtree_);
+      lAnalyzer_ = new(buf) ObLineIntersectionAnalyzer(this, rtree_);
       // collect line segments
       ObGeoSegmentCollectVisitor seg_visitor(&line_segments_);
       if (OB_FAIL(get_cached_geom()->do_visit(seg_visitor))) {
@@ -318,24 +317,29 @@ int ObCachedGeoPolygon::get_point_position_in_polygon(int p_idx, const ObPoint2d
   } else {
     pos = ObPointLocation::INVALID;
     for (int i = start; i < end && OB_SUCC(ret) && pos == ObPointLocation::INVALID; ++i) {
-      ObPointLocationAnalyzer tmp_pAnalyzer(this, rings_rtree_.rtrees_[i]);
-      if (i == start) {
-        // exterior ring
-        if (OB_FAIL(tmp_pAnalyzer.calculate_point_position(test_point))) {
+      if (OB_ISNULL(rings_rtree_.rtrees_[i])) {
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("rtree is null", K(ret), K(i));
+      } else {
+        ObPointLocationAnalyzer tmp_pAnalyzer(this, *rings_rtree_.rtrees_[i]);
+        if (i == start) {
+          // exterior ring
+          if (OB_FAIL(tmp_pAnalyzer.calculate_point_position(test_point))) {
+            LOG_WARN("calculate point position failed", K(ret), K(input_vertexes_[i]));
+          } else if (tmp_pAnalyzer.get_position() == ObPointLocation::EXTERIOR) {
+            // outside the exterior ring
+            pos = ObPointLocation::EXTERIOR;
+          } else if (tmp_pAnalyzer.get_position() == ObPointLocation::BOUNDARY) {
+            pos = ObPointLocation::BOUNDARY;
+          } // if is ObPointLocation::INTERIOR, need to check inner rings
+        } else if (OB_FAIL(tmp_pAnalyzer.calculate_point_position(test_point))) {
           LOG_WARN("calculate point position failed", K(ret), K(input_vertexes_[i]));
-        } else if (tmp_pAnalyzer.get_position() == ObPointLocation::EXTERIOR) {
-          // outside the exterior ring
+        } else if (tmp_pAnalyzer.get_position() == ObPointLocation::INTERIOR) {
+          // inside a hole => outside the polygon
           pos = ObPointLocation::EXTERIOR;
         } else if (tmp_pAnalyzer.get_position() == ObPointLocation::BOUNDARY) {
           pos = ObPointLocation::BOUNDARY;
-        } // if is ObPointLocation::INTERIOR, need to check inner rings
-      } else if (OB_FAIL(tmp_pAnalyzer.calculate_point_position(test_point))) {
-        LOG_WARN("calculate point position failed", K(ret), K(input_vertexes_[i]));
-      } else if (tmp_pAnalyzer.get_position() == ObPointLocation::INTERIOR) {
-        // inside a hole => outside the polygon
-        pos = ObPointLocation::EXTERIOR;
-      } else if (tmp_pAnalyzer.get_position() == ObPointLocation::BOUNDARY) {
-        pos = ObPointLocation::BOUNDARY;
+        }
       }
     }
 
@@ -500,7 +504,7 @@ int ObCachedGeoPolygon::inner_eval_contains(ObGeometry& geo, ObGeoEvalCtx& gis_c
   return ret;
 }
 
-// check if CachedPolygon catains geo
+// check if CachedPolygon contains geo
 int ObCachedGeoPolygon::contains(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res)
 {
   int ret = OB_SUCCESS;
@@ -525,7 +529,7 @@ int ObCachedGeoPolygon::contains(ObGeometry& geo, ObGeoEvalCtx& gis_context, boo
   return ret;
 }
 
-// check if CachedPolygon catains geo
+// check if CachedPolygon contains geo
 int ObCachedGeoPolygon::cover(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res)
 {
   int ret = OB_SUCCESS;
@@ -579,7 +583,7 @@ int ObCachedGeoPolygon::check_valid(ObGeoEvalCtx& gis_context)
   int ret = OB_SUCCESS;
   if (!check_valid_) {
     bool invalid_for_cache = false;
-    if (OB_FAIL(ObGeoTypeUtil::polygon_check_self_intersections(*(gis_context.get_allocator()), *origin_geo_, srs_, invalid_for_cache))) {
+    if (OB_FAIL(ObGeoTypeUtil::polygon_check_self_intersections(gis_context.get_mem_ctx(), *origin_geo_, srs_, invalid_for_cache))) {
       LOG_WARN("cached polygon fail to check valid", K(ret));
     } else {
       check_valid_ = true;

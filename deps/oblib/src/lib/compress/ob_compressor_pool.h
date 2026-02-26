@@ -25,6 +25,8 @@
 #include "zstd/ob_zstd_stream_compressor.h"
 #include "zstd_1_3_8/ob_zstd_compressor_1_3_8.h"
 #include "zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.h"
+#include "zstd_1_5_7/ob_zstd_compressor_1_5_7.h"
+#include "zstd_1_5_7/ob_zstd_stream_compressor_1_5_7.h"
 #include "zlib_lite/ob_zlib_lite_compressor.h"
 
 namespace oceanbase
@@ -51,7 +53,8 @@ public:
   {
     return (STREAM_LZ4_COMPRESSOR == compressor_type
         || STREAM_ZSTD_COMPRESSOR == compressor_type
-        || STREAM_ZSTD_1_3_8_COMPRESSOR == compressor_type);
+        || STREAM_ZSTD_1_3_8_COMPRESSOR == compressor_type
+        || STREAM_ZSTD_1_5_7_COMPRESSOR == compressor_type);
   }
 
   static bool need_compress(const ObCompressorType &compressor_type)
@@ -71,12 +74,14 @@ private:
   ObZlibCompressor zlib_compressor;
   zstd::ObZstdCompressor zstd_compressor;
   zstd_1_3_8::ObZstdCompressor_1_3_8 zstd_compressor_1_3_8;
+  zstd_1_5_7::ObZstdCompressor_1_5_7 zstd_compressor_1_5_7;
   ZLIB_LITE::ObZlibLiteCompressor zlib_lite_compressor;
 
   //stream compressor
   ObLZ4StreamCompressor lz4_stream_compressor;
   zstd::ObZstdStreamCompressor zstd_stream_compressor;
   zstd_1_3_8::ObZstdStreamCompressor_1_3_8 zstd_stream_compressor_1_3_8;
+  zstd_1_5_7::ObZstdStreamCompressor_1_5_7 zstd_stream_compressor_1_5_7;
 };
 
 } /* namespace common */

@@ -137,7 +137,9 @@ public:
       modified_count_(0),
       sample_size_(0),
       tablet_id_(ObTabletID::INVALID_TABLET_ID),
-      stat_expired_time_(-1) {}
+      stat_expired_time_(-1),
+      stale_stats_(0),
+      is_internal_(0) {}
   ObOptTableStat(uint64_t table_id,
                  int64_t partition_id,
                  int64_t object_type,
@@ -169,7 +171,9 @@ public:
       modified_count_(0),
       sample_size_(0),
       tablet_id_(ObTabletID::INVALID_TABLET_ID),
-      stat_expired_time_(-1) {}
+      stat_expired_time_(-1),
+      stale_stats_(false),
+      is_internal_(false) {}
 
   virtual ~ObOptTableStat() {}
 
@@ -215,9 +219,11 @@ public:
 
   int64_t get_sstable_row_count() const { return sstable_row_count_; }
   void set_sstable_row_count(int64_t num) { sstable_row_count_ = num; }
+  void set_sstable_row_cnt(int64_t num) { sstable_row_count_ = num; }
 
   int64_t get_memtable_row_count() const { return memtable_row_count_; }
   void set_memtable_row_count(int64_t num) { memtable_row_count_ = num; }
+  void set_memtable_row_cnt(int64_t num) { memtable_row_count_ = num; }
 
   int64_t get_last_analyzed() const { return last_analyzed_; }
   void set_last_analyzed(int64_t last_analyzed) {  last_analyzed_ = last_analyzed; }
@@ -237,6 +243,12 @@ public:
   int64_t get_stat_expired_time() const { return stat_expired_time_; }
   void set_stat_expired_time(int64_t expired_time) {  stat_expired_time_ = expired_time; }
 
+  bool is_stat_expired() const { return stale_stats_; }
+  void set_stale_stats(int64_t stale_stats) { stale_stats_ = stale_stats > 0; }
+
+  bool is_internal() const { return is_internal_; }
+  void set_is_interal() { is_internal_ = true; }
+  void add_sample_size(int64_t rc) { sample_size_ += rc; }
   bool is_locked() const { return stattype_locked_ > 0; }
 
   void add_row_count(int64_t rc) { row_count_ += rc; }
@@ -316,6 +328,8 @@ public:
     sample_size_ = 0;
     tablet_id_ = ObTabletID::INVALID_TABLET_ID;
     stat_expired_time_ = -1;
+    stale_stats_ = false;
+    is_internal_ = false;
   }
 
   TO_STRING_KV(K(table_id_),
@@ -336,7 +350,10 @@ public:
                K(modified_count_),
                K(sample_size_),
                K(tablet_id_),
-               K(stat_expired_time_));
+               K(stat_expired_time_),
+               K(stale_stats_),
+               K(is_internal_)
+               );
 
 private:
   uint64_t table_id_;
@@ -360,6 +377,9 @@ private:
   int64_t sample_size_;
   uint64_t tablet_id_;//now only use estimate table rowcnt by meta table.
   int64_t stat_expired_time_;//mark the stat in cache is arrived expired time, if arrived at expired time need reload, -1 meanings no expire forever.
+  bool stale_stats_;//mark the stat is expired or not.
+
+  bool is_internal_;// mark the stat is internal stat used by statstics
 };
 
 }

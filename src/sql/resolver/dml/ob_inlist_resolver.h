@@ -22,6 +22,7 @@ class ObValuesTableDef;
 class ObDMLResolver;
 class ObQueryRefRawExpr;
 struct DistinctObjMeta;
+struct InListRewriteInfo;
 
 struct ObInListInfo
 {
@@ -32,6 +33,42 @@ struct ObInListInfo
   int64_t row_cnt_;
   int64_t column_cnt_;
   bool is_question_mark_;
+};
+
+struct ObInListsResolverHelper
+{
+  ObIAllocator &alloc_;
+  const ParamStore *param_store_;
+  ObCollationType connect_collation_;
+  ObCollationType nchar_collation_;
+  ObCollationType server_collation_;
+  bool enable_decimal_int_;
+  bool is_prepare_stmt_;
+  uint64_t optimizer_features_enable_version_;
+
+  ObInListsResolverHelper(ObIAllocator &alloc,
+                          const ParamStore *param_store,
+                          ObCollationType connect_collation,
+                          ObCollationType nchar_collation,
+                          ObCollationType server_collation,
+                          bool enable_decimal_int,
+                          bool is_prepare_stmt,
+                          uint64_t optimizer_features_enable_version)
+  : alloc_(alloc),
+    param_store_(param_store),
+    connect_collation_(connect_collation),
+    nchar_collation_(nchar_collation),
+    server_collation_(server_collation),
+    enable_decimal_int_(enable_decimal_int),
+    is_prepare_stmt_(is_prepare_stmt),
+    optimizer_features_enable_version_(optimizer_features_enable_version) {}
+
+  TO_STRING_KV(K_(connect_collation),
+               K_(nchar_collation),
+               K_(server_collation),
+               K_(enable_decimal_int),
+               K_(is_prepare_stmt),
+               K_(optimizer_features_enable_version));
 };
 
 class ObInListResolver
@@ -46,20 +83,47 @@ public:
                                          const ObStmtScope &scope,
                                          const bool is_root_condition,
                                          const bool is_need_print,
-                                         const bool is_prepare_protocol,
-                                         const bool is_in_pl,
+                                         const bool is_in_pl_prepare,
                                          const ObSQLSessionInfo *session_info,
                                          const ParamStore *param_store,
                                          const ObStmt *stmt,
                                          common::ObIAllocator &alloc,
                                          bool &is_question_mark,
                                          bool &is_enable);
+  // try to merge IN nodes under root_node (which is an AND/OR node)
+  // if merge does not happen, the ret_node is root_node
+  // if merge happened, the merged node will be a new node with merged children, and if:
+  //   1. the merged node has only one child:      ret_node is that child node
+  //   2. the merged node has more then one child: ret_node is the merged_node
+  static int try_merge_inlists(ObExprResolveContext &resolve_ctx,
+                               const bool is_root_condition,
+                               const ParseNode *root_node,
+                               const ParseNode *&ret_node);
   int resolve_inlist(ObInListInfo &inlist_infos);
 private:
+  static int get_inlist_rewrite_info(const ParseNode &in_list,
+                                     const int64_t column_cnt,
+                                     int64_t col_idx,
+                                     ObInListsResolverHelper &helper,
+                                     InListRewriteInfo &rewrite_info);
+  static int check_can_merge_inlists(const ParseNode *last_in_node,
+                                     const ParseNode *cur_in_node,
+                                     ObInListsResolverHelper &helper,
+                                     InListRewriteInfo &last_info,
+                                     bool &can_merge);
+  static int merge_two_in_nodes(ObIAllocator &alloc,
+                                const ParseNode *src_node,
+                                ParseNode *&dst_node);
+  static int do_merge_inlists(ObIAllocator &alloc,
+                              ObInListsResolverHelper &helper,
+                              const ParseNode *root_node,
+                              const ParseNode *&ret_node);
   int resolve_values_table_from_inlist(const ParseNode *in_list,
                                        const int64_t column_cnt,
                                        const int64_t row_cnt,
                                        const bool is_question_mark,
+                                       const bool is_prepare_stmt,
+                                       const bool is_called_in_sql,
                                        const ParamStore *param_store,
                                        ObSQLSessionInfo *session_info,
                                        ObIAllocator *allocator,
@@ -73,28 +137,21 @@ private:
                                          const bool is_prepare_stmt,
                                          const int64_t column_cnt,
                                          ObQueryRefRawExpr *query_ref);
-  static int get_const_node_types(const ParseNode *node,
-                                  const ParamStore *param_store,
-                                  const bool is_question_mark,
-                                  const ObCollationType connect_collation,
-                                  const ObCollationType nchar_collation,
-                                  const ObCollationType server_collation,
-                                  const bool enable_decimal_int,
-                                  ObIAllocator &alloc,
-                                  DistinctObjMeta &param_type,
-                                  bool &is_const);
   int resolve_access_param_values_table(const ParseNode &in_list,
                                         const int64_t column_cnt,
                                         const int64_t row_cnt,
                                         const ParamStore *param_store,
                                         ObSQLSessionInfo *session_info,
                                         ObIAllocator *allocator,
+                                        const bool is_called_in_sql,
                                         ObValuesTableDef &table_def);
   int resolve_access_obj_values_table(const ParseNode &in_list,
                                       const int64_t column_cnt,
                                       const int64_t row_cnt,
                                       ObSQLSessionInfo *session_info,
                                       ObIAllocator *allocator,
+                                      const bool is_prepare_stage,
+                                      const bool is_called_in_sql,
                                       ObValuesTableDef &table_def);
 private:
   ObDMLResolver *cur_resolver_;

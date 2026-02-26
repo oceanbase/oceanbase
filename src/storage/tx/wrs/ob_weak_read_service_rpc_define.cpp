@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX TRANS
 
-#include "share/ob_errno.h"
+#include "ob_weak_read_service_rpc_define.h"
 #include "ob_weak_read_service_rpc.h"
 
 namespace oceanbase

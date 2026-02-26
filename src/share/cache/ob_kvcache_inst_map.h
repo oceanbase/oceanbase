@@ -17,6 +17,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/ob_lf_fifo_allocator.h"
+#include "lib/lock/ob_simple_lock.h"
 #include "lib/resource/ob_resource_mgr.h"
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_hashmap.h"
@@ -32,6 +33,7 @@ namespace oceanbase
 namespace common
 {
 class ObKVCacheInstMap;
+class HazardDomain;
 struct ObTenantMBList
 {
   ObTenantMBList() { reset(); }
@@ -39,11 +41,11 @@ struct ObTenantMBList
 
   int init(const uint64_t tenant_id);
   void reset() {
-    tenant_id_ = common::OB_INVALID_ID;
     head_.reset();
     head_.prev_ = &head_;
     head_.next_ = &head_;
     resource_mgr_.reset();
+    tenant_id_ = common::OB_INVALID_ID;
     ref_cnt_ = 0;
     inited_ = false;
   }
@@ -52,9 +54,9 @@ struct ObTenantMBList
   int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1); }
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
 
-  uint64_t tenant_id_;
   ObKVMemBlockHandle head_;
   lib::ObTenantResourceMgrHandle resource_mgr_;
+  uint64_t tenant_id_;
   int64_t ref_cnt_;
   bool inited_;
 };
@@ -82,6 +84,7 @@ struct ObKVCacheInst
   ObLfFIFOAllocator node_allocator_;
   ObKVCacheStatus status_;
   bool is_delete_;
+  bool is_block_cache_;
   int64_t ref_cnt_;
   ObTenantMBListHandle mb_list_handle_; // list of tenant mbs
   ObKVCacheInst()
@@ -90,6 +93,7 @@ struct ObKVCacheInst
       node_allocator_(),
       status_(),
       is_delete_(false),
+      is_block_cache_(false),
       ref_cnt_(0),
       mb_list_handle_() { MEMSET(handles_, 0, sizeof(handles_)); }
   bool can_destroy() const ;
@@ -99,6 +103,7 @@ struct ObKVCacheInst
     node_allocator_.destroy();
     status_.reset();
     is_delete_ = false;
+    is_block_cache_ = false;
     ref_cnt_ = 0;
     mb_list_handle_.reset();
     MEMSET(handles_, 0, sizeof(handles_));
@@ -112,7 +117,7 @@ struct ObKVCacheInst
   inline int64_t get_memory_limit_pct() { return status_.get_memory_limit_pct(); }
   common::ObDLink *get_mb_list() { return mb_list_handle_.get_head(); }
 
-  TO_STRING_KV(K_(cache_id), K_(tenant_id), K_(is_delete), K_(status), K_(ref_cnt));
+  TO_STRING_KV(K_(cache_id), K_(tenant_id), K_(is_delete), K_(status), K_(is_block_cache), K_(ref_cnt));
 };
 
 class ObKVCacheInstHandle
@@ -147,7 +152,8 @@ public:
   int erase_tenant(const uint64_t tenant_id);
   int refresh_score();
   int set_priority(const int64_t cache_id, const int64_t old_priority, const int64_t new_priority);
-  int get_cache_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles);
+  // when `tenant_id` is nullptr, return all inst handles
+  int get_cache_info(ObIArray<ObKVCacheInstHandle> &inst_handles, const uint64_t* tenant_id = nullptr);
   void print_all_cache_info();
   void print_tenant_cache_info(const uint64_t tenant_id);
 
@@ -164,6 +170,9 @@ private:
   void de_inst_ref(ObKVCacheInst *inst);
   int inner_push_inst_handle(const KVCacheInstMap::iterator &iter, ObIArray<ObKVCacheInstHandle> &inst_handles);
 private:
+  static constexpr int64_t MAX_CACHE_INFO_LINE_LEN = 1000;
+  static constexpr int64_t TENANT_CACHE_INFO_BUF_LEN = MAX_CACHE_INFO_LINE_LEN * MAX_CACHE_NUM;
+
   DRWLock lock_;
   KVCacheInstMap  inst_map_;
   DRWLock list_lock_;
@@ -176,6 +185,11 @@ private:
   // used by clean garbage inst
   ObSimpleFixedArray<ObKVCacheInstKey> inst_keys_;
   const ObITenantMemLimitGetter *mem_limit_getter_;
+
+  // used by print_tenant_cache_info to avoid being not able to print cache info
+  // when there is no enough memory
+  char *tenant_cache_info_buf_;
+  ObSimpleLock cache_info_buf_lock_;
 
   // used by erase tenant cache inst
   bool is_inited_;

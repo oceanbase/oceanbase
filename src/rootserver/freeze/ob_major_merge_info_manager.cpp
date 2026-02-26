@@ -14,24 +14,11 @@
 
 #include "rootserver/freeze/ob_major_merge_info_manager.h"
 
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_root_utils.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/utility/utility.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_zone_table_operation.h"
 #include "share/ob_global_stat_proxy.h"
-#include "rootserver/freeze/ob_zone_merge_manager.h"
 #include "rootserver/ob_ddl_service.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/ob_snapshot_table_proxy.h"
-#include "observer/ob_server_struct.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "storage/tx/ob_ts_mgr.h"
-#include "storage/tx/wrs/ob_weak_read_util.h"
-#include "share/ob_server_table_operator.h"
-
+#include "rootserver/ob_tenant_balance_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -91,13 +78,13 @@ int ObMajorMergeInfoManager::reload(const bool reload_zone_merge_info)
   } else if (OB_FAIL(freeze_info_mgr_.reload(global_broadcast_scn))) {
     LOG_WARN("fail to update freeze info", KR(ret), K_(tenant_id), K(global_broadcast_scn));
   } else {
-    LOG_INFO("succ to reload merge info manager", K_(tenant_id));
+    LOG_INFO("succ to reload merge info manager", K_(tenant_id), K(global_broadcast_scn));
   }
   return ret;
 }
 
 // add freeze info to inner_table
-int ObMajorMergeInfoManager::set_freeze_info()
+int ObMajorMergeInfoManager::set_freeze_info(const ObMajorFreezeReason freeze_reason)
 {
   int ret = OB_SUCCESS;
   SCN new_frozen_scn;
@@ -138,7 +125,6 @@ int ObMajorMergeInfoManager::set_freeze_info()
         freeze_info.frozen_scn_ = new_frozen_scn;
         freeze_info.schema_version_ = schema_version_in_frozen_ts;
         freeze_info.data_version_ = data_version;
-
         // 4. insert freeze info
         if (OB_FAIL(freeze_info_proxy.set_freeze_info(trans, freeze_info))) {
           LOG_WARN("fail to set freeze info", KR(ret), K(freeze_info), K_(tenant_id));
@@ -158,8 +144,9 @@ int ObMajorMergeInfoManager::set_freeze_info()
   }
 
   LOG_INFO("finish set freeze info", KR(ret), K(freeze_info), K_(tenant_id));
-  ROOTSERVICE_EVENT_ADD("root_service", "root_major_freeze", K_(tenant_id),
-                        K(ret), "new_frozen_scn", new_frozen_scn.get_val_for_inner_table_field());
+  ROOTSERVICE_EVENT_ADD("major_merge", "root_major_freeze", K_(tenant_id),
+                        K(ret), "new_frozen_scn", new_frozen_scn.get_val_for_inner_table_field(),
+                        "freeze_reason", major_freeze_reason_to_str(freeze_reason));
   return ret;
 }
 
@@ -208,6 +195,18 @@ int ObMajorMergeInfoManager::generate_frozen_scn(
       LOG_WARN("max frozen_scn in cache is larger than max frozen_scn in table", KR(ret),
                K(local_max_frozen_scn), K(max_frozen_status));
     }
+    if (max_frozen_status.is_modified_) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(compaction::ADD_SUSPECT_LS_INFO(
+                  compaction::MAJOR_MERGE,
+                  ObDiagnoseTabletType::TYPE_RS_MAJOR_MERGE,
+                  ObLSID(1)/*ls_id*/,
+                  ObSuspectInfoType::SUSPECT_RS_FROZEN_SCN_ERROR,
+                  static_cast<int64_t>(max_frozen_status.frozen_scn_.get_val_for_inner_table_field()),
+                  static_cast<int64_t>(local_max_frozen_scn.get_val_for_inner_table_field())))) {
+        LOG_WARN("failed to add suspect info", KR(tmp_ret));
+      }
+    }
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, cur_min_data_version))) {
     LOG_WARN("fail to get min data version", KR(ret), K_(tenant_id));
   } else if (cur_min_data_version < max_frozen_status.data_version_) {
@@ -227,6 +226,7 @@ int ObMajorMergeInfoManager::generate_frozen_scn(
               K(tmp_frozen_scn), K(local_max_frozen_scn), K(snapshot_info));
   } else {
     new_frozen_scn = tmp_frozen_scn;
+    DEL_SUSPECT_INFO(compaction::MAJOR_MERGE, ObLSID(1)/*ls_id*/, UNKNOW_TABLET_ID, share::ObDiagnoseTabletType::TYPE_RS_MAJOR_MERGE);
   }
 
   return ret;
@@ -277,7 +277,7 @@ int ObMajorMergeInfoManager::get_freeze_info(
   return ret;
 }
 
-int ObMajorMergeInfoManager::get_local_latest_frozen_scn(SCN &frozen_scn)
+int ObMajorMergeInfoManager::get_local_latest_freeze_info(share::ObFreezeInfo &freeze_info)
 {
   int ret = OB_SUCCESS;
   ObRecursiveMutexGuard guard(lock_);
@@ -288,7 +288,7 @@ int ObMajorMergeInfoManager::get_local_latest_frozen_scn(SCN &frozen_scn)
   } else if (OB_FAIL(freeze_info_mgr_.get_latest_freeze_info(latest_freeze_info))) {
     LOG_WARN("inner stat error", KR(ret), K(latest_freeze_info));
   } else {
-    frozen_scn = latest_freeze_info.frozen_scn_;
+    freeze_info.assign(latest_freeze_info);
   }
   return ret;
 }
@@ -347,8 +347,8 @@ int ObMajorMergeInfoManager::try_gc_freeze_info()
   ObRecursiveMutexGuard guard(lock_);
   int ret = OB_SUCCESS;
 
-  const int64_t MAX_KEEP_INTERVAL_NS =  30 * 24 * 60 * 60 * 1000L * 1000L * 1000L; // 30 day
-  const int64_t MIN_REMAINED_VERSION_COUNT = 32;
+  const int64_t MAX_KEEP_INTERVAL_NS =  300 * 24 * 60 * 60 * 1000L * 1000L * 1000L; // 300 day
+  const int64_t MIN_REMAINED_VERSION_COUNT = 300;
   SCN cur_gts_scn;
   SCN min_frozen_scn;
   if (OB_FAIL(get_gts(cur_gts_scn))) {

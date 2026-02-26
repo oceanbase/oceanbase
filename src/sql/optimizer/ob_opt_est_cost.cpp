@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 
-#include "sql/optimizer/ob_opt_est_cost.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/optimizer/ob_optimizer_context.h"
+#include "ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
-#include "sql/optimizer/ob_optimizer.h"
-#include "storage/access/ob_table_scan_range.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "sql/optimizer/ob_opt_selectivity.h"
 #include "ob_opt_est_parameter_normal.h"
 #include "ob_opt_est_parameter_vector.h"
 #include "share/stat/ob_opt_stat_manager.h"
@@ -44,23 +37,18 @@ using namespace oceanbase::share;
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::storage;
-using namespace oceanbase::jit::expr;
 // using share::schema::ObSchemaGetterGuard;
 
 const int64_t ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM = 10;
 
 int ObOptEstCost::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                                 double &cost,
-                                double &filter_selectivity,
-                                ObIArray<ObExprSelPair> &all_predicate_sel,
                                 const ObOptimizerContext &opt_ctx)
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
   if (OB_FAIL(model->cost_nestloop(est_cost_info,
-                                  cost,
-                                  filter_selectivity,
-                                  all_predicate_sel))) {
+                                   cost))) {
     LOG_WARN("failed to est cost for nestloop join", K(ret));
   }
   return ret;
@@ -381,6 +369,35 @@ int ObOptEstCost::cost_table_for_parallel(const ObCostTableScanInfo &est_cost_in
   return ret;
 }
 
+int ObOptEstCost::cost_index_back(const ObCostTableScanInfo &est_cost_info,
+                                  double row_count,
+                                  double limit_count,
+                                  double &index_back_cost,
+                                  const ObOptimizerContext &opt_ctx)
+{
+  int ret = OB_SUCCESS;
+  GET_COST_MODEL();
+  if (OB_FAIL(model->cost_index_back(est_cost_info,
+                                     row_count,
+                                     limit_count,
+                                     index_back_cost))) {
+    LOG_WARN("failed to est cost for index back", K(ret));
+  }
+  return ret;
+}
+
+int ObOptEstCost::get_sort_cmp_cost(const common::ObIArray<sql::ObRawExprResType> &types,
+                                    double &cmp_cost,
+                                    const ObOptimizerContext &opt_ctx)
+{
+  int ret = OB_SUCCESS;
+  GET_COST_MODEL();
+  if (OB_FAIL(model->get_sort_cmp_cost(types, cmp_cost))) {
+    LOG_WARN("failed to get sort cmp cost", K(ret));
+  }
+  return ret;
+}
+
 double ObOptEstCost::cost_late_materialization_table_get(int64_t column_cnt, const ObOptimizerContext &opt_ctx)
 {
   GET_COST_MODEL();
@@ -512,6 +529,8 @@ int ObOptEstCost::estimate_width_for_table(const OptTableMetas &table_metas,
     for (int i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
       const ColumnItem &column_item = columns.at(i);
       ObColumnRefRawExpr *column_expr = column_item.expr_;
+      const OptColumnMeta *column_meta = NULL == table_meta ? NULL :
+                                         table_meta->get_column_meta(column_expr->get_column_id());
       if (OB_ISNULL(column_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
@@ -520,23 +539,11 @@ int ObOptEstCost::estimate_width_for_table(const OptTableMetas &table_metas,
                  !column_expr->is_explicited_reference() ||
                  column_expr->is_hidden_column()) {
         // do nothing
+      } else if (OB_NOT_NULL(column_meta) && table_meta->use_opt_stat() && column_meta->get_avg_len() != 0) {
+        width += column_meta->get_avg_len();
       } else {
-        ObGlobalColumnStat stat;
-        if (OB_NOT_NULL(table_meta) && table_meta->use_opt_stat() &&
-            OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
-                                                                table_meta->get_ref_table_id(),
-                                                                table_meta->get_all_used_parts(),
-                                                                column_expr->get_column_id(),
-                                                                table_meta->get_all_used_global_parts(),
-                                                                table_meta->get_rows(),
-                                                                table_meta->get_scale_ratio(),
-                                                                stat))) {
-          LOG_WARN("failed to get column stat", K(ret));
-        } else if (stat.avglen_val_ != 0) {
-          width += stat.avglen_val_;
-        } else {
-          width += get_estimate_width_from_type(column_expr->get_result_type());
-        }
+        // non base table column expr use estimation
+        width += get_estimate_width_from_type(column_expr->get_result_type());
       }
     }
   }
@@ -567,19 +574,11 @@ int ObOptEstCost::estimate_width_for_exprs(const OptTableMetas &table_metas,
         uint64_t table_id = column_expr->get_table_id();
         ObGlobalColumnStat stat;
         const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(table_id);
+        const OptColumnMeta *column_meta = NULL == table_meta ? NULL :
+                                           table_meta->get_column_meta(column_expr->get_column_id());
         // base table column expr use statistic
-        if (OB_NOT_NULL(table_meta) && table_meta->use_opt_stat() &&
-            OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
-                                                                table_meta->get_ref_table_id(),
-                                                                table_meta->get_all_used_parts(),
-                                                                column_expr->get_column_id(),
-                                                                table_meta->get_all_used_global_parts(),
-                                                                table_meta->get_rows(),
-                                                                table_meta->get_scale_ratio(),
-                                                                stat))) {
-          LOG_WARN("failed to get column stat", K(ret));
-        } else if (stat.avglen_val_ != 0) {
-          width += stat.avglen_val_;
+        if (OB_NOT_NULL(column_meta) && table_meta->use_opt_stat() && column_meta->get_avg_len() != 0) {
+          width += column_meta->get_avg_len();
         } else {
           // non base table column expr use estimation
           width += get_estimate_width_from_type(column_expr->get_result_type());
@@ -595,7 +594,7 @@ int ObOptEstCost::estimate_width_for_exprs(const OptTableMetas &table_metas,
   return ret;
 }
 
-double ObOptEstCost::get_estimate_width_from_type(const ObExprResType &type)
+double ObOptEstCost::get_estimate_width_from_type(const ObRawExprResType &type)
 {
   double width = ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH;
   if (type.is_integer_type()) {
@@ -673,44 +672,62 @@ int ObOptEstCost::stat_estimate_partition_batch_rowcount(const ObCostTableScanIn
   return ret;
 }
 
-int ObOptEstCost::calculate_filter_selectivity(ObCostTableScanInfo &est_cost_info,
-                                               ObIArray<ObExprSelPair> &all_predicate_sel)
+int ObOptEstCost::calculate_filter_selectivity(AccessPath &path)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(est_cost_info.table_metas_) || OB_ISNULL(est_cost_info.sel_ctx_)) {
+  ObCostTableScanInfo &est_cost_info = path.est_cost_info_;
+  ObIArray<ObExprSelPair> &all_predicate_sel = path.parent_->get_plan()->get_predicate_selectivities();
+  ObSEArray<ObRawExpr *, 8> apply_filters;
+  double total_sel = 1.0;
+  if (OB_ISNULL(est_cost_info.table_metas_) || OB_ISNULL(est_cost_info.sel_ctx_) ||
+      OB_ISNULL(est_cost_info.table_meta_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null point error", K(est_cost_info.table_metas_), K(est_cost_info.sel_ctx_), K(ret));
-  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
-                                                             *est_cost_info.sel_ctx_,
-                                                             est_cost_info.prefix_filters_,
-                                                             est_cost_info.prefix_filter_sel_,
-                                                             all_predicate_sel))) {
-    LOG_WARN("failed to calculate selectivity", K(est_cost_info.postfix_filters_), K(ret));
-  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
-                                                             *est_cost_info.sel_ctx_,
-                                                             est_cost_info.pushdown_prefix_filters_,
-                                                             est_cost_info.pushdown_prefix_filter_sel_,
-                                                             all_predicate_sel))) {
-    LOG_WARN("failed to calculate selectivity", K(est_cost_info.pushdown_prefix_filters_), K(ret));
-  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
-                                                             *est_cost_info.sel_ctx_,
-                                                             est_cost_info.ss_postfix_range_filters_,
-                                                             est_cost_info.ss_postfix_range_filters_sel_,
-                                                             all_predicate_sel))) {
-    LOG_WARN("failed to calculate selectivity", K(est_cost_info.ss_postfix_range_filters_), K(ret));
-  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
-                                                             *est_cost_info.sel_ctx_,
-                                                             est_cost_info.postfix_filters_,
-                                                             est_cost_info.postfix_filter_sel_,
-                                                             all_predicate_sel))) {
-    LOG_WARN("failed to calculate selectivity", K(est_cost_info.postfix_filters_), K(ret));
-  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
-                                                             *est_cost_info.sel_ctx_,
-                                                             est_cost_info.table_filters_,
-                                                             est_cost_info.table_filter_sel_,
-                                                             all_predicate_sel))) {
-    LOG_WARN("failed to calculate selectivity", K(est_cost_info.table_filters_), K(ret));
+  } else if (FALSE_IT(est_cost_info.sel_ctx_->init_op_ctx(NULL, est_cost_info.table_meta_info_->table_row_count_))) {
+  } else if (OB_FAIL(est_cost_info.sel_ctx_->init_deduce_infos(&path))) {
+    LOG_WARN("failed to init deduce info", K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_conditional_selectivity(*est_cost_info.table_metas_,
+                                                                         *est_cost_info.sel_ctx_,
+                                                                         apply_filters,
+                                                                         est_cost_info.prefix_filters_,
+                                                                         total_sel,
+                                                                         est_cost_info.prefix_filter_sel_,
+                                                                         all_predicate_sel))) {
+    LOG_WARN("failed to calculate prefix filter sel", K(est_cost_info.prefix_filters_));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_conditional_selectivity(*est_cost_info.table_metas_,
+                                                                         *est_cost_info.sel_ctx_,
+                                                                         apply_filters,
+                                                                         est_cost_info.pushdown_prefix_filters_,
+                                                                         total_sel,
+                                                                         est_cost_info.pushdown_prefix_filter_sel_,
+                                                                         all_predicate_sel))) {
+    LOG_WARN("failed to calculate prefix filter sel", K(est_cost_info.pushdown_prefix_filters_));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_conditional_selectivity(*est_cost_info.table_metas_,
+                                                                         *est_cost_info.sel_ctx_,
+                                                                         apply_filters,
+                                                                         est_cost_info.ss_postfix_range_filters_,
+                                                                         total_sel,
+                                                                         est_cost_info.ss_postfix_range_filters_sel_,
+                                                                         all_predicate_sel))) {
+    LOG_WARN("failed to calculate prefix filter sel", K(est_cost_info.ss_postfix_range_filters_));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_conditional_selectivity(*est_cost_info.table_metas_,
+                                                                         *est_cost_info.sel_ctx_,
+                                                                         apply_filters,
+                                                                         est_cost_info.postfix_filters_,
+                                                                         total_sel,
+                                                                         est_cost_info.postfix_filter_sel_,
+                                                                         all_predicate_sel))) {
+    LOG_WARN("failed to calculate prefix filter sel", K(est_cost_info.postfix_filters_));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_conditional_selectivity(*est_cost_info.table_metas_,
+                                                                         *est_cost_info.sel_ctx_,
+                                                                         apply_filters,
+                                                                         est_cost_info.table_filters_,
+                                                                         total_sel,
+                                                                         est_cost_info.table_filter_sel_,
+                                                                         all_predicate_sel))) {
+    LOG_WARN("failed to calculate prefix filter sel", K(est_cost_info.table_filters_));
   } else {
+    est_cost_info.sel_ctx_->clear();
     LOG_TRACE("table filter info", K(est_cost_info.ref_table_id_), K(est_cost_info.index_id_),
         K(est_cost_info.prefix_filters_), K(est_cost_info.pushdown_prefix_filters_),
         K(est_cost_info.postfix_filters_), K(est_cost_info.table_filters_),

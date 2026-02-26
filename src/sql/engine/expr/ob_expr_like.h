@@ -13,10 +13,18 @@
 #ifndef OCEANBASE_SQL_ENGINE_EXPR_LIKE_
 #define OCEANBASE_SQL_ENGINE_EXPR_LIKE_
 
+#include "common/ob_target_specific.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
 namespace oceanbase
 {
+namespace common
+{
+OB_DECLARE_AVX2_SPECIFIC_CODE(
+  class StringSearcher;
+)
+}
+
 namespace sql
 {
 enum INSTR_MODE
@@ -31,6 +39,9 @@ enum INSTR_MODE
 
 class ObExprLike : public ObFuncExprOperator
 {
+#if OB_USE_MULTITARGET_CODE
+  using StringSearcher = common::specific::avx2::StringSearcher;
+#endif
   struct InstrInfo
   {
     InstrInfo() :
@@ -75,6 +86,7 @@ class ObExprLike : public ObFuncExprOperator
     char *instr_buf_;
     uint32_t instr_buf_length_;
   };
+public:
   class ObExprLikeContext : public ObExprOperatorCtx
   {
   public:
@@ -90,7 +102,8 @@ class ObExprLike : public ObFuncExprOperator
           last_escape_(NULL),
           last_escape_len_(0),
           escape_buf_len_(0),
-          same_as_last(false)
+          same_as_last(false),
+          string_searcher_(nullptr)
     {}
     OB_INLINE bool is_analyzed() const {return is_analyzed_;}
     OB_INLINE void set_analyzed() {is_analyzed_ = true;}
@@ -113,6 +126,8 @@ class ObExprLike : public ObFuncExprOperator
     uint32_t last_escape_len_;
     uint32_t escape_buf_len_;
     bool same_as_last;
+    // string helper to calc substring etc.
+    void *string_searcher_;
   };
   OB_UNIS_VERSION_V(1);
 public:
@@ -128,16 +143,25 @@ public:
                                         const common::ObCollationType coll_type,
                                         const int32_t escape_wc,
                                         const common::ObString &pattern_val,
-                                        const InstrInfo instr_info);
+                                        const InstrInfo instr_info,
+                                        void *string_searcher);
 template <typename TextVec, typename ResVec, bool NullCheck, bool UseInstrMode, INSTR_MODE InstrMode>
   static int match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL,
                                         const common::ObCollationType coll_type,
                                         const int32_t escape_wc,
                                         const common::ObString &pattern_val,
-                                        const InstrInfo instr_info);
+                                        const InstrInfo instr_info,
+                                        void *string_searcher);
   template <bool percent_sign_start, bool percent_sign_end>
   static int64_t match_with_instr_mode(const common::ObString &text_val,
-                                       const InstrInfo instr_info);
+                                       const InstrInfo instr_info,
+                                       void *string_searcher);
+  template <bool percent_sign_start, bool percent_sign_end>
+  static int64_t match_with_instr_mode(const common::ObString &text_val,
+                                       const InstrInfo &instr_info);
+  template <bool percent_sign_start, bool percent_sign_end>
+  static int64_t match_with_instr_mode_by_simd(const common::ObString &text_val,
+                                               void *string_searcher);
   template <typename T>
   static int calc_with_non_instr_mode(T &result,
                                       const common::ObCollationType coll_type,
@@ -172,14 +196,15 @@ template <typename TextVec, typename ResVec, bool NullCheck, bool UseInstrMode, 
                                              const ObBitVector &skip, const EvalBound &bound,
                                              ObExpr &text, ObDatum *pattern_datum);
 
-  DECLARE_SET_LOCAL_SESSION_VARS;
-private:
   static int set_instr_info(common::ObIAllocator *exec_allocator,
                             const common::ObCollationType cs_type,
                             const common::ObString &pattern,
                             const common::ObString &escape,
                             const common::ObCollationType escape_coll,
                             ObExprLikeContext &like_ctx);
+
+  DECLARE_SET_LOCAL_SESSION_VARS;
+private:
   static int is_escape(const common::ObCollationType cs_type,
                        const char *buf_start,
                        int32_t char_len,
@@ -200,10 +225,10 @@ private:
                                 ObExecContext *exec_ctx, const uint64_t like_id,
                                 const bool check_optimization);
   template <bool is_static_engine>
-  OB_INLINE static void record_last_check(ObExprLikeContext &like_ctx,
-                                          const common::ObString pattern_val,
-                                          const common::ObString escape_val,
-                                          common::ObIAllocator *buf_alloc);
+  OB_INLINE static int record_last_check(ObExprLikeContext &like_ctx,
+                                         const common::ObString pattern_val,
+                                         const common::ObString escape_val,
+                                         common::ObIAllocator *buf_alloc);
   template <bool is_static_engine>
   OB_INLINE static bool checked_already(const ObExprLikeContext &like_ctx, bool null_pattern,
                                         const common::ObString pattern_val, bool null_escape,

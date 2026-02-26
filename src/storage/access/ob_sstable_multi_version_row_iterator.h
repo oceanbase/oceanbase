@@ -26,8 +26,7 @@ class ObSSTableMultiVersionRowGetter : public ObSSTableRowScanner<>
 public:
   ObSSTableMultiVersionRowGetter()
       : multi_version_range_(),
-      range_idx_(0),
-      base_rowkey_(nullptr)
+        base_rowkey_(nullptr)
   {}
   virtual ~ObSSTableMultiVersionRowGetter() {}
   virtual void reset() override;
@@ -42,7 +41,6 @@ protected:
   virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row) override;
 protected:
   blocksstable::ObDatumRange multi_version_range_;
-  int64_t range_idx_;
 private:
   const blocksstable::ObDatumRowkey *base_rowkey_;
   blocksstable::ObDatumRow not_exist_row_;
@@ -76,7 +74,6 @@ class ObSSTableMultiVersionRowMultiGetter : public ObSSTableRowMultiScanner<>
 public:
   ObSSTableMultiVersionRowMultiGetter()
       : multi_version_ranges_(),
-      range_idx_(0),
       pending_row_(nullptr),
       base_rowkeys_(nullptr)
   {
@@ -93,9 +90,9 @@ protected:
       ObITable *table,
       const void *query_range) override;
   virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row) override;
+  virtual bool is_multi_get() const override { return true; }
 private:
   common::ObSEArray<blocksstable::ObDatumRange, 4> multi_version_ranges_;
-  int64_t range_idx_;
   blocksstable::ObDatumRow not_exist_row_;
   const blocksstable::ObDatumRow *pending_row_;
   const common::ObIArray<blocksstable::ObDatumRowkey> *base_rowkeys_;

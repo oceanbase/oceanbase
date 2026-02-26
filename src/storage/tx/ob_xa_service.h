@@ -111,6 +111,7 @@ public:
               const int64_t flags,
               const int64_t timeout_seconds,
               const uint32_t session_id,
+              const uint32_t client_sid,
               const ObTxParam &tx_param,
               ObTxDesc *&tx_desc,
               const uint64_t data_version);
@@ -140,6 +141,42 @@ public:
                               const ObTransID &trans_id,
                               const int64_t timeout_seconds);
 public:
+  // for mysql
+  int xa_start_for_mysql(const ObXATransID &xid,
+                         const int64_t flags,
+                         const uint32_t session_id,
+                         const uint32_t client_sid,
+                         const ObTxParam &tx_param,
+                         ObTxDesc *&tx_desc);
+  int xa_end_for_mysql(const ObXATransID &xid,
+                       ObTxDesc *&tx_desc);
+  int xa_prepare_for_mysql(const ObXATransID &xid,
+                           const int64_t timeout_us,
+                           ObTxDesc *&tx_desc,
+                           bool &need_exit);
+  int xa_commit_onephase_for_mysql(const ObXATransID &xid,
+                                   const int64_t timeout_us,
+                                   ObTxDesc *&tx_desc,
+                                   bool &need_exit);
+  int xa_second_phase_twophase_for_mysql(const ObXATransID &xid,
+                                         const int64_t timeout_us,
+                                         const bool is_rollback,
+                                         ObTransID &tx_id);
+  int xa_rollback_onephase_for_mysql(const ObXATransID &xid,
+                                     const int64_t timeout_us,
+                                     ObTxDesc *&tx_desc,
+                                     bool &need_exit);
+  int insert_record_for_mysql(const uint64_t tenant_id,
+                              const ObXATransID &xid,
+                              const ObTransID &trans_id,
+                              const share::ObLSID &coordinator,
+                              const ObAddr &sche_addr,
+                              const bool is_read_only);
+  int handle_terminate_for_mysql(const ObXATransID &xid,
+                                 ObTxDesc *tx_desc);
+  int gc_record_for_mysql();
+  int check_trans_ctx(const int64_t tx_id_value, bool &is_exist);
+public:
   // for 4.0 dblink
   int xa_start_for_tm_promotion(const int64_t flags,
                                 const int64_t timeout_seconds,
@@ -148,6 +185,7 @@ public:
   int xa_start_for_tm(const int64_t flags,
                       const int64_t timeout_seconds,
                       const uint32_t session_id,
+                      const uint32_t client_sid,
                       const ObTxParam &tx_param,
                       ObTxDesc *&tx_desc,
                       ObXATransID &xid,
@@ -156,6 +194,8 @@ public:
                                  common::sqlclient::ObISQLConnection *dblink_conn,
                                  ObTxDesc *&tx_desc,
                                  ObXATransID &remote_xid);
+  int create_savepoint_for_dblink_trans(ObTxDesc *&tx_desc, const ObString &savepoint_name);
+  int rollback_savepoint_for_dblink_trans(ObTxDesc *&tx_desc, const ObString &savepoint_name);
   int commit_for_dblink_trans(ObTxDesc *&tx_desc);
   int rollback_for_dblink_trans(ObTxDesc *&tx_desc);
   static int generate_xid(const ObTransID &tx_id, ObXATransID &new_xid);
@@ -177,6 +217,8 @@ public:
                               ObTxDesc *&tx_desc,
                               const int64_t stmt_expired_time);
   void clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_desc);
+  // for dblink
+  int update_savepoint_with_sessid(ObTxDesc *&tx_desc, const uint32_t real_session_id);
 public:
   int delete_xa_all_tightly_branch(const uint64_t tenant_id, const ObXATransID &xid);
   int query_xa_scheduler_trans_id(const uint64_t tenant_id,
@@ -256,6 +298,7 @@ private:
                 const int64_t flags,
                 const int64_t timeout_seconds,
                 const uint32_t session_id,
+                const uint32_t client_sid,
                 const ObTxParam &tx_param,
                 ObTxDesc *&tx_desc,
                 const uint64_t data_version);
@@ -319,6 +362,13 @@ private:
                              const ObAddr &original_sche_addr,
                              const int64_t timeout_us);
 private:
+  // for mysql
+  int xa_start_for_mysql_(const ObXATransID &xid,
+                          const uint32_t session_id,
+                          const uint32_t client_sid,
+                          const ObTxParam &tx_param,
+                          ObTxDesc *&tx_desc);
+private:
   // for 4.0 dblink
   int xa_start_for_tm_promotion_(const int64_t flags,
                                  const int64_t timeout_seconds,
@@ -327,6 +377,7 @@ private:
   int xa_start_for_tm_(const int64_t flags,
                        const int64_t timeout_seconds,
                        const uint32_t session_id,
+                       const uint32_t client_sid,
                        const ObTxParam &tx_param,
                        ObTxDesc *&tx_desc,
                        ObXATransID &xid,
@@ -482,6 +533,9 @@ private:
 /////// statistics of xa inner logic
 #define XA_INNER_INCREMENT_COMPENSATE_COUNT()            \
    { MTL(ObXAService*)->get_statistics().inc_compensate_record_count();}                  \
+
+#define XA_INNER_INCREMENT_TERMINATE_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_session_terminate_count();}                  \
 
 /////// statistics of dblink trans
 #define DBLINK_STAT_ADD_TRANS_COUNT()            \

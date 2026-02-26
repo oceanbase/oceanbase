@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_nls_system_variable.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
 
 using namespace oceanbase::common;
 

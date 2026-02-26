@@ -11,9 +11,7 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_tx_data_table.h"
-#include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;
@@ -43,6 +41,7 @@ ObAllVirtualTxDataTable::~ObAllVirtualTxDataTable()
 void ObAllVirtualTxDataTable::reset()
 {
   // release tenant resources first
+  mgr_handle_.reset();
   omt::ObMultiTenantOperator::reset();
   addr_.reset();
   ObVirtualTableScannerIterator::reset();
@@ -51,6 +50,7 @@ void ObAllVirtualTxDataTable::reset()
 void ObAllVirtualTxDataTable::release_last_tenant()
 {
   // resources related with tenant must be released by this function
+  mgr_handle_.reset();
   ls_iter_guard_.reset();
 }
 
@@ -170,6 +170,8 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
         SERVER_LOG(WARN, "fail to get next logstream", KR(ret));
       }
     } else if (FALSE_IT(ls_id_ = ls->get_ls_id().id())) {
+    } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+      // skip logonly replica
     } else if (OB_FAIL(ls->get_tablet_svr()->get_tx_data_memtable_mgr(mgr_handle_))) {
       SERVER_LOG(WARN, "fail to get tx data memtable mgr.", KR(ret));
     } else if (FALSE_IT(memtable_mgr = mgr_handle_.get_memtable_mgr())) {

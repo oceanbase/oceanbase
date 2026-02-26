@@ -10,11 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/checkpoint/ob_data_checkpoint.h"
+#include "ob_data_checkpoint.h"
 #include "storage/tx_storage/ob_checkpoint_service.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/ls/ob_freezer.h"
+
+#define USING_LOG_PREFIX STORAGE
 
 namespace oceanbase
 {
@@ -25,6 +25,7 @@ namespace checkpoint
 {
 
 __thread bool ObDataCheckpoint::is_tenant_freeze_for_flush_ = false;
+__thread ObFreezeSourceFlag ObDataCheckpoint::freeze_source_ = ObFreezeSourceFlag::INVALID_SOURCE;
 
 // ** ObCheckpointDList **
 void ObCheckpointDList::reset()
@@ -198,7 +199,7 @@ int ObDataCheckpoint::safe_to_destroy(bool &is_safe_destroy)
   is_inited_ = false;
   // wait until ls_freeze finish
   while(!ls_freeze_finished_) {
-    ob_usleep(1000 * 1000);
+    ob_throttle_usleep(1000 * 1000, 0, ls_->get_ls_id().id());
     if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
       STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ls freeze cost too much time", K(ls_->get_ls_id()));
       ret = OB_ERR_UNEXPECTED;
@@ -259,7 +260,16 @@ SCN ObDataCheckpoint::get_active_rec_scn()
 int ObDataCheckpoint::flush(SCN recycle_scn, int64_t trace_id, bool need_freeze)
 {
   int ret = OB_SUCCESS;
-  if (need_freeze) {
+  if (is_tenant_freeze()) {
+    const bool is_sync = false;
+    const bool abs_timeout_ts = 0;
+    if (OB_FAIL(ls_->logstream_freeze(trace_id,
+                                      is_sync,
+                                      abs_timeout_ts,
+                                      get_freeze_source()))) {
+      STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
+    }
+  } else if (need_freeze) {
     SCN active_rec_scn = get_active_rec_scn();
     if (active_rec_scn > recycle_scn) {
       STORAGE_LOG(INFO,
@@ -273,7 +283,6 @@ int ObDataCheckpoint::flush(SCN recycle_scn, int64_t trace_id, bool need_freeze)
   } else if (OB_FAIL(traversal_flush_())) {
     STORAGE_LOG(WARN, "traversal_flush failed", K(ret), K(ls_->get_ls_id()));
   }
-
   return ret;
 }
 
@@ -460,7 +469,7 @@ void ObDataCheckpoint::ls_frozen_to_active_(int64_t &last_time)
     }
 
     if (!ls_frozen_list_is_empty) {
-      ob_usleep(LOOP_TRAVERSAL_INTERVAL_US);
+      ob_throttle_usleep(LOOP_TRAVERSAL_INTERVAL_US, ret, ls_->get_ls_id().id());
       if (task_reach_time_interval(3 * 1000 * 1000, last_time)) {
         STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "cost too much time in ls_frozen_list_", K(ret), K(ls_->get_ls_id()));
         RLOCK(LS_FROZEN);
@@ -520,7 +529,7 @@ void ObDataCheckpoint::ls_frozen_to_prepare_(int64_t &last_time)
     }
 
     if (!ls_frozen_list_is_empty) {
-      ob_usleep(LOOP_TRAVERSAL_INTERVAL_US);
+      ob_throttle_usleep(LOOP_TRAVERSAL_INTERVAL_US, ret, ls_->get_ls_id().id());
       if (task_reach_time_interval(3 * 1000 * 1000, last_time)) {
         STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "cost too much time in ls_frozen_list_", K(ls_->get_ls_id()));
         RLOCK(LS_FROZEN);
@@ -530,7 +539,7 @@ void ObDataCheckpoint::ls_frozen_to_prepare_(int64_t &last_time)
       break;
     }
     if (OB_EAGAIN == ret) {
-      ob_usleep(100000);
+      ob_throttle_usleep(100000, ret, ls_->get_ls_id().id());
     }
   } while (true);
 
@@ -894,33 +903,36 @@ int ObDataCheckpoint::freeze_base_on_needs_(const int64_t trace_id,
     share::SCN recycle_scn)
 {
   int ret = OB_SUCCESS;
-  if (get_rec_scn() <= recycle_scn) {
-    if (is_tenant_freeze() || !is_flushing()) {
-      int64_t wait_flush_num =
-        new_create_list_.checkpoint_list_.get_size()
-        + active_list_.checkpoint_list_.get_size();
-      bool logstream_freeze = true;
-      ObSArray<ObTabletID> need_flush_tablets;
-      if (wait_flush_num > MAX_FREEZE_CHECKPOINT_NUM) {
-        if (OB_FAIL(get_need_flush_tablets_(recycle_scn, need_flush_tablets))) {
-          // do nothing
-        } else {
-          int need_flush_num = need_flush_tablets.count();
-          logstream_freeze =
-            need_flush_num * 100 / wait_flush_num > TABLET_FREEZE_PERCENT;
-        }
+  if (get_rec_scn() <= recycle_scn && !is_flushing()) {
+    int64_t wait_flush_num = new_create_list_.checkpoint_list_.get_size() + active_list_.checkpoint_list_.get_size();
+    bool logstream_freeze = true;
+    ObSArray<ObTabletID> need_flush_tablets;
+    if (wait_flush_num > MAX_FREEZE_CHECKPOINT_NUM) {
+      if (OB_FAIL(get_need_flush_tablets_(recycle_scn, need_flush_tablets))) {
+        // do nothing
+      } else {
+        int need_flush_num = need_flush_tablets.count();
+        logstream_freeze = need_flush_num * 100 / wait_flush_num > TABLET_FREEZE_PERCENT;
       }
+    }
 
-      const bool is_sync = false;
-      const bool abs_timeout_ts = 0;  // async freeze do not need
-      if (OB_FAIL(ret)) {
-      } else if (logstream_freeze) {
-        if (OB_FAIL(ls_->logstream_freeze(trace_id, is_sync, abs_timeout_ts))) {
-          STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
-        }
-      } else if (OB_FAIL(ls_->tablet_freeze(trace_id, need_flush_tablets, is_sync))) {
-        STORAGE_LOG(WARN, "batch tablet freeze failed", K(ret), K(ls_->get_ls_id()), K(need_flush_tablets));
+    const bool is_sync = false;
+    const bool abs_timeout_ts = 0;  // async freeze do not need
+    if (OB_FAIL(ret)) {
+    } else if (logstream_freeze) {
+      if (OB_FAIL(ls_->logstream_freeze(trace_id,
+                                        is_sync,
+                                        abs_timeout_ts,
+                                        get_freeze_source()))) {
+        STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
       }
+    } else if (OB_FAIL(ls_->tablet_freeze(trace_id,
+                                          need_flush_tablets,
+                                          is_sync,
+                                          abs_timeout_ts,
+                                          false, /*need_rewrite_meta*/
+                                          get_freeze_source()))) {
+      STORAGE_LOG(WARN, "batch tablet freeze failed", K(ret), K(ls_->get_ls_id()), K(need_flush_tablets));
     }
   }
   return ret;

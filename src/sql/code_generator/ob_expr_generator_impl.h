@@ -20,7 +20,6 @@
 
 namespace oceanbase
 {
-using jit::expr::ObColumnIndexProvider;
 namespace sql
 {
 class ObExprRegexp;
@@ -58,13 +57,13 @@ public:
   ObExprGeneratorImpl(int16_t cur_regexp_op_count,
                       int16_t cur_like_op_count,
                       uint32_t *next_expr_id,
-                      ObColumnIndexProvider &column_idx_provider);
+                      RowDesc &column_idx_provider);
 
   ObExprGeneratorImpl(ObExprOperatorFactory &factory,
                       int16_t cur_regexp_op_count,
                       int16_t cur_like_op_count,
                       uint32_t *next_expr_id,
-                      ObColumnIndexProvider &column_idx_provider);
+                      RowDesc &column_idx_provider);
   virtual ~ObExprGeneratorImpl();
   virtual int generate(ObRawExpr &raw_expr, ObSqlExpression &out_expr);
 
@@ -98,6 +97,7 @@ private:
   virtual int visit(ObPseudoColumnRawExpr &expr);
   virtual int visit(ObPlQueryRefRawExpr &expr);
   virtual int visit(ObMatchFunRawExpr &expr);
+  virtual int visit(ObUnpivotRawExpr &expr);
   virtual bool skip_child(ObRawExpr &expr);
 private:
   // types and constants
@@ -151,7 +151,7 @@ private:
   ObSqlExpression *sql_expr_;  // generated postfix expression
   int16_t cur_regexp_op_count_;
   int16_t cur_like_op_count_;
-  ObColumnIndexProvider &column_idx_provider_;
+  RowDesc &column_idx_provider_;
   common::ObArenaAllocator inner_alloc_;
   ObExprOperatorFactory inner_factory_;
   ObExprOperatorFactory &factory_;

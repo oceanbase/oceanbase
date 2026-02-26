@@ -12,16 +12,7 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include <mysql.h>
-#include "lib/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_statement.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/time/ob_time_utility.h"
-#include "common/object/ob_object.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "common/ob_zerofill_info.h"
-#include "lib/timezone/ob_timezone_info.h"
 #include "lib/string/ob_hex_utils_base.h"
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
 
@@ -133,6 +124,21 @@ int ObMySQLResultImpl::close()
   return ret;
 }
 
+int ObMySQLResultImpl::inner_fetch_row_nonblock(MYSQL_RES *result, MYSQL_ROW &row)
+{
+  int ret = OB_SUCCESS;
+  row = NULL;
+  int status = mysql_fetch_row_start(&row, result);
+  while (status && OB_SUCC(ret)) {
+    if (OB_FAIL(stmt_.wait_for_mysql(status))) {
+      LOG_WARN("wait for mysql failed", K(ret));
+    } else {
+      status = mysql_fetch_row_cont(&row, result, status);
+    }
+  }
+  return ret;
+}
+
 int ObMySQLResultImpl::next()
 {
   int ret = OB_SUCCESS;
@@ -143,7 +149,9 @@ int ObMySQLResultImpl::next()
   if (OB_ISNULL(result_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("result must not be null", K(ret));
-  } else if (OB_ISNULL(cur_row_ = mysql_fetch_row(result_))) {
+  } else if (OB_FAIL(inner_fetch_row_nonblock(result_, cur_row_))) {
+    LOG_WARN("fetch row nonblock failed", K(ret));
+  } else if (OB_ISNULL(cur_row_)) {
     MYSQL *stmt_handler = stmt_.get_stmt_handler();
     if (OB_ISNULL(stmt_handler)) {
       ret = OB_ERR_UNEXPECTED;
@@ -160,17 +168,11 @@ int ObMySQLResultImpl::next()
         int tmp_ret = ret;
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null ptr", K(errmsg), K(tmp_ret), K(ret));
-      } else if (OB_INVALID_ID != conn->get_dblink_id()) {
-        LOG_WARN("dblink connection error", K(ret),
-                                            KP(conn),
-                                            K(conn->get_dblink_id()),
-                                            K(conn->get_sessid()),
-                                            K(conn->usable()),
-                                            K(conn->ping()));
-        TRANSLATE_CLIENT_ERR(ret, errmsg);
-        if (ObMySQLStatement::is_need_disconnect_error(ret)) {
-          conn->set_usable(false);
-        }
+      } else {
+        conn->handler_dblink_error(ret, false, errmsg);
+      }
+      if (ObMySQLStatement::is_need_disconnect_error(ret)) {
+        conn->set_usable(false);
       }
     }
   } else if (OB_ISNULL(cur_row_result_lengths_ = mysql_fetch_lengths(result_))) {

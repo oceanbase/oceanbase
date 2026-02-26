@@ -58,7 +58,8 @@ void ObExprHexTest::TearDown()
                                          ref.set_collation_type(CS_TYPE_UTF8MB4_BIN);         \
                                          ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
                                          int err = str_op_object.func(r, t1, expr_ctx); \
-                                         _OB_LOG(INFO, "text=%s expect=%s result=%s", to_cstring(t1), to_cstring(ref), to_cstring(r)); \
+                                         ObCStringHelper helper; \
+                                         _OB_LOG(INFO, "text=%s expect=%s result=%s", helper.convert(t1), helper.convert(ref), helper.convert(r)); \
                                          EXPECT_TRUE(OB_SUCCESS == err); \
                                          ASSERT_TRUE(ref.get_type() == r.get_type()); \
                                          if (ref.get_type() != ObNullType) \

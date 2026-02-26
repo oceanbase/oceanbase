@@ -135,7 +135,7 @@ public:
   const char *get_err_msg() const { return rcode_.msg_; }
   int store_warning_msg(const ObWarningBuffer &wb);
   const sql::ObSessionValMap& get_session_var_map() const {return user_var_map_;}
-  int set_session_var_map(const sql::ObSQLSessionInfo *p_session_info);
+  int set_session_var_map(sql::ObExecContext &exec_ctx);
 
   /// copy ObScanner
   int assign(const ObScanner &other_scanner);

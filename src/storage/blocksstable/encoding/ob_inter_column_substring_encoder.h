@@ -92,6 +92,8 @@ public:
   virtual int64_t get_ref_col_idx() const override;
   virtual void reuse() override;
   virtual int store_fix_data(ObBufferWriter &buf_writer) override;
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, K_(ref_col_idx), KPC_(ref_ctx),
+      K_(same_start_pos), K_(fix_data_size), K_(start_pos_byte), K_(val_len_byte));
 
 private:
   // return:

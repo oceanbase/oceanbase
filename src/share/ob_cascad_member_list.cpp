@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
-#include "lib/utility/ob_print_utils.h"
 #include "ob_cascad_member_list.h"
 
 namespace oceanbase

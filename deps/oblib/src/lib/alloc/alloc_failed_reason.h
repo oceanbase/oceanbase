@@ -20,15 +20,20 @@ namespace oceanbase
 {
 namespace lib
 {
-enum AllocFailedReason
+enum AllocFailedReason // FARM COMPAT WHITELIST
 {
   UNKNOWN = 0,
+  INVALID_ALLOC_SIZE,
   SINGLE_ALLOC_SIZE_OVERFLOW,
   CTX_HOLD_REACH_LIMIT,
+  ERRSIM_CTX_HOLD_REACH_LIMIT,
   TENANT_HOLD_REACH_LIMIT,
+  ERRSIM_TENANT_HOLD_REACH_LIMIT,
   SERVER_HOLD_REACH_LIMIT,
+  ERRSIM_SERVER_HOLD_REACH_LIMIT,
   PHYSICAL_MEMORY_EXHAUST,
-  ERRSIM
+  ERRSIM_PHYSICAL_MEMORY_EXHAUST,
+  ERRSIM_INJECTION,
 };
 
 struct AllocFailedCtx
@@ -57,25 +62,26 @@ public:
   bool need_wash_block() const
   {
     return reason_ == lib::CTX_HOLD_REACH_LIMIT ||
+           reason_ == lib::ERRSIM_CTX_HOLD_REACH_LIMIT ||
            reason_ == lib::TENANT_HOLD_REACH_LIMIT ||
-           reason_ == lib::SERVER_HOLD_REACH_LIMIT;
+           reason_ == lib::ERRSIM_TENANT_HOLD_REACH_LIMIT ||
+           reason_ == lib::SERVER_HOLD_REACH_LIMIT ||
+           reason_ == lib::ERRSIM_SERVER_HOLD_REACH_LIMIT;
   }
   bool need_wash_chunk() const
   {
-    return reason_ == lib::PHYSICAL_MEMORY_EXHAUST;
+    return reason_ == lib::PHYSICAL_MEMORY_EXHAUST ||
+           reason_ == lib::ERRSIM_PHYSICAL_MEMORY_EXHAUST;
 
-  }
-  bool reach_limit_except_ctx() const
-  {
-    return reason_ == lib::TENANT_HOLD_REACH_LIMIT ||
-           reason_ == lib::SERVER_HOLD_REACH_LIMIT ||
-           reason_ == lib::PHYSICAL_MEMORY_EXHAUST;
   }
 };
 
 char *alloc_failed_msg();
 
 AllocFailedCtx &g_alloc_failed_ctx();
+void print_alloc_failed_msg(uint64_t tenant_id, uint64_t ctx_id,
+                            int64_t ctx_hold, int64_t ctx_limit,
+                            int64_t tenant_hold, int64_t tenant_limit);
 
 } // end of namespace lib
 } // end of namespace oceanbase

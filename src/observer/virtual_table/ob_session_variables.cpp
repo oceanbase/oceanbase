@@ -11,8 +11,6 @@
  */
 
 #include "observer/virtual_table/ob_session_variables.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

@@ -34,20 +34,16 @@ class ObAllVirtualLSReplicaTaskPlan : public common::ObVirtualTableProjector
 public:
   ObAllVirtualLSReplicaTaskPlan();
   virtual ~ObAllVirtualLSReplicaTaskPlan();
-
-  int init(
-      share::schema::ObMultiVersionSchemaService &schema_service,
-      rootserver::ObDRWorker &task_worker);
   virtual int inner_get_next_row(common::ObNewRow *&row);
 
 private:
   int get_full_row_(const share::schema::ObTableSchema *table,
                     const ObLSReplicaTaskDisplayInfo &task_stat,
                     common::ObIArray<Column> &columns);
+  int try_tenant_disaster_recovery_(const uint64_t tenant_id,
+                                    ObDRWorker &task_worker);
+
 private:
-  bool inited_;
-  share::schema::ObMultiVersionSchemaService *schema_service_;
-  rootserver::ObDRWorker *task_worker_;
   common::ObArenaAllocator arena_allocator_;
 
 private:

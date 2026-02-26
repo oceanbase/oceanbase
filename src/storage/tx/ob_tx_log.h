@@ -28,6 +28,7 @@
 #include "logservice/palf/lsn.h"
 #include "share/scn.h"
 #include "lib/utility/ob_unify_serialize.h"
+#include "storage/tablelock/ob_table_lock_common.h"
 //#include <cstdint>
 
 #define OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
@@ -94,6 +95,8 @@ enum class ObTxLogType : int64_t
   TX_START_WORKING_LOG = 0x100000,
   // BigSegment log
   TX_BIG_SEGMENT_LOG = 0x200000,
+  // direct load inc major
+  TX_DIRECT_LOAD_INC_MAJOR_LOG = 0x400000,
   TX_LOG_TYPE_LIMIT
 };
 
@@ -149,7 +152,9 @@ static const ObTxLogType TX_LOG_TYPE_MASK = (ObTxLogType::TX_REDO_LOG |
                                              ObTxLogType::TX_COMMIT_LOG |
                                              ObTxLogType::TX_ABORT_LOG |
                                              ObTxLogType::TX_CLEAR_LOG |
-                                             ObTxLogType::TX_START_WORKING_LOG);
+                                             ObTxLogType::TX_START_WORKING_LOG |
+                                             ObTxLogType::TX_BIG_SEGMENT_LOG |
+                                             ObTxLogType::TX_DIRECT_LOAD_INC_MAJOR_LOG);
 
 class ObTxLogTypeChecker {
 public:
@@ -158,7 +163,8 @@ public:
     return ObTxLogType::TX_REDO_LOG == log_type || ObTxLogType::TX_RECORD_LOG == log_type
            || ObTxLogType::TX_ROLLBACK_TO_LOG == log_type
            || ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type
-           || ObTxLogType::TX_DIRECT_LOAD_INC_LOG == log_type;
+           || ObTxLogType::TX_DIRECT_LOAD_INC_LOG == log_type
+           || ObTxLogType::TX_DIRECT_LOAD_INC_MAJOR_LOG == log_type;
   }
   static bool is_state_log(const ObTxLogType log_type)
   {
@@ -174,6 +180,10 @@ public:
   static bool is_ls_log(const ObTxLogType log_type)
   {
     return ObTxLogType::TX_START_WORKING_LOG == log_type;
+  }
+  static bool is_mds_log(const ObTxLogType log_type)
+  {
+    return ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type;
   }
   static bool can_be_spilt(const ObTxLogType log_type)
   {
@@ -616,6 +626,7 @@ public:
   const ObTxDLIncLogBuf &get_dli_buf() { return log_buf_; }
 
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
+  int ob_admin_dump_macro_block(share::ObAdminMutatorStringArg &arg, int64_t scn_val);
 
   static const ObTxLogType LOG_TYPE;
   TO_STRING_KV(K(LOG_TYPE), K(ddl_log_type_), K(log_buf_));
@@ -632,24 +643,36 @@ public:
 
 #endif
 
-private:
+protected:
   ObTxSerCompatByte compat_bytes_;
 
   DirectLoadIncLogType ddl_log_type_;
 
   ObTxDLIncLogBuf &log_buf_;
   // ObDDLRedoLog &ddl_redo_log_;
+  ObDDLIncLogBasic batch_key_;
+};
+
+class ObTxDirectLoadIncMajorLog : public ObTxDirectLoadIncLog
+{
+public:
+  static const ObTxLogType LOG_TYPE;
+  ObTxDirectLoadIncMajorLog(const ObTxDirectLoadIncLog::ConstructArg &arg)
+      : ObTxDirectLoadIncLog(arg)
+  {}
 };
 
 class ObTxActiveInfoLogTempRef {
 public:
-  ObTxActiveInfoLogTempRef() : scheduler_(), app_trace_id_str_(), proposal_leader_(), xid_() {}
+  ObTxActiveInfoLogTempRef()
+    : scheduler_(), app_trace_id_str_(), proposal_leader_(), xid_(), prio_op_array_() {}
 
 public:
   common::ObAddr scheduler_;
   common::ObString app_trace_id_str_;
   common::ObAddr proposal_leader_;
   ObXATransID xid_;
+  tablelock::ObTableLockPrioOpArray prio_op_array_;
 };
 
 class ObTxActiveInfoLog
@@ -658,18 +681,19 @@ class ObTxActiveInfoLog
 
 public:
   ObTxActiveInfoLog(ObTxActiveInfoLogTempRef &temp_ref)
-      : scheduler_(temp_ref.scheduler_), trans_type_(TransType::SP_TRANS), session_id_(0),
+      : scheduler_(temp_ref.scheduler_), trans_type_(TransType::SP_TRANS), session_id_(0), associated_session_id_(0),
         app_trace_id_str_(temp_ref.app_trace_id_str_), schema_version_(0), can_elr_(false),
         proposal_leader_(temp_ref.proposal_leader_), cur_query_start_time_(0), is_sub2pc_(false),
         is_dup_tx_(false), tx_expired_time_(0), epoch_(0), last_op_sn_(0), first_seq_no_(),
         last_seq_no_(), max_submitted_seq_no_(), serial_final_seq_no_(), cluster_version_(0),
-        xid_(temp_ref.xid_)
+        xid_(temp_ref.xid_), prio_op_array_(temp_ref.prio_op_array_)
   {
     before_serialize();
   }
   ObTxActiveInfoLog(common::ObAddr &scheduler,
                     int trans_type,
                     int session_id,
+                    uint32_t associated_session_id,
                     common::ObString &app_trace_id_str,
                     int64_t schema_version,
                     bool elr,
@@ -685,14 +709,16 @@ public:
                     ObTxSEQ max_submitted_seq_no,
                     uint64_t cluster_version,
                     const ObXATransID &xid,
-                    ObTxSEQ serial_final_seq_no)
+                    ObTxSEQ serial_final_seq_no,
+                    tablelock::ObTableLockPrioOpArray &prio_op_array)
       : scheduler_(scheduler), trans_type_(trans_type), session_id_(session_id),
+        associated_session_id_(associated_session_id),
         app_trace_id_str_(app_trace_id_str), schema_version_(schema_version), can_elr_(elr),
         proposal_leader_(proposal_leader), cur_query_start_time_(cur_query_start_time),
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), tx_expired_time_(tx_expired_time),
         epoch_(epoch), last_op_sn_(last_op_sn), first_seq_no_(first_seq_no), last_seq_no_(last_seq_no),
         max_submitted_seq_no_(max_submitted_seq_no), serial_final_seq_no_(serial_final_seq_no),
-        cluster_version_(cluster_version), xid_(xid)
+        cluster_version_(cluster_version), xid_(xid), prio_op_array_(prio_op_array)
   {
     before_serialize();
   };
@@ -700,6 +726,7 @@ public:
   const common::ObAddr &get_scheduler() const { return scheduler_; }
   int get_trans_type() const { return trans_type_; }
   int get_session_id() const { return session_id_; }
+  int get_associated_session_id() const { return associated_session_id_; }
   const common::ObString &get_app_trace_id() const { return app_trace_id_str_; }
   const int64_t &get_schema_version() { return schema_version_; }
   bool is_elr() const { return can_elr_; }
@@ -716,6 +743,7 @@ public:
   ObTxSEQ get_serial_final_seq_no() const { return serial_final_seq_no_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
   const ObXATransID &get_xid() const { return xid_; }
+  const tablelock::ObTableLockPrioOpArray &get_prio_op_array() const { return prio_op_array_; }
   // for ob_admin
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
@@ -724,6 +752,7 @@ public:
                K(scheduler_),
                K(trans_type_),
                K(session_id_),
+               K(associated_session_id_),
                K(app_trace_id_str_),
                K(schema_version_),
                K(can_elr_),
@@ -739,7 +768,8 @@ public:
                K(max_submitted_seq_no_),
                K(serial_final_seq_no_),
                K(cluster_version_),
-               K(xid_));
+               K(xid_),
+               K(prio_op_array_));
 
 public:
   int before_serialize();
@@ -749,6 +779,7 @@ private:
   common::ObAddr &scheduler_;
   int trans_type_;
   int session_id_;
+  uint32_t associated_session_id_;
   common::ObString &app_trace_id_str_;
   int64_t schema_version_;
   bool can_elr_;
@@ -769,19 +800,21 @@ private:
   ObTxSEQ serial_final_seq_no_;
   uint64_t cluster_version_;
   ObXATransID xid_;
+  tablelock::ObTableLockPrioOpArray &prio_op_array_;
 };
 
 class ObTxCommitInfoLogTempRef
 {
 public:
   ObTxCommitInfoLogTempRef()
-      : scheduler_(), participants_(), app_trace_id_str_(), app_trace_info_(),
-        incremental_participants_(), prev_record_lsn_(), redo_lsns_(), xid_()
+    : scheduler_(), participants_(), commit_parts_(), app_trace_id_str_(), app_trace_info_(),
+    incremental_participants_(), prev_record_lsn_(), redo_lsns_(), xid_()
   {}
 
 public:
   common::ObAddr scheduler_;
   share::ObLSArray participants_;
+  ObTxCommitParts commit_parts_;
   common::ObString app_trace_id_str_;
   common::ObString app_trace_info_;
   share::ObLSArray incremental_participants_;
@@ -801,7 +834,7 @@ public:
         incremental_participants_(temp_ref.incremental_participants_), cluster_version_(0),
         app_trace_id_str_(temp_ref.app_trace_id_str_), app_trace_info_(temp_ref.app_trace_info_),
         prev_record_lsn_(temp_ref.prev_record_lsn_), redo_lsns_(temp_ref.redo_lsns_),
-        xid_(temp_ref.xid_), commit_parts_(), epoch_(0)
+        xid_(temp_ref.xid_), commit_parts_(temp_ref.commit_parts_), epoch_(0)
   {
     before_serialize();
   }
@@ -818,7 +851,7 @@ public:
                     share::ObLSArray &incremental_participants,
                     uint64_t cluster_version,
                     const ObXATransID &xid,
-                    const ObTxCommitParts &commit_parts,
+                    ObTxCommitParts &commit_parts,
                     int64_t epoch)
       : scheduler_(scheduler), participants_(participants), upstream_(upstream),
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), can_elr_(is_elr),
@@ -884,7 +917,8 @@ private:
   ObRedoLSNArray &redo_lsns_;
   // for xa
   ObXATransID xid_;
-  ObTxCommitParts commit_parts_;
+  // for transfer
+  ObTxCommitParts &commit_parts_;
   int64_t epoch_;
 };
 
@@ -1411,7 +1445,7 @@ private:
   {
     int ret = OB_ALLOCATE_MEMORY_FAILED;
     char *ptr = NULL;
-    if (OB_ISNULL(ptr = static_cast<char *>(ob_malloc(NORMAL_LOG_BUF_SIZE, "NORMAL_CLOG_BUF")))) {
+    if (OB_ISNULL(ptr = static_cast<char *>(share::mtl_malloc(NORMAL_LOG_BUF_SIZE, "NORMAL_CLOG_BUF")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "alloc clog normal buffer failed", K(ret));
     }
@@ -1421,7 +1455,7 @@ private:
   {
     int ret = OB_ALLOCATE_MEMORY_FAILED;
     char *ptr = NULL;
-    if (OB_ISNULL(ptr = static_cast<char *>(ob_malloc(BIG_LOG_BUF_SIZE, "BIG_CLOG_BUF")))) {
+    if (OB_ISNULL(ptr = static_cast<char *>(share::mtl_malloc(BIG_LOG_BUF_SIZE, "BIG_CLOG_BUF")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "alloc clog big buffer failed", K(ret));
     }
@@ -1430,11 +1464,11 @@ private:
   void free_buf_(char *buf)
   {
     if (OB_NOT_NULL(buf)) {
-      ob_free(buf);
+      share::mtl_free(buf);
     }
   }
 public:
-  static const int64_t MIN_LOG_BUF_SIZE = 2048;
+  static const int64_t MIN_LOG_BUF_SIZE = 4096;
   static const int64_t NORMAL_LOG_BUF_SIZE = common::OB_MAX_LOG_ALLOWED_SIZE;
   static const int64_t BIG_LOG_BUF_SIZE = palf::MAX_LOG_BODY_SIZE;
   STATIC_ASSERT((BIG_LOG_BUF_SIZE > 3 * 1024 * 1024 && BIG_LOG_BUF_SIZE < 4 * 1024 * 1024), "unexpected big log buf size");
@@ -1573,7 +1607,9 @@ int ObTxLogBlock::add_new_log(T &tx_log_body, ObTxBigSegmentBuf *big_segment_buf
     } else {
       while (OB_SUCC(ret) && len_ < serialize_size + tmp_pos) {
         if (OB_FAIL(extend_log_buf())) {
-          ret = OB_BUF_NOT_ENOUGH;
+          // ret = OB_BUF_NOT_ENOUGH;
+          TRANS_LOG(WARN, "extend a log buf failed", K(ret), K(len_), K(tmp_pos), K(serialize_size),
+                    K(fill_buf_), KPC(this));
         }
       }
     }

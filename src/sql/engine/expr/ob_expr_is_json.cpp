@@ -14,13 +14,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_is_json.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "objit/common/ob_item_type.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/json_type/ob_json_tree.h"
-#include "lib/hash/ob_hashset.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -82,7 +75,7 @@ int ObExprIsJson::calc_result_typeN(ObExprResType& type,
 
 int ObExprIsJson::check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
                                 const ObDatum &data, ObObjType type,
-                                ObCollationType cs_type, ObArenaAllocator &allocator,
+                                ObCollationType cs_type, MultimodeAlloctor &allocator,
                                 uint8_t strict_opt, uint8_t scalar_opt, uint8_t unique_opt,
                                 bool check_for_is_json, ObDatum &res)
 {
@@ -101,7 +94,7 @@ int ObExprIsJson::check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
     } else if (is_null) {
     } else if (OB_UNLIKELY(j_str == "")) {
-      if (type == ObJsonType) {
+      if (ob_is_json(type) || ob_is_string_type(type)) {
         is_null = true;
       } else {
         is_invalid = true;
@@ -113,7 +106,8 @@ int ObExprIsJson::check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
       ADD_FLAG_IF_NEED(strict_opt != OB_JSON_MODE_STRICT, parse_flag, ObJsonParser::JSN_RELAXED_FLAG);
       ADD_FLAG_IF_NEED(unique_opt == OB_JSON_MODE_UNIQUE_KEYS, parse_flag, ObJsonParser::JSN_UNIQUE_FLAG);
 
-      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, &allocator, parse_flag))) {
+      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, &allocator, parse_flag,
+                                                  ObJsonExprHelper::get_json_max_depth_config()))) {
         LOG_WARN("fail to check json syntax", K(ret), K(type), K(j_str));
       }
     }
@@ -274,7 +268,8 @@ int ObExprIsJson::eval_is_json(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     LOG_WARN("eval json arg failed", K(ret));
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+    MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
     if (OB_FAIL(check_is_json(expr, ctx, *json_datum,
                               json_arg->datum_meta_.type_,
                               cs_type, temp_allocator,

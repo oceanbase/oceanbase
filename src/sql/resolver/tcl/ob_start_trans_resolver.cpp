@@ -15,7 +15,6 @@
 #include "ob_start_trans_resolver.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_trans_character.h"
-#include "share/schema/ob_sys_variable_mgr.h" // ObSimpleSysVariableSchema
 
 namespace oceanbase
 {

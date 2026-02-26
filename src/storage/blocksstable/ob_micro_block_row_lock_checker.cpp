@@ -13,10 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_row_lock_checker.h"
 #include "storage/access/ob_rows_info.h"
+#include "storage/access/ob_index_tree_prefetcher.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/memtable/ob_memtable_interface.h"
-#include "storage/tx_table/ob_tx_table.h"
-
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 namespace oceanbase {
 namespace blocksstable {
 using namespace share;
@@ -28,7 +27,7 @@ ObMicroBlockRowLockChecker::ObMicroBlockRowLockChecker(common::ObIAllocator &all
     check_exist_(false),
     snapshot_version_(),
     lock_state_(nullptr),
-    row_state_(nullptr)
+    base_version_(0)
 {
 }
 
@@ -36,75 +35,75 @@ ObMicroBlockRowLockChecker::~ObMicroBlockRowLockChecker()
 {
 }
 
+void ObMicroBlockRowLockChecker::inc_empty_read(ObSSTableReadHandle &read_handle)
+{
+  if (OB_NOT_NULL(context_) && OB_NOT_NULL(sstable_)
+      && (!context_->query_flag_.is_index_back() || !sstable_->is_major_sstable())
+      && context_->query_flag_.is_use_bloomfilter_cache() && !sstable_->is_small_sstable()) {
+    (void)OB_STORE_CACHE.get_bf_cache().inc_empty_read(MTL_ID(),
+                                                       param_->table_id_,
+                                                       param_->ls_id_,
+                                                       sstable_->get_key(),
+                                                       macro_id_,
+                                                       read_handle.get_rowkey_datum_cnt(),
+                                                       sstable_->get_macro_offset(),
+                                                       sstable_->get_macro_read_size(),
+                                                       &read_handle);
+  }
+}
+
 int ObMicroBlockRowLockChecker::inner_get_next_row(
-    bool &row_lock_checked,
     int64_t &current,
     ObStoreRowLockState *&lock_state)
 {
   int ret = OB_SUCCESS;
-  row_lock_checked = false;
   if (OB_FAIL(end_of_block())) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Failed to get next row", K(ret));
     }
   } else {
     current = current_++;
-    row_lock_checked = row_state_->is_lock_decided() || lock_state_->is_lock_decided();
-    if (OB_UNLIKELY(row_lock_checked && !check_exist_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected lock state", K(ret), KPC_(lock_state), KPC_(row_state), K_(check_exist));
-    } else if (lock_state_->is_lock_decided()) {
-      tmp_lock_state_.reset();
-      lock_state = &tmp_lock_state_;
-    } else {
-      lock_state = lock_state_;
-    }
+    lock_state = lock_state_;
   }
   return ret;
 }
 
 int ObMicroBlockRowLockChecker::check_row(
-    const bool row_lock_checked,
     const transaction::ObTransID &trans_id,
     const ObRowHeader *row_header,
-    const ObStoreRowLockState &lock_state,
+    ObStoreRowLockState &lock_state,
     bool &need_stop)
 {
   int ret = OB_SUCCESS;
-  ObDmlFlag inner_dml_flag = row_header->get_row_flag().get_dml_flag();
   const ObMultiVersionRowFlag multi_version_flag = row_header->get_row_multi_version_flag();
-  const bool lock_is_decided = lock_state.is_lock_decided();
+  const bool row_is_decided = lock_state.is_row_decided();
   bool is_ghost_row_flag = false;
   need_stop = false;
-  if (!lock_is_decided) {
-    // Row is aborted.
-  } else if (!check_exist_) {
-    need_stop = true;
+
+  if (!row_is_decided) {
+    // Case1: Row is aborted.
+    need_stop = false;
+  } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(multi_version_flag,
+                                                  is_ghost_row_flag))) {
+    LOG_WARN("Failed to check ghost row", K(ret), K(multi_version_flag));
+  } else if (is_ghost_row_flag) {
+    // Case2: We encounter the ghost row which means the version node is
+    // faked, and the row has already ended. So, we believe that the next
+    // iteration will find OB_ITER_END.
+    LOG_INFO("encounter a ghost row", K(ret), K(trans_id), K(lock_state));
+    need_stop = false;
+    lock_state.lock_dml_flag_ = ObDmlFlag::DF_NOT_EXIST;
   } else {
-    if (!row_lock_checked) {
-      if (lock_state.is_locked(trans_id) || lock_state.trans_version_ > snapshot_version_) {
-        need_stop = true;
-      }
-    }
-    if (!need_stop) {
-      if (OB_FAIL(ObGhostRowUtil::is_ghost_row(multi_version_flag, is_ghost_row_flag))) {
-        LOG_WARN("Failed to check ghost row", K(ret), K(inner_dml_flag), K(multi_version_flag));
-      } else if (is_ghost_row_flag || DF_LOCK == inner_dml_flag) {
-      } else {
-        row_state_->row_dml_flag_ = inner_dml_flag;
-        need_stop = true;
-      }
-    }
+    // Case3: Row is decided, so the lock and existence state is decided
+    need_stop = true;
   }
+
   return ret;
 }
 
 void ObMicroBlockRowLockChecker::check_row_in_major_sstable(bool &need_stop)
 {
   need_stop = true;
-  if (check_exist_) {
-    row_state_->row_dml_flag_ = blocksstable::ObDmlFlag::DF_INSERT;
-  }
 }
 
 int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
@@ -119,14 +118,15 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
     const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
     memtable::ObMvccAccessCtx &ctx = context_->store_ctx_->mvcc_acc_ctx_;
     const transaction::ObTransID &read_trans_id = ctx.get_tx_id();
-    const bool is_major_sstable = sstable_->is_major_sstable();
+    const bool is_major_sstable = sstable_->is_major_type_sstable() || sstable_->is_ddl_type_sstable() || sstable_->is_ddl_merge_sstable();
     int64_t trans_version = INT64_MAX;
     int64_t current;
     row = &row_;
     ObStoreRowLockState *lock_state = nullptr;
-    bool row_lock_checked = false;
+    bool is_filtered = false;
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(inner_get_next_row(row_lock_checked, current, lock_state))) {
+      is_filtered = false;
+      if (OB_FAIL(inner_get_next_row(current, lock_state))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Failed to get next row", K(ret), K_(macro_id), K(is_major_sstable));
         }
@@ -141,35 +141,60 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
         } else if (OB_ISNULL(row_header)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("row header is null", K(ret));
-          // TODO(handora.qc): fix it
-        } else if (OB_FAIL(lock_state->trans_version_.convert_for_tx(trans_version))) {
-          LOG_ERROR("convert failed", K(ret), K(trans_version));
         } else if (row_header->get_row_multi_version_flag().is_uncommitted_row()) {
           ObTxTableGuards &tx_table_guards = ctx.get_tx_table_guards();
           transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
+          ObStoreRowLockState uncommited_lock_state;
           if (!tx_table_guards.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("tx table guard is invalid", KR(ret), K(ctx));
           } else if (OB_FAIL(tx_table_guards.check_row_locked(read_trans_id,
-                                                             row_header->get_trans_id(),
-                                                             tx_sequence,
-                                                             sstable_->get_end_scn(),
-                                                             *lock_state))) {
-          } else if (lock_state->is_locked_) {
+                                                              row_header->get_trans_id(),
+                                                              tx_sequence,
+                                                              sstable_->get_end_scn(),
+                                                              uncommited_lock_state))) {
+          } else if (FALSE_IT(trans_version = uncommited_lock_state.trans_version_.get_val_for_tx())) {
+          } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
+                     transaction::is_effective_trans_version(trans_version) &&
+                     OB_FAIL(check_truncate_part_filter(current,
+                                                        trans_version,
+                                                        row_header->get_row_multi_version_flag().is_ghost_row(),
+                                                        is_filtered))) {
+            LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
+          } else if (!is_filtered && FALSE_IT(check_base_version(trans_version, is_filtered))) {
+          } else if (is_filtered) {
+          } else if (FALSE_IT(*lock_state = uncommited_lock_state)) {
+          } else if (lock_state->is_lock_decided()) {
             lock_state->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
           }
+        } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
+                   OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, row_header->get_row_multi_version_flag().is_ghost_row(), is_filtered))) {
+          LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
+        } else if (!is_filtered && FALSE_IT(check_base_version(trans_version, is_filtered))) {
+        } else if (is_filtered) {
+        } else if (OB_FAIL(lock_state->trans_version_.convert_for_tx(trans_version))) {
+          LOG_ERROR("convert failed", K(ret), K(trans_version));
+        } else {
+          lock_state->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
         }
-        STORAGE_LOG(DEBUG, "check row lock", K(ret), KPC_(range), K(read_trans_id), KPC(row_header),
-                    K(sql_sequence), KPC_(lock_state));
+      } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
+                 OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, false, is_filtered))) {
+        LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
+      } else if (is_filtered) {
+      } else {
+        lock_state->trans_version_ = sstable_->get_end_scn();
+        lock_state->lock_dml_flag_ = blocksstable::ObDmlFlag::DF_INSERT;
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && !is_filtered) {
         bool need_stop = false;
         if (is_major_sstable) {
           check_row_in_major_sstable(need_stop);
-        } else if (OB_FAIL(check_row(row_lock_checked, read_trans_id, row_header, *lock_state, need_stop))) {
+        } else if (OB_FAIL(check_row(read_trans_id, row_header, *lock_state, need_stop))) {
           LOG_WARN("Failed to check row", K(ret), K(ret), KPC_(range), K(read_trans_id), KPC(row_header),
                    K(sql_sequence), KPC(lock_state));
         }
+        STORAGE_LOG(DEBUG, "check row lock on sstable", K(ret), KPC_(range), K(need_stop),
+                    K(read_trans_id), KPC(row_header), KPC(lock_state), K(current));
         if (OB_SUCC(ret) && need_stop) {
           break;
         }
@@ -177,6 +202,39 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
     }
   }
   return ret;
+}
+
+// TODO if current row is filtered by truncate, it's no need to scan remain data of the same rowkey
+int ObMicroBlockRowLockChecker::check_truncate_part_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered)
+{
+  int ret = OB_SUCCESS;
+  fitered = false;
+  if (!is_ghost_row && context_->truncate_part_filter_->is_valid_filter()) {
+    const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
+    if (OB_FAIL(reader_->get_row(current, row_))) {
+      LOG_WARN("failed to get row", K(ret));
+    } else if (transaction::is_effective_trans_version(trans_version)) {
+      row_.storage_datums_[rowkey_cnt].reuse();
+      row_.storage_datums_[rowkey_cnt].set_int(trans_version);
+    }
+    if (FAILEDx(context_->truncate_part_filter_->filter(row_, fitered, true/*check_filter*/, !sstable_->is_major_sstable()))) {
+      LOG_WARN("failed to filter truncated part", K(ret));
+    } else if (OB_UNLIKELY(fitered)) {
+      LOG_DEBUG("[TRUNCATE INFO] filtered by truncated main table partition", K(ret), K(current), K(trans_version), K_(row));
+    } else {
+      LOG_DEBUG("[TRUNCATE INFO] not filtered row", KR(ret), K(row_), KPC(context_->truncate_part_filter_), K(rowkey_cnt));
+    }
+  }
+  return ret;
+}
+
+void ObMicroBlockRowLockChecker::check_base_version(const int64_t trans_version, bool &is_filtered)
+{
+  if (OB_UNLIKELY(base_version_ > 0 &&
+                  transaction::is_effective_trans_version(trans_version) &&
+                  trans_version <= base_version_)) {
+    is_filtered = true;
+  }
 }
 
 /************************* ObMicroBlockRowLockMultiChecker *************************/
@@ -218,22 +276,26 @@ int ObMicroBlockRowLockMultiChecker::open(
   return ret;
 }
 
-void ObMicroBlockRowLockMultiChecker::inc_empty_read()
+void ObMicroBlockRowLockMultiChecker::inc_empty_read(ObSSTableReadHandle &read_handle)
 {
-  if (OB_NOT_NULL(context_) && OB_NOT_NULL(sstable_) &&
-      !context_->query_flag_.is_index_back() && context_->query_flag_.is_use_bloomfilter_cache() &&
-      !sstable_->is_small_sstable() && empty_read_cnt_ > 0) {
-    (void) OB_STORE_CACHE.get_bf_cache().inc_empty_read(
-             MTL_ID(),
-             param_->table_id_,
-             macro_id_,
-             rows_info_->get_datum_cnt(),
-             empty_read_cnt_);
+  if (OB_NOT_NULL(context_) && OB_NOT_NULL(sstable_)
+      && (!context_->query_flag_.is_index_back() || !sstable_->is_major_sstable())
+      && context_->query_flag_.is_use_bloomfilter_cache() && !sstable_->is_small_sstable() && empty_read_cnt_ > 0) {
+    read_handle.current_rows_info_idx_ = rowkey_begin_idx_;
+    (void)OB_STORE_CACHE.get_bf_cache().inc_empty_read(MTL_ID(),
+                                                       param_->table_id_,
+                                                       param_->ls_id_,
+                                                       sstable_->get_key(),
+                                                       macro_id_,
+                                                       rows_info_->get_datum_cnt(),
+                                                       sstable_->get_macro_offset(),
+                                                       sstable_->get_macro_read_size(),
+                                                       &read_handle,
+                                                       empty_read_cnt_);
   }
 }
 
 int ObMicroBlockRowLockMultiChecker::inner_get_next_row(
-    bool &row_lock_checked,
     int64_t &current,
     ObStoreRowLockState *&lock_state)
 {
@@ -248,78 +310,66 @@ int ObMicroBlockRowLockMultiChecker::inner_get_next_row(
     }
   }
   if (OB_SUCC(ret)) {
-    row_lock_checked = rows_info_->is_row_lock_checked(rowkey_current_idx_ - 1);
-    ObStoreRowLockState &my_lock_state = rows_info_->get_row_lock_state(rowkey_current_idx_ - 1);
-    if (row_lock_checked) {
-      if (OB_UNLIKELY(!check_exist_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected lock state", K(ret), K_(current), K_(start), K_(last), K(my_lock_state), K_(check_exist),
-                 K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K(rows_info_->get_marked_rowkey(rowkey_current_idx_ - 1)),
-                 KPC_(rows_info));
-      } else {
-        tmp_lock_state_.reset();
-        lock_state = &tmp_lock_state_;
-      }
-    } else {
-      lock_state = &my_lock_state;
-    }
+    lock_state = &(rows_info_->get_row_lock_state(rowkey_current_idx_ - 1));
     current = current_++;
   }
   return ret;
 }
 
 int ObMicroBlockRowLockMultiChecker::check_row(
-    const bool row_lock_checked,
     const transaction::ObTransID &trans_id,
     const ObRowHeader *row_header,
-    const ObStoreRowLockState &lock_state,
+    ObStoreRowLockState &lock_state,
     bool &need_stop)
 {
   int ret = OB_SUCCESS;
   const ObMultiVersionRowFlag multi_version_flag = row_header->get_row_multi_version_flag();
-  const bool lock_is_decided = lock_state.is_lock_decided();
+  const bool row_is_decided = lock_state.is_row_decided();
   const int64_t rowkey_idx = rowkey_current_idx_ - 1;
-  ObDmlFlag inner_dml_flag = row_header->get_row_flag().get_dml_flag();
   bool is_ghost_row_flag = false;
   need_stop = false;
-  if (!lock_is_decided) {
-    // Row is aborted.
+
+  if (!row_is_decided) {
+    // Case1: Row is aborted.
+    need_stop = false;
+  } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(multi_version_flag,
+                                                  is_ghost_row_flag))) {
+    LOG_WARN("Failed to check ghost row", K(ret), K(multi_version_flag));
+  } else if (is_ghost_row_flag) {
+    // Case2: We encounter the ghost row which means the version node is
+    // faked, and the row has already ended. So, we believe that the next
+    // iteration will find OB_ITER_END.
+    LOG_INFO("encounter a ghost row", K(ret), K(trans_id), K(lock_state));
+    need_stop = false;
+    lock_state.lock_dml_flag_ = ObDmlFlag::DF_NOT_EXIST;
   } else {
-    if (!row_lock_checked) {
-      if (lock_state.is_locked(trans_id)) {
-        rows_info_->set_conflict_rowkey(rowkey_idx);
-        rows_info_->set_error_code(OB_TRY_LOCK_ROW_CONFLICT);
-        need_stop = true;
-        LOG_DEBUG("Find lock conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
-                  K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                  K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
-      } else if (lock_state.trans_version_ > snapshot_version_) {
-        rows_info_->set_conflict_rowkey(rowkey_idx);
-        rows_info_->set_error_code(OB_TRANSACTION_SET_VIOLATION);
-        need_stop = true;
-        LOG_DEBUG("Find tsv conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
-                  K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                  K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
-      } else {
-        rows_info_->set_row_lock_checked(rowkey_idx, check_exist_);
-      }
-    }
-    if (!need_stop && check_exist_ && !rows_info_->is_row_skipped(rowkey_idx)) {
-      if (OB_FAIL(ObGhostRowUtil::is_ghost_row(multi_version_flag, is_ghost_row_flag))) {
-        LOG_WARN("Failed to check ghost row", K(ret), K(inner_dml_flag), K(multi_version_flag));
-      } else if (is_ghost_row_flag || DF_LOCK == inner_dml_flag) {
-      } else if (DF_DELETE != inner_dml_flag) {
-        rows_info_->set_conflict_rowkey(rowkey_idx);
-        rows_info_->set_error_code(OB_ERR_PRIMARY_KEY_DUPLICATE);
-        need_stop = true;
-        LOG_DEBUG("Find duplication in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
-                  K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                  K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
-      } else {
-        rows_info_->set_row_checked(rowkey_idx);
-      }
+    if (lock_state.is_locked_not_by(trans_id)) {
+      rows_info_->set_row_conflict_error(rowkey_idx, OB_TRY_LOCK_ROW_CONFLICT);
+      need_stop = true;
+      LOG_DEBUG("Find lock conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
+                K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
+                K_(current), K_(start), K_(last), K_(macro_id), KPC(row_header));
+    } else if (lock_state.trans_version_ > snapshot_version_) {
+      rows_info_->set_row_conflict_error(rowkey_idx, OB_TRANSACTION_SET_VIOLATION);
+      need_stop = true;
+      LOG_DEBUG("Find tsv conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
+                K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
+                K_(current), K_(start), K_(last), K_(macro_id), KPC(row_header));
+    } else if (check_exist_ && DF_DELETE != row_header->get_row_flag().get_dml_flag()) {
+      rows_info_->set_row_conflict_error(rowkey_idx, OB_ERR_PRIMARY_KEY_DUPLICATE);
+      need_stop = !rows_info_->need_find_all_duplicate_key();;
+      LOG_DEBUG("Find duplication in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
+                K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
+                K_(current), K_(start), K_(last), K_(macro_id), KPC(row_header));
+    } else {
+      rows_info_->set_row_checked(rowkey_idx);
     }
   }
+
+  LOG_DEBUG("check decided row in multi row checker of mini/minor sstable", K(rowkey_idx),
+            K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx),
+            K(rows_info_->rowkeys_[rowkey_idx]), K(lock_state), KPC(row_header));
+
   return ret;
 }
 
@@ -328,28 +378,27 @@ void ObMicroBlockRowLockMultiChecker::check_row_in_major_sstable(bool &need_stop
   const int64_t rowkey_idx = rowkey_current_idx_ - 1;
   need_stop = false;
   if (check_exist_) {
-    rows_info_->set_conflict_rowkey(rowkey_idx);
-    rows_info_->set_error_code(OB_ERR_PRIMARY_KEY_DUPLICATE);
-    need_stop = true;
+    rows_info_->set_row_conflict_error(rowkey_idx, OB_ERR_PRIMARY_KEY_DUPLICATE);
+    need_stop = !rows_info_->need_find_all_duplicate_key();
     LOG_DEBUG("Find duplication in major sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
               K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt),
               K_(current), K_(start), K_(last), K_(macro_id));
   } else {
     rows_info_->set_row_checked(rowkey_idx);
   }
+
+  LOG_DEBUG("check decided row in multi row checker of major sstable", K(rowkey_idx),
+            K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx),
+            K(rows_info_->rowkeys_[rowkey_idx]));
 }
 
 int ObMicroBlockRowLockMultiChecker::seek_forward()
 {
   int ret = OB_SUCCESS;
-  ObIMicroBlockReader *micro_block_reader = nullptr;
+  ObIMicroBlockReader *micro_block_reader = reader_;
   bool need_search_duplicate_row = false;
-  if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-      ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
-    micro_block_reader = decoder_;
-  } else {
-    micro_block_reader = flat_reader_;
-    need_search_duplicate_row = !sstable_->is_major_sstable() && !flat_reader_->single_version_rows();
+  if (ObIMicroBlockReader::Reader == reader_->get_type() || ObIMicroBlockReader::NewFlatReader == reader_->get_type()) {
+    need_search_duplicate_row = !sstable_->is_major_type_sstable() && !static_cast<ObIMicroBlockFlatReaderBase *>(reader_)->single_version_rows();
   }
   const int64_t row_count = micro_block_reader->row_count();
   while (OB_SUCC(ret)) {

@@ -14,7 +14,6 @@
 #include "ob_expr_generator_impl.h"
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 #include "sql/engine/expr/ob_expr_regexp.h"
-#include "sql/engine/expr/ob_expr_in.h"
 #include "sql/engine/expr/ob_expr_like.h"
 #include "sql/engine/expr/ob_expr_field.h"
 #include "sql/engine/expr/ob_expr_strcmp.h"
@@ -29,7 +28,7 @@
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_expr_dll_udf.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/engine/expr/ob_expr_udf.h"
+#include "sql/engine/expr/ob_expr_udf/ob_expr_udf.h"
 #include "sql/engine/expr/ob_expr_pl_integer_checker.h"
 #include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
 #include "sql/engine/expr/ob_expr_pl_sqlcode_sqlerrm.h"
@@ -37,12 +36,10 @@
 #include "sql/engine/expr/ob_expr_pl_associative_index.h"
 #include "sql/engine/expr/ob_expr_collection_construct.h"
 #include "sql/engine/expr/ob_expr_object_construct.h"
-#include "sql/engine/expr/ob_expr_multiset.h"
 #include "sql/engine/expr/ob_expr_rownum.h"
 #include "sql/engine/expr/ob_expr_coll_pred.h"
 #include "sql/engine/expr/ob_expr_nullif.h"
 #include "sql/engine/expr/ob_expr_cast.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/expr/ob_pl_expr_subquery.h"
 #include "sql/engine/expr/ob_expr_sql_udt_construct.h"
 #include "sql/engine/expr/ob_expr_priv_attribute_access.h"
@@ -56,7 +53,7 @@ ObExprGeneratorImpl::ObExprGeneratorImpl(
     int16_t cur_regexp_op_count,
     int16_t cur_like_op_count,
     uint32_t *next_expr_id,
-    ObColumnIndexProvider &idx_provider)
+    RowDesc &idx_provider)
     : sql_expr_(NULL),
       cur_regexp_op_count_(cur_regexp_op_count),
       cur_like_op_count_(cur_like_op_count),
@@ -73,7 +70,7 @@ ObExprGeneratorImpl::ObExprGeneratorImpl(
     int16_t cur_regexp_op_count,
     int16_t cur_like_op_count,
     uint32_t *next_expr_id,
-    ObColumnIndexProvider &idx_provider)
+    RowDesc &idx_provider)
     : sql_expr_(NULL),
       cur_regexp_op_count_(cur_regexp_op_count),
       cur_like_op_count_(cur_like_op_count),
@@ -507,8 +504,6 @@ int ObExprGeneratorImpl::visit(ObColumnRefRawExpr &expr)
     } else {
       // do nothing for infix expr generation, especially processed in infix_visit_child()
     }
-  } else if (expr.is_unpivot_mocked_column()) {
-    //do nothing
   } else {
     // 基本列表达式在此之前外部已经完成翻译
     ret = OB_ERR_UNEXPECTED;
@@ -550,9 +545,7 @@ int ObExprGeneratorImpl::visit_simple_op(ObNonTerminalRawExpr &expr)
     op->set_row_dimension(ObExprOperator::NOT_ROW_DIMENSION);
     op->set_result_type(expr.get_result_type());
     // calc part id expr may got T_OP_ROW child, it's meaningless to set its input type.
-    if (OB_LIKELY(!expr.is_calc_part_expr()) && OB_FAIL(op->set_input_types(expr.get_input_types()))) {
-      LOG_WARN("fail copy input types", K(ret));
-    } else if (OB_FAIL(item.assign(op))) {
+    if (OB_FAIL(item.assign(op))) {
       LOG_WARN("failed to assign", K(ret));
     } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret));
@@ -1152,35 +1145,8 @@ int ObExprGeneratorImpl::set_need_cast(ObNonTerminalRawExpr &expr, bool &need_ca
 int ObExprGeneratorImpl::visit_relational_expr(ObNonTerminalRawExpr &expr, ObRelationalExprOperator *relational_op)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(relational_op)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("relational expr op is null", K(ret));
-  } else if (expr.get_param_count() == 2) {
-    int64_t param_count = expr.get_param_count();
-    int64_t input_types_count = expr.get_input_types().count();
-    if (OB_UNLIKELY(param_count != input_types_count)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param count should be equal to input_types_count", K(param_count),
-               K(input_types_count), K(ret));
-    } else {
-      /*
-       * loop of size 2. Seems reasonable  to unroll it to get a better perf.
-       *
-       * But, well, do not bother yourself. It is up to gcc.
-       */
-      for (int i = 0; OB_SUCC(ret) && i < param_count; ++i) {
-        if (OB_ISNULL(expr.get_param_expr(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("relational expr param is null", K(ret), K(i));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ObObjType left_operand_type = expr.get_input_types().at(0).get_calc_type();
-        ObObjType right_operand_type = expr.get_input_types().at(1).get_calc_type();
-        ret = relational_op->set_cmp_func(left_operand_type, right_operand_type);
-      }
-    }
-  }
+  // ObExprGeneratorImpl is still depeneded by PL,
+  // just remove the unused result type and cmp func related code
   return ret;
 }
 
@@ -1372,6 +1338,7 @@ int ObExprGeneratorImpl::visit_udf_expr(ObOpRawExpr &expr, ObExprUDF *udf)
     OZ (udf->set_params_type(udf_expr.get_params_type()));
     OZ (udf->set_params_desc(udf_expr.get_params_desc()));
     OZ (udf->set_nocopy_params(udf_expr.get_nocopy_params()));
+    OZ (udf->set_out_params_type(udf_expr.get_out_params_type()));
   }
   return ret;
 }
@@ -1614,9 +1581,7 @@ int ObExprGeneratorImpl::visit(ObOpRawExpr &expr)
       }
       if (OB_SUCC(ret)) {
         op->set_result_type(expr.get_result_type());
-        if (OB_FAIL(op->set_input_types(expr.get_input_types()))) {
-          LOG_WARN("fail copy input types", K(ret));
-        } else if (OB_FAIL(item.assign(op))) {
+        if (OB_FAIL(item.assign(op))) {
           LOG_WARN("failed to assign", K(ret));
         } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
           LOG_WARN("failed to add expr item", K(ret));
@@ -1665,9 +1630,7 @@ int ObExprGeneratorImpl::visit(ObCaseOpRawExpr &expr)
         ObExprArgCase *argcase_op = static_cast<ObExprArgCase*>(op);
         ret = visit_argcase_expr(expr, argcase_op);
       }
-      if (OB_SUCC(ret) && OB_FAIL(op->set_input_types(expr.get_input_types()))) {
-        LOG_WARN("fail copy input types", K(ret));
-      } else if (OB_FAIL(item.assign(op))) {
+      if (OB_FAIL(item.assign(op))) {
         LOG_WARN("failed to assign", K(ret));
       } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
         LOG_WARN("failed to add expr item", K(ret));
@@ -1715,7 +1678,9 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
     //其他聚集函数的参数只有一列
     int64_t col_count = (T_FUN_JSON_OBJECTAGG == expr.get_expr_type()
                         || T_FUN_ORA_JSON_OBJECTAGG == expr.get_expr_type()
-                        || T_FUN_ORA_XMLAGG == expr.get_expr_type()) ?  2 : 1;
+                        || T_FUN_ORA_XMLAGG == expr.get_expr_type()
+                        || T_FUN_ARG_MIN == expr.get_expr_type()
+                        || T_FUN_ARG_MAX == expr.get_expr_type()) ? 2 : 1;
     aggr_expr->set_real_param_col_count(col_count);
     aggr_expr->set_all_param_col_count(col_count);
     const ObIArray<ObRawExpr*> &real_param_exprs = expr.get_real_param_exprs();
@@ -1735,7 +1700,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
       } else {
         ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr.get_pl_agg_udf_expr());
         aggr_expr->set_pl_agg_udf_type_id(udf_expr->get_type_id());
-        aggr_expr->set_result_type(const_cast<ObExprResType &>(expr.get_result_type()));
+        aggr_expr->set_result_type(expr.get_result_type());
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < real_param_exprs.count(); i++) {
@@ -1748,7 +1713,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
           LOG_WARN("add cs type fail", K(ret));
         } else if (aggr_expr->is_gen_infix_expr() && T_FUN_PL_AGG_UDF == expr.get_expr_type() &&
                    OB_FAIL(aggr_expr->add_pl_agg_udf_param_type(
-                         const_cast<ObExprResType &>(real_param_exprs.at(i)->get_result_type())))) {
+                                          real_param_exprs.at(i)->get_result_type()))) {
           LOG_WARN("add cs type fail", K(ret));
         }
       }
@@ -1780,8 +1745,11 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
         || T_FUN_PL_AGG_UDF == expr.get_expr_type()
         || T_FUN_HYBRID_HIST == expr.get_expr_type()
         || T_FUN_ORA_XMLAGG == expr.get_expr_type()
+        || T_FUNC_SYS_ARRAY_AGG == expr.get_expr_type()
         || (T_FUN_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)
-        || (T_FUN_ORA_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)) {
+        || (T_FUN_ORA_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)
+        || (T_FUN_ARG_MAX == expr.get_expr_type() && expr.get_real_param_count() == 2)
+        || (T_FUN_ARG_MIN == expr.get_expr_type() && expr.get_real_param_count() == 2)) {
       ObExprOperator *op = NULL;
       if (OB_FAIL(factory_.alloc(T_OP_AGG_PARAM_LIST, op))) {
         LOG_WARN("fail to alloc expr_op", K(ret));
@@ -1816,7 +1784,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
                T_FUN_KEEP_COUNT == expr.get_expr_type() ||
                T_FUN_KEEP_WM_CONCAT == expr.get_expr_type() ||
                T_FUN_HYBRID_HIST == expr.get_expr_type() ||
-               T_FUN_ORA_XMLAGG == expr.get_expr_type())) {
+               T_FUN_ORA_XMLAGG == expr.get_expr_type() ||
+               T_FUNC_SYS_ARRAY_AGG == expr.get_expr_type())) {
             ObConstRawExpr *sep_expr = static_cast<ObConstRawExpr *>(expr.get_separator_param_expr());
             // set separator
             if (NULL != sep_expr) {
@@ -2039,6 +2008,31 @@ int ObExprGeneratorImpl::visit(ObMatchFunRawExpr &expr)
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("all match expr should have been generated", K(expr), K(&expr));
+  }
+  return ret;
+}
+
+int ObExprGeneratorImpl::visit(ObUnpivotRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  // 不为 unpivot expr 生成 expr operator
+  ObPostExprItem item;
+  item.set_accuracy(expr.get_accuracy());
+  if (OB_ISNULL(sql_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("sql_expr_ is NULL");
+  } else if (expr.has_flag(IS_COLUMNLIZED)) {
+    int64_t idx = OB_INVALID_INDEX;
+    if (OB_FAIL(column_idx_provider_.get_idx(&expr, idx))) {
+      LOG_WARN("get index failed", K(ret));
+    } else if (OB_FAIL(item.set_column(idx))) {
+      LOG_WARN("failed to set column", K(ret), K(expr));
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
+      LOG_WARN("failed to add expr item", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("all unpivot expr should have been generated", K(expr), K(&expr));
   }
   return ret;
 }

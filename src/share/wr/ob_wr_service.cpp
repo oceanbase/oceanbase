@@ -13,19 +13,74 @@
 #define USING_LOG_PREFIX WR
 
 #include "share/wr/ob_wr_service.h"
-#include "share/wr/ob_wr_task.h"
-#include "share/scn.h"
-#include "lib/oblog/ob_log.h"
-#include "share/ob_errno.h"
-#include "deps/oblib/src/lib/mysqlclient/ob_mysql_proxy.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
 namespace share
 {
 
-ObWorkloadRepositoryService::ObWorkloadRepositoryService() : is_inited_(false), wr_timer_task_()
+int ObWorkloadRepositoryContext::mtl_init(ObWorkloadRepositoryContext* &ptr)
+{
+  ptr->is_inited_ = true;
+  return OB_SUCCESS;
+}
+
+void ObWorkloadRepositoryContext::destroy()
+{
+  is_inited_ = false;
+}
+
+int ObWorkloadRepositoryContext::try_lock_ash_snapshot_ahead()
+{
+  return ash_snapshot_mutex_.trylock();
+}
+
+void ObWorkloadRepositoryContext::release_lock_ash_snapshot_ahead()
+{
+  ash_snapshot_mutex_.unlock();
+}
+
+int ObWorkloadRepositoryContext::try_lock_sqlstat_snapshot_ahead()
+{
+  return sqlstat_snapshot_mutex_.trylock();
+}
+
+void ObWorkloadRepositoryContext::release_lock_sqlstat_snapshot_ahead()
+{
+  sqlstat_snapshot_mutex_.unlock();
+}
+
+int ObWorkloadRepositoryContext::try_lock_all()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(try_lock_ash_snapshot_ahead())) {
+    LOG_WARN("failed to try lock ash snapshot ahead", K(ret));
+  } else if (OB_FAIL(try_lock_sqlstat_snapshot_ahead())) {
+    release_lock_ash_snapshot_ahead();
+    LOG_WARN("failed to try lock sqlstat snapshot ahead", K(ret));
+  }
+  return ret;
+}
+
+int ObWorkloadRepositoryContext::lock_all(const int64_t abs_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ash_snapshot_mutex_.lock(abs_timeout_us))) {
+    LOG_WARN("failed to lock ash snapshot ahead", K(ret));
+  } else if (OB_FAIL(sqlstat_snapshot_mutex_.lock(abs_timeout_us))) {
+    release_lock_ash_snapshot_ahead();
+    LOG_WARN("failed to lock sqlstat snapshot ahead", K(ret));
+  }
+  return ret;
+}
+
+void ObWorkloadRepositoryContext::release_all()
+{
+  ash_snapshot_mutex_.unlock();
+  sqlstat_snapshot_mutex_.unlock();
+}
+
+ObWorkloadRepositoryService::ObWorkloadRepositoryService() : is_inited_(false), wr_timer_task_(), sql_stat_dump_task_()
 {}
 
 int ObWorkloadRepositoryService::replay(
@@ -55,6 +110,8 @@ int ObWorkloadRepositoryService::init()
   int ret = OB_SUCCESS;
   if (OB_FAIL(wr_timer_task_.init())) {
     LOG_WARN("failed to init wr timer", K(ret), K_(wr_timer_task));
+  } else if (OB_FAIL(sql_stat_dump_task_.init())) {
+    LOG_WARN("failed to init sql stat dump task", K(ret), K_(sql_stat_dump_task));
   } else {
     is_inited_ = true;
   }
@@ -93,8 +150,12 @@ int ObWorkloadRepositoryService::inner_switch_to_leader()
   int ret = OB_SUCCESS;
   // schedule wr timer task
   // TODO(roland.qk): need to cancel wr task first?
-  if (OB_FAIL(wr_timer_task_.schedule_one_task())) {
+  int64_t interval_us = get_snapshot_interval(true/*is_laze_load*/) * 60 * 1000L * 1000L;
+  int64_t sqlstat_interval_us = sql_stat_dump_task_.get_sql_stat_interval(true/*is_lazy_load*/);
+  if (OB_FAIL(wr_timer_task_.schedule_one_task(interval_us))) {
     LOG_WARN("failed to schedule wr timer task", K(ret));
+  } else if (OB_FAIL(sql_stat_dump_task_.schedule_one_task(sqlstat_interval_us))) {
+    LOG_WARN("failed to schedule sql stat dump task", K(ret));
   } else {
     LOG_INFO("current observer is leader, start to dispatch workload repository snapshot timer",
         KPC(this));
@@ -107,6 +168,7 @@ int ObWorkloadRepositoryService::inner_switch_to_follower()
   int ret = OB_SUCCESS;
   // cancel previous wr timer task
   wr_timer_task_.cancel_current_task();
+  sql_stat_dump_task_.cancel_current_task();
   LOG_INFO("stop to execute workload repository snapshot timer", KPC(this));
   return ret;
 }
@@ -157,14 +219,14 @@ int ObWorkloadRepositoryService::cancel_current_task()
   return ret;
 }
 
-int ObWorkloadRepositoryService::schedule_new_task(const int64_t interval)
+int ObWorkloadRepositoryService::schedule_new_task(const int64_t interval_us)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("wr service not init", K(ret));
-  } else if (OB_FAIL(wr_timer_task_.schedule_one_task(interval))) {
-    LOG_WARN("failed to schedule a new task of wr timer thread", K(ret), K(interval));
+  } else if (OB_FAIL(wr_timer_task_.schedule_one_task(interval_us))) {
+    LOG_WARN("failed to schedule a new task of wr timer thread", K(ret), K(interval_us));
   }
   return ret;
 }

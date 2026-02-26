@@ -219,62 +219,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPsStmtInfoDestroyAtomicOp);
 };
 
-
-class ObPsPCVSetAtomicOp
-{
-protected:
-  typedef common::hash::HashMapPair<ObPlanCacheKey, ObPCVSet *> PsPlanCacheKV;
-
-public:
-  ObPsPCVSetAtomicOp(const CacheRefHandleID ref_handle)
-    : pcv_set_(NULL), ref_handle_(ref_handle) {}
-  virtual ~ObPsPCVSetAtomicOp() {}
-  // get pcv_set and lock
-  virtual int get_value(ObPCVSet *&pcv_set);
-  // get pcv_set and increase reference count
-  void operator()(PsPlanCacheKV &entry);
-
-protected:
-  //when get value, need lock
-  virtual int lock(ObPCVSet &pcv_set) = 0;
-protected:
-  // According to the interface of ObHashTable, all returned values will be passed
-  // back to the caller via the callback functor.
-  // pcv_set_ - the plan cache value that is referenced.
-  ObPCVSet *pcv_set_;
-  const CacheRefHandleID ref_handle_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPsPCVSetAtomicOp);
-};
-
-class ObPsPCVSetWlockAndRef : public ObPsPCVSetAtomicOp
-{
-public:
-  ObPsPCVSetWlockAndRef(const CacheRefHandleID ref_handle)
-    : ObPsPCVSetAtomicOp(ref_handle) {}
-  virtual ~ObPsPCVSetWlockAndRef() {}
-  int lock(ObPCVSet &pcv_set)
-  {
-    return pcv_set.lock(false/*wlock*/);
-  };
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPsPCVSetWlockAndRef);
-};
-
-class ObPsPCVSetRlockAndRef : public ObPsPCVSetAtomicOp
-{
-public:
-  ObPsPCVSetRlockAndRef(const CacheRefHandleID ref_handle)
-    : ObPsPCVSetAtomicOp(ref_handle) {}
-  virtual ~ObPsPCVSetRlockAndRef() {}
-  int lock(ObPCVSet &pcvs)
-  {
-    return pcvs.lock(true/*rlock*/);
-  };
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPsPCVSetRlockAndRef);
-};
-
 } //end of namespace sql
 } //end of namespace oceanbase
 

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_rootservice_list.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_errno.h"
 #include "lib/string/ob_sql_string.h"
 
 namespace oceanbase

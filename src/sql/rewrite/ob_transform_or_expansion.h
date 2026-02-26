@@ -21,6 +21,7 @@ namespace oceanbase
 {
 namespace sql
 {
+struct DeducedExprInfo;
 
 class ObTransformOrExpansion: public ObTransformRule
 {
@@ -115,6 +116,7 @@ public:
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
+  virtual int check_rule_bypass(const ObDMLStmt &stmt, bool &reject) override;
 protected:
   virtual int adjust_transform_types(uint64_t &transform_types) override;
   virtual int is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid) override;
@@ -163,7 +165,9 @@ private:
                                       uint64_t joined_table_id,
                                       TableItem *&view_table,
                                       ObSelectStmt *&ref_query);
-
+  int get_joined_table_pushdown_conditions(const TableItem *cur_table,
+                                           const ObDMLStmt *trans_stmt,
+                                           ObIArray<ObRawExpr *> &pushdown_conds);
   int add_select_item_to_ref_query(ObSelectStmt *stmt,
                                    const uint64_t flag_table_id,
                                    StmtUniqueKeyProvider &unique_key_provider,
@@ -231,11 +235,11 @@ private:
                                       const ObRawExpr &expr,
                                       bool &using_same_cols);
 
-  int is_match_index(const ObDMLStmt *stmt,
-                     const ObRawExpr *expr,
-                     EqualSets &equal_sets,
-                     ObIArray<ObRawExpr*> &const_exprs,
-                     bool &is_match);
+  int may_expr_extract_query_range(const ObDMLStmt *stmt,
+                                   const ObRawExpr *expr,
+                                   EqualSets &equal_sets,
+                                   ObIArray<ObRawExpr*> &const_exprs,
+                                   bool &is_match);
 
   int is_valid_subquery_cond(const ObDMLStmt &stmt,
                              const ObRawExpr &expr,
@@ -367,8 +371,7 @@ private:
   int is_expected_multi_index_plan(ObLogicalOperator* op,
                                    ObCostBasedRewriteCtx &ctx,
                                    bool &is_valid);
-  int remove_filter_exprs(ObLogicalOperator* op,
-                          ObIArray<ObRawExpr*> &candi_exprs);
+  int get_range_exprs(ObLogicalOperator* op, ObIArray<ObRawExpr*> &candi_exprs);
   int is_candi_match_index_exprs(ObRawExpr *expr, bool &result);
   int get_candi_match_index_exprs(ObRawExpr *expr,
                                   ObIArray<ObRawExpr*> &candi_exprs);
@@ -397,7 +400,8 @@ private:
                               TableItem *rel_table,
                               TableItem *table,
                               bool &left_bottom);
-  int check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool &is_stmt_valid);
+  int build_deduced_index_expr_equal_sets(ObIArray<DeducedExprInfo> &deduced_exprs_info,
+                                          EqualSets &equal_sets);
   DISALLOW_COPY_AND_ASSIGN(ObTransformOrExpansion);
 private:
   int64_t try_times_;

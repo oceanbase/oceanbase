@@ -11,17 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_sharding_info.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "sql/optimizer/ob_optimizer_context.h"
-#include "sql/optimizer/ob_logical_operator.h"
+#include "ob_sharding_info.h"
 #include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_opt_est_utils.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_raw_expr_sets.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/optimizer/ob_pwj_comparer.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -93,14 +84,14 @@ int ObShardingInfo::init_partition_info(ObOptimizerContext &ctx,
         LOG_WARN("There is no part expr in stmt", K(table_id), K(ret));
       } else if (OB_FAIL(part_func_exprs_.push_back(part_expr))) {
       	LOG_WARN("Failed to push back to part expr");
-    	} else if (OB_FAIL(set_partition_key(part_expr, part_func_type_, partition_keys_))) {
+	} else if (OB_FAIL(get_partition_key(part_expr, part_func_type_, partition_keys_))) {
         LOG_WARN("Failed to set partition key", K(ret), K(table_id), K(ref_table_id));
       } else if (PARTITION_LEVEL_TWO == part_level_) {
         subpart_func_type_ = table_schema->get_sub_part_option().get_part_func_type();
         if (OB_ISNULL(subpart_expr = stmt.get_subpart_expr(table_id, ref_table_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("There is no subpart expr in stmt", K(ret));
-        } else if (OB_FAIL(set_partition_key(subpart_expr, subpart_func_type_, sub_partition_keys_))) {
+        } else if (OB_FAIL(get_partition_key(subpart_expr, subpart_func_type_, sub_partition_keys_))) {
           LOG_WARN("Failed to set sub partition key", K(ret), K(table_id), K(ref_table_id));
         } else if (OB_FAIL(part_func_exprs_.push_back(subpart_expr))) {
         	LOG_WARN("Failed to set key partition func", K(ret), K(table_id), K(ref_table_id));
@@ -130,7 +121,50 @@ int ObShardingInfo::init_partition_info(ObOptimizerContext &ctx,
   return ret;
 }
 
-int ObShardingInfo::set_partition_key(
+int ObShardingInfo::get_all_partition_key(ObOptimizerContext &ctx,
+                                          const ObDMLStmt &stmt,
+                                          const uint64_t table_id,
+                                          const uint64_t ref_table_id,
+                                          ObIArray<ObRawExpr*> &all_partition_keys)
+{
+  int ret = OB_SUCCESS;
+  all_partition_keys.reuse();
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const ObTableSchema *table_schema = NULL;
+  ObRawExpr *part_expr = NULL;
+  if (OB_ISNULL(schema_guard = ctx.get_sql_schema_guard())) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("failed to get table schema", K(ref_table_id));
+  } else if (OB_FAIL(schema_guard->get_table_schema(table_id, ref_table_id, &stmt, table_schema))) {
+	ret = OB_SCHEMA_ERROR;
+	LOG_WARN("failed to get table schema", K(ref_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("failed to get table schema", K(ref_table_id));
+  } else if (PARTITION_LEVEL_ONE != table_schema->get_part_level()
+             && PARTITION_LEVEL_TWO != table_schema->get_part_level()) {
+    /* do nohitng */
+  } else if (OB_ISNULL(part_expr = stmt.get_part_expr(table_id, ref_table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("There is no part expr in stmt", K(table_id), K(ret));
+  } else if (OB_FAIL(get_partition_key(part_expr,
+                                       table_schema->get_part_option().get_part_func_type(),
+                                       all_partition_keys))) {
+        LOG_WARN("Failed to get partition key", K(ret), K(table_id), K(ref_table_id));
+  } else if (PARTITION_LEVEL_TWO != table_schema->get_part_level()) {
+    /* do nohitng */
+  } else if (OB_ISNULL(part_expr = stmt.get_subpart_expr(table_id, ref_table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("There is no subpart expr in stmt", K(ret));
+  } else if (OB_FAIL(get_partition_key(part_expr,
+                                       table_schema->get_sub_part_option().get_part_func_type(),
+                                       all_partition_keys))) {
+    LOG_WARN("Failed to get sub partition key", K(ret), K(table_id), K(ref_table_id));
+  }
+  return ret;
+}
+
+int ObShardingInfo::get_partition_key(
     ObRawExpr *part_expr,
     const ObPartitionFuncType part_func_type,
     ObIArray<ObRawExpr*> &partition_keys)
@@ -293,26 +327,32 @@ int ObShardingInfo::is_join_key_cover_partition_key(const EqualSets &equal_sets,
   return ret;
 }
 
-int ObShardingInfo::is_lossless_column_cast(const ObRawExpr *expr,
-                                            const ObShardingInfo &sharding_info, bool &is_lossless)
+int ObShardingInfo::remove_lossless_cast_for_sharding_key(ObRawExpr *&expr,
+                                                          const ObShardingInfo &sharding_info)
 {
   int ret = OB_SUCCESS;
-  is_lossless = false;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null raw expr", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, is_lossless))) {
-    LOG_WARN("check lossless column cast failed", K(ret));
-  } else if (is_lossless) {
-    if (expr->get_result_type().is_decimal_int()
-        && expr->get_param_expr(0)->get_result_type().is_decimal_int()
-        && is_part_func_scale_sensitive(sharding_info, ObDecimalIntType)) {
-      is_lossless = (expr->get_scale() == expr->get_param_expr(0)->get_scale());
+  bool is_lossless = true;
+  while (OB_SUCC(ret) && is_lossless) {
+    is_lossless = false;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null raw expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, is_lossless))) {
+      LOG_WARN("check lossless column cast failed", K(ret));
+    } else if (!is_lossless) {
+      // do nothing
+    } else if (expr->get_result_type().is_decimal_int()
+               && is_part_func_scale_sensitive(sharding_info, ObDecimalIntType)
+               && (!expr->get_param_expr(0)->get_result_type().is_decimal_int()
+                   || expr->get_scale() != expr->get_param_expr(0)->get_scale())) {
+      is_lossless = false;
+    } else {
+      expr = expr->get_param_expr(0);
     }
   }
-  LOG_DEBUG("sharding info, is_lossless column_cast", K(*expr), K(is_lossless), K(sharding_info));
   return ret;
 }
+
 int ObShardingInfo::is_expr_equivalent(const EqualSets &equal_sets,
                                        const ObShardingInfo &first_sharding,
                                        const ObIArray<ObRawExpr*> &first_part_keys,
@@ -323,24 +363,13 @@ int ObShardingInfo::is_expr_equivalent(const EqualSets &equal_sets,
 {
   int ret = OB_SUCCESS;
   is_equal = false;
-  bool first_key_lossless = false, second_key_lossless = false;
   if (OB_ISNULL(first_key) || OB_ISNULL(second_key)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(first_key), K(second_key), K(ret));
-  } else if (OB_FAIL(is_lossless_column_cast(first_key, first_sharding, first_key_lossless))) {
-    LOG_WARN("check lossless cast failed", K(ret));
-  } else if (OB_FAIL(is_lossless_column_cast(second_key, first_sharding, second_key_lossless))) {
-    LOG_WARN("check lossless cast failed", K(ret));
-  } else {
-    if (first_key_lossless) {
-      first_key = first_key->get_param_expr(0);
-    }
-    if (second_key_lossless) {
-      second_key = second_key->get_param_expr(0);
-    }
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
+  } else if (OB_FAIL(remove_lossless_cast_for_sharding_key(first_key, first_sharding))) {
+    LOG_WARN("remove lossless cast failed", K(ret));
+  } else if (OB_FAIL(remove_lossless_cast_for_sharding_key(second_key, first_sharding))) {
+    LOG_WARN("remove lossless cast failed", K(ret));
   } else {
     bool left_is_equal = false;
     bool right_is_equal = false;
@@ -836,8 +865,8 @@ int ObShardingInfo::is_physically_equal_serverlist(ObIArray<ObAddr> &left_server
     // do nothing
   } else {
     is_equal_serverlist = true;
-    std::sort(&left_server_list.at(0), &left_server_list.at(0) + left_server_list.count());
-    std::sort(&right_server_list.at(0), &right_server_list.at(0) + right_server_list.count());
+    lib::ob_sort(&left_server_list.at(0), &left_server_list.at(0) + left_server_list.count());
+    lib::ob_sort(&right_server_list.at(0), &right_server_list.at(0) + right_server_list.count());
     for (int64_t i = 0; OB_SUCC(ret) && is_equal_serverlist && i < left_server_list.count(); i ++) {
       if (left_server_list.at(i) != right_server_list.at(i)) {
         is_equal_serverlist = false;
@@ -1072,15 +1101,15 @@ int ObShardingInfo::is_sharding_equal(const ObShardingInfo *left_sharding,
     } else { /*do nothing*/ }
   } else if (left_sharding->is_match_all() || left_sharding->is_local()) {
     is_equal = true;
-  } else if (!ObOptimizerUtil::same_exprs(left_sharding->get_partition_keys(),
-                                          right_sharding->get_partition_keys(),
-                                          equal_sets) ||
-             !ObOptimizerUtil::same_exprs(left_sharding->get_sub_partition_keys(),
-                                          right_sharding->get_sub_partition_keys(),
-                                          equal_sets) ||
-             !ObOptimizerUtil::same_exprs(left_sharding->get_partition_func(),
-                                          right_sharding->get_partition_func(),
-                                          equal_sets)) {
+  } else if (!ObOptimizerUtil::is_exprs_equivalent(left_sharding->get_partition_keys(),
+                                                   right_sharding->get_partition_keys(),
+                                                   equal_sets) ||
+             !ObOptimizerUtil::is_exprs_equivalent(left_sharding->get_sub_partition_keys(),
+                                                   right_sharding->get_sub_partition_keys(),
+                                                   equal_sets) ||
+             !ObOptimizerUtil::is_exprs_equivalent(left_sharding->get_partition_func(),
+                                                   right_sharding->get_partition_func(),
+                                                   equal_sets)) {
     is_equal = false;
   } else if (NULL == left_sharding->get_phy_table_location_info() &&
              NULL == right_sharding->get_phy_table_location_info()) {

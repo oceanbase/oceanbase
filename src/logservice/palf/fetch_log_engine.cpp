@@ -11,12 +11,7 @@
  */
 
 #include "fetch_log_engine.h"
-#include "log_define.h"
-#include "palf_handle_impl.h"
 #include "palf_handle_impl_guard.h"
-#include "share/allocator/ob_tenant_mutil_allocator.h"
-#include "share/ob_thread_mgr.h"
-#include "share/ob_ls_id.h"
 #include "palf_env_impl.h"
 
 namespace oceanbase
@@ -225,7 +220,7 @@ int FetchLogEngine::push_task_into_cache_(FetchLogTask *fetch_log_task)
   SpinLockGuard lock_guard(cache_lock_);
   int64_t count = fetch_task_cache_.count();
   if (count >= MAX_CACHED_FETCH_TASK_NUM) {
-    if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000)) {
+    if (REACH_THREAD_TIME_INTERVAL(5 * 1000 * 1000)) {
       PALF_LOG(INFO, "fetch_task_cache_ is full", K(ret), K_(fetch_task_cache));
     }
   } else {

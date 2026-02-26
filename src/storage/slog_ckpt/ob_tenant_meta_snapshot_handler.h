@@ -15,12 +15,13 @@
 
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
+#include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/ob_super_block_struct.h"
 #include "storage/ls/ob_ls_meta.h"
 #include "storage/tx/ob_dup_table_base.h"
 #include "storage/high_availability/ob_tablet_transfer_info.h"
 #include "storage/slog_ckpt/ob_tenant_storage_checkpoint_reader.h"
-#include "storage/slog_ckpt/ob_tenant_storage_checkpoint_writer.h"
+#include "storage/slog_ckpt/ob_tenant_storage_snapshot_writer.h"
 #include "storage/slog/ob_storage_log_struct.h"
 #include "storage/slog/ob_storage_log.h"
 
@@ -36,7 +37,7 @@ class ObStartupAccelTaskHandler;
 }
 namespace storage
 {
-class ObTenantStorageCheckpointWriter;
+class ObTenantStorageSnapshotWriter;
 class ObTenantMetaSnapshotHandler
 {
 public:
@@ -79,13 +80,13 @@ private:
       blocksstable::MacroBlockId &tablet_meta_entry);
   static int push_ls_snapshot(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len, ObIArray<ObLSID> &ls_ids);
   static int inc_all_linked_block_ref(
-      ObTenantStorageCheckpointWriter &tenant_storage_meta_writer,
+      ObTenantStorageSnapshotWriter &tenant_storage_meta_writer,
       bool &inc_ls_blocks_ref_succ,
       bool &inc_tablet_blocks_ref_succ);
   static void rollback_ref_cnt(
       const bool inc_ls_blocks_ref_succ,
       const bool inc_tablet_blocks_ref_succ,
-      ObTenantStorageCheckpointWriter &tenant_storage_meta_writer);
+      ObTenantStorageSnapshotWriter &tenant_storage_meta_writer);
   static void dec_meta_block_ref(const ObIArray<blocksstable::MacroBlockId> &meta_block_list);
   static int inner_delete_tablet_by_addrs(const ObIArray<ObMetaDiskAddr> &deleted_tablet_addrs);
   static int inner_delete_ls_snapshot(const blocksstable::MacroBlockId& tablet_meta_entry,
@@ -107,7 +108,6 @@ private:
       const char *buf,
       const int64_t buf_len,
       ObIArray<ObUpdateTabletLog> &slog_array);
-  static int batch_report_slog(const ObIArray<ObStorageLogParam> &param_arr);
   static int do_write_slog(ObIArray<ObUpdateTabletLog> &slog_arr);
 };
 }

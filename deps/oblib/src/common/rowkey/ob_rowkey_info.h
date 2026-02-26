@@ -105,6 +105,7 @@ public:
   TO_STRING_KV("columns", common::ObArrayWrap<ObRowkeyColumn>(columns_, size_), K_(capacity));
   int get_column_ids(ObIArray<uint64_t> &column_ids) const;
   int get_column_ids(ObBitSet<> &column_ids) const;
+  bool equals(const ObRowkeyInfo &other) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 private:
   int expand(const int64_t size);

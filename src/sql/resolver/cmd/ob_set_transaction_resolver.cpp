@@ -14,8 +14,7 @@
 
 #include "sql/resolver/cmd/ob_set_transaction_resolver.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
+#include "src/sql/resolver/ob_resolver_utils.h"
 #include "sql/ob_trans_character.h"
 using namespace oceanbase::common;
 using namespace oceanbase::transaction;
@@ -145,7 +144,6 @@ int ObSetTransactionResolver::build_isolation_expr(ObRawExpr *&expr, int32_t lev
     val.set_varchar(level_name);
     val.set_collation_type(ObCharset::get_system_collation());
     val.set_param_meta();
-    c_expr->set_param(val);
     c_expr->set_value(val);
     c_expr->set_data_type(ObVarcharType);
     expr = c_expr;
@@ -171,7 +169,6 @@ int ObSetTransactionResolver::build_access_expr(ObRawExpr *&expr, const bool is_
   } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_INT, c_expr))) {
     LOG_WARN("create raw expr failed", K(ret));
   } else {
-    c_expr->set_param(val);
     c_expr->set_value(val);
     c_expr->set_data_type(ObIntType);
     expr = c_expr;

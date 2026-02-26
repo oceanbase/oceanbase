@@ -21,6 +21,7 @@ namespace rootserver
 {
 class ObDDLTabletScheduler final
 {
+  OB_UNIS_VERSION(1);
 public:
   ObDDLTabletScheduler();
   ~ObDDLTabletScheduler();
@@ -31,17 +32,23 @@ public:
            const int64_t  parallelism,
            const int64_t  snapshot_version,
            const common::ObCurTraceId::TraceId &trace_id,
-           const ObIArray<ObTabletID> &tablets);
-  int get_next_batch_tablets(int64_t &parallelism, int64_t &new_execution_id, share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets);
+           const ObIArray<ObTabletID> &tablets,
+           const uint64_t data_version);
+  int get_next_batch_tablets(const bool is_ddl_retryable,
+                             int64_t &parallelism,
+                             int64_t &new_execution_id,
+                             share::ObLSID &ls_id,
+                             common::ObAddr &leader_addr,
+                             ObIArray<ObTabletID> &tablets);
   int confirm_batch_tablets_status(const int64_t execution_id, const bool finish_status, const share::ObLSID &ls_id, const ObIArray<ObTabletID> &tablets);
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(table_id), K_(ref_data_table_id),
               K_(task_id), K_(parallelism), K_(snapshot_version), K_(trace_id), K_(all_tablets), K_(running_task_ls_ids_before));
 private:
   int get_next_parallelism(int64_t &parallelism);
   int get_running_sql_parallelism(int64_t &parallelism);
-  int get_unfinished_tablets(const int64_t execution_id, share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets);
+  int get_unfinished_tablets(const share::ObDDLType task_type, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id, share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets);
   int get_to_be_scheduled_tablets(share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets);
-  int calculate_candidate_tablets(const uint64_t left_space_size, const ObIArray<ObTabletID> &in_tablets, ObIArray<ObTabletID> &out_tablets);
+  int calculate_candidate_tablets(const uint64_t left_space_size, common::ObAddr &leader_addr, const ObIArray<ObTabletID> &in_tablets, ObIArray<ObTabletID> &out_tablets);
   int get_session_running_lsid(ObIArray<share::ObLSID> &running_ls_ids);
   int get_target_running_ls_tablets(const share::ObLSID &ls_id, ObIArray<ObTabletID> &tablets);
   int get_potential_finished_lsid(const ObIArray<share::ObLSID> &running_ls_ids_now, ObIArray<share::ObLSID> &potential_finished_ls_ids);
@@ -49,6 +56,13 @@ private:
   int check_target_ls_tasks_completion_status(const share::ObLSID &ls_id);
   bool is_all_tasks_finished();
   bool is_running_tasks_before_finished();
+  int refresh_ls_location_map();
+  int push_tablet_execution_id(share::ObDDLType task_type,
+    const bool ddl_can_retry,
+    const int64_t data_format_version,
+    const common::ObIArray<common::ObTabletID> &tablets,
+    int64_t &new_task_execution_id);
+  int push_task_execution_id(int64_t &new_task_execution_id);
   void destroy();
 private:
   bool is_inited_;
@@ -60,7 +74,6 @@ private:
   int64_t snapshot_version_;
   common::ObCurTraceId::TraceId trace_id_;
   common::TCRWLock lock_; // this lock is used to protect read and write operations of class members: running_task_ls_ids_before_、 all_ls_to_tablets_map_、 running_ls_to_tablets_map_、 running_ls_to_execution_id_, to avoid conflicts between ddl_builder task and ddl_scheduler task.
-  common::ObArenaAllocator allocator_;
   ObRootService *root_service_;
   ObArray<ObTabletID> all_tablets_;
   ObArray<share::ObLSID> running_task_ls_ids_before_; // this is the used lsid array where the tablets is located when init ObDDLTabletScheduler;
@@ -70,6 +83,8 @@ private:
   common::hash::ObHashMap<share::ObLSID, int64_t> running_ls_to_execution_id_;
   common::hash::ObHashMap<int64_t, int64_t> tablet_id_to_data_size_;
   common::hash::ObHashMap<int64_t, int64_t> tablet_id_to_data_row_cnt_;
+  common::hash::ObHashMap<int64_t, int64_t> tablet_scheduled_times_statistic_;
+  common::hash::ObHashMap<common::ObTabletID, int64_t> tablet_id_to_execution_id_map_;
 };
 
 class ObTabletIdUpdater final

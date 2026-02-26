@@ -66,6 +66,8 @@ public:
   OB_INLINE int to_row(const sql::RowMeta &row_meta, sql::ObCompactRow *stored_row,
                        const uint64_t row_idx, const int64_t col_idx, const int64_t remain_size,
                        const bool is_fixed_length_data, int64_t &row_size) const override final;
+  DEF_VEC_READ_INTERFACES(ObContinuousFormat);
+  DEF_VEC_WRITE_INTERFACES(ObContinuousFormat);
 };
 
 OB_INLINE void ObContinuousFormat::get_payload(const int64_t idx,
@@ -116,6 +118,9 @@ OB_INLINE int ObContinuousFormat::from_rows(const sql::RowMeta &row_meta,
   int ret = OB_SUCCESS;
   // TODO shengle may can opt by prefect and has_null specialize
   for (int64_t i = 0; i < size; i++) {
+    if (nullptr == stored_rows[i]) {
+      continue;
+    }
     if (stored_rows[i]->is_null(col_idx)) {
       set_null(i);
     } else {
@@ -136,6 +141,9 @@ OB_INLINE int ObContinuousFormat::from_rows(const sql::RowMeta &row_meta,
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < size; i++) {
+    if (nullptr == stored_rows[i]) {
+      continue;
+    }
     int64_t row_idx = selector[i];
     if (stored_rows[i]->is_null(col_idx)) {
       set_null(row_idx);

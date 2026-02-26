@@ -14,6 +14,8 @@
 #include "logservice/ob_log_handler.h"
 #include "storage/tx/ob_ts_mgr.h"
 
+#define USING_LOG_PREFIX TRANS
+
 namespace oceanbase
 {
 
@@ -94,6 +96,14 @@ void ObKeepAliveLSHandler::reset()
   stat_info_.reset();
 }
 
+void ObKeepAliveLSHandler::clear_keep_alive_smaller_scn_info()
+{
+  SpinWLockGuard guard(lock_);
+  FLOG_INFO("[Keep Alive] clear keep alive ls info", K(ls_id_), K(tmp_keep_alive_info_), K(durable_keep_alive_info_));
+  tmp_keep_alive_info_.reset();
+  durable_keep_alive_info_.reset();
+}
+
 int ObKeepAliveLSHandler::try_submit_log(const SCN &min_start_scn, MinStartScnStatus min_start_status)
 {
   int ret = OB_SUCCESS;
@@ -150,6 +160,7 @@ int ObKeepAliveLSHandler::on_success()
   durable_keep_alive_info_.replace(tmp_keep_alive_info_);
   stat_info_.stat_keepalive_info_ = durable_keep_alive_info_;
 
+
   ATOMIC_STORE(&is_busy_,false);
 
   return ret;
@@ -200,16 +211,17 @@ int ObKeepAliveLSHandler::replay(const void *buffer,
 void ObKeepAliveLSHandler::print_stat_info()
 {
   SpinRLockGuard guard(lock_);
+  ObCStringHelper helper;
   TRANS_LOG(INFO, "[Keep Alive Stat] LS Keep Alive Info", "tenant_id",          MTL_ID(),
                                                           "LS_ID",              ls_id_,
                                                           "Not_Master_Cnt",     stat_info_.not_master_cnt,
                                                           "Near_To_GTS_Cnt",    stat_info_.near_to_gts_cnt,
                                                           "Other_Error_Cnt",    stat_info_.other_error_cnt,
                                                           "Submit_Succ_Cnt",    stat_info_.submit_succ_cnt,
-                                                          "last_scn",           to_cstring(stat_info_.stat_keepalive_info_.loop_job_succ_scn_),
+                                                          "last_scn",           helper.convert(stat_info_.stat_keepalive_info_.loop_job_succ_scn_),
                                                           "last_lsn",           stat_info_.stat_keepalive_info_.lsn_,
                                                           "last_gts",           last_gts_,
-                                                          "min_start_scn",      to_cstring(stat_info_.stat_keepalive_info_.min_start_scn_),
+                                                          "min_start_scn",      helper.convert(stat_info_.stat_keepalive_info_.min_start_scn_),
                                                           "min_start_status",   stat_info_.stat_keepalive_info_.min_start_status_,
                                                           "sys_ls_end_scn",     sys_ls_end_scn_);
   stat_info_.clear_cnt();
@@ -234,6 +246,9 @@ bool ObKeepAliveLSHandler::check_gts_()
   SCN end_scn;
   int ret = OB_SUCCESS;
   SCN sys_ls_end_scn = sys_ls_end_scn_.atomic_load();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  const int64_t KEEPALIVE_INTERVAL = tenant_config.is_valid() ?
+      tenant_config->_keepalive_interval : KEEP_ALIVE_GTS_INTERVAL;
   if (OB_ISNULL(log_handler_ptr_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid arguments", K(ret), KP(log_handler_ptr_));
@@ -243,14 +258,17 @@ bool ObKeepAliveLSHandler::check_gts_()
     TRANS_LOG(WARN, "get max log_ts failed", K(ret));
   } else if (OB_FAIL(log_handler_ptr_->get_end_scn(end_scn))) {
     TRANS_LOG(WARN, "get end scn failed", K(ret));
-  } else if (!last_gts_.is_valid_and_not_min()
-      || last_gts_ == gts) {
+  } else if (!last_gts_.is_valid_and_not_min()) {
+    // remove the condition last_gts_ == gts, which would bind the keepalive log to gts cache refresh;
+    // Consider the scenario the SYS_LS has no leader, which would make other LS not advance
+    // But if we use the same gts to submit log, the user ls would still advance slowly, so we regard
+    // keepalive log with the same gts as redundant
     need_submit = true;
   } else if (end_scn.is_valid_and_not_min()
       && sys_ls_end_scn.is_valid_and_not_min()
       && end_scn < sys_ls_end_scn) {
     need_submit = true;
-  } else if (gts.convert_to_ts() < max_scn.convert_to_ts() + KEEP_ALIVE_GTS_INTERVAL) {
+  } else if (gts.convert_to_ts() < max_scn.convert_to_ts() + KEEPALIVE_INTERVAL) {
     need_submit = false;
   }
 

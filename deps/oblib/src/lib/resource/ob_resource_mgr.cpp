@@ -12,37 +12,21 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "ob_resource_mgr.h"
-#include <new>
-#include <stdlib.h>
 
-#include "lib/alloc/memory_sanity.h"
-#include "lib/alloc/ob_malloc_time_monitor.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_diagnose_info.h"
+#include "ob_resource_mgr.h"
 #include "lib/utility/utility.h"
-#include "lib/alloc/alloc_failed_reason.h"
+#include "lib/resource/ob_affinity_ctrl.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
 using namespace common;
 namespace lib
 {
-ObTenantMemoryMgr::ObTenantMemoryMgr()
-  : cache_washer_(NULL), tenant_id_(common::OB_INVALID_ID),
-    limit_(INT64_MAX), sum_hold_(0), rpc_hold_(0), cache_hold_(0),
-    cache_item_count_(0)
-{
-  for (uint64_t i = 0; i < common::ObCtxIds::MAX_CTX_ID; i++) {
-    ATOMIC_STORE(&(hold_bytes_[i]), 0);
-    ATOMIC_STORE(&(limit_bytes_[i]), INT64_MAX);
-  }
-}
-
 ObTenantMemoryMgr::ObTenantMemoryMgr(const uint64_t tenant_id)
   : cache_washer_(NULL), tenant_id_(tenant_id),
-    limit_(INT64_MAX), sum_hold_(0), rpc_hold_(0), cache_hold_(0),
-    cache_item_count_(0)
+    limit_(INT64_MAX), limiter_(INT64_MAX, 0),
+    cache_hold_(0), cache_item_count_(0)
 {
   for (uint64_t i = 0; i < common::ObCtxIds::MAX_CTX_ID; i++) {
     ATOMIC_STORE(&(hold_bytes_[i]), 0);
@@ -71,13 +55,10 @@ AChunk *ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr &attr
       chunk = alloc_chunk_(size, attr);
       if (NULL == chunk) {
         update_hold(-hold_size, attr.ctx_id_, attr.label_, reach_ctx_limit);
-      } else if (attr.label_ == ObNewModIds::OB_KVSTORE_CACHE_MB) {
-        update_cache_hold(hold_size);
       }
     }
     BASIC_TIME_GUARD_CLICK("ALLOC_CHUNK_END");
-    if (!reach_ctx_limit && NULL != cache_washer_ && NULL == chunk && hold_size < cache_hold_
-        && attr.label_ != ObNewModIds::OB_KVSTORE_CACHE_MB) {
+    if (!reach_ctx_limit && NULL != cache_washer_ && NULL == chunk && hold_size < cache_hold_) {
       // try wash memory from cache
       ObICacheWasher::ObCacheMemBlock *washed_blocks = NULL;
       int64_t wash_size = hold_size + LARGE_REQUEST_EXTRA_MB_COUNT * INTACT_ACHUNK_SIZE;
@@ -126,9 +107,6 @@ void ObTenantMemoryMgr::free_chunk(AChunk *chunk, const ObMemAttr &attr)
     bool reach_ctx_limit = false;
     const int64_t hold_size = static_cast<int64_t>(chunk->hold());
     update_hold(-hold_size, attr.ctx_id_, attr.label_, reach_ctx_limit);
-    if (attr.label_ == ObNewModIds::OB_KVSTORE_CACHE_MB) {
-      update_cache_hold(-hold_size);
-    }
     free_chunk_(chunk, attr);
   }
 }
@@ -141,6 +119,7 @@ void *ObTenantMemoryMgr::alloc_cache_mb(const int64_t size)
   attr.tenant_id_ = tenant_id_;
   attr.prio_ = OB_NORMAL_ALLOC;
   attr.label_ = ObNewModIds::OB_KVSTORE_CACHE_MB;
+  attr.numa_id_ = AFFINITY_CTRL.get_numa_id();
   if (NULL != (chunk = alloc_chunk(size, attr))) {
     const int64_t all_size = CHUNK_MGR.aligned(size);
     SANITY_UNPOISON(chunk, all_size);
@@ -210,52 +189,45 @@ void ObTenantMemoryMgr::update_cache_hold(const int64_t size)
   }
 }
 
+ERRSIM_POINT_DEF(EN_TENANT_HOLD_REACH_LIMIT);
 bool ObTenantMemoryMgr::update_hold(const int64_t size, const uint64_t ctx_id,
                                     const lib::ObLabel &label, bool &reach_ctx_limit)
 {
-  bool updated = false;
+  bool updated = true;
   reach_ctx_limit = false;
-  if (size <= 0) {
-    ATOMIC_AAF(&sum_hold_, size);
-    updated = true;
-  } else {
-    if (sum_hold_ + size <= limit_) {
-      const int64_t nvalue = ATOMIC_AAF(&sum_hold_, size);
-      if (nvalue > limit_) {
-        ATOMIC_AAF(&sum_hold_, -size);
-      } else {
-        updated = true;
-      }
-    }
-  }
-  if (!updated) {
+  bool is_errsim = false;
+  if ((size > 0 && (is_errsim = EN_TENANT_HOLD_REACH_LIMIT)) || !limiter_.acquire(size)) {
+    updated = false;
     auto &afc = g_alloc_failed_ctx();
-    afc.reason_ = TENANT_HOLD_REACH_LIMIT;
+    afc.reason_ = is_errsim ? ERRSIM_TENANT_HOLD_REACH_LIMIT : TENANT_HOLD_REACH_LIMIT;
     afc.alloc_size_ = size;
     afc.tenant_id_ = tenant_id_;
-    afc.tenant_hold_ = sum_hold_;
+    afc.tenant_hold_ = get_sum_hold();
     afc.tenant_limit_ = limit_;
   } else if (label != ObNewModIds::OB_KVSTORE_CACHE_MB) {
     if (!update_ctx_hold(ctx_id, size)) {
-      ATOMIC_AAF(&sum_hold_, -size);
+      limiter_.acquire(-size);
       updated = false;
       reach_ctx_limit = true;
     }
+  } else {
+    update_cache_hold(size);
   }
   return updated;
 }
-
+ERRSIM_POINT_DEF(EN_CTX_HOLD_REACH_LIMIT);
 bool ObTenantMemoryMgr::update_ctx_hold(const uint64_t ctx_id, const int64_t size)
 {
   bool updated = false;
   if (ctx_id < ObCtxIds::MAX_CTX_ID) {
     volatile int64_t &hold = hold_bytes_[ctx_id];
     volatile int64_t &limit = limit_bytes_[ctx_id];
+    bool is_errsim = false;
     if (size <= 0) {
       ATOMIC_AAF(&hold, size);
       updated = true;
     } else {
-      if (hold + size <= limit) {
+      if (!(is_errsim = EN_CTX_HOLD_REACH_LIMIT) && hold + size <= limit) {
         const int64_t nvalue = ATOMIC_AAF(&hold, size);
         if (nvalue > limit) {
           ATOMIC_AAF(&hold, -size);
@@ -266,7 +238,7 @@ bool ObTenantMemoryMgr::update_ctx_hold(const uint64_t ctx_id, const int64_t siz
     }
     if (!updated) {
       auto &afc = g_alloc_failed_ctx();
-      afc.reason_ = CTX_HOLD_REACH_LIMIT;
+      afc.reason_ = is_errsim ? ERRSIM_CTX_HOLD_REACH_LIMIT : CTX_HOLD_REACH_LIMIT;
       afc.alloc_size_ = size;
       afc.ctx_id_ = ctx_id;
       afc.ctx_hold_ = hold;
@@ -291,9 +263,9 @@ AChunk *ObTenantMemoryMgr::alloc_chunk_(const int64_t size, const ObMemAttr &att
 {
   AChunk *chunk = nullptr;
   if (OB_UNLIKELY(attr.ctx_id_ == ObCtxIds::CO_STACK)) {
-    chunk = CHUNK_MGR.alloc_co_chunk(static_cast<uint64_t>(size));
+    chunk = CHUNK_MGR.alloc_co_chunk(static_cast<uint64_t>(size), attr.numa_id_);
   } else {
-    chunk = CHUNK_MGR.alloc_chunk(static_cast<uint64_t>(size), OB_HIGH_ALLOC == attr.prio_);
+    chunk = CHUNK_MGR.alloc_chunk(static_cast<uint64_t>(size), attr.numa_id_, OB_HIGH_ALLOC == attr.prio_);
   }
   return chunk;
 }

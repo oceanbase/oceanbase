@@ -11,10 +11,7 @@
  */
 #define USING_LOG_PREFIX RS
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 #include "share/ob_heartbeat_struct.h"
 
 namespace oceanbase

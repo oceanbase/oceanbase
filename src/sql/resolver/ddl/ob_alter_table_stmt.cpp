@@ -11,39 +11,46 @@
  */
 
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
+#include "storage/tablelock/ob_lock_executor.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "share/ob_table_lock_compat_versions.h"
 
 namespace oceanbase
 {
 using namespace common;
+using namespace transaction::tablelock;
 namespace sql
 {
 
 ObAlterTableStmt::ObAlterTableStmt(common::ObIAllocator *name_pool)
     : ObTableStmt(name_pool, stmt::T_ALTER_TABLE), is_comment_table_(false), 
       is_alter_system_(false), fts_arg_allocator_(nullptr), is_alter_triggers_(false),
-      interval_expr_(NULL), transition_expr_(NULL), alter_table_action_count_(0),
-      alter_external_table_type_(0)
+      interval_expr_for_set_interval_(NULL), transition_expr_for_set_interval_(NULL),
+      interval_expr_for_add_partition_(NULL), transition_expr_for_add_partition_(NULL),
+      alter_table_action_count_(0),
+      alter_external_table_type_(0), is_add_interval_partition_(false)
 {
 }
 
 ObAlterTableStmt::ObAlterTableStmt()
     : ObTableStmt(stmt::T_ALTER_TABLE), is_comment_table_(false), is_alter_system_(false),
-      fts_arg_allocator_(nullptr), is_alter_triggers_(false), interval_expr_(NULL), transition_expr_(NULL), alter_table_action_count_(0),
-      alter_external_table_type_(0)
+      fts_arg_allocator_(nullptr), is_alter_triggers_(false),
+      interval_expr_for_set_interval_(NULL), transition_expr_for_set_interval_(NULL),
+      interval_expr_for_add_partition_(NULL), transition_expr_for_add_partition_(NULL),
+      alter_table_action_count_(0),
+      alter_external_table_type_(0), is_add_interval_partition_(false)
 {
 }
 
 ObAlterTableStmt::~ObAlterTableStmt()
 {
   for (int64_t i = 0; i < index_arg_list_.count(); ++i) {
-    obrpc::ObCreateIndexArg *index_arg = index_arg_list_.at(i);
-    if (is_fts_index(index_arg->index_type_)
-        || is_multivalue_index(index_arg->index_type_)) {
-      index_arg->~ObCreateIndexArg();
-      fts_arg_allocator_->free(index_arg);
+    if (OB_NOT_NULL(index_arg_list_.at(i))) {
+      index_arg_list_.at(i)->~ObCreateIndexArg();
+      index_arg_list_.at(i) = nullptr;
     }
   }
-  index_arg_list_.reuse();
+  index_arg_list_.reset();
   fts_arg_allocator_ = nullptr;
 }
 
@@ -175,6 +182,32 @@ int ObAlterTableStmt::set_exchange_partition_arg(const obrpc::ObExchangePartitio
   int ret = OB_SUCCESS;
   if (OB_FAIL(exchange_partition_arg_.assign(exchange_partition_arg))) {
     SQL_RESV_LOG(WARN, "failed to assign", K(ret), K(exchange_partition_arg));
+  }
+  return ret;
+}
+
+int ObAlterTableStmt::set_lock_priority(sql::ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = session->get_effective_tenant_id();
+  const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+  if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "tenant config invalid, can not do rename", K(ret), K(tenant_id));
+  } else if (tenant_config->enable_lock_priority) {
+    if (is_rename_cluster_version(min_cluster_version)) {
+      if (!ObLockExecutor::proxy_is_support(session)) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "is in proxy_mode and not support rename", K(ret), KPC(session));
+      } else {
+        alter_table_arg_.lock_priority_ = ObTableLockPriority::HIGH1;
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      SQL_RESV_LOG(WARN, "the cluster version is not support rename", K(ret),
+                   K(min_cluster_version));
+    }
   }
   return ret;
 }

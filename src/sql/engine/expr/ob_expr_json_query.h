@@ -66,7 +66,8 @@ private:
                           ObEvalCtx& ctx,
                           ObObjType &dest_type,
                           bool &is_cover_by_error);
-  static int set_multivalue_result(ObEvalCtx& ctx,
+  static int set_multivalue_result(bool is_array,
+                                   ObEvalCtx& ctx,
                                    ObIAllocator& allocator,
                                    ObIJsonBase* json_base,
                                    const ObExpr &expr,
@@ -120,7 +121,7 @@ private:
   static int get_clause_pre_asc_sca_opt(const ObExpr &expr, ObEvalCtx &ctx,
                                         bool &is_cover_by_error, uint8_t &pretty_type,
                                         uint8_t &ascii_type, uint8_t &scalars_type);
-  static int check_enable_cast_index_array(ObIJsonBase* json_base, bool disable_container);
+  static int check_enable_cast_index_array(ObIJsonBase* json_base, bool disable_container, ObObjType dest_type);
 
 public:
   static int get_empty_option(bool &is_cover_by_error,
@@ -153,7 +154,7 @@ public:
                                             bool use_wrapper);
   static int get_error_option(int8_t &error_type, ObIJsonBase *&error_val, ObIJsonBase *jb_arr, ObIJsonBase *jb_obj, bool &is_null);
   static int get_mismatch_option(int8_t &mismatch_type, int &ret);
-  static int init_ctx_var(ObJsonParamCacheCtx*& param_ctx, const ObExpr &expr);
+  static int init_ctx_var(ObJsonParamCacheCtx*& param_ctx, ObEvalCtx &ctx, const ObExpr &expr);
   static int extract_plan_cache_param(const ObExprJsonQueryParamInfo *info, ObJsonExprParam& json_param);
   static int check_data_type_allowed(const ObExprResType* types_stack, const ObExprResType& data_type);
   /* code from ob_expr_cast for cal_result_type */
@@ -161,6 +162,19 @@ public:
 
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonQuery);
 
+};
+
+struct ObJsonObjectCompare {
+  int operator()(const ObObj &left, const ObObj &right)
+  {
+    int result = 0;
+    if (left.is_string_type() && right.is_string_type()) {
+      left.compare(right, CS_TYPE_UTF8MB4_GENERAL_CI, result);
+    } else {
+      left.compare(right, result);
+    }
+    return result <= 0 ? 0 : 1;
+  }
 };
 
 } // sql

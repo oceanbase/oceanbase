@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_row_getter.h"
-#include "lib/stat/ob_diagnose_info.h"
 
 namespace oceanbase
 {
@@ -125,10 +124,16 @@ int ObSSTableRowGetter::inner_get_next_row(const ObDatumRow *&store_row)
     ObDatumRow &datum_row = *const_cast<ObDatumRow *>(store_row);
     if (!store_row->row_flag_.is_not_exist() &&
         iter_param_->need_scn_ &&
-        OB_FAIL(set_row_scn(*iter_param_, store_row))) {
+        OB_FAIL(set_row_scn(access_ctx_->use_fuse_row_cache_, *iter_param_, store_row))) {
       LOG_WARN("failed to set row scn", K(ret));
     }
-    EVENT_INC(ObStatEventIds::SSSTORE_READ_ROW_COUNT);
+    if (OB_NOT_NULL(sstable_)) {
+      if (sstable_->is_minor_sstable()) {
+        ++access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_;
+      } else if (sstable_->is_major_type_sstable()) {
+        ++access_ctx_->table_store_stat_.major_sstable_read_row_cnt_;
+      }
+    }
     LOG_DEBUG("inner get next row", KPC(store_row), KPC(read_handle_.rowkey_));
   }
   return ret;
@@ -163,6 +168,7 @@ int ObSSTableRowGetter::fetch_row(ObSSTableReadHandle &read_handle, const ObDatu
               macro_block_reader_))) {
     LOG_WARN("Fail to get row", K(ret));
   } else {
+    REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(access_ctx_, micro_getter_->get_average_row_length());
     has_fetched_ = true;
   }
   return ret;

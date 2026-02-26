@@ -11,13 +11,9 @@
  */
 
 #include "share/ob_occam_time_guard.h"
+#include "share/ob_server_struct.h"
 #include "election_acceptor.h"
-#include "common/ob_clock_generator.h"
 #include "election_impl.h"
-#include "lib/net/ob_addr.h"
-#include "logservice/palf/election/interface/election_priority.h"
-#include "logservice/palf/election/utils/election_common_define.h"
-#include "logservice/palf/election/utils/election_event_recorder.h"
 
 namespace oceanbase
 {
@@ -32,8 +28,12 @@ do {\
     ELECT_LOG_RET(ERROR, common::OB_ERROR, "INIT_TS is less than 0, may not call GLOBAL_INIT_ELECTION_MODULE yet!", K(*this));\
     return;\
   } else if (OB_UNLIKELY(get_monotonic_ts() < ATOMIC_LOAD(&INIT_TS) + MAX_LEASE_TIME)) {\
-    ELECT_LOG(INFO, "keep silence for safty, won't send response", K(*this));\
-    return;\
+    if (GCTX.in_bootstrap_) {\
+      ELECT_LOG(INFO, "in bootstrap progress, no need to keep silence", K(*this), K(GCTX.in_bootstrap_));\
+    } else { \
+      ELECT_LOG(INFO, "keep silence for safty, won't send response", K(*this));\
+      return;\
+    }\
   }\
 } while(0)
 
@@ -344,17 +344,21 @@ int64_t ElectionAcceptor::to_string(char *buf, const int64_t buf_len) const
     common::databuff_printf(buf, buf_len, pos, "{p_election:NULL");
   } else {
     common::databuff_printf(buf, buf_len, pos, "{ls_id:{id:%ld}", p_election_->id_);
-    common::databuff_printf(buf, buf_len, pos, ", addr:%s", to_cstring(p_election_->get_self_addr()));
+    common::databuff_printf(buf, buf_len, pos, ", addr:");
+    common::databuff_printf(buf, buf_len, pos, p_election_->get_self_addr());
   }
   common::databuff_printf(buf, buf_len, pos, ", ballot_number:%ld", ballot_number_);
   common::databuff_printf(buf, buf_len, pos, ", ballot_of_time_window:%ld", ballot_of_time_window_);
-  common::databuff_printf(buf, buf_len, pos, ", lease:%s", to_cstring(lease_));
-  common::databuff_printf(buf, buf_len, pos, ", is_time_window_opened:%s", to_cstring(is_time_window_opened_));
-  common::databuff_printf(buf, buf_len, pos, ", vote_reason:%s", to_cstring(vote_reason_));
+  common::databuff_printf(buf, buf_len, pos, ", lease:");
+  common::databuff_printf(buf, buf_len, pos, lease_);
+  common::databuff_printf(buf, buf_len, pos, ", is_time_window_opened:");
+  common::databuff_printf(buf, buf_len, pos, is_time_window_opened_);
+  common::databuff_printf(buf, buf_len, pos, ", vote_reason:");
+  common::databuff_printf(buf, buf_len, pos, vote_reason_);
   common::databuff_printf(buf, buf_len, pos, ", last_time_window_open_ts:%s", ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(last_time_window_open_ts_));
   if (highest_priority_prepare_req_.is_valid()) {
-    common::databuff_printf(buf, buf_len, pos, ", highest_priority_prepare_req:%s",
-                                                  to_cstring(highest_priority_prepare_req_));
+    common::databuff_printf(buf, buf_len, pos, ", highest_priority_prepare_req:");
+    common::databuff_printf(buf, buf_len, pos, highest_priority_prepare_req_);
   }
   common::databuff_printf(buf, buf_len, pos, ", p_election:0x%lx}", (unsigned long)p_election_);
   return pos;

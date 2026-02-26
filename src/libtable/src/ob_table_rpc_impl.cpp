@@ -12,8 +12,8 @@
 
 #define USING_LOG_PREFIX CLIENT
 #include "ob_table_rpc_impl.h"
-#include "share/table/ob_table_rpc_proxy.h"               // ObTableRpcProxy
-#include "share/ob_tenant_mgr.h"
+#include "src/libtable/src/ob_tablet_location_proxy.h"
+
 using namespace oceanbase::table;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -97,6 +97,7 @@ int ObTableRpcImpl::execute(const ObTableOperation &table_operation, const ObTab
         request.returning_affected_rows_ = request_options.returning_affected_rows();
         request.returning_affected_entity_ = request_options.returning_affected_entity();
         request.option_flag_ = request_options.get_option_flag();
+        request.set_server_can_retry(true); // server can retry in this version
 
         ret = rpc_proxy_->
               timeout(request_options.server_timeout())
@@ -208,7 +209,7 @@ int ObTableRpcImpl::aggregate_tablet_by_server(const ObIArray<ObTabletLocation> 
   int tmp_ret = ret;
   FreeIdxArrayFunc free_idx_array_fn;
   if (OB_FAIL(server_tablet_map.foreach_refactored(free_idx_array_fn))) {
-    //overwrite ret
+    // overwrite ret
     LOG_WARN("failed to do foreach", K(ret));
   }
   ret = OB_SUCCESS == tmp_ret ? ret : tmp_ret;
@@ -289,6 +290,7 @@ int ObTableRpcImpl::batch_execute(const ObTableBatchOperation &batch_operation, 
       request.returning_affected_entity_ = request_options.returning_affected_entity();
       request.option_flag_ = request_options.get_option_flag();
       request.batch_operation_as_atomic_ = request_options.batch_operation_as_atomic();
+      request.set_server_can_retry(true); // server can retry in this version
       if (REACH_TIME_INTERVAL(10*1000*1000)) {
         // TODO: we can not print the tenat memory usage now.
         // ObTenantManager::get_instance().print_tenant_usage();
@@ -482,6 +484,7 @@ int ObTableRpcImpl::execute_query(const ObTableQuery &query, const ObTableReques
       request.credential_ = client_->get_credential();
       request.entity_type_ = this->entity_type_;
       request.consistency_level_ = request_options.consistency_level();
+      request.set_server_can_retry(true); // server can retry in this version
       query_multi_result_.reset();
 
       ret = rpc_proxy_->
@@ -527,6 +530,7 @@ int ObTableRpcImpl::execute_query_and_mutate(const ObTableQueryAndMutate &query_
       request.tablet_id_ = tablet_id;
       request.credential_ = client_->get_credential();
       request.entity_type_ = this->entity_type_;
+      request.set_server_can_retry(true); // retry OB_TRY_LOCK_ROW_CONFLICT
       query_multi_result_.reset();
       ret = rpc_proxy_->
             timeout(request_options.server_timeout())
@@ -563,12 +567,16 @@ int ObTableRpcImpl::query_start(const ObTableQuery& query, const ObTableRequestO
       request.query_ = query;
       request.table_name_ = table_name_;
       request.table_id_ = table_id_;
-      request.tablet_id_ = tablet_id;
+      if (this->entity_type_ != ObTableEntityType::ET_HKV) {
+        // htable request does not set valid tablet_id here because _obkv_enable_distributed_execution has been set as True by default from 4.4.1
+        request.tablet_id_ = tablet_id;
+      }
       request.credential_ = client_->get_credential();
       request.entity_type_ = this->entity_type_;
       request.consistency_level_ = request_options.consistency_level();
       request.query_session_id_ = 0;
       request.query_type_ = ObQueryOperationType::QUERY_START;
+      request.set_server_can_retry(true); // server can retry in this version
       query_async_multi_result_.reset();
       result = &query_async_multi_result_.get_one_result();
       ret = rpc_proxy_->
@@ -606,6 +614,9 @@ int ObTableRpcImpl::query_next(const ObTableRequestOptions &request_options, ObT
     request.consistency_level_ = request_options.consistency_level();
     request.query_session_id_ = query_async_multi_result_.session_id_;
     request.query_type_ = ObQueryOperationType::QUERY_NEXT;
+    request.table_name_ = table_name_;
+    request.table_id_ = table_id_;
+    request.set_server_can_retry(true); // server can retry in this version
     query_async_multi_result_.has_more_ = false;
     result = &query_async_multi_result_.get_one_result();
     result->reset();

@@ -12,12 +12,10 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "pl/sys_package/ob_dbms_sql.h"
-#include "pl/ob_pl_exception_handling.h"
+#include "ob_dbms_sql.h"
 #include "pl/ob_pl_package.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/parser/ob_parser.h"
-#include "sql/ob_spi.h"
 #include "sql/engine/expr/ob_expr_pl_associative_index.h"
 
 namespace oceanbase
@@ -209,7 +207,7 @@ int ObDbmsInfo::set_bind_param(const ObString &param_name, const ObObjParam&para
               && param_value.get_ext() != 0
               && param_value.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
         if (bind_params_.at(idx).param_value_.get_ext() != 0) {
-          OZ (ObUserDefinedType::destruct_obj(bind_params_.at(idx).param_value_));
+          OZ (ObUserDefinedType::destruct_obj(bind_params_.at(idx).param_value_, nullptr, true));
         }
         OZ (ObUserDefinedType::deep_copy_obj(alloc, param_value, bind_params_.at(idx).param_value_));
       } else {
@@ -265,7 +263,7 @@ int64_t ObDbmsCursorInfo::search_array(const ObString &name, ObIArray<ObString> 
 int ObDbmsCursorInfo::variable_value(sql::ObSQLSessionInfo *session,
                                      ObIAllocator *allocator,
                                      const ObString &variable_name,
-                                     sql::ObExprResType &result_type,
+                                     sql::ObRawExprResType &result_type,
                                      ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -335,7 +333,7 @@ int ObDbmsInfo::define_column(int64_t col_idx, ObObjType col_type,
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("define column position is invalid", K(col_idx), K(fields_), K(col_type), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "ORA-06562: type of out argument must match type of column or bind variable");
+                   "OBE-06562: type of out argument must match type of column or bind variable");
   } else {
     #define ENABLE_RECOVER_EXIST 1
     OZ (define_columns_.set_refactored(col_idx, col_size, ENABLE_RECOVER_EXIST));
@@ -364,7 +362,7 @@ int ObDbmsInfo::define_array(int64_t col_idx,
       LOG_WARN("define column position is invalid",
                K(col_idx), K(fields_), K(id),K(elem_type), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                     "ORA-06562: type of out argument must match type of column or bind variable");
+                     "OBE-06562: type of out argument must match type of column or bind variable");
   } else {
     #define ENABLE_RECOVER_EXIST 1
     ArrayDesc desc(id, cnt, lower_bnd, elem_type);
@@ -413,7 +411,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
                  ObIAllocator *allocator,
                  int64_t col_idx,
                  const ObObjParam src_obj,
-                 sql::ObExprResType &result_type,
+                 sql::ObRawExprResType &result_type,
                  ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -448,7 +446,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
         ObPLAssocArray *table = reinterpret_cast<ObPLAssocArray*>(result.get_ext());
         ObObjParam obj;
         ObObj key(ObInt32Type);
-        ObExprResType element_type;
+        ObRawExprResType element_type;
         ObExprPLAssocIndex::Info info;
         OX (info.for_write_ = true);
         OX (element_type.set_meta(desc->type_.get_meta_type()));
@@ -457,13 +455,19 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
           int64_t index = OB_INVALID_INDEX;
           ObNewRow &row = fetch_rows_.at(i);
           ObObjParam src = row.get_cell(col_idx);
+          ObObj tmp;
           OX (key.set_int32(desc->lower_bnd_ + desc->cur_idx_));
           OZ (ObExprPLAssocIndex::do_eval_assoc_index(index, session, info, *table, key, *allocator));
           CK(table->get_count() >= index);
-          OZ (ObSPIService::spi_convert(session, table->get_allocator(), src, element_type, obj));
-          OZ (deep_copy_obj(*table->get_allocator(),
-                            obj,
-                            reinterpret_cast<ObObj*>(table->get_data())[index-1]));
+          OZ (ObSPIService::spi_convert(session, allocator, src, element_type, obj));
+          OZ (deep_copy_obj(*table->get_allocator(), obj, tmp));
+          if (OB_SUCC(ret)) {
+            void *ptr = (table->get_data())[index-1].get_deep_copy_obj_ptr();
+            if (nullptr != ptr) {
+              table->get_allocator()->free(ptr);
+            }
+            (table->get_data())[index-1] = tmp;
+          }
           LOG_DEBUG("column add key ", K(col_idx), K(index), K(desc->cur_idx_), K(desc->lower_bnd_), K(key.get_int32()), K(table->get_key(index-1)->get_int32()));
           OX (++desc->cur_idx_);
         }
@@ -484,7 +488,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
                                ObIAllocator *allocator,
                                int64_t col_idx,
                                const ObObjParam src_obj,
-                               sql::ObExprResType &result_type,
+                               sql::ObRawExprResType &result_type,
                                ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -596,13 +600,21 @@ int ObDbmsCursorInfo::parse(const ObString &sql_stmt, ObSQLSessionInfo &session)
       session.get_warnings_buffer().set_error_line_column(0, error_offset);
     }
     OZ (ObResolverUtils::resolve_stmt_type(parse_result, stmt_type_), sql_stmt);
-    // cann't execute multi select stmt
-    if (OB_SUCC(ret)
-          && !parser.is_pl_stmt(sql_stmt)
-          && !parser.is_single_stmt(sql_stmt)) {
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (!parser.is_pl_stmt(sql_stmt)
+                 && !parser.is_single_stmt(sql_stmt)) {
+      // cann't execute multi select stmt
       ret = OB_ERR_CMD_NOT_PROPERLY_ENDED;
       LOG_WARN("execute immdeidate only support one stmt", K(ret));
+    } else if (0 < parse_result.question_mark_ctx_.count_
+                &&!parse_result.question_mark_ctx_.by_name_) {
+      ret = OB_ERR_INVALID_CHARACTER;
+      LOG_WARN("use '?' in DBMS_SQL.PARSE is not supported",
+               K(ret), K(sql_stmt));
     }
+
     OX (param_names = parse_result.question_mark_ctx_.name_);
     OX (param_count = parse_result.question_mark_ctx_.count_);
     // 取出所有绑定变量名
@@ -648,7 +660,7 @@ int64_t ObDbmsCursorInfo::convert_to_dbms_cursor_id(int64_t id)
 int ObDbmsCursorInfo::column_value(sql::ObSQLSessionInfo *session,
                             ObIAllocator *allocator,
                             int64_t col_idx,
-                            sql::ObExprResType &result_type,
+                            sql::ObRawExprResType &result_type,
                             ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -691,11 +703,67 @@ int ObPLDbmsSql::open_cursor(ObExecContext &exec_ctx, ParamStore &params, ObObj 
   return ret;
 }
 
+int ObPLDbmsSql::assemble_assoc_arr(ObIAllocator &allocator,
+                                    ObPLAssocArray &assoc_arr,
+                                    const int64_t lb,
+                                    const int64_t ub,
+                                    const bool linefeed,
+                                    ObString &sql_stmt,
+                                    ObCollationType &coll_type)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_txt;
+  coll_type = CS_TYPE_INVALID;
+
+  if (OB_SUCC(ret) && lb > ub) {
+    ret = OB_ERR_PARSE_SQL;
+    LOG_WARN("wrong parameter with lower bound and upper bound", K(ret), K(lb), K(ub));
+  }
+  for (int64_t i = lb; OB_SUCC(ret) && i <= ub; ++i) {
+    ObObj key, exists;
+    int64_t index = OB_INVALID_INDEX;
+    int64_t search_end = OB_INVALID_INDEX;
+    key.set_int32(i);
+    OZ (assoc_arr.search_key(key, index, search_end, assoc_arr.get_count()));
+    if (OB_SUCC(ret) && OB_INVALID_INDEX == index) {
+      ret = OB_READ_NOTHING;
+      LOG_WARN("can not found key in assoc array", K(ret), K(key));
+    }
+    CK (search_end != OB_INVALID_INDEX);
+    OV (index >= 0 && index < assoc_arr.get_count(), OB_ERR_UNEXPECTED, K(index));
+    OZ (assoc_arr.exist(index + 1, exists)); // Notice: first argument is start with 1, index is start with 0.
+    if (OB_SUCC(ret) && !exists.get_tinyint()) {
+      ret = OB_READ_NOTHING;
+      LOG_WARN("can not found key in assoc array", K(ret), K(key));
+    }
+    if (OB_SUCC(ret)) {
+      ObObj &elem = reinterpret_cast<ObObj *>(assoc_arr.get_data())[index];
+      OX (coll_type = elem.get_collation_type(););
+      if (!elem.is_null()) {
+        ObString elem_txt;
+        OZ (elem.get_varchar(elem_txt), K(elem));
+        OZ (sql_txt.append(elem_txt));
+        if (linefeed) {
+          OZ (sql_txt.append("\n"));
+        }
+      }
+    }
+  }
+  OZ (ob_write_string(allocator, sql_txt.string(), sql_stmt));
+  return ret;
+}
+
 int ObPLDbmsSql::parse_6p(ObExecContext &exec_ctx, ParamStore &params, ObObj &result)
 {
   UNUSED(result);
   int ret = OB_SUCCESS;
   int64_t param_count = params.count();
+  int64_t low_bound = -1, upper_bound = -1;
+  bool linefeed = false;
+  int8_t flag = 0;
+  ObPLCollection *sql_arr = NULL;
+  ObPLAssocArray *assoc_arr = NULL;
+
   OV (param_count == 6, OB_INVALID_ARGUMENT, params);
   OV (params.at(1).is_ext(), OB_INVALID_ARGUMENT, params);
   OV (params.at(2).is_number(), OB_INVALID_ARGUMENT, params);
@@ -703,104 +771,28 @@ int ObPLDbmsSql::parse_6p(ObExecContext &exec_ctx, ParamStore &params, ObObj &re
   OV (params.at(4).is_tinyint(), OB_INVALID_ARGUMENT, params);
   OV (params.at(5).is_number(), OB_INVALID_ARGUMENT, params);
 
-  ObPLCollection *sql_arr = NULL;
   OX (sql_arr = reinterpret_cast<ObPLCollection *>(params.at(1).get_ext()));
   CK (OB_NOT_NULL(sql_arr));
   CK (sql_arr->is_associative_array());
-  int64_t low_bound = -1, upper_bound = -1;
-  bool linefeed = false;
-  int8_t flag = 0;
   OV (params.at(2).get_number().is_valid_int64(low_bound), OB_INVALID_ARGUMENT, params.at(2));
   OV (params.at(3).get_number().is_valid_int64(upper_bound), OB_INVALID_ARGUMENT, params.at(3));
   OZ (params.at(4).get_tinyint(flag), params.at(4));
   OX (linefeed = static_cast<bool>(flag));
-  CK (sql_arr->get_count() >= upper_bound - low_bound);
-  CK (low_bound <= upper_bound);
-  ObSqlString sql_txt;
-  if (OB_SUCC(ret)) {
-    ObString elem_txt;
-    ObPLAssocArray *assoc_arr = static_cast<ObPLAssocArray *>(sql_arr);
-    int64_t *sort_arr = assoc_arr->get_sort();
-    int64_t idx = assoc_arr->get_first() - 1;
-    ObObj *keys = assoc_arr->get_key();
-    CK (OB_NOT_NULL(keys));
-    int32_t key = -1;
-    int64_t low_idx = OB_INVALID_INDEX, upper_idx = OB_INVALID_INDEX;
-    #define GET_NEXT() { \
-      if (OB_SUCC(ret) && 0 <= idx && idx < assoc_arr->get_count()) { \
-        if (OB_NOT_NULL(sort_arr)) { \
-          idx = sort_arr[idx]; \
-        } else { \
-          idx++; \
-        } \
-      } else { \
-        idx = OB_INVALID_INDEX; \
-      } \
-    }
-    // 首先拿到low_bound和upper_bound对应的index;
-    do {
-      if (OB_SUCC(ret) && 0 <= idx && idx < assoc_arr->get_count()) {
-        OZ (keys[idx].get_int32(key), keys[idx]);
-        if (OB_SUCC(ret)) {
-          if (static_cast<int64_t>(key) == low_bound) {
-            low_idx = idx;
-          }
-          if (static_cast<int64_t>(key) == upper_bound) {
-            upper_idx = idx;
-          }
-        }
-      }
-      if (OB_INVALID_INDEX != low_idx && OB_INVALID_INDEX != upper_idx) {
-        break;
-      }
-      GET_NEXT();
-    } while (OB_SUCC(ret) && OB_INVALID_INDEX != idx);
+  CK (OB_NOT_NULL(assoc_arr = static_cast<ObPLAssocArray *>(sql_arr)));
 
-    CK (0 <= low_idx);
-    CK (sql_arr->get_count() > low_idx);
-    CK (sql_arr->get_count() > upper_idx);
-    CK (low_idx <= upper_idx);
-
-    if (OB_SUCC(ret)) {
-      // reset idx
-      OX (idx = assoc_arr->get_first() - 1);
-      // 定位low bound
-      while(0 < low_idx) {
-        GET_NEXT();
-        low_idx--;
-        upper_idx--;
-      }
-      // 开始组装
-      while (OB_SUCC(ret) && 0 <= upper_idx) {
-        bool is_del = false;
-        OZ (assoc_arr->is_elem_deleted(idx, is_del));
-        if (OB_SUCC(ret)) {
-          if (is_del) {
-            ret = OB_READ_NOTHING;
-          } else {
-            ObObj &elem = reinterpret_cast<ObObj *>(assoc_arr->get_data())[idx];
-            if (elem.is_null()) {
-              ret = OB_READ_NOTHING;
-            } else {
-              OZ (elem.get_varchar(elem_txt), elem);
-              OZ (sql_txt.append(elem_txt));
-              if (linefeed) {
-                OZ (sql_txt.append("\n"));
-              }
-              GET_NEXT();
-            }
-          }
-        }
-        upper_idx--;
-      }
-    }
-  }
   ObDbmsCursorInfo *cursor = NULL;
   ObString sql_stmt;
+  ObCollationType coll_type = CS_TYPE_INVALID;
+  OZ (assemble_assoc_arr(exec_ctx.get_allocator(),
+                         *assoc_arr,
+                         low_bound,
+                         upper_bound,
+                         linefeed,
+                         sql_stmt,
+                         coll_type));
   OZ (get_cursor(exec_ctx, params, cursor));// 这儿只用了params的第一个参数，cursor id
-  OZ (ob_write_string(exec_ctx.get_allocator(), sql_txt.string(), sql_stmt));
-  LOG_DEBUG("parse 6p, concated sql stmt", K(sql_stmt), K(sql_txt.string()));
-  OZ (do_parse(exec_ctx, cursor, sql_stmt));
+  LOG_DEBUG("parse 6p, concated sql stmt", K(sql_stmt));
+  OZ (do_parse(exec_ctx, cursor, sql_stmt, coll_type));
   return ret;
 }
 
@@ -823,7 +815,7 @@ int ObPLDbmsSql::parse(ObExecContext &exec_ctx, ParamStore &params, ObObj &resul
       OZ (params.at(1).get_varchar(sql_stmt), params.at(1));
 
       OZ (get_cursor(exec_ctx, params, cursor));
-      OZ (do_parse(exec_ctx, cursor, sql_stmt));
+      OZ (do_parse(exec_ctx, cursor, sql_stmt, params.at(1).get_collation_type()));
     } else if (6 == param_count) {
       OZ (parse_6p(exec_ctx, params, result));
     } else {
@@ -834,13 +826,25 @@ int ObPLDbmsSql::parse(ObExecContext &exec_ctx, ParamStore &params, ObObj &resul
   return ret;
 }
 
-int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObString &sql_stmt)
+int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx,
+                          ObDbmsCursorInfo *cursor,
+                          ObString &sql_stmt,
+                          ObCollationType coll_type)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(cursor));
   // do parse.
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
-  OZ (cursor->parse(sql_stmt, *session), sql_stmt);
+  ObCollationType conn_coll_type = CS_TYPE_INVALID;
+  ObString sql_cs;
+  CK (OB_NOT_NULL(session));
+  OX (conn_coll_type = session->get_local_collation_connection());
+  OZ (ObCharset::charset_convert(exec_ctx.get_allocator(),
+                                 sql_stmt,
+                                 coll_type,
+                                 conn_coll_type,
+                                 sql_cs));
+  OZ (cursor->parse(sql_cs, *session), sql_cs);
   if (OB_SUCC(ret)) {
     ObString ps_sql;
     stmt::StmtType stmt_type = stmt::StmtType::T_NONE;
@@ -850,10 +854,10 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
     bool skip_locked = false;
     ParamStore dummy_params;
     ObSqlString sql_str;
-    ObPLExecCtx pl_ctx(cursor->get_allocator(), &exec_ctx, &dummy_params,
+    ObPLExecCtx pl_ctx(cursor->get_allocator(), cursor->get_allocator(), &exec_ctx, &dummy_params,
                      NULL/*result*/, &ret, NULL/*func*/, true);
     CK (OB_NOT_NULL(exec_ctx.get_my_session()));
-    OZ (sql_str.append(sql_stmt));
+    OZ (sql_str.append(sql_cs));
     OX (cursor->get_field_columns().set_allocator(&cursor->get_dbms_entity()->get_arena_allocator()));
     OZ (ObSPIService::prepare_dynamic(&pl_ctx,
                                       cursor->get_dbms_entity()->get_arena_allocator(),
@@ -867,6 +871,7 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
                                       hidden_rowid,
                                       into_cnt,
                                       skip_locked,
+                                      nullptr,
                                       &cursor->get_field_columns()));
     if (OB_SUCC(ret)) {
       cursor->set_ps_sql(ps_sql);
@@ -884,7 +889,9 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
   //  ret = OB_ERR_DBMS_SQL_INVALID_STMT;
   //}
   // execute if stmt is not dml nor select.
-  if (OB_SUCC(ret) && check_stmt_need_to_be_executed_when_parsing(*cursor)) {
+  bool flag = false;
+  OZ (check_stmt_need_to_be_executed_when_parsing(*cursor, flag));
+  if (OB_SUCC(ret) && true == flag) {
     OZ (do_execute(exec_ctx, *cursor));
     OX (cursor->get_ps_sql().reset());
     OX (cursor->get_sql_stmt().reset());
@@ -892,10 +899,16 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
   return ret;
 }
 
-bool ObPLDbmsSql::check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor)
+int ObPLDbmsSql::check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor, bool& flag)
 {
-  bool flag = ObStmt::is_ddl_stmt(cursor.get_stmt_type(), true);
-  return flag;
+  int ret = OB_SUCCESS;
+  if (stmt::T_NONE == cursor.get_stmt_type()) {
+    ret = OB_NO_STMT_PARSE;
+    LOG_WARN("Cursor has not parsed any statement", K(ret));
+  } else {
+    flag = ObStmt::is_ddl_stmt(cursor.get_stmt_type(), true);
+  }
+  return ret;
 }
 
 int ObPLDbmsSql::bind_variable(ObExecContext &exec_ctx, ParamStore &params, ObObj &result)
@@ -967,9 +980,9 @@ int ObPLDbmsSql::define_column(ObExecContext &exec_ctx, ParamStore &params, ObOb
   OV (params.at(1).is_number(), OB_INVALID_ARGUMENT, params);
   OV (params.at(1).get_number().is_valid_int64(column_pos), OB_INVALID_ARGUMENT, params.at(1));
   OX (column_type =
-      params.at(2).is_null() ? params.at(2).get_null_meta().get_type() : params.at(2).get_type());
+      params.at(2).is_null() ? params.at(2).get_param_meta().get_type() : params.at(2).get_type());
   OX (column_cs_type = params.at(2).is_null()
-                       ? params.at(2).get_null_meta().get_collation_type()
+                       ? params.at(2).get_param_meta().get_collation_type()
                        : params.at(2).get_collation_type());
   if (OB_SUCC(ret)) {
     if (ob_is_accuracy_length_valid_tc(column_type)) {
@@ -983,7 +996,7 @@ int ObPLDbmsSql::define_column(ObExecContext &exec_ctx, ParamStore &params, ObOb
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("column size cannot be used for this type", K(column_type), K(column_size), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                     "ORA-06562: type of out argument must match type of column or bind variable");
+                     "OBE-06562: type of out argument must match type of column or bind variable");
     }
   }
 
@@ -1103,20 +1116,24 @@ int ObPLDbmsSql::execute(ObExecContext &exec_ctx, ParamStore &params, ObObj &res
       LOG_WARN("Cursor contains both regular and array defines which is illegal", K(ret));
     } else {
       // do execute.
-      if (!check_stmt_need_to_be_executed_when_parsing(*cursor)) {
-        OZ (do_execute(exec_ctx, *cursor, params, result));
-        //every ececute should reset current index of Array
-        for (ObDbmsCursorInfo::DefineArrays::iterator iter = cursor->get_define_arrays().begin();
-               OB_SUCC(ret) && iter != cursor->get_define_arrays().end();
-               ++iter) {
-          ObDbmsCursorInfo::ArrayDesc &array_info = iter->second;
-          array_info.cur_idx_ = 0;
+      bool flag = false;
+      OZ (check_stmt_need_to_be_executed_when_parsing(*cursor, flag));
+      if (OB_SUCC(ret)) {
+        if (false == flag) {
+          OZ (do_execute(exec_ctx, *cursor, params, result));
+          //every ececute should reset current index of Array
+          for (ObDbmsCursorInfo::DefineArrays::iterator iter = cursor->get_define_arrays().begin();
+                 OB_SUCC(ret) && iter != cursor->get_define_arrays().end();
+                 ++iter) {
+            ObDbmsCursorInfo::ArrayDesc &array_info = iter->second;
+            array_info.cur_idx_ = 0;
+          }
+        } else {
+          number::ObNumber num;
+          int64_t res_num = 0;
+          OZ (num.from(res_num, exec_ctx.get_allocator()));
+          result.set_number(num);
         }
-      } else {
-        number::ObNumber num;
-        int64_t res_num = 0;
-        OZ (num.from(res_num, exec_ctx.get_allocator()));
-        result.set_number(num);
       }
     }
   }
@@ -1128,7 +1145,7 @@ int ObPLDbmsSql::do_execute(ObExecContext &exec_ctx,
                             ObDbmsCursorInfo &dbms_cursor)
 {
   int ret = OB_SUCCESS;
-  ObPLExecCtx pl_ctx(dbms_cursor.get_allocator(), &exec_ctx, NULL/*params*/,
+  ObPLExecCtx pl_ctx(dbms_cursor.get_allocator(), dbms_cursor.get_allocator(), &exec_ctx, NULL/*params*/,
                      NULL/*result*/, &ret, NULL/*func*/, true);
   OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, dbms_cursor));
   return ret;
@@ -1141,7 +1158,7 @@ int ObPLDbmsSql::do_execute(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   number::ObNumber num;
-  ObPLExecCtx pl_ctx(cursor.get_allocator(), &exec_ctx, &params,
+  ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), &exec_ctx, &params,
                      NULL/*result*/, &ret, NULL/*func*/, true);
   OZ (cursor.expand_params());
   OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, cursor, true));
@@ -1181,7 +1198,7 @@ int ObPLDbmsSql::do_fetch(ObExecContext &exec_ctx,
   bool is_last_fetch_with_row = cursor.get_fetched_with_row();
 
   if (OB_SUCC(ret)) {
-    ObPLExecCtx pl_ctx(cursor.get_allocator(), &exec_ctx, &params,
+    ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), &exec_ctx, &params,
                         NULL/*result*/, &ret, NULL/*func*/, true);
     int64_t fetch_cnt = 0;
     ObNumber row_count;
@@ -1251,7 +1268,7 @@ int ObPLDbmsSql::column_value(ObExecContext &exec_ctx, ParamStore &params, ObObj
   int64_t param_count = params.count();
 
   // parse all param.
-  ObExprResType result_type;
+  ObRawExprResType result_type;
   if (5 == param_count) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("five parameters for column_value not supported", K(ret));
@@ -1261,7 +1278,7 @@ int ObPLDbmsSql::column_value(ObExecContext &exec_ctx, ParamStore &params, ObObj
   OV (params.at(1).is_number(), OB_INVALID_ARGUMENT, params);
   OV (params.at(1).get_number().is_valid_int64(column_pos), OB_INVALID_ARGUMENT, params.at(1));
   OX (result_type.set_meta(params.at(2).is_null()
-      ? params.at(2).get_null_meta() : params.at(2).get_meta()));
+      ? params.at(2).get_param_meta() : params.at(2).get_meta()));
   OX (result_type.set_accuracy(params.at(2).get_accuracy()));
 
   OZ (get_cursor(exec_ctx, params, cursor));
@@ -1284,12 +1301,12 @@ int ObPLDbmsSql::variable_value(ObExecContext &exec_ctx, ParamStore &params, ObO
   ObString name;
   int64_t param_count = params.count();
   // parse all param.
-  ObExprResType result_type;
+  ObRawExprResType result_type;
   OV (3 == param_count, OB_INVALID_ARGUMENT, params);
   OV (params.at(1).is_varchar(), OB_INVALID_ARGUMENT, params);
   OZ (params.at(1).get_string(name));
   OX (result_type.set_meta(params.at(2).is_null()
-      ? params.at(2).get_null_meta() : params.at(2).get_meta()));
+      ? params.at(2).get_param_meta() : params.at(2).get_meta()));
   OX (result_type.set_accuracy(params.at(2).get_accuracy()));
   OZ (get_cursor(exec_ctx, params, cursor));
   CK (OB_NOT_NULL(cursor));
@@ -1353,7 +1370,7 @@ int ObPLDbmsSql::do_describe(ObExecContext &exec_ctx, ParamStore &params, Descri
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Only select statement can be described", K(cursor->get_stmt_type()), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "ORA-00900: invalid SQL statement, only select statement can be described");
+                   "OBE-00900: invalid SQL statement, only select statement can be described");
   }
 
   OV (3 == params.count(), OB_INVALID_ARGUMENT, params);
@@ -1370,11 +1387,11 @@ int ObPLDbmsSql::do_describe(ObExecContext &exec_ctx, ParamStore &params, Descri
     ObPLAssocArray *table = reinterpret_cast<ObPLAssocArray*>(params.at(2).get_ext());
     CK (OB_NOT_NULL(exec_ctx.get_my_session()));
     CK (OB_NOT_NULL(table));
-    OZ (ObSPIService::spi_extend_assoc_array(exec_ctx.get_my_session()->get_effective_tenant_id(),
+    OZ (ObSPIService::spi_set_collection(exec_ctx.get_my_session()->get_effective_tenant_id(),
                                              NULL,
-                                             exec_ctx.get_allocator(),
                                              *table,
-                                             cursor->get_field_columns().count()));
+                                             cursor->get_field_columns().count(),
+                                             true));
 
   /*
    * TYPE desc_rec IS RECORD ( col_type BINARY_INTEGER := 0,
@@ -1543,11 +1560,14 @@ int ObPLDbmsSql::execute_and_fetch(ObExecContext &exec_ctx, ParamStore &params, 
   }
   // todo : when dbms_cursor support stream cursor need change here
   if (OB_SUCC(ret) && (!cursor->isopen()
-                        || (cursor->isopen() && cursor->get_rowcount() == cursor->get_spi_cursor()->cur_))
-                   && !check_stmt_need_to_be_executed_when_parsing(*cursor)) {
-    // do execute.
-    has_open = false;
-    OZ (do_execute(exec_ctx, *cursor, params, result));
+                        || (cursor->isopen() && cursor->get_rowcount() == cursor->get_spi_cursor()->cur_))) {
+    bool flag = false;
+    OZ (check_stmt_need_to_be_executed_when_parsing(*cursor, flag));
+    if (OB_SUCC(ret) && false == flag) {
+      // do execute.
+      has_open = false;
+      OZ (do_execute(exec_ctx, *cursor, params, result));
+    }
   }
   if (OB_SUCC(ret)) {
     if (2 == param_count) {
@@ -1630,7 +1650,21 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
     // 2.* fill row store
     if (cursor->is_streaming()) {
       // we can't reopen the cursor, so if fill cursor has error. we will report to client.
-      OZ (ObSPIService::fill_cursor(*(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0));
+      bool is_iter_end = false;
+      CK (OB_NOT_NULL(cursor->get_cursor_handler()->get_result_set()));
+      OZ (spi_cursor->init_row_desc(*(cursor->get_cursor_handler()->get_result_set())));
+      if (OB_SUCC(ret) && cursor->get_cursor_handler()->enable_streaming_cursor_prefetch()
+          && OB_NOT_NULL(cursor->get_cursor_handler()->get_spi_cursor()) && cursor->get_cursor_handler()->get_spi_cursor()->cur_ < cursor->get_cursor_handler()->get_spi_cursor()->row_store_.get_row_cnt()) {
+        ObSPICursor *orig_spi_cursor = cursor->get_cursor_handler()->get_spi_cursor();
+        for (int64_t i = orig_spi_cursor->cur_; OB_SUCC(ret) && i < orig_spi_cursor->row_store_.get_row_cnt(); i++) {
+          const ObNewRow *cur_row = NULL;
+          OZ (orig_spi_cursor->row_store_.get_row(i, cur_row));
+          OZ (ObSPIService::fill_cursor_row(spi_cursor, *cur_row));
+        }
+      }
+      OZ (ObSPIService::fill_cursor(
+        cursor->get_cursor_entity(),
+        *(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0, is_iter_end));
     } else {
       ObSPICursor *orig_spi_cursor = cursor->get_spi_cursor();
       for (int64_t i = 0; OB_SUCC(ret) && i < orig_spi_cursor->fields_.count(); ++i) {
@@ -1654,7 +1688,7 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
   OX (new_cursor->open(spi_cursor));
   if (OB_FAIL(ret) && NULL != spi_cursor) {
     spi_cursor->~ObSPICursor();
-    LOG_WARN("fill cursor failed.", K(ret), K(new_cursor->get_id()), K(session->get_sessid()));
+    LOG_WARN("fill cursor failed.", K(ret), K(new_cursor->get_id()), K(session->get_server_sid()));
   }
 
   // 3. set old cursor invalid
@@ -1692,7 +1726,6 @@ int ObPLDbmsSql::to_cursor_number(ObExecContext &exec_ctx, ParamStore &params, O
       OV (OB_NOT_NULL(new_cursor));
       OZ (new_cursor->prepare_entity(*session));
       OZ (fill_dbms_cursor(session, cursor, new_cursor));
-      OX (new_cursor->set_ref_by_refcursor());
       OX (new_cursor->set_stmt_type(stmt::T_SELECT));
       OX (new_cursor->get_sql_stmt() = "SELECT");  // placeholder for SQL stmt
       if (OB_FAIL(ret) && NULL != new_cursor) {
@@ -1723,6 +1756,46 @@ int ObPLDbmsSql::to_cursor_number(ObExecContext &exec_ctx, ParamStore &params, O
   }
   return ret;
 }
+
+int ObPLDbmsSql::to_refcursor(ObExecContext &exec_ctx, ParamStore &params, ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  ObDbmsCursorInfo *cursor = NULL;
+
+  if (params.at(0).is_null()) {
+    ret = OB_ERR_DBMS_SQL_CURSOR_NOT_EXIST;
+    LOG_WARN("cursor number is null", K(ret));
+  }
+  OZ (get_cursor(exec_ctx, params, cursor));
+  CK (OB_NOT_NULL(cursor));
+  if (OB_SUCC(ret) && (cursor->get_sql_stmt().empty()
+                      || !ObStmt::is_select_stmt(cursor->get_stmt_type())
+                      || !cursor->isopen()
+                      || (cursor->get_fetched() && !cursor->get_fetched_with_row()))) {
+    ret = OB_ERR_INVALID_CURSOR;
+    LOG_WARN("invlid cursor", K(ret), K(cursor->get_sql_stmt().empty()), K(cursor->get_stmt_type()), K(cursor->isopen()));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObPLCursorInfo* cursor_info = static_cast<ObPLCursorInfo*>(cursor);
+    if (!cursor_info->is_streaming()) {
+      ObSPICursor* spi_cursor = cursor_info->get_spi_cursor();
+      CK (OB_NOT_NULL(spi_cursor));
+      OZ (ObDbmsInfo::deep_copy_field_columns(*cursor->get_allocator(),
+                                              cursor->get_field_columns(),
+                                              spi_cursor->fields_));
+    }
+    OX (cursor->reset_dbms_info());
+    OX (cursor_info->set_is_session_cursor());
+    OX (cursor_info->set_ref_by_refcursor());
+    OX (cursor_info->set_ref_count(1));
+    OX (result.set_extend(reinterpret_cast<int64_t>(cursor_info), PL_REF_CURSOR_TYPE));
+    OX (params.at(0).set_null());
+  }
+
+  return ret;
+}
+
 
 int ObPLDbmsSql::last_error_position(ObExecContext &exec_ctx, ParamStore &params, ObObj &result) {
   int ret = OB_SUCCESS;

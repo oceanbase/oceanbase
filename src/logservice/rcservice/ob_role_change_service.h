@@ -31,7 +31,8 @@ enum class RoleChangeEventType {
   INVALID_RC_EVENT_TYPE = 0,
   CHANGE_LEADER_EVENT_TYPE = 1,
   ROLE_CHANGE_CB_EVENT_TYPE = 2,
-  MAX_RC_EVENT_TYPE = 3
+  SYNC_MODE_EVENT_TYPE = 3,
+  MAX_RC_EVENT_TYPE = 4
 };
 
 struct RoleChangeEvent {
@@ -94,7 +95,9 @@ private:
   enum class RetrySubmitRoleChangeEventReason {
     INVALID_TYPE = 0,
     WAIT_REPLAY_DONE_TIMEOUT = 1,
-    MAX_TYPE = 2
+    WAIT_REPLACE_DONE_TIMEOUT = 2,
+    WAIT_STANDBY_SYNC_TIMEOUT = 3,
+    MAX_TYPE = 4
   };
   class RetrySubmitRoleChangeEventCtx {
   public:
@@ -105,7 +108,8 @@ private:
     }
     bool need_retry() const
     {
-      return RetrySubmitRoleChangeEventReason::WAIT_REPLAY_DONE_TIMEOUT == reason_;
+      return RetrySubmitRoleChangeEventReason::WAIT_REPLAY_DONE_TIMEOUT == reason_
+             || RetrySubmitRoleChangeEventReason::WAIT_REPLACE_DONE_TIMEOUT == reason_;
     }
     void set_retry_reason(const RetrySubmitRoleChangeEventReason &reason)
     {

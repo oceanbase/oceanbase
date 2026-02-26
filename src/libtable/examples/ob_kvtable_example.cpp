@@ -80,7 +80,9 @@ int main(int argc, char *argv[])
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to get row: %d\n", ret);
   } else {
-    fprintf(stderr, "get row succ. %s\n", S(value2));
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(value2);
+    fprintf(stderr, "get row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
   // remove
   ret = kv_table->remove(key);
@@ -95,7 +97,9 @@ int main(int argc, char *argv[])
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to get row: %d\n", ret);
   } else {
-    fprintf(stderr, "get row succ. %s\n", S(value3));
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(value3);
+    fprintf(stderr, "get row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
 
   ////////////////

@@ -61,7 +61,9 @@ class ObLoadExternalFileListRes
 {
   OB_UNIS_VERSION(1);
 public:
-  ObLoadExternalFileListRes() : rcode_(), file_urls_(), file_sizes_(), allocator_() {}
+  ObLoadExternalFileListRes() :
+    rcode_(), file_urls_(), file_sizes_(), modify_times_(), content_digests_(), allocator_()
+  {}
 
   ObIAllocator &get_alloc() { return allocator_; }
   int assign(const ObLoadExternalFileListRes &other);
@@ -70,6 +72,8 @@ public:
   obrpc::ObRpcResultCode rcode_; //返回的错误信息
   ObSEArray<ObString, 8> file_urls_;
   ObSEArray<int64_t, 8> file_sizes_;
+  ObSEArray<int64_t, 8> modify_times_;
+  ObSEArray<ObString, 8> content_digests_;
 
 private:
   ObArenaAllocator allocator_;

@@ -17,6 +17,7 @@
 #include "observer/ob_server_struct.h"
 #include "storage/mock_ob_tenant_storage.h"
 #include "share/io/ob_io_manager.h"
+#include "share/ob_device_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
@@ -44,6 +45,11 @@ public:
   virtual void TearDown()
   {
     ObIOManager::get_instance().destroy();
+  }
+
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObDeviceManager::get_instance().init_devices_env());
   }
 
 protected:

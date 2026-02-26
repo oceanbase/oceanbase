@@ -34,19 +34,22 @@ public:
 	ObCharsets4Parser charsets4parser_;
 	ObSQLMode sql_mode_;
 	QuestionMarkDefNameCtx *def_name_ctx_;
+  bool is_format_;
 
 	FPContext()
 		: enable_batched_multi_stmt_(false),
 			is_udr_mode_(false),
 			sql_mode_(0),
-			def_name_ctx_(nullptr)
+			def_name_ctx_(nullptr),
+      is_format_(false)
 	{}
 	FPContext(ObCharsets4Parser charsets4parser)
 		: enable_batched_multi_stmt_(false),
 			is_udr_mode_(false),
 			charsets4parser_(charsets4parser),
 			sql_mode_(0),
-			def_name_ctx_(nullptr)
+			def_name_ctx_(nullptr),
+      is_format_(false)
 	{}
 };
 
@@ -167,6 +170,66 @@ struct ObRawSql {
 	bool search_end_;
 };
 
+struct StringBuffer
+{
+  explicit StringBuffer(common::ObIAllocator &allocator) :
+    allocator_(allocator), buffer_(nullptr), capacity_(0), length_(0)
+  {}
+  int append(const char *str, const int64_t len);
+  int append_character(const char character);
+  int resize_buffer(const int64_t size);
+  OB_INLINE void trim_n(int64_t n)
+  {
+    buffer_ += n;
+    length_ -= (2 * n);
+  }
+  OB_INLINE char begin_character() const
+  {
+    return buffer_[0];
+  }
+  OB_INLINE char end_character() const
+  {
+    return buffer_[length_ - 1];
+  }
+  OB_INLINE char &operator[](int64_t idx) // dangerous
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_UNLIKELY(0 > idx || idx >= length_)) {
+      LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "idx out of range", K(idx), K(length_));
+    }
+    return buffer_[idx];
+  }
+  OB_INLINE char *seek(int64_t idx) // dangerous
+  {
+    if (OB_UNLIKELY(0 > idx || idx > capacity_)) {
+      LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "idx out of range", K(idx), K(capacity_));
+    }
+    return buffer_ + idx;
+  }
+  OB_INLINE void reuse()
+  {
+    length_ = 0;
+  }
+  OB_INLINE char *buffer()
+  {
+    return buffer_;
+  }
+  OB_INLINE int64_t length() const
+  {
+    return length_;
+  }
+  OB_INLINE int64_t capacity() const
+  {
+    return capacity_;
+  }
+
+  static const int64_t DEFAULT_STR_BUFFER_LEN = 512;
+  common::ObIAllocator &allocator_;
+  char *buffer_;
+  int64_t capacity_;
+  int64_t length_;
+};
+
 class ObFastParserBase
 {
 public:
@@ -242,6 +305,7 @@ protected:
 	// this will not affect any correctness issues, and will make the code look better
 	static const int64_t PARSER_NODE_SIZE = sizeof(ParseNode);
 	static const int64_t FIEXED_PARAM_NODE_SIZE = PARSER_NODE_SIZE + sizeof(ParamList);
+	static const int64_t CHECK_STATUS_TRY_TIMES = 512;
 
 protected:
 	/**
@@ -383,7 +447,7 @@ protected:
 	void reset_parser_node(ParseNode *node);
 	int64_t notascii_gb_char(const int64_t pos);
 	//{U}
-	int64_t is_latin1_char(const int64_t pos);
+	int64_t is_single_byte_char(const int64_t pos);
 	// ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}
 	int64_t is_utf8_char(const int64_t pos);
 	// NOTES: No boundary check, the caller guarantees safety!!!
@@ -396,6 +460,11 @@ protected:
 	// ([\\\xef\][\\\xbc\][\\\x89])
 	int64_t is_utf8_multi_byte_right_parenthesis(const char *str, const int64_t start_pos);
 	// {GB_1}{GB_2}
+	int64_t is_hk_char(const int64_t pos);
+	int64_t is_hk_multi_byte_space(const char *str, const int64_t start_pos);
+	int64_t is_hk_multi_byte_comma(const char *str, const int64_t start_pos);
+	int64_t is_hk_multi_byte_left_parenthesis(const char *str, const int64_t start_pos);
+	int64_t is_hk_multi_byte_right_parenthesis(const char *str, const int64_t start_pos);
 	int64_t is_gbk_char(const int64_t pos);
 	// ([\\\xa1][\\\xa1])
 	int64_t is_gbk_multi_byte_space(const char *str, const int64_t start_pos);
@@ -435,18 +504,34 @@ protected:
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x81 && static_cast<uint8_t>(ch) <= 0xfe;
 	}
+	// [\x81-\xfe]
+	inline bool is_hk1(char ch)
+	{
+		return is_valid_char(ch) &&
+		static_cast<uint8_t>(ch) >= 0x81 && static_cast<uint8_t>(ch) <= 0xfe;
+	}
+
 	// [\x40-\xfe]
 	inline bool is_gb2(char ch)
 	{
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x40 && static_cast<uint8_t>(ch) <= 0xfe;
 	}
+
+	// [\x81-\xfe]
+	inline bool is_hk2(char ch)
+	{
+		return is_valid_char(ch) &&
+		((static_cast<uint8_t>(ch) >= 0x40 && static_cast<uint8_t>(ch) <= 0x7e)
+		|| (static_cast<uint8_t>(ch) >= 0xa1 && static_cast<uint8_t>(ch) <= 0xfe));
+	}
+
 	inline bool notascii(char ch)
 	{
 		return 	is_valid_char(ch) &&
 				(static_cast<uint8_t>(ch) >= 0x80 && static_cast<uint8_t>(ch) <= 0xFF);
 	}
-    inline bool is_latin1(char ch)
+    inline bool is_single_byte(char ch)
 	{
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x80 && static_cast<uint8_t>(ch) <= 0xFF;
@@ -481,7 +566,7 @@ protected:
 	int add_nowait_type_node();
 	void lex_store_param(ParseNode *node, char *buf);
 	void append_no_param_sql();
-	void process_escape_string(char *str_buf, int64_t &str_buf_len);
+	int process_escape_string(StringBuffer &str_buffer);
 	ParseNode *new_node(char *&buf, ObItemType type);
 	char* parse_strndup(const char *str, size_t nbyte, char *buf);
 	int64_t get_question_mark(ObQuestionMarkCtx *ctx,
@@ -531,7 +616,7 @@ protected:
 	 * big5, cp932, gbk, sjis. the escape character (0x5C) may be part of a multi-byte
 	 * character and requires special judgment
 	 */
-	void check_real_escape(bool &is_real_escape);
+	int check_real_escape(StringBuffer &str_buffer, bool &is_real_escape);
 	/**
 	 * Used to parse whitespace
 	 * @param [in] : pos the position of the first character
@@ -616,6 +701,13 @@ protected:
 
 	int check_is_on_duplicate_key(ObRawSql &raw_sql, bool &is_on_duplicate_key);
 	bool skip_space(ObRawSql &raw_sql);
+  void skip_invalid_charactar(int64_t& pos, int& token_len, ObRawSql &raw_sql);
+  bool is_invalid_character(ObRawSql &raw_sql, int64_t pos, int64_t& skip_len);
+  int extend_alloc_sql_buffer();
+	int process_format_token();
+	int try_check_status();
+  int toupper(const ObCollationType collation_type, const ObString &src, ObString &dst,
+              StringBuffer &str_buffer);
 
 protected:
   enum FoundInsertTokenStatus
@@ -635,10 +727,11 @@ protected:
 	int64_t cur_token_begin_pos_;
 	int64_t copy_begin_pos_;
 	int64_t copy_end_pos_;
-	char *tmp_buf_;
-	int64_t tmp_buf_len_;
+	StringBuffer str_buffer_;
 	int64_t last_escape_check_pos_;
-	ParamList *param_node_list_;
+	uint64_t try_check_tick_;
+public:
+  ParamList *param_node_list_;
 	ParamList *tail_param_node_;
 	TokenType cur_token_type_;
 	ObQuestionMarkCtx question_mark_ctx_;
@@ -649,6 +742,10 @@ protected:
 	int64_t values_token_pos_;
 	ParseNextTokenFunc parse_next_token_func_;
 	ProcessIdfFunc process_idf_func_;
+  bool is_format_;
+  bool need_caseup_;
+  int alloc_len_;
+	common::ObCollationType col_type_;
 
 private:
 	DISALLOW_COPY_AND_ASSIGN(ObFastParserBase);

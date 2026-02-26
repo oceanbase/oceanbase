@@ -16,6 +16,7 @@ cd ${TOP_DIR}
     deb                     \
     -DOB_RELEASEID=$RELEASE \
     -DBUILD_NUMBER=$RELEASE \
+    -DUSE_LTO_CACHE=ON	    \
     --init                  \
     --make deb || exit 1
 

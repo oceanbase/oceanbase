@@ -11,7 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/ddl/ob_trigger_stmt.h"
+#include "ob_trigger_stmt.h"
+#include "deps/oblib/src/lib/container/ob_se_array.h"
 
 namespace oceanbase
 {

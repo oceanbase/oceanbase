@@ -11,20 +11,13 @@
  */
 
 #define UNUSED(param) (void)param
-#include <cstdint>
-#include <cstdlib>
-#include <cstdio>
-#include <cassert>
 #include <cstring>
 #include <fstream>
-#include <iterator>
-#include <iostream>
 
 #include <gtest/gtest.h>
 
 #include "sql/parser/ob_sql_parser.h"
 #include "sql/parser/parse_malloc.h"
-#include "sql/parser/parser_proxy_func.h"
 
 extern "C"
 {
@@ -33,6 +26,14 @@ extern "C"
     while (1) {
       sleep(120);
     }
+  }
+  extern int ob_backtrace_c(void **buffer, int size)
+  {
+    return 0;
+  }
+  extern char *parray_c(char *buf, int64_t len, int64_t *array, int size)
+  {
+    return NULL;
   }
 }
 
@@ -165,8 +166,7 @@ void test_fast_parser()
       "select * from t;",
       "select  * from t;",
       "select t1.a from t1 join t2 where b = udf_func(3) and c = 'hello';",
-      "select t1.a from t1 join t2 where b = udf_func(3.1231232) and c = "
-      "'hello';"};
+      "select t1.a from t1 join t2 where b = udf_func(3.1231232) and c = 'hello';"};
   const char* expected_sql_ids[test_sql_cnt] = {
     "1FE1379FE2A31B8D16219655761820A2",
     "99B8023929C1482A458CB071ADE822AC",
@@ -234,8 +234,7 @@ void test_sql_parser()
       "select * from t;",
       "select  * from t;",
       "select t1.a from t1 join t2 where b = udf_func(3) and c = 'hello';",
-      "select t1.a from t1 join t2 where b = udf_func(3.1231232) and c = "
-      "'hello';"};
+      "select t1.a from t1 join t2 where b = udf_func(3.1231232) and c = 'hello';"};
 
   for (int i = 0; i < test_sql_cnt; i++) {
     const char *input_sql = test_sqls[i];
@@ -284,6 +283,9 @@ void start_test_token_offset(const char *test_sqls[],
     ParseResult parse_result;
     int tmp_ptr = 1;
     setup_parse_result(parse_result, tmp_ptr);
+    if (2151678466 == sql_mode) {
+      parse_result.connection_collation_ = 45;
+    }
     parse_result.sql_mode_ = sql_mode;
     const char *input_sql = test_sqls[i];
 

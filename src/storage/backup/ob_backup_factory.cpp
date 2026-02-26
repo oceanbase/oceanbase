@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/backup/ob_backup_factory.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
 
 namespace oceanbase {
 namespace backup {
@@ -88,6 +87,10 @@ ObIBackupIndexIterator *ObLSBackupFactory::get_backup_index_iterator(
     iterator = OB_NEW(ObBackupMacroRangeIndexIterator, attr);
   } else if (BACKUP_META_INDEX_ITERATOR == type) {
     iterator = OB_NEW(ObBackupMetaIndexIterator, attr);
+  } else if (BACKUP_UNOREDRED_MACRO_BLOCK_INDEX_ITERATOR == type) {
+    iterator = OB_NEW(ObBackupUnorderedMacroBlockIndexIterator, attr);
+  } else if (BACKUP_ORDERED_MACRO_BLOCK_INDEX_ITERATOR == type) {
+    iterator = OB_NEW(ObBackupOrderedMacroBlockIndexIterator, attr);
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown iterator type", K(type));
   }
@@ -126,6 +129,30 @@ ObBackupTabletCtx *ObLSBackupFactory::get_backup_tablet_ctx(const uint64_t tenan
 {
   lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
   return OB_NEW(ObBackupTabletCtx, attr);
+}
+
+ObBackupSSTableSecMetaIterator *ObLSBackupFactory::get_backup_sstable_sec_meta_iterator(const uint64_t tenant_id)
+{
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
+  return OB_NEW(ObBackupSSTableSecMetaIterator, attr);
+}
+
+ObBackupWrapperIODevice *ObLSBackupFactory::get_backup_wrapper_io_device(const uint64_t tenant_id)
+{
+  lib::ObMemAttr attr(tenant_id, "BackupIO");
+  return OB_NEW(ObBackupWrapperIODevice, attr);
+}
+
+ObExternBackupTabletMetaIterator *ObLSBackupFactory::get_extern_backup_tablet_meta_iterator(const uint64_t tenant_id)
+{
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
+  return OB_NEW(ObExternBackupTabletMetaIterator, attr);
+}
+
+ObBackupTabletMetaIndexIterator *ObLSBackupFactory::get_backup_tablet_meta_index_iterator(const uint64_t tenant_id)
+{
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
+  return OB_NEW(ObBackupTabletMetaIndexIterator, attr);
 }
 
 void ObLSBackupFactory::free(ObILSTabletIdReader *&reader)
@@ -245,6 +272,38 @@ void ObLSBackupFactory::free(ObIBackupMacroBlockIndexFuser *&fuser)
 void ObLSBackupFactory::free(ObBackupTabletCtx *&ctx)
 {
   OB_DELETE(ObBackupTabletCtx, ObModIds::BACKUP, ctx);
+}
+
+void ObLSBackupFactory::free(ObBackupOrderedMacroBlockIndexIterator *&iterator)
+{
+  OB_DELETE(ObBackupOrderedMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
+}
+
+void ObLSBackupFactory::free(ObBackupUnorderedMacroBlockIndexIterator *&iterator)
+{
+  OB_DELETE(ObBackupUnorderedMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
+}
+
+void ObLSBackupFactory::free(ObBackupSSTableSecMetaIterator *&iterator)
+{
+  OB_DELETE(ObBackupSSTableSecMetaIterator, ObModIds::BACKUP, iterator);
+}
+
+void ObLSBackupFactory::free(ObBackupWrapperIODevice *device)
+{
+  OB_DELETE(ObBackupWrapperIODevice, "BackupIO", device);
+}
+
+void ObLSBackupFactory::free(ObIBackupTabletMetaIterator *iterator)
+{
+  if (OB_NOT_NULL(iterator)) {
+    if (ObBackupTabletMetaIteratorType::TYPE_TABLET_INFO == iterator->get_type()
+        || ObBackupTabletMetaIteratorType::TYPE_TENANT_META_INDEX == iterator->get_type()) {
+      OB_DELETE(ObIBackupTabletMetaIterator, ObModIds::BACKUP, iterator);
+    } else {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown iterator type", "type", iterator->get_type());
+    }
+  }
 }
 
 }  // namespace backup

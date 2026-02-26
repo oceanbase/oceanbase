@@ -11,14 +11,8 @@
  */
 
 #define USING_LOG_PREFIX PL
-#include "pl/sys_package/ob_dbms_application.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "pl/sys_package/ob_dbms_monitor.h"
-#include "lib/number/ob_number_v2.h"
 
 using namespace oceanbase::sql;
 
@@ -73,12 +67,12 @@ int ObDBMSMonitor::session_trace_enable(sql::ObExecContext &ctx, sql::ParamStore
   if (params.at(0).is_number()) {
     OZ (params.at(0).get_number(sess_id));
     if (sess_id.is_zero()) {
-      sid = ctx.get_my_session()->get_sessid();
+      sid = ctx.get_my_session()->get_server_sid();
     } else {
       sid = atoi(sess_id.format());
     }
   } else {
-    sid = ctx.get_my_session()->get_sessid();
+    sid = ctx.get_my_session()->get_server_sid();
   }
   OV (params.at(1).is_number(), OB_INVALID_ARGUMENT);
   OZ (params.at(1).get_number(level));
@@ -129,12 +123,12 @@ int ObDBMSMonitor::session_trace_disable(sql::ObExecContext &ctx, sql::ParamStor
   if (params.at(0).is_number()) {
     OZ (params.at(0).get_number(sess_id));
     if (sess_id.is_zero()) {
-      sid = ctx.get_my_session()->get_sessid();
+      sid = ctx.get_my_session()->get_server_sid();
     } else {
       sid = atoi(sess_id.format());
     }
   } else {
-    sid = ctx.get_my_session()->get_sessid();
+    sid = ctx.get_my_session()->get_server_sid();
   }
   // check policy, if policy not exist, report err.
   // mark session
@@ -345,18 +339,28 @@ int ObDBMSMonitor::tenant_trace_disable(sql::ObExecContext &ctx, sql::ParamStore
 {
   int ret = OB_SUCCESS;
   ObString tenant_name;
+  uint64_t disable_tenant_id = 0;
+  uint64_t cur_tenant_id = GET_MY_SESSION(ctx)->get_effective_tenant_id();
   UNUSED(result);
   if (1 == params.count()) {
     if (params.at(0).is_varchar()) {
       OZ (params.at(0).get_string(tenant_name));
       if (tenant_name.case_compare(GET_MY_SESSION(ctx)->get_tenant_name()) == 0) {
-        // do nothing
+        disable_tenant_id = cur_tenant_id;
+      } else if (true == is_sys_tenant(MTL_ID())) {
+        ObSchemaGetterGuard schema_guard;
+        if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(cur_tenant_id, schema_guard))) {
+          LOG_WARN("fail to get tenant schema guard", K(ret));
+        } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, disable_tenant_id))) {
+          LOG_WARN("Invalid tenant", "tenant_name", tenant_name, KR(ret));
+        }
+        // sys tenant allow to do this for all tenant.
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant name");
       }
     } else if (params.at(0).is_null()) {
-      // do nothing
+      disable_tenant_id = cur_tenant_id;
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant name");
@@ -365,8 +369,7 @@ int ObDBMSMonitor::tenant_trace_disable(sql::ObExecContext &ctx, sql::ParamStore
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant name");
   }
-
-  ObFLTControlInfoManager mgr(GET_MY_SESSION(ctx)->get_effective_tenant_id());
+  ObFLTControlInfoManager mgr(disable_tenant_id);
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(mgr.init())) {

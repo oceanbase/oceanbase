@@ -13,24 +13,9 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_autoincrement_service.h"
-#include <algorithm>
-#include <stdint.h>
-#include "lib/worker.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/ash/ob_active_session_guard.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/partition_table/ob_partition_location.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/ob_schema_status_proxy.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
+#include "lib/ash/ob_active_session_guard.h"
+#include "lib/wait_event/ob_inner_sql_wait_type.h"
 
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common;
@@ -653,6 +638,7 @@ int ObAutoincrementService::lock_autoinc_row(const uint64_t &tenant_id,
   int ret = OB_SUCCESS;
   ObSqlString lock_sql;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_LOAD);
     ObMySQLResult *result = NULL;
     ObISQLClient *sql_client = &trans;
     if (OB_FAIL(lock_sql.assign_fmt("SELECT sequence_key, sequence_value, sync_value "
@@ -689,6 +675,7 @@ int ObAutoincrementService::reset_autoinc_row(const uint64_t &tenant_id,
   int ret = OB_SUCCESS;
   ObSqlString update_sql;
   int64_t affected_rows = 0;
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_SAVE);
   if (OB_FAIL(update_sql.assign_fmt("UPDATE %s SET sequence_value = 1, sync_value = 0, truncate_version = %ld",
                                     OB_ALL_AUTO_INCREMENT_TNAME,
                                     autoinc_version))) {
@@ -784,6 +771,48 @@ int ObAutoincrementService::try_lock_autoinc_row(const uint64_t &tenant_id,
   return ret;
 }
 
+int ObAutoincrementService::calculate_idempotent_autoinc_val_for_ddl(
+                                               AutoincParam *autoinc_param,
+                                               const int64_t table_all_slice_count,
+                                               const int64_t table_level_slice_idx,
+                                               const int64_t slice_row_idx,
+                                               const int64_t autoinc_range_interval,
+                                               uint64_t &autoinc_value)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(autoinc_param)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(autoinc_param),
+             K(table_all_slice_count), K(table_level_slice_idx), K(slice_row_idx));
+  } else if (autoinc_param->global_value_to_sync_ >= UINT64_MAX) {
+    ret = OB_ERR_REACH_AUTOINC_MAX;
+    LOG_WARN("autoinc reach max", K(ret), K(autoinc_param->global_value_to_sync_));
+  } else {
+    const int64_t range_id = slice_row_idx / autoinc_range_interval;
+    const int64_t row_id_in_range = slice_row_idx % autoinc_range_interval;
+    const ObObjType column_type = autoinc_param->autoinc_col_type_;
+    // for now, only `offset` param is supported, `increment` param is not supported
+    const uint64_t offset = autoinc_param->autoinc_offset_;
+    const uint64_t max_value = get_max_value(column_type);
+    if (1 == table_all_slice_count) {
+      // if generate in only one thread, calc next value by prev value and increment step to compat MySQL
+      autoinc_value = OB_UNLIKELY(0 == slice_row_idx) ? offset : min(autoinc_param->global_value_to_sync_ + autoinc_param->autoinc_increment_, max_value);
+    } else {
+      autoinc_value =
+        min(offset + table_level_slice_idx * autoinc_range_interval +
+                (table_all_slice_count * range_id * autoinc_range_interval) + row_id_in_range,
+            max_value);
+    }
+    autoinc_param->global_value_to_sync_ = max(autoinc_param->global_value_to_sync_, autoinc_value);
+    LOG_TRACE("ddl calc idem autoinc value", K(ret), K(autoinc_value),
+        K(table_all_slice_count), K(table_level_slice_idx), K(slice_row_idx), K(autoinc_range_interval),
+        K(autoinc_param->value_to_sync_), K(autoinc_param->global_value_to_sync_), K(autoinc_param->autoinc_increment_), K(offset));
+  }
+
+  return ret;
+}
+
 int ObAutoincrementService::clear_autoinc_cache_all(const uint64_t tenant_id,
                                                     const uint64_t table_id,
                                                     const uint64_t column_id,
@@ -799,6 +828,7 @@ int ObAutoincrementService::clear_autoinc_cache_all(const uint64_t tenant_id,
     arg.tenant_id_ = tenant_id;
     arg.table_id_  = table_id;
     arg.column_id_ = column_id;
+    arg.autoinc_is_order_ = autoinc_is_order;
     ObHashSet<ObAddr> server_set;
     if (OB_FAIL(server_set.create(PARTITION_LOCATION_SET_BUCKET_NUM))) {
       LOG_WARN("failed to create hash set", K(ret));
@@ -849,7 +879,8 @@ int ObAutoincrementService::clear_autoinc_cache(const obrpc::ObAutoincSyncArg &a
     // do nothing; key does not exist
     ret = OB_SUCCESS;
   }
-  if (OB_SUCC(ret) && OB_FAIL(global_autoinc_service_.clear_global_autoinc_cache(key))) {
+  if (OB_SUCC(ret) && arg.autoinc_is_order_ &&
+      OB_FAIL(global_autoinc_service_.clear_global_autoinc_cache(key))) {
     LOG_WARN("failed to clear global autoinc cache", K(ret));
   }
   return ret;
@@ -1928,6 +1959,7 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
             ObMySQLResult *result = NULL;
             ObISQLClient *sql_client = &trans;
             uint64_t sequence_table_id = OB_ALL_AUTO_INCREMENT_TID;
+            ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_LOAD);
             ObSQLClientRetryWeak sql_client_retry_weak(sql_client,
                                                        exec_tenant_id,
                                                        sequence_table_id);
@@ -2014,12 +2046,10 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
                               column_id,
                               inner_autoinc_version);
             int64_t affected_rows = 0;
+            ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_SAVE);
             if (sql_len >= OB_MAX_SQL_LENGTH || sql_len <= 0) {
               ret = OB_SIZE_OVERFLOW;
               LOG_WARN("failed to format sql. size not enough", K(ret), K(sql_len));
-            } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != exec_tenant_id) {
-              ret = OB_OP_NOT_ALLOW;
-              LOG_WARN("can't write sys table now", K(ret), K(exec_tenant_id));
             } else if (OB_FAIL(trans.write(exec_tenant_id, sql, affected_rows))) {
               LOG_WARN("failed to write data", K(ret));
             } else if (affected_rows != 1) {
@@ -2056,6 +2086,7 @@ int ObAutoIncInnerTableProxy::get_autoinc_value(const AutoincKey &key,
   const uint64_t tenant_id = key.tenant_id_;
   const int64_t tmp_autoinc_version = get_modify_autoinc_version(autoinc_version);
   SMART_VARS_2((ObMySQLProxy::MySQLResult, res), (char[OB_MAX_SQL_LENGTH], sql)) {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_LOAD);
     ObMySQLResult *result = NULL;
     int sql_len = 0;
     const uint64_t exec_tenant_id = tenant_id;
@@ -2165,6 +2196,7 @@ int ObAutoIncInnerTableProxy::get_autoinc_value_in_batch(
 
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_LOAD);
         ObMySQLResult *result = NULL;
         int64_t table_id  = 0;
         int64_t column_id = 0;
@@ -2248,6 +2280,7 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
     }
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_LOAD);
         ObMySQLResult *result = NULL;
         ObISQLClient *sql_client = &trans;
         uint64_t sequence_table_id = OB_ALL_AUTO_INCREMENT_TID;
@@ -2309,15 +2342,13 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
         //       Why don't we calculate AUTO_INCREMENT in real time when we execute the SHOW
         //       statement?
         //       > I can't get MAX_VALUE in DDL context. auto inc column type is needed.
+        ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_SAVE);
         if (OB_FAIL(sql.assign_fmt(
                     "UPDATE %s SET sync_value = %lu, sequence_value = %lu, gmt_modified = now(6) "
                     "WHERE tenant_id=%lu AND sequence_key=%lu AND column_id=%lu AND truncate_version=%ld",
                     table_name, sync_value, new_seq_value,
                     OB_INVALID_TENANT_ID, table_id, column_id, inner_autoinc_version))) {
           LOG_WARN("failed to assign sql", K(ret));
-        } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != exec_tenant_id) {
-          ret = OB_OP_NOT_ALLOW;
-          LOG_WARN("can't write sys table now", K(ret), K(exec_tenant_id));
         } else if (OB_FAIL((trans.write(exec_tenant_id, sql.ptr(), affected_rows)))) {
           LOG_WARN("failed to execute", K(sql), K(ret));
         } else if (!is_single_row(affected_rows)) {
@@ -2458,9 +2489,6 @@ int ObAutoIncInnerTableProxy::read_and_push_inner_table(const AutoincKey &key,
                       table_name, new_seq_value,
                       OB_INVALID_TENANT_ID, table_id, column_id, inner_autoinc_version))) {
             LOG_WARN("failed to assign sql", K(ret));
-          } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != exec_tenant_id) {
-            ret = OB_OP_NOT_ALLOW;
-            LOG_WARN("can't write sys table now", K(ret), K(exec_tenant_id));
           } else if (OB_FAIL((trans.write(exec_tenant_id, sql.ptr(), affected_rows)))) {
             LOG_WARN("failed to execute", K(sql), K(ret));
           } else if (!is_single_row(affected_rows)) {

@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX PL
 
-//#include "objit/ob_llvm_helper.h"
 #include "core/jit_context.h"
 #include "core/jit_di_context.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/container/ob_se_array.h"
 
 #include "objit/ob_llvm_di_helper.h"
 
@@ -35,7 +29,7 @@ uint64_t ObLLVMDIType::get_size_bits()
 {
   return OB_ISNULL(v_) ? 0 : v_->getSizeInBits();
 }
-  
+
 uint64_t ObLLVMDIType::get_align_bits()
 {
   return OB_ISNULL(v_) ? 0 : v_->getAlignInBits();
@@ -189,8 +183,8 @@ int ObLLVMDIHelper::insert_declare(ObLLVMValue &storage, ObLLVMDILocalVariable &
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to create expression", K(ret));
   } else if (OB_ISNULL(jc_->dbuilder_.insertDeclare(storage.get_v(), variable.get_v(),
-                                                    expr, ObDebugLoc::get(line, 0, sp),
-                                                    block.get_v()))) {
+                                                    expr, ObDILocation::get(sp->getContext(), line, 0, sp),
+						    block.get_v()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to insert declare", K(ret));
   }

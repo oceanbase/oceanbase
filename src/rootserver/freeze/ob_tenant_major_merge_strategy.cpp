@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX RS_COMPACTION
 #include "rootserver/freeze/ob_tenant_major_merge_strategy.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
-#include "share/ob_zone_info.h"
-#include "share/ob_errno.h"
-#include "share/ob_freeze_info_proxy.h"
 
 namespace oceanbase
 {

@@ -400,67 +400,30 @@ template<>
   return ret;
 }
 
-////////////////////////////////////////////////////////////////
-// define template <...> databuff_encode_elements(buf, buf_len, pos, ...)
-#define TO_YSON_TEMPLATE_TYPE(N) CAT(typename T, N)
-#define TO_YSON_ARG_PAIR(N) ElementKeyType CAT(key, N), const CAT(T, N) &CAT(obj, N)
-#define TO_YSON_ENCODE_ONE(N) if (OB_SUCC(ret)) {       \
-    ret = databuff_encode_element(buf, buf_len, pos, CAT(key, N), CAT(obj,N)); \
-  }
+template <typename T>
+int databuff_encode_elements(char *buf, const int64_t buf_len, int64_t& pos, ElementKeyType key, T &&obj)
+{
+  return databuff_encode_element(buf, buf_len, pos, key, std::forward<T>(obj));
+}
 
-#define TO_YSON_ELEMENTS(N)                                             \
-  template < LST_DO_(N, TO_YSON_TEMPLATE_TYPE, (,), PROC_ONE, ONE_TO_HUNDRED) > \
-  int databuff_encode_elements(char *buf, const int64_t buf_len, int64_t& pos, \
-                               LST_DO_(N, TO_YSON_ARG_PAIR, (,), PROC_ONE, ONE_TO_HUNDRED) \
-                               )                                        \
-  {                                                                     \
-    int ret = OB_SUCCESS;                            \
-    LST_DO_(N, TO_YSON_ENCODE_ONE, (), PROC_ONE, ONE_TO_HUNDRED); \
-    return ret;                                                         \
+template <typename HEAD, typename ...ARGS>
+int databuff_encode_elements(char *buf, const int64_t buf_len, int64_t& pos, ElementKeyType head_key, HEAD &&head_obj, ARGS &&...others)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(databuff_encode_elements(buf, buf_len, pos, head_key, head_obj))) {
+    ret = databuff_encode_elements(buf, buf_len, pos, std::forward<ARGS>(others)...);
   }
+  return ret;
+}
 
 inline int databuff_encode_elements(char *buf, const int64_t buf_len, int64_t& pos)
 {
-    int ret = common::OB_SUCCESS;
-    UNUSED(buf);
-    UNUSED(buf_len);
-    UNUSED(pos);
-    return ret;
+  int ret = common::OB_SUCCESS;
+  UNUSED(buf);
+  UNUSED(buf_len);
+  UNUSED(pos);
+  return ret;
 }
-
-
-TO_YSON_ELEMENTS(1);
-TO_YSON_ELEMENTS(2);
-TO_YSON_ELEMENTS(3);
-TO_YSON_ELEMENTS(4);
-TO_YSON_ELEMENTS(5);
-TO_YSON_ELEMENTS(6);
-TO_YSON_ELEMENTS(7);
-TO_YSON_ELEMENTS(8);
-TO_YSON_ELEMENTS(9);
-TO_YSON_ELEMENTS(10);
-TO_YSON_ELEMENTS(11);
-TO_YSON_ELEMENTS(12);
-TO_YSON_ELEMENTS(13);
-TO_YSON_ELEMENTS(14);
-TO_YSON_ELEMENTS(15);
-TO_YSON_ELEMENTS(16);
-TO_YSON_ELEMENTS(17);
-TO_YSON_ELEMENTS(18);
-TO_YSON_ELEMENTS(19);
-TO_YSON_ELEMENTS(20);
-TO_YSON_ELEMENTS(21);
-TO_YSON_ELEMENTS(22);
-TO_YSON_ELEMENTS(23);
-TO_YSON_ELEMENTS(24);
-TO_YSON_ELEMENTS(25);
-TO_YSON_ELEMENTS(26);
-TO_YSON_ELEMENTS(27);
-TO_YSON_ELEMENTS(28);
-TO_YSON_ELEMENTS(29);
-TO_YSON_ELEMENTS(30);
-TO_YSON_ELEMENTS(31);
-TO_YSON_ELEMENTS(32);
 
 // special databuff_encode_element
 template<typename T1, typename T2>

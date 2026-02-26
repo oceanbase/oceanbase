@@ -1,3 +1,6 @@
+// owner: muwei.ym
+// owner group: storage_ha
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,21 +13,16 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 
 #define USING_LOG_PREFIX STORAGE
 
 #define private public
 #define protected public
 
-#include "common/ob_tablet_id.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "storage/blocksstable/ob_sstable_meta.h"
-#include "storage/blocksstable/ob_block_manager.h"
+#include "src/share/io/io_schedule/ob_io_mclock.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "storage/schema_utils.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/high_availability/ob_physical_copy_task.h"
+#include "src/storage/high_availability/ob_storage_ha_macro_block_writer.h"
 
 namespace oceanbase
 {
@@ -111,7 +109,7 @@ void TestRootBlockInfo::prepare_tablet_read_info()
 void TestRootBlockInfo::prepare_block_root()
 {
   const int64_t block_size = 2L * 1024 * 1024L;
-  ObMicroBlockWriter writer;
+  ObMicroBlockWriter<> writer;
   ASSERT_EQ(OB_SUCCESS, writer.init(block_size, ROWKEY_COL_CNT, COLUMN_CNT));
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, COLUMN_CNT));
@@ -237,6 +235,7 @@ void TestSSTableMeta::TearDown()
 
 void TestSSTableMeta::prepare_create_sstable_param()
 {
+  param_.set_init_value_for_column_store_();
   const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   param_.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   param_.table_key_.tablet_id_ = tablet_id_;
@@ -264,10 +263,18 @@ void TestSSTableMeta::prepare_create_sstable_param()
   param_.occupy_size_ = 0;
   param_.ddl_scn_.set_min();
   param_.filled_tx_scn_.set_min();
+  param_.tx_data_recycle_scn_.set_min();
+  param_.rec_scn_.set_min();
   param_.original_size_ = 0;
   param_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param_.encrypt_id_ = 0;
   param_.master_key_id_ = 0;
+  param_.recycle_version_ = 0;
+  param_.root_macro_seq_ = 0;
+  param_.row_count_ = 0;
+  param_.sstable_logic_seq_ = 0;
+  param_.nested_offset_ = 0;
+  param_.nested_size_ = 0;
   ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param_.column_cnt_, param_.column_checksums_));
 }
 
@@ -278,6 +285,8 @@ public:
   virtual ~TestMigrationSSTableParam() = default;
   virtual void SetUp() override;
   virtual void TearDown() override;
+  static void SetUpTestCase();
+  static void TearDownTestCase();
 private:
   storage::ObStorageSchema storage_schema_;
   ObSSTableMeta sstable_meta_;
@@ -316,6 +325,18 @@ void TestMigrationSSTableParam::TearDown()
   sstable_meta_.reset();
   storage_schema_.reset();
   TestSSTableMeta::TearDown();
+}
+
+void TestMigrationSSTableParam::SetUpTestCase()
+{
+  ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+}
+
+void TestMigrationSSTableParam::TearDownTestCase()
+{
+  ObTimerService::get_instance().stop();
+  ObTimerService::get_instance().wait();
+  ObTimerService::get_instance().destroy();
 }
 
 TEST_F(TestMigrationSSTableParam, test_check_sstable_meta)

@@ -60,6 +60,8 @@ public:
   int fetch_interval(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval);
   int fetch_interval_without_cache(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval);
   void destroy() {}
+  int clear_cache_if_fallback_for_mlog(
+      const uint64_t current_value);
 
   TO_STRING_KV(K_(tablet_id),
                K_(next_value),
@@ -122,11 +124,10 @@ public:
   ObTabletAutoincCacheCleaner(const uint64_t tenant_id) : tenant_id_(tenant_id), tablet_ids_() {}
   ~ObTabletAutoincCacheCleaner() {}
   int add_table(schema::ObSchemaGetterGuard &schema_guard, const schema::ObTableSchema &table_schema);
+  int add_single_table(const schema::ObSimpleTableSchemaV2 &table_schema);
   int add_database(const schema::ObDatabaseSchema &database_schema);
   int commit(const int64_t timeout_us = DEFAULT_TIMEOUT_US);
   TO_STRING_KV(K_(tenant_id), K_(tablet_ids));
-private:
-  int add_single_table(const schema::ObSimpleTableSchemaV2 &table_schema);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletAutoincCacheCleaner);
   uint64_t tenant_id_;
@@ -137,11 +138,18 @@ class ObTabletAutoincrementService
 {
 public:
   static ObTabletAutoincrementService &get_instance();
+  static const int64_t DEFAULT_CACHE_SIZE = 10000;
+  static const int64_t LOB_CACHE_SIZE = 100000;
   int init();
   void destroy();
   int get_tablet_cache_interval(const uint64_t tenant_id,
                                 ObTabletCacheInterval &interval);
-  int get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq);
+  int get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq, const int64_t cache_size=ObTabletAutoincrementService::DEFAULT_CACHE_SIZE);
+  int get_autoinc_seq_for_mlog(
+      const uint64_t tenant_id,
+      const ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      uint64_t &autoinc_seq);
   int clear_tablet_autoinc_seq_cache(const uint64_t tenant_id, const common::ObIArray<common::ObTabletID> &tablet_ids, const int64_t abs_timeout_us);
 private:
   int acquire_mgr(const uint64_t tenant_id, const common::ObTabletID &tablet_id, const int64_t init_cache_size, ObTabletAutoincMgr *&autoinc_mgr);

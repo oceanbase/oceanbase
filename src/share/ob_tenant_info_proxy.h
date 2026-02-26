@@ -24,6 +24,7 @@
 #include "lib/mysqlclient/ob_mysql_transaction.h"  //ObMySQLTransaction
 #include "share/ls/ob_ls_i_life_manager.h" // share::OB_LS_INVALID_SCN_VALUE
 #include "share/restore/ob_restore_data_mode.h" //share::ObRestoreDataMode
+#include "src/share/ob_cluster_role.h"
 
 namespace oceanbase
 {
@@ -44,7 +45,7 @@ namespace share
 bool is_valid_tenant_scn(
   const share::SCN &sync_scn,
   const share::SCN &replayable_scn,
-  const share::SCN &standby_scn,
+  const share::SCN &readable_scn,
   const share::SCN &recovery_until_scn);
 
 SCN gen_new_sync_scn(const share::SCN &cur_sync_scn, const share::SCN &desired_sync_scn, const share::SCN &cur_recovery_until_scn);
@@ -53,6 +54,7 @@ struct ObAllTenantInfo
 {
   OB_UNIS_VERSION(1);
 public:
+ static const int64_t INITIAL_SWITCHOVER_EPOCH = 0;
  ObAllTenantInfo() {reset();};
  virtual ~ObAllTenantInfo() {}
  /**
@@ -63,7 +65,7 @@ public:
   * @param[in] switchover_epoch
   * @param[in] sync_scn
   * @param[in] replayable_scn
-  * @param[in] standby_scn
+  * @param[in] readable_scn
   * @param[in] recovery_until_scn
   * @param[in] log_mode
   * @param[in] restore_data_mode
@@ -71,10 +73,10 @@ public:
  int init(const uint64_t tenant_id,
           const ObTenantRole &tenant_role,
           const ObTenantSwitchoverStatus &switchover_status = NORMAL_SWITCHOVER_STATUS ,
-          const int64_t switchover_epoch = 0,
+          const int64_t switchover_epoch = INITIAL_SWITCHOVER_EPOCH,
           const SCN &sync_scn = SCN::base_scn(),
           const SCN &replayable_scn = SCN::base_scn(),
-          const SCN &standby_scn = SCN::base_scn(),
+          const SCN &readable_scn = SCN::base_scn(),
           const SCN &recovery_until_scn = SCN::base_scn(),
           const ObArchiveMode &log_mode = NOARCHIVE_MODE,
           const share::ObLSID &max_ls_id = share::SYS_LS,
@@ -116,9 +118,13 @@ IS_TENANT_STATUS(prepare_switching_to_standby)
 IS_TENANT_STATUS(prepare_flashback_for_switch_to_primary)
 #undef IS_TENANT_STATUS 
 
- TO_STRING_KV(K_(tenant_id), K_(tenant_role), K_(switchover_status),
-              K_(switchover_epoch), K_(sync_scn), K_(replayable_scn),
-              K_(standby_scn), K_(recovery_until_scn), K_(log_mode), K_(max_ls_id), K_(restore_data_mode));
+  TO_STRING_KV(K_(tenant_id), "tenant_role", tenant_role_.to_str(),
+    "switchover_status", switchover_status_.to_str(),
+    K_(switchover_epoch), "sync_scn", sync_scn_.get_val_for_inner_table_field(),
+    "replayable_scn", replayable_scn_.get_val_for_inner_table_field(),
+    "readable_scn", readable_scn_.get_val_for_inner_table_field(),
+    "recovery_until_scn", recovery_until_scn_.get_val_for_inner_table_field(),
+    "log_mode", log_mode_.to_str(), "max_ls_id", max_ls_id_.id(), K_(restore_data_mode));
   DECLARE_TO_YSON_KV;
 
   // Getter&Setter
@@ -140,7 +146,7 @@ public:\
   Property_declare_var(int64_t, switchover_epoch)
   Property_declare_var(share::SCN, sync_scn)
   Property_declare_var(share::SCN, replayable_scn)
-  Property_declare_var(share::SCN, standby_scn)
+  Property_declare_var(share::SCN, readable_scn)
   Property_declare_var(share::SCN, recovery_until_scn)
   Property_declare_var(ObArchiveMode, log_mode)
   Property_declare_var(share::ObLSID, max_ls_id)
@@ -149,6 +155,8 @@ public:\
 private:
   ObTenantRole tenant_role_;
   ObTenantSwitchoverStatus switchover_status_;
+  ObProtectionMode protection_mode_;
+  ObProtectionLevel protection_level_;
 };
 
 class ObAllTenantInfoProxy
@@ -373,6 +381,17 @@ private:
       ObISQLClient *proxy,
       const ObArchiveMode &old_log_mode,
       const ObArchiveMode &new_log_mode);
+
+    /**
+     * @description: update tenant restore data mode
+     * @param[in] tenant_id
+     * @param[in] proxy
+     * @param[in] new_log_mode new log mode
+     */
+    static int update_tenant_restore_data_mode(
+      const uint64_t tenant_id,
+      ObISQLClient *proxy,
+      const ObRestoreDataMode &new_restore_data_mode);
 
 };
 }

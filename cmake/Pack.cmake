@@ -1,4 +1,4 @@
-set(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
+ob_define(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OceanBase is a distributed relational database")
 set(CPACK_PACKAGE_VENDOR "OceanBase Inc.")
 set(CPACK_PACKAGE_DESCRIPTION "OceanBase is a distributed relational database")
@@ -10,6 +10,12 @@ if (OB_BUILD_OPENSOURCE)
   set(CPACK_PACKAGE_VERSION_MAJOR "${OceanBase_CE_VERSION_MAJOR}")
   set(CPACK_PACKAGE_VERSION_MINOR "${OceanBase_CE_VERSION_MINOR}")
   set(CPACK_PACKAGE_VERSION_PATCH "${OceanBase_CE_VERSION_PATCH}")
+elseif(OB_BUILD_STANDALONE)
+  set(CPACK_PACKAGE_NAME "oceanbase-standalone")
+  set(CPACK_PACKAGE_VERSION "${OceanBase_standalone_VERSION}")
+  set(CPACK_PACKAGE_VERSION_MAJOR "${OceanBase_standalone_VERSION_MAJOR}")
+  set(CPACK_PACKAGE_VERSION_MINOR "${OceanBase_standalone_VERSION_MINOR}")
+  set(CPACK_PACKAGE_VERSION_PATCH "${OceanBase_standalone_VERSION_PATCH}")
 else()
   set(CPACK_PACKAGE_NAME "oceanbase")
   set(CPACK_PACKAGE_VERSION "${OceanBase_VERSION}")
@@ -32,6 +38,9 @@ if (OB_BUILD_OPENSOURCE)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh.template
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh
                 @ONLY)
+                configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/oceanbase.service.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/oceanbase.service
+                @ONLY)
 endif()
 
 ## server
@@ -50,28 +59,87 @@ install(PROGRAMS
   tools/import_srs_data.py
   ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
   ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
+  ${CMAKE_BINARY_DIR}/close_modules/oracle_pl/pl/wrap/wrap
   tools/ob_admin/io_bench/bench_io.sh
   ${CMAKE_BINARY_DIR}/src/observer/observer
   DESTINATION bin
   COMPONENT server)
 endif()
 
+set(INSTALL_EXTRA_FILES "")
+if (NOT OB_BUILD_OPENSOURCE)
+  # Merge standalone or storage extra file
+  set(PARAMS_EXTRA_DIR "${CMAKE_SOURCE_DIR}/src/share/parameter")
+  set(VARIABLE_EXTRA_DIR "${CMAKE_SOURCE_DIR}/src/share/system_variable")
+
+  message(STATUS "Merge parameter and variable file")
+  execute_process(
+    COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/merge_extra --inputpa=${PARAMS_EXTRA_DIR} --inputva=${VARIABLE_EXTRA_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    RESULT_VARIABLE result_var
+    )
+  if(NOT result_var EQUAL 0)
+    message(FATAL_ERROR "merge_extra execution failed.")
+  endif()
+
+  if (OB_BUILD_STANDALONE)
+    set(EXTRA_FILE_PATTERNS
+      "${PARAMS_EXTRA_DIR}/standalone_default_parameter.json"
+      "${VARIABLE_EXTRA_DIR}/standalone_default_system_variable.json")
+  else()
+    set(EXTRA_FILE_PATTERNS
+      "${PARAMS_EXTRA_DIR}/shared_storage_default_parameter.json"
+      "${VARIABLE_EXTRA_DIR}/shared_storage_default_system_variable.json")
+  endif()
+
+  # Add install files for standalone or storage business
+  foreach(EXTRA_FILE_PATTERN IN LISTS EXTRA_FILE_PATTERNS)
+    file(GLOB EXTRA_FILES
+      LIST_DIRECTORIES false
+      "${EXTRA_FILE_PATTERN}")
+    if (EXTRA_FILES)
+      list(APPEND INSTALL_EXTRA_FILES "${EXTRA_FILE_PATTERN}")
+    endif()
+  endforeach()
+endif()
+
+if (OB_BUILD_STANDALONE)
+  install(PROGRAMS
+  deps/3rd/home/admin/oceanbase/bin/obshell
+  DESTINATION bin
+  COMPONENT server)
+endif()
+
+file(READ "${CMAKE_SOURCE_DIR}/src/share/system_variable/ob_system_variable_init.json" SYS_VAR_INIT_JSON)
+string(REGEX REPLACE "\"ref_url\"[^\"]*\"[^\"]*\"" "\"ref_url\": \"\"" SYS_VAR_INIT_JSON "${SYS_VAR_INIT_JSON}")
+file(WRITE "${CMAKE_BINARY_DIR}/src/share/ob_system_variable_init.json" "${SYS_VAR_INIT_JSON}")
+
 install(FILES
   src/sql/fill_help_tables-ob.sql
   src/share/parameter/default_parameter.json
   src/share/system_variable/default_system_variable.json
   tools/timezone_V1.log
+  tools/timezone.data
+  tools/timezone_name.data
+  tools/timezone_trans.data
+  tools/timezone_trans_type.data
+  tools/spatial_reference_systems.data
   tools/default_srs_data_mysql.sql
   tools/upgrade/upgrade_pre.py
   tools/upgrade/upgrade_post.py
   tools/upgrade/upgrade_checker.py
   tools/upgrade/upgrade_health_checker.py
   tools/upgrade/oceanbase_upgrade_dep.yml
+  tools/upgrade/deps_compat.yml
+  ${CMAKE_BINARY_DIR}/src/share/ob_system_variable_init.json
+  ${INSTALL_EXTRA_FILES}
+  ${CMAKE_BINARY_DIR}/ob_all_available_parameters.json
   DESTINATION etc
   COMPONENT server)
 
+message(STATUS "system package release directory: " ${SYS_PACK_RELEASE_DIR})
 install(
-  DIRECTORY src/share/inner_table/sys_package/
+  DIRECTORY ${SYS_PACK_RELEASE_DIR}/
   DESTINATION admin
   COMPONENT server)
 
@@ -81,13 +149,14 @@ install(FILES
   tools/systemd/profile/oceanbase-pre.json
   tools/systemd/profile/oceanbase.service
   tools/systemd/profile/oceanbase-service.sh
+  tools/systemd/profile/telemetry-pre.json
   tools/systemd/profile/telemetry.sh
   DESTINATION profile
   COMPONENT server)
 endif()
 
 ## oceanbase-cdc
-if (NOT OB_SO_CACHE AND OB_BUILD_CDC)
+if (NOT OB_SO_CACHE AND BUILD_CDC_ONLY)
   list(APPEND CPACK_COMPONENTS_ALL cdc)
   include(GNUInstallDirs)
   install(
@@ -352,27 +421,25 @@ if (NOT OB_BUILD_OPENSOURCE)
   endif()
 endif()
 
-if(OB_BUILD_OPENSOURCE)
-## oceanbase-libs
+  ## oceanbase-libs
 list(APPEND CPACK_COMPONENTS_ALL libs)
 install(PROGRAMS
   deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
   deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1.0.1
   deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so
-  deps/3rd/usr/local/oceanbase/deps/devel/lib/mariadb/libmariadb.so
-  deps/3rd/usr/local/oceanbase/deps/devel/lib/mariadb/libmariadb.so.3
   DESTINATION lib
   COMPONENT libs
 )
-if(OB_BUILD_OBADMIN)
-    ## oceanbase-utils
-    list(APPEND CPACK_COMPONENTS_ALL utils)
-    install(PROGRAMS
-      ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
-      ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
-      ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
-      DESTINATION /usr/bin
-      COMPONENT utils
-    )
-  endif()
+
+if(OB_BUILD_OPENSOURCE AND OB_BUILD_OBADMIN)
+  ## oceanbase-utils
+  list(APPEND CPACK_COMPONENTS_ALL utils)
+  install(PROGRAMS
+    ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
+    ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
+    ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
+    ${DEVTOOLS_DIR}/bin/obstack
+    DESTINATION /usr/bin
+    COMPONENT utils
+  )
 endif()

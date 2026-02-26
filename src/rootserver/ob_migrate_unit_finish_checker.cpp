@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_migrate_unit_finish_checker.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "share/ls/ob_ls_status_operator.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "ob_unit_manager.h"
-#include "ob_zone_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -28,7 +22,6 @@ using namespace oceanbase::rootserver;
 ObMigrateUnitFinishChecker::ObMigrateUnitFinishChecker(volatile bool &stop)
     : inited_(false),
       unit_mgr_(nullptr),
-      zone_mgr_(nullptr),
       schema_service_(nullptr),
       sql_proxy_(nullptr),
       lst_operator_(nullptr),
@@ -52,7 +45,6 @@ int ObMigrateUnitFinishChecker::check_stop() const
 
 int ObMigrateUnitFinishChecker::init(
     ObUnitManager &unit_mgr,
-    ObZoneManager &zone_mgr,
     share::schema::ObMultiVersionSchemaService &schema_service,
     common::ObMySQLProxy &sql_proxy,
     share::ObLSTableOperator &lst_operator)
@@ -63,7 +55,6 @@ int ObMigrateUnitFinishChecker::init(
     LOG_WARN("init twice", KR(ret));
   } else {
     unit_mgr_ = &unit_mgr;
-    zone_mgr_ = &zone_mgr;
     schema_service_ = &schema_service;
     sql_proxy_ = &sql_proxy;
     lst_operator_ = &lst_operator;
@@ -170,11 +161,10 @@ int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_by_tenant(
     LOG_WARN("sql proxy is null", KR(ret));
   } else {
     LOG_INFO("try check migrate unit finish by tenant", K(tenant_id));
-    DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id),
-                        zone_mgr_,
-                        schema_service_);
+    DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id), schema_service_);
     ObLSStatusInfoArray ls_status_info_array;
     share::ObLSStatusOperator ls_status_operator;
+    common::ObArray<uint64_t> gts_unit_ids; // not used
     if (OB_FAIL(ls_status_operator.get_all_tenant_related_ls_status_info(
       *sql_proxy_, tenant_id, ls_status_info_array))) {
       LOG_WARN("fail to get all ls status", KR(ret), K(tenant_id));
@@ -196,8 +186,10 @@ int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_by_tenant(
         } else if (OB_FAIL(dr_ls_info.build_disaster_ls_info(
                 ls_info,
                 ls_status_info,
-                true/*filter_readonly_replicas_with_flag*/))) {
-          LOG_WARN("fail to generate dr log stream info", KR(ret));
+                true/*filter_readonly_replicas_with_flag*/,
+                gts_unit_ids))) {
+          LOG_WARN("fail to generate dr log stream info", KR(ret), K(ls_info),
+                   K(ls_status_info), K(gts_unit_ids));
         } else if (OB_FAIL(statistic_migrate_unit_by_ls(
                 dr_ls_info,
                 ls_status_info))) {

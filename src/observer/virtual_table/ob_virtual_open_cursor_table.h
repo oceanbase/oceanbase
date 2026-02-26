@@ -117,8 +117,15 @@ private:
     {}
     virtual ~FillScanner(){}
     bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo* sess_info);
-    int fill_session_cursor_cell(sql::ObSQLSessionInfo &sess_info,
-                                 const int64_t cursor_id);
+    int fill_cursor_cell(sql::ObSQLSessionInfo &sess_info,
+                         pl::ObPLCursorInfo* cursor_id,
+                         bool is_session_cursor);
+    int get_session_cursor_sql_text(sql::ObSQLSessionInfo &sess_info,
+                                    pl::ObPLCursorInfo* cursor,
+                                    ObString &sql_text);
+    int get_non_session_cursor_sql_text(sql::ObSQLSessionInfo &sess_info,
+                                        pl::ObPLCursorInfo* cursor,
+                                        ObString &sql_text);
     int fill_cur_plan_cell(sql::ObSQLSessionInfo &sess_info);
     int init(ObIAllocator *allocator,
              common::ObScanner *scanner,

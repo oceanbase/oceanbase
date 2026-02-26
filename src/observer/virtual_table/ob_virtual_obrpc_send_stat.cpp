@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_virtual_obrpc_send_stat.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
-#include "rpc/obrpc/ob_rpc_stat.h"
-#include "share/config/ob_server_config.h"
 #include "observer/ob_server_utils.h"
-#include "lib/alloc/memory_dump.h"
 #include "observer/ob_server.h"
 
 using namespace oceanbase::rpc;
@@ -58,11 +54,11 @@ int ObVirtualObRpcSendStat::inner_get_next_row(ObNewRow *&row)
     // user tenant show self tenant infos
       tenant_ids_.clear();
       tenant_ids_.push_back(effective_tenant_id_);
-      tenant_cnt_ = 1;
+      tenant_cnt_ = tenant_ids_.size();
     }
     has_start_ = true;
   }
-  if (pcode_idx_ < ObRpcPacketSet::THE_PCODE_COUNT) {
+  if (pcode_idx_ < ObRpcPacketSet::THE_PCODE_COUNT && tenant_idx_ < tenant_cnt_) {
     if (OB_LIKELY(NULL != cells)) {
       ObRpcPacketSet &set = ObRpcPacketSet::instance();
       RpcStatItem item;

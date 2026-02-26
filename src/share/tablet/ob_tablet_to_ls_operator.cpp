@@ -13,13 +13,9 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "share/ob_errno.h" // KR(ret)
-#include "share/inner_table/ob_inner_table_schema.h" // OB_ALL_TABLET_TO_LS_TNAME, OB_ALL_TABLET_TO_LS_TID
+#include "src/share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_dml_sql_splicer.h" // ObDMLSqlSplicer
-#include "lib/string/ob_sql_string.h" // ObSqlString
-#include "lib/mysqlclient/ob_mysql_proxy.h" // ObISqlClient, SMART_VAR
 #include "observer/ob_sql_client_decorator.h" // ObSQLClientRetryWeak
-#include "share/transfer/ob_transfer_info.h"
 
 namespace oceanbase
 {
@@ -655,6 +651,7 @@ int ObTabletToLSTableOperator::batch_get_tablet_ls_cache(
     const common::ObIArray<common::ObTabletID> &tablet_ids,
     common::ObIArray<ObTabletLSCache> &tablet_ls_caches)
 {
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::GET_TABLET_LOCATION);
   int ret = OB_SUCCESS;
   BATCH_GET(sql_proxy, tenant_id, tablet_ids, tablet_ls_caches);
   return ret;

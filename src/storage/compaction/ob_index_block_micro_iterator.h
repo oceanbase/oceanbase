@@ -50,8 +50,8 @@ public:
     return *micro_block_infos_;
   }
   OB_INLINE const common::ObIArray<blocksstable::ObDatumRowkey> &get_end_keys() { return *endkeys_; }
-  OB_INLINE bool is_left_border() { return 0 == cur_micro_cursor_; }
-  OB_INLINE bool is_right_border() { return micro_block_infos_->count() - 1 == cur_micro_cursor_; }
+  OB_INLINE bool is_left_border() { return 1 == cur_micro_cursor_; }
+  OB_INLINE bool is_right_border() { return micro_block_infos_->count() == cur_micro_cursor_; }
   OB_INLINE int64_t get_micro_index() const { return cur_micro_cursor_; }
 
   OB_INLINE int64_t get_range_block_count();
@@ -69,7 +69,7 @@ class ObIndexBlockMicroIterator
 {
 public:
   ObIndexBlockMicroIterator();
-  virtual ~ObIndexBlockMicroIterator() {}
+  virtual ~ObIndexBlockMicroIterator() { reset(); }
 
   int init(
       const blocksstable::ObMacroBlockDesc &macro_desc,
@@ -93,7 +93,7 @@ private:
   ObMacroBlockDataIterator data_iter_;
   blocksstable::ObDatumRange range_;
   blocksstable::ObMicroBlock micro_block_;
-  blocksstable::ObMacroBlockHandle macro_handle_;
+  blocksstable::ObStorageObjectHandle macro_handle_;
   blocksstable::ObCGRowKeyTransHelper rowkey_helper_;
   common::ObArenaAllocator allocator_;
   bool is_inited_;

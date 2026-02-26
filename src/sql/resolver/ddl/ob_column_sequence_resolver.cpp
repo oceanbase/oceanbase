@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "sql/resolver/ddl/ob_column_sequence_resolver.h"
-#include "sql/resolver/ddl/ob_sequence_stmt.h"
-#include "sql/resolver/ddl/ob_sequence_resolver.h"
 
 namespace oceanbase
 {

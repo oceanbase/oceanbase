@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_insert.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -52,8 +51,7 @@ int ObExprInsert::calc_result_typeN(ObExprResType &type,
       LOG_WARN("fail push col", K(coll0), K(ret));
     } else if (OB_FAIL(coll_types.push_back(coll3))) {
       LOG_WARN("fail push col", K(coll3), K(ret));
-    } else if (OB_FAIL(aggregate_charsets_for_string_result(
-                type, &coll_types.at(0), 2, type_ctx.get_coll_type()))) {
+    } else if (OB_FAIL(aggregate_charsets_for_string_result(type, &coll_types.at(0), 2, type_ctx))) {
       LOG_WARN("aggregate cahrset for string result failed", K(ret));
     } else {
       types_array[0].set_calc_type(ObVarcharType);

@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_define.h"
 #include "sql/executor/ob_slice_id.h"
-#include "lib/utility/serialization.h"
 
 namespace oceanbase
 {

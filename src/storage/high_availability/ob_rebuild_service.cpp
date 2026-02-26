@@ -12,14 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_rebuild_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
 #include "observer/ob_server.h"
-#include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "ob_storage_ha_utils.h"
 
 using namespace oceanbase;
@@ -27,11 +22,15 @@ using namespace share;
 using namespace storage;
 
 ERRSIM_POINT_DEF(CHECK_CAN_REBUILD);
+ERRSIM_POINT_DEF(EN_MANUAL_REBUILD);
 
 ObLSRebuildCtx::ObLSRebuildCtx()
   : ls_id_(),
     type_(),
-    task_id_()
+    task_id_(),
+    tablet_id_array_(),
+    src_(),
+    result_(OB_SUCCESS)
 {
 }
 
@@ -40,6 +39,9 @@ void ObLSRebuildCtx::reset()
   ls_id_.reset();
   type_ = ObLSRebuildType::MAX;
   task_id_.reset();
+  tablet_id_array_.reset();
+  src_.reset();
+  result_ = OB_SUCCESS;
 }
 
 bool ObLSRebuildCtx::is_valid() const
@@ -50,6 +52,7 @@ bool ObLSRebuildCtx::is_valid() const
 }
 
 int ObLSRebuildInfoHelper::get_next_rebuild_info(
+    const share::ObLSID &ls_id,
     const ObLSRebuildInfo &curr_info,
     const ObLSRebuildType &rebuild_type,
     const int32_t result,
@@ -59,9 +62,11 @@ int ObLSRebuildInfoHelper::get_next_rebuild_info(
   int ret = OB_SUCCESS;
   next_info.reset();
 
-  if (!curr_info.is_valid() || !rebuild_type.is_valid() || !ObMigrationStatusHelper::is_valid(status)) {
+  if (!ls_id.is_valid() || !curr_info.is_valid() || !rebuild_type.is_valid() || !ObMigrationStatusHelper::is_valid(status)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get next change status get invalid argument", K(ret), K(curr_info), K(rebuild_type), K(status));
+    LOG_WARN("get next change status get invalid argument", K(ret), K(ls_id), K(curr_info), K(rebuild_type), K(status));
+  } else if (OB_FAIL(next_info.assign(curr_info))) {
+    LOG_WARN("failed to assign ls rebuild info", K(ret), K(curr_info));
   } else {
     switch (curr_info.status_) {
     case ObLSRebuildStatus::NONE: {
@@ -84,7 +89,10 @@ int ObLSRebuildInfoHelper::get_next_rebuild_info(
       break;
     }
     case ObLSRebuildStatus::DOING: {
-      if (OB_SUCCESS == result
+      if (ObLSRebuildType::TABLET == rebuild_type) {
+        next_info.status_ = ObLSRebuildStatus::CLEANUP;
+        next_info.type_ = rebuild_type;
+      } else if (OB_SUCCESS == result
           || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL == status) {
         next_info.status_ = ObLSRebuildStatus::CLEANUP;
         next_info.type_ = rebuild_type;
@@ -92,12 +100,14 @@ int ObLSRebuildInfoHelper::get_next_rebuild_info(
         next_info.status_ = ObLSRebuildStatus::DOING;
         next_info.type_ = rebuild_type;
       }
-     break;
+      break;
     }
     case ObLSRebuildStatus::CLEANUP: {
       if (OB_SUCCESS == result) {
         next_info.status_ = ObLSRebuildStatus::NONE;
         next_info.type_ = ObLSRebuildType::NONE;
+        next_info.tablet_id_array_.reset();
+        next_info.src_.reset();
       } else {
         next_info.status_ = ObLSRebuildStatus::CLEANUP;
         next_info.type_ = rebuild_type;
@@ -162,7 +172,6 @@ int ObLSRebuildInfoHelper::check_can_change_info(
   }
   return ret;
 }
-
 
 ObRebuildService::ObRebuildService()
   : is_inited_(false),
@@ -288,9 +297,16 @@ int ObRebuildService::finish_rebuild_ls(
     LOG_WARN("remove rebuild ls get invalid argument", K(ret), K(ls_id));
   } else {
     {
-      common::SpinRLockGuard guard(map_lock_);
+      //ls rebuild and rebuild tablet will  update result in rebuild ctx
+      //ls rebuild will retry until ls rebuild success.
+      //rebuild tablet will quit when failed.
+      common::SpinWLockGuard guard(map_lock_);
+      const int32_t overwrite = 1;
       if (OB_FAIL(rebuild_ctx_map_.get_refactored(ls_id, rebuild_ctx))) {
         LOG_WARN("failed to get rebuild ctx", K(ret), K(ls_id));
+      } else if (FALSE_IT(rebuild_ctx.result_ = result)) {
+      } else if (OB_FAIL(rebuild_ctx_map_.set_refactored(ls_id, rebuild_ctx, overwrite))) {
+        LOG_WARN("failed to set rebuild ctx into map", K(ret), K(ls_id), K(rebuild_ctx));
       }
     }
 
@@ -370,6 +386,7 @@ void ObRebuildService::fast_sleep()
 {
   ObThreadCondGuard guard(thread_cond_);
   fast_sleep_cnt_++;
+  thread_cond_.signal();
 }
 
 void ObRebuildService::destroy()
@@ -426,9 +443,13 @@ void ObRebuildService::run1()
   lib::set_thread_name("RebuildService");
 
   while (!has_set_stop()) {
-    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (!SERVER_STORAGE_META_SERVICE.is_started()) {
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
+#ifdef ERRSIM
+    } else if (OB_FAIL(errsim_manual_rebuild_())) {
+      LOG_WARN("[ERRSIM] fail to manual rebuild", K(ret));
+#endif
     } else if (OB_FAIL(build_rebuild_ctx_map_())) {
       LOG_WARN("failed to build rebuild ctx map", K(ret));
     } else if (OB_FAIL(build_ls_rebuild_info_())) {
@@ -444,11 +465,15 @@ void ObRebuildService::run1()
       wakeup_cnt_ = 0;
     } else {
       int64_t wait_time_ms = SCHEDULER_WAIT_TIME_MS;
+#ifdef ERRSIM
+      wait_time_ms = 1 * 1000; //1s
+#endif
       if (OB_SERVER_IS_INIT == ret || fast_sleep_cnt_ > 0) {
         wait_time_ms = WAIT_SERVER_IN_SERVICE_TIME_MS;
+        fast_sleep_cnt_ = 0;
       }
+      ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.wait(wait_time_ms);
-      fast_sleep_cnt_ = 0;
     }
   }
 }
@@ -456,6 +481,7 @@ void ObRebuildService::run1()
 int ObRebuildService::build_rebuild_ctx_map_()
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard ag("prepare rebuild ctx");
   common::ObSharedGuard<ObLSIterator> ls_iter_guard;
   ObLSIterator *ls_iter = nullptr;
 
@@ -494,7 +520,10 @@ int ObRebuildService::build_rebuild_ctx_map_()
           rebuild_ctx.ls_id_ = ls->get_ls_id();
           rebuild_ctx.type_ = rebuild_info.type_;
           rebuild_ctx.task_id_.init(GCONF.self_addr_);
-          if (OB_FAIL(rebuild_ctx_map_.set_refactored(ls->get_ls_id(), rebuild_ctx))) {
+          rebuild_ctx.src_ = rebuild_info.src_;
+          if (OB_FAIL(rebuild_info.tablet_id_array_.get_tablet_id_array(rebuild_ctx.tablet_id_array_))) {
+            LOG_WARN("failed to assign tablet id array", K(ret), K(rebuild_info));
+          } else if (OB_FAIL(rebuild_ctx_map_.set_refactored(ls->get_ls_id(), rebuild_ctx))) {
             LOG_WARN("failed to set rebuild ctx", K(ret), KPC(ls), K(rebuild_info));
           }
         } else {
@@ -524,6 +553,7 @@ int ObRebuildService::scheduler_rebuild_mgr_()
       ObLSHandle ls_handle;
       ObLS *ls = nullptr;
       ObLSRebuildInfo rebuild_info;
+      ObDIActionGuard di_action_guard(ObDIActionGuard::NS_ACTION, "rebuild LSID:%ld", rebuild_ctx.ls_id_.id());
       if (OB_FAIL(ls_service_->get_ls(rebuild_ctx.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
         if (OB_LS_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
@@ -647,6 +677,7 @@ int ObRebuildService::get_ls_rebuild_ctx_array_(
 int ObRebuildService::build_ls_rebuild_info_()
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard ag("prepare ls rebuild info");
   ObArray<ObLSRebuildCtx> rebuild_ctx_array;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -686,7 +717,10 @@ int ObRebuildService::build_ls_rebuild_info_()
       } else {
         rebuild_info.status_ = ObLSRebuildStatus::INIT;
         rebuild_info.type_ = rebuild_ctx.type_;
-        if (OB_FAIL(ls->set_rebuild_info(rebuild_info))) {
+        rebuild_info.src_ = rebuild_ctx.src_;
+        if (OB_FAIL(rebuild_info.tablet_id_array_.assign(rebuild_ctx.tablet_id_array_))) {
+          LOG_WARN("failed to assign tablet id array", K(ret), K(rebuild_ctx));
+        } else if (OB_FAIL(ls->set_rebuild_info(rebuild_info))) {
           LOG_WARN("failed to set rebuild info", K(ret), K(rebuild_info), K(rebuild_ctx), KPC(ls));
         }
       }
@@ -709,6 +743,7 @@ int ObRebuildService::check_can_rebuild_(
   int64_t paxos_replica_num = 0;
   const ObAddr &self_addr = GCONF.self_addr_;
   bool is_primary_tenant = false;
+  common::GlobalLearnerList learner_list;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -716,10 +751,15 @@ int ObRebuildService::check_can_rebuild_(
   } else if (!rebuild_ctx.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls should not be NULL", K(ret), K(rebuild_ctx), KP(ls));
+  } else if (ObLSRebuildType::TABLET == rebuild_ctx.type_) {
+    can_rebuild = true;
   } else if (OB_FAIL(ObStorageHAUtils::check_is_primary_tenant(tenant_id, is_primary_tenant))) {
     LOG_WARN("failed to check is primary tenant", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ls->get_log_handler()->get_paxos_member_list(member_list, paxos_replica_num))) {
+  } else if (OB_FAIL(ls->get_log_handler()->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
     LOG_WARN("failed to get paxos member list and learner list", K(ret), KPC(ls));
+  } else if (!member_list.contains(self_addr) && !learner_list.contains(self_addr))  {
+    can_rebuild = false;
+    LOG_INFO("replica do not in member list or learn list, cannot rebuild", K(ret), K(member_list), K(learner_list), K(self_addr));
   } else if (ObLSRebuildType::TRANSFER == rebuild_ctx.type_
       && is_primary_tenant
       && member_list.contains(self_addr)) {
@@ -740,9 +780,45 @@ int ObRebuildService::check_can_rebuild_(
           "ls_id", ls->get_ls_id(), K(role));
     }
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && OB_SUCCESS != EN_MANUAL_REBUILD) {
+    can_rebuild = true;
+    LOG_INFO("[ERRSIM] force rebuild", K(rebuild_ctx), K(can_rebuild));
+  }
+#endif
   return ret;
 }
 
+#ifdef ERRSIM
+int ObRebuildService::errsim_manual_rebuild_() {
+  int ret = OB_SUCCESS;
+  if (OB_SUCCESS != EN_MANUAL_REBUILD && GCONF.errsim_rebuild_ls_id != 0) {
+    const int64_t errsim_rebuild_ls_id = GCONF.errsim_rebuild_ls_id;
+    const ObLSID errsim_ls_id(errsim_rebuild_ls_id);
+    const ObString &errsim_rebuild_addr = GCONF.errsim_rebuild_addr.str();
+    common::ObAddr addr;
+    const ObAddr &my_addr = GCONF.self_addr_;
+
+    // trigger follower rebuild
+    const ObLSRebuildType rebuild_type(ObLSRebuildType::TRANSFER);
+    if (!errsim_rebuild_addr.empty() && OB_FAIL(addr.parse_from_string(errsim_rebuild_addr))) {
+      LOG_WARN("failed to parse from string to addr", K(ret), K(errsim_rebuild_addr));
+    } else if (my_addr == addr) {
+      if (OB_FAIL(add_rebuild_ls(errsim_ls_id, rebuild_type))) {
+        LOG_WARN("[ERRSIM] failed to add rebuild ls", K(ret), K(errsim_ls_id), K(rebuild_type));
+      } else {
+        LOG_INFO("fake EN_MANUAL_REBUILD", K(errsim_ls_id), K(rebuild_type));
+        SERVER_EVENT_SYNC_ADD("storage_ha", "mannual_rebuild",
+                        "ls_id", errsim_ls_id.id());
+      }
+    } else {
+      LOG_INFO("[ERRSIM] not my addr, won't trigger rebuild", K(my_addr), K(addr));
+    }
+  }
+  return ret;
+}
+#endif
 
 ObLSRebuildMgr::ObLSRebuildMgr()
   : is_inited_(false),
@@ -851,53 +927,25 @@ int ObLSRebuildMgr::finish_ls_rebuild(
 int ObLSRebuildMgr::do_with_init_status_(const ObLSRebuildInfo &rebuild_info)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
-  const uint64_t tenant_id = MTL_ID();
-  const bool need_check_log_missing = ObLSRebuildType::CLOG == rebuild_info.type_ ? true : false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls rebuild mgr do not init", K(ret));
+  } else if (!rebuild_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("do with init status get invalid argument", K(ret), K(rebuild_info));
   } else {
-    if (!rebuild_info.is_valid() || ObLSRebuildStatus::INIT != rebuild_info.status_) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("do with none status get invalid argument", K(ret), K(rebuild_info));
-    } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_info));
+    if (rebuild_info.is_rebuild_ls()) {
+      if (OB_FAIL(do_with_rebuild_ls_init_status_(rebuild_info))) {
+        LOG_WARN("failed to do with rebuild ls init status", K(ret), K(rebuild_info));
+      }
+    } else if (rebuild_info.is_rebuild_tablet()) {
+      if (OB_FAIL(do_with_rebuild_tablet_init_status_(rebuild_info))) {
+        LOG_WARN("failed to do with rebuild tablet init status", K(ret), K(rebuild_info));
+      }
     } else {
-      ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_rebuild_ls_replica",
-                            "tenant_id", tenant_id,
-                            "ls_id", rebuild_ctx_.ls_id_,
-                            "task_id", rebuild_ctx_.task_id_,
-                            "source", MYADDR,
-                            "destination", MYADDR,
-                            "comment", "");
-      DEBUG_SYNC(BEFORE_MIGRATION_DISABLE_VOTE);
-
-      if (OB_FAIL(ls->disable_vote(need_check_log_missing))) {
-        LOG_WARN("failed to disable vote", K(ret), KPC(ls), K(rebuild_info));
-      }
-
-      if (OB_FAIL(ret)) {
-        SERVER_EVENT_ADD("storage_ha", "rebuild_disable_vote_failed",
-                         "tenant_id", tenant_id,
-                         "ls_id",  rebuild_ctx_.ls_id_.id(),
-                         "task_id", rebuild_ctx_.task_id_,
-                         "destination", MYADDR,
-                         "type", rebuild_info.type_,
-                         "result", ret,
-                         "REBUILD_LS_OP");
-      }
-    }
-
-    if (OB_SUCCESS != (tmp_ret = switch_next_status_(rebuild_info, ret))) {
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
-      LOG_WARN("failed to switch next status", K(ret), K(tmp_ret), K(rebuild_info));
-      if (OB_SUCCESS != (tmp_ret = ls->enable_vote())) {
-        LOG_ERROR("failed to enable vote", K(tmp_ret), K(ret), K(rebuild_info), K(rebuild_ctx_));
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rebuild info type is unexpected", K(ret), K(rebuild_info));
     }
   }
   return ret;
@@ -980,13 +1028,24 @@ int ObLSRebuildMgr::do_with_cleanup_status_(
     } else if (OB_FAIL(switch_next_status_(rebuild_info, tmp_result))) {
       LOG_WARN("failed to switch next status", K(ret), K(rebuild_info), KPC(ls));
     } else {
-      ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_rebuild_ls_replica",
-                            "tenant_id", tenant_id,
-                            "ls_id", rebuild_ctx_.ls_id_,
-                            "task_id", rebuild_ctx_.task_id_,
-                            "source", MYADDR,
-                            "destination", MYADDR,
-                            "comment", tmp_result);
+      rebuild_ctx_.result_ = OB_SUCCESS == rebuild_ctx_.result_ ? tmp_result : rebuild_ctx_.result_;
+      if (rebuild_info.type_.is_rebuild_ls_type()) {
+        ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_rebuild_ls_replica",
+                              "tenant_id", tenant_id,
+                              "ls_id", rebuild_ctx_.ls_id_.id(),
+                              "task_id", rebuild_ctx_.task_id_,
+                              "source", MYADDR,
+                              "destination", MYADDR,
+                              "comment", rebuild_ctx_.result_);
+      } else {
+        ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_rebuild_tablet_replica",
+                              "tenant_id", tenant_id,
+                              "ls_id", rebuild_ctx_.ls_id_.id(),
+                              "task_id", rebuild_ctx_.task_id_,
+                              "source", rebuild_info.src_,
+                              "destination", MYADDR,
+                              "comment", rebuild_ctx_.result_);
+      }
     }
   }
   return ret;
@@ -1018,7 +1077,7 @@ int ObLSRebuildMgr::switch_next_status_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("switch next status get invalid argument", K(ret), K(curr_rebuild_info));
   } else {
-    if (OB_FAIL(ObLSRebuildInfoHelper::get_next_rebuild_info(curr_rebuild_info, rebuild_ctx_.type_, result, migration_status, next_rebuild_info))) {
+    if (OB_FAIL(ObLSRebuildInfoHelper::get_next_rebuild_info(ls->get_ls_id(), curr_rebuild_info, rebuild_ctx_.type_, result, migration_status, next_rebuild_info))) {
       LOG_WARN("failed to get next change status", K(ret), K(curr_rebuild_info), K(result), K(rebuild_ctx_), K(migration_status));
     } else if (OB_FAIL(ObLSRebuildInfoHelper::check_can_change_info(curr_rebuild_info, next_rebuild_info, can_change))) {
       LOG_WARN("failed to check can change status", K(ret), K(curr_rebuild_info), K(next_rebuild_info), K(rebuild_ctx_));
@@ -1066,6 +1125,152 @@ void ObLSRebuildMgr::fast_sleep_()
 int ObLSRebuildMgr::generate_rebuild_task_()
 {
   int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls rebuild mgr do not init", K(ret));
+  } else if (rebuild_ctx_.type_.is_rebuild_ls_type()) {
+    if (OB_FAIL(generate_rebuild_ls_task_())) {
+      LOG_WARN("failed to generate rebuild ls task", K(ret), K(rebuild_ctx_));
+    }
+  } else if (rebuild_ctx_.type_.is_rebuild_rebuild_type()) {
+    if (OB_FAIL(generate_rebuild_tablet_task_())) {
+      LOG_WARN("failed to generate rebuild tablet task", K(ret), K(rebuild_ctx_));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rebuild type is unexpected", K(ret), K(rebuild_ctx_));
+  }
+  return ret;
+}
+
+int ObLSRebuildMgr::do_with_rebuild_ls_init_status_(const ObLSRebuildInfo &rebuild_info)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  const uint64_t tenant_id = MTL_ID();
+  const bool need_check_log_missing = ObLSRebuildType::CLOG == rebuild_info.type_ ? true : false;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls rebuild mgr do not init", K(ret));
+  } else {
+    if (!rebuild_info.is_valid() || ObLSRebuildStatus::INIT != rebuild_info.status_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("do with none status get invalid argument", K(ret), K(rebuild_info));
+    } else if (!rebuild_info.is_rebuild_ls()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("do with rebuild ls init status get unexpected rebuild info type", K(ret), K(rebuild_info));
+    } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_info));
+    } else {
+      ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_rebuild_ls_replica",
+                            "tenant_id", tenant_id,
+                            "ls_id", rebuild_ctx_.ls_id_.id(),
+                            "task_id", rebuild_ctx_.task_id_,
+                            "source", MYADDR,
+                            "destination", MYADDR,
+                            "comment", "");
+      DEBUG_SYNC(BEFORE_MIGRATION_DISABLE_VOTE);
+
+      if (OB_FAIL(ls->disable_vote(need_check_log_missing))) {
+        LOG_WARN("failed to disable vote", K(ret), KPC(ls), K(rebuild_info));
+      }
+
+      if (OB_FAIL(ret)) {
+        SERVER_EVENT_ADD("storage_ha", "rebuild_disable_vote_failed",
+                         "tenant_id", tenant_id,
+                         "ls_id",  rebuild_ctx_.ls_id_.id(),
+                         "task_id", rebuild_ctx_.task_id_,
+                         "destination", MYADDR,
+                         "type", rebuild_info.type_,
+                         "result", ret,
+                         "REBUILD_LS_OP");
+      }
+    }
+
+    if (OB_SUCCESS != (tmp_ret = switch_next_status_(rebuild_info, ret))) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to switch next status", K(ret), K(tmp_ret), K(rebuild_info));
+      if (OB_SUCCESS != (tmp_ret = ls->enable_vote())) {
+        LOG_ERROR("failed to enable vote", K(tmp_ret), K(ret), K(rebuild_info), K(rebuild_ctx_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSRebuildMgr::do_with_rebuild_tablet_init_status_(
+    const ObLSRebuildInfo &rebuild_info)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const int64_t expire_renew_time = INT64_MAX;
+  share::ObLSLocation location;
+  bool is_cache_hit = false;
+  const uint64_t tenant_id = MTL_ID();
+  ObLS *ls = nullptr;
+  ObAddr addr;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls rebuild mgr do not init", K(ret));
+  } else {
+    if (!rebuild_info.is_valid() || ObLSRebuildStatus::INIT != rebuild_info.status_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("do with none status get invalid argument", K(ret), K(rebuild_info));
+    } else if (!rebuild_info.is_rebuild_tablet()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("do with rebuild tablet init status get unexpected rebuild info type", K(ret), K(rebuild_info));
+    } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_info));
+    } else if (OB_FAIL(GCTX.location_service_->get(
+        GCONF.cluster_id, tenant_id, ls->get_ls_id(), expire_renew_time, is_cache_hit, location))) {
+      LOG_WARN("get ls location failed", KR(ret), K(rebuild_info), KPC(ls));
+    } else if (OB_FAIL(rebuild_info.src_.get_location_addr(addr))) {
+      LOG_WARN("failed to get location addr", K(ret), K(rebuild_info));
+    } else {
+      bool is_src_exist = false;
+      bool is_dest_exist = false;
+      const ObIArray<ObLSReplicaLocation> &ls_locations = location.get_replica_locations();
+      for (int i = 0; i < ls_locations.count() && OB_SUCC(ret); ++i) {
+        const ObAddr &server = ls_locations.at(i).get_server();
+        if (server == MYADDR) {
+          is_dest_exist = true;
+        } else if (server == addr) {
+          is_src_exist = true;
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (!is_dest_exist || !is_src_exist) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("rebuild tablet src or dest is not exist", K(ret), K(rebuild_info), K(ls_locations));
+        } else {
+          ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_rebuild_tablet_replica",
+                                "tenant_id", tenant_id,
+                                "ls_id", rebuild_ctx_.ls_id_.id(),
+                                "task_id", rebuild_ctx_.task_id_,
+                                "source", rebuild_info.src_,
+                                "destination", MYADDR,
+                                "comment", "");
+        }
+      }
+    }
+    if (OB_SUCCESS != (tmp_ret = switch_next_status_(rebuild_info, ret))) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to switch next status", K(ret), K(tmp_ret), K(rebuild_info));
+    }
+  }
+  return ret;
+}
+
+int ObLSRebuildMgr::generate_rebuild_ls_task_()
+{
+  int ret = OB_SUCCESS;
   const int64_t timestamp = 0;
   common::ObMemberList member_list;
   int64_t cluster_id = GCONF.cluster_id;
@@ -1079,6 +1284,8 @@ int ObLSRebuildMgr::generate_rebuild_task_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_ctx_));
   } else {
+    ObLSReplica ls_replica;
+    ObLSID ls_id;
   #ifdef ERRSIM
       if (OB_SUCC(ret)) {
         ret = OB_E(EventTable::EN_GENERATE_REBUILD_TASK_FAILED) OB_SUCCESS;
@@ -1088,20 +1295,30 @@ int ObLSRebuildMgr::generate_rebuild_task_()
       }
   #endif
     if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(ls_id = ls->get_ls_id())) {
+    } else if (OB_ISNULL(GCTX.ob_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ob service should not be NULL", K(ret));
+    } else if (OB_FAIL(GCTX.ob_service_->fill_ls_replica(tenant_id, ls_id, ls_replica))) {
+      LOG_WARN("failed to fill ls replica", K(ret), K(tenant_id), K(ls_id));
     } else {
       DEBUG_SYNC(BEFOR_EXEC_REBUILD_TASK);
       ObTaskId task_id;
+      ObReplicaType replica_type = ls_replica.get_replica_type();
       task_id.init(GCONF.self_addr_);
-      ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp);
-      ObReplicaMember src_replica_member(GCONF.self_addr_, timestamp);
+      ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp,
+                                         replica_type);
+      ObReplicaMember src_replica_member(GCONF.self_addr_, timestamp,
+                                         replica_type);
       ObMigrationOpArg arg;
       arg.cluster_id_ = GCONF.cluster_id;
       arg.data_src_ = src_replica_member;
       arg.dst_ = dst_replica_member;
-      arg.ls_id_ = ls->get_ls_id();
+      arg.ls_id_ = ls_id;
       arg.priority_ = ObMigrationOpPriority::PRIO_MID;
       arg.src_ = src_replica_member;
       arg.type_ = ObMigrationOpType::REBUILD_LS_OP;
+      arg.prioritize_same_zone_src_ = false;
 
       if (OB_FAIL(ls->get_ls_migration_handler()->add_ls_migration_task(rebuild_ctx_.task_id_, arg))) {
         LOG_WARN("failed to add ls migration task", K(ret), K(arg), KPC(ls));
@@ -1119,3 +1336,40 @@ int ObLSRebuildMgr::generate_rebuild_task_()
   return ret;
 }
 
+int ObLSRebuildMgr::generate_rebuild_tablet_task_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t timestamp = 0;
+  ObLS *ls = nullptr;
+  ObAddr src;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls rebuild mgr do not init", K(ret));
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_ctx_));
+  } else if (OB_FAIL(rebuild_ctx_.src_.get_location_addr(src))) {
+    LOG_WARN("failed to get location addr", K(ret), K(rebuild_ctx_));
+  } else {
+    ObTaskId task_id;
+    task_id.init(GCONF.self_addr_);
+    ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp);
+    ObReplicaMember src_replica_member(src, timestamp);
+    ObMigrationOpArg arg;
+    arg.cluster_id_ = GCONF.cluster_id;
+    arg.data_src_ = src_replica_member;
+    arg.dst_ = dst_replica_member;
+    arg.ls_id_ = rebuild_ctx_.ls_id_;
+    arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
+    arg.paxos_replica_number_ = 1;
+    arg.src_ = src_replica_member;
+    arg.type_ = ObMigrationOpType::REBUILD_TABLET_OP;
+    if (OB_FAIL(arg.tablet_id_array_.assign(rebuild_ctx_.tablet_id_array_))) {
+      LOG_WARN("failed to asign tablet id array", K(ret), K(rebuild_ctx_));
+    } else if (OB_FAIL(ls->get_ls_migration_handler()->add_ls_migration_task(rebuild_ctx_.task_id_, arg))) {
+      LOG_WARN("failed to add ls migration task", K(ret), K(arg), KPC(ls));
+    }
+  }
+  return ret;
+}

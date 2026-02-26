@@ -11,20 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "share/stat/ob_opt_column_stat_cache.h"
-#include "share/stat/ob_opt_table_stat.h"
-#include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_dbms_stats_export_import.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/stat/ob_opt_stat_sql_service.h"
 #include "share/stat/ob_dbms_stats_history_manager.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_lob_access_utils.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase {
 using namespace sql;
@@ -41,12 +32,12 @@ namespace common {
 
 #define CREATE_MYSQL_STAT_TABLE "(STATID VARCHAR(128), TYPE CHAR(1), VERSION DECIMAL,FLAGS DECIMAL,\
                                   C1 VARCHAR(128),C2 VARCHAR(128), C3 VARCHAR(128),C4 VARCHAR(128),\
-                                  C5 VARCHAR(128), C6 VARCHAR(128), N1 DECIMAL, N2 DOUBLE,\
-                                  N3 DECIMAL, N4 DECIMAL, N5 DECIMAL, N6 DECIMAL, N7 DECIMAL,\
-                                  N8 DECIMAL, N9 DECIMAL, N10 DECIMAL, N11 DECIMAL, N12	DECIMAL,\
-                                  N13 DECIMAL, D1 TIMESTAMP(6), T1 TIMESTAMP, R1 TEXT(1000), \
+                                  C5 VARCHAR(128), C6 VARCHAR(128), N1 DECIMAL(20, 0), N2 DOUBLE,\
+                                  N3 DECIMAL(20, 0), N4 DECIMAL(20, 0), N5 DECIMAL(20, 0), N6 DECIMAL(20, 0), N7 DECIMAL(20, 0),\
+                                  N8 DECIMAL(20, 0), N9 DECIMAL(20, 0), N10 DECIMAL(20, 0), N11 DECIMAL(20, 0), N12	DECIMAL(20, 0),\
+                                  N13 DECIMAL(20, 0), D1 TIMESTAMP(6), T1 TIMESTAMP, R1 TEXT(1000), \
                                   R2 TEXT(1000), R3 TEXT(1000), CH1 VARCHAR(1000), CL1 BLOB,\
-                                  BL1 BLOB, OB_SPEC1 DECIMAL, OB_SPEC2 DECIMAL, OB_SPEC3 VARCHAR(4096))"
+                                  BL1 BLOB, OB_SPEC1 DECIMAL(20, 0), OB_SPEC2 DECIMAL(20, 0), OB_SPEC3 VARCHAR(4096))"
 
 #define CHECK_STAT_SELECT_LIST "select statid, type, version, flags, c1, c2, c3, c4, n1, n2, n3,\
                                 n4, n5,n6, n7, n8, n9, d1, r1, r2, ob_spec1, ob_spec2, ob_spec3 "

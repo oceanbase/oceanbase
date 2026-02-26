@@ -29,30 +29,34 @@ class IObLogMetaDataReplayer
 public:
   virtual ~IObLogMetaDataReplayer() {}
 
+  virtual void stop() = 0;
+
   virtual int push(PartTransTask *task, const int64_t timeout) = 0;
 
-  virtual int replay(
-      const uint64_t tenant_id,
-      const int64_t start_timestamp_ns,
-      ObDictTenantInfo &tenant_info) = 0;
+  virtual int replay(const uint64_t tenant_id) = 0;
+  virtual int wait_replay_end() = 0;
 };
 
-class ObLogMetaDataReplayer : public IObLogMetaDataReplayer
+class ObLogMetaDataReplayer : public IObLogMetaDataReplayer, public lib::ThreadPool
 {
 public:
   ObLogMetaDataReplayer();
   virtual ~ObLogMetaDataReplayer();
 
+  virtual void stop() { stop_flag_ = true; }
+
   virtual int push(PartTransTask *task, const int64_t timeout);
 
-  virtual int replay(
-      const uint64_t tenant_id,
-      const int64_t start_timestamp_ns,
-      ObDictTenantInfo &tenant_info);
+  virtual int replay(const uint64_t tenant_id);
+
+  virtual int wait_replay_end();
+
 
 public:
-  int init(IObLogPartTransParser &part_trans_parser);
+  int init(const int64_t start_timestamp_ns, IObLogPartTransParser &part_trans_parser);
   void destroy();
+  void run1() override;
+
 
 private:
   struct ReplayInfoStat
@@ -76,13 +80,11 @@ private:
 
   // handle DDL transaction
   int handle_ddl_trans_(
-      const int64_t start_timestamp_ns,
       ObDictTenantInfo &tenant_info,
       PartTransTask &part_trans_task,
       ReplayInfoStat &replay_info_stat);
   // handle LogStream operation transaction
   int handle_ls_op_trans_(
-      const int64_t start_timestamp_ns,
       ObDictTenantInfo &tenant_info,
       PartTransTask &part_trans_task,
       ReplayInfoStat &replay_info_stat);
@@ -94,6 +96,9 @@ private:
 
 private:
   bool is_inited_;
+  volatile bool stop_flag_;
+  uint64_t replay_tenant_id_;
+  int64_t start_timestamp_ns_;
   SafePartTransTaskQueue queue_;
   ObLogSchemaIncReplay schema_inc_replay_;
   IObLogPartTransParser *part_trans_parser_;

@@ -49,7 +49,6 @@ public:
   // 事务上下文恢复的时候需要从事务状态表将BufferCtx深拷贝至事务上下文
   virtual int deep_copy(BufferCtx &) const { return common::OB_SUCCESS; }
   virtual int64_t get_impl_binging_type_id() { return 0; }// 在事务层反序列化和深拷贝时需要得知子类对象的类型
-
   virtual int64_t to_string(char*, const int64_t buf_len) const = 0;
   // 同事务状态一起持久化以及恢复
   virtual int serialize(char*, const int64_t, int64_t&) const = 0;
@@ -74,13 +73,9 @@ public:
   void before_prepare() { ctx_->before_prepare(); }
   void on_prepare(const share::SCN &prepare_version) { ctx_->on_prepare(prepare_version); }
   void on_commit(const share::SCN &commit_version, const share::SCN &commit_scn) {
-    MDS_LOG(INFO, "buffer ctx on commit", KP(this), K(*this));
     ctx_->on_commit(commit_version, commit_scn);
   }
-  void on_abort(const share::SCN &abort_scn) {
-    MDS_LOG(INFO, "buffer ctx on abort", KP(this), K(*this));
-    ctx_->on_abort(abort_scn);
-  }
+  void on_abort(const share::SCN &abort_scn) { ctx_->on_abort(abort_scn); }
   // 同事务状态一起持久化以及恢复
   int serialize(char*, const int64_t, int64_t&) const;// 要把实际的ctx类型编码进二进制中
   int deserialize(const char*,

@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_io_worker_wrapper.h"
-#include "lib/ob_define.h"
-#include "share/rc/ob_tenant_base.h"          // mtl_free
-#include "log_define.h"
 
 namespace oceanbase
 {
@@ -131,7 +128,14 @@ int64_t LogIOWorkerWrapper::get_last_working_time() const
     PALF_LOG_RET(ERROR, OB_NOT_INIT, "LogIOWorkerWrapper not inited", KPC(this));
   } else {
     for (int64_t i = 0; i < log_writer_parallelism_; i++) {
-      last_working_time = MAX(last_working_time, log_io_workers_[i].get_last_working_time());
+      const int64_t this_time = log_io_workers_[i].get_last_working_time();
+      if (OB_INVALID_TIMESTAMP == this_time) {
+        // skip
+      } else if (OB_INVALID_TIMESTAMP == last_working_time) {
+        last_working_time = this_time;
+      } else {
+        last_working_time = MIN(last_working_time, this_time);
+      }
     }
   }
   return last_working_time;
@@ -222,8 +226,8 @@ void LogIOWorkerWrapper::destory_and_free_log_io_workers_()
 int64_t LogIOWorkerWrapper::palf_id_to_index_(const int64_t palf_id)
 {
   int64_t index = -1;
-  // For sys log stream, index set to 0.
-  if (is_sys_palf_id(palf_id)) {
+  // For sys and sslog log stream, index set to 0.
+  if (is_sys_palf_id(palf_id) || !is_user_tenant_) {
     index = SYS_LOG_IO_WORKER_INDEX;
   } else {
     const int64_t hash_factor = log_writer_parallelism_ - 1;

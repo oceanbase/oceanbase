@@ -14,10 +14,7 @@
 
 #include "share/ob_dml_sql_splicer.h"
 #include "lib/container/ob_se_array_iterator.h"
-#include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/hash/ob_hashmap.h"
-#include "common/object/ob_object.h"
 
 namespace oceanbase
 {
@@ -792,7 +789,7 @@ int ObDMLSqlSplicer::splice_select_1_sql(const char *table_name, ObSqlString &sq
   return ret;
 }
 
-int ObDMLSqlSplicer::splice_core_cells(ObCoreTableProxy &kv_proxy,
+int ObDMLSqlSplicer::splice_core_cells(ObCoreTableStoreCell &kv_proxy,
       common::ObIArray<ObCoreTableProxy::UpdateCell> &cells)
 {
   int ret = OB_SUCCESS;
@@ -1101,6 +1098,23 @@ int ObDMLSqlSplicer::splice_batch_insert_sql(const char *table_name, ObSqlString
   return ret;
 }
 
+int ObDMLSqlSplicer::splice_batch_insert_ignore_sql(const char *table_name, ObSqlString &sql) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObString> all_names;
+  ObArray<int64_t> rows_matrix;
+  if (NULL == table_name) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(table_name));
+  } else if (columns_.count() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column_count is invalid", K(ret), "column_count", columns_.count());
+  } else if (OB_FAIL(splice_batch_insert(table_name, "INSERT IGNORE", sql, all_names, rows_matrix))) {
+    LOG_WARN("splice insert failed", K(ret), K(table_name));
+  }
+  return ret;
+}
+
 int ObDMLSqlSplicer::splice_batch_replace_sql_without_plancache(const char *table_name, ObSqlString &sql) const
 {
   int ret = OB_SUCCESS;
@@ -1352,6 +1366,22 @@ int ObDMLSqlSplicer::add_long_double_column(const char *col_name, const double v
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid column name", K(ret), KP(col_name));
   } else if (OB_FAIL(values_.append_fmt("%.17g", value))) {
+    LOG_WARN("append value failed", K(ret));
+  } else if (OB_FAIL(add_column(is_primary_key, is_null, col_name))) {
+    LOG_WARN("add column failed", K(ret), K(is_primary_key), K(is_null), K(col_name));
+  }
+  return ret;
+}
+
+int ObDMLSqlSplicer::add_function_call(const char *col_name, const char *func_call)
+{
+  int ret = OB_SUCCESS;
+  const bool is_primary_key = false;
+  const bool is_null = false;
+  if (OB_ISNULL(col_name) || OB_ISNULL(func_call)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid column name", K(ret), KP(col_name));
+  } else if (OB_FAIL(values_.append(func_call))) {
     LOG_WARN("append value failed", K(ret));
   } else if (OB_FAIL(add_column(is_primary_key, is_null, col_name))) {
     LOG_WARN("add column failed", K(ret), K(is_primary_key), K(is_null), K(col_name));

@@ -9,8 +9,6 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX RS
 #include "ob_backup_base_service.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "share/backup/ob_backup_data_table_operator.h"
 #include "logservice/ob_log_service.h"
 
 using namespace oceanbase;
@@ -132,6 +130,7 @@ void ObBackupBaseService::idle()
   if (has_set_stop() || wakeup_cnt_ > 0) {
     wakeup_cnt_ = 0;
   } else {
+    ObBKGDSessInActiveGuard inactive_guard;
     thread_cond_.wait_us(interval_idle_time_us_);
   }
 }
@@ -221,6 +220,35 @@ int ObBackupBaseService::check_leader()
   } else {
     ret = OB_NOT_MASTER;
   }
+  return ret;
+}
+
+int ObBackupBaseService::end_transaction(
+    common::ObMySQLTransaction &trans,
+    const int upstream_ret)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  if (trans.is_started()) {
+    if (OB_SUCCESS == upstream_ret) {
+      // Upper layer succeeded, check leader and commit
+      if (OB_FAIL(check_leader())) {
+        LOG_WARN("failed to recheck leader before commit", K(ret));
+        if (OB_TMP_FAIL(trans.end(false))) {
+          LOG_WARN("failed to rollback after leader check fail", K(ret), K(tmp_ret));
+        }
+      } else if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("failed to commit trans", K(ret));
+      }
+    } else {
+      // Upper layer failed, rollback (preserve original error)
+      if (OB_FAIL(trans.end(false))) {
+        LOG_WARN("failed to rollback trans", K(upstream_ret), K(ret));
+      }
+    }
+  }
+
   return ret;
 }
 

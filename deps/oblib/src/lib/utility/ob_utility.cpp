@@ -10,12 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/utility/ob_utility.h"
-#include <unistd.h>
-#include <errno.h>
-#include <sys/time.h>
+#include "ob_utility.h"
 #include <sys/mman.h>
-#include "lib/ob_errno.h"
 #include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase

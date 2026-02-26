@@ -13,17 +13,6 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "ob_physical_restore_table_operator.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/ob_kv_parser.h"
-#include "share/ob_cluster_version.h"
-#include "rootserver/ob_rs_job_table_operator.h"
-#include "share/backup/ob_backup_path.h"
-#include "share/ls/ob_ls_info.h"
-#include <algorithm>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -49,6 +38,7 @@ static const char* phy_restore_status_str_array[PHYSICAL_RESTORE_MAX_STATUS] = {
   "RESTORE_PRE",
   "RESTORE_CREATE_INIT_LS",
   "PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN",
+  "PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH",
   "RESTORE_WAIT_LS",
   "POST_CHECK",
   "UPGRADE",
@@ -212,6 +202,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, tenant_id);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, backup_tenant_id);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, restore_start_ts);
+    ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, restoring_start_ts);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, comment);
 
     // restore_scn
@@ -219,7 +210,9 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     // consistent_scn
     ADD_COLUMN_WITH_UINT_VALUE(job_info, consistent_scn, (job_info.get_consistent_scn().get_val_for_inner_table_field()));
     //restore_type
-    ADD_COLUMN_WITH_VALUE(job_info, restore_type, (int64_t)(job_info.get_restore_type()));
+    ADD_COLUMN_WITH_VALUE(job_info, restore_type, job_info.get_restore_type().to_str());
+    //restore progress display mode
+    ADD_COLUMN_WITH_VALUE(job_info, progress_display_mode, job_info.get_progress_display_mode().to_str());
     if (OB_SUCC(ret)) {
       uint64_t post_data_version = job_info.get_post_data_version();
       int64_t len = ObClusterVersion::print_version_str(
@@ -265,6 +258,9 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, passwd_array);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, concurrency);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, recover_table);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, using_complement_log);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, backup_compatible);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, sts_credential);
 
      // source_cluster_version
      if (OB_SUCC(ret)) {
@@ -475,6 +471,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_UINT_VALUE(initiator_tenant_id, job);
     RETRIEVE_UINT_VALUE(backup_tenant_id, job);
     RETRIEVE_INT_VALUE(restore_start_ts, job);
+    RETRIEVE_INT_VALUE(restoring_start_ts, job);
     if (OB_SUCC(ret)) {
       if (name == "restore_scn") {
         uint64_t current_value = share::OB_INVALID_SCN_VAL;
@@ -520,6 +517,8 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_STR_VALUE(kms_dest, job);
     RETRIEVE_STR_VALUE(kms_encrypt_key, job);
     RETRIEVE_INT_VALUE(concurrency, job);
+    RETRIEVE_INT_VALUE(backup_compatible, job);
+    RETRIEVE_STR_VALUE(sts_credential, job);
 
     if (OB_SUCC(ret)) {
       if (name == "backup_dest") {
@@ -554,12 +553,29 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     }
 
     if (OB_SUCC(ret)) {
-      if (name == "restore_type") {
-        uint64_t restore_type = 0;
-        if (OB_FAIL(retrieve_uint_value(result, restore_type))) {
-          LOG_WARN("fail to retrive int value", K(ret));
+      if (name == "using_complement_log") {
+        int64_t using_complement_log = 0;
+        if (OB_FAIL(retrieve_int_value(result, using_complement_log))) {
+          LOG_WARN("fail to retrive int value", K(ret), "column_name", "using_complement_log");
         } else {
-          job.set_restore_type(share::ObRestoreType(static_cast<share::ObRestoreType::Type>(restore_type)));
+          job.set_using_complement_log(using_complement_log != 0);
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (name == "restore_type") {
+        ObString restore_type_str;
+        EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", restore_type_str);
+        if (OB_SUCC(ret))  {
+          share::ObRestoreType tmp_restore_type(restore_type_str);
+          if (ObRestoreType::RESTORE_TYPE_MAX == tmp_restore_type) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid restore type str extracted from sql", K(ret), K(restore_type_str));
+          } else {
+            job.set_restore_type(tmp_restore_type);
+          }
+
         }
       }
     }
@@ -680,6 +696,22 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(job.get_white_list().assign_with_hex_str(str))) {
           LOG_WARN("fail to assign white_list", KR(ret), K(str));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (name == "progress_display_mode") {
+        ObString display_mode_str;
+        EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", display_mode_str);
+        if (OB_SUCC(ret))  {
+          share::ObRestoreProgressDisplayMode tmp_display_mode(display_mode_str);
+          if (!tmp_display_mode.is_valid()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid restore progress display str extracted from sql", K(ret), K(display_mode_str));
+          } else {
+            job.set_progress_display_mode(tmp_display_mode);
+          }
         }
       }
     }
@@ -847,12 +879,21 @@ int ObPhysicalRestoreTableOperator::update_job_error_info(
   } else {
     ObSqlString sql;
     int64_t affected_rows = 0;
+    char addr_str[OB_IP_PORT_STR_BUFF] = {'\0'};
+    char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+    int64_t addr_pos = 0;
+    int64_t trace_id_pos = 0;
     // update __all_restore_info
-    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET value = '%s : %s(%d) on %s with traceid %s' "
+    if (OB_FAIL(databuff_printf(addr_str, sizeof(addr_str), addr_pos, addr))) {
+      LOG_WARN("call databuff_printf failed", K(ret), K(addr), K(addr_pos));
+    } else if (OB_FAIL(databuff_printf(
+        trace_id_str, sizeof(trace_id_str), trace_id_pos, trace_id))) {
+      LOG_WARN("call databuff_printf failed", K(ret), K(trace_id), K(trace_id_pos));
+    } else if (OB_FAIL(sql.assign_fmt("UPDATE %s SET value = '%s : %s(%d) on %s with traceid %s' "
                                "WHERE job_id = %ld AND name = 'comment'",
                                OB_ALL_RESTORE_JOB_TNAME, mod_str,
                                ob_error_name(return_ret), return_ret,
-                               to_cstring(addr), to_cstring(trace_id),
+                               addr_str, trace_id_str,
                                job_id))) {
       LOG_WARN("failed to set sql", K(ret), K(mod_str), K(return_ret), K(trace_id), K(addr));
     } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
@@ -1062,8 +1103,11 @@ int ObPhysicalRestoreTableOperator::get_restore_job_by_sql_(
   return ret;
 }
 
-int ObPhysicalRestoreTableOperator::check_finish_restore_to_consistent_scn(
-    bool &is_finished, bool &is_success)
+int ObPhysicalRestoreTableOperator::check_finish_restore_to_target_status(
+    const ObLSRestoreStatus &sys_ls_target_status,
+    const ObLSRestoreStatus &user_ls_target_status,
+    bool &is_finished,
+    bool &is_success)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1101,17 +1145,72 @@ int ObPhysicalRestoreTableOperator::check_finish_restore_to_consistent_scn(
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
             LOG_WARN("failed to set status", KR(ret), K(restore_status));
-          } else if (!ls_restore_status.is_in_restore_or_none() || ls_restore_status.is_failed()) {
+          } else if (!ls_restore_status.is_valid_restore_status() || ls_restore_status.is_failed()) {
             //restore failed
             is_finished = true;
             is_success = false;
+            LOG_WARN_RET(OB_SUCCESS, "ls restore failed", K(ls_id));
           } else {
-            const ObLSRestoreStatus target_status(ObLSRestoreStatus::Status::WAIT_RESTORE_TO_CONSISTENT_SCN);
-            if (ls_restore_status.get_status() < target_status.get_status()
-                && !ls_restore_status.is_none()
-                && is_finished && is_success) {
+            ObLSID tmp_ls_id(ls_id);
+            if (tmp_ls_id.is_sys_ls() && ls_restore_status == sys_ls_target_status) {
+            } else if (tmp_ls_id.is_user_ls() && ls_restore_status == user_ls_target_status) {
+            } else {
               is_finished = false;
             }
+          }
+        } // while
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+
+        if (OB_SUCC(ret) && is_finished && !is_success) {
+          LOG_INFO("tenant restore failed", K(ls_id), K(ls_restore_status));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalRestoreTableOperator::check_all_ls_finish_quick_restore(bool &is_finish)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (is_sys_tenant(exec_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id cannot be sys", KR(ret), K_(tenant_id));
+  } else {
+    is_finish = true;
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      ObSqlString sql;
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select a.ls_id, b.restore_status, b.replica_status from %s as a "
+              "left join %s as b on a.ls_id = b.ls_id",
+              OB_ALL_LS_STATUS_TNAME, OB_ALL_LS_META_TABLE_TNAME))) {
+        LOG_WARN("failed to assign sql", K(ret));
+      } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr(), group_id_))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), K(sql));
+      } else {
+        int64_t ls_id = 0;
+        share::ObLSRestoreStatus ls_restore_status;
+        int32_t restore_status = -1;
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "restore_status", restore_status, int32_t);
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
+            LOG_WARN("failed to set status", KR(ret), K(restore_status));
+          } else if (ObLSRestoreStatus::Status::RESTORE_START <= ls_restore_status
+                     &&  ObLSRestoreStatus::Status::QUICK_RESTORE >= ls_restore_status) {
+            is_finish = false;
           }
         } // while
         if (OB_ITER_END == ret) {

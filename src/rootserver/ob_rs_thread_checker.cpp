@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_rs_thread_checker.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {
@@ -57,7 +56,7 @@ void ObRsThreadChecker::run3()
     while (!stop_) {
       ObRsReentrantThread::check_thread_set_.loop_operation(ObRsReentrantThread::check_alert);
       if (!stop_) {
-        get_cond().wait(CHECK_TIMEVAL_US / 1000);
+        idle_wait(CHECK_TIMEVAL_US / 1000);
       }
     }
   }

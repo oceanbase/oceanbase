@@ -122,7 +122,7 @@ void TestSortTempMacroBlockReaderWriter::prepare_one_buffer(const int64_t start_
   ObObj cells[TEST_COLUMN_CNT];
   row.row_val_.cells_ = cells;
   row.row_val_.count_ = TEST_COLUMN_CNT;
-  const int64_t buf_capacity = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t buf_capacity = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   for (int64_t i = start_index; OB_SUCC(ret) && buf_pos < buf_capacity; ++i) {
     ret = row_generate_.get_next_row(i, row);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -138,7 +138,7 @@ void TestSortTempMacroBlockReaderWriter::prepare_one_buffer(const int64_t start_
 
 void TestSortTempMacroBlockReaderWriter::prepare_data(const int64_t buf_capacity, char *buf, ObIArray<int64_t> &start_indexes)
 {
-  const int64_t macro_block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t macro_block_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   const int64_t macro_block_buffer_count = buf_capacity / macro_block_size;
   int64_t buf_pos = 0;
   ASSERT_EQ(OB_SUCCESS, start_indexes.push_back(0));
@@ -185,7 +185,7 @@ TEST_F(TestSortTempMacroBlockReaderWriter, test_write)
 {
   int ret = OB_SUCCESS;
   ObSortTempMacroBlockWriter writer;
-  const int64_t macro_block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t macro_block_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   const int64_t buf_capacity = macro_block_size * 10;
   char buf[buf_capacity];
   const int64_t io_timeout_ms = common::DEFAULT_IO_WAIT_TIME_MS;
@@ -233,7 +233,7 @@ TEST_F(TestSortTempMacroBlockReaderWriter, test_read)
   int ret = OB_SUCCESS;
   ObSortTempMacroBlockWriter writer;
   ObSortTempMacroBlockReader reader;
-  const int64_t macro_block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t macro_block_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   const int64_t buf_capacity = macro_block_size * 10;
   char buf[buf_capacity];
   char read_buf[buf_capacity];

@@ -204,7 +204,8 @@ public:
                K_(end_scn));
 
 public:
-  enum : int32_t {
+  enum TxDataState : int32_t {
+    UNKOWN = -1,
     RUNNING = 0,
     COMMIT = 1,
     ELR_COMMIT = 2,
@@ -291,19 +292,7 @@ public:
     return ref_cnt;
   }
 
-  void dec_ref()
-  {
-#ifdef UNITTEST
-  return;
-#endif
-    if (nullptr == tx_data_allocator_) {
-      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid slice allocator", KPC(this));
-      ob_abort();
-    } else if (0 == ATOMIC_SAF(&ref_cnt_, 1)) {
-      op_guard_.reset();
-      tx_data_allocator_->free(this);
-    }
-  }
+  void dec_ref();
 
   int check_tx_op_exist(share::SCN op_scn, bool &exist);
 
@@ -471,11 +460,21 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
+    J_ARRAY_START();
     for (int i = 0; i < TX_DATA_MINI_LRU_ITEM_CNT; i++) {
+      if (i == 0) {
+        databuff_printf(buf, buf_len, pos, "%d:", i);
+      } else {
+        databuff_printf(buf, buf_len, pos, ", %d:", i);
+      }
+
       if (OB_UNLIKELY(cache_items_[i].is_valid_)) {
-        J_KV(K(cache_items_[i]));
+        databuff_print_obj(buf, buf_len, pos, cache_items_[i]);
+      } else {
+        databuff_printf(buf, buf_len, pos, "{}");
       }
     }
+    J_ARRAY_END();
     return pos;
   }
 

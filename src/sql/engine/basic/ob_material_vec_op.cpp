@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/basic/ob_material_vec_op.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -39,6 +36,7 @@ int ObMaterialVecOp::inner_open()
     LOG_WARN("failed to get px size", K(ret));
   } else {
     int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+    int64_t tempstore_read_alignment_size = ObTempBlockStore::get_read_alignment_size_config(tenant_id);
     lib::ContextParam param;
     param.set_mem_attr(tenant_id, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA)
       .set_properties(lib::USE_TL_PAGE_OPTIONAL);
@@ -53,7 +51,9 @@ int ObMaterialVecOp::inner_open()
                                    mem_attr,
                                    0 /*mem_limit*/,
                                    true /*enable_dump*/,
-                                   true /*reuse_vector_array*/))) {
+                                   true /*reuse_vector_array*/,
+                                   MY_SPEC.compress_type_,
+                                   tempstore_read_alignment_size))) {
       LOG_WARN("init row store failed");
     } else {
       const int64_t size = OB_INVALID_ID == row_count ? 0 : row_count * MY_SPEC.width_;
@@ -204,6 +204,7 @@ int ObMaterialVecOp::inner_get_next_batch(int64_t max_row_cnt)
 
     if (OB_SUCC(ret)) {
       brs_.size_ = read_rows;
+      brs_.all_rows_active_ = true;
     } else if (OB_ITER_END == ret) {
       brs_.size_ = 0;
       brs_.end_ = true;

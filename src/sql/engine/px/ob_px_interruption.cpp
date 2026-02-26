@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/px/ob_px_interruption.h"
+#include "ob_px_interruption.h"
 #include "sql/engine/px/ob_dfo.h"
-#include "lib/time/ob_time_utility.h"
 
 
 using namespace oceanbase::common;
@@ -56,26 +55,26 @@ int ObInterruptUtil::broadcast_dfo(ObDfo *dfo, int code)
                            GCTX.self_addr(),
                            "PX ABORT DFO");
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
-  ObSEArray<ObPxSqcMeta *, 32> sqcs;
   if (OB_ISNULL(dfo)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("NULL ptr unexpected", K(ret));
-  } else if (OB_FAIL(dfo->get_sqcs(sqcs))) {
-    LOG_WARN("fail to get addrs", K(ret));
   } else {
+    const ObIArray<ObPxSqcMeta> &sqcs = dfo->get_sqcs();
     // 暂存上次的 id，inc_seqnum 将修改 px_interrupt_id_
     ObInterruptibleTaskID interrupt_id = dfo->get_interrupt_id().px_interrupt_id_;
+    ObSEArray<ObAddr, 8> interrupt_addrs;
     for (int64_t j = 0; j < sqcs.count(); ++j) {
-      const ObAddr &addr = sqcs.at(j)->get_exec_addr();
-      if(OB_SUCCESS != (tmp_ret = manager->interrupt(addr, interrupt_id, int_code))) {
+      const ObAddr &addr = sqcs.at(j).get_exec_addr();
+      if (OB_SUCCESS != (tmp_ret = manager->interrupt(addr, interrupt_id, int_code))) {
         ret = tmp_ret;
         LOG_WARN("fail to send interrupt message to other server",
                 K(ret), K(int_code), K(addr), K(interrupt_id));
-      } else {
-        LOG_INFO("success to send interrupt message",
-                  K(int_code), K(addr), K(interrupt_id));
+      } else if (OB_FAIL(interrupt_addrs.push_back(addr))) {
+        LOG_WARN("fail to push back", K(j), K(ret));
       }
     }
+    LOG_INFO("success to send interrupt message",
+            K(int_code), K(interrupt_id), K(sqcs.count()), K(interrupt_addrs));
   }
   return ret;
 }
@@ -83,17 +82,13 @@ int ObInterruptUtil::broadcast_dfo(ObDfo *dfo, int code)
 int ObInterruptUtil::regenerate_interrupt_id(ObDfo &dfo)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObPxSqcMeta *, 32> sqcs;
-  if (OB_FAIL(dfo.get_sqcs(sqcs))) {
-    LOG_WARN("fail to get addrs", K(ret));
-  } else {
-    // 每次发送完中断后，需要将中断号的 sequence 加 1，并设置到 sqc 结构中，
-    // 避免误中断重试的 sqc
-    ObDfoInterruptIdGen::inc_seqnum(dfo.get_interrupt_id().px_interrupt_id_);
+  ObIArray<ObPxSqcMeta> &sqcs = dfo.get_sqcs();
+  // 每次发送完中断后，需要将中断号的 sequence 加 1，并设置到 sqc 结构中，
+  // 避免误中断重试的 sqc
+  ObDfoInterruptIdGen::inc_seqnum(dfo.get_interrupt_id().px_interrupt_id_);
 
-    ARRAY_FOREACH_X(sqcs, j, cnt, OB_SUCC(ret)) {
-      sqcs.at(j)->set_interrupt_id(dfo.get_interrupt_id());
-    }
+  ARRAY_FOREACH_X(sqcs, j, cnt, OB_SUCC(ret)) {
+    sqcs.at(j).set_interrupt_id(dfo.get_interrupt_id());
   }
   return ret;
 }
@@ -118,25 +113,42 @@ int ObInterruptUtil::interrupt_tasks(ObPxSqcMeta &sqc, int code)
   return ret;
 }
 
-void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &code)
+ERRSIM_POINT_DEF(ERRSIM_SCHEMA_ERROR_NEED_RETRY);
+void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &code, int64_t px_worker_execute_start_schema_version)
 {
   int ret = OB_SUCCESS;
+  int prev_code = code;
   if (is_schema_error(code) && OB_NOT_NULL(exec_ctx) && OB_NOT_NULL(exec_ctx->get_my_session())) {
     uint64_t tenant_id = exec_ctx->get_my_session()->get_effective_tenant_id();
-    ObSchemaGetterGuard schema_guard;
-    int64_t local_schema_version = -1;
+    ObSchemaGetterGuard current_moment_schema_guard;
+    int64_t current_moment_schema_version = -1;
     int64_t query_tenant_begin_schema_version =
       exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version();
     if (query_tenant_begin_schema_version == OB_INVALID_VERSION) {
       code = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid tenant_schema_version", K(ret), K(query_tenant_begin_schema_version));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    } else if (OB_UNLIKELY(ERRSIM_SCHEMA_ERROR_NEED_RETRY)) {
+      code = ERRSIM_SCHEMA_ERROR_NEED_RETRY;
+      LOG_INFO("ERRSIM here", KR(ret));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+                 tenant_id, current_moment_schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret));
-    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, local_schema_version))) {
+    } else if (OB_FAIL(current_moment_schema_guard.get_schema_version(
+                 tenant_id, current_moment_schema_version))) {
       LOG_WARN("get schema version failed", K(ret));
     }
-
-    if ((OB_SUCC(ret) && local_schema_version != query_tenant_begin_schema_version)
+    // 1. First we will check current_moment_schema_version is equal to
+    // query_tenant_begin_schema_version
+    // 2. Then if it's a px worker update schema error, it need also check whether
+    // px_worker_execute_start_schema_version is equal to current_moment_schema_guard
+    //   For example, machine A(schema_version: 1000) -- send plan to -> machine
+    //   B(schema_version:900), machine B find schema_error and execute here, but machine B just
+    //   update schema to 1000 (current_moment_schema_version == query_tenant_begin_schema_version)
+    //   So we have to compare px_worker_execute_start_schema_version
+    if ((OB_SUCC(ret)
+         && (current_moment_schema_version != query_tenant_begin_schema_version
+             || (px_worker_execute_start_schema_version != OB_INVALID_VERSION
+                 && px_worker_execute_start_schema_version != query_tenant_begin_schema_version)))
         || ret == OB_TENANT_NOT_EXIST || ret == OB_SCHEMA_ERROR || ret == OB_SCHEMA_EAGAIN) {
       code = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
     }
@@ -147,7 +159,7 @@ void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &cod
       code = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
     }
 
-    LOG_TRACE("update_schema_error_code, exec_ctx is not null", K(tenant_id), K(local_schema_version),
+    LOG_TRACE("update_schema_error_code, exec_ctx is not null", K(ret), K(prev_code), K(code), K(tenant_id), K(px_worker_execute_start_schema_version), K(current_moment_schema_version),
               K(exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version()), K(lbt()));
   } else {
     LOG_TRACE("update_schema_error_code, exec_ctx is null", K(lbt()));
@@ -162,11 +174,9 @@ int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code, ObExecContext *exe
                            GETTID(),
                            GCTX.self_addr(),
                            "SQC ABORT QC");
-  ObInterruptCode orig_int_code = int_code;
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   ObInterruptibleTaskID interrupt_id = sqc.get_interrupt_id().query_interrupt_id_;
 
-  update_schema_error_code(exec_ctx, int_code.code_);
   if (OB_ISNULL(manager)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(manager->interrupt(sqc.get_qc_addr(),
@@ -174,7 +184,6 @@ int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code, ObExecContext *exe
                                         int_code))) {
     LOG_WARN("fail send interrupt signal to qc",
               "addr", sqc.get_qc_addr(),
-              K(orig_int_code),
               K(int_code),
               K(ret));
   } else {
@@ -183,7 +192,6 @@ int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code, ObExecContext *exe
               "qc_id", sqc.get_qc_id(),
               "interrupt_id", interrupt_id,
               "sqc_id", sqc.get_sqc_id(),
-              K(orig_int_code),
               K(int_code));
   }
   return ret;
@@ -198,11 +206,9 @@ int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code, ObExecContext *exec_
                            GETTID(),
                            GCTX.self_addr(),
                            "TASK ABORT QC");
-  ObInterruptCode orig_int_code = int_code;
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   ObInterruptibleTaskID interrupt_id = task.get_interrupt_id().query_interrupt_id_;
 
-  update_schema_error_code(exec_ctx, int_code.code_);
   if (OB_ISNULL(manager)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(manager->interrupt(task.get_qc_addr(),
@@ -211,7 +217,6 @@ int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code, ObExecContext *exec_
     LOG_WARN("fail send interrupt signal to qc",
               "addr", task.get_qc_addr(),
               K(int_code),
-              K(orig_int_code),
               K(ret));
   } else {
     LOG_TRACE("task notify qc to interrupt",
@@ -220,7 +225,6 @@ int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code, ObExecContext *exec_
               "task_id", task.get_task_id(),
               "task_co_id", task.get_task_co_id(),
               "interrupt_id", interrupt_id,
-              K(orig_int_code),
               K(int_code));
   }
   return ret;

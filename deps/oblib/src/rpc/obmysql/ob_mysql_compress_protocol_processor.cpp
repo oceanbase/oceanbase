@@ -14,10 +14,8 @@
 
 #include "rpc/obmysql/ob_mysql_compress_protocol_processor.h"
 #include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/ob_mysql_request_utils.h"
 #include "lib/compress/zlib/ob_zlib_compressor.h"
 #include "rpc/obmysql/obsm_struct.h"
-#include "rpc/obmysql/ob_packet_record.h"
 
 namespace oceanbase
 {

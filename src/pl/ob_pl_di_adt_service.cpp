@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX PL
 
 #include "ob_pl_di_adt_service.h"
-#include "ob_pl_type.h"
-#include "ob_pl_stmt.h"
 #include "ob_pl_exception_handling.h"
-#include "ob_pl_user_type.h"
-#include "ob_pl.h"
 
 #define CREATE_MEMBER_TYPE(name, offset, line, type) \
   if (OB_FAIL(ret)) {                                                                   \

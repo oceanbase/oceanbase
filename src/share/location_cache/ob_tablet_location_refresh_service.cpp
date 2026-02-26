@@ -11,11 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SHARE_LOCATION
-#include "share/location_cache/ob_tablet_location_refresh_service.h"
+#include "ob_tablet_location_refresh_service.h"
 #include "share/location_cache/ob_tablet_ls_service.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/transfer/ob_transfer_task_operator.h"
-#include "rootserver/ob_root_utils.h"
+#include "src/rootserver/ob_root_utils.h"
 
 namespace oceanbase
 {
@@ -83,7 +82,7 @@ int ObTabletLocationRefreshMgr::merge_inc_task_infos(
   if (inc_task_infos_to_merge.count() <= 0) {
     // do nothing
   } else {
-    std::sort(inc_task_infos_to_merge.begin(), inc_task_infos_to_merge.end(), ObTransferRefreshInfo::less_than);
+    lib::ob_sort(inc_task_infos_to_merge.begin(), inc_task_infos_to_merge.end(), ObTransferRefreshInfo::less_than);
     ObArray<ObTransferRefreshInfo> new_tasks;
     ObArray<ObTransferRefreshInfo> changed_tasks;
 
@@ -134,7 +133,7 @@ int ObTabletLocationRefreshMgr::merge_inc_task_infos(
       } else if (OB_FAIL(append(inc_task_infos_, new_tasks))) {
         LOG_WARN("fail to append array", KR(ret), K(new_count));
       } else {
-        std::sort(inc_task_infos_.begin(), inc_task_infos_.end(), ObTransferRefreshInfo::less_than);
+        lib::ob_sort(inc_task_infos_.begin(), inc_task_infos_.end(), ObTransferRefreshInfo::less_than);
         FLOG_INFO("[REFRESH_TABLET_LOCATION] add tasks",
                   KR(ret), K_(tenant_id), K(new_tasks.count()), K(new_tasks));
       }
@@ -228,7 +227,7 @@ void ObTabletLocationRefreshMgr::dump_statistic()
     const ObTransferRefreshInfo &transfer_task = inc_task_infos_.at(i);
     if (transfer_task.get_status().is_unknown_status()) {
       unknown_task_cnt++;
-    } else if (transfer_task.get_status().is_done_status()) {
+    } else if (transfer_task.get_status().is_doing_status()) {
       doing_task_cnt++;
     } else if (transfer_task.get_status().is_done_status()) {
       done_task_cnt++;

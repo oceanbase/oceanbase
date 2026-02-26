@@ -25,10 +25,13 @@ public:
   ObLogDistinct(ObLogPlan &plan)
       : ObLogicalOperator(plan),
         algo_(AGGREGATE_UNINITIALIZED),
+        step_(SINGLE),
         is_block_mode_(false),
         is_push_down_(false),
         total_ndv_(-1.0),
-        force_push_down_(false)
+        force_push_down_(false),
+        input_sorted_(false),
+        has_push_down_(false)
   { }
   virtual ~ObLogDistinct()
   { }
@@ -40,20 +43,25 @@ public:
   inline const ObIArray<ObRawExpr*>& get_distinct_exprs() const
   { return distinct_exprs_; }
   int set_distinct_exprs(const common::ObIArray<ObRawExpr*> &exprs)
-  { return append(distinct_exprs_, exprs); }
+  { return distinct_exprs_.assign(exprs); }
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual uint64_t hash(uint64_t seed) const override;
 
   inline void set_hash_type() { algo_ = HASH_AGGREGATE; }
+  inline void set_step_type(AggregatePathType step) { step_ = step; }
+  inline void set_step_final() { step_ = FINAL; }
+  inline void set_step_partial() { step_ = PARTIAL; }
   inline void set_merge_type() { algo_ = MERGE_AGGREGATE; }
   inline void set_algo_type(AggregateAlgo type) { algo_ = type; }
   inline AggregateAlgo get_algo() const { return algo_; }
+  inline AggregatePathType get_step() const { return step_; }
+  inline bool is_partial() const { return step_ == PARTIAL; }
   inline void set_block_mode(bool is_block_mode) { is_block_mode_ = is_block_mode; }
   inline bool get_block_mode() { return is_block_mode_; }
   virtual int est_cost() override;
   virtual int est_width() override;
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
-  int inner_est_cost(const int64_t parallel, double child_card, double child_ndv, double &op_cost);
+  int inner_est_cost(const int64_t parallel, double child_card, double &child_ndv, double &op_cost);
   virtual bool is_block_op() const override { return false; }
   virtual int compute_fd_item_set() override;
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
@@ -76,15 +84,24 @@ public:
   inline void set_is_partition_gi(bool v) { is_partition_gi_ = v; }
   virtual int get_card_without_filter(double &card) override;
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
-
+  virtual int compute_property() override;
+  virtual int compute_op_parallel_and_server_info() override;
+  void set_distinct_outline_info(bool has_push_down)
+  {
+    has_push_down_ = has_push_down;
+  }
 private:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;
   AggregateAlgo algo_;
+
+  AggregatePathType step_;
   bool is_block_mode_;
   bool is_push_down_;
   double total_ndv_;
   bool force_push_down_; // control by _aggregation_optimization_settings
   bool is_partition_gi_;
+  bool input_sorted_;
+  bool has_push_down_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogDistinct);
 };

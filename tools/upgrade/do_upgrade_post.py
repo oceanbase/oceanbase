@@ -5,6 +5,7 @@ from my_error import MyError
 import sys
 import mysql.connector
 from mysql.connector import errorcode
+from my_utils import set_session_timeout_for_upgrade
 import logging
 import json
 import config
@@ -26,14 +27,11 @@ class UpgradeParams:
 class PasswordMaskingFormatter(logging.Formatter):
   def format(self, record):
     s = super(PasswordMaskingFormatter, self).format(record)
-    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+    return re.sub(r'password="(?:[^"\\]|\\.)*"', 'password="******"', s)
 
 def config_logging_module(log_filenamme):
-  logging.basicConfig(level=logging.INFO,\
-      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
-      datefmt='%Y-%m-%d %H:%M:%S',\
-      filename=log_filenamme,\
-      filemode='w')
+  logger = logging.getLogger('')
+  logger.setLevel(logging.INFO)
   # 定义日志打印格式
   formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
   #######################################
@@ -69,6 +67,8 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
     cur = conn.cursor(buffered=True)
     try:
       query_cur = actions.QueryCursor(cur)
+      if timeout != 0:
+        set_session_timeout_for_upgrade(query_cur, timeout)
       actions.check_server_version_by_cluster(cur)
       conn.commit()
 
@@ -109,9 +109,9 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
         actions.refresh_commit_sql_list()
         logging.info('================succeed to run post check action ===============')
 
-    except Exception, e:
+    except Exception as e:
       logging.exception('run error')
-      raise e
+      raise
     finally:
       # 打印统计信息
       print_stats()
@@ -119,12 +119,12 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
       # actions.dump_rollback_sql_to_file(upgrade_params.rollback_sql_filename)
       cur.close()
       conn.close()
-  except mysql.connector.Error, e:
+  except mysql.connector.Error as e:
     logging.exception('connection error')
-    raise e
-  except Exception, e:
+    raise
+  except Exception as e:
     logging.exception('normal error')
-    raise e
+    raise
 
 def do_upgrade_by_argv(argv):
   upgrade_params = UpgradeParams()
@@ -158,14 +158,14 @@ def do_upgrade_by_argv(argv):
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
           host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
       do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
-    except mysql.connector.Error, e:
+    except mysql.connector.Error as e:
       logging.exception('mysql connctor error')
       logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-      raise e
-    except Exception, e:
+      raise
+    except Exception as e:
       logging.exception('normal error')
       logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-      raise e
+      raise
 
 
 

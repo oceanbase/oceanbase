@@ -13,37 +13,14 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_coord_op.h"
-#include "lib/random/ob_random.h"
 #include "share/ob_rpc_share.h"
-#include "share/schema/ob_part_mgr_util.h"
 #include "sql/ob_sql.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/dtl/ob_dtl_linked_buffer.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
-#include "sql/dtl/ob_dtl_channel_loop.h"
-#include "sql/dtl/ob_dtl_msg_type.h"
-#include "sql/dtl/ob_dtl.h"
-#include "sql/dtl/ob_op_metric.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_px_dtl_msg.h"
-#include "sql/engine/px/ob_px_dtl_proc.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/ob_px_interruption.h"
-#include "sql/engine/px/exchange/ob_px_transmit_op.h"
-#include "share/config/ob_server_config.h"
-#include "sql/engine/px/ob_px_sqc_async_proxy.h"
-#include "sql/engine/px/ob_px_basic_info.h"
-#include "sql/engine/px/datahub/components/ob_dh_barrier.h"
-#include "sql/engine/px/datahub/components/ob_dh_winbuf.h"
-#include "sql/engine/px/datahub/components/ob_dh_sample.h"
-#include "sql/engine/px/datahub/components/ob_dh_range_dist_wf.h"
 #include "sql/engine/join/ob_nested_loop_join_op.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
 #include "sql/dtl/ob_dtl_utils.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/engine/px/exchange/ob_px_ms_coord_op.h"
 #include "sql/engine/px/exchange/ob_px_ms_coord_vec_op.h"
-#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 
@@ -66,10 +43,14 @@ OB_DEF_SERIALIZE(ObPxCoordSpec)
               px_expected_worker_count_,
               qc_id_,
               batch_op_info_,
-              table_locations_,
-              sort_exprs_,
-              sort_collations_,
-              sort_cmp_funs_);
+              table_locations_);
+  ExprFixedArray sort_exprs;
+  ObSortCollations sort_collations;
+  ObSortFuncs sort_cmp_funs;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              sort_exprs,
+              sort_collations,
+              sort_cmp_funs);
   return ret;
 }
 
@@ -92,9 +73,12 @@ OB_DEF_DESERIALIZE(ObPxCoordSpec)
       }
     }
   }
-  OB_UNIS_DECODE(sort_exprs_);
-  OB_UNIS_DECODE(sort_collations_);
-  OB_UNIS_DECODE(sort_cmp_funs_);
+  ExprFixedArray sort_exprs;
+  ObSortCollations sort_collations;
+  ObSortFuncs sort_cmp_funs;
+  OB_UNIS_DECODE(sort_exprs);
+  OB_UNIS_DECODE(sort_collations);
+  OB_UNIS_DECODE(sort_cmp_funs);
   return ret;
 }
 
@@ -106,10 +90,14 @@ OB_DEF_SERIALIZE_SIZE(ObPxCoordSpec)
               px_expected_worker_count_,
               qc_id_,
               batch_op_info_,
-              table_locations_,
-              sort_exprs_,
-              sort_collations_,
-              sort_cmp_funs_);
+              table_locations_);
+  ExprFixedArray sort_exprs;
+  ObSortCollations sort_collations;
+  ObSortFuncs sort_cmp_funs;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              sort_exprs,
+              sort_collations,
+              sort_cmp_funs);
   return len;
 }
 
@@ -124,7 +112,6 @@ ObPxCoordOp::ObPxCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInpu
   row_allocator_(common::ObModIds::OB_SQL_PX),
   coord_info_(*this, allocator_, msg_loop_, interrupt_id_),
   root_dfo_(NULL),
-  root_receive_ch_provider_(),
   first_row_fetched_(false),
   first_row_sent_(false),
   qc_id_(common::OB_INVALID_ID),
@@ -133,11 +120,12 @@ ObPxCoordOp::ObPxCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInpu
   interrupt_id_(0),
   register_detectable_id_(false),
   detectable_id_(),
-  px_dop_(1),
   time_recorder_(0),
   batch_rescan_param_version_(0),
   server_alive_checker_(coord_info_.dfo_mgr_, exec_ctx.get_my_session()->get_process_query_time()),
-  last_px_batch_rescan_size_(0)
+  last_px_batch_rescan_size_(0),
+  query_sql_(),
+  use_serial_scheduler_(false)
 {}
 
 
@@ -154,7 +142,7 @@ int ObPxCoordOp::init_dfc(ObDfo &dfo, dtl::ObDtlChTotalInfo *ch_info)
       K(dfo.get_qc_id()), K(dfo.get_dfo_id()));
   } else {
     ObDtlDfoKey dfo_key;
-    dfo_key.set(GCTX.server_id_, dfo.get_px_sequence_id(), dfo.get_qc_id(), dfo.get_dfo_id());
+    dfo_key.set(GCTX.get_server_index(), dfo.get_px_sequence_id(), dfo.get_qc_id(), dfo.get_dfo_id());
     dfc_.set_timeout_ts(phy_plan_ctx->get_timeout_timestamp());
     dfc_.set_receive();
     dfc_.set_qc_coord();
@@ -226,6 +214,7 @@ int ObPxCoordOp::inner_rescan()
 int ObPxCoordOp::rescan()
 {
   int ret = OB_SUCCESS;
+  const uint64_t server_index = GCTX.get_server_index();
   if (NULL == coord_info_.batch_rescan_ctl_
       || batch_rescan_param_version_ != coord_info_.batch_rescan_ctl_->param_version_) {
     ObDfo *root_dfo = NULL;
@@ -262,12 +251,12 @@ int ObPxCoordOp::rescan()
       LOG_WARN("fail to register detectable_id", K(ret));
     } else if (OB_FAIL(init_dfo_mgr(
                 ObDfoInterruptIdGen(interrupt_id_,
-                                    (uint32_t)GCTX.server_id_,
+                                    (uint32_t)server_index,
                                     (uint32_t)MY_SPEC.qc_id_,
                                     px_sequence_id_),
                 coord_info_.dfo_mgr_))) {
       LOG_WARN("fail parse dfo tree",
-               "server_id", GCTX.server_id_,
+               "server_index", server_index,
                "qc_id", MY_SPEC.qc_id_,
                "execution_id", ctx_.get_my_session()->get_current_execution_id(),
                K(ret));
@@ -297,11 +286,22 @@ int ObPxCoordOp::rescan()
 int ObPxCoordOp::inner_open()
 {
   int ret = OB_SUCCESS;
+  const uint64_t server_index = GCTX.get_server_index();
   ObDfo *root_dfo = NULL;
-  if (OB_FAIL(ObPxReceiveOp::inner_open())) {
-  } else if (!is_valid_server_id(GCTX.server_id_)) {
+  ObString cur_query_str = ctx_.get_my_session()->get_current_query_string();
+  char *buf = reinterpret_cast<char*>(ctx_.get_allocator().alloc(cur_query_str.length() + 1));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for query string", K(cur_query_str.length()));
+  } else {
+    MEMCPY(buf, cur_query_str.ptr(), cur_query_str.length());
+    query_sql_.assign_ptr(buf, cur_query_str.length());
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObPxReceiveOp::inner_open())) {
+  } else if (OB_UNLIKELY(!is_valid_server_index(server_index))) {
     ret = OB_SERVER_IS_INIT;
-    LOG_WARN("Server is initializing", K(ret), K(GCTX.server_id_));
+    LOG_WARN("Server is initializing", K(ret), K(server_index));
   } else if (OB_FAIL(post_init_op_ctx())) {
     LOG_WARN("init operator context failed", K(ret));
   } else if (OB_FAIL(coord_info_.init())) {
@@ -314,12 +314,12 @@ int ObPxCoordOp::inner_open()
     LOG_WARN("fail to register detectable_id", K(ret));
   } else if (OB_FAIL(init_dfo_mgr(
               ObDfoInterruptIdGen(interrupt_id_,
-                                  (uint32_t)GCTX.server_id_,
+                                  (uint32_t)server_index,
                                   (uint32_t)(static_cast<const ObPxCoordSpec*>(&get_spec()))->qc_id_,
                                   px_sequence_id_),
                                   coord_info_.dfo_mgr_))) {
     LOG_WARN("fail parse dfo tree",
-             "server_id", GCTX.server_id_,
+             "server_index", server_index,
              "qc_id", (static_cast<const ObPxCoordSpec*>(&get_spec()))->qc_id_,
              "execution_id", ctx_.get_my_session()->get_current_execution_id(),
              K(ret));
@@ -346,13 +346,31 @@ int ObPxCoordOp::setup_loop_proc()
   return OB_ERR_UNEXPECTED;
 }
 
+int64_t ObPxCoordOp::get_adaptive_px_dop(int64_t dop) const
+{
+  int ret = OB_SUCCESS;
+  int64_t px_dop = dop;
+  AutoDopHashMap &auto_dop_map = ctx_.get_auto_dop_map();
+  if (!auto_dop_map.created()) {
+    // do nothing
+  } else if (OB_FAIL(auto_dop_map.get_refactored(get_spec().get_id(), px_dop))) {
+    LOG_WARN("failed to get refactored", K(ret));
+  } else {
+    px_dop = px_dop >= 1 ? px_dop : dop;
+  }
+  LOG_TRACE("adaptive px dop", K(get_spec().get_id()), K(px_dop));
+  return px_dop;
+}
+
 int ObPxCoordOp::post_init_op_ctx()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_obrpc_proxy(coord_info_.rpc_proxy_))) {
     LOG_WARN("fail init rpc proxy", K(ret));
   } else {
-    px_dop_ = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan()->get_px_dop();
+    int64_t plan_dop = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan()->get_px_dop();
+    int64_t adaptive_dop = get_adaptive_px_dop(plan_dop);
+    use_serial_scheduler_ = ((1 == plan_dop && 1 == adaptive_dop) ? true : false);
     set_pruning_table_locations(&(static_cast<const ObPxCoordSpec&>(get_spec()).table_locations_));
   }
 
@@ -545,7 +563,7 @@ int ObPxCoordOp::inner_close()
   }
   ctx_.del_extra_check(server_alive_checker_);
   clean_dfos_dtl_interm_result();
-  LOG_TRACE("byebye. exit QC Coord");
+  LOG_TRACE("byebye. exit QC Coord", K(spec_.id_), K(enable_px_batch_rescan()));
   return ret;
 }
 
@@ -604,26 +622,22 @@ int ObPxCoordOp::destroy_all_channel()
   /* even if one channel unlink faild, we still continue destroy other channel */
   ARRAY_FOREACH_X(dfos, idx, cnt, true) {
     const ObDfo *edge = dfos.at(idx);
-    ObSEArray<const ObPxSqcMeta *, 16> sqcs;
-    if (OB_FAIL(edge->get_sqcs(sqcs))) {
-      LOG_WARN("fail to get sqcs", K(ret));
-    } else {
-      /* one channel unlink faild still continue destroy other channel */
-      ARRAY_FOREACH_X(sqcs, sqc_idx, sqc_cnt, true) {
-        const ObDtlChannelInfo &qc_ci = sqcs.at(sqc_idx)->get_qc_channel_info_const();
-        const ObDtlChannelInfo &sqc_ci = sqcs.at(sqc_idx)->get_sqc_channel_info_const();
-        if (OB_FAIL(ObDtlChannelGroup::unlink_channel(qc_ci))) {
-          LOG_WARN("fail unlink channel", K(qc_ci), K(ret));
-        }
-        /*
-         * actually, the qc and sqc can see the channel id of sqc.
-         * sqc channel's owner is SQC, not QC.
-         * if we release there, all these channel will be release twice.
-         * So, sqc channel will be release by sqc, not qc.
-         *
-         * */
-        UNUSED(sqc_ci);
+    const ObIArray<ObPxSqcMeta> &sqcs = edge->get_sqcs();
+    /* one channel unlink faild still continue destroy other channel */
+    ARRAY_FOREACH_X(sqcs, sqc_idx, sqc_cnt, true) {
+      const ObDtlChannelInfo &qc_ci = sqcs.at(sqc_idx).get_qc_channel_info_const();
+      const ObDtlChannelInfo &sqc_ci = sqcs.at(sqc_idx).get_sqc_channel_info_const();
+      if (OB_FAIL(ObDtlChannelGroup::unlink_channel(qc_ci))) {
+        LOG_WARN("fail unlink channel", K(qc_ci), K(ret));
       }
+      /*
+        * actually, the qc and sqc can see the channel id of sqc.
+        * sqc channel's owner is SQC, not QC.
+        * if we release there, all these channel will be release twice.
+        * So, sqc channel will be release by sqc, not qc.
+        *
+        * */
+      UNUSED(sqc_ci);
     }
   }
   /*
@@ -682,6 +696,9 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     dtl::ObDtlPacketEmptyProc<ObInitChannelPieceMsg> init_channel_piece_msg_proc;
     dtl::ObDtlPacketEmptyProc<ObReportingWFPieceMsg> reporting_wf_piece_msg_proc;
     dtl::ObDtlPacketEmptyProc<ObOptStatsGatherPieceMsg> opt_stats_gather_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<SPWinFuncPXPieceMsg> sp_winfunc_px_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<RDWinFuncPXPieceMsg> rd_winfunc_px_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<ObJoinFilterCountRowPieceMsg> join_filter_count_row_piece_msg_proc;
 
     // 这个注册会替换掉旧的proc.
     (void)msg_loop_.clear_all_proc();
@@ -697,7 +714,10 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
       .register_processor(rd_wf_piece_msg_proc)
       .register_processor(init_channel_piece_msg_proc)
       .register_processor(reporting_wf_piece_msg_proc)
-      .register_processor(opt_stats_gather_piece_msg_proc);
+      .register_processor(opt_stats_gather_piece_msg_proc)
+      .register_processor(sp_winfunc_px_piece_msg_proc)
+      .register_processor(rd_winfunc_px_piece_msg_proc)
+      .register_processor(join_filter_count_row_piece_msg_proc);
     loop.ignore_interrupt();
 
     ObPxControlChannelProc control_channels;
@@ -734,7 +754,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(loop.process_one_if(&control_channels, nth_channel))) {
-        if (OB_EAGAIN == ret) {
+        if (OB_DTL_WAIT_EAGAIN == ret) {
           LOG_DEBUG("no message, waiting sqc report", K(ret));
           ret = OB_SUCCESS;
         } else if (OB_ITER_END != ret) {
@@ -758,6 +778,9 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
           case ObDtlMsgType::DH_INIT_CHANNEL_PIECE_MSG:
           case ObDtlMsgType::DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG:
           case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
+          case ObDtlMsgType::DH_SP_WINFUNC_PX_PIECE_MSG:
+          case ObDtlMsgType::DH_RD_WINFUNC_PX_PIECE_MSG:
+          case ObDtlMsgType::DH_JOIN_FILTER_COUNT_ROW_PIECE_MSG:
             break;
           default:
             ret = OB_ERR_UNEXPECTED;
@@ -777,13 +800,12 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     ObSQLSessionInfo *session = ctx_.get_my_session();
     session->get_trans_result().set_incomplete();
     LOG_WARN("collect trans_result fail", K(ret),
-             "session_id", session->get_sessid(),
+             "session_id", session->get_server_sid(),
              "trans_result", session->get_trans_result());
 
   }
   return ret;
 }
-
 int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
                                int64_t &times_offset,
                                bool &all_dfo_terminate,
@@ -792,44 +814,45 @@ int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
   int ret = OB_SUCCESS;
   all_dfo_terminate = true;
   for (int64_t i = 0; i < active_dfos.count() && all_dfo_terminate && OB_SUCC(ret); ++i) {
-    ObArray<ObPxSqcMeta *> sqcs;
-    if (OB_FAIL(active_dfos.at(i)->get_sqcs(sqcs))) {
-      LOG_WARN("fail get qc-sqc channel for QC", K(ret));
-    } else {
-      ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-        ObPxSqcMeta *sqc = sqcs.at(idx);
-        if (OB_ISNULL(sqc)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL unexpected sqc", K(ret));
-        } else if (sqc->need_report()) {
-          LOG_DEBUG("wait for sqc", K(sqc));
-          int64_t cur_timestamp = ObTimeUtility::current_time();
-          // > 1s, increase gradually
-          // In order to get the dfo to propose as soon as possible and
-          // In order to avoid the interruption that is not received,
-          // So the interruption needs to be sent repeatedly
-          if (cur_timestamp - last_timestamp > (1000000 + min(times_offset, 10) * 1000000)) {
-            last_timestamp = cur_timestamp;
-            times_offset++;
-            ObInterruptUtil::broadcast_dfo(active_dfos.at(i), OB_GOT_SIGNAL_ABORTING);
-          }
-          all_dfo_terminate = false;
-          break;
-        } else if (sqc->is_server_not_alive() || sqc->is_interrupt_by_dm()) {
-          if (sqc->is_interrupt_by_dm()) {
-            ObRpcResultCode err_msg;
-            ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_, OB_RPC_CONNECT_ERROR, err_msg);
-          }
-          sqc->set_server_not_alive(false);
-          sqc->set_interrupt_by_dm(false);
-          const DASTabletLocIArray &access_locations = sqc->get_access_table_locations();
-          for (int64_t i = 0; i < access_locations.count() && OB_SUCC(ret); i++) {
-            if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(access_locations.at(i)->ls_id_))) {
-              LOG_WARN("add touched ls failed", K(ret));
-            }
-          }
-          LOG_WARN("server not alive", K(access_locations), K(sqc->get_access_table_location_keys()));
+    ObIArray<ObPxSqcMeta> &sqcs = active_dfos.at(i)->get_sqcs();
+    ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
+      ObPxSqcMeta &sqc = sqcs.at(idx);
+      if (sqc.need_report()) {
+        LOG_DEBUG("wait for sqc", K(sqc));
+        int64_t cur_timestamp = ObTimeUtility::current_time();
+        // > 1s, increase gradually
+        // In order to get the dfo to propose as soon as possible and
+        // In order to avoid the interruption that is not received,
+        // So the interruption needs to be sent repeatedly
+        if (cur_timestamp - last_timestamp > (1000000 + min(times_offset, 10) * 1000000)) {
+          last_timestamp = cur_timestamp;
+          times_offset++;
+          ObInterruptUtil::broadcast_dfo(active_dfos.at(i), OB_GOT_SIGNAL_ABORTING);
         }
+        all_dfo_terminate = false;
+        break;
+      } else if (sqc.is_server_not_alive() || sqc.is_interrupt_by_dm()) {
+        if (sqc.is_interrupt_by_dm()) {
+          ObRpcResultCode err_msg;
+          ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_,
+              OB_RPC_CONNECT_ERROR, err_msg, sqc.get_exec_addr());
+        }
+        sqc.set_server_not_alive(false);
+        sqc.set_interrupt_by_dm(false);
+        const DASTabletLocIArray &access_locations = sqc.get_access_table_locations();
+        for (int64_t i = 0; i < access_locations.count() && OB_SUCC(ret); i++) {
+          if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(access_locations.at(i)->ls_id_))) {
+            LOG_WARN("add touched ls failed", K(ret));
+          }
+        }
+        const DASTabletLocIArray &extra_access_locations = sqc.get_extra_access_table_locations();
+        for (int64_t i = 0; i < extra_access_locations.count() && OB_SUCC(ret); i++) {
+          if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(extra_access_locations.at(i)->ls_id_))) {
+            LOG_WARN("add touched ls failed", K(ret));
+          }
+        }
+        LOG_WARN("server not alive", K(sqc), K(access_locations),
+                  K(sqc.get_access_table_location_keys()), K(extra_access_locations));
       }
     }
   }
@@ -840,7 +863,7 @@ int ObPxCoordOp::register_interrupt()
 {
   int ret = OB_SUCCESS;
   px_sequence_id_ = GCTX.sql_engine_->get_px_sequence_id();
-  ObInterruptUtil::generate_query_interrupt_id((uint32_t)GCTX.server_id_,
+  ObInterruptUtil::generate_query_interrupt_id((uint32_t)GCTX.get_server_index(),
       px_sequence_id_,
       interrupt_id_);
   if (OB_FAIL(SET_INTERRUPTABLE(interrupt_id_))) {
@@ -874,6 +897,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
   } else if (OB_FAIL(ObPxReceiveOp::link_ch_sets(task_ch_set_, task_channels_, &dfc_))) {
     LOG_WARN("fail link px coord data channels with its only child dfo", K(ret));
   } else {
+    uint16_t min_cluster_version = ctx.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version();
     if (OB_FAIL(get_listenner().on_root_data_channel_setup())) {
       LOG_WARN("fail notify listener", K(ret));
     }
@@ -899,6 +923,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
         ch->set_operator_owner();
         ch->set_thread_id(thread_id);
         ch->set_enable_channel_sync(true);
+        ch->set_send_by_tenant(min_cluster_version >= CLUSTER_VERSION_4_3_5_0);
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());
@@ -923,7 +948,7 @@ int ObPxCoordOp::notify_peers_mock_eof(ObDfo *dfo,
     for (int i = 0; i < task_channels_.count() && OB_SUCC(ret); ++i) {
       if (task_channels_.at(i)->get_peer() == addr) {
         OZ(reinterpret_cast<ObDtlBasicChannel *>(task_channels_.at(i))->
-           mock_eof_buffer(timeout_ts));
+           mock_eof_buffer(timeout_ts, dfo->get_dfo_id()));
       }
     }
   }
@@ -945,6 +970,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
   } else if (OB_FAIL(ObPxReceiveOp::link_ch_sets(task_ch_set_, task_channels_, &dfc_))) {
     LOG_WARN("fail link px coord data channels with its only child dfo", K(ret));
   } else {
+    uint64_t min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version();
     if (OB_FAIL(get_listenner().on_root_data_channel_setup())) {
       LOG_WARN("fail notify listener", K(ret));
     }
@@ -970,6 +996,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
         ch->set_audit(enable_audit);
         ch->set_is_px_channel(true);
         ch->set_enable_channel_sync(true);
+        ch->set_send_by_tenant(min_cluster_version >= CLUSTER_VERSION_4_3_5_0);
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());
@@ -1047,7 +1074,7 @@ int ObPxCoordOp::erase_dtl_interm_result()
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
+  int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
   if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
     LOG_WARN("ObPxCoordOp not erase_dtl_interm_result by design", K(ret));
     return OB_SUCCESS;
@@ -1065,7 +1092,7 @@ int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
         for (int j = 0; j < last_px_batch_rescan_size_; ++j) {
           key.batch_id_ = j;
           if (OB_FAIL(MTL(ObDTLIntermResultManager*)->erase_interm_result_info(key))) {
-            LOG_TRACE("fail to release recieve internal result", K(ret));
+            LOG_TRACE("fail to release receive internal result", K(ret));
           }
         }
       }

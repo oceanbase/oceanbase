@@ -45,8 +45,8 @@ public:
   // As long as the buff of buf_ is enough, this interface can be continuously expanded, or a new set interface can be added
   void set_info(int64_t from_tid, const common::ObAddr &from_svr_addr, const char *extra_msg)
   {
-    char svr_buf[common::MAX_IP_ADDR_LENGTH];
-    (void)from_svr_addr.to_string(svr_buf, common::MAX_IP_ADDR_LENGTH);
+    char svr_buf[common::MAX_IP_PORT_LENGTH];
+    (void)from_svr_addr.to_string(svr_buf, common::MAX_IP_PORT_LENGTH);
     (void) common::databuff_printf(
         buf1_, BUF1_SIZE, pos1_,
         "tid:%ld,from:%s,%s",

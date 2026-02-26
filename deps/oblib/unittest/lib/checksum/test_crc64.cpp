@@ -10,11 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <pthread.h>
 #include <gtest/gtest.h>
-#include <stdio.h>
-#include <time.h>
-#include <sys/time.h>
 
 #include "lib/checksum/ob_crc64.h"
 

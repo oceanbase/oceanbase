@@ -14,8 +14,6 @@
 
 #include <gtest/gtest.h>
 #include <fstream>
-#include "lib/timezone/ob_time_convert.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obmysql/ob_mysql_util.h"
 
 using namespace oceanbase::common;

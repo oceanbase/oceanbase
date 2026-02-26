@@ -1,3 +1,6 @@
+// owner: yunlong.cb
+// owner group: clog
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,14 +13,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdio>
 #include <gtest/gtest.h>
-#include <signal.h>
 #define private public
-#include "share/scn.h"
 #include "env/ob_simple_cluster_test_base.h"
 #include "logservice/ob_log_service.h"
-#include "logservice/leader_coordinator/ob_failure_detector.h"
 #undef private
 
 const std::string TEST_NAME = "rto_func";
@@ -49,7 +48,13 @@ int ObIOFaultDetector::get_device_health_status(ObDeviceHealthStatus &dhs,
 using namespace common;
 namespace logservice
 {
-int ObLogService::get_io_start_time(int64_t &last_working_time)
+int ObLogService::get_io_statistic_info(int64_t &last_working_time,
+                                        int64_t &pending_write_size,
+                                        int64_t &pending_write_count,
+                                        int64_t &pending_write_rt,
+                                        int64_t &accum_write_size,
+                                        int64_t &accum_write_count,
+                                        int64_t &accum_write_rt)
 {
   last_working_time = mock_clog_disk_hang ?
                       mock_fatal_err_ts - CLOG_HANG_TIME_THRESHOLD_US

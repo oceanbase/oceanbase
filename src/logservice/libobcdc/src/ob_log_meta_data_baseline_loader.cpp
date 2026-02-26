@@ -8,12 +8,12 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX DATA_DICT
 
 #include "ob_log_meta_data_baseline_loader.h"
 
-#define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[LOG_META_DATA] [LOADER] " fmt, ##args)
-#define STAT(level, fmt, args...) OBLOG_LOG(level, "[LOG_META_DATA] [LOADER] " fmt, ##args)
+#define _STAT(level, fmt, args...) _DATA_DICT_LOG(level, "[LOG_META_DATA] [LOADER] " fmt, ##args)
+#define STAT(level, fmt, args...) DATA_DICT_LOG(level, "[LOG_META_DATA] [LOADER] " fmt, ##args)
 #define _ISTAT(fmt, args...) _STAT(INFO, fmt, ##args)
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
 #define _DSTAT(fmt, args...) _STAT(DEBUG, fmt, ##args)
@@ -150,6 +150,9 @@ int ObLogMetaDataBaselineLoader::read(
         if (OB_ITER_END != ret) {
           LOG_ERROR("data_dict_iterator next_dict_heaer failed", KR(ret), K(tenant_id));
         }
+      } else if (OB_UNLIKELY(TCONF.enable_output_virtual_generated_column) && 4 > meta_header.get_version()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_ERROR("DATA_DICT BASELINE DATA IS NOT COMPAT WITH OBCDC, SYNC VIRTUAL GENERATED COLUMN IS NOT SUPPORTED FOR OB VERSION BEFORE 4.2.5 OR IN [4.3.0, 4.3.4)", KR(ret));
       } else {
         const datadict::ObDictMetaType &meta_type = meta_header.get_dict_meta_type();
 

@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "sql/resolver/ddl/ob_create_tenant_resolver.h"
-#include "sql/resolver/ddl/ob_create_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_tenant_resolver.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/cmd/ob_variable_set_resolver.h"
 
 namespace oceanbase
@@ -174,9 +172,11 @@ int ObCreateTenantResolver::resolve(const ParseNode &parse_tree)
       }
 
       if (OB_SUCC(ret)) {
-        if (CHARSET_UTF16 == charset_type) {
+        ObCollationType col_type = ObCharset::get_default_collation(charset_type);
+        if (!ObCharset::is_valid_collation(col_type) ||
+          ObCharset::get_charset(ObCharset::get_default_collation(charset_type))->mbminlen > 1) {
           ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use utf16 as database charset");
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use utf16 and utf16le as database charset");
         }
       }
 

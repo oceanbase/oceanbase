@@ -12,9 +12,6 @@
 
 #include <thread>
 #include "lib/hash/ob_link_hashmap.h"
-#include "lib/hash/ob_hashutils.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/utility/ob_print_utils.h"
 
 #include "gtest/gtest.h"
 

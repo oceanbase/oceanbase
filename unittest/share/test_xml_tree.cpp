@@ -15,14 +15,9 @@
 
 #define private public
 #include "test_xml_utils.h"
-#include "lib/xml/ob_xml_tree.h"
-#include "lib/timezone/ob_timezone_info.h"
 
-#include "lib/xml/ob_xml_parser.h"
-#include "lib/xml/ob_xml_util.h"
 #undef private
 
-#include <sys/time.h>
 using namespace std;
 
 namespace oceanbase {

@@ -63,7 +63,8 @@ public:
   }
   static bool in_ddl_retry_black_list(const int ret_code)
   {
-    return common::OB_SERVER_OUTOF_DISK_SPACE == ret_code || common::OB_DISK_ERROR == ret_code || OB_NOT_SUPPORTED == ret_code;
+    return common::OB_SERVER_OUTOF_DISK_SPACE == ret_code || common::OB_DISK_ERROR == ret_code || OB_NOT_SUPPORTED == ret_code
+          || common::OB_ERR_DATA_TOO_LONG == ret_code || common::OB_ERR_TOO_LONG_KEY_LENGTH == ret_code;
   }
   static bool is_ddl_force_no_more_process(const int ret_code)
   {
@@ -81,12 +82,13 @@ private:
   }
   static bool is_retry(const int ret_code) {
     return common::OB_EAGAIN == ret_code || common::OB_DDL_SCHEMA_VERSION_NOT_MATCH == ret_code || common::OB_TASK_EXPIRED == ret_code || common::OB_NEED_RETRY == ret_code
-        || common::OB_ERR_SHARED_LOCK_CONFLICT == ret_code || common::OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code || common::OB_SCHEMA_EAGAIN == ret_code
+        || common::OB_ERR_SHARED_LOCK_CONFLICT == ret_code || common::OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code || common::OB_SCHEMA_EAGAIN == ret_code || OB_DATA_NOT_UPTODATE == ret_code
         || common::OB_ERR_REMOTE_SCHEMA_NOT_FULL == ret_code || common::OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret_code || common::OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret_code
         || common::OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT == ret_code || common::OB_TRANS_STMT_NEED_RETRY == ret_code || common::OB_SCHEMA_NOT_UPTODATE == ret_code
         || common::OB_TRANSACTION_SET_VIOLATION == ret_code || common::OB_TRY_LOCK_ROW_CONFLICT == ret_code || common::OB_TRANS_CANNOT_SERIALIZE == ret_code || common::OB_GTI_NOT_READY == ret_code
         || common::OB_TRANS_WEAK_READ_VERSION_NOT_READY == ret_code || common::OB_REPLICA_NOT_READABLE == ret_code || common::OB_ERR_INSUFFICIENT_PX_WORKER == ret_code
-        || common::OB_EXCEED_MEM_LIMIT == ret_code || common::OB_INACTIVE_SQL_CLIENT == ret_code || common::OB_INACTIVE_RPC_PROXY == ret_code || common::OB_LS_OFFLINE == ret_code;
+        || common::OB_EXCEED_MEM_LIMIT == ret_code || common::OB_INACTIVE_SQL_CLIENT == ret_code || common::OB_INACTIVE_RPC_PROXY == ret_code || common::OB_LS_OFFLINE == ret_code
+        || common::OB_DAG_TASK_IS_SUSPENDED == ret_code;
   }
   static bool is_not_exist(const int ret_code) {
     return common::OB_LS_NOT_EXIST == ret_code || common::OB_TABLET_NOT_EXIST == ret_code || common::OB_TENANT_NOT_EXIST == ret_code
@@ -184,14 +186,18 @@ class ObDDLReplicaBuilder
 public:
   ObDDLReplicaBuilder();
   ~ObDDLReplicaBuilder();
+  int init();
   int start();
   void stop();
+  void mtl_thread_stop();
+  void mtl_thread_wait();
   void destroy();
   int push_task(ObAsyncTask &task);
 
 private:
   bool is_thread_started_;
   bool is_stopped_;
+  int tg_id_;
 };
 
 }  // end namespace share

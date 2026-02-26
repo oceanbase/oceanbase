@@ -11,18 +11,7 @@
  */
 
 #include "ob_all_virtual_mds_event_history.h"
-#include "lib/container/ob_tuple.h"
-#include "lib/function/ob_function.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_print_utils.h"
-#include "share/ob_ls_id.h"
-#include "storage/multi_data_source/runtime_utility/common_define.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/ls/ob_ls.h"
-#include "ob_mds_event_buffer.h"
 
 namespace oceanbase
 {
@@ -250,7 +239,7 @@ int ObAllVirtualMdsEventHistory::convert_event_info_to_row_(const MdsEventKey &k
       }
       case OB_APP_MIN_COLUMN_ID + 7: {// trace
         int64_t pos = 0;
-        databuff_printf(buffer, buffer_size, pos, "%s", to_cstring(event.trace_id_));
+        databuff_printf(buffer, buffer_size, pos, event.trace_id_);
         buffer += pos;
         buffer_size -= pos;
         cur_row_.cells_[i].set_string(ObLongTextType, ObString(pos, buffer - pos));
@@ -270,7 +259,7 @@ int ObAllVirtualMdsEventHistory::convert_event_info_to_row_(const MdsEventKey &k
       }
       case OB_APP_MIN_COLUMN_ID + 10: {// info
         int64_t pos = 0;
-        databuff_printf(buffer, buffer_size, pos, "%s", to_cstring(event.info_str_));
+        databuff_printf(buffer, buffer_size, pos, event.info_str_);
         buffer += pos;
         buffer_size -= pos;
         cur_row_.cells_[i].set_string(ObLongTextType, ObString(pos, buffer - pos));
@@ -282,7 +271,7 @@ int ObAllVirtualMdsEventHistory::convert_event_info_to_row_(const MdsEventKey &k
       }
       case OB_APP_MIN_COLUMN_ID + 12: {// user_key
         int64_t pos = 0;
-        databuff_printf(buffer, buffer_size, pos, "%s", to_cstring(event.key_str_));
+        databuff_printf(buffer, buffer_size, pos, event.key_str_);
         buffer += pos;
         buffer_size -= pos;
         cur_row_.cells_[i].set_string(ObLongTextType, ObString(pos, buffer - pos));
@@ -301,7 +290,7 @@ int ObAllVirtualMdsEventHistory::convert_event_info_to_row_(const MdsEventKey &k
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 15: {// seq_no
-        cur_row_.cells_[i].set_int(event.seq_no_);
+        cur_row_.cells_[i].set_int(event.seq_no_.get_seq());
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 16: {// redo_scn

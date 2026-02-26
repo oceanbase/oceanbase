@@ -11,12 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 #define private public
 #define protected public
 #include "src/storage/tx/ob_trans_part_ctx.h"
-#include "src/storage/tx/ob_tx_msg.h"
 
 namespace oceanbase
 {

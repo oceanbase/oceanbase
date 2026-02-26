@@ -29,7 +29,8 @@ OB_SERIALIZE_MEMBER(ObTableLoadDDLParam,
                     schema_version_,
                     snapshot_version_,
                     data_version_,
-                    cluster_version_);
+                    cluster_version_,
+                    is_no_logging_);
 
 } // namespace observer
 } // namespace oceanbase

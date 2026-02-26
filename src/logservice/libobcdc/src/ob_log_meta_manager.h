@@ -183,7 +183,8 @@ public:
       TableSchemaInfo *&tb_schema_info);
 public:
   int init(ObObj2strHelper *obj2str_helper,
-      const bool enable_output_hidden_primary_key);
+      const bool enable_output_hidden_primary_key,
+      const bool enable_output_virtual_generated_column);
   void destroy();
 
 private:
@@ -452,7 +453,8 @@ private:
       const bool is_usr_column,
       const int16_t usr_column_idx,
       TableSchemaInfo &tb_schema_info,
-      const ObTimeZoneInfoWrap *tz_info_wrap);
+      const ObTimeZoneInfoWrap *tz_info_wrap,
+      const bool is_last_column);
   int set_table_schema_(
       const int64_t version,
       const uint64_t tenant_id,
@@ -468,6 +470,7 @@ private:
 private:
   bool                  inited_;
   bool                  enable_output_hidden_primary_key_;
+  bool                  enable_output_virtual_generated_column_;
   ObObj2strHelper       *obj2str_helper_;
   ITableMeta            *ddl_table_meta_;
   DBMetaMap             db_meta_map_;

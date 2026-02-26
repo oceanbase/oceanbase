@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <thread>
 #define USING_LOG_PREFIX STORAGE
 
 #define USING_LOG_PREFIX STORAGE
@@ -20,10 +18,6 @@
 #define protected public
 
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/compaction/ob_partition_merge_policy.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
@@ -79,7 +73,12 @@ void TestParallelMinorDag::SetUp()
   ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, tenant_id_);
   ASSERT_EQ(OB_SUCCESS, t3m->init());
 
+  ObTimerService *timer_service = OB_NEW(ObTimerService, ObModIds::TEST, tenant_id_);
+  ASSERT_NE(nullptr, timer_service);
+  ASSERT_EQ(OB_SUCCESS, timer_service->start());
+
   tenant_base_.set(t3m);
+  tenant_base_.set(timer_service);
   ObTenantEnv::set_tenant(&tenant_base_);
   ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
 
@@ -98,6 +97,11 @@ void TestParallelMinorDag::TearDown()
 
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
   t3m->destroy();
+  ObTimerService *timer_service = MTL(ObTimerService *);
+  ASSERT_NE(nullptr, timer_service);
+  timer_service->stop();
+  timer_service->wait();
+  timer_service->destroy();
   ObTenantEnv::set_tenant(nullptr);
 }
 

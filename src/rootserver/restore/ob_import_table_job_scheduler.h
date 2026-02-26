@@ -73,6 +73,8 @@ private:
   common::ObMySQLProxy                       *sql_proxy_;
   share::ObImportTableJobPersistHelper       job_helper_;
   share::ObImportTableTaskPersistHelper      task_helper_;
+  const static int64_t DEFAULT_RECOVER_TABLE_CONCURRENCY = 1;
+  const static int64_t MAX_RECOVER_TABLE_CONCURRENCY = 16;
   DISALLOW_COPY_AND_ASSIGN(ObImportTableJobScheduler);
 };
 
@@ -101,6 +103,8 @@ private:
   int gen_import_ddl_task_();
   int wait_import_ddl_task_finish_(bool &is_finish);
   void wakeup_();
+
+  const static int64_t DEFAULT_RECOVER_TABLE_DOP = 1;
 protected:
   bool is_inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

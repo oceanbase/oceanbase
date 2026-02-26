@@ -89,10 +89,19 @@ void ObCDCAutoConfigMgr::init_queue_length_(const ObLogConfig &config)
   REFRESH_NUM_FIELD_DIRECT(formatter_queue_length, br_queue_length_);
   REFRESH_NUM_FIELD_DIRECT(dml_parser_queue_length, br_queue_length_);
   REFRESH_NUM_FIELD_DIRECT(lob_data_merger_queue_length, br_queue_length_);
+  const int64_t mem_warn_threshold = memory_limit_ * config.memory_usage_warn_threshold.get() / 100;
+  const double part_trans_task_max_ratio = 0.25;
+
+  // auto_sequencer_queue_length = mem_warn_threshold
+  // * 0.25(expect PartTransTask and TransCtx takes at most 1/4 of memory)
+  // / 2(a trans contains at least a PartTransTask and a TransCtx)
+  // / sizeof(PartTransTask)(assume sizof PartTransTask and TransCtx is 8K)
+  // / sequencer_thread_num
+  const int64_t auto_sequencer_queue_length = mem_warn_threshold * part_trans_task_max_ratio / 2 / (8 * _K_) / config.sequencer_thread_num.get();
 
   const int64_t msg_sorter_queue_length = br_queue_length;
   REFRESH_NUM_FIELD_WITH_CONFIG(msg_sorter_task_count_upper_limit, msg_sorter_queue_length, config.msg_sorter_task_count_upper_limit.get());
-  REFRESH_NUM_FIELD_WITH_CONFIG(sequencer_queue_length, MAX_QUEUE_LENGTH / 10, config.sequencer_queue_length.get());
+  REFRESH_NUM_FIELD_WITH_CONFIG(sequencer_queue_length, auto_sequencer_queue_length, config.sequencer_queue_length.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(storager_queue_length, DEFAULT_STORAGE_QUEUE_LENGTH, config.storager_queue_length.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(reader_queue_length, DEFAULT_STORAGE_QUEUE_LENGTH, config.reader_queue_length.get());
 }

@@ -85,9 +85,12 @@ int DBInitializer::init_sql_proxy()
   sql_conn_pool_.set_db_param(db_.user_.c_str(), db_.pass_.c_str(), db_.db_.c_str());
   sql_conn_pool_.set_check_read_consistency(false);
   common::ObAddr db_addr;
+  char db_addr_str[OB_IP_PORT_STR_BUFF] = {'\0'};
+  int64_t pos = 0;
+  (void)databuff_printf(db_addr_str, sizeof(db_addr_str), pos, db_addr);
   db_addr.set_ip_addr(db_.host_.c_str(), db_.port_);
   _OB_LOG(INFO, "init sql connect pool, server %s, database name %s",
-          common::to_cstring(db_addr), db_.db_.c_str());
+          db_addr_str, db_.db_.c_str());
 
   ObConnPoolConfigParam param;
   //param.sqlclient_wait_timeout_ = 10; // 10s

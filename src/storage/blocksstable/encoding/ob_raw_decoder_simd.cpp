@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "ob_encoding_query_util.h"
 #include "ob_raw_decoder.h"
 
 namespace oceanbase {
@@ -173,7 +172,7 @@ struct RawFixFilterAVX512ArrayInit
 
 bool init_raw_fix_simd_filter_funcs()
 {
-  return ObNDArrayIniter<RawFixFilterAVX512ArrayInit, 2, 4, 6>::apply();
+  return ObNDArrayIniter<RawFixFilterAVX512ArrayInit, 2, 2, 6>::apply();
 }
 
 } // end of namespace blocksstable

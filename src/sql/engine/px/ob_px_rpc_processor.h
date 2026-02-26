@@ -30,21 +30,18 @@ class ObInitSqcP
 {
 public:
   ObInitSqcP(const observer::ObGlobalContext &gctx)
-    : exec_ctx_(CURRENT_CONTEXT->get_arena_allocator(), gctx.session_mgr_),
-      phy_plan_(),
-      unregister_interrupt_(false)
+    : unregister_interrupt_(false)
   {}
   virtual ~ObInitSqcP() = default;
   virtual int init() final;
   virtual void destroy() final;
   virtual int process() final;
   virtual int after_process(int error_code) final;
+  virtual int deserialize() final;
 private:
   int pre_setup_op_input(ObPxSqcHandler &sqc_handler);
   int startup_normal_sqc(ObPxSqcHandler &sqc_handler);
 private:
-  sql::ObDesExecContext exec_ctx_;
-  sql::ObPhysicalPlan phy_plan_;
   bool unregister_interrupt_;
 };
 
@@ -82,6 +79,7 @@ public:
   virtual int init() final;
   virtual void destroy() final;
   virtual int process() final;
+  virtual int deserialize() final;
 private:
   int startup_normal_sqc(ObPxSqcHandler &sqc_handler);
 private:

@@ -12,7 +12,7 @@
 #define USING_LOG_PREFIX TRANS
 
 #include "ob_trans_service.h"
-#include "lib/utility/serialization.h"
+#include "storage/tx/ob_xa_ctx.h"
 
 /*
  * The exception handle of txn state update with synchronization via proxy
@@ -404,6 +404,7 @@ int ObTransService::txn_free_route__handle_tx_exist_(
   }
 
 int ObTransService::txn_free_route__update_static_state(const uint32_t session_id,
+                                                        const uint32_t client_sid,
                                                         ObTxDesc *&tx,
                                                         ObTxnFreeRouteCtx &ctx,
                                                         const char* buf,
@@ -433,12 +434,17 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
         TRANS_LOG(WARN, "handle tx exist fail", K(ret));
       } else if (OB_ISNULL(tx)) {
         audit_record.alloc_tx_ = true;
-        if (OB_FAIL(acquire_tx(tx, session_id, data_version))) {
+        if (OB_FAIL(acquire_tx(tx, session_id, client_sid, data_version))) {
           // if acquire tx failed, it may retryable: alloc-memory failed
           TRANS_LOG(WARN, "acquire tx for decode failed", K(ret));
         } else { need_add_tx = true; }
       }
     } else if (!tx->tx_id_.is_valid()) {
+      if (tx->op_sn_ > 1) {
+        ObSpinLockGuard guard(tx->lock_);
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx op_sn > 1", K(ret), KPC(tx));
+        tx->print_trace_();
+      }
       // reuse, overwrite
       need_add_tx = true;
       audit_record.reuse_tx_ = true;
@@ -459,7 +465,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
       }
       if (OB_SUCC(ret)) {
         // reset tx to cleanup for new txn
-        reinit_tx_(*tx, session_id, tx->get_cluster_version());
+        reinit_tx_(*tx, session_id, client_sid, tx->get_cluster_version());
         need_add_tx = true;
       }
     } else {
@@ -523,10 +529,11 @@ int ObTransService::update_logic_clock_(const int64_t logic_clock, const ObTxDes
 {
   // if logic clock drift too much, disconnect required
   int ret = OB_SUCCESS;
-  if (logic_clock - ObClockGenerator::getClock() > 1_day ) {
-    TRANS_LOG(WARN, "logic clock is fast more than 1 day", K(logic_clock), KPC(tx));
-  } else if (check_fallback && (ObClockGenerator::getClock() - logic_clock > 1_day)) {
-    TRANS_LOG(WARN, "logic clock is slow more than 1 day", K(logic_clock), KPC(tx));
+  const int64_t cur_clock = ObClockGenerator::getClock();
+  if (logic_clock > cur_clock + 1_day ) {
+    TRANS_LOG(WARN, "logic clock is fast more than 1 day", K(logic_clock), K(cur_clock), KPC(tx));
+  } else if (check_fallback && (cur_clock > logic_clock + 1_day)) {
+    TRANS_LOG(WARN, "logic clock is slow more than 1 day", K(logic_clock), K(cur_clock), KPC(tx));
     if (OB_NOT_NULL(tx)) { tx->print_trace_(); }
   }
   if (OB_SUCC(ret)) {
@@ -536,6 +543,7 @@ int ObTransService::update_logic_clock_(const int64_t logic_clock, const ObTxDes
 }
 
 int ObTransService::txn_free_route__update_dynamic_state(const uint32_t session_id,
+                                                         const uint32_t client_sid,
                                                          ObTxDesc *&tx,
                                                          ObTxnFreeRouteCtx &ctx,
                                                          const char* buf,
@@ -596,6 +604,7 @@ int ObTransService::txn_free_route__update_dynamic_state(const uint32_t session_
 }
 
 int ObTransService::txn_free_route__update_parts_state(const uint32_t session_id,
+                                                       const uint32_t client_sid,
                                                        ObTxDesc *&tx,
                                                        ObTxnFreeRouteCtx &ctx,
                                                        const char* buf,
@@ -654,6 +663,7 @@ int ObTransService::txn_free_route__update_parts_state(const uint32_t session_id
 }
 
 int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id,
+                                                       const uint32_t client_sid,
                                                        ObTxDesc *&tx,
                                                        ObTxnFreeRouteCtx &ctx,
                                                        const char* buf,
@@ -697,7 +707,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
     } else if (OB_FAIL(update_logic_clock_(logic_clock, NULL, false))) {
       TRANS_LOG(ERROR, "update logic clock fail", K(ret));
     }
-    if (OB_SUCC(ret) && add_tx && OB_FAIL(acquire_tx(tx, session_id, data_version))) {
+    if (OB_SUCC(ret) && add_tx && OB_FAIL(acquire_tx(tx, session_id, client_sid, data_version))) {
       // only has savepoints or txn scope snapshot, txn not started
       // acquire tx to hold extra info
       TRANS_LOG(WARN, "acquire tx fail", K(ret));
@@ -718,6 +728,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
       } else if ((add_tx || replace_tx) && OB_FAIL(tx_desc_mgr_.add_with_txid(tx->tx_id_, *tx))) {
         TRANS_LOG(WARN, "add tx to mgr fail", K(ret));
       } else if (FALSE_IT(tx->flags_.REPLICA_ = tx->addr_ != self_)) {
+      } else if (FALSE_IT(ctx.set_start_sessid(tx->sess_id_))) {
       }
       int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
       ObTransTraceLog &tlog = tx->get_tlog();
@@ -839,29 +850,29 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
   // 3) other TCLs caused txn into active
   // actions:
   // a. decide txn_free_route is allowed
-  //    via proxy's passthorugh flag, tenant's config and the txn's state will not cause fallback
+  //    via proxy's passthrough flag, tenant's config and the txn's state will not cause fallback
   // b. remember the decision on `ctx`
   //
   // [2] ACTIVE -> ACTIVE
   // eg.
-  // 1) DML stmt after txn has been actived
-  // 2) SELECT stmt after txn has been actived
+  // 1) DML stmt after txn has been activated
+  // 2) SELECT stmt after txn has been activated
   // 3) other queries which don't change data
   // 4) BEGIN stmt, which cause current txn commit and start a new txn
   //    * this will caused txn state transform : ACTIVE -> TERMINATE -> IDLE ->ACTIVE
   //      and the final state is ACTIVE, which fall into this category
-  //      because start txn will caused the trueth of all state changed, it is also covered here
+  //      because start txn will caused the truth of all state changed, it is also covered here
   // actions:
   // a. if on txn-start-node, and txn-free-route's decision is on and has not been fallbacked
   //    if so, check whether txn's current state is too large and need to fallback
-  //    1) if need fallback, just remember the falllback decision on `ctx`
-  //    2) otherwise, txn continiue to return normal changed state
+  //    1) if need fallback, just remember the fallback decision on `ctx`
+  //    2) otherwise, txn continue to return normal changed state
   // b. if on txn-start-node, but txn-free-route is disabled or it has been fallbacked
   //    further decision is not required, just return
   // c. if on temporary-txn-node, it must be the txn-free-route is enabled
   //    1) check whether txn's current state is too large and need to fallback
   //       if so, distinguish to two cases:
-  //       i) the txn's total size is over the proxy's max recieveable size
+  //       i) the txn's total size is over the proxy's max receivable size
   //          in such case, it's required to push current txn's state to txn-start-node directly
   //          if push is timeouted or some other errors, we will try to return the state to proxy
   //            and the proxy will try its best to handle it, otherwise it will shutdown the session
@@ -1124,6 +1135,15 @@ bool ObTransService::need_fallback_(ObTxDesc &tx, int64_t &total_size)
   } else if (tx.is_xa_trans() && tx.is_xa_tightly_couple()) {
     TRANS_LOG(TRACE, "need fallback for tightly coupled xa trans");
     fallback = true;
+  } else if (tx.is_xa_trans()
+             && NULL != tx.get_xa_ctx()
+             && tx.get_xa_ctx()->is_mysql_mode()
+             && ObXATransState::ACTIVE != tx.get_xa_ctx()->get_state()) {
+    // To be compatible with mysql, trans can not be disassociated with session after xa end.
+    // However, any dml can not be executed after xa end. Therefore, we need stop tx free route.
+    // NOTE that the xa trans state is switched to IDLE from ACTIVE in xa end.
+    TRANS_LOG(TRACE, "need fallback for mysql xa trans");
+    fallback = true;
   } else {
     total_size = OB_E(EventTable::EN_TX_FREE_ROUTE_STATE_SIZE, tx.tx_id_) tx.estimate_state_size();
     if (total_size > MAX_STATE_SIZE) {
@@ -1273,8 +1293,9 @@ int ObTransService::tx_free_route_check_alive(ObTxnFreeRouteCtx &ctx, const ObTx
 {
   int ret = OB_SUCCESS;
   // 1. skip txn born node
-  // 2. skip txn is idle state
-  if (ctx.txn_addr_.is_valid() && ctx.txn_addr_ != self_ && tx.is_in_tx()) {
+  // 2. skip txn is idle state, but with extra info (like serializable snapshot)
+  if (ctx.txn_addr_.is_valid() && ctx.txn_addr_ != self_
+      && tx.get_tx_id().is_valid() && tx.in_tx_or_has_extra_state()) {
     common::ObCurTraceId::init(self_);
     ObTxFreeRouteCheckAliveMsg m;
     m.request_id_ = ctx.get_local_version();

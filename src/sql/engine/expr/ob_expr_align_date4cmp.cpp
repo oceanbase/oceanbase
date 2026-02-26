@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_align_date4cmp.h"
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
-#include "common/object/ob_obj_compare.h"
-#include "lib/timezone/ob_time_convert.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
@@ -30,8 +25,6 @@ static const int8_t DAYS_OF_MON[2][12 + 1] = {
   {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
   {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 };
-
-#define IS_LEAP_YEAR(y) (y == 0 ? 0 : ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0))
 
 ObExprAlignDate4Cmp::ObExprAlignDate4Cmp(common::ObIAllocator &alloc)
   : ObFuncExprOperator(alloc, T_FUN_SYS_ALIGN_DATE4CMP, N_ALIGN_DATE4CMP, 3, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
@@ -107,7 +100,7 @@ int ObExprAlignDate4Cmp::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_
     LOG_WARN("the arg of expr_align_date4cmp is null.", K(ret), K(rt_expr));
   } else {
     rt_expr.eval_func_ = eval_align_date4cmp;
-    rt_expr.extra_ = raw_expr.get_extra();
+    rt_expr.extra_ = raw_expr.get_cast_mode();
   }
   return ret;
 }

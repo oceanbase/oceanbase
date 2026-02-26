@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_PC
 
 #include "ob_pc_ref_handle.h"
-#include "lib/string/ob_string.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -66,7 +63,11 @@ const char* ObCacheRefHandleMgr::handle_name(const CacheRefHandleID handle_id)
     "tableapi_node_handle",
     "sql_plan_handle",
     "callstmt_handle",
-    "pc_diag_handle"
+    "pc_diag_handle",
+    "sql_stat_handle",
+    "virtual_table_sql_stat_handle",
+    "kv_schema_info_handle",
+    "udf_result_cache"
   };
   static_assert(sizeof(handle_names)/sizeof(const char*) == MAX_HANDLE, "invalid handle name array");
   if (handle_id < MAX_HANDLE) {

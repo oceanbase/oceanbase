@@ -1,9 +1,6 @@
 result_format: 4
 explain_protocol: 0
 
-alter system set enable_async_syslog = false;
-
-
 drop view if exists v1;
 create view v1 as select connection_id() from dual limit 10;
 desc v1;
@@ -189,4 +186,3 @@ desc v1;
 | version() | varchar(4096) | NO   |     |         |       |
 +-----------+---------------+------+-----+---------+-------+
 drop view v1;
-

@@ -36,6 +36,7 @@
 #include "logservice/common_util/ob_log_ls_define.h"        // logservice::TenantLSID
 #include "ob_log_fetcher_start_parameters.h"  // ObLogFetcherStartParameters
 #include "logservice/logfetcher/ob_log_fetcher_err_handler.h" // IObLogErrHandler
+#include "logservice/cdcservice/ob_cdc_raw_log_req.h"
 
 namespace oceanbase
 {
@@ -47,7 +48,7 @@ namespace logfetcher
 {
 
 using logservice::ObRemoteLogParent;
-using logservice::ObRemoteLogGroupEntryIterator;
+using logservice::ObRemoteIGroupEntryIterator;
 /////////////////////////////// LSFetchCtx /////////////////////////////////
 
 class ObLogFetcherConfig;
@@ -98,7 +99,8 @@ public:
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest_str,
       ObILogFetcherLSCtxAddInfo &ls_ctx_add_info,
-      IObLogErrHandler &err_handler);
+      IObLogErrHandler &err_handler,
+      logservice::ObLogserviceModelInfo &logservice_model_info);
 
   void set_host(IObLogLSFetchMgr &ls_fetch_mgr) { ls_fetch_mgr_ = &ls_fetch_mgr; }
 
@@ -108,16 +110,18 @@ public:
   int append_log(const char *buf, const int64_t buf_len);
   void reset_memory_storage();
   int get_next_group_entry(
-      palf::LogGroupEntry &group_entry,
+      ipalf::IGroupEntry &group_entry,
       palf::LSN &lsn,
-      const char *&buf);
+      const char *&buf,
+      const share::SCN replayable_point,
+      const obrpc::ObCdcFetchRawSource data_end_source);
   int get_next_remote_group_entry(
-      palf::LogGroupEntry &group_entry,
+      ipalf::IGroupEntry &group_entry,
       palf::LSN &lsn,
       const char *&buf,
       int64_t &buf_size);
   int get_log_entry_iterator(
-      const palf::LogGroupEntry &group_entry,
+      const ipalf::IGroupEntry &group_entry,
       const palf::LSN &start_lsn,
       palf::MemPalfBufferIterator &entry_iter);
 
@@ -134,8 +138,13 @@ public:
   virtual int sync(volatile bool &stop_flag);
 
   int update_progress(
-      const palf::LogGroupEntry &group_entry,
+      const ipalf::IGroupEntry &group_entry,
       const palf::LSN &group_entry_lsn);
+
+
+  bool get_logservice_model() {
+    return enable_logservice_;
+  }
 
   // The offline LS interface, which is called before the log stream is physically removed.
   // 1. For OBCDC, This interface is used to clear all unoutput tasks and dispatch OFFLINE type tasks.
@@ -337,7 +346,7 @@ public:
     int64_t   log_touch_tstamp_;    // Log progress last update time
 
     // Lock: Keeping read and write operations atomic
-     mutable common::ObByteLock  lock_;
+    mutable common::ObByteLock  lock_;
 
     LSProgress() { reset(); }
     ~LSProgress() { reset(); }
@@ -476,7 +485,7 @@ public:
   }
 
 public:
-  TO_STRING_KV("type", "FETCH_TASK",
+  TO_STRING_KV_WITH_HELPER("type", "FETCH_TASK",
       "stype", print_fetch_stream_type(stype_),
       K_(state),
       "state_str", print_state(state_),
@@ -493,7 +502,7 @@ public:
       K_(fetch_info),
       K_(svr_list_need_update),
       "start_log_id_locate_req",
-      start_lsn_locate_req_.is_state_idle() ? "IDLE" : to_cstring(start_lsn_locate_req_),
+      start_lsn_locate_req_.is_state_idle() ? "IDLE" : helper.convert(start_lsn_locate_req_),
       KP_(next),
       KP_(prev));
 
@@ -521,7 +530,7 @@ protected:
   ObILogFetcherLSCtxAddInfo *ls_ctx_add_info_;
 
   ObRemoteLogParent             *source_;
-  ObRemoteLogGroupEntryIterator remote_iter_;
+  ObRemoteIGroupEntryIterator remote_iter_;
 
   // Last synced progress
   int64_t                 last_sync_progress_ CACHE_ALIGNED;
@@ -543,7 +552,8 @@ protected:
   StartLSNLocateReq       end_lsn_locate_req_;
 
   palf::MemoryStorage     mem_storage_;
-  palf::MemPalfGroupBufferIterator group_iterator_;
+  ipalf::IPalfIterator<ipalf::IGroupEntry> group_iterator_;
+  bool enable_logservice_;
 
   datadict::ObDataDictIterator data_dict_iterator_;
 

@@ -12,7 +12,6 @@
 
 #include "lib/restore/ob_storage.h"
 #include "ob_storage_s3_base.h"
-
 namespace oceanbase
 {
 namespace common
@@ -20,6 +19,52 @@ namespace common
 using namespace Aws::S3;
 using namespace Aws::Client;
 using namespace Aws::Utils;
+
+/*--------------------------------ObS3MemoryManager-------------------------*/
+
+int ObS3MemoryManager::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(allocator_.init(DEFAULT_BLOCK_SIZE, mem_limiter_, attr_))) {
+    OB_LOG(WARN, "init allocator error", K(ret));
+  } else {
+    allocator_.set_nway(N_WAY);
+  }
+  return ret;
+}
+
+void *ObS3MemoryManager::AllocateMemory(std::size_t blockSize,
+                                        std::size_t alignment,
+                                        const char *allocationTag)
+{
+  // When memory allocation fails, S3 SDK calls abort, causing a program crash.
+  // Replace memalign with ObVSliceAlloc to get lower CPU usage and faster memory allocation efficiency
+  // ObVSliceAlloc mainly optimizes small block allocation
+  // and directly passes large block(OB_MALLOC_BIG_BLOCK_SIZE 2MB) allocation to the lower-level allocator (ob_malloc)
+  // thus when ob_malloc fails to allocate memory and the duration exceeds 1s, the program will crash
+  // in addition, memory alignment is performed before allocating memory
+  int ret = OB_SUCCESS;
+  UNUSED(allocationTag);
+  void *ptr = nullptr;
+  do {
+    ptr = allocator_.alloc_align(blockSize, alignment);
+    if (OB_ISNULL(ptr)) {
+      ob_usleep(10000); // 10ms
+      if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(ERROR, "ObVSliceAlloc failed to allocate memory",
+            K(blockSize), K(alignment), K(allocationTag));
+      }
+    }
+  } while (OB_ISNULL(ptr));
+  return ptr;
+}
+
+void ObS3MemoryManager::FreeMemory(void *memoryPtr)
+{
+  allocator_.free_align(memoryPtr);
+  memoryPtr = nullptr;
+}
 
 /*--------------------------------ObS3Logger--------------------------------*/
 Logging::LogLevel ObS3Logger::GetLogLevel(void) const
@@ -63,10 +108,15 @@ void ObS3Logger::Log(Logging::LogLevel logLevel, const char* tag, const char* fo
     switch (logLevel) {
       case Logging::LogLevel::Fatal:
       case Logging::LogLevel::Error:
-      case Logging::LogLevel::Warn:
-        ret = OB_S3_ERROR;
-        _OB_LOG(WARN, new_format, tag, arg_buf);
+      case Logging::LogLevel::Warn: {
+        if (OB_NOT_NULL(STRSTR(arg_buf, "HTTP response code: 404"))) {
+          // skip NO_SUCH_KEY error
+        } else {
+          ret = OB_OBJECT_STORAGE_IO_ERROR;
+          _OB_LOG(WARN, new_format, tag, arg_buf);
+        }
         break;
+      }
       case Logging::LogLevel::Info:
         _OB_LOG(INFO, new_format, tag, arg_buf);
         break;
@@ -90,6 +140,26 @@ void ObS3Logger::LogStream(Logging::LogLevel logLevel, const char* tag, const Aw
 }
 
 /*--------------------------------ObS3Client--------------------------------*/
+// max allowed idle duration for a s3 client: 20min
+static int64_t MAX_S3_CLIENT_IDLE_DURATION_US = 20LL * 600LL * 1000LL * 1000LL;
+
+int set_max_s3_client_idle_duration_us(const int64_t duration_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(duration_us <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arg", K(ret), K(duration_us));
+  } else {
+    MAX_S3_CLIENT_IDLE_DURATION_US = duration_us;
+  }
+  return ret;
+}
+
+int64_t get_max_s3_client_idle_duration_us()
+{
+  return MAX_S3_CLIENT_IDLE_DURATION_US;
+}
+
 ObS3Client::ObS3Client()
     : lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       is_inited_(false),
@@ -104,6 +174,19 @@ ObS3Client::~ObS3Client()
 {
   destroy();
 }
+
+// Disable the internal retry mechanism within the S3 SDK
+class ObStorageS3DisabledRetryStrategy : public Aws::Client::DefaultRetryStrategy
+{
+public:
+  ObStorageS3DisabledRetryStrategy() : DefaultRetryStrategy() {}
+  virtual ~ObStorageS3DisabledRetryStrategy() {}
+
+  virtual bool ShouldRetry(const AWSError<CoreErrors>& error, long attemptedRetries) const override
+  {
+    return false;
+  }
+};
 
 int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
                                               S3ClientConfiguration &config)
@@ -124,10 +207,13 @@ int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
     config.payloadSigningPolicy = Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never;
     config.endpointOverride = account.endpoint_;
     config.executor = nullptr;
+    if (account.addressing_model_ == ObStorageAddressingModel::OB_PATH_STYLE) {
+      config.useVirtualAddressing = false;
+    }
 
     // Default maxRetries is 10
-    std::shared_ptr<Aws::Client::DefaultRetryStrategy> retryStrategy =
-        Aws::MakeShared<Aws::Client::DefaultRetryStrategy>(S3_SDK, 1/*maxRetries*/);
+    std::shared_ptr<ObStorageS3DisabledRetryStrategy> retryStrategy =
+        Aws::MakeShared<ObStorageS3DisabledRetryStrategy>(S3_SDK);
     config.retryStrategy = retryStrategy;
   }
   return ret;
@@ -143,7 +229,15 @@ int ObS3Client::init(const ObS3Account &account)
   S3ClientConfiguration config(init_values);
   // Re-enables IMDS access for subsequent operations if needed
   config.disableIMDS = false;
-  Aws::Auth::AWSCredentials credentials(account.access_id_, account.secret_key_);
+  Aws::Auth::AWSCredentials credentials;
+  const char *sts_data =  account.sts_token_.get_data();
+  if (OB_NOT_NULL(sts_data)) {
+    credentials = Aws::Auth::AWSCredentials(account.access_id_, account.secret_key_, sts_data);
+  } else {
+    credentials = Aws::Auth::AWSCredentials(account.access_id_, account.secret_key_);
+  }
+
+
   SpinWLockGuard guard(lock_);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -161,11 +255,11 @@ int ObS3Client::init(const ObS3Account &account)
       client_ = new(client_buf) Aws::S3::S3Client(credentials,
           Aws::MakeShared<Endpoint::S3EndpointProvider>(S3_SDK), config);
     } catch (const std::exception &e) {
-      ret = OB_S3_ERROR;
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
       OB_LOG(WARN, "caught exception when initing ObS3Client",
           K(ret), K(e.what()), KP(this), K(*this));
     } catch (...) {
-      ret = OB_S3_ERROR;
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
       OB_LOG(WARN, "caught unknown exception when initing ObS3Client", K(ret), KP(this), K(*this));
     }
 
@@ -202,10 +296,12 @@ bool ObS3Client::is_stopped() const
 bool ObS3Client::try_stop(const int64_t timeout)
 {
   bool is_stopped = true;
-  if (OB_SUCCESS == lock_.wrlock(timeout)) {
+  const int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout;
+  if (OB_SUCCESS == lock_.wrlock(abs_timeout_us)) {
     if (is_inited_) {
-      const int64_t cur_time = ObTimeUtility::current_time();
-      if (ref_cnt_ <= 0 && cur_time - last_modified_ts_ >= MAX_S3_CLIENT_IDLE_DURATION) {
+      const int64_t cur_time_us = ObTimeUtility::current_time();
+      if (ref_cnt_ <= 0
+          && cur_time_us - last_modified_ts_ >= get_max_s3_client_idle_duration_us()) {
         stopped_ = true;
       } else {
         is_stopped = false;
@@ -238,27 +334,34 @@ void ObS3Client::release()
   last_modified_ts_ = ObTimeUtility::current_time();
 }
 
-template<typename RequestType, typename OutcomeType>
-int ObS3Client::do_s3_operation_(S3OperationFunc<RequestType, OutcomeType> s3_op_func,
-                                 const RequestType &request, OutcomeType &outcome)
+int ObS3Client::check_status()
 {
   int ret = OB_SUCCESS;
-  {
-    SpinRLockGuard guard(lock_);
-    if (!is_inited_) {
-      ret = OB_NOT_INIT;
-      OB_LOG(WARN, "ObS3Client not init", K(ret));
-    } else if (stopped_) {
-      ret = OB_IN_STOP_STATE;
-      OB_LOG(WARN, "ObS3Client has been stopped", K(ret));
-    } else if (OB_ISNULL(client_)) {
-      ret = OB_S3_ERROR;
-      OB_LOG(WARN, "client is NULL in ObS3Client", K(ret), KP(client_));
-    }
+  SpinRLockGuard guard(lock_);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "ObS3Client not init", K(ret));
+  } else if (stopped_) {
+    ret = OB_IN_STOP_STATE;
+    OB_LOG(WARN, "ObS3Client has been stopped", K(ret));
+  } else if (OB_ISNULL(client_)) {
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
+    OB_LOG(WARN, "client is NULL in ObS3Client", K(ret), KP(client_));
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret)) {
-    outcome = (client_->*s3_op_func)(request);
+template<typename RequestType, typename OutcomeType>
+int ObS3Client::do_s3_operation_(S3OperationFunc<RequestType, OutcomeType> s3_op_func,
+                                 const RequestType &request, OutcomeType &outcome,
+                                 const int64_t retry_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_status())) {
+    OB_LOG(WARN, "ObS3Client is not in running state", K(ret));
+  } else {
+    ObStorageS3RetryStrategy<OutcomeType> strategy(retry_timeout_us);
+    outcome = execute_until_timeout(strategy, std::mem_fn(s3_op_func), client_, request);
     last_modified_ts_ = ObTimeUtility::current_time();
   }
   return ret;
@@ -293,6 +396,14 @@ int ObS3Client::delete_object(const Model::DeleteObjectRequest &request,
 {
   S3OperationFunc<Model::DeleteObjectRequest, Model::DeleteObjectOutcome>
       s3_op_func = &S3Client::DeleteObject;
+  return do_s3_operation_(s3_op_func, request, outcome);
+}
+
+int ObS3Client::delete_objects(const Model::DeleteObjectsRequest &request,
+                              Model::DeleteObjectsOutcome &outcome)
+{
+  S3OperationFunc<Model::DeleteObjectsRequest, Model::DeleteObjectsOutcome>
+      s3_op_func = &S3Client::DeleteObjects;
   return do_s3_operation_(s3_op_func, request, outcome);
 }
 
@@ -349,7 +460,7 @@ int ObS3Client::complete_multipart_upload(const Model::CompleteMultipartUploadRe
 {
   S3OperationFunc<Model::CompleteMultipartUploadRequest, Model::CompleteMultipartUploadOutcome>
       s3_op_func = &S3Client::CompleteMultipartUpload;
-  return do_s3_operation_(s3_op_func, request, outcome);
+  return do_s3_operation_(s3_op_func, request, outcome, DO_NOT_RETRY/*retry_timeout_us*/);
 }
 
 int ObS3Client::abort_multipart_upload(const Model::AbortMultipartUploadRequest &request,
@@ -397,7 +508,7 @@ void fin_s3_env()
       OB_LOG(WARN, "force fin_s3_env", K(ret), K(flying_io_cnt));
       break;
     }
-    usleep(100 * 1000L); // 100ms
+    ob_usleep(100 * 1000L); // 100ms
     flying_io_cnt = ObExternalIOCounter::get_flying_io_cnt();
   }
 
@@ -419,11 +530,15 @@ ObS3Env::ObS3Env()
       is_inited_(false), s3_mem_manger_(),
       aws_options_(), s3_client_map_()
 {
-  aws_options_.memoryManagementOptions.memoryManager = &s3_mem_manger_;
   aws_options_.ioOptions.clientBootstrap_create_fn = s3_clientBootstrap_create_fn;
   ObS3Logger s3_logger;
   aws_options_.loggingOptions.logLevel = s3_logger.GetLogLevel();
   aws_options_.loggingOptions.logger_create_fn = s3_logger_create_fn;
+  // Adhere to RFC 3986, supporting encoding of reserved characters
+  // such as '-', '_', '.', '$', '@', etc.
+  // Thus, it alleviates the issue of inconsistent server behavior when accessing
+  // COS using S3 SDK.
+  aws_options_.httpOptions.compliantRfc3986Encoding = true;
 }
 
 ObS3Env &ObS3Env::get_instance()
@@ -441,7 +556,10 @@ int ObS3Env::init()
     OB_LOG(WARN, "S3 env init twice", K(ret));
   } else if (OB_FAIL(s3_client_map_.create(MAX_S3_CLIENT_NUM, OB_STORAGE_S3_ALLOCATOR))) {
     OB_LOG(WARN, "failed to create s3 client map", K(ret));
+  } else if (OB_FAIL(s3_mem_manger_.init())) {
+    OB_LOG(WARN, "failed to init S3 Memory Manger", K(ret));
   } else {
+    aws_options_.memoryManagementOptions.memoryManager = &s3_mem_manger_;
     Aws::InitAPI(aws_options_);
     is_inited_ = true;
     // TO make sure Aws::ShutdownAPI is called before OPENSSL_cleanup
@@ -481,6 +599,7 @@ int ObS3Env::get_or_create_s3_client(const ObS3Account &account, ObS3Client *&cl
 {
   int ret = OB_SUCCESS;
   const int64_t key = account.hash();
+  client = nullptr;
   SpinWLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -488,29 +607,39 @@ int ObS3Env::get_or_create_s3_client(const ObS3Account &account, ObS3Client *&cl
   } else if (OB_UNLIKELY(!account.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "S3 account not valid", K(ret));
-  } else if (OB_FAIL(s3_client_map_.get_refactored(key, client))) {
+  } else if (REACH_TIME_INTERVAL(get_max_s3_client_idle_duration_us())) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(clean_s3_client_map_())) {
+      OB_LOG(WARN, "failed to clean s3 client map", K(tmp_ret), K(s3_client_map_.size()));
+    }
+  }
+
+  if (FAILEDx(s3_client_map_.get_refactored(key, client))) {
     if (ret == OB_HASH_NOT_EXIST) {
       ret = OB_SUCCESS;
-      void *client_buf = NULL;
-      if (s3_client_map_.size() > MAX_S3_CLIENT_MAP_THRESHOLD && OB_FAIL(clean_s3_client_map_())) {
-        OB_LOG(WARN, "failed to clean s3 client map", K(ret), K(s3_client_map_.size()));
-      } else if (OB_ISNULL(client_buf = ob_malloc(sizeof(ObS3Client), OB_STORAGE_S3_ALLOCATOR))) {
+      void *client_buf = nullptr;
+      if (OB_ISNULL(client_buf = ob_malloc(sizeof(ObS3Client), OB_STORAGE_S3_ALLOCATOR))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "failed to alloc buf for ob s3 client", K(ret));
       } else {
         client = new(client_buf) ObS3Client();
         if (OB_FAIL(client->init(account))) {
-          client->~ObS3Client();
-          ob_free(client_buf);
-          client = nullptr;
           OB_LOG(WARN, "failed to init ObS3Client", K(ret), K(account));
         } else if (OB_FAIL(s3_client_map_.set_refactored(key, client))) {
-          client->~ObS3Client();
-          ob_free(client_buf);
-          client = nullptr;
           OB_LOG(WARN, "failed to insert into s3 client map", K(ret), K(account));
         } else {
           OB_LOG(DEBUG, "succeed create new s3 client", K(account), K(s3_client_map_.size()));
+        }
+
+        if (OB_FAIL(ret)) {
+          if (OB_NOT_NULL(client)) {
+            client->~ObS3Client();
+            client = nullptr;
+          }
+          if (OB_NOT_NULL(client_buf)) {
+            ob_free(client_buf);
+            client_buf = nullptr;
+          }
         }
       }
     } else {
@@ -574,8 +703,23 @@ void ObS3Env::stop()
   }
 }
 
-const int S3_BAD_REQUEST = 400;
-const int S3_ITEM_NOT_EXIST = 404;
+/*--------------------------------ERROR HANDLE--------------------------------*/
+
+template<typename OutcomeType>
+static bool is_obs_destination(const OutcomeType &outcome)
+{
+  Aws::String key_str = Aws::Utils::StringUtils::ToLower("server");
+  const Aws::Http::HeaderValueCollection &headers = outcome.GetError().GetResponseHeaders();
+  Aws::Http::HeaderValueCollection::const_iterator iter = headers.find(key_str);
+  return (iter != headers.end() && iter->second == "OBS");
+}
+
+template<typename OutcomeType>
+static bool is_gcs_destination(const OutcomeType &outcome)
+{
+  // The x-guploader-uploadid header is a unique identifier provided in Cloud Storage responses.
+  return outcome.GetError().ResponseHeaderExists("x-guploader-uploadid");
+}
 
 static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
 {
@@ -586,12 +730,28 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
   switch (http_code) {
     case S3_BAD_REQUEST: {
       if (exception == "InvalidRequest" && err_msg.find("x-amz-checksum") != std::string::npos) {
-        ob_errcode = OB_CHECKSUM_ERROR;
+        ob_errcode = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
+      } else if (exception == "InvalidRequest" && err_msg.find("Appid, Bucket") != std::string::npos) {
+        ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
       } else if (err_msg.find("region") != std::string::npos
                  && err_msg.find("is wrong; expecting") != std::string::npos) {
         ob_errcode = OB_S3_REGION_MISMATCH;
+      } else if (exception == "InvalidRegionName" || exception == "InvalidBucketName") {
+        // When accessing COS and OSS using the S3 SDK, if the endpoint parameter is incorrect,
+        // S3 does not capture the exception. Instead, we need to set ob_errorcode individually
+        // based on the HTTP response code and the exception name.
+        ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
+      }
+      // S3 reports different errors for object names that exceed the limited length
+      // put: KeyTooLongError, delete: InvalidObjectName, list: InvalidArgument(OBS)
+      else if (err_msg.find("KeyTooLongError") != std::string::npos
+          || err_msg.find("InvalidObjectName") != std::string::npos
+          || err_msg.find("InvalidArgument") != std::string::npos) {
+        ob_errcode = OB_INVALID_ARGUMENT;
+      } else if (exception == "InvalidURI") {
+        ob_errcode = OB_INVALID_ARGUMENT;
       } else {
-        ob_errcode = OB_S3_ERROR;
+        ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
       }
       break;
     }
@@ -601,12 +761,24 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
         // a NoSuchTagSet error will be returned.
         ob_errcode = OB_ITEM_NOT_SETTED;
       } else {
-        ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        ob_errcode = OB_OBJECT_NOT_EXIST;
       }
       break;
     }
+    case S3_PERMISSION_DENIED: {
+      ob_errcode = OB_OBJECT_STORAGE_PERMISSION_DENIED;
+      break;
+    }
+    case S3_SLOW_DOWN: {
+      ob_errcode = OB_IO_LIMIT;
+      break;
+    }
     default: {
-      ob_errcode = OB_S3_ERROR;
+      if (err_msg.find("curlCode: 28") != std::string::npos) {
+        ob_errcode = OB_TIMEOUT;
+      } else {
+        ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
+      }
       break;
     }
   }
@@ -616,11 +788,11 @@ static void convert_io_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
 {
   switch (s3_err.GetErrorType()) {
     case Aws::S3::S3Errors::NO_SUCH_KEY: {
-      ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+      ob_errcode = OB_OBJECT_NOT_EXIST;
       break;
     }
     case Aws::S3::S3Errors::RESOURCE_NOT_FOUND: {
-      ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+      ob_errcode = OB_OBJECT_NOT_EXIST;
       break;
     }
     case Aws::S3::S3Errors::SLOW_DOWN: {
@@ -628,7 +800,7 @@ static void convert_io_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
       break;
     }
     case Aws::S3::S3Errors::ACCESS_DENIED: {
-      ob_errcode = OB_BACKUP_PERMISSION_DENIED;
+      ob_errcode = OB_OBJECT_STORAGE_PERMISSION_DENIED;
       break;
     }
     case Aws::S3::S3Errors::NO_SUCH_BUCKET: {
@@ -643,14 +815,28 @@ static void convert_io_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
 }
 
 template<typename OutcomeType>
-static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
+static void log_s3_status(OutcomeType &outcome, int &ob_errcode)
 {
   const char *request_id = outcome.GetResult().GetRequestId().c_str();
+  if (outcome.GetResult().GetRequestId().empty()) {
+    const Aws::Http::HeaderValueCollection &headers = outcome.GetError().GetResponseHeaders();
+    Aws::Http::HeaderValueCollection::const_iterator it = headers.find("x-amz-request-id");
+    if (it != headers.end()) {
+      request_id = it->second.c_str();
+    }
+  }
   const int code = static_cast<int>(outcome.GetError().GetResponseCode());
   const char *exception = outcome.GetError().GetExceptionName().c_str();
   const char *err_msg = outcome.GetError().GetMessage().c_str();
-  if (OB_CHECKSUM_ERROR == ob_errcode) {
+  if (OB_OBJECT_NOT_EXIST != ob_errcode || code / 100 != 2) {
+    // force printing log
+    allow_next_syslog();
+  }
+  if (OB_OBJECT_STORAGE_CHECKSUM_ERROR == ob_errcode) {
     OB_LOG_RET(ERROR, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
+    // checksum error are offten caused by network issues, so we convert it to
+    // io error to make it easier for user to retry.
+    ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
   } else {
     OB_LOG_RET(WARN, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
   }
@@ -677,15 +863,21 @@ static int set_request_checkusum_algorithm(RequestType &request,
     if (checksum_type == ObStorageChecksumType::OB_CRC32_ALGO) {
       request.SetChecksumAlgorithm(Aws::S3::Model::ChecksumAlgorithm::CRC32);
     } else {
-      // defaut md5
+      // default md5
     }
   }
   return ret;
 }
 
+//   1. OBS/GCS is currently accessed through the S3 SDK without any dedicated OBS/GCS prefix or type,
+//      and using the host to determine if the endpoint is OBS/GCS is not secure.
+//   2. The S3 SDK can only acquire the response header to distinguish the server type
+//      when a request fails.
+//   3. Furthermore, when the S3 SDK is used to access OBS/GCS with the checksum type set to crc32,
+//      the OBS/GCS server will only return an error in the complete_multipart_upload interface.
 static int set_completed_part_checksum(Aws::S3::Model::CompletedPart &completed_part,
-                                       const Aws::S3::Model::Part &part,
-                                       const ObStorageChecksumType checksum_type)
+                                       const ObStorageChecksumType checksum_type,
+                                       const char *checksum)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_s3_supported_checksum(checksum_type))) {
@@ -693,7 +885,36 @@ static int set_completed_part_checksum(Aws::S3::Model::CompletedPart &completed_
     OB_LOG(WARN, "that checksum algorithm is not supported for s3", K(ret), K(checksum_type));
   } else {
     if (checksum_type == ObStorageChecksumType::OB_CRC32_ALGO) {
-      completed_part.SetChecksumCRC32(part.GetChecksumCRC32());
+      if (OB_ISNULL(checksum)) {
+        ret = OB_INVALID_ARGUMENT;
+        OB_LOG(WARN, "checksum is null", K(ret), K(checksum_type), KP(checksum));
+      } else {
+        completed_part.SetChecksumCRC32(checksum);
+      }
+    } else {
+      // default md5
+    }
+  }
+  return ret;
+}
+
+static int get_completed_part_checksum(const Aws::S3::Model::UploadPartResult &result,
+                                       const ObStorageChecksumType checksum_type,
+                                       const char *&checksum_str)
+{
+  int ret = OB_SUCCESS;
+  checksum_str = nullptr;
+  if (OB_UNLIKELY(!is_s3_supported_checksum(checksum_type))) {
+    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
+    OB_LOG(WARN, "that checksum algorithm is not supported for s3", K(ret), K(checksum_type));
+  } else {
+    if (checksum_type == ObStorageChecksumType::OB_CRC32_ALGO) {
+      if (OB_UNLIKELY(result.GetChecksumCRC32().empty())) {
+        ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
+        OB_LOG(WARN, "returned checksum is null", K(ret), K(checksum_type));
+      } else {
+        checksum_str = result.GetChecksumCRC32().c_str();
+      }
     } else {
       // default md5
     }
@@ -717,7 +938,7 @@ static int check_crc32(const char *buf, const int64_t size, Aws::S3::Model::GetO
     Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
 
     if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
-      ret = OB_CHECKSUM_ERROR;
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
       OB_LOG(ERROR, "crc32 mismatch",
           K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
     }
@@ -735,7 +956,7 @@ static int check_crc32c(const char *buf, const int64_t size, Aws::S3::Model::Get
     Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
 
     if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
-      ret = OB_CHECKSUM_ERROR;
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
       OB_LOG(ERROR, "crc32c mismatch",
           K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
     }
@@ -753,7 +974,7 @@ static int check_sha1(const char *buf, const int64_t size, Aws::S3::Model::GetOb
     Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
 
     if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
-      ret = OB_CHECKSUM_ERROR;
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
       OB_LOG(ERROR, "sha1 mismatch",
           K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
     }
@@ -771,7 +992,7 @@ static int check_sha256(const char *buf, const int64_t size, Aws::S3::Model::Get
     Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
 
     if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
-      ret = OB_CHECKSUM_ERROR;
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
       OB_LOG(ERROR, "sha256 mismatch",
           K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
     }
@@ -814,11 +1035,13 @@ ObS3Account::~ObS3Account()
 void ObS3Account::reset()
 {
   is_valid_ = false;
-  delete_mode_ = ObIStorageUtil::DELETE;
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   MEMSET(region_, 0, sizeof(region_));
   MEMSET(endpoint_, 0, sizeof(endpoint_));
   MEMSET(access_id_, 0, sizeof(access_id_));
   MEMSET(secret_key_, 0, sizeof(secret_key_));
+  sts_token_.reset();
+  addressing_model_ = ObStorageAddressingModel::OB_VIRTUAL_HOSTED_STYLE;
 }
 
 int64_t ObS3Account::hash() const
@@ -828,6 +1051,7 @@ int64_t ObS3Account::hash() const
   hash_value = murmurhash(endpoint_, static_cast<int32_t>(strlen(endpoint_)), hash_value);
   hash_value = murmurhash(access_id_, static_cast<int32_t>(strlen(access_id_)), hash_value);
   hash_value = murmurhash(secret_key_, static_cast<int32_t>(strlen(secret_key_)), hash_value);
+  hash_value = murmurhash(&addressing_model_, sizeof(addressing_model_), hash_value);
   return hash_value;
 }
 
@@ -851,35 +1075,44 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
       if (OB_ISNULL(token)) {
         break;
       } else if (0 == strncmp(REGION, token, strlen(REGION))) {
-        if (OB_FAIL(set_field(token + strlen(REGION), region_, sizeof(region_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(REGION), region_, sizeof(region_)))) {
           OB_LOG(WARN, "failed to set s3 region", K(ret), KCSTRING(token));
         }
       } else if (0 == strncmp(HOST, token, strlen(HOST))) {
-        if (OB_FAIL(set_field(token + strlen(HOST), endpoint_, sizeof(endpoint_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(HOST), endpoint_, sizeof(endpoint_)))) {
           OB_LOG(WARN, "failed to set s3 endpoint", K(ret), KCSTRING(token));
         } else {
           bitmap |= 1;
         }
       } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
-        if (OB_FAIL(set_field(token + strlen(ACCESS_ID), access_id_, sizeof(access_id_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(ACCESS_ID), access_id_, sizeof(access_id_)))) {
           OB_LOG(WARN, "failed to set s3 access id", K(ret), KCSTRING(token));
         } else {
           bitmap |= (1 << 1);
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
-        if (OB_FAIL(set_field(token + strlen(ACCESS_KEY), secret_key_, sizeof(secret_key_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(ACCESS_KEY), secret_key_, sizeof(secret_key_)))) {
           OB_LOG(WARN, "failed to set s3 secret key", K(ret), KP(token));
         } else {
           bitmap |= (1 << 2);
         }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
         if (0 == strcmp(token + strlen(DELETE_MODE), "delete")) {
-          delete_mode_ = ObIStorageUtil::DELETE;
+          delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
         } else if (0 == strcmp(token + strlen(DELETE_MODE), "tagging")) {
-          delete_mode_ = ObIStorageUtil::TAGGING;
+          delete_mode_ = ObStorageDeleteMode::STORAGE_TAGGING_MODE;
         } else {
           ret = OB_INVALID_ARGUMENT;
           OB_LOG(WARN, "delete mode is invalid", K(ret), KCSTRING(token));
+        }
+      } else if (0 == strncmp(ADDRESSING_MODEL, token, strlen(ADDRESSING_MODEL))) {
+        if (0 == strcmp(token + strlen(ADDRESSING_MODEL), ADDRESSING_MODEL_VIRTUAL_HOSTED_STYLE)) {
+          addressing_model_ = ObStorageAddressingModel::OB_VIRTUAL_HOSTED_STYLE;
+        } else if (0 == strcmp(token + strlen(ADDRESSING_MODEL), ADDRESSING_MODEL_PATH_STYLE)) {
+          addressing_model_ = ObStorageAddressingModel::OB_PATH_STYLE;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          OB_LOG(WARN, "addressing model is invalid", K(ret), KCSTRING(token));
         }
       } else {
         OB_LOG(DEBUG, "unknown s3 info", K(*token));
@@ -903,28 +1136,9 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
   return ret;
 }
 
-int ObS3Account::set_field(const char *value, char *field, const uint32_t field_length)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(value) || OB_ISNULL(field)) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invliad arguments", K(ret), KP(value), KP(field));
-  } else {
-    const int64_t value_len = strlen(value);
-    if (value_len >= field_length) {
-      ret = OB_SIZE_OVERFLOW;
-      OB_LOG(WARN, "value is too long", K(ret), KP(value), K(value_len), K(field_length));
-    } else {
-      MEMCPY(field, value, value_len);
-      field[value_len] = '\0';
-    }
-  }
-  return ret;
-}
-
 /*--------------------------------ObStorageS3Base--------------------------------*/
 ObStorageS3Base::ObStorageS3Base()
-    : allocator_(OB_STORAGE_S3_ALLOCATOR),
+    : allocator_(OB_STORAGE_S3_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id()),
       s3_client_(NULL),
       bucket_(),
       object_(),
@@ -936,7 +1150,7 @@ ObStorageS3Base::ObStorageS3Base()
 
 ObStorageS3Base::~ObStorageS3Base()
 {
-  reset();
+  ObStorageS3Base::reset();
 }
 
 void ObStorageS3Base::reset()
@@ -954,6 +1168,25 @@ void ObStorageS3Base::reset()
 int ObStorageS3Base::open(const ObString &uri, ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    OB_LOG(WARN, "s3 base alreagy inited", K(ret));
+  } else if (OB_FAIL(inner_open(uri, storage_info))) {
+    OB_LOG(WARN, "failed to inner open", K(ret), K(uri), KPC(storage_info));
+  }
+   // object name should not be empty
+  if (OB_SUCC(ret) && OB_UNLIKELY(object_.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "object name is empty", K(uri), K(ret), K(uri));
+    reset();
+  }
+  return ret;
+}
+
+
+int ObStorageS3Base::inner_open(const ObString &uri, ObObjectStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
   char info_str[common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -963,14 +1196,19 @@ int ObStorageS3Base::open(const ObString &uri, ObObjectStorageInfo *storage_info
     OB_LOG(WARN, "failed to init s3 base, invalid arguments", K(ret), K(uri), KPC(storage_info));
   } else if (OB_FAIL(build_bucket_and_object_name(allocator_, uri, bucket_, object_))) {
     OB_LOG(WARN, "failed to parse uri", K(ret), K(uri));
-  } else if (OB_FAIL(storage_info->get_storage_info_str(info_str, sizeof(info_str)))) {
-    OB_LOG(WARN, "failed to get storage info str", K(ret), KPC(storage_info));
+  } else if (OB_FAIL(storage_info->get_authorization_str(info_str, sizeof(info_str), s3_account_.sts_token_))) {
+    OB_LOG(WARN, "failed to get authorization str", K(ret), KPC(storage_info));
   } else if (OB_FAIL(s3_account_.parse_from(info_str, strlen(info_str)))) {
     OB_LOG(WARN, "failed to build s3 account", K(ret));
   } else if (OB_FAIL(ObS3Env::get_instance().get_or_create_s3_client(s3_account_, s3_client_))) {
     OB_LOG(WARN, "faied to get s3 client", K(ret));
   } else {
     checksum_type_ = storage_info->get_checksum_type();
+#ifdef ERRSIM
+    if (OB_NOT_NULL(storage_info) && (OB_SUCCESS != EventTable::EN_ENABLE_LOG_OBJECT_STORAGE_CHECKSUM_TYPE)) {
+      OB_LOG(ERROR, "errsim backup io with checksum type", "checksum_type", storage_info->get_checksum_type_str());
+    }
+#endif
     if (OB_UNLIKELY(!is_s3_supported_checksum(checksum_type_))) {
       ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
       OB_LOG(WARN, "that checksum algorithm is not supported for s3", K(ret), K_(checksum_type));
@@ -978,7 +1216,6 @@ int ObStorageS3Base::open(const ObString &uri, ObObjectStorageInfo *storage_info
       is_inited_ = true;
     }
   }
-
   if (OB_FAIL(ret)) {
     reset();
   }
@@ -996,21 +1233,38 @@ int ObStorageS3Base::get_s3_file_meta_(S3ObjectMeta &meta)
     OB_LOG(WARN, "s3 base not inited", K(ret));
   } else {
     Aws::S3::Model::HeadObjectRequest request;
-    request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
+    if (OB_UNLIKELY(object_.empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "object name is empty",  K(ret), K_(bucket), K_(object));
+    } else {
+      request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
+    }
+
     Aws::S3::Model::HeadObjectOutcome outcome;
-    if (OB_FAIL(s3_client_->head_object(request, outcome))) {
+    if (FAILEDx(s3_client_->head_object(request, outcome))) {
       OB_LOG(WARN, "failed to head s3 object", K(ret));
     } else if (!outcome.IsSuccess()) {
-      convert_io_error(outcome.GetError(), ret);
-      if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      handle_s3_outcome(outcome, ret);
+      if (OB_OBJECT_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
-        log_s3_status(outcome, ret);
         OB_LOG(WARN, "failed to head s3 object", K(ret), K_(bucket), K_(object));
       }
     } else {
       meta.is_exist_ = true;
       meta.length_ = outcome.GetResult().GetContentLength();
+      const Aws::Utils::DateTime &last_modified_date_time = outcome.GetResult().GetLastModified();
+      meta.mtime_s_ = last_modified_date_time.Seconds();
+
+      int tmp_ret = OB_SUCCESS;
+      const Aws::String &etag = outcome.GetResult().GetETag();
+      const ObString etag_ob_str(etag.size(), etag.c_str());
+      if (!etag_ob_str.empty()) {
+        if (OB_TMP_FAIL(meta.digest_.set(etag_ob_str))) {
+          OB_LOG(WARN, "fail to set digest", K(ret), K(tmp_ret),
+              K_(bucket), K_(object), K(etag_ob_str), K(meta));
+        }
+      }
     }
   }
   return ret;
@@ -1028,12 +1282,17 @@ int ObStorageS3Base::do_list_(const int64_t max_list_num, const char *delimiter,
   } else if (OB_UNLIKELY(max_list_num <= 0 || max_list_num > OB_STORAGE_LIST_MAX_NUM)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K_(bucket), K_(object), K(max_list_num));
-  } else if (OB_UNLIKELY(!is_end_with_slash(object_.ptr()))) {
+  } else if (OB_UNLIKELY(!is_null_or_end_with_slash(object_.ptr()))) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "uri is not a valid dir path", K(ret), K_(object), K_(bucket));
   } else {
     Aws::S3::Model::ListObjectsRequest request;
-    request.WithBucket(bucket_.ptr()).WithPrefix(object_.ptr()).WithMaxKeys(max_list_num);
+    // if object_ is empty, list all objects in the bucket
+    if (!object_.empty()) {
+      request.WithBucket(bucket_.ptr()).WithPrefix(object_.ptr()).WithMaxKeys(max_list_num);
+    } else {
+      request.WithBucket(bucket_.ptr()).WithMaxKeys(max_list_num);
+    }
     if (NULL != delimiter && strlen(delimiter) > 0) {
       request.SetDelimiter(delimiter);
     }
@@ -1071,7 +1330,7 @@ int ObStorageS3Writer::open_(const ObString &uri, ObObjectStorageInfo *storage_i
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 writer already open, cannot open again", K(ret), K(uri));
   } else if (OB_FAIL(ObStorageS3Base::open(uri, storage_info))) {
     OB_LOG(WARN, "failed to open in s3 base", K(ret), K(uri));
@@ -1141,6 +1400,10 @@ int ObStorageS3Writer::write_obj_(const char *obj_name, const char *buf, const i
     Aws::S3::Model::PutObjectOutcome outcome;
     if (OB_FAIL(s3_client_->put_object(request, outcome))) {
       OB_LOG(WARN, "failed to put s3 object", K(ret));
+#ifdef ERRSIM
+    } else if (OB_FAIL(EventTable::EN_OBJECT_STORAGE_CHECKSUM_ERROR)) {
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
+#endif
     } else if (!outcome.IsSuccess()) {
       handle_s3_outcome(outcome, ret);
       OB_LOG(WARN, "failed to write object into s3",
@@ -1164,7 +1427,7 @@ int ObStorageS3Writer::close_()
   int ret = OB_SUCCESS;
   is_opened_ = false;
   file_length_ = -1;
-  reset();
+  ObStorageS3Base::reset();
   return ret;
 }
 
@@ -1179,6 +1442,7 @@ ObStorageS3Reader::ObStorageS3Reader()
 
 ObStorageS3Reader::~ObStorageS3Reader()
 {
+  close();
 }
 
 void ObStorageS3Reader::reset()
@@ -1196,7 +1460,7 @@ int ObStorageS3Reader::open_(const ObString &uri,
   S3ObjectMeta meta;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 reader already open, cannot open again", K(ret), K(uri));
   } else if (OB_FAIL(ObStorageS3Base::open(uri, storage_info))) {
     OB_LOG(WARN, "failed to open in s3 base", K(ret), K(uri));
@@ -1205,8 +1469,8 @@ int ObStorageS3Reader::open_(const ObString &uri,
       if (OB_FAIL(get_s3_file_meta(meta))) {
         OB_LOG(WARN, "failed to get s3 object meta", K(ret), K(uri));
       } else if (!meta.is_exist_) {
-        ret = OB_BACKUP_FILE_NOT_EXIST;
-        OB_LOG(WARN, "backup file is not exist", K(ret), K(uri), K_(bucket), K_(object));
+        ret = OB_OBJECT_NOT_EXIST;
+        OB_LOG(WARN, "object is not exist", K(ret), K(uri), K_(bucket), K_(object));
       } else {
         file_length_ = meta.length_;
         has_meta_ = true;
@@ -1228,7 +1492,7 @@ int ObStorageS3Reader::pread_(char *buf,
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 reader not opened", K(ret));
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size <= 0 || offset < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1265,11 +1529,17 @@ int ObStorageS3Reader::pread_(char *buf,
         handle_s3_outcome(outcome, ret);
         OB_LOG(WARN, "failed to read object from s3",
             K(ret), K_(bucket), K_(object), K(range_read));
+      } else if (FALSE_IT(read_size = outcome.GetResult().GetContentLength())) {
+      } else if (OB_UNLIKELY(has_meta_ && read_size != get_data_size)) {
+        ret = OB_OBJECT_STORAGE_IO_ERROR;
+        OB_LOG(WARN, "returned data size is not equal to expected", K(ret),
+            K_(bucket), K_(object), K(offset), K(buf_size), K_(has_meta), K_(file_length));
+        log_s3_status(outcome, ret);
       } else {
-        read_size = outcome.GetResult().GetContentLength();
         outcome.GetResult().GetBody().read(buf, read_size);
 
         // read size <= get_data_size <= buf_size
+        // For nohead read, file_length_ is always -1, so the logic below will not be executed
         if (read_size == file_length_) {
           if (OB_FAIL(validate_response_checksum(buf, read_size, outcome.GetResult()))) {
             OB_LOG(WARN, "fail to validate_response_checksum",
@@ -1298,13 +1568,14 @@ ObStorageS3Util::ObStorageS3Util() : is_opened_(false), storage_info_(NULL)
 
 ObStorageS3Util::~ObStorageS3Util()
 {
+  close();
 }
 
 int ObStorageS3Util::open(ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 util already open, cannot open again", K(ret));
   } else if (OB_ISNULL(storage_info)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1343,8 +1614,8 @@ int ObStorageS3Util::get_file_length_(const ObString &uri, int64_t &file_length)
   if (OB_FAIL(head_object_meta(uri, obj_meta))) {
     OB_LOG(WARN, "fail to head object meta", K(ret), K(uri));
   } else if (!obj_meta.is_exist_) {
-    ret = OB_BACKUP_FILE_NOT_EXIST;
-    OB_LOG(WARN, "backup file is not exist", K(ret), K(uri));
+    ret = OB_OBJECT_NOT_EXIST;
+    OB_LOG(WARN, "object is not exist", K(ret), K(uri));
   } else {
     file_length = obj_meta.length_;
   }
@@ -1359,7 +1630,7 @@ int ObStorageS3Util::head_object_meta(const ObString &uri, ObStorageObjectMetaBa
   obj_meta.reset();
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1372,6 +1643,10 @@ int ObStorageS3Util::head_object_meta(const ObString &uri, ObStorageObjectMetaBa
     obj_meta.is_exist_ = meta.is_exist_;
     if (obj_meta.is_exist_) {
       obj_meta.length_ = meta.length_;
+      obj_meta.mtime_s_ = meta.mtime_s_;
+      if (!meta.digest_.empty() && OB_FAIL(obj_meta.digest_.assign(meta.digest_))) {
+        OB_LOG(WARN, "fail to set digest", K(ret), K(uri), K(meta));
+      }
     }
   }
   return ret;
@@ -1424,7 +1699,7 @@ int ObStorageS3Util::del_file_(const ObString &uri)
   ObStorageS3Base s3_base;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1433,11 +1708,11 @@ int ObStorageS3Util::del_file_(const ObString &uri)
     OB_LOG(WARN, "failed to open s3 base", K(ret), K(uri));
   } else {
     const int64_t delete_mode = s3_base.s3_account_.delete_mode_;
-    if (ObIStorageUtil::DELETE == delete_mode) {
+    if (ObStorageDeleteMode::STORAGE_DELETE_MODE == delete_mode) {
       if (OB_FAIL(delete_object_(s3_base))) {
-        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+        if (OB_OBJECT_NOT_EXIST == ret) {
           // Uniform handling of 'object not found' scenarios across different object storage services:
-          // GCS returns the OB_BACKUP_FILE_NOT_EXIST error when an object does not exist,
+          // GCS returns the OB_OBJECT_NOT_EXIST error when an object does not exist,
           // whereas other object storage services may not report an error.
           // Therefore, to maintain consistency,
           // no error code is returned when attempting to delete a non-existent object
@@ -1446,7 +1721,7 @@ int ObStorageS3Util::del_file_(const ObString &uri)
           OB_LOG(WARN, "failed to delete s3 object", K(ret), K(uri));
         }
       }
-    } else if (ObIStorageUtil::TAGGING == delete_mode) {
+    } else if (ObStorageDeleteMode::STORAGE_TAGGING_MODE == delete_mode) {
       if (OB_FAIL(tagging_object_(s3_base))) {
         OB_LOG(WARN, "failed to tag s3 object", K(ret), K(uri));
       }
@@ -1458,13 +1733,98 @@ int ObStorageS3Util::del_file_(const ObString &uri)
   return ret;
 }
 
+int ObStorageS3Util::batch_del_files_(
+    const ObString &uri,
+    hash::ObHashMap<ObString, int64_t> &files_to_delete,
+    ObIArray<int64_t> &failed_files_idx)
+{
+  int ret = OB_SUCCESS;
+  ObStorageS3Base s3_base;
+  const int64_t n_files_to_delete = files_to_delete.size();
+  ObArenaAllocator allocator(OB_STORAGE_S3_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
+  ObExternalIOCounterGuard io_guard;
+
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "s3 util not opened", K(ret), K(uri));
+  } else if (OB_FAIL(check_files_map_validity(files_to_delete))) {
+    OB_LOG(WARN, "files_to_delete is invalid", K(ret), K(uri));
+  } else if (OB_FAIL(s3_base.open(uri, storage_info_))) {
+    OB_LOG(WARN, "failed to open s3 base", K(ret), K(uri), KPC_(storage_info));
+  } else if (OB_UNLIKELY(ObStorageDeleteMode::STORAGE_TAGGING_MODE == s3_base.s3_account_.delete_mode_)) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "batch tagging is not supported", K(ret), K(uri), K(s3_base.s3_account_));
+  } else {
+    char *tmp_key = nullptr;
+    Aws::S3::Model::Delete delete_info;
+    delete_info.SetQuiet(false); // return all object's status
+    hash::ObHashMap<ObString, int64_t>::const_iterator iter = files_to_delete.begin();
+    while (OB_SUCC(ret) && iter != files_to_delete.end()) {
+      if (OB_FAIL(ob_dup_cstring(allocator, iter->first, tmp_key))) {
+        OB_LOG(WARN, "fail to copy c string", K(ret), K(uri),
+            K(iter->first), KPC_(storage_info), K(s3_base.bucket_), K(s3_base.object_));
+      } else {
+        delete_info.AddObjects(Aws::S3::Model::ObjectIdentifier().WithKey(tmp_key));
+        iter++;
+      }
+    }
+
+    Aws::S3::Model::DeleteObjectsRequest request;
+    Aws::S3::Model::DeleteObjectsOutcome outcome;
+    request.WithBucket(s3_base.bucket_.ptr()).WithDelete(delete_info);
+    if (FAILEDx(s3_base.s3_client_->delete_objects(request, outcome))) {
+      OB_LOG(WARN, "failed to delete multiple objects", K(ret), K(s3_base.s3_account_));
+    } else if (!outcome.IsSuccess()) {
+      handle_s3_outcome(outcome, ret);
+      if (is_gcs_destination(outcome)) {
+        // For GCS, ignore current error
+        ret = OB_NOT_SUPPORTED;
+        OB_LOG(WARN, "delete objects interface is not supported for GCS",
+            K(ret), K(uri), K(s3_base.bucket_), K(s3_base.object_), KPC_(storage_info));
+      } else {
+        OB_LOG(WARN, "failed to delete objects",
+            K(ret), K(uri), K(s3_base.bucket_), K(s3_base.object_), KPC_(storage_info));
+      }
+    } else {
+      // The deleted_object_list contains all the objects that were successfully deleted.
+      // By comparing it to files_to_delete, we can identify the objects that failed to be deleted.
+      const Aws::Vector<Model::DeletedObject> &deleted_object_list = outcome.GetResult().GetDeleted();
+      const char *object_name = nullptr;
+      int64_t object_name_len = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < deleted_object_list.size(); i++) {
+        object_name = deleted_object_list[i].GetKey().c_str();
+        object_name_len = deleted_object_list[i].GetKey().size();
+        if (OB_ISNULL(object_name) || OB_UNLIKELY(object_name_len <= 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          OB_LOG(WARN, "returned object name is null",
+              K(ret), K(s3_base.s3_account_), K(i), K(object_name), K(object_name_len));
+        }
+        // S3 returns the successfully deleted object in the structure of the basic_string.
+        // We use the size of string to construct ObString.
+        else if (OB_FAIL(files_to_delete.erase_refactored(ObString(object_name_len, object_name)))) {
+          OB_LOG(WARN, "fail to erase succeed deleted object", K(ret),
+              K(s3_base.s3_account_), K(i), K(object_name), K(object_name_len));
+        } else {
+          OB_LOG(DEBUG, "succeed deleting object", K(object_name));
+        }
+      }
+
+      if (FAILEDx(record_failed_files_idx(files_to_delete, failed_files_idx))) {
+        OB_LOG(WARN, "fail to record failed del",
+            K(ret), K(s3_base.s3_account_), K(n_files_to_delete), K(files_to_delete.size()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObStorageS3Util::write_single_file_(const ObString &uri, const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
   ObStorageS3Writer s3_writer;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty() || size < 0) || OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1496,38 +1856,45 @@ int ObStorageS3Util::list_files_(const ObString &uri, ObBaseDirEntryOperator &op
   const char *full_dir_path = NULL;
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(uri));
-  } else if (OB_FAIL(s3_base.open(uri, storage_info_))) {
+  } else if (OB_FAIL(s3_base.inner_open(uri, storage_info_))) {
     OB_LOG(WARN, "fail to open s3 base", K(ret), K(uri));
   } else if (FALSE_IT(full_dir_path = s3_base.object_.ptr())) {
-  } else if (OB_UNLIKELY(!is_end_with_slash(full_dir_path))) {
+  } else if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "uri is not terminated with '/'", K(ret), K(uri), K(full_dir_path));
   } else {
-    const int64_t full_dir_path_len = strlen(full_dir_path); // actual dir path len
+    const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
     Aws::S3::Model::ListObjectsOutcome outcome;
     Aws::String next_marker;
+    int64_t list_count = 0;
+    int64_t vain_list_count = 0;
     do {
       if (OB_FAIL(s3_base.do_list_(OB_STORAGE_LIST_MAX_NUM, NULL/*delimiter*/,
                                    next_marker, outcome))) {
         OB_LOG(WARN, "fail to list s3 objects", K(ret), K(uri));
       } else {
+        list_count++;
         const char *request_id = outcome.GetResult().GetRequestId().c_str();
         const Aws::Vector<Aws::S3::Model::Object> &contents = outcome.GetResult().GetContents();
         for (int64_t i = 0; OB_SUCC(ret) && i < contents.size(); i++) {
           const Aws::S3::Model::Object &obj = contents[i];
           const char *obj_path = obj.GetKey().c_str();
           const int64_t obj_path_len = obj.GetKey().size();
+          ObFileExtraInfo file_extra_info;
+          file_extra_info.etag_ = obj.GetETag().c_str();
+          file_extra_info.etag_len_ = obj.GetETag().size();
+          file_extra_info.last_modified_time_ms_ = obj.GetLastModified().Millis();
 
           // For example, we can use oss console to create a 'read dir', like aaa/bbb/ccc/.
           // When list 'aaa/bbb/ccc/' this dir, we will get it self, that means we will get
           // a object whose name length is same with its parent dir length.
-          if (OB_UNLIKELY(false == ObString(obj_path).prefix_match(full_dir_path))) {
-            ret = OB_S3_ERROR;
+          if (OB_ISNULL(obj_path) || OB_UNLIKELY(false == ObString(obj_path).prefix_match(full_dir_path))) {
+            ret = OB_OBJECT_STORAGE_IO_ERROR;
             OB_LOG(WARN, "returned object prefix not match",
                 K(ret), K(request_id), K(obj_path), K(full_dir_path), K(uri));
           } else if (OB_UNLIKELY(obj_path_len == full_dir_path_len)) {
@@ -1536,8 +1903,9 @@ int ObStorageS3Util::list_files_(const ObString &uri, ObBaseDirEntryOperator &op
                  K(request_id), K(obj_path), K(full_dir_path), K(full_dir_path_len));
           } else if (OB_FAIL(handle_listed_object(op, obj_path + full_dir_path_len,
                                                   obj_path_len - full_dir_path_len,
-                                                  obj.GetSize()))) {
-            OB_LOG(WARN, "fail to handle listed s3 object", K(ret),  K(request_id),
+                                                  obj.GetSize(),
+                                                  &file_extra_info))) {
+            OB_LOG(WARN, "fail to handle listed s3 object", K(ret), K(request_id), K(file_extra_info),
                 K(obj_path), K(obj_path_len), K(full_dir_path), K(full_dir_path_len), K(uri));
           }
         } // end for
@@ -1553,8 +1921,9 @@ int ObStorageS3Util::list_files_(const ObString &uri, ObBaseDirEntryOperator &op
             next_marker = contents[contents.size() - 1].GetKey();
           } else {
             // if result is truncated, contents should not be empty
-            ret = OB_ERR_UNEXPECTED;
-            OB_LOG(WARN, "listed s3 objects are empty", K(ret), K(request_id), K(contents.size()));
+            // but bos is an exception, to avoid bos errors, we don't return error here
+            vain_list_count++;
+            OB_LOG(WARN, "listed s3 objects are empty but is truncated", K(ret), K(request_id), K(contents.size()), K(vain_list_count), K(list_count));
           }
         }
       }
@@ -1574,19 +1943,19 @@ int ObStorageS3Util::list_files2_(
   ObStorageListObjectsCtx &list_ctx = static_cast<ObStorageListObjectsCtx &>(ctx_base);
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty() || !list_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(uri), K(list_ctx));
-  } else if (OB_FAIL(s3_base.open(uri, storage_info_))) {
+  } else if (OB_FAIL(s3_base.inner_open(uri, storage_info_))) {
     OB_LOG(WARN, "fail to open s3 base", K(ret), K(uri));
   } else if (FALSE_IT(full_dir_path = s3_base.object_.ptr())) {
-  } else if (OB_UNLIKELY(!is_end_with_slash(full_dir_path))) {
+  } else if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "uri is not terminated with '/'", K(ret), K(uri), K(full_dir_path));
   } else {
-    const int64_t full_dir_path_len = strlen(full_dir_path); // actual dir path len
+    const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
     Aws::S3::Model::ListObjectsOutcome outcome;
     Aws::String next_marker;
     if (list_ctx.next_token_ != NULL && list_ctx.next_token_[0] != '\0') {
@@ -1628,8 +1997,8 @@ int ObStorageS3Util::list_files2_(
         const int64_t cur_obj_path_len = obj.GetKey().size();
         OB_LOG(DEBUG, "s3 list files content", K(cur_obj_path), K(cur_obj_path_len));
 
-        if (OB_UNLIKELY(false == ObString(cur_obj_path).prefix_match(full_dir_path))) {
-          ret = OB_S3_ERROR;
+        if (OB_ISNULL(cur_obj_path) || OB_UNLIKELY(false == ObString(cur_obj_path).prefix_match(full_dir_path))) {
+          ret = OB_OBJECT_STORAGE_IO_ERROR;
           OB_LOG(WARN, "returned object prefix not match",
               K(ret), K(request_id), K(cur_obj_path), K(full_dir_path), K(uri));
         } else if (OB_UNLIKELY(cur_obj_path_len == full_dir_path_len)) {
@@ -1663,19 +2032,19 @@ int ObStorageS3Util::list_directories_(const ObString &uri, ObBaseDirEntryOperat
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(uri));
-  } else if (OB_FAIL(s3_base.open(uri, storage_info_))) {
+  } else if (OB_FAIL(s3_base.inner_open(uri, storage_info_))) {
     OB_LOG(WARN, "fail to open s3 base", K(ret), K(uri));
   } else if (FALSE_IT(full_dir_path = s3_base.object_.ptr())) {
-  } else if (OB_UNLIKELY(!is_end_with_slash(full_dir_path))) {
+  } else if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "uri is not terminated with '/'", K(ret), K(uri), K(full_dir_path));
   } else {
-    const int64_t full_dir_path_len = strlen(full_dir_path); // actual dir path len
+    const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
     Aws::S3::Model::ListObjectsOutcome outcome;
     Aws::String next_marker;
     do {
@@ -1698,12 +2067,12 @@ int ObStorageS3Util::list_directories_(const ObString &uri, ObBaseDirEntryOperat
           const int64_t listed_dir_full_path_len = tmp_common_prefix.GetPrefix().size();
           OB_LOG(DEBUG, "s3 list directories", K(i), K(listed_dir_full_path));
 
-          if (OB_UNLIKELY(false == ObString(listed_dir_full_path).prefix_match(full_dir_path))) {
-            ret = OB_S3_ERROR;
+          if (OB_ISNULL(listed_dir_full_path) || OB_UNLIKELY(false == ObString(listed_dir_full_path).prefix_match(full_dir_path))) {
+            ret = OB_OBJECT_STORAGE_IO_ERROR;
             OB_LOG(WARN, "returned object prefix not match",
                 K(ret), K(request_id), K(listed_dir_full_path), K(full_dir_path), K(uri));
           } else if (OB_UNLIKELY(!is_end_with_slash(listed_dir_full_path))) {
-            ret = OB_S3_ERROR;
+            ret = OB_OBJECT_STORAGE_IO_ERROR;
             OB_LOG(WARN, "the data has no directory",
                 K(ret), K(request_id), K(full_dir_path), K(listed_dir_full_path), K(uri));
           } else if (OB_FAIL(handle_listed_directory(op,
@@ -1716,7 +2085,7 @@ int ObStorageS3Util::list_directories_(const ObString &uri, ObBaseDirEntryOperat
         if (OB_SUCC(ret) && outcome.GetResult().GetIsTruncated()) {
           next_marker = outcome.GetResult().GetNextMarker();
           if (next_marker.empty()) {
-            ret = OB_S3_ERROR;
+            ret = OB_OBJECT_STORAGE_IO_ERROR;
             OB_LOG(WARN, "when listing s3 directories, next marker should not be empty if result is truncated",
                 K(ret), K(request_id), K(outcome.GetResult().GetIsTruncated()), K(next_marker.c_str()));
           }
@@ -1734,7 +2103,7 @@ int ObStorageS3Util::is_tagging_(const ObString &uri, bool &is_tagging)
   ObExternalIOCounterGuard io_guard;
   is_tagging = false;
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1778,7 +2147,7 @@ int ObStorageS3Util::del_unmerged_parts_(const ObString &uri)
   ObStorageS3Base s3_base;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1839,6 +2208,7 @@ ObStorageS3AppendWriter::ObStorageS3AppendWriter()
 
 ObStorageS3AppendWriter::~ObStorageS3AppendWriter()
 {
+  close();
 }
 
 int ObStorageS3AppendWriter::open_(const ObString &uri, ObObjectStorageInfo *storage_info)
@@ -1846,10 +2216,10 @@ int ObStorageS3AppendWriter::open_(const ObString &uri, ObObjectStorageInfo *sto
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OPEN_TWICE;
     OB_LOG(WARN, "s3 append writer already open, cannot open again", K(ret), K(uri));
   } else if (OB_FAIL(ObStorageS3Writer::open(uri, storage_info))) {
-    OB_LOG(WARN, "failed to open in s3 base", K(ret), K(uri));
+    OB_LOG(WARN, "failed to open in s3 base", K(ret), K(uri), KPC(storage_info));
   } else {
     is_opened_ = true;
     storage_info_ = storage_info;
@@ -1859,7 +2229,10 @@ int ObStorageS3AppendWriter::open_(const ObString &uri, ObObjectStorageInfo *sto
 
 int ObStorageS3AppendWriter::write_(const char *buf, const int64_t size)
 {
-  return pwrite(buf, size, 0);
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(buf);
+  UNUSED(size);
+  return ret;
 }
 
 int ObStorageS3AppendWriter::pwrite_(const char *buf, const int64_t size, const int64_t offset)
@@ -1877,12 +2250,12 @@ int ObStorageS3AppendWriter::pwrite_(const char *buf, const int64_t size, const 
   } else {
     // write the format file when writing the first fragment because the appender may open multiple times
     if (offset == 0) {
-      if (OB_FAIL(construct_fragment_full_name(object_, OB_S3_APPENDABLE_FORMAT_META,
+      if (OB_FAIL(construct_fragment_full_name(object_, OB_ADAPTIVELY_APPENDABLE_FORMAT_META,
                                                fragment_name, sizeof(fragment_name)))) {
         OB_LOG(WARN, "failed to construct s3 mock append object foramt name",
             K(ret), K_(bucket), K_(object));
-      } else if (OB_FAIL(write_obj_(fragment_name, OB_S3_APPENDABLE_FORMAT_CONTENT_V1,
-                                    strlen(OB_S3_APPENDABLE_FORMAT_CONTENT_V1)))) {
+      } else if (OB_FAIL(write_obj_(fragment_name, OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1,
+                                    strlen(OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1)))) {
         OB_LOG(WARN, "fail to write s3 mock append object format file", K(ret), K(fragment_name));
       }
     }
@@ -1928,16 +2301,16 @@ int64_t ObStorageS3AppendWriter::get_length() const
 
 /*--------------------------------ObStorageS3MultiPartWriter--------------------------------*/
 ObStorageS3MultiPartWriter::ObStorageS3MultiPartWriter()
-    : ObStorageS3Base(),
-      is_opened_(false),
+    : ObStorageS3Writer(),
       base_buf_(NULL), base_buf_pos_(-1),
       upload_id_(NULL),
-      partnum_(0),
-      file_length_(-1)
+      partnum_(0)
 {}
 
 ObStorageS3MultiPartWriter::~ObStorageS3MultiPartWriter()
-{}
+{
+  close();
+}
 
 void ObStorageS3MultiPartWriter::reset()
 {
@@ -1947,6 +2320,7 @@ void ObStorageS3MultiPartWriter::reset()
   upload_id_ = NULL;
   partnum_ = 0;
   file_length_ = -1;
+  reset_part_info();
   ObStorageS3Base::reset();
 }
 
@@ -1955,10 +2329,12 @@ int ObStorageS3MultiPartWriter::open_(const ObString &uri, ObObjectStorageInfo *
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_S3_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "s3 multipart writer already opened, cannot open again", K(ret), K(uri));
-  } else if (OB_FAIL(ObStorageS3Base::open(uri, storage_info))) {
+  } else if (OB_FAIL(ObStorageS3Writer::open(uri, storage_info))) {
     OB_LOG(WARN, "failed to open in s3 base", K(ret), K(uri));
+  } else if (OB_FAIL(ObStoragePartInfoHandler::init())) {
+    OB_LOG(WARN, "fail to init part info handler", K(ret), K(uri));
   } else {
     Aws::S3::Model::CreateMultipartUploadRequest request;
     request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
@@ -2039,18 +2415,41 @@ int ObStorageS3MultiPartWriter::pwrite_(const char *buf, const int64_t size, con
   return write(buf, size);
 }
 
-static bool is_obs_destination(const Aws::S3::Model::CompleteMultipartUploadOutcome &outcome)
+static int construct_completed_multipart_upload(
+    const ObStoragePartInfoHandler::PartInfoMap &part_info_map,
+    const ObStorageChecksumType checksum_type,
+    Aws::S3::Model::CompletedMultipartUpload &completed_multipart_upload)
 {
-  Aws::String key_str = Aws::Utils::StringUtils::ToLower("server");
-  const Aws::Http::HeaderValueCollection &headers = outcome.GetError().GetResponseHeaders();
-  Aws::Http::HeaderValueCollection::const_iterator iter = headers.find(key_str);
-  return (iter != headers.end() && iter->second == "OBS");
-}
+  int ret = OB_SUCCESS;
+  const int64_t max_part_id = part_info_map.size();
+  ObStoragePartInfoHandler::PartInfo tmp_part_info;
 
-static bool is_gcs_destination(const Aws::S3::Model::CompleteMultipartUploadOutcome &outcome)
-{
-  // The x-guploader-uploadid header is a unique identifier provided in Cloud Storage responses.
-  return outcome.GetError().ResponseHeaderExists("x-guploader-uploadid");
+  // allow to be empty parts
+  if (OB_UNLIKELY(max_part_id < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), K(max_part_id));
+  }
+  for (int64_t i = 1; OB_SUCC(ret) && i <= max_part_id; i++) {
+    if (OB_FAIL(part_info_map.get_refactored(i, tmp_part_info))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        OB_LOG(WARN, "part ids should be 1 ~ max_part_id", K(ret), K(i), K(max_part_id));
+      } else {
+        OB_LOG(WARN, "fail to get part info", K(ret), K(i), K(max_part_id));
+      }
+    } else if (OB_ISNULL(tmp_part_info.first)) {  // etag
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "etag is null", K(ret), K(i), K(max_part_id));
+    } else {
+      Aws::S3::Model::CompletedPart tmp_part;
+      if (OB_FAIL(set_completed_part_checksum(tmp_part, checksum_type, tmp_part_info.second))) {
+        OB_LOG(WARN, "fail to set checksum", K(ret), K(i), K(checksum_type), K(max_part_id));
+      } else {
+        tmp_part.WithPartNumber(i).WithETag(tmp_part_info.first);
+        completed_multipart_upload.AddParts(std::move(tmp_part));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObStorageS3MultiPartWriter::complete_()
@@ -2068,38 +2467,12 @@ int ObStorageS3MultiPartWriter::complete_()
     }
   }
 
-  if (OB_SUCC(ret)) {
-    // list parts
-    Aws::S3::Model::CompletedMultipartUpload completed_multipart_upload;
-    int64_t part_num = 0;
-    Aws::S3::Model::ListPartsRequest request;
-    request.WithBucket(bucket_.ptr()).WithKey(object_.ptr()).WithUploadId(upload_id_);
-    request.SetMaxParts(OB_STORAGE_LIST_MAX_NUM);
-    Aws::S3::Model::ListPartsOutcome outcome;
-    do {
-      if (OB_FAIL(s3_client_->list_parts(request, outcome))) {
-        OB_LOG(WARN, "failed to list s3 multipart upload parts", K(ret));
-      } else if (!outcome.IsSuccess()) {
-        handle_s3_outcome(outcome, ret);
-        OB_LOG(WARN, "failed to list s3 uploaded parts",
-            K(ret), K_(bucket), K_(object));
-      } else {
-        const Aws::Vector<Aws::S3::Model::Part> &parts = outcome.GetResult().GetParts();
-        part_num += parts.size();
-        for (int64_t i = 0; OB_SUCC(ret) && i < parts.size(); i++) {
-          Aws::S3::Model::CompletedPart tmp_part;
-          if (OB_FAIL(set_completed_part_checksum(tmp_part, parts[i], checksum_type_))) {
-            OB_LOG(WARN, "fail to set completed part checksum", K(ret), K_(checksum_type));
-          } else {
-            tmp_part.WithPartNumber(parts[i].GetPartNumber()).WithETag(parts[i].GetETag());
-            completed_multipart_upload.AddParts(std::move(tmp_part));
-          }
-        }
-      }
-      request.SetPartNumberMarker(outcome.GetResult().GetNextPartNumberMarker());
-    } while (OB_SUCC(ret) && outcome.GetResult().GetIsTruncated());
-
-
+  Aws::S3::Model::CompletedMultipartUpload completed_multipart_upload;
+  if (FAILEDx(construct_completed_multipart_upload(part_info_map_,
+                                                   checksum_type_,
+                                                   completed_multipart_upload))) {
+    OB_LOG(WARN, "fail to construct completed multipart upload", K(ret), K_(checksum_type));
+  } else {
     // complete upload
     Aws::S3::Model::CompleteMultipartUploadRequest complete_multipart_upload_request;
     complete_multipart_upload_request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
@@ -2108,39 +2481,22 @@ int ObStorageS3MultiPartWriter::complete_()
 
     Aws::S3::Model::CompleteMultipartUploadOutcome complete_multipart_upload_outcome;
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(part_num == 0)) {
+    } else if (OB_UNLIKELY(size() == 0)) {
       // If 'complete' without uploading any data, S3 will return the error
       // 'InvalidRequest，You must specify at least one part'
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(part_num), K_(upload_id));
+      // write an empty object instead
+      if (OB_FAIL(write_obj_(object_.ptr(), "", 0))) {
+        OB_LOG(WARN, "complete an empty multipart upload, but fail to write an empty object",
+            K(ret), K_(partnum), K_(upload_id), K_(bucket), K_(object));
+      }
     } else if (OB_FAIL(s3_client_->complete_multipart_upload(complete_multipart_upload_request,
                                                              complete_multipart_upload_outcome))) {
-      OB_LOG(WARN, "failed to complete s3 multipart upload", K(ret));
+      OB_LOG(WARN, "failed to complete s3 multipart upload",
+          K(ret), K_(partnum), K(size()), K_(bucket), K_(object), K_(upload_id));
     } else if (!complete_multipart_upload_outcome.IsSuccess()) {
       handle_s3_outcome(complete_multipart_upload_outcome, ret);
-
-      // Due to the following reasons:
-      //   1. OBS/GCS is currently accessed through the S3 SDK without any dedicated OBS/GCS prefix or type,
-      //      and using the host to determine if the endpoint is OBS/GCS is not secure.
-      //   2. The S3 SDK can only acquire the response header to distinguish the server type
-      //      when a request fails.
-      //   3. Furthermore, when the S3 SDK is used to access OBS/GCS with the checksum type set to crc32,
-      //      the OBS/GCS server will only return an error in the complete_multipart_upload interface.
-      // Therefore, it is only possible to determine at this point
-      // whether the configured checksum type is supported by the destination.
-      // If the checksum algorithm is crc32 and the destination type is OBS/GCS,
-      // for the caller at a higher level,
-      // the checksum algorithm should first be set to a type supported by OBS/GCS.
-      // Hence, the error code is directly translated to OB_CHECKSUM_TYPE_NOT_SUPPORTED.
-      if (ObStorageChecksumType::OB_CRC32_ALGO == checksum_type_
-          && (is_obs_destination(complete_multipart_upload_outcome)
-              || is_gcs_destination(complete_multipart_upload_outcome))) {
-        ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
-        OB_LOG(WARN, "the checksum type is not supported for OBS/GCS", K(ret), K_(checksum_type));
-      }
-
       OB_LOG(WARN, "failed to complete multipart upload for s3",
-          K(ret), K_(bucket), K_(object));
+          K(ret), K_(bucket), K_(object), K_(upload_id), K_(partnum), K(size()));
     }
 
   }
@@ -2199,21 +2555,223 @@ int ObStorageS3MultiPartWriter::write_single_part_()
     data_stream->write(base_buf_, base_buf_pos_);
     data_stream->flush();
     request.SetBody(data_stream);
+    request.SetContentLength(static_cast<long>(request.GetBody()->tellp()));
 
     Aws::S3::Model::UploadPartOutcome outcome;
     if (OB_FAIL(set_request_checkusum_algorithm(request, checksum_type_))) {
-      OB_LOG(WARN, "fail to set checksum algorithm", K(ret), K_(checksum_type));
+      OB_LOG(WARN, "fail to set checksum algorithm", K(ret),
+          K_(checksum_type), K_(bucket), K_(object), K_(upload_id));
     } else if (OB_FAIL(s3_client_->upload_part(request, outcome))) {
-      OB_LOG(WARN, "failed to upload s3 multipart", K(ret));
+      OB_LOG(WARN, "failed to upload s3 multipart", K(ret), K_(bucket), K_(object), K_(upload_id));
     } else if (!outcome.IsSuccess()) {
       handle_s3_outcome(outcome, ret);
       OB_LOG(WARN, "failed to upload part into s3", K(ret), K_(bucket), K_(object), K_(partnum));
     } else {
       OB_LOG(DEBUG, "succed upload a part into s3", K_(partnum), K_(bucket), K_(object));
+
+      const char *etag = outcome.GetResult().GetETag().c_str();
+      const char *checksum = nullptr;
+      if (OB_FAIL(get_completed_part_checksum(outcome.GetResult(), checksum_type_, checksum))) {
+        OB_LOG(WARN, "fail to get completed part checksum", K(ret),
+            K_(checksum_type), K_(bucket), K_(object), K_(upload_id));
+      } else if (OB_FAIL(add_part_info(partnum_, etag, checksum))) {
+        OB_LOG(WARN, "fail to add part info", K(ret),
+            K_(bucket), K_(object), K_(partnum), K(etag));
+      }
     }
   }
   return ret;
 }
 
+ObStorageParallelS3MultiPartWriter::ObStorageParallelS3MultiPartWriter()
+    : ObStorageS3Writer(),
+      upload_id_(nullptr)
+{}
+
+ObStorageParallelS3MultiPartWriter::~ObStorageParallelS3MultiPartWriter()
+{
+  close();
+}
+
+void ObStorageParallelS3MultiPartWriter::reset()
+{
+  is_opened_ = false;
+  upload_id_ = nullptr;
+  reset_part_info();
+  ObStorageS3Base::reset();
+}
+
+int ObStorageParallelS3MultiPartWriter::open_(const ObString &uri, ObObjectStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+  if (OB_UNLIKELY(is_opened_)) {
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
+    OB_LOG(WARN, "s3 multipart writer already opened, cannot open again", K(ret), K(uri));
+  } else if (OB_FAIL(ObStorageS3Writer::open(uri, storage_info))) {
+    OB_LOG(WARN, "failed to open in s3 base writer", K(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(ObStoragePartInfoHandler::init())) {
+    OB_LOG(WARN, "fail to init part info handler", K(ret), K(uri));
+  } else {
+    Aws::S3::Model::CreateMultipartUploadRequest request;
+    request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
+    Aws::S3::Model::CreateMultipartUploadOutcome outcome;
+
+    if (OB_FAIL(set_request_checkusum_algorithm(request, checksum_type_))) {
+      OB_LOG(WARN, "fail to set checksum algorithm", K(ret), K_(checksum_type));
+    } else if (OB_FAIL(s3_client_->create_multipart_upload(request, outcome))) {
+      OB_LOG(WARN, "failed to create s3 multipart upload", K(ret));
+    } else if (!outcome.IsSuccess()) {
+      handle_s3_outcome(outcome, ret);
+      OB_LOG(WARN, "failed to create multipart upload for s3",
+          K(ret), K_(bucket), K_(object));
+    } else {
+      const Aws::String &upload_id = outcome.GetResult().GetUploadId();
+      if (OB_UNLIKELY(upload_id.empty())) {
+        ret = OB_OBJECT_STORAGE_IO_ERROR;
+        OB_LOG(WARN, "returned upload_id is empty", K(ret), K(upload_id.size()));
+      } else if (OB_ISNULL(upload_id_ = static_cast<char *>(allocator_.alloc(upload_id.size() + 1)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "failed to alloc buf for s3 multipartupload upload id",
+            K(ret), K(upload_id.size()));
+      } else {
+        STRNCPY(upload_id_, upload_id.c_str(), upload_id.size());
+        upload_id_[upload_id.size()] = '\0';
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    reset();
+  }
+  return ret;
+}
+
+int ObStorageParallelS3MultiPartWriter::upload_part_(
+    const char *buf, const int64_t size, const int64_t part_id)
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "s3 multipart writer not opened", K(ret));
+  } else if (OB_UNLIKELY(part_id < 1 || part_id > MAX_S3_PART_NUM)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "out of s3 part num effective range", K(ret), K(part_id), K(MAX_S3_PART_NUM));
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size));
+  } else {
+    Aws::S3::Model::UploadPartRequest request;
+    request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
+    request.WithPartNumber(part_id).WithUploadId(upload_id_);
+    std::shared_ptr<Aws::IOStream> data_stream =
+        Aws::MakeShared<Aws::StringStream>(S3_SDK);
+    data_stream->write(buf, size);
+    data_stream->flush();
+    request.SetBody(data_stream);
+    request.SetContentLength(static_cast<long long>(size));
+
+    Aws::S3::Model::UploadPartOutcome outcome;
+    if (OB_FAIL(set_request_checkusum_algorithm(request, checksum_type_))) {
+      OB_LOG(WARN, "fail to set checksum algorithm", K(ret),
+          K_(checksum_type), K_(bucket), K_(object), K(part_id), K_(upload_id));
+    } else if (OB_FAIL(s3_client_->upload_part(request, outcome))) {
+      OB_LOG(WARN, "failed to upload s3 multipart", K(ret),
+          K_(checksum_type), K_(bucket), K_(object), K(part_id), K_(upload_id));
+    } else if (!outcome.IsSuccess()) {
+      handle_s3_outcome(outcome, ret);
+      OB_LOG(WARN, "failed to upload part into s3",
+          K(ret), K_(bucket), K_(object), K(part_id), K_(upload_id));
+    } else {
+      OB_LOG(DEBUG, "succed upload a part into s3", K(part_id), K_(bucket), K_(object));
+
+      const char *etag = outcome.GetResult().GetETag().c_str();
+      const char *checksum = nullptr;
+      if (OB_FAIL(get_completed_part_checksum(outcome.GetResult(), checksum_type_, checksum))) {
+        OB_LOG(WARN, "fail to get completed part checksum", K(ret),
+            K_(checksum_type), K_(bucket), K_(object), K_(upload_id));
+      } else if (OB_FAIL(add_part_info(part_id, etag, checksum))) {
+        OB_LOG(WARN, "fail to add part info", K(ret),
+            K_(bucket), K_(object), K(part_id), K(etag));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStorageParallelS3MultiPartWriter::complete_()
+{
+  int ret = OB_SUCCESS;
+  Aws::S3::Model::CompletedMultipartUpload completed_multipart_upload;
+  ObExternalIOCounterGuard io_guard;
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "s3 multipart writer cannot compelete before it is opened", K(ret));
+  } else if (FAILEDx(construct_completed_multipart_upload(part_info_map_,
+                                                          checksum_type_,
+                                                          completed_multipart_upload))) {
+    OB_LOG(WARN, "fail to construct completed multipart upload", K(ret), K_(checksum_type));
+  } else {
+    // complete upload
+    Aws::S3::Model::CompleteMultipartUploadRequest complete_multipart_upload_request;
+    complete_multipart_upload_request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
+    complete_multipart_upload_request.WithUploadId(upload_id_);
+    complete_multipart_upload_request.WithMultipartUpload(completed_multipart_upload);
+
+    Aws::S3::Model::CompleteMultipartUploadOutcome complete_multipart_upload_outcome;
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(size() == 0)) {
+      // If 'complete' without uploading any data, S3 will return the error
+      // 'InvalidRequest，You must specify at least one part'
+      // write an empty object instead
+      if (OB_FAIL(write_obj_(object_.ptr(), "", 0))) {
+       OB_LOG(WARN, "complete an empty multipart upload, but fail to write an empty object",
+           K(ret), K(size()), K_(upload_id), K_(bucket), K_(object));
+      }
+    } else if (OB_FAIL(s3_client_->complete_multipart_upload(complete_multipart_upload_request,
+                                                             complete_multipart_upload_outcome))) {
+      OB_LOG(WARN, "failed to complete s3 multipart upload",
+          K(ret), K_(bucket), K_(object), K_(upload_id), K(size()));
+    } else if (!complete_multipart_upload_outcome.IsSuccess()) {
+      handle_s3_outcome(complete_multipart_upload_outcome, ret);
+      OB_LOG(WARN, "failed to complete multipart upload for s3",
+          K(ret), K_(bucket), K_(object), K_(upload_id), K(size()));
+    }
+  }
+  return ret;
+}
+
+int ObStorageParallelS3MultiPartWriter::abort_()
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "s3 multipart writer not opened", K(ret));
+  } else {
+    Aws::S3::Model::AbortMultipartUploadRequest request;
+    request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
+    request.WithUploadId(upload_id_);
+    Aws::S3::Model::AbortMultipartUploadOutcome outcome;
+    if (OB_FAIL(s3_client_->abort_multipart_upload(request, outcome))) {
+      OB_LOG(WARN, "failed to abort s3 multipart upload", K(ret));
+    } else if (!outcome.IsSuccess()) {
+      handle_s3_outcome(outcome, ret);
+      OB_LOG(WARN, "failed to abort s3 multipart upload",
+          K(ret), K_(bucket), K_(object), K_(upload_id));
+    }
+  }
+  return ret;
+}
+
+int ObStorageParallelS3MultiPartWriter::close_()
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+  reset();
+  return ret;
+}
+
 } // common
-} // oceanbase
+} // oceanbas

@@ -12,7 +12,6 @@
 
 #include "ob_xa_ctx_mgr.h"
 #include "ob_xa_service.h"
-//#include "ob_xa_ctx.h"
 
 namespace oceanbase
 {

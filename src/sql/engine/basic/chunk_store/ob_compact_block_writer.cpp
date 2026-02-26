@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/basic/chunk_store/ob_compact_block_writer.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/container/ob_bitmap.h"
-#include "sql/engine/ob_bit_vector.h"
-#include "sql/engine/basic/ob_chunk_datum_store.h"
 
 namespace oceanbase
 {
@@ -139,7 +134,7 @@ int ObCompactBlockWriter::inner_add_row(const blocksstable::ObStorageDatum *stor
   } else {
     T *var_offset_array = reinterpret_cast<T*>(row_info_.buf_ + HEAD_SIZE + row_info_.bitmap_size_);
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_schema.column_cnt_; i++) {
-      int64_t column_idx = cg_schema.column_idxs_ ? cg_schema.column_idxs_[i] : i;
+      int64_t column_idx = cg_schema.get_column_idx(i);
       if (OB_FAIL(inner_process_datum<T>(storage_datums[column_idx], i, *row_meta_, row_info_))) {
         LOG_WARN("fail to process datum", K(ret));
       }
@@ -386,7 +381,7 @@ int ObCompactBlockWriter::get_row_stored_size(const blocksstable::ObStorageDatum
     if (row_meta.column_length_[i] != 0) {
       data_size += row_meta.column_length_[i];
     } else {
-      int64_t column_idx = cg_schema.column_idxs_ ? cg_schema.column_idxs_[i] : i;
+      int64_t column_idx = cg_schema.get_column_idx(i);
       if (!storage_datums[column_idx].is_null()) {
         data_size += storage_datums[column_idx].len_;
       }

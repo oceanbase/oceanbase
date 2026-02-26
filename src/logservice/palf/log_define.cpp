@@ -11,8 +11,6 @@
  */
 
 #include "log_define.h"
-#include "lib/list/ob_dlist.h"
-#include "share/ob_errno.h"
 #include "log_block_pool_interface.h"
 
 namespace oceanbase
@@ -43,6 +41,9 @@ int convert_sys_errno()
     break;
   case ENOMEM:
     ret = OB_ALLOCATE_MEMORY_FAILED;
+    break;
+  case EMFILE:
+    ret = OB_TOO_MANY_OPEN_FILES;
     break;
   default:
     ret = OB_IO_ERROR;
@@ -82,6 +83,30 @@ int block_id_to_flashback_string(const block_id_t block_id, char *str, const int
   } else {
     int64_t pos = 0;
     ret = databuff_printf(str, str_len, pos, "%lu.flashback", block_id);
+  }
+  return ret;
+}
+
+int construct_absolute_block_path(const char *dir_path, const block_id_t block_id, const int64_t buf_len, char *absolute_block_path)
+{
+  int ret = OB_SUCCESS;
+  if (false == is_valid_block_id(block_id) || OB_ISNULL(dir_path) || 0 >= buf_len || OB_ISNULL(absolute_block_path)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(absolute_block_path, buf_len, pos, "%s/%lu", dir_path, block_id);
+  }
+  return ret;
+}
+
+int construct_absolute_tmp_block_path(const char *dir_path, const block_id_t block_id, const int64_t buf_len, char *absolute_tmp_block_path)
+{
+  int ret = OB_SUCCESS;
+  if (false == is_valid_block_id(block_id) || OB_ISNULL(dir_path) || 0 >= buf_len || OB_ISNULL(absolute_tmp_block_path)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(absolute_tmp_block_path, buf_len, pos, "%s/%lu.tmp", dir_path, block_id);
   }
   return ret;
 }

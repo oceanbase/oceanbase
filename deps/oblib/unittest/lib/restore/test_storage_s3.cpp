@@ -11,15 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 #include "lib/restore/ob_storage.h"
-#include "lib/restore/ob_storage_s3_base.h"
-#include "lib/allocator/page_arena.h"
 #include "test_storage_s3.h"
-#include "lib/container/ob_array_serialization.h"
-#include <thread>
 
-#include <aws/core/auth/AWSCredentials.h>
 
 using namespace oceanbase::common;
 
@@ -194,7 +188,7 @@ TEST_F(TestStorageS3, test_basic_rw)
       // read not exist object
       const int64_t ts = ObTimeUtility::current_time();
       ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%snot_exist_%ld", dir_uri, ts));
-      ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, reader.open(uri, &s3_base));
+      ASSERT_EQ(OB_OBJECT_NOT_EXIST, reader.open(uri, &s3_base));
       ASSERT_EQ(OB_NOT_INIT, reader.close());
 
       // open after fail
@@ -308,7 +302,7 @@ TEST_F(TestStorageS3, test_util_is_tagging)
     ASSERT_FALSE(is_tagging);
 
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
-    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     tmp_s3_base.reset();
     util.close();
 
@@ -343,7 +337,7 @@ TEST_F(TestStorageS3, test_util_is_tagging)
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_s3_base));
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
-    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     util.close();
   }
 }
@@ -922,8 +916,8 @@ TEST_F(TestStorageS3, test_appendable_object_util)
       dirent entry;
 
       // meta file
-      ASSERT_TRUE(sizeof(entry.d_name) >= sizeof(OB_S3_APPENDABLE_SEAL_META));
-      STRCPY(entry.d_name, OB_S3_APPENDABLE_SEAL_META);
+      ASSERT_TRUE(sizeof(entry.d_name) >= sizeof(OB_ADAPTIVELY_APPENDABLE_SEAL_META));
+      STRCPY(entry.d_name, OB_ADAPTIVELY_APPENDABLE_SEAL_META);
       ASSERT_EQ(OB_SUCCESS, op.func(&entry));
 
       // invalid fragment name
@@ -1034,7 +1028,7 @@ TEST_F(TestStorageS3, test_appendable_object_util)
     {
       // valid fragment name
       const char *valid_fragments[] = {
-          OB_S3_APPENDABLE_SEAL_META,
+          OB_ADAPTIVELY_APPENDABLE_SEAL_META,
           "1-7", "2-5", "3-6", "4-7", "1-7", "1-7", "1-5",    // covered by "1-7"
           "0-3", "0-3", "0-1", "1-2", "2-3",                  // covered "0-3"
           "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",    // no gap

@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_tablet_checksum_iterator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "common/ob_smart_var.h"
 
 namespace oceanbase
 {

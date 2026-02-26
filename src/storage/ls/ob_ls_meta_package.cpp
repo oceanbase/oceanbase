@@ -19,17 +19,19 @@ namespace storage
 OB_SERIALIZE_MEMBER(ObLSMetaPackage,
                     ls_meta_,
                     palf_meta_,
-                    dup_ls_meta_);
+                    dup_ls_meta_,
+                    tx_data_recycle_scn_);
 
 ObLSMetaPackage::ObLSMetaPackage()
   : ls_meta_(),
     palf_meta_(),
-    dup_ls_meta_()
+    dup_ls_meta_(),
+    tx_data_recycle_scn_()
 {
 }
 
 ObLSMetaPackage::ObLSMetaPackage(const ObLSMetaPackage &other)
-    : ls_meta_(other.ls_meta_), palf_meta_(other.palf_meta_)
+    : ls_meta_(other.ls_meta_), palf_meta_(other.palf_meta_), tx_data_recycle_scn_(other.tx_data_recycle_scn_)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dup_ls_meta_.copy(other.dup_ls_meta_))) {
@@ -49,6 +51,7 @@ ObLSMetaPackage &ObLSMetaPackage::operator=(const ObLSMetaPackage &other)
   if (this != &other) {
     ls_meta_ = other.ls_meta_;
     palf_meta_ = other.palf_meta_;
+    tx_data_recycle_scn_ = other.tx_data_recycle_scn_;
     if (OB_FAIL(dup_ls_meta_.copy(other.dup_ls_meta_))) {
       ret = OB_ERR_UNEXPECTED;
       DUP_TABLE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "copy dup ls meta failed", K(dup_ls_meta_),
@@ -67,6 +70,7 @@ void ObLSMetaPackage::reset()
   ls_meta_.reset();
   palf_meta_.reset();
   dup_ls_meta_.reset();
+  tx_data_recycle_scn_.reset();
 }
 
 bool ObLSMetaPackage::is_valid() const

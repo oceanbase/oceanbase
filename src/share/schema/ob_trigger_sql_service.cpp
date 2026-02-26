@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_trigger_sql_service.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_trigger_info.h"
-#include "ob_routine_info.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
@@ -133,12 +127,12 @@ int ObTriggerSqlService::flashback_trigger(const ObTriggerInfo &trigger_info,
   return ret;
 }
 
-int ObTriggerSqlService::rebuild_trigger_package(const ObTriggerInfo &trigger_info,
-                                                 const ObString &base_object_database,
-                                                 const ObString &base_object_name,
-                                                 int64_t new_schema_version,
-                                                 ObISQLClient &sql_client,
-                                                 ObSchemaOperationType op_type)
+int ObTriggerSqlService::rebuild_trigger_on_rename(const ObTriggerInfo &trigger_info,
+                                                   const ObString &base_object_database,
+                                                   const ObString &base_object_name,
+                                                   int64_t new_schema_version,
+                                                   ObISQLClient &sql_client,
+                                                   ObSchemaOperationType op_type)
 {
   int ret = OB_SUCCESS;
   ObString spec_source;
@@ -252,9 +246,6 @@ int ObTriggerSqlService::fill_dml_sql(const ObTriggerInfo &trigger_info,
   OZ (dml.add_column("ref_new_name", ObHexEscapeSqlStr(trigger_info.get_ref_new_name())));
   OZ (dml.add_column("ref_parent_name", ObHexEscapeSqlStr(trigger_info.get_ref_parent_name())));
   OZ (dml.add_column("when_condition", ObHexEscapeSqlStr(trigger_info.get_when_condition())));
-  OZ (dml.add_column("trigger_body", ObHexEscapeSqlStr(trigger_info.get_trigger_body())));
-  OZ (dml.add_column("package_spec_source", ObHexEscapeSqlStr(spec_source)));
-  OZ (dml.add_column("package_body_source", ObHexEscapeSqlStr(body_source)));
   OZ (dml.add_column("package_flag", trigger_info.get_package_flag()));
   OZ (dml.add_column("package_comp_flag", trigger_info.get_package_comp_flag()));
   OZ (dml.add_column("package_exec_env", ObHexEscapeSqlStr(trigger_info.get_package_exec_env())));
@@ -274,6 +265,23 @@ int ObTriggerSqlService::fill_dml_sql(const ObTriggerInfo &trigger_info,
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, analyze_flag column");
     } else if (data_version >= DATA_VERSION_4_2_0_0) {
       OZ (dml.add_column("analyze_flag", trigger_info.get_analyze_flag()));
+    }
+
+    if (OB_SUCC(ret)) {
+      ObString empty_str;
+      OV (!trigger_info.get_trigger_body().empty());
+      if (OB_FAIL(ret)) {
+      } else if ((data_version < DATA_VERSION_4_3_5_0 && data_version >= DATA_VERSION_4_3_0_0)
+                 || data_version <= MOCK_DATA_VERSION_4_2_5_1) {
+        OZ (dml.add_column("trigger_body", ObHexEscapeSqlStr(trigger_info.get_trigger_body())));
+        OZ (dml.add_column("package_spec_source", ObHexEscapeSqlStr(spec_source)));
+        OZ (dml.add_column("package_body_source", ObHexEscapeSqlStr(body_source)));
+      } else {
+        OZ (dml.add_column("trigger_body", empty_str));
+        OZ (dml.add_column("package_spec_source", empty_str));
+        OZ (dml.add_column("package_body_source", empty_str));
+        OZ (dml.add_column("trigger_body_v2", ObHexEscapeSqlStr(trigger_info.get_trigger_body())));
+      }
     }
   }
   return ret;

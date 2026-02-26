@@ -59,8 +59,10 @@ void TestServerTabbleOperator::check_result(const ObIArray<ObServerStatus> &stat
     ASSERT_EQ(statuses.at(i).sql_port_, cmp_statuses.at(i).sql_port_);
     ASSERT_EQ(statuses.at(i).register_time_, cmp_statuses.at(i).register_time_);
     //ASSERT_EQ(statuses.at(i).last_hb_time_, cmp_statuses.at(i).last_hb_time_);
+    ObCStringHelper helper;
     ASSERT_EQ(statuses.at(i).admin_status_, cmp_statuses.at(i).admin_status_)
-        << "left: " <<  to_cstring(statuses.at(i)) << "right: " << to_cstring(cmp_statuses.at(i));
+        << "left: " <<  helper.convert(statuses.at(i))
+        << "right: " << helper.convert(cmp_statuses.at(i));
     ASSERT_EQ(statuses.at(i).hb_status_, cmp_statuses.at(i).hb_status_);
     ASSERT_EQ(statuses.at(i).get_display_status(), cmp_statuses.at(i).get_display_status());
     ASSERT_EQ(statuses.at(i).block_migrate_in_time_, cmp_statuses.at(i).block_migrate_in_time_);

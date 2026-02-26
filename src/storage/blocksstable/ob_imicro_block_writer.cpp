@@ -11,8 +11,8 @@
  */
 
 #include "ob_imicro_block_writer.h"
-#include "lib/utility/utility.h"
 #include  "ob_row_writer.h"
+#include "storage/blocksstable/index_block/ob_index_block_aggregator.h"
 namespace oceanbase
 {
 namespace blocksstable
@@ -42,6 +42,7 @@ void ObMicroBlockDesc::reset()
   column_count_ = 0;
   max_merged_trans_version_ = 0;
   macro_id_.reset();
+  logic_micro_id_.reset();
   block_offset_ = 0;
   block_checksum_ = 0;
   row_count_delta_ = 0;
@@ -51,35 +52,110 @@ void ObMicroBlockDesc::reset()
   has_lob_out_row_ = false;
   original_size_ = 0;
   is_last_row_last_flag_ = false;
+  is_first_row_first_flag_ = false;
 }
 
- /**
- * -------------------------------------------------------------------ObMicroBufferWriter-------------------------------------------------------------------
+/**
+ * Check if the header in ObMicroBlockDesc points to a complete micro block memory
+ * @param micro_block_desc The micro block descriptor to check
+ * @return true if the header points to complete micro block memory, false otherwise
  */
-int ObMicroBufferWriter::write_row(const ObDatumRow &row, const int64_t rowkey_cnt, int64_t &size)
+bool ObMicroBlockDesc::is_complete_micro_block_memory() const
+{
+  bool is_complete = false;
+  const char *header_buf = get_block_buf();
+  const char *micro_data_buf = nullptr;
+  if (OB_ISNULL(header_buf) || OB_ISNULL(buf_)) {
+    is_complete = false;
+  } else if (FALSE_IT(micro_data_buf = header_buf + header_->header_size_)) {
+  } else if (micro_data_buf == buf_) {
+    is_complete = true;
+  }
+  return is_complete;
+}
+
+int ObMicroBlockDesc::deep_copy(
+    common::ObIAllocator& allocator,
+    ObMicroBlockDesc& dst) const
 {
   int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
+  if (this != &dst) {
+    dst.reset();
+    char * block_buffer = nullptr;
+    ObMicroBlockHeader *micro_header = nullptr;
+    void * row_buffer = nullptr;
+    ObSkipIndexAggResult *agg_row = nullptr;
 
-  if (remain_buffer_size() <= 0 && OB_FAIL(expand(ObCompactionBuffer::size()))) {
-    STORAGE_LOG(WARN, "failed to reserve", K(ret));
-  }
-
-  while (OB_SUCC(ret)) {
-    if (OB_SUCC(row_writer.write(rowkey_cnt, row, current(), remain_buffer_size(), size))) {
-      break;
+    if (OB_ISNULL(header_) || OB_ISNULL(buf_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "can't copy invalid desc", K(ret), K(*this));
+    } else if (OB_FAIL(last_rowkey_.deep_copy(dst.last_rowkey_, allocator))) {
+      STORAGE_LOG(WARN, "failed to copy last key", K(ret));
     } else {
-      if (OB_UNLIKELY(ret != OB_BUF_NOT_ENOUGH)) {
-        STORAGE_LOG(WARN, "failed to write row", K(ret), KPC(this));
-      } else if (!check_could_expand()) { //break
-      } else if (OB_FAIL(expand(ObCompactionBuffer::size()))) {
-        STORAGE_LOG(WARN, "failed to reserve", K(ret));
+      const int64_t block_size = header_->header_size_ + buf_size_;
+      int64_t pos = 0;
+      if (block_size == 0) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "empty micro block desc", K(ret), K(*this));
+      } else if (OB_ISNULL(block_buffer = (char *)allocator.alloc(block_size))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "failed to alloc micro block buf", K(ret));
+      } else if (FALSE_IT(micro_header = reinterpret_cast<ObMicroBlockHeader *>(block_buffer))) {
+      } else if (OB_FAIL(header_->deep_copy(block_buffer, block_size, pos, micro_header))) {
+        STORAGE_LOG(WARN, "failed to deep copy header", K(ret));
+      } else if (OB_UNLIKELY(pos != micro_header->header_size_)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "header deep copy size mismatch", K(ret), K(*micro_header), K(pos));
+      } else {
+        MEMCPY(block_buffer + pos, buf_, buf_size_);
+        dst.buf_ = block_buffer + pos;
+        dst.header_ = micro_header;
+        dst.buf_size_ = buf_size_;
+        dst.data_size_ = data_size_;
+        dst.original_size_ = original_size_;
+        dst.row_count_ = row_count_;
+        dst.column_count_ = column_count_;
+        dst.max_merged_trans_version_ = max_merged_trans_version_;
+        dst.macro_id_ = macro_id_;
+        dst.block_offset_ = block_offset_;
+        dst.block_checksum_ = block_checksum_;
+        dst.row_count_delta_ = row_count_delta_;
+        dst.contain_uncommitted_row_ = contain_uncommitted_row_;
+        dst.can_mark_deletion_ = can_mark_deletion_;
+        dst.has_string_out_row_ = has_string_out_row_;
+        dst.has_lob_out_row_ = has_lob_out_row_;
+        dst.is_last_row_last_flag_ = is_last_row_last_flag_;
+        dst.is_first_row_first_flag_ = is_first_row_first_flag_;
+
+        if (nullptr != aggregated_row_) {
+          if (OB_ISNULL(row_buffer = allocator.alloc(sizeof(ObSkipIndexAggResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            STORAGE_LOG(WARN, "failed to alloc row buf", K(ret));
+          } else if (FALSE_IT(agg_row = new (row_buffer) ObSkipIndexAggResult())) {
+          } else if (OB_FAIL(agg_row->init(aggregated_row_->get_agg_col_cnt(), allocator))) {
+            STORAGE_LOG(WARN, "failed to init datum row", K(ret));
+          } else if (OB_FAIL(agg_row->deep_copy(*aggregated_row_, allocator))) {
+            STORAGE_LOG(WARN, "failed to copy datum row", K(ret));
+          } else {
+            dst.aggregated_row_ = agg_row;
+          }
+        }
       }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    write_nop(size);
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(block_buffer)) {
+        allocator.free(block_buffer);
+      }
+
+      if (OB_NOT_NULL(agg_row)) {
+        agg_row->~ObSkipIndexAggResult();
+      }
+
+      if (OB_NOT_NULL(row_buffer)) {
+        allocator.free(row_buffer);
+      }
+    }
   }
   return ret;
 }
@@ -112,6 +188,7 @@ int ObIMicroBlockWriter::build_micro_block_desc(ObMicroBlockDesc &micro_block_de
     micro_block_desc.has_lob_out_row_ = has_lob_out_row_;
     micro_block_desc.original_size_ = get_original_size();
     micro_block_desc.is_last_row_last_flag_ = is_last_row_last_flag();
+    micro_block_desc.is_first_row_first_flag_ = is_first_row_first_flag();
     // fill micro header for bugfix on micro block that bypass compression/encryption
     // since these fields will be only filled on compression in current implementation
     micro_header->data_length_ = micro_block_desc.buf_size_;
@@ -121,6 +198,13 @@ int ObIMicroBlockWriter::build_micro_block_desc(ObMicroBlockDesc &micro_block_de
     micro_header->set_header_checksum();
   }
   // do not reuse micro writer here
+  return ret;
+}
+
+int ObIMicroBlockWriter::get_pre_agg_param(const int64_t col_idx, ObMicroDataPreAggParam &pre_agg_param) const
+{
+  int ret = OB_NOT_SUPPORTED;
+  STORAGE_LOG(WARN, "unsupported get data from micro writer", K(ret));
   return ret;
 }
 

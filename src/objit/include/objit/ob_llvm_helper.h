@@ -81,13 +81,14 @@ public:
 
   TO_STRING_KV(KP_(v))
 
-  inline const llvm::Type *get_v() const { return v_; }
+  inline llvm::Type *get_v() const { return v_; }
   inline llvm::Type *&get_v() { return v_; }
   inline void set_v(llvm::Type *v) { v_ = v; }
   inline void reset() { v_ = NULL; }
 
 public:
   int get_pointer_to(ObLLVMType &result);
+  int get_pointee_type(ObLLVMType &result);
   int same_as(ObLLVMType &other, bool &same);
 
 //For Debug
@@ -108,12 +109,18 @@ public:
   ObLLVMValue(llvm::Value *v) : v_(v) {}
   virtual ~ObLLVMValue() {}
 
-  TO_STRING_KV(KP_(v))
+  TO_STRING_KV(KP_(v), KP_(t))
 
-  inline const llvm::Value *get_v() const { return v_; }
+  inline llvm::Value *get_v() const { return v_; }
   inline llvm::Value *get_v() { return v_; }
   inline void set_v(llvm::Value *v) { v_ = v; }
-  inline void reset() { v_ = NULL; }
+  inline void set_t(llvm::Type *t) { t_ = t; }
+  inline void set_t(ObLLVMType &t) { t_ = t.get_v(); }
+  inline void reset()
+  {
+    v_ = nullptr;
+    t_ = nullptr;
+  }
 
 public:
   int get_type(ObLLVMType &result) const;
@@ -123,9 +130,14 @@ public:
 public:
   ObLLVMType get_type() const;
   int64_t get_type_id() const;
+  int get_pointee_type(ObLLVMType &result);
 
 protected:
-  llvm::Value *v_;
+  inline llvm::Type *get_t() const { return t_; }
+
+protected:
+  llvm::Value *v_;  // value
+  llvm::Type *t_ = nullptr;  // pointee type if value is a pointer
 };
 
 class ObLLVMStructType : public ObLLVMType
@@ -364,9 +376,8 @@ public:
   int compile_module(jit::ObPLOptLevel optimization);
   void dump_module();
   void dump_debuginfo();
-  int verify_function(ObLLVMFunction &function);
   int verify_module();
-  uint64_t get_function_address(const common::ObString &name);
+  int get_function_address(const common::ObString &name, uint64_t &addr);
   static void add_symbol(const common::ObString &name, void *value);
 
   ObDIRawData get_debug_info() const;
@@ -399,9 +410,9 @@ public:
   int create_inc(ObLLVMValue &value1, ObLLVMValue &result);
   int create_dec(ObLLVMValue &value1, ObLLVMValue &result);
   int create_add(ObLLVMValue &value1, ObLLVMValue &value2, ObLLVMValue &result);
-  int create_add(ObLLVMValue &value1, int64_t &value2, ObLLVMValue &result);
+  int create_add(ObLLVMValue &value1, const int64_t &value2, ObLLVMValue &result);
   int create_sub(ObLLVMValue &value1, ObLLVMValue &value2, ObLLVMValue &result);
-  int create_sub(ObLLVMValue &value1, int64_t &value2, ObLLVMValue &result);
+  int create_sub(ObLLVMValue &value1, const int64_t &value2, ObLLVMValue &result);
   int create_ret(ObLLVMValue &value);
   int create_gep(const common::ObString &name, ObLLVMValue &value, common::ObIArray<int64_t> &idxs, ObLLVMValue &result);
   int create_gep(const common::ObString &name, ObLLVMValue &value, common::ObIArray<ObLLVMValue> &idxs, ObLLVMValue &result);
@@ -420,10 +431,16 @@ public:
   int create_switch(ObLLVMValue &value, ObLLVMBasicBlock &default_block, ObLLVMSwitch &result);
   int create_resume(ObLLVMValue &value);
   int create_unreachable();
+  int create_phi(const common::ObString &name,
+                 ObLLVMType &type,
+                 ObIArray<std::pair<ObLLVMValue, ObLLVMBasicBlock>> &incoming,
+                 ObLLVMValue &result);
 
   int create_global_string(const common::ObString &str, ObLLVMValue &result);
   int set_insert_point(const ObLLVMBasicBlock &block);
+  int set_insert_point(ObLLVMValue &value);
   int set_debug_location(uint32_t line, uint32_t col, ObLLVMDIScope *scope);
+  int get_debug_location(uint32_t &line, uint32_t &col);
   int unset_debug_location(ObLLVMDIScope *scope);
   int get_or_insert_global(const common::ObString &name, ObLLVMType &type, ObLLVMValue &result);
   int stack_save(ObLLVMValue &stack);
@@ -432,8 +449,7 @@ public:
   static int get_null_const(const ObLLVMType &type, ObLLVMValue &result);
   static int get_array_type(const ObLLVMType &elem_type, uint64_t size, ObLLVMType &type);
   int get_uint64_array(const common::ObIArray<uint64_t> &elem_values, ObLLVMValue &result);
-  int get_string(const common::ObString &str, ObLLVMValue &result);
-  int get_global_string(ObLLVMValue &const_string, ObLLVMValue &result);
+  int get_int8_array(const common::ObIArray<int8_t> &elem_values, ObLLVMValue &result);
   static int get_const_struct(ObLLVMType &type, common::ObIArray<ObLLVMValue> &elem_values, ObLLVMValue &result);
 
   int get_function_type(ObLLVMType &ret_type, common::ObIArray<ObLLVMType> &arg_types, ObLLVMType &result);
@@ -451,12 +467,19 @@ public:
   int get_int_value(const ObLLVMType &value, int64_t i, ObLLVMValue &i_value);
   int get_insert_block(ObLLVMBasicBlock &block);
 
+  static int64 get_integer_type_id();
+  static int64 get_pointer_type_id();
+  static int64 get_struct_type_id();
+
 public:
   core::JitContext *get_jc() { return jc_; }
+  int get_compiled_stack_size(uint64_t &stack_size);
 
 private:
   int check_insert_point(bool &is_valid);
   static int init_llvm();
+  static int acc_struct_field_rec(const ObLLVMType &type, int64_t &count);
+  static int check_struct_type(common::ObIArray<ObLLVMType> &elem_types);
 
 private:
   bool is_inited_;

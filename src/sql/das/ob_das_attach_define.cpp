@@ -15,8 +15,6 @@
  */
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_attach_define.h"
-#include "sql/das/ob_das_scan_op.h"
-#include "sql/das/ob_das_factory.h"
 namespace oceanbase {
 namespace sql {
 
@@ -33,6 +31,18 @@ const ObDASScanCtDef *ObDASTableLookupCtDef::get_lookup_scan_ctdef() const
   OB_ASSERT(2 == children_cnt_ && children_ != nullptr);
   if (DAS_OP_TABLE_SCAN == children_[1]->op_type_) {
     scan_ctdef = static_cast<const ObDASScanCtDef*>(children_[1]);
+  } else if (DAS_OP_DOC_ID_MERGE == children_[1]->op_type_) {
+    ObDASDocIdMergeCtDef *doc_id_merge_ctdef = static_cast<ObDASDocIdMergeCtDef *>(children_[1]);
+    OB_ASSERT(2 == doc_id_merge_ctdef->children_cnt_ && doc_id_merge_ctdef->children_ != nullptr);
+    scan_ctdef = static_cast<ObDASScanCtDef*>(doc_id_merge_ctdef->children_[0]);
+  } else if (DAS_OP_VID_MERGE == children_[1]->op_type_) {
+    ObDASVIdMergeCtDef *vid_merge_ctdef = static_cast<ObDASVIdMergeCtDef *>(children_[1]);
+    OB_ASSERT(2 == vid_merge_ctdef->children_cnt_ && vid_merge_ctdef->children_ != nullptr);
+    scan_ctdef = static_cast<ObDASScanCtDef*>(vid_merge_ctdef->children_[0]);
+  } else if (DAS_OP_DOMAIN_ID_MERGE == children_[1]->op_type_) {
+    ObDASDomainIdMergeCtDef *domain_id_merge_ctdef = static_cast<ObDASDomainIdMergeCtDef *>(children_[1]);
+    OB_ASSERT(domain_id_merge_ctdef->children_ != nullptr);
+    scan_ctdef = static_cast<ObDASScanCtDef*>(domain_id_merge_ctdef->children_[0]);
   }
   return scan_ctdef;
 }
@@ -45,9 +55,26 @@ ObDASScanRtDef *ObDASTableLookupRtDef::get_lookup_scan_rtdef()
   OB_ASSERT(2 == children_cnt_ && children_ != nullptr);
   if (DAS_OP_TABLE_SCAN == children_[1]->op_type_) {
     scan_rtdef = static_cast<ObDASScanRtDef*>(children_[1]);
+  } else if (DAS_OP_DOC_ID_MERGE == children_[1]->op_type_) {
+    ObDASDocIdMergeRtDef *doc_id_merge_rtdef = static_cast<ObDASDocIdMergeRtDef *>(children_[1]);
+    OB_ASSERT(2 == doc_id_merge_rtdef->children_cnt_ && doc_id_merge_rtdef->children_ != nullptr);
+    scan_rtdef = static_cast<ObDASScanRtDef*>(doc_id_merge_rtdef->children_[0]);
+  } else if (DAS_OP_VID_MERGE == children_[1]->op_type_) {
+    ObDASVIdMergeRtDef *vid_merge_rtdef = static_cast<ObDASVIdMergeRtDef *>(children_[1]);
+    OB_ASSERT(2 == vid_merge_rtdef->children_cnt_ && vid_merge_rtdef->children_ != nullptr);
+    scan_rtdef = static_cast<ObDASScanRtDef*>(vid_merge_rtdef->children_[0]);
+  } else if (DAS_OP_DOMAIN_ID_MERGE == children_[1]->op_type_) {
+    ObDASDomainIdMergeRtDef *domain_id_merge_rtdef = static_cast<ObDASDomainIdMergeRtDef *>(children_[1]);
+    OB_ASSERT(domain_id_merge_rtdef->children_ != nullptr);
+    scan_rtdef = static_cast<ObDASScanRtDef*>(domain_id_merge_rtdef->children_[0]);
   }
   return scan_rtdef;
 }
+
+OB_SERIALIZE_MEMBER((ObDASIndexProjLookupCtDef, ObDASTableLookupCtDef),
+                     index_scan_proj_exprs_);
+
+OB_SERIALIZE_MEMBER((ObDASIndexProjLookupRtDef, ObDASTableLookupRtDef));
 
 OB_SERIALIZE_MEMBER((ObDASSortCtDef, ObDASAttachCtDef),
                     sort_exprs_,
@@ -58,6 +85,22 @@ OB_SERIALIZE_MEMBER((ObDASSortCtDef, ObDASAttachCtDef),
                     fetch_with_ties_);
 
 OB_SERIALIZE_MEMBER((ObDASSortRtDef, ObDASAttachRtDef));
+
+OB_SERIALIZE_MEMBER((ObDASDocIdMergeCtDef, ObDASAttachCtDef));
+
+OB_SERIALIZE_MEMBER((ObDASDocIdMergeRtDef, ObDASAttachRtDef));
+
+OB_SERIALIZE_MEMBER((ObDASVIdMergeCtDef, ObDASAttachCtDef));
+
+OB_SERIALIZE_MEMBER((ObDASVIdMergeRtDef, ObDASAttachRtDef));
+
+OB_SERIALIZE_MEMBER((ObDASDomainIdMergeCtDef, ObDASAttachCtDef), domain_types_);
+
+OB_SERIALIZE_MEMBER((ObDASDomainIdMergeRtDef, ObDASAttachRtDef));
+
+OB_SERIALIZE_MEMBER((ObDASIndexMergeCtDef, ObDASAttachCtDef), merge_type_, is_reverse_, merge_node_types_, rowkey_exprs_); // FARM COMPAT WHITELIST
+
+OB_SERIALIZE_MEMBER((ObDASIndexMergeRtDef, ObDASAttachRtDef));
 
 OB_DEF_SERIALIZE(ObDASAttachSpec)
 {
@@ -236,6 +279,14 @@ int ObDASAttachSpec::set_calc_exprs_tree(ObDASAttachCtDef *root,
     } else if (child->op_type_ == DAS_OP_TABLE_SCAN) {
       if (OB_FAIL(static_cast<ObDASScanCtDef *>(child)->pd_expr_spec_.set_calc_exprs(calc_exprs, max_batch_size))) {
         LOG_WARN("failed to set scan calc exprs", K(ret), KPC(child));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && root->op_type_ == DAS_OP_INDEX_MERGE) {
+    ObDASScanCtDef *main_scan_ctdef = static_cast<ObDASIndexMergeCtDef *>(root)->main_scan_ctdef_;
+    if (main_scan_ctdef != nullptr) {
+      if (OB_FAIL(main_scan_ctdef->pd_expr_spec_.set_calc_exprs(calc_exprs, max_batch_size))) {
+        LOG_WARN("failed to set main scan calc exprs", K(ret), KPC(main_scan_ctdef));
       }
     }
   }

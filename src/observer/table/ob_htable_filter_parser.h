@@ -64,6 +64,7 @@ public:
   common::ObIAllocator *allocator() { return allocator_; }
   virtual int create_comparator(const SimpleString &bytes, hfilter::Comparable *&comparator);
   int create_prefix_comparator(const SimpleString &bytes, hfilter::Comparable *&comparator);
+  ObString create_ob_string(const SimpleString &bytes) { return ObString(bytes.len_, bytes.str_); }
   int store_filter(hfilter::Filter *&filter);
 protected:
   common::ObIAllocator* allocator_;

@@ -265,7 +265,9 @@ int64_t ObMailBox<MailType>::to_string(char *buffer, const int64_t size) const
   if (nullptr != buffer && size > 0) {
     databuff_printf(buffer, size, pos, "{addr: %ld, DEQUE: [", addr_);
     for (auto it = mailbox_.begin(); it != mailbox_.end(); ++it) {
-      databuff_printf(buffer, size, pos, "(%s), ", to_cstring(*it));
+      databuff_printf(buffer, size, pos, "(");
+      databuff_printf(buffer, size, pos, *it);
+      databuff_printf(buffer, size, pos, "), ");
     }
 
     databuff_printf(buffer, size, pos, "]}");

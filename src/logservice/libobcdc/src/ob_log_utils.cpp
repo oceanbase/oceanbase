@@ -20,10 +20,8 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <linux/sockios.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
-#include <stdlib.h>                                     // strtoll
 #include <openssl/md5.h>                                // MD5
 
 #include "lib/string/ob_string.h"                       // ObString
@@ -34,7 +32,6 @@
 #include "share/schema/ob_table_schema.h"               // ObTableSchema
 #include "share/schema/ob_column_schema.h"              // ObColumnSchemaV2
 #include "share/schema/ob_schema_struct.h"
-#include "share/ob_get_compat_mode.h"
 #include "rpc/obmysql/ob_mysql_global.h"                // MYSQL_TYPE_*
 #include "ob_log_config.h"
 #include "ob_log_schema_cache_info.h"                   // ColumnSchemaInfo
@@ -195,8 +192,8 @@ RecordType get_record_type(const ObDmlRowFlag &dml_flag)
 
   // Set record type
   // Note: The REPLACE type is not handled, it does not exist in Redo
-  // Note: must judge is_delete_insert first because PUT is also is_insert, but it's flag_type is DF_TYPE_INSERT_DELETE
-  if (OB_UNLIKELY(dml_flag.is_delete_insert())) {
+  // Note: must judge is_upsert first because PUT is also is_insert, but it's flag_type is DF_TYPE_INSERT_DELETE
+  if (OB_UNLIKELY(dml_flag.is_upsert())) {
     record_type = EPUT;
   } else if (dml_flag.is_insert()) {
     record_type = EINSERT;
@@ -215,7 +212,7 @@ const char *print_dml_flag(const blocksstable::ObDmlRowFlag &dml_flag)
 {
   const char *str = "UNKNOWN";
 
-  if (dml_flag.is_delete_insert()) {
+  if (dml_flag.is_upsert()) {
     str = "put";
   } else if (dml_flag.is_insert()) {
     str = "insert";
@@ -487,6 +484,26 @@ const char *get_ctype_string(int ctype)
       sc_type = "MYSQL_TYPE_OB_RAW";
       break;
 
+    case oceanbase::obmysql::MYSQL_TYPE_ROARINGBITMAP:
+      sc_type = "MYSQL_TYPE_ROARINGBITMAP";
+      break;
+
+    case oceanbase::obmysql::MYSQL_TYPE_OB_VECTOR:
+      sc_type = "MYSQL_TYPE_OB_VECTOR";
+      break;
+
+    case oceanbase::obmysql::MYSQL_TYPE_OB_ARRAY:
+      sc_type = "MYSQL_TYPE_OB_ARRAY";
+      break;
+
+    case oceanbase::obmysql::MYSQL_TYPE_OB_MAP:
+      sc_type = "MYSQL_TYPE_OB_MAP";
+      break;
+
+    case oceanbase::obmysql::MYSQL_TYPE_OB_SPARSE_VECTOR:
+      sc_type = "MYSQL_TYPE_OB_SPARSE_VECTOR";
+      break;
+
     case oceanbase::obmysql::MYSQL_TYPE_NEWDECIMAL:
       sc_type = "MYSQL_TYPE_NEWDECIMAL";
       break;
@@ -621,6 +638,19 @@ bool is_xml_type(const int ctype)
   return (ctype == drcmsg_field_types::DRCMSG_TYPE_ORA_XML);
 }
 
+bool is_roaringbitmap_type(const int ctype)
+{
+  return (ctype == oceanbase::obmysql::MYSQL_TYPE_ROARINGBITMAP);
+}
+
+bool is_collection_type(const int ctype)
+{
+  return (ctype == oceanbase::obmysql::MYSQL_TYPE_OB_ARRAY
+          || ctype == oceanbase::obmysql::MYSQL_TYPE_OB_VECTOR
+          || ctype == oceanbase::obmysql::MYSQL_TYPE_OB_MAP)
+          || ctype == oceanbase::obmysql::MYSQL_TYPE_OB_SPARSE_VECTOR;
+}
+
 double get_delay_sec(const int64_t tstamp_ns)
 {
   int64_t delta = (ObTimeUtility::current_time() - tstamp_ns / NS_CONVERSION);
@@ -697,7 +727,7 @@ void column_cast(common::ObObj &obj, const share::schema::ObColumnSchemaV2 &colu
   }
 }
 
-void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info)
+void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info, const bool is_out_row)
 {
   // Neither the NULL type nor the Ext type update Meta information
   if (! obj.is_null() && ! obj.is_ext()) {
@@ -710,6 +740,11 @@ void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info)
       obj.set_scale(column_schema_info.get_accuracy().get_precision());
     } else {
       obj.set_scale(column_schema_info.get_accuracy().get_scale());
+    }
+
+    // outrow doesn't have lob_header so can't set lob_header
+    if (obj.is_lob_storage() && !is_out_row) {
+      obj.set_has_lob_header();
     }
   }
 }
@@ -1224,7 +1259,7 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
     if (! done) {
       // Retry to get it again
       ret = OB_SUCCESS;
-      // After a failure to acquire the tenant schema, and in order to ensure that the modules can handle the performance, usleep for a short time
+      // After a failure to acquire the tenant schema, and in order to ensure that the modules can handle the performance, ob_usleep for a short time
       ob_usleep(100);
     }
 
@@ -1317,38 +1352,6 @@ int64_t ObLogTimeMonitor::mark_and_get_cost(const char *log_msg_suffix, bool nee
 bool is_backup_mode()
 {
   return (TCONF.enable_backup_mode != 0);
-}
-
-char *lbt_oblog()
-{
-  int ret = OB_SUCCESS;
-  //As lbt used when print error log, can not print error log
-  //in this function and functions called.
-  static __thread void *addrs[100];
-  static __thread char buf[LBT_BUFFER_LENGTH];
-  int size = ob_backtrace(addrs, 100);
-  char **res = backtrace_symbols(addrs, 100);
-  int64_t pos = 0;
-
-  for (int idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
-    char *res_idx = res[idx];
-    int tmp_ret = OB_SUCCESS;
-
-    if (OB_NOT_NULL(res_idx)) {
-      if (OB_TMP_FAIL(databuff_printf(buf, LBT_BUFFER_LENGTH, pos, "%s", res_idx))) {
-        if (OB_SIZE_OVERFLOW != ret) {
-          LOG_WARN("atabuff_printf fail when lbt, ignore", KR(tmp_ret), K(idx), K(size), K(buf), K(pos),
-              K(LBT_BUFFER_LENGTH));
-        }
-      }
-    }
-  }
-
-  if (OB_NOT_NULL(res)) {
-    free(res);
-  }
-
-  return buf;
 }
 
 int get_br_value(IBinlogRecord *br,
@@ -1531,6 +1534,25 @@ int c_str_to_int(const char *str, int64_t &num)
   return ret;
 }
 
+int c_str_to_uint64(const char *str, uint64_t &num)
+{
+  int ret = OB_SUCCESS;
+  errno = 0;
+  char *end_str = NULL;
+  if (OB_ISNULL(str) || OB_UNLIKELY(0 == strlen(str))) {
+    LOG_ERROR("c_str_to_int str should not null");
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    num = strtoull(str, &end_str, 10);
+    if (errno != 0 || (NULL != end_str && *end_str != '\0')) {
+      LOG_ERROR("strtoll convert string to int value fail", K(str), K(num),
+        "error", strerror(errno), K(end_str));
+      ret = OB_INVALID_DATA;
+    }
+  }
+  return ret;
+}
+
 bool is_ddl_tablet(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id)
 {
   return ls_id.is_sys_ls() && share::OB_ALL_DDL_OPERATION_TID == tablet_id.id();
@@ -1549,7 +1571,7 @@ int sort_and_unique_lsn_arr(ObLogLSNArray &lsn_arr)
   palf::LSN prev_lsn;
 
   // sort lsn_arr
-  std::sort(lsn_arr.begin(), lsn_arr.end(), CDCLSNComparator());
+  lib::ob_sort(lsn_arr.begin(), lsn_arr.end(), CDCLSNComparator());
   // get duplicate misslog lsn idx
   for(int64_t idx = 0; OB_SUCC(ret) && idx < lsn_arr.count(); idx++) {
     palf::LSN &cur_lsn = lsn_arr[idx];

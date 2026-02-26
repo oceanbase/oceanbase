@@ -12,14 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 
-#include "sql/dblink/ob_dblink_utils.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "ob_dblink_utils.h"
 #include "lib/string/ob_hex_utils_base.h"
-#include "share/ob_errno.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "common/ob_smart_call.h"
-#include "common/object/ob_object.h"
-#include "lib/mysqlclient/ob_dblink_error_trans.h"
 #ifdef OB_BUILD_DBLINK
 #include "observer/omt/ob_multi_tenant.h"
 #include "share/rc/ob_tenant_base.h"
@@ -42,6 +37,12 @@ bool get_dblink_reuse_connection_cfg()
 bool get_enable_dblink_cfg()
 {
   return GCONF.enable_dblink;
+}
+
+uint64_t get_max_dblink_conn_per_observer()
+{
+   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  return tenant_config.is_valid() ? tenant_config->_max_dblink_conn_per_observer : 256;
 }
 
 uint64_t get_current_tenant_id_for_dblink()
@@ -100,7 +101,7 @@ int ObDblinkService::get_charset_id(ObSQLSessionInfo *session_info,
     } else {
       charset_id = static_cast<uint16_t>(ObCharset::charset_type_to_ora_charset_id(cs_type));
       ncharset_id = static_cast<uint16_t>(ObCharset::charset_type_to_ora_charset_id(ncs_type));
-      LOG_DEBUG("get charset id", K(ret), K(charset_id), K(ncharset_id),
+      LOG_TRACE("succ to get dblink charset id", K(ret), K(charset_id), K(ncharset_id),
                                   K(cs_type), K(ncs_type), K(coll_type), K(ncoll_type));
     }
   }
@@ -120,16 +121,16 @@ int ObDblinkService::init_dblink_param_ctx(common::sqlclient::dblink_param_ctx &
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
-  } else if (OB_FAIL(get_charset_id(session_info, charset_id, ncharset_id))) {
-    LOG_WARN("failed to get session charset id", K(ret), K(dblink_id));
   } else if (OB_FAIL(get_local_session_vars(session_info, allocator, param_ctx))) {
     LOG_WARN("failed to get local session vars", K(ret), K(dblink_id));
+  } else if (OB_FAIL(get_charset_id(session_info, charset_id, ncharset_id))) {
+    LOG_WARN("failed to get session charset id", K(ret), K(dblink_id));
   } else {
     param_ctx.charset_id_ = charset_id;
     param_ctx.ncharset_id_ = ncharset_id;
     param_ctx.pool_type_ = pool_type;
     param_ctx.tenant_id_ = session_info->get_effective_tenant_id();
-    param_ctx.sessid_ = session_info->get_sessid();
+    param_ctx.sessid_ = session_info->get_server_sid();
     param_ctx.sql_request_level_ = session_info->get_next_sql_request_level();
     param_ctx.dblink_id_ = dblink_id;
     param_ctx.link_type_ = link_type;
@@ -259,71 +260,28 @@ int ObDblinkService::get_set_transaction_isolation_cstr(sql::ObSQLSessionInfo *s
   LOG_TRACE("dblink get isolation level from session", K(ret), K(session_info), K(set_isolation_level));
   return ret;
 }
-
-int ObDblinkService::get_set_names_cstr(sql::ObSQLSessionInfo *session_info,
-                                        const char *&set_client_charset,
-                                        const char *&set_connection_charset,
-                                        const char *&set_results_charset)
+//const char *charset_name(ObCharsetType charset_type);
+int ObDblinkService::get_set_names_charset_type(sql::ObSQLSessionInfo *session_info, ObCharsetType &charset_type)
 {
   int ret = OB_SUCCESS;
-  int64_t client = -1;
-  int64_t connection = -1;
-  int64_t results = -1;
-  set_client_charset = NULL;
-  set_connection_charset = NULL;
-  set_results_charset = "set character_set_results = NULL";
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_CHARACTER_SET_CLIENT, client))) {
-    LOG_WARN("failed to get client characterset", K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_CHARACTER_SET_CONNECTION, connection))) {
-    LOG_WARN("failed to get connection characterset", K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_CHARACTER_SET_CLIENT, results))) {
-    LOG_WARN("failed to get results characterset", K(ret));
   } else {
-    switch(ObCharset::charset_type_by_coll(ObCollationType(client))) {
-      case ObCharsetType::CHARSET_UTF8MB4:
-        set_client_charset = ObDblinkService::SET_CLIENT_CHARSET_UTF8MB4;
-        break;
-      case ObCharsetType::CHARSET_GBK:
-        set_client_charset = ObDblinkService::SET_CLIENT_CHARSET_GBK;
-        break;
-      case ObCharsetType::CHARSET_BINARY:
-        set_client_charset = ObDblinkService::SET_CLIENT_CHARSET_BINARY;
-        break;
-      default:
-        // do nothing
-        break;
-    }
-    switch(ObCharset::charset_type_by_coll(ObCollationType(connection))) {
-      case ObCharsetType::CHARSET_UTF8MB4:
-        set_connection_charset = ObDblinkService::SET_CONNECTION_CHARSET_UTF8MB4;
-        break;
-      case ObCharsetType::CHARSET_GBK:
-        set_connection_charset = ObDblinkService::SET_CONNECTION_CHARSET_GBK;
-        break;
-      case ObCharsetType::CHARSET_BINARY:
-        set_connection_charset = ObDblinkService::SET_CONNECTION_CHARSET_BINARY;
-        break;
-      default:
-        // do nothing
-        break;
-    }
-    switch(ObCharset::charset_type_by_coll(ObCollationType(results))) {
-      case ObCharsetType::CHARSET_UTF8MB4:
-        set_results_charset = ObDblinkService::SET_RESULTS_CHARSET_UTF8MB4;
-        break;
-      case ObCharsetType::CHARSET_GBK:
-        set_results_charset = ObDblinkService::SET_RESULTS_CHARSET_GBK;
-        break;
-      case ObCharsetType::CHARSET_BINARY:
-        set_results_charset = ObDblinkService::SET_RESULTS_CHARSET_BINARY;
-        break;
-      default:
-        // do nothing
-        break;
-    }
+    ObCollationType tenant_collation = is_oracle_mode() ? session_info->get_nls_collation() : ObCollationType::CS_TYPE_UTF8MB4_BIN;
+    charset_type = ObCharset::charset_type_by_coll(tenant_collation);
+  }
+  return ret;
+}
+
+int ObDblinkService::get_ob_query_timeout_value(sql::ObSQLSessionInfo *session_info, int64_t &timeout)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(session_info->get_query_timeout(timeout))) {
+    LOG_WARN("get query timeout failed", K(ret));
   }
   return ret;
 }
@@ -335,14 +293,32 @@ int ObDblinkService::get_local_session_vars(sql::ObSQLSessionInfo *session_info,
   int ret = OB_SUCCESS;
   if (lib::is_mysql_mode() && OB_FAIL(get_set_sql_mode_cstr(session_info, param_ctx.set_sql_mode_cstr_, allocator))) {
     LOG_WARN("failed to get set_sql_mode_cstr", K(ret));
-  } else if (OB_FAIL(get_set_names_cstr(session_info,
-                                        param_ctx.set_client_charset_cstr_,
-                                        param_ctx.set_connection_charset_cstr_,
-                                        param_ctx.set_results_charset_cstr_))) {
-    LOG_WARN("failed to get set_names_cstr", K(ret));
   } else if (OB_FAIL(get_set_transaction_isolation_cstr(session_info,
                                                         param_ctx.set_transaction_isolation_cstr_))) {
     LOG_WARN("failed to get set_transaction_isolation_cstr", K(ret));
+  } else if (OB_FAIL(get_set_names_charset_type(session_info, param_ctx.set_conn_charset_type_))) {
+    LOG_WARN("failed to get set_names_cstr", K(ret));
+  } else if (OB_FAIL(get_ob_query_timeout_value(session_info, param_ctx.ob_query_timeout_))) {
+    LOG_WARN("failed to get ob_query_timeout sys var", K(ret));
+  } else {
+    LOG_TRACE("succ to get local session vars", K(param_ctx.set_conn_charset_type_),
+                                                K(param_ctx.set_sql_mode_cstr_),
+                                                K(param_ctx.dblink_id_),
+                                                K(ret));
+  }
+  return ret;
+}
+
+int ObDblinkService::get_spell_collation_type(ObSQLSessionInfo *session, ObCollationType &spell_coll)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    spell_coll = session->get_nls_collation();
+  } else {
+    spell_coll = ObCollationType::CS_TYPE_UTF8MB4_BIN;
   }
   return ret;
 }
@@ -356,8 +332,11 @@ ObReverseLink::ObReverseLink()
     self_addr_(),
     tx_id_(0),
     tm_sessid_(0),
-    is_close_(true)
+    is_close_(true),
+    host_name_(),
+    port_(0)
 {
+  reverse_conn_.set_is_dblink_reverse_conn(true);
 }
 
 ObReverseLink::~ObReverseLink()
@@ -376,7 +355,9 @@ OB_DEF_SERIALIZE(ObReverseLink)
               addr_,
               self_addr_,
               tx_id_,
-              tm_sessid_);
+              tm_sessid_,
+              host_name_,
+              port_);
   return ret;
 }
 
@@ -393,7 +374,9 @@ OB_DEF_DESERIALIZE(ObReverseLink)
               addr_,
               self_addr_,
               tx_id_,
-              tm_sessid_);
+              tm_sessid_,
+              host_name_,
+              port_);
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(tmp_len = user_.length())) {
   } else if (OB_ISNULL(tmp_buf = static_cast<char *>(allocator_.alloc(tmp_len)))) {
@@ -430,6 +413,15 @@ OB_DEF_DESERIALIZE(ObReverseLink)
     MEMCPY(tmp_buf, passwd_.ptr(), tmp_len);
     passwd_.assign(tmp_buf, static_cast<int32_t>(tmp_len));
   }
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(tmp_len = host_name_.length())) {
+  } else if (OB_ISNULL(tmp_buf = static_cast<char *>(allocator_.alloc(tmp_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc tmp_buf", K(ret), K(tmp_len));
+  } else {
+    MEMCPY(tmp_buf, host_name_.ptr(), tmp_len);
+    host_name_.assign(tmp_buf, static_cast<int32_t>(tmp_len));
+  }
   return ret;
 }
 
@@ -444,7 +436,9 @@ OB_DEF_SERIALIZE_SIZE(ObReverseLink)
               addr_,
               self_addr_,
               tx_id_,
-              tm_sessid_);
+              tm_sessid_,
+              host_name_,
+              port_);
   return len;
 }
 
@@ -465,10 +459,11 @@ int ObReverseLink::open(int64_t session_sql_req_level)
       || OB_UNLIKELY(cluster_.length() >= OB_MAX_CLUSTER_NAME_LENGTH)
       || OB_UNLIKELY(tenant_.length() >= OB_MAX_TENANT_NAME_LENGTH)
       || OB_UNLIKELY(user_.length() >= OB_MAX_USER_NAME_LENGTH)
-      || OB_UNLIKELY(passwd_.length() >= OB_MAX_PASSWORD_LENGTH)) {
+      || OB_UNLIKELY(passwd_.length() >= OB_MAX_PASSWORD_LENGTH)
+      || OB_UNLIKELY(host_name_.length() >= OB_MAX_DOMIN_NAME_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret),
-             K(cluster_), K(tenant_), K(user_), K(passwd_));
+             K(cluster_), K(tenant_), K(user_), K(passwd_), K(host_name_));
   } else if (OB_FAIL(ObDblinkService::get_local_session_vars(session_info_, allocator_, param_ctx))) {
       LOG_WARN("failed to get local session vars", K(ret));
   } else {
@@ -481,9 +476,10 @@ int ObReverseLink::open(int64_t session_sql_req_level)
                     cluster_.length(), cluster_.ptr());
     }
     (void)snprintf(db_pass_, sizeof(db_pass_), "%.*s", passwd_.length(), passwd_.ptr());
+    (void)snprintf(host_name_cstr_, sizeof(host_name_cstr_), "%.*s", host_name_.length(), host_name_.ptr());
     LOG_DEBUG("open reverse link connection", K(ret), K(db_user_), K(db_pass_), K(addr_));
     param_ctx.link_type_ = common::sqlclient::DBLINK_DRV_OB;
-    if (OB_FAIL(reverse_conn_.connect(db_user_, db_pass_, "", addr_, 10, true, session_sql_req_level))) { //just set connect timeout to 10s, read and write have not timeout
+    if (OB_FAIL(reverse_conn_.connect(db_user_, db_pass_, "", host_name_cstr_, port_, 10, true, session_sql_req_level))) { //just set connect timeout to 10s, read and write have not timeout
       LOG_WARN("failed to open reverse link connection", K(ret), K(db_user_), K(db_pass_), K(addr_));
     } else if (OB_FAIL(reverse_conn_.set_timeout_variable(LONG_QUERY_TIMEOUT, common::sqlclient::ObMySQLConnectionPool::DEFAULT_TRANSACTION_TIMEOUT_US))) {
       LOG_WARN("failed to set reverse link connection's timeout", K(ret));
@@ -501,7 +497,7 @@ int ObReverseLink::open(int64_t session_sql_req_level)
   return ret;
 }
 
-int ObReverseLink::read(const char *sql, ObISQLClient::ReadResult &res)
+int ObReverseLink::read(const ObString &sql, ObISQLClient::ReadResult &res)
 {
   int ret = OB_SUCCESS;
   if (is_close_) {
@@ -696,14 +692,14 @@ int ObDblinkCtxInSession::register_dblink_conn_pool(common::sqlclient::ObCommonS
   } else if (OB_ISNULL(dblink_conn_pool)) {
     //do nothing
   } else if (OB_FAIL(add_var_to_array_no_dup(dblink_conn_pool_array_, dblink_conn_pool))) {
-    LOG_WARN("register dblink conn pool failed in session", K(dblink_conn_pool), K(session_info_->get_sessid()), K(ret));
+    LOG_WARN("register dblink conn pool failed in session", K(dblink_conn_pool), K(session_info_->get_server_sid()), K(ret));
     // directly free dblink connection in dblink_conn_pool
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = dblink_conn_pool->free_dblink_session(session_info_->get_sessid()))) {
-      LOG_WARN("register dblink conn pool failed in session, then free dblink conn pool failed", K(dblink_conn_pool), K(session_info_->get_sessid()), K(tmp_ret));
+    if (OB_SUCCESS != (tmp_ret = dblink_conn_pool->free_dblink_session(session_info_->get_server_sid()))) {
+      LOG_WARN("register dblink conn pool failed in session, then free dblink conn pool failed", K(dblink_conn_pool), K(session_info_->get_server_sid()), K(tmp_ret));
     }
   } else {
-    LOG_DEBUG("register_dblink_conn_pool", KP(this), K(session_info_->get_sessid()), KP(dblink_conn_pool), K(dblink_conn_pool_array_.count()), K(dblink_conn_pool_array_), K(lbt()));
+    LOG_DEBUG("register_dblink_conn_pool", KP(this), K(session_info_->get_server_sid()), KP(dblink_conn_pool), K(dblink_conn_pool_array_.count()), K(dblink_conn_pool_array_), K(lbt()));
   }
   return ret;
 }
@@ -721,10 +717,10 @@ int ObDblinkCtxInSession::free_dblink_conn_pool()
     common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool = dblink_conn_pool_array_.at(i);
     if (OB_UNLIKELY(NULL == dblink_conn_pool)) {
       //do nothing
-    } else if (OB_FAIL(dblink_conn_pool->free_dblink_session(session_info_->get_sessid()))) {
-      LOG_WARN("free dblink conn pool failed", K(dblink_conn_pool), K(session_info_->get_sessid()), K(ret));
+    } else if (OB_FAIL(dblink_conn_pool->free_dblink_session(session_info_->get_server_sid()))) {
+      LOG_WARN("free dblink conn pool failed", K(dblink_conn_pool), K(session_info_->get_server_sid()), K(ret));
     } else {
-      LOG_TRACE("free and close dblink connection in session", KP(this), K(session_info_->get_sessid()), K(i), K(dblink_conn_pool_array_.count()), K(dblink_conn_pool_array_), KP(dblink_conn_pool), K(lbt()));
+      LOG_TRACE("free and close dblink connection in session", KP(this), K(session_info_->get_server_sid()), K(i), K(dblink_conn_pool_array_.count()), K(dblink_conn_pool_array_), KP(dblink_conn_pool), K(lbt()));
     }
   }
   dblink_conn_pool_array_.reset();
@@ -745,14 +741,14 @@ int ObDblinkCtxInSession::get_dblink_conn(uint64_t dblink_id, common::sqlclient:
   if (OB_ISNULL(session_info_) || OB_ISNULL(tenant_dblink_keeper)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexcepted null ptr", K(ret), KP(session_info_), KP(tenant_dblink_keeper));
-  } else if (FALSE_IT(sessid = session_info_->get_sessid())) {
+  } else if (FALSE_IT(sessid = session_info_->get_server_sid())) {
   } else if (OB_FAIL(tenant_dblink_keeper->get_dblink_conn((0 != tm_sessid) ? tm_sessid : sessid, dblink_id, conn))) {
     LOG_WARN("failed to get dblink conn", K(ret), K(tm_sessid), K(sessid), K(dblink_id), KP(tenant_dblink_keeper));
   } else if (OB_ISNULL(conn)) {
     // do nothing
   } else if (OB_SUCCESS != (conn->ping())) {
     ret = OB_ERR_DBLINK_SESSION_KILLED;
-    LOG_WARN("connection is invalid", K(ret), K(dblink_conn->usable()), KP(dblink_conn));
+    LOG_WARN("connection is invalid", K(ret), K(conn->usable()), KP(conn));
   } else {
     dblink_conn = conn;
   }
@@ -779,18 +775,23 @@ int ObDblinkCtxInSession::set_dblink_conn(common::sqlclient::ObISQLConnection *d
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_DBLINK
-  uint32_t sessid = 0;
   oceanbase::common::sqlclient::ObTenantDblinkKeeper *tenant_dblink_keeper = MTL(oceanbase::common::sqlclient::ObTenantDblinkKeeper*);
   if (OB_ISNULL(session_info_) || OB_ISNULL(tenant_dblink_keeper)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexcepted null ptr", K(ret), KP(session_info_), KP(tenant_dblink_keeper));
-  } else if (FALSE_IT(sessid = session_info_->get_sessid())) {
+  } else if (0 == sessid_) {
+    sessid_ = session_info_->get_server_sid();
+  } else if (OB_UNLIKELY(sessid_ != session_info_->get_server_sid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session id not same", K(ret), K(sessid_), K(session_info_->get_server_sid()));
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(dblink_conn)) {
     //do nothing
-  } else if (OB_FAIL(tenant_dblink_keeper->set_dblink_conn(sessid, dblink_conn))) {
-    LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid), KP(tenant_dblink_keeper), K(ret));
+  } else if (OB_FAIL(tenant_dblink_keeper->set_dblink_conn(sessid_, dblink_conn))) {
+    LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid_), KP(tenant_dblink_keeper), K(ret));
   }
-  LOG_TRACE("set_dblink_conn", K(ret), KP(dblink_conn), K(sessid), K(lbt()));
+  LOG_TRACE("set_dblink_conn", K(ret), KP(dblink_conn), K(sessid_), K(lbt()));
 #endif
   return ret;
 }
@@ -799,26 +800,24 @@ int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_DBLINK
-  uint32_t sessid = 0;
   common::sqlclient::ObISQLConnection *dblink_conn = NULL;
   // Why do not use MTL(oceanbase::common::sqlclient::ObTenantDblinkKeeper*) ?
   // MTL(xxx) accesses the ptr in the cache, we need to access the ptr in the memory.
   // In the following scene，we need to know if MTL(ObTenantDblinkKeeper*) has been destroyed or not:
-  // MTL(ObTenantDblinkKeeper*) destroy firstly, MTL(ObTableApiSessPoolMgr*) destroy later.
-  // When MTL(ObTableApiSessPoolMgr*) destroy, it will destruct ObSQLSessionInfo which will clean dblink in reset(),
+  // MTL(ObTenantDblinkKeeper*) destroy firstly, MTL(ObTableObjectPoolMgr*) destroy later.
+  // When MTL(ObTableObjectPoolMgr*) destroy, it will destruct ObSQLSessionInfo which will clean dblink in reset(),
   // so we need to know if MTL(ObTenantDblinkKeeper*) has been destroyed to avoid accessing the memory that has been destroyed
   if (OB_ISNULL(MTL_CTX())) {
     // do nothing
   } else {
     oceanbase::common::sqlclient::ObTenantDblinkKeeper *tenant_dblink_keeper = MTL_CTX()->get<oceanbase::common::sqlclient::ObTenantDblinkKeeper *>();
-    if (OB_ISNULL(tenant_dblink_keeper)) {
+    if (OB_ISNULL(tenant_dblink_keeper) || 0 == sessid_) {
       // do nothing
     } else if (OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexcepted null ptr", K(ret), KP(session_info_), KP(tenant_dblink_keeper));
-    } else if (FALSE_IT(sessid = session_info_->get_sessid())) {
-    } else if (OB_FAIL(tenant_dblink_keeper->clean_dblink_conn(sessid, force_disconnect))) {
-      LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid), KP(tenant_dblink_keeper), K(force_disconnect), K(ret));
+    } else if (OB_FAIL(tenant_dblink_keeper->clean_dblink_conn(sessid_, force_disconnect))) {
+      LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid_), KP(tenant_dblink_keeper), K(force_disconnect), K(ret));
     }
     tx_id_.reset();
     arena_alloc_.reset();
@@ -871,7 +870,7 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
         } else {
           reverse_dblink_->set_session_info(session_info_);
           reverse_dblink = reverse_dblink_;
-          LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
+          LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_server_sid()), K(*reverse_dblink), KP(reverse_dblink));
         }
       }
     } else if (OB_ISNULL(reverse_dblink_)) {
@@ -879,11 +878,11 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
       LOG_WARN("unexpected NULL ptr", K(ret));
     } else {
       reverse_dblink = reverse_dblink_;
-      LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
+      LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_server_sid()), K(*reverse_dblink), KP(reverse_dblink));
     }
   } else {
     reverse_dblink = reverse_dblink_;
-    LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
+    LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_server_sid()), K(*reverse_dblink), KP(reverse_dblink));
   }
   return ret;
 }

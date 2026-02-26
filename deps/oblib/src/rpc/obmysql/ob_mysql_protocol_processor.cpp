@@ -16,9 +16,7 @@
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "rpc/obmysql/packet/ompk_handshake_response.h"
 #include "rpc/obmysql/packet/ompk_ssl_request.h"
-#include "rpc/obmysql/ob_mysql_request_utils.h"
 #include "rpc/obmysql/obsm_struct.h"
-#include "rpc/obmysql/ob_packet_record.h"
 
 namespace oceanbase
 {

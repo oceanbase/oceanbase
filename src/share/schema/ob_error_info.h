@@ -104,17 +104,22 @@ public:
   bool is_user_field_valid() const;
   void reset();
   int64_t get_convert_size() const;
-  int collect_error_info(const IObErrorInfo *info);
-  int collect_error_info(const IObErrorInfo *info, const common::ObWarningBuffer *buf, bool fill_info);
-  int update_error_info(const IObErrorInfo *info);
+  int collect_error_info(const IObErrorInfo *info,
+                         const ObObjectType obj_type = ObObjectType::INVALID);
+  int collect_error_info(const IObErrorInfo *info, const common::ObWarningBuffer *buf, bool fill_info,
+                         const ObObjectType obj_type = ObObjectType::INVALID);
+  int update_error_info(const IObErrorInfo *info, const ObObjectType obj_type = ObObjectType::INVALID);
   int get_error_info_from_table(common::ObISQLClient &sql_client, ObErrorInfo *old_err_info);
-  int handle_error_info(common::ObMySQLTransaction &trans, const IObErrorInfo *info);
-  int handle_error_info(const IObErrorInfo *info);
+  int handle_error_info(common::ObMySQLTransaction &trans, const IObErrorInfo *info,
+                        const ObObjectType obj_type = ObObjectType::INVALID);
+  int handle_error_info(const IObErrorInfo *info,
+                        const ObObjectType obj_type = ObObjectType::INVALID);
   int del_error(common::ObISQLClient &sql_client);
   int del_error(common::ObMySQLProxy *sql_proxy);
   int add_error(common::ObISQLClient & sql_client, bool is_replace, bool only_history);
   int get_error_obj_seq(common::ObISQLClient &sql_client, bool &exist);
-  int delete_error(const IObErrorInfo *info);
+  int delete_error(const IObErrorInfo *info,
+                   const ObObjectType obj_type = ObObjectType::INVALID);
 
   TO_STRING_KV(K_(tenant_id),
                K_(obj_id),

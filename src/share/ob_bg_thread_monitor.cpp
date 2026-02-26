@@ -11,12 +11,7 @@
  */
 
 #include "ob_bg_thread_monitor.h"
-#include "lib/ob_define.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/atomic/ob_atomic.h"                 // ATOMIC_STORE
 #include "lib/thread/ob_thread_name.h"            // set_thread_name
-#include "common/ob_i_callback.h"                 // ObICallback
-#include "common/ob_clock_generator.h"            // ObClockGenerator
 
 namespace oceanbase {
 namespace share {
@@ -342,7 +337,7 @@ void ObBGThreadMonitor::run_loop_()
     if (sleep_time < 0) {
       sleep_time = 0;
     }
-    ob_usleep(sleep_time);
+    ob_usleep(sleep_time, true/*is_idle_sleep*/);
   }
 }
 

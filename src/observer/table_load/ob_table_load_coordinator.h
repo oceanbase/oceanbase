@@ -12,16 +12,20 @@
 
 #pragma once
 
+#include "lib/ob_define.h"
+#include "share/io/ob_io_define.h"
 #include "common/object/ob_object.h"
 #include "observer/table_load/ob_table_load_struct.h"
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
+#include "share/table/ob_table_load_dml_stat.h"
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "share/table/ob_table_load_row_array.h"
 #include "observer/table_load/resource/ob_table_load_resource_rpc_struct.h"
 #include "observer/table_load/resource/ob_table_load_resource_rpc_proxy.h"
 #include "observer/table_load/resource/ob_table_load_resource_service.h"
 #include "observer/table_load/ob_table_load_assigned_memory_manager.h"
+#include "observer/table_load/ob_table_load_partition_location.h"
 
 namespace oceanbase
 {
@@ -34,20 +38,23 @@ class ObTableLoadCoordinatorTrans;
 
 class ObTableLoadCoordinator
 {
-  static const int64_t WAIT_INTERVAL_US = 3 * 1000 * 1000; // 3s
+  static const int64_t WAIT_INTERVAL_US = 1 * 1000 * 1000; // 1s
   static const int64_t DEFAULT_TIMEOUT_US = 10LL * 1000 * 1000; // 10s
   static const int64_t HEART_BEAT_RPC_TIMEOUT_US = 1LL * 1000 * 1000; // 1s
   // 申请和释放资源失败等待间隔时间
   static const int64_t RESOURCE_OP_WAIT_INTERVAL_US = 5 * 1000LL * 1000LL; // 5s
-  static const int64_t SSTABLE_BUFFER_SIZE = 20 * 1024LL;;  // 20KB
+  static const int64_t SSTABLE_BUFFER_SIZE = 68 * 1024LL;;  // 64K + 4K
   static const int64_t MACROBLOCK_BUFFER_SIZE = 10 * 1024LL * 1024LL;  // 10MB
+  static const int64_t CG_BUFFER_SIZE = 64LL * 1024; // 64K
+  static const int64_t MIN_THREAD_COUNT = 2;
 public:
   ObTableLoadCoordinator(ObTableLoadTableCtx *ctx);
   static bool is_ctx_inited(ObTableLoadTableCtx *ctx);
   static int init_ctx(ObTableLoadTableCtx *ctx,
                       const common::ObIArray<uint64_t> &column_ids,
+                      const common::ObIArray<ObTabletID> &tablet_ids,
                       ObTableLoadExecCtx *exec_ctx);
-  static void abort_ctx(ObTableLoadTableCtx *ctx);
+  static void abort_ctx(ObTableLoadTableCtx *ctx, int error_code);
   int init();
   bool is_valid() const { return is_inited_; }
 private:
@@ -62,9 +69,38 @@ public:
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
   int heart_beat();
 private:
+  int check_need_sort_for_lob_or_index(bool &need_sort) const;
+  int calc_session_count(const int64_t total_session_count,
+                         const int64_t max_session_count,
+                         const table::ObTableLoadArray<observer::ObTableLoadPartitionLocation::LeaderInfo> all_leader_info_array,
+                         ObArray<int64_t> &partitions,
+                         ObDirectLoadResourceApplyArg &apply_arg,
+                         int64_t &coord_session_count,
+                         int64_t &min_session_count,
+                         int64_t &write_session_count);
+  int calc_memory_size(const int64_t store_server_count,
+                       const int64_t write_session_count,
+                       const int64_t memory_limit,
+                       const int64_t part_unsort_memory,
+                       const int64_t min_part_memory,
+                       const ObArray<int64_t> &partitions,
+                       ObDirectLoadResourceApplyArg &apply_arg,
+                       bool &main_need_sort,
+                       bool &task_need_sort);
   int gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg);
   int pre_begin_peers(ObDirectLoadResourceApplyArg &apply_arg);
   int confirm_begin_peers();
+  int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics,
+                   table::ObTableLoadDmlStat &dml_stats);
+  int build_table_stat_param(ObTableStatParam &param,
+                             common::ObIAllocator &allocator);
+  int write_sql_stat(table::ObTableLoadSqlStatistics &sql_statistics,
+                     table::ObTableLoadDmlStat &dml_stats);
+  int heart_beat_peer();
+private:
+  int init_empty_tablets();
+  class InitEmptyTabletTaskProcessor;
+  class InitEmptyTabletTaskCallback;
 private:
   int add_check_begin_result_task();
   int check_peers_begin_result(bool &is_finish);
@@ -73,9 +109,6 @@ private:
 public:
   int pre_merge_peers();
   int start_merge_peers();
-  int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics);
-  int write_sql_stat(table::ObTableLoadSqlStatistics &sql_statistics);
-  int heart_beat_peer();
 private:
   int add_check_merge_result_task();
   int check_peers_merge_result(bool &is_finish);
@@ -104,10 +137,8 @@ private:
 public:
   int finish_trans_peers(ObTableLoadCoordinatorTrans *trans);
 private:
-  int add_check_peers_trans_commit_task(ObTableLoadCoordinatorTrans *trans);
   int check_peers_trans_commit(ObTableLoadCoordinatorTrans *trans, bool &is_commit);
-  class CheckPeersTransCommitTaskProcessor;
-  class CheckPeersTransCommitTaskCallback;
+  int check_trans_commit(ObTableLoadCoordinatorTrans *trans);
 
 // write interface
 public:

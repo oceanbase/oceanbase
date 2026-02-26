@@ -37,7 +37,7 @@ public:
   void runTimerTask() override;
 
 private:
-  static const int64_t MVIEW_MAINTENANCE_INTERVAL = 24LL * 3600 * 1000 * 1000; // 1day
+  static const int64_t MVIEW_MAINTENANCE_INTERVAL = 60 * 1000 * 1000; // 1min
   static const int64_t MVIEW_MAINTENANCE_SCHED_INTERVAL = 10LL * 1000 * 1000; // 10s
   static const int64_t MVIEW_NUM_FETCH_PER_SCHED = 1000;
   static const int64_t MVREF_STATS_NUM_PURGE_PER_SCHED = 1000;

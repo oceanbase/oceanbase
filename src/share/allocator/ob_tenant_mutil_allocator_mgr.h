@@ -67,7 +67,7 @@ private:
 
 private:
   bool is_inited_;
-  obsys::ObRWLock locks_[ARRAY_SIZE];
+  obsys::ObRWLock<> locks_[ARRAY_SIZE];
   ObTenantMutilAllocator *tma_array_[ARRAY_SIZE];
   ObBlockAllocMgr clog_body_blk_alloc_;
   ObVSliceAlloc clog_entry_alloc_;

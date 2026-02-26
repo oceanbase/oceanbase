@@ -67,7 +67,10 @@ public:
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       MEMSET(array_, 0, sizeof(void*) * size);
+      push_ = 0;
+      pop_ = 0;
       capacity_ = size;
+      memset(ref_, 0, sizeof(ref_));
     }
     return ret;
   }
@@ -76,6 +79,10 @@ public:
       ob_free(array_);
       array_ = NULL;
     }
+    push_ = 0;
+    pop_ = 0;
+    capacity_ = 0;
+    MEMSET(ref_, 0, sizeof(ref_));
   }
   uint64_t get_push_idx() const { return ATOMIC_LOAD(&push_); }
   uint64_t get_pop_idx() const { return ATOMIC_LOAD(&pop_); }
@@ -167,20 +174,15 @@ public:
       ref->reset();
     }
   }
-private:
-  void wait_ref_clear(int64_t seq) {
+  void** get_addr(uint64_t x) { return array_ + idx(x); }
+protected:
+  virtual void wait_ref_clear(int64_t seq) {
     while(0 != ATOMIC_LOAD(ref_ + seq % N_REF)) {
       ob_usleep(1000);
     }
   }
-  int64_t xref(int64_t seq, int64_t x) {
+  virtual int64_t xref(int64_t seq, int64_t x) {
     return ATOMIC_AAF(ref_ + seq % N_REF, x);
-  }
-  void do_revert(uint64_t seq, void* p) {
-    if (NULL != array_ && NULL != p) {
-      void** addr = get_addr(seq);
-      ATOMIC_STORE(addr, p);
-    }
   }
   static uint64_t faa_bounded(uint64_t* addr, uint64_t* limit_addr, uint64_t& limit) {
     uint64_t val = ATOMIC_LOAD(addr);
@@ -192,9 +194,8 @@ private:
     }
     return val;
   }
-  void** get_addr(uint64_t x) { return array_ + idx(x); }
   uint64_t idx(uint64_t x) { return x % capacity_; }
-private:
+protected:
   uint64_t push_ CACHE_ALIGNED;
   uint64_t pop_ CACHE_ALIGNED;
   uint64_t capacity_ CACHE_ALIGNED;

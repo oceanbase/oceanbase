@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_exists.h"
-#include "common/row/ob_row_iterator.h"
 
 namespace oceanbase
 {

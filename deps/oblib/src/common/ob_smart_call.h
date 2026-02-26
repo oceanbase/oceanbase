@@ -15,6 +15,7 @@
 
 #include "common/ob_common_utility.h"
 #include "lib/utility/utility.h"
+#include "lib/other/recursion.h"
 #include "lib/thread/protected_stack_allocator.h"
 
 namespace oceanbase
@@ -28,15 +29,33 @@ RLOCAL_EXTERN(int64_t, all_stack_size);
 
 int jump_call(void * arg_, int(*func_) (void*), void* stack_addr);
 
-inline int call_with_new_stack(void * arg_, int(*func_) (void*))
+inline int call_with_new_stack(void * arg_, int(*func_) (void*), void *stack_addr, size_t stack_size)
 {
   int ret = OB_SUCCESS;
 #if defined(__x86_64__) || defined(__aarch64__)
   void *ori_stack_addr = nullptr;
   size_t ori_stack_size = 0;
-  void *stack_addr = nullptr;
+  if (OB_FAIL(get_stackattr(ori_stack_addr, ori_stack_size))) {
+  } else {
+    // To prevent the check_stack_overflow call before the jump
+    // Do not introduce other code between the two set_stackattr
+    set_stackattr(stack_addr, stack_size);
+    DEFER(set_stackattr(ori_stack_addr, ori_stack_size));
+    ret = jump_call(arg_, func_, (char *)stack_addr + stack_size);
+  }
+#else
+  ret = func_(arg_);
+#endif
+  return ret;
+}
+
+inline int alloc_stack(const size_t stack_size, void *&stack_addr)
+{
+  int ret = OB_SUCCESS;
+  void *ori_stack_addr = nullptr;
+  size_t ori_stack_size = 0;
+  stack_addr = nullptr;
   uint64_t tenant_id = GET_TENANT_ID() == 0 ? 500 : GET_TENANT_ID();
-  const int64_t stack_size = STACK_PER_EXTEND;
   if (OB_FAIL(get_stackattr(ori_stack_addr, ori_stack_size))) {
   } else if (FALSE_IT(all_stack_size = 0 == all_stack_size ?
     ori_stack_size : all_stack_size)) {
@@ -46,49 +65,63 @@ inline int call_with_new_stack(void * arg_, int(*func_) (void*))
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     all_stack_size += stack_size;
-    // To prevent the check_stack_overflow call before the jump
-    // Do not introduce other code between the two set_stackattr
-    set_stackattr(stack_addr, stack_size);
-    ret = jump_call(arg_, func_, (char *)stack_addr + stack_size);
-    set_stackattr(ori_stack_addr, ori_stack_size);
-    lib::g_stack_allocer.dealloc(stack_addr);
-    all_stack_size -= stack_size;
   }
-#else
-  ret = func_(arg_);
-#endif
   return ret;
+}
+
+inline void dealloc_stack(void *stack_addr, size_t stack_size)
+{
+  lib::g_stack_allocer.dealloc(stack_addr);
+  all_stack_size -= stack_size;
 }
 
 
 #ifndef OB_USE_ASAN
+#define CALL_WITH_NEW_STACK(func, stack_addr, stack_size)                 \
+  ({                                                                      \
+    int ret = OB_SUCCESS;                                                 \
+    std::function<int()> f = [&]() {                                      \
+      int ret = OB_SUCCESS;                                               \
+      try {                                                               \
+        in_try_stmt = true;                                               \
+        ret = func;                                                       \
+        in_try_stmt = false;                                              \
+      } catch (OB_BASE_EXCEPTION &except) {                               \
+        ret = except.get_errno();                                         \
+        in_try_stmt = false;                                              \
+      }                                                                   \
+      return ret;                                                         \
+    };                                                                    \
+    int(*func_) (void*) = [](void *arg) { return (*(decltype(f)*)(arg))(); };\
+    void * arg_ = &f;                                                     \
+    ret = call_with_new_stack(arg_, func_, stack_addr, stack_size);       \
+    ret;                                                                  \
+  })
 #define SMART_CALL(func)                                                    \
   ({                                                                        \
     int ret = OB_SUCCESS;                                                   \
     bool is_overflow = false;                                               \
+    RECURSION_CHECKER_GUARD;                                                \
     if (OB_FAIL(check_stack_overflow(is_overflow, STACK_RESERVED_SIZE))) {  \
     } else if (!is_overflow) {                                              \
       ret = func;                                                           \
     } else {                                                                \
-      std::function<int()> f = [&]() {                                      \
-        int ret = OB_SUCCESS;                                               \
-        try {                                                               \
-          in_try_stmt = true;                                               \
-          ret = func;                                                       \
-          in_try_stmt = false;                                              \
-        } catch (OB_BASE_EXCEPTION &except) {                               \
-          ret = except.get_errno();                                         \
-          in_try_stmt = false;                                              \
-        }                                                                   \
-        return ret;                                                         \
-      };                                                                    \
-      int(*func_) (void*) = [](void *arg) { return (*(decltype(f)*)(arg))(); };\
-      void * arg_ = &f;                                                     \
-      ret = call_with_new_stack(arg_, func_);                               \
+      const size_t stack_size = STACK_PER_EXTEND;                           \
+      void *stack_addr = nullptr;                                           \
+      if (OB_SUCC(alloc_stack(stack_size, stack_addr))) {                   \
+        DEFER(dealloc_stack(stack_addr, stack_size));                       \
+        ret = CALL_WITH_NEW_STACK(func, stack_addr, stack_size);            \
+      }                                                                     \
     }                                                                       \
     ret;                                                                    \
   })
 #else
+#define CALL_WITH_NEW_STACK(func, stack_addr, stack_size)   \
+  ({                                                        \
+    int ret = OB_SUCCESS;                                   \
+    ret = func;                                             \
+    ret;                                                    \
+  })
 #define SMART_CALL(func)                                                    \
   ({                                                                        \
     int ret = OB_SUCCESS;                                                   \

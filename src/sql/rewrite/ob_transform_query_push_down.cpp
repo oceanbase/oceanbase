@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_query_push_down.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
 namespace oceanbase
 {
 using namespace common;
@@ -154,7 +152,13 @@ int ObTransformQueryPushDown::need_transform(const common::ObIArray<ObParentDMLS
   UNUSED(current_level);
   const ObQueryHint *query_hint = NULL;
   const ObHint *trans_hint = NULL;
-  if (!stmt.is_select_stmt() || is_normal_disabled_transform(stmt)) {
+  bool bypass = false;
+  if (OB_FAIL(check_rule_bypass(stmt, bypass))) {
+    LOG_WARN("fail check stmt validity", K(ret));
+  } else if (bypass) {
+    need_trans = false;
+    OPT_TRACE("transform rule bypassed");
+  } else if (!stmt.is_select_stmt()) {
     need_trans = false;
   } else if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -285,7 +289,7 @@ int ObTransformQueryPushDown::check_transform_validity(ObSelectStmt *select_stmt
   } else if (!check_status) {
     can_transform = false;
     OPT_TRACE("can not pushdown where condition");
-  } else if ((select_stmt->has_group_by() || select_stmt->has_rollup())
+  } else if ((select_stmt->has_group_by() || select_stmt->has_rollup() || select_stmt->has_grouping_sets())
              && !view_stmt->is_spj()) {//判断6
     can_transform = false;
     OPT_TRACE("stmt has group by, but view is not spj");
@@ -304,6 +308,9 @@ int ObTransformQueryPushDown::check_transform_validity(ObSelectStmt *select_stmt
   } else if (select_stmt->has_order_by() && view_stmt->has_limit()) {//判断9
     can_transform = false;
     OPT_TRACE("stmt has order by, but view has limit ,can not pushdown");
+  } else if (select_stmt->is_unpivot_select() || view_stmt->is_unpivot_select()) {
+    can_transform = false;
+    OPT_TRACE("unpivot, can not transform");
   } else if (select_stmt->has_limit()) {//判断10
     can_transform = (!select_stmt->is_calc_found_rows()
                      && !view_stmt->is_contains_assignment()
@@ -547,6 +554,7 @@ int ObTransformQueryPushDown::check_rownum_push_down(ObSelectStmt *select_stmt,
              (select_stmt->get_condition_size() > 0 ||
               select_stmt->has_group_by() ||
               select_stmt->has_rollup() ||
+              select_stmt->has_grouping_sets() ||
               select_stmt->has_window_function() ||
               select_stmt->is_set_stmt() ||
               select_stmt->has_order_by())) { //判断2
@@ -581,6 +589,9 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
   if (OB_ISNULL(select_stmt) || OB_ISNULL(view_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(select_stmt), K(view_stmt), K(ret));
+  } else if (select_stmt->has_rollup() || select_stmt->has_grouping_sets()) {
+    can_be = false;
+    OPT_TRACE("outer stmt has rollup, can not merge");
   } else if (OB_FAIL(check_select_item_subquery(*select_stmt, *view_stmt, check_status))) {
     LOG_WARN("failed to check select item has subquery", K(ret));
   } else if (!check_status) {
@@ -618,17 +629,6 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
     OPT_TRACE("view is scalary group or view has distinct");
   } else {
     can_be = true;
-  }
-  if (OB_SUCC(ret) && select_stmt->has_rollup()) {
-    for (int64_t i = 0; OB_SUCC(ret) && can_be && i < select_exprs.count(); ++i) {
-      if (OB_ISNULL(select_exprs.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("select expr is null", K(ret));
-      } else {
-        can_be = !select_exprs.at(i)->is_const_expr() &&
-                 !select_exprs.at(i)->has_flag(CNT_SUB_QUERY);
-      }
-    }
   }
   return ret;
 }

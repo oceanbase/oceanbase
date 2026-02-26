@@ -11,13 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_name_def.h"
 #include "sql/engine/expr/ob_expr_time_format.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "src/sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX LIB
 
 #include "lib/utility/ob_fast_convert.h"
-#include "lib/ob_define.h"
 
 namespace oceanbase
 {

@@ -16,7 +16,6 @@
 #define OCEANBASE_LIBOBCDC_OB_LOG_PART_TRANS_RESOLVER_FACTORY_H__
 
 #include "ob_cdc_part_trans_resolver.h"           // IObLogPartTransResolver, PartTransTaskMap
-
 #include "lib/allocator/ob_small_allocator.h"     // ObSmallAllocator
 
 namespace oceanbase
@@ -40,6 +39,7 @@ typedef ObLogTransTaskPool<PartTransTask> TaskPool;
 class IObLogEntryTaskPool;
 class IObLogFetcherDispatcher;
 class IObLogClusterIDFilter;
+class IObLogLsnFilter;
 
 class ObLogPartTransResolverFactory : public IObLogPartTransResolverFactory
 {
@@ -53,7 +53,8 @@ public:
   int init(TaskPool &task_pool,
       IObLogEntryTaskPool &log_entry_task_pool,
       IObLogFetcherDispatcher &dispatcher,
-      IObLogClusterIDFilter &cluster_id_filter);
+      IObLogClusterIDFilter &cluster_id_filter,
+      IObLogLsnFilter &lsn_filter);
   void destroy();
 
 public:
@@ -76,6 +77,7 @@ private:
   IObLogEntryTaskPool       *log_entry_task_pool_;
   IObLogFetcherDispatcher   *dispatcher_;
   IObLogClusterIDFilter     *cluster_id_filter_;
+  IObLogLsnFilter           *lsn_filter_;
 
   common::ObSmallAllocator  allocator_;
   PartTransTaskMap          task_map_;

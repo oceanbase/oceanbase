@@ -16,7 +16,7 @@
 #include "share/ob_autoincrement_param.h"
 #include "share/ob_autoincrement_service.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
-#include "storage/blocksstable/ob_datum_row.h"
+#include "storage/blocksstable/ob_storage_datum.h"
 
 namespace oceanbase
 {

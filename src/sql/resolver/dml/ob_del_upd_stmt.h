@@ -196,9 +196,11 @@ public:
       is_overwrite_(false),
       values_desc_(),
       values_vector_(),
+      all_values_simple_const_(false),
       column_conv_exprs_(),
       assignments_(),
-      column_in_values_vector_()
+      column_in_values_vector_(),
+      is_insertup_update_assign_need_calc_(false)
   {
   }
   ObInsertTableInfo(ObDmlTableType dml_type) :
@@ -207,10 +209,12 @@ public:
       is_overwrite_(false),
       values_desc_(),
       values_vector_(),
+      all_values_simple_const_(false),
       column_conv_exprs_(),
       part_generated_col_dep_cols_(),
       assignments_(),
-      column_in_values_vector_()
+      column_in_values_vector_(),
+      is_insertup_update_assign_need_calc_(false)
   {
   }
   virtual ~ObInsertTableInfo()
@@ -238,7 +242,8 @@ public:
                K_(column_conv_exprs),
                K_(part_generated_col_dep_cols),
                K_(assignments),
-               K_(column_in_values_vector));
+               K_(column_in_values_vector),
+               K_(is_insertup_update_assign_need_calc));
   bool is_replace_;  // replace semantic for mysql
   bool is_overwrite_;
   // 下面两个变量组合在一起描述了 INSERT 的 VALUES 结构
@@ -247,6 +252,8 @@ public:
   //  - value_vectors_ 的大小为 6，保存的内容为 1,2,3,4,5,6 这几个表达式
   common::ObSEArray<ObColumnRefRawExpr*, 16, common::ModulePageAllocator, true> values_desc_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> values_vector_;
+  // mark if all values in values_vector_ are simple const which can be ignored during relation expr iteration
+  bool all_values_simple_const_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> column_conv_exprs_;
   // if generated col is partition key in heap table, we need to store all dep cols,
   // eg:
@@ -256,6 +263,8 @@ public:
   common::ObSEArray<ObColumnRefRawExpr*, 16, common::ModulePageAllocator, true> part_generated_col_dep_cols_;
   ObAssignments assignments_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> column_in_values_vector_;
+  // for insert up update, if the update assignment need to calc
+  bool is_insertup_update_assign_need_calc_;
 };
 
 class ObMergeTableInfo: public ObInsertTableInfo
@@ -293,7 +302,11 @@ public:
                K_(values_desc),
                K_(values_vector),
                K_(column_conv_exprs),
-               K_(assignments));
+               K_(assignments),
+               K_(match_condition_exprs),
+               K_(insert_condition_exprs),
+               K_(update_condition_exprs),
+               K_(delete_condition_exprs));
   uint64_t source_table_id_;
   uint64_t target_table_id_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> match_condition_exprs_;
@@ -405,6 +418,7 @@ public:
         returning_exprs_(),
         returning_strs_(),
         returning_agg_items_(),
+        group_param_exprs_(),
         ignore_(false),
         has_global_index_(false),
         error_log_info_(),
@@ -414,6 +428,8 @@ public:
         pdml_disabled_(false)
   { }
   virtual ~ObDelUpdStmt() { }
+  common::ObIArray<ObRawExpr*> &get_group_param_exprs() { return group_param_exprs_; }
+  const common::ObIArray<ObRawExpr*> &get_group_param_exprs() const { return group_param_exprs_; }
   int deep_copy_stmt_struct(ObIAllocator &allocator,
                             ObRawExprCopier &expr_factory,
                             const ObDMLStmt &other) override;
@@ -480,11 +496,13 @@ public:
   int check_dml_source_from_join();
   bool is_pdml_disabled() const { return pdml_disabled_; }
   void set_pdml_disabled() { pdml_disabled_ = true; }
+  int get_modified_materialized_view_id(uint64_t &mview_id) const;
 protected:
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_exprs_;
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_into_exprs_;
   common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_strs_;
   common::ObArray<ObAggFunRawExpr*, common::ModulePageAllocator, true> returning_agg_items_;
+  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> group_param_exprs_;
   bool ignore_;
   bool has_global_index_;
   ObErrLogInfo error_log_info_;

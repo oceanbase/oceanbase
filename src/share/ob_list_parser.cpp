@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <string.h>
-#include <ctype.h>
 #include "ob_list_parser.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log.h"
 
 using namespace oceanbase::common;

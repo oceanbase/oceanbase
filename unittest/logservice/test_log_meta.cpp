@@ -10,14 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "logservice/palf/log_define.h"
 #define private public
 #include "logservice/palf/log_meta.h"
 #undef private
 #include <gtest/gtest.h>
 
+char **global_argv = nullptr;
 namespace oceanbase
 {
 namespace unittest
@@ -25,11 +23,7 @@ namespace unittest
 using namespace common;
 using namespace palf;
 
-TEST(TestLogMeta, test_log_meta)
-{
-  int64_t proposal_id = INVALID_PROPOSAL_ID;
-  proposal_id = 1;
-  ObAddr addr(ObAddr::IPV4, "127.0.0.1", 4096);
+TEST(TestLogMeta, test_log_meta) { int64_t proposal_id = INVALID_PROPOSAL_ID; proposal_id = 1; ObAddr addr(ObAddr::IPV4, "127.0.0.1", 4096);
 
   // Prepare meta
   LogPrepareMeta log_prepare_meta1;
@@ -80,10 +74,11 @@ TEST(TestLogMeta, test_log_meta)
   EXPECT_TRUE(log_config_meta1.is_valid());
 
   // Snapshot meta
+  LogInfo log_info; log_info.generate_by_default();
   LogSnapshotMeta log_snapshot_meta1;
   LSN lsn; lsn.val_ = 1;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_snapshot_meta1.generate(LSN()));
-  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta1.generate(lsn));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_snapshot_meta1.generate(LSN(), log_info, LSN()));
+  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta1.generate(lsn, log_info, lsn));
   EXPECT_TRUE(log_snapshot_meta1.is_valid());
 
   // replica property meta
@@ -152,6 +147,41 @@ TEST(TestLogMeta, test_log_meta_generate)
   EXPECT_EQ(meta1.log_snapshot_meta_.base_lsn_, base_info.curr_lsn_);
   EXPECT_EQ(meta1.log_snapshot_meta_.prev_log_info_, base_info.prev_log_info_);
 }
+
+TEST(TestLogMeta, test_max_length_learner_list)
+{
+  const int64_t init_log_proposal_id(0);
+  LogConfigMeta log_config_meta;
+  LogConfigInfoV2 init_config_info;
+  LogConfigVersion init_config_version;
+  EXPECT_EQ(OB_SUCCESS, init_config_version.generate(init_log_proposal_id, 0));
+  EXPECT_EQ(OB_SUCCESS, init_config_info.generate(init_config_version));
+  log_config_meta.version_ = LogConfigMeta::LOG_CONFIG_META_VERSION_INC;
+  log_config_meta.proposal_id_ = init_log_proposal_id;
+  log_config_meta.curr_ = init_config_info;
+  log_config_meta.prev_ = init_config_info;
+  LogMeta log_meta1;
+  EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_config_meta(log_config_meta));
+
+  ObAddr::VER ip_type = ObAddr::IPV4;
+  const char* addr_str = "255.255.255.255";
+  const int32_t port = INT32_MAX;
+
+  for (int i = 0; i < OB_MAX_MEMBER_NUMBER; i++) {
+    log_meta1.log_config_meta_.curr_.config_.log_sync_memberlist_.add_member(ObMember(ObAddr(ip_type, addr_str, port - i), INT64_MAX));
+    log_meta1.log_config_meta_.prev_.config_.log_sync_memberlist_.add_member(ObMember(ObAddr(ip_type, addr_str, port - i), INT64_MAX));
+    log_meta1.log_config_meta_.curr_.config_.arbitration_member_ = ObMember(ObAddr(ip_type, addr_str, port - i), INT64_MAX);
+    log_meta1.log_config_meta_.prev_.config_.arbitration_member_ = ObMember(ObAddr(ip_type, addr_str, port - i), INT64_MAX);
+  }
+  PALF_LOG(INFO, "IPV4 base serialize size",  "size", log_meta1.get_serialize_size());
+
+  for (int i = 0; i < 60; i++) {
+    log_meta1.log_config_meta_.curr_.config_.learnerlist_.add_server(ObAddr(ip_type, addr_str, port - i));
+  }
+  const int64_t member_serialize_size = ObMember(ObAddr(ObAddr::IPV4, addr_str, port), INT64_MAX).get_serialize_size();
+  const int64_t addr_serialize_size = ObAddr(ObAddr::IPV4, addr_str, port).get_serialize_size();
+  PALF_LOG(INFO, "60 IPV4 serialize size",  "size", log_meta1.get_serialize_size(), K(member_serialize_size), K(addr_serialize_size));
+}
 }
 }
 
@@ -162,5 +192,6 @@ int main(int argc, char **argv)
   PALF_LOG(INFO, "begin unittest::test_log_meta");
   ::testing::InitGoogleTest(&argc, argv);
   oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+  oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }

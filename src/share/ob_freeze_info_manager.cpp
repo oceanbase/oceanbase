@@ -14,11 +14,7 @@
 
 #include "share/ob_freeze_info_manager.h"
 
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/utility/utility.h"
-#include "share/ob_common_rpc_proxy.h"
 #include "share/ob_global_stat_proxy.h"
-#include "observer/ob_server_struct.h"
 
 
 namespace oceanbase
@@ -188,8 +184,8 @@ int ObFreezeInfoManager::fetch_new_freeze_info(
              sql_proxy, min_frozen_scn, freeze_infos))) {
     LOG_WARN("fail to get freeze info", KR(ret), K(min_frozen_scn));
   } else if (OB_UNLIKELY(freeze_infos.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid frozen status", KR(ret), K(min_frozen_scn));
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("no freeze info in inner table", KR(ret), K(min_frozen_scn));
   }
   return ret;
 }
@@ -209,7 +205,7 @@ int ObFreezeInfoManager::update_freeze_info(
   } else if (OB_FAIL(freeze_info_.frozen_statuses_.assign(freeze_infos))) {
     LOG_WARN("fail to assign", KR(ret), K(freeze_infos));
   } else if (freeze_info_.frozen_statuses_.count() > 1) {
-    std::sort(freeze_info_.frozen_statuses_.begin(), freeze_info_.frozen_statuses_.end(),
+    lib::ob_sort(freeze_info_.frozen_statuses_.begin(), freeze_info_.frozen_statuses_.end(),
               [](const ObFreezeInfo &a, const ObFreezeInfo &b)
                 { return a.frozen_scn_ < b.frozen_scn_; } );
   }
@@ -309,13 +305,10 @@ int ObFreezeInfoManager::get_freeze_info_by_idx(
 
 int ObFreezeInfoManager::get_freeze_info_by_major_snapshot(
     const int64_t snapshot_version,
-    ObIArray<share::ObFreezeInfo> &info_list,
-    const bool need_all_behind_info)
+    share::ObFreezeInfo &frozen_status)
 {
   int ret = OB_SUCCESS;
-  info_list.reset();
   share::SCN frozen_scn;
-  share::ObFreezeInfo freeze_info; //placeholder
   int64_t ret_pos = -1;
 
   if (IS_NOT_INIT) {
@@ -326,27 +319,51 @@ int ObFreezeInfoManager::get_freeze_info_by_major_snapshot(
     LOG_WARN("get invalid arguments", K(ret), K(snapshot_version));
   } else if (OB_FAIL(frozen_scn.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert snapshot version to scn", K(ret), K(snapshot_version));
-  } else if (OB_FAIL(freeze_info_.get_freeze_info(frozen_scn, freeze_info, ret_pos))) {
+  } else if (OB_FAIL(freeze_info_.get_freeze_info(frozen_scn, frozen_status, ret_pos))) {
     LOG_WARN("failed to get frozen status", K(ret), K(frozen_scn));
   } else if (ret_pos < 0 || ret_pos >= freeze_info_.count()) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_DEBUG("can not find the freeze info", K(ret), K(snapshot_version), K(freeze_info_));
-  } else {
-    const int64_t end_idx = need_all_behind_info
-                          ? freeze_info_.frozen_statuses_.count()
-                          : ret_pos + 1;
-
-    for (int64_t i = ret_pos; OB_SUCC(ret) && i < end_idx; ++i) {
-      if (OB_FAIL(info_list.push_back(freeze_info_.frozen_statuses_.at(i)))) {
-        LOG_WARN("failed to push back frozen status", K(ret));
-      }
-    }
   }
   return ret;
 }
 
-int ObFreezeInfoManager::get_freeze_info_behind_major_snapshot(
+int ObFreezeInfoManager::get_freeze_info_behind_snapshot_version(
     const int64_t snapshot_version,
+    const bool include_equal,
+    ObIArray<ObFreezeInfo> &freeze_infos)
+{
+  int ret = OB_SUCCESS;
+  freeze_infos.reset();
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("freeze info mgr not inited", KR(ret));
+  } else if (OB_UNLIKELY(snapshot_version < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), K(snapshot_version));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < freeze_info_.frozen_statuses_.count(); ++i) {
+    const ObFreezeInfo &cur_info = freeze_info_.frozen_statuses_.at(i);
+    if (snapshot_version > cur_info.frozen_scn_.get_val_for_tx()) {
+      // do nothing
+    } else if (!include_equal && snapshot_version == cur_info.frozen_scn_.get_val_for_tx()) {
+      // do nothing
+    } else if (OB_FAIL(freeze_infos.push_back(cur_info))) {
+      LOG_WARN("failed to add cur info", K(ret), K(cur_info));
+    }
+  }
+
+  if (OB_SUCC(ret) && freeze_infos.empty()) {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
+  return ret;
+}
+
+int ObFreezeInfoManager::get_freeze_info_compare_with_major_snapshot(
+    const int64_t snapshot_version,
+    const CmpType cmp_type,
     share::ObFreezeInfo &frozen_status)
 {
   int ret = OB_SUCCESS;
@@ -359,11 +376,21 @@ int ObFreezeInfoManager::get_freeze_info_behind_major_snapshot(
     LOG_WARN("get invalid arguments", K(ret), K(snapshot_version));
   } else {
     bool found = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < freeze_info_.frozen_statuses_.count(); ++i) {
-      if (snapshot_version < freeze_info_.frozen_statuses_.at(i).frozen_scn_.get_val_for_tx()) {
-        frozen_status = freeze_info_.frozen_statuses_.at(i);
-        found = true;
-        break;
+    if (CmpType::GREATER_THAN == cmp_type) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < freeze_info_.frozen_statuses_.count(); ++i) {
+        if (snapshot_version < freeze_info_.frozen_statuses_.at(i).frozen_scn_.get_val_for_tx()) {
+          frozen_status = freeze_info_.frozen_statuses_.at(i);
+          found = true;
+          break;
+        }
+      }
+    } else if (CmpType::LOWER_BOUND == cmp_type) {
+      for (int64_t i = freeze_info_.frozen_statuses_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+        if (freeze_info_.frozen_statuses_.at(i).frozen_scn_.get_val_for_tx() <= snapshot_version) {
+          frozen_status = freeze_info_.frozen_statuses_.at(i);
+          found = true;
+          break;
+        }
       }
     }
 
@@ -404,7 +431,8 @@ int ObFreezeInfoManager::get_neighbour_frozen_status(
         found = true;
         if (0 == i) {
           ret = OB_ENTRY_NOT_EXIST;
-          if (REACH_TENANT_TIME_INTERVAL(60L * 1000L * 1000L)) {
+          if (REACH_THREAD_TIME_INTERVAL(60L * 1000L * 1000L)) {
+            // ignore ret
             LOG_WARN("cannot get neighbour major freeze before bootstrap", K(ret),
               K(snapshot_version), K(next_info));
           }

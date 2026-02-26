@@ -35,6 +35,7 @@ public:
     const ObColumnCSEncodingCtx &ctx, const int64_t column_index, const int64_t row_count) override;
   void reuse() override;
   int store_column(ObMicroBufferWriter &buf_writer) override;
+  int store_column_meta(ObMicroBufferWriter &buf_writer) override;
   int64_t estimate_store_size() const override;
   ObCSColumnHeader::Type get_type() const override { return type_; }
   int get_maximal_encoding_store_size(int64_t &size) const override;

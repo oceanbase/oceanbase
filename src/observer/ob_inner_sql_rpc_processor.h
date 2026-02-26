@@ -23,11 +23,6 @@
 namespace oceanbase
 {
 
-namespace observer
-{
-class ObGlobalContext;
-}
-
 namespace obrpc
 {
 
@@ -71,20 +66,13 @@ private:
   int set_session_param_to_conn(
       sqlclient::ObISQLConnection *conn,
       const ObInnerSQLTransmitArg &transmit_arg);
+  int process_inner_tablet_write(
+      sqlclient::ObISQLConnection *con,
+      const ObInnerSQLTransmitArg &arg,
+      ObInnerSQLTransmitResult &transmit_result);
+
   const observer::ObGlobalContext &gctx_;
   DISALLOW_COPY_AND_ASSIGN(ObInnerSqlRpcP);
-};
-
-class ResourceGroupGuard
-{
-  //todo qilu:revert after ddl_back_threads are split under tenants
-public:
-  ResourceGroupGuard(const int32_t group_id);
-  ~ResourceGroupGuard();
-public:
-  bool group_change_;
-  int32_t old_group_id_;
-
 };
 
 }

@@ -56,7 +56,8 @@ public:
   int64_t get_last_run_timestamp() const;
   void update_last_run_timestamp();
 
-  int create(const int64_t thread_cnt, const char* name = nullptr);
+  int create(const int64_t thread_cnt, const char* name = nullptr,
+             const int64_t wait_event_id = ObWaitEventIds::REENTRANT_THREAD_COND_WAIT);
   int destroy();
   int start();
   void stop();

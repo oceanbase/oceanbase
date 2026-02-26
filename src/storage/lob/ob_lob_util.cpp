@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_util.h"
-#include "ob_lob_manager.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/lob/ob_lob_meta.h"
-#include "storage/tx_storage/ob_access_service.h"
 
 namespace oceanbase
 {
@@ -26,16 +22,6 @@ using namespace common;
 using namespace transaction;
 namespace storage
 {
-
-ObLobAccessParam::~ObLobAccessParam()
-{
-  if (OB_NOT_NULL(dml_base_param_)) {
-    if (OB_NOT_NULL(dml_base_param_->store_ctx_guard_)) {
-      dml_base_param_->store_ctx_guard_->~ObStoreCtxGuard();
-    }
-    dml_base_param_->~ObDMLBaseParam();
-  }
-}
 
 ObCollationType ObLobCharsetUtil::get_collation_type(ObObjType type, ObCollationType ori_coll_type)
 {
@@ -46,94 +32,15 @@ ObCollationType ObLobCharsetUtil::get_collation_type(ObObjType type, ObCollation
   return coll_type;
 }
 
-int ObLobAccessParam::set_lob_locator(common::ObLobLocatorV2 *lob_locator)
+void ObLobCharsetUtil::transform_query_result_charset(
+    const common::ObCollationType& coll_type,
+    const char* data,
+    uint32_t len,
+    uint32_t &byte_len,
+    uint32_t &byte_st)
 {
-  int ret = OB_SUCCESS;
-  ObString disk_locator;
-  if (OB_ISNULL(lob_locator)) {
-    // do nothing
-  } else if (!lob_locator->has_lob_header()) {
-    // do nothing
-  } else if (!lob_locator->is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("lob locator is invalid", K(ret), KPC(lob_locator));
-  } else if (!(lob_locator->is_lob_disk_locator() || lob_locator->is_persist_lob() || lob_locator->is_full_temp_lob())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("lob locator type is invalid", K(ret), KPC(lob_locator));
-  } else if (OB_FAIL(lob_locator->get_disk_locator(disk_locator))) {
-    LOG_WARN("failed to get lob common from lob locator", K(ret), KPC(lob_locator));
-  } else {
-    lob_common_ = reinterpret_cast<ObLobCommon*>(disk_locator.ptr());
-    handle_size_ = disk_locator.length();
-    lob_locator_ = lob_locator;
-  }
-  return ret;
-}
-
-int64_t ObLobAccessParam::get_schema_chunk_size() const
-{
-  uint64_t chunk_size = 0;
-  if (0 == schema_chunk_size_ || schema_chunk_size_ > ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE) {
-    chunk_size = ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE;
-  } else {
-    chunk_size = schema_chunk_size_;
-  }
-  return chunk_size;
-}
-
-bool ObLobAccessParam::has_store_chunk_size() const
-{
-  bool bres = false;
-  if (OB_ISNULL(lob_common_)) {
-  } else if (lob_common_->in_row_ || ! lob_common_->is_init_) {
-  } else if (OB_ISNULL(lob_data_)) {
-  } else {
-    bres = true;
-  }
-  return bres;
-}
-
-// chunk size can be changed online.
-// that means lob data that has been writed may have different chunk size with schema
-// so here should get chunk size according context
-int ObLobAccessParam::get_store_chunk_size(int64_t &chunk_size) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(lob_common_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lob_common_ is null", KR(ret), KPC(this));
-  } else if (lob_common_->in_row_ || ! lob_common_->is_init_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lob_common_ is not outrow", KR(ret), KPC(lob_common_), KPC(this));
-  } else if (OB_ISNULL(lob_data_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lob_data_ is null", KR(ret), KPC(lob_common_), KPC(this));
-  } else {
-    ObLobDataOutRowCtx *outrow_ctx = reinterpret_cast<ObLobDataOutRowCtx*>(lob_data_->buffer_);
-    chunk_size = outrow_ctx->get_real_chunk_size();
-  }
-  return ret;
-}
-
-int64_t ObLobAccessParam::get_inrow_threshold()
-{
-  int64_t res = inrow_threshold_;
-  if (res < OB_MIN_LOB_INROW_THRESHOLD || res > OB_MAX_LOB_INROW_THRESHOLD) {
-    LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid inrow threshold, use default inrow threshold", K(res));
-    res = OB_DEFAULT_LOB_INROW_THRESHOLD;
-  }
-  return res;
-}
-
-int ObLobAccessParam::is_timeout()
-{
-  int ret = OB_SUCCESS;
-  int64_t cur_time = ObTimeUtility::current_time();
-  if (cur_time > timeout_) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("query timeout", K(ret), K(cur_time), K(timeout_));
-  }
-  return ret;
+  byte_st = ObCharset::charpos(coll_type, data, len, byte_st);
+  byte_len = ObCharset::charpos(coll_type, data + byte_st, len - byte_st, byte_len);
 }
 
 int ObInsertLobColumnHelper::start_trans(const share::ObLSID &ls_id,
@@ -244,19 +151,25 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
         ObLobAccessParam lob_param;
         lob_param.src_tenant_id_ = src_tenant_id;
         lob_param.tx_desc_ = tx_desc;
-        lob_param.snapshot_ = snapshot;
-        lob_param.sql_mode_ = SMO_DEFAULT;
-        lob_param.ls_id_ = ls_id;
-        lob_param.tablet_id_ = tablet_id;
-        lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(obj_type, cs_type);
-        lob_param.allocator_ = &allocator;
-        lob_param.lob_common_ = nullptr;
-        lob_param.timeout_ = timeout_ts;
-        lob_param.scan_backward_ = false;
-        lob_param.offset_ = 0;
-        lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
-        LOG_DEBUG("lob storage param", K(lob_storage_param), K(cs_type));
-        if (!src.is_valid()) {
+        if (OB_FAIL(lob_param.snapshot_.assign(snapshot))) {
+          LOG_WARN("assign snapshot fail", K(ret));
+        } else {
+          lob_param.sql_mode_ = SMO_DEFAULT;
+          lob_param.ls_id_ = ls_id;
+          lob_param.tablet_id_ = tablet_id;
+          lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(obj_type, cs_type);
+          lob_param.allocator_ = &allocator;
+          lob_param.lob_common_ = nullptr;
+          lob_param.timeout_ = timeout_ts;
+          lob_param.scan_backward_ = false;
+          lob_param.offset_ = 0;
+          lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
+          lob_param.is_index_table_ = lob_storage_param.is_index_table_;
+          lob_param.main_table_rowkey_col_ = !lob_storage_param.is_index_table_ && lob_storage_param.is_rowkey_col_;
+          LOG_DEBUG("lob storage param", K(lob_storage_param), K(cs_type));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (!src.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid src lob locator.", K(ret));
         } else if (OB_FAIL(lob_mngr->append(lob_param, src))) {
@@ -293,10 +206,12 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
 }
 
 int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
+                                               ObIAllocator &lob_allocator,
                                                transaction::ObTxDesc *tx_desc,
+                                               share::ObTabletCacheInterval &lob_id_geneator,
                                                const share::ObLSID ls_id,
                                                const common::ObTabletID tablet_id,
-                                               const ObLobId &lob_id,
+                                               const common::ObTabletID lob_meta_tablet_id,
                                                const ObObjType &obj_type,
                                                const ObCollationType collation_type,
                                                const ObLobStorageParam &lob_storage_param,
@@ -323,7 +238,18 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       LOG_WARN("fail to get lob data byte len", K(ret), K(src));
     } else if (src.has_inrow_data() && lob_mngr->can_write_inrow(byte_len, lob_storage_param.inrow_threshold_)) {
       // do fast inrow
-      if (OB_FAIL(src.get_inrow_data(data))) {
+      if (src.is_inrow_disk_lob_locator()) {
+        // if is disk inrow lob, no need alloc new memory, just reset lob common header
+        char *buf = src.ptr_;
+        ObLobCommon *lob_comm = new (buf) ObLobCommon();
+        if (lob_comm->buffer_ != buf + sizeof(ObLobCommon)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("lob common buffer ptr is invalid", K(ret), KPC(lob_comm));
+        } else {
+          datum.set_lob_data(*lob_comm, src.size_);
+          iter.set_end();
+        }
+      } else if (OB_FAIL(src.get_inrow_data(data))) {
         LOG_WARN("fail to get inrow data", K(ret), K(src));
       } else {
         void *buf = allocator.alloc(data.length() + sizeof(ObLobCommon));
@@ -339,10 +265,8 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       }
     } else {
       ObTransService *txs = MTL(transaction::ObTransService*);
-      ObTxReadSnapshot snapshot;
-      // 4.0 text tc compatiable
       ObLobAccessParam lob_param;
-      // lob_param.tx_desc_ = tx_desc;
+      lob_param.tx_desc_ = tx_desc;
       // lob_param.snapshot_ = snapshot;
       lob_param.sql_mode_ = SMO_DEFAULT;
       lob_param.ls_id_ = ls_id;
@@ -353,14 +277,64 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       lob_param.timeout_ = timeout_ts;
       lob_param.scan_backward_ = false;
       lob_param.offset_ = 0;
-      lob_param.spec_lob_id_ = lob_id;
+      lob_param.lob_meta_tablet_id_ = lob_meta_tablet_id;
+      lob_param.lob_id_geneator_ = &lob_id_geneator;
       lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
+      lob_param.is_index_table_ = lob_storage_param.is_index_table_;
+      lob_param.main_table_rowkey_col_ = !lob_storage_param.is_index_table_ && lob_storage_param.is_rowkey_col_;
       lob_param.src_tenant_id_ = src_tenant_id;
+      lob_param.set_tmp_allocator(&lob_allocator);
       if (!src.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid src lob locator.", K(ret));
       } else if (OB_FAIL(lob_mngr->append(lob_param, src, iter))) {
         LOG_WARN("lob append failed.", K(ret));
+      } else {
+        datum.set_lob_data(*lob_param.lob_common_, lob_param.handle_size_);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObInsertLobColumnHelper::delete_lob_column(ObIAllocator &allocator,
+                                              const share::ObLSID ls_id,
+                                              const common::ObTabletID tablet_id,
+                                              const ObCollationType& collation_type,
+                                              blocksstable::ObStorageDatum &datum,
+                                              transaction::ObTxDesc *tx_desc,
+                                              transaction::ObTxReadSnapshot &snapshot,
+                                              const int64_t timeout_ts,
+                                              const bool has_lob_header)
+{
+  int ret = OB_SUCCESS;
+
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  if (OB_ISNULL(lob_mngr) || OB_ISNULL(tx_desc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(lob_mngr), KP(tx_desc));
+  } else {
+    ObString data = datum.get_string();
+    // datum with null ptr and zero len should treat as no lob header
+    bool set_has_lob_header = has_lob_header && data.length() > 0;
+    ObLobLocatorV2 lob(data, set_has_lob_header);
+    int64_t byte_len = 0;
+    if (lob.has_inrow_data()) {
+      // delete inrow lob no need to use the lob manager
+    } else {
+      // 4.0 text tc compatiable
+      ObLobAccessParam lob_param;
+      lob_param.tx_desc_ = tx_desc;
+      lob_param.tablet_id_ = tablet_id;
+      if (!lob.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid src lob locator.", K(ret));
+      } else if (OB_FAIL(lob_mngr->build_lob_param(lob_param, allocator, collation_type, 0, UINT64_MAX, timeout_ts, lob))) {
+        LOG_WARN("fail to build lob param.", K(ret));
+      } else if (OB_FAIL(lob_param.snapshot_.assign(snapshot))) {
+        LOG_WARN("fail to assign snapshot", K(ret), K(snapshot));
+      } else if (OB_FAIL(lob_mngr->erase(lob_param))) {
+        LOG_WARN("lob meta row delete failed.", K(ret));
       } else {
         datum.set_lob_data(*lob_param.lob_common_, lob_param.handle_size_);
       }
@@ -560,7 +534,7 @@ int ObLobPartialData::get_ori_data_length(int64_t &len) const
 int ObLobPartialData::sort_index()
 {
   int ret = OB_SUCCESS;
-  std::sort(index_.begin(), index_.end(), ObLobChunkIndexComparator());
+  lib::ob_sort(index_.begin(), index_.end(), ObLobChunkIndexComparator());
   search_map_.reuse();
   for (int i = 0; i < index_.count(); ++i) {
     const ObLobChunkIndex &chunk_index = index_[i];

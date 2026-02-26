@@ -11,14 +11,14 @@
  */
 
 #define USING_LOG_PREFIX PL
-#include "pl/parser/ob_pl_parser.h"
-#include "pl/parser/parse_stmt_node.h"
+#include "ob_pl_parser.h"
 #include "pl/ob_pl_resolver.h"
-#include "share/ob_define.h"
-#include "lib/string/ob_string.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/ash/ob_active_session_guard.h"
 #include "sql/parser/parse_malloc.h"
+
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/wrap/ob_pl_wrap_allocator.h"
+#include "pl/wrap/ob_pl_wrap_decoder.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -86,35 +86,47 @@ int ObPLParser::fast_parse(const ObString &query,
     parse_ctx.no_param_sql_buf_len_ = new_length;
   }
   if (OB_SUCC(ret)) {
-    ret = parse_stmt_block(parse_ctx, parse_result.result_tree_);
-    if (OB_ERR_PARSE_SQL == ret) {
-      int err_len = 0;
-      const char *err_str = "", *global_errmsg = "";
-      int err_line = 0;
-      if (parse_ctx.cur_error_info_ != NULL) {
-        int first_column = parse_ctx.cur_error_info_->stmt_loc_.first_column_;
-        int last_column = parse_ctx.cur_error_info_->stmt_loc_.last_column_;
-        err_len = last_column - first_column + 1;
-        err_str = parse_ctx.stmt_str_ + first_column;
-        err_line = parse_ctx.cur_error_info_->stmt_loc_.last_line_ + 1;
-        global_errmsg = parse_ctx.global_errmsg_;
+    if (OB_FAIL(parse_stmt_block(parse_ctx, parse_result.result_tree_))) {
+      if (OB_ERR_PARSE_SQL == ret) {
+        int err_len = 0;
+        const char *err_str = "", *global_errmsg = "";
+        int err_line = 0;
+        if (parse_ctx.cur_error_info_ != NULL) {
+          int first_column = parse_ctx.cur_error_info_->stmt_loc_.first_column_;
+          int last_column = parse_ctx.cur_error_info_->stmt_loc_.last_column_;
+          err_len = last_column - first_column + 1;
+          err_str = parse_ctx.stmt_str_ + first_column;
+          err_line = parse_ctx.cur_error_info_->stmt_loc_.last_line_ + 1;
+          global_errmsg = parse_ctx.global_errmsg_;
+        }
+        ObString stmt(MIN(MAX_PRINT_LEN, parse_ctx.stmt_len_), parse_ctx.stmt_str_);
+        LOG_WARN("failed to parse pl stmt",
+                K(ret), K(err_line), K(global_errmsg), K(stmt));
+        LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
+                      err_len, err_str, err_line);
+      } else {
+        LOG_WARN("failed to parse pl stmt", K(ret));
       }
-      ObString stmt(parse_ctx.stmt_len_, parse_ctx.stmt_str_);
-      LOG_WARN("failed to parser pl stmt",
-              K(ret), K(err_line), K(global_errmsg), K(stmt));
-      LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
-                    err_len, err_str, err_line);
     } else {
-      memmove(parse_ctx.no_param_sql_ + parse_ctx.no_param_sql_len_,
+      int64_t buf_remain_len = parse_ctx.no_param_sql_buf_len_ - parse_ctx.no_param_sql_len_;
+      int64_t copy_len = parse_ctx.stmt_len_ - parse_ctx.copied_pos_;
+      if (buf_remain_len < copy_len) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Can not memmove due to remain buf len less than copy len",
+                K(ret), K(buf_remain_len), K(copy_len));
+      } else {
+        memmove(parse_ctx.no_param_sql_ + parse_ctx.no_param_sql_len_,
                       parse_ctx.stmt_str_ + parse_ctx.copied_pos_,
-                      parse_ctx.stmt_len_ - parse_ctx.copied_pos_);
-      parse_ctx.no_param_sql_len_ += parse_ctx.stmt_len_ - parse_ctx.copied_pos_;
-      parse_result.no_param_sql_ = parse_ctx.no_param_sql_;
-      parse_result.no_param_sql_len_ = parse_ctx.no_param_sql_len_;
-      parse_result.no_param_sql_buf_len_ = parse_ctx.no_param_sql_buf_len_;
-      parse_result.param_node_num_ = parse_ctx.param_node_num_;
-      parse_result.param_nodes_ = parse_ctx.param_nodes_;
-      parse_result.tail_param_node_ = parse_ctx.tail_param_node_;
+                      copy_len);
+        parse_ctx.no_param_sql_len_ += copy_len;
+        parse_result.no_param_sql_ = parse_ctx.no_param_sql_;
+        parse_result.no_param_sql_len_ = parse_ctx.no_param_sql_len_;
+        parse_result.no_param_sql_buf_len_ = parse_ctx.no_param_sql_buf_len_;
+        parse_result.param_node_num_ = parse_ctx.param_node_num_;
+        parse_result.param_nodes_ = parse_ctx.param_nodes_;
+        parse_result.tail_param_node_ = parse_ctx.tail_param_node_;
+        parse_result.contain_sensitive_data_ = parse_ctx.contain_sensitive_data_;
+      }
     }
   }
   return ret;
@@ -128,6 +140,7 @@ int ObPLParser::parse(const ObString &stmt_block,
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_pl_parse);
   int ret = OB_SUCCESS;
   bool is_include_old_new_in_trigger = false;
+  bool contain_sensitive_data = false;
   ObQuestionMarkCtx question_mark_ctx;
   if (OB_FAIL(parse_procedure(stmt_block,
                               orig_stmt_block,
@@ -136,8 +149,14 @@ int ObPLParser::parse(const ObString &stmt_block,
                               parse_result.is_for_trigger_,
                               parse_result.is_dynamic_sql_,
                               is_inner_parse,
-                              is_include_old_new_in_trigger))) {
-    LOG_WARN("parse stmt block failed", K(ret), K(stmt_block), K(orig_stmt_block));
+                              is_include_old_new_in_trigger,
+                              contain_sensitive_data))) {
+    if (OB_SIZE_OVERFLOW != ret) {
+      LOG_WARN("parse stmt block failed", K(ret), K(ObString(MIN(MAX_PRINT_LEN, stmt_block.length()) ,stmt_block.ptr())),
+                                                  K(ObString(MIN(MAX_PRINT_LEN, orig_stmt_block.length()) ,orig_stmt_block.ptr())));
+    } else {
+      LOG_WARN("parse stmt block failed", K(ret));
+    }
   } else if (OB_ISNULL(parse_result.result_tree_)) {
     ret = OB_ERR_PARSE_SQL;
     LOG_WARN("result tree is NULL", K(stmt_block), K(ret));
@@ -149,6 +168,7 @@ int ObPLParser::parse(const ObString &stmt_block,
     parse_result.no_param_sql_len_ = stmt_block.length();
     parse_result.end_col_ = stmt_block.length();
     parse_result.is_include_old_new_in_trigger_ = is_include_old_new_in_trigger;
+    parse_result.contain_sensitive_data_ = contain_sensitive_data;
   }
   return ret;
 }
@@ -160,7 +180,8 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
                                 bool is_for_trigger,
                                 bool is_dynamic,
                                 bool is_inner_parse,
-                                bool &is_include_old_new_in_trigger)
+                                bool &is_include_old_new_in_trigger,
+                                bool &contain_sensitive_data)
 {
   int ret = OB_SUCCESS;
   ObParseCtx parse_ctx;
@@ -189,27 +210,58 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
     if (parse_ctx.cur_error_info_ != NULL) {
       int first_column = parse_ctx.cur_error_info_->stmt_loc_.first_column_;
       int last_column = parse_ctx.cur_error_info_->stmt_loc_.last_column_;
-      err_len = last_column - first_column + 1;
-      err_str = parse_ctx.stmt_str_ + first_column;
+      if (0 <= first_column && 0 <= last_column && last_column >= first_column && last_column < parse_ctx.stmt_len_) {
+        err_len = last_column - first_column + 1;
+        err_str = parse_ctx.stmt_str_ + first_column;
+        if (parse_ctx.is_not_utf8_connection_) {
+          char *dst_str = NULL;
+          uint errors = 0;
+          size_t dst_len = err_len * 4;
+          size_t out_len = 0;
+          if (OB_ISNULL(dst_str = static_cast<char *>(allocator_.alloc(dst_len + 1)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate string buffer", K(ret), K(dst_len + 1));
+          } else {
+            out_len = static_cast<int64_t>(ob_convert(dst_str, dst_len, &ob_charset_utf8mb4_bin, err_str, err_len, parse_ctx.charset_info_, false, '?', &errors));
+            if (0 != errors) {
+              // The OB_ERR_INCORRECT_STRING_VALUE error code returned after convet fails will cause disconnection.
+              // Therefore, the error code is not changed here and the OB_ERR_PARSE_SQL error is still returned. Only the log is printed.
+              LOG_WARN("ob_convert failed", K(ret), K(errors), K( parse_ctx.charset_info_), K(ObString(err_len, err_str)));
+            } else {
+              dst_str[out_len] = '\0';
+              err_str = dst_str;
+              err_len = out_len;
+            }
+          }
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected first column or last column", K(ret), K(first_column), K(last_column), K(parse_ctx.stmt_len_));
+      }
       err_line = parse_ctx.cur_error_info_->stmt_loc_.last_line_ + 1;
       global_errmsg = parse_ctx.global_errmsg_;
     }
-    ObString stmt(parse_ctx.stmt_len_, parse_ctx.stmt_str_);
+    ObString stmt(MIN(MAX_PRINT_LEN, parse_ctx.stmt_len_), parse_ctx.stmt_str_);
     LOG_WARN("failed to parser pl stmt",
              K(ret), K(err_line), K(global_errmsg), K(stmt));
     LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
                    err_len, err_str, err_line);
   } else if (parse_ctx.mysql_compatible_comment_) {
     ret = OB_ERR_PARSE_SQL;
-    LOG_WARN("the sql is invalid", K(ret), K(stmt_block));
+    LOG_WARN("the sql is invalid", K(ret), K(ObString(MIN(MAX_PRINT_LEN, stmt_block.length()) ,stmt_block.ptr())));
   } else {
     question_mark_ctx = parse_ctx.question_mark_ctx_;
     is_include_old_new_in_trigger = parse_ctx.is_include_old_new_in_trigger_;
+    contain_sensitive_data = parse_ctx.contain_sensitive_data_;
   }
   return ret;
 }
 
-int ObPLParser::parse_routine_body(const ObString &routine_body, ObStmtNodeTree *&routine_stmt, bool is_for_trigger)
+int ObPLParser::parse_routine_body(const ObString &routine_body,
+                                   ObStmtNodeTree *&routine_stmt,
+                                   bool is_for_trigger,
+                                   bool &is_wrap,
+                                   bool need_unwrap)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_pl_parse);
   int ret = OB_SUCCESS;
@@ -218,7 +270,7 @@ int ObPLParser::parse_routine_body(const ObString &routine_body, ObStmtNodeTree 
   if (lib::is_oracle_mode()) {
     buf = const_cast<char*>(routine_body.ptr());
   } else {
-    const char *prefix = "CALL\n";
+    const char *prefix = "^ ";  // something totally different from SQL style
     prefix_len = static_cast<int32_t>(strlen(prefix));
     buf = static_cast<char*>(allocator_.alloc(routine_body.length() + prefix_len));
     if (OB_UNLIKELY(NULL == buf)) {
@@ -252,6 +304,22 @@ int ObPLParser::parse_routine_body(const ObString &routine_body, ObStmtNodeTree 
 
     if (OB_FAIL(parse_stmt_block(parse_ctx, routine_stmt))) {
       LOG_WARN("failed to parse stmt block", K(ret));
+#ifdef OB_BUILD_ORACLE_PL
+    } else if (is_wrapped_parse_tree(*routine_stmt)) {
+      if (lib::is_mysql_mode()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mysql mode does not support wrapped procedure or function", K(ret));
+      } else if (need_unwrap) {
+        ObString plain_text;
+        ObArenaAllocator arena_allocator("PLWrap", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        if (OB_FAIL(decode_cipher_text(arena_allocator, routine_stmt, plain_text))) {
+          LOG_WARN("failed to decode wrapped cipher text", K(ret));
+        } else if (OB_FAIL(parse_routine_body(plain_text, routine_stmt, is_for_trigger, is_wrap, false))) {
+          LOG_WARN("failed to parse unwrapped procedure or function", K(ret));
+        }
+      }
+      is_wrap = true;
+#endif
     }
   }
   return ret;
@@ -262,7 +330,10 @@ int ObPLParser::parse_package(const ObString &package,
                               const ObDataTypeCastParams &dtc_params,
                               share::schema::ObSchemaGetterGuard *schema_guard,
                               bool is_for_trigger,
-                              const ObTriggerInfo *trg_info)
+                              bool & is_wrap,
+                              const ObTriggerInfo *trg_info,
+                              bool need_unwrap,
+                              sql::ObSQLSessionInfo *session)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_pl_parse);
   int ret = OB_SUCCESS;
@@ -287,10 +358,32 @@ int ObPLParser::parse_package(const ObString &package,
 
   if (OB_FAIL(parse_stmt_block(parse_ctx, package_stmt))) {
     LOG_WARN("failed to parse stmt block", K(ret));
-  } else if (!is_for_trigger) {
-    // do nothing
-  } else if (OB_NOT_NULL(trg_info) && lib::is_oracle_mode()) {
-    OZ (reconstruct_trigger_package(package_stmt, trg_info, dtc_params, schema_guard));
+#ifdef OB_BUILD_ORACLE_PL
+  } else if (is_wrapped_parse_tree(*package_stmt)) {
+    if (lib::is_mysql_mode()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mysql mode does not support wrapped procedure or function", K(ret));
+    } else if (need_unwrap) {
+      ObString plain_text;
+      ObArenaAllocator arena_allocator("PLWrap", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      if (OB_FAIL(decode_cipher_text(arena_allocator, package_stmt, plain_text))) {
+        LOG_WARN("failed to decode wrapped cipher text", K(ret));
+      } else if (OB_FAIL(parse_package(plain_text,
+                                       package_stmt,
+                                       dtc_params,
+                                       schema_guard,
+                                       is_for_trigger,
+                                       is_wrap,
+                                       trg_info,
+                                       false,
+                                       session))) {
+        LOG_WARN("failed to parse unwrapped type or package", K(ret));
+      }
+    }
+    is_wrap = true;
+#endif
+  } else if (is_for_trigger && OB_NOT_NULL(trg_info) && lib::is_oracle_mode()) {
+    OZ (reconstruct_trigger_package(package_stmt, trg_info, dtc_params, schema_guard, session));
   }
   return ret;
 }
@@ -319,6 +412,7 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
       pre_parse_ctx.is_for_preprocess_ = true;
       pre_parse_ctx.connection_collation_ = parse_ctx.connection_collation_;
       pre_parse_ctx.scanner_ctx_.sql_mode_ = parse_ctx.scanner_ctx_.sql_mode_;
+      pre_parse_ctx.contain_sensitive_data_ = parse_ctx.contain_sensitive_data_;
       if (0 != obpl_parser_init(&pre_parse_ctx)) {
         ret = OB_ERR_PARSER_INIT;
         LOG_WARN("failed to initialized parser", K(ret));
@@ -329,17 +423,22 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
       }
     }
     if (OB_FAIL(ret)) {
-      LOG_WARN("failed to parse the statement",
-               "orig_stmt_str", ObString(parse_ctx.orig_stmt_len_, parse_ctx.orig_stmt_str_),
-               "stmt_str", ObString(parse_ctx.stmt_len_, parse_ctx.stmt_str_),
+      if (OB_SIZE_OVERFLOW != ret) {
+        LOG_WARN("failed to parse the statement",
                K_(parse_ctx.global_errmsg),
                K_(parse_ctx.global_errno),
                K_(parse_ctx.is_for_trigger),
                K_(parse_ctx.is_dynamic),
                K_(parse_ctx.is_for_preprocess),
-               K(ret));
+               "orig_stmt_str", ObString(MIN(MAX_PRINT_LEN, parse_ctx.orig_stmt_len_), parse_ctx.orig_stmt_str_),
+               "stmt_str", ObString(MIN(MAX_PRINT_LEN, parse_ctx.stmt_len_), parse_ctx.stmt_str_));
+      } else {
+        LOG_WARN("failed to parse the statement", K_(parse_ctx.global_errno));
+      }
       if (OB_NOT_SUPPORTED == ret) {
         LOG_USER_ERROR(OB_NOT_SUPPORTED, parse_ctx.global_errmsg_);
+      } else if (OB_ERR_NON_INT_LITERAL == ret) {
+       LOG_USER_ERROR(OB_ERR_NON_INT_LITERAL, static_cast<int32_t>(strlen(parse_ctx.global_errmsg_)), parse_ctx.global_errmsg_);
       }
       parse_ctx.stmt_tree_ = merge_tree(parse_ctx.mem_pool_, &(parse_ctx.global_errno_), T_STMT_LIST, parse_ctx.stmt_tree_);
       multi_stmt = parse_ctx.stmt_tree_;
@@ -353,7 +452,8 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
 int ObPLParser::reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
                                             const ObTriggerInfo *trg_info,
                                             const ObDataTypeCastParams &dtc_params,
-                                            share::schema::ObSchemaGetterGuard *schema_guard)
+                                            share::schema::ObSchemaGetterGuard *schema_guard,
+                                            sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   ObString trg_define;
@@ -398,7 +498,7 @@ int ObPLParser::reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
       if (OB_SUCC(ret) && T_SP_PRE_STMTS == trigger_source_node->type_) {
         OV (OB_NOT_NULL(schema_guard));
         OZ (pl::ObPLResolver::resolve_condition_compile(allocator_, 
-                                                        NULL,
+                                                        session,
                                                         schema_guard,
                                                         NULL,
                                                         NULL,
@@ -556,6 +656,66 @@ int ObPLParser::reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
   }
   return ret;
 }
+
+#ifdef OB_BUILD_ORACLE_PL
+bool ObPLParser::is_wrapped_parse_tree(const ParseNode &parse_tree)
+{
+  return T_STMT_LIST == parse_tree.type_
+         && 1 == parse_tree.num_child_
+         && OB_NOT_NULL(parse_tree.children_)
+         && OB_NOT_NULL(parse_tree.children_[0])
+         && (T_CREATE_WRAPPED_PACKAGE == parse_tree.children_[0]->type_
+             || T_CREATE_WRAPPED_PACKAGE_BODY == parse_tree.children_[0]->type_
+             || T_CREATE_WRAPPED_FUNCTION == parse_tree.children_[0]->type_
+             || T_CREATE_WRAPPED_PROCEDURE == parse_tree.children_[0]->type_
+             || T_CREATE_WRAPPED_TYPE == parse_tree.children_[0]->type_
+             || T_CREATE_WRAPPED_TYPE_BODY == parse_tree.children_[0]->type_);
+}
+
+int ObPLParser::check_wrapped_parse_tree_legal(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(2 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child num", K(ret), K(parse_tree.num_child_));
+  } else if (OB_ISNULL(parse_tree.children_)
+             || OB_ISNULL(parse_tree.children_[1])
+             || T_BASE64_CIPHER != parse_tree.children_[1]->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child node", K(ret));
+  }
+  return ret;
+}
+
+int ObPLParser::decode_cipher_text(ObIAllocator &allocator,
+                                   const ObStmtNodeTree *cipher_stmt,
+                                   ObString &plain_text)
+{
+  int ret = OB_SUCCESS;
+  char *out = nullptr;
+  int64_t out_size = 0;
+  ObStmtNodeTree *cipher_text_node = nullptr;
+  ObPLWAllocator wrap_allocator;
+  OZ (init_plw_allocator(&wrap_allocator, &allocator));
+  ObPLWDecoder wrap_decoder(wrap_allocator);
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_wrapped_parse_tree_legal(*cipher_stmt->children_[0]))) {
+    LOG_WARN("illegal wrapped parse tree", K(ret));
+  } else if (FALSE_IT(cipher_text_node = cipher_stmt->children_[0]->children_[1])) {
+  } else if (OB_FAIL(wrap_decoder.decode(
+                 reinterpret_cast<const uint8_t *>(cipher_text_node->str_value_),
+                 cipher_text_node->str_len_,
+                 reinterpret_cast<uint8_t *&>(out),
+                 out_size))) {
+    LOG_WARN("failed to decode wrapped cipher text", K(ret));
+  }
+  CK (OB_NOT_NULL(out));
+  CK (OB_LIKELY(out_size > 0));
+  plain_text.assign(out, static_cast<int32_t>(out_size));
+  return ret;
+}
+#endif
 
 }  // namespace pl
 }  // namespace oceanbase

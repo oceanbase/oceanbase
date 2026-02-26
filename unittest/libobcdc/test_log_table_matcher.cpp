@@ -10,10 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <fnmatch.h>
 #include <gtest/gtest.h>
 
-#include "share/ob_define.h"
 
 #include "logservice/libobcdc/src/ob_log_table_matcher.h"
 

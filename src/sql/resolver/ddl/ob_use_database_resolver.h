@@ -27,6 +27,7 @@ public:
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUseDatabaseResolver);
+  int resolve_database_factor_(const ParseNode *node, uint64_t &catalog_id, common::ObString &database_name);
 };
 
 } // end namespace sql

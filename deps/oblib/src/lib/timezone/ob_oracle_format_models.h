@@ -240,14 +240,14 @@ enum ElementFlag : int64_t
   //定义组内冲突时，报什么错
   static constexpr int            CONFLICT_GROUP_ERR[MAX_CONFLICT_GROUP_NUMBER] =
   {
-    /*NEVER_APPEAR_GROUP*/            OB_ERR_FORMAT_CODE_CANNOT_APPEAR,                 //ORA-01820: format code cannot appear in date input format
-    /*YEAR_GROUP*/                    OB_ERR_YEAR_MAY_ONLY_BE_SPECIFIED_ONCE,           //ORA-01812: year may only be specified once
-    /*MERIDIAN_INDICATOR_GROUP*/      OB_ERR_AM_PM_CONFLICTS_WITH_USE_OF_AM_DOT_PM_DOT, //ORA-01810: format code appears twice
-    /*WEEK_OF_DAY_GROUP*/             OB_ERR_DAY_OF_WEEK_SPECIFIED_MORE_THAN_ONCE,      //ORA-01817: day of week may only be specified once
-    /*ERA_GROUP*/                     OB_ERR_BC_AD_CONFLICT_WITH_USE_OF_BC_DOT_AD_DOT,  //ORA-01810: format code appears twice
-    /*HOUR_GROUP*/                    OB_ERR_HOUR_MAY_ONLY_BE_SPECIFIED_ONCE,           //ORA-01813: hour may only be specified once
-    /*MONTH_GROUP*/                   OB_ERR_MONTH_MAY_ONLY_BE_SPECIFIED_ONCE,          //ORA-01816: month may only be specified once
-    /*DAY_OF_YEAR_GROUP*/             OB_ERR_JULIAN_DATE_PRECLUDES_USE_OF_DAY_OF_YEAR   //ORA-1811: Julian date precludes use of day of year
+    /*NEVER_APPEAR_GROUP*/            OB_ERR_FORMAT_CODE_CANNOT_APPEAR,                 //OBE-01820: format code cannot appear in date input format
+    /*YEAR_GROUP*/                    OB_ERR_YEAR_MAY_ONLY_BE_SPECIFIED_ONCE,           //OBE-01812: year may only be specified once
+    /*MERIDIAN_INDICATOR_GROUP*/      OB_ERR_AM_PM_CONFLICTS_WITH_USE_OF_AM_DOT_PM_DOT, //OBE-01810: format code appears twice
+    /*WEEK_OF_DAY_GROUP*/             OB_ERR_DAY_OF_WEEK_SPECIFIED_MORE_THAN_ONCE,      //OBE-01817: day of week may only be specified once
+    /*ERA_GROUP*/                     OB_ERR_BC_AD_CONFLICT_WITH_USE_OF_BC_DOT_AD_DOT,  //OBE-01810: format code appears twice
+    /*HOUR_GROUP*/                    OB_ERR_HOUR_MAY_ONLY_BE_SPECIFIED_ONCE,           //OBE-01813: hour may only be specified once
+    /*MONTH_GROUP*/                   OB_ERR_MONTH_MAY_ONLY_BE_SPECIFIED_ONCE,          //OBE-01816: month may only be specified once
+    /*DAY_OF_YEAR_GROUP*/             OB_ERR_JULIAN_DATE_PRECLUDES_USE_OF_DAY_OF_YEAR   //OBE-1811: Julian date precludes use of day of year
   };
 
   //定义每个元素(数字类型)期望匹配长度，可以小于这个长度，不能超过

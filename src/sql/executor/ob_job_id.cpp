@@ -11,9 +11,7 @@
  */
 
 #include "share/ob_define.h"
-#include "lib/utility/serialization.h"
 #include "sql/executor/ob_job_id.h"
-#include "lib/json/ob_yson.h"
 using namespace oceanbase::common;
 namespace oceanbase
 {

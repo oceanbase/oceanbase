@@ -12,15 +12,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "lib/xml/ob_xpath.h"
 #include "lib/xml/ob_path_parser.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string.h"
-#include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
-#include "common/data_buffer.h"
-#include <rapidjson/encodings.h>
 #include <rapidjson/memorystream.h>
 
 namespace oceanbase {
@@ -397,7 +390,7 @@ int ObPathParser::check_is_legal_xpath(const ObPathArgType& patharg_type)
         if (location1->get_seek_type() == ObSeekType::TEXT
             && location1->get_prefix_ns_info()
             && ObPathUtil::is_upper_axis(location2->get_axis())) {
-          ret = OB_ERR_PARSER_SYNTAX; // ORA-31011: XML parsing failed
+          ret = OB_ERR_PARSER_SYNTAX; // OBE-31011: XML parsing failed
           LOG_WARN("Function call with invalid number of arguments", K(ret), K(location2->get_axis()));
         }
         if (OB_FAIL(ret)) {
@@ -1049,7 +1042,7 @@ int ObPathParser::parse_func_node(ObPathArgType patharg_type)
         LOG_WARN("fail to init ellipsis_node", K(ret), K(index_), K(expression_));
       } else if (patharg_type == ObPathArgType::NOT_SUBPATH
                 && ObPathParserUtil::is_func_must_in_pred(func_type)) {
-        //ORA-31012: Given XPATH expression not supported
+        //OBE-31012: Given XPATH expression not supported
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("Given XPATH expression not supported", K(ret), K(index_), K(expression_));
       }
@@ -1299,31 +1292,38 @@ int ObPathParser::parse_subpath(ObString& subpath, ObPathNode*& node, bool is_fi
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("should not be null", K(ret));
   } else {
-    ObPathParser* subpath_parser =
-    static_cast<ObPathParser*> (allocator_->alloc(sizeof(ObPathParser)));
-    if (OB_ISNULL(subpath_parser)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate row buffer failed at location_node", K(ret), K(index_), K(expression_));
-    } else {
-      subpath_parser = new (subpath_parser) ObPathParser(ctx_, parser_type_, subpath, default_ns_, pass_var_);
-      if (is_filter) {
-        if (subpath_parser->is_function_path()) {
-          if (OB_FAIL(subpath_parser->parse_func_node(patharg_type))) {
+    uint64_t not_null_idx = 0;
+    ObXPathUtil::skip_whitespace(subpath, not_null_idx);
+    if (not_null_idx < subpath.length()) {
+      ObPathParser* subpath_parser =
+      static_cast<ObPathParser*> (allocator_->alloc(sizeof(ObPathParser)));
+      if (OB_ISNULL(subpath_parser)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate row buffer failed at location_node", K(ret), K(index_), K(expression_));
+      } else {
+        subpath_parser = new (subpath_parser) ObPathParser(ctx_, parser_type_, subpath, default_ns_, pass_var_);
+        if (is_filter) {
+          if (subpath_parser->is_function_path()) {
+            if (OB_FAIL(subpath_parser->parse_func_node(patharg_type))) {
+              bad_index_ = subpath_parser->bad_index_;
+              LOG_WARN("fail to parse function.", K(ret), K(index_));
+            } // is function
+          } else if (OB_FAIL(subpath_parser->parse_location_path(patharg_type))) {
             bad_index_ = subpath_parser->bad_index_;
-            LOG_WARN("fail to parse function.", K(ret), K(index_));
-          } // is function
-        } else if (OB_FAIL(subpath_parser->parse_location_path(patharg_type))) {
+            LOG_WARN("fail to parse", K(ret));
+          }
+        } else if (OB_FAIL(subpath_parser->parse_path(IN_FUNCTION))) {
           bad_index_ = subpath_parser->bad_index_;
           LOG_WARN("fail to parse", K(ret));
         }
-      } else if (OB_FAIL(subpath_parser->parse_path(IN_FUNCTION))) {
-        bad_index_ = subpath_parser->bad_index_;
-        LOG_WARN("fail to parse", K(ret));
+        if (OB_FAIL(ret)) {
+        } else if (OB_NOT_NULL(subpath_parser->get_root())) {
+          node = subpath_parser->get_root();
+        }
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_NOT_NULL(subpath_parser->get_root())) {
-        node = subpath_parser->get_root();
-      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subpath should not be null", K(ret));
     }
   }
   return ret;
@@ -1354,7 +1354,7 @@ int ObPathParser::parse_namespace_info(ObPathLocationNode*& location, ObString& 
         location->set_check_ns_info(true);
       }
     } else if (OB_ISNULL(pass_var_)) {
-      // ORA-31013: Invalid XPATH expression
+      // OBE-31013: Invalid XPATH expression
       // no passing var, prefix ns is not allowed
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Invalid XPATH expression.", K(ret), K(index_), K(expression_));
@@ -1424,10 +1424,10 @@ int ObPathParser::parse_nodetest_info(ObPathLocationNode*& location)
         } else if (ns_str.length() > 0) {
           allocator_->free(location->get_ns_name().ptr());
           if (location->get_seek_type() != ObSeekType::TEXT) {
-            ret = OB_ERR_PARSER_SYNTAX; // ORA-31011: XML parsing failed
+            ret = OB_ERR_PARSER_SYNTAX; // OBE-31011: XML parsing failed
             LOG_WARN("Function call with invalid arguments", K(ret));
           } else if (ObPathUtil::is_upper_axis(location->get_axis())) {
-            ret = OB_ERR_PARSER_SYNTAX; // ORA-31011: XML parsing failed
+            ret = OB_ERR_PARSER_SYNTAX; // OBE-31011: XML parsing failed
             LOG_WARN("Function call with invalid arguments", K(ret));
           } else {
             location->set_prefix_ns_info(true);
@@ -1583,7 +1583,7 @@ int ObPathParser::parse_double_slash_node()
   ObXPathUtil::skip_whitespace(expression_, index_);
   ObPathLocationNode* ellipsis_node = nullptr;
   if (index_ >= len_ || expression_[index_] == ObPathItem::SLASH) {
-    ret = OB_ERR_PARSER_SYNTAX; // ORA-31011: XML parsing failed
+    ret = OB_ERR_PARSER_SYNTAX; // OBE-31011: XML parsing failed
     LOG_WARN("Function call with invalid arguments", K(ret));
   } else if (OB_FAIL(alloc_location_node(ellipsis_node))) {
     LOG_WARN("allocate row buffer failed at path_node", K(ret), K(index_), K(expression_));
@@ -1641,7 +1641,7 @@ int ObPathParser::parse_double_slash_node()
               root_node->need_trans_++;
             }
           } else {
-            ret = OB_ERR_PARSER_SYNTAX; // ORA-31011: XML parsing failed
+            ret = OB_ERR_PARSER_SYNTAX; // OBE-31011: XML parsing failed
             LOG_WARN("Function call with invalid arguments", K(ret));
           }
         }
@@ -1652,7 +1652,7 @@ int ObPathParser::parse_double_slash_node()
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid path expression", K(ret), K(index_), K(expression_));
           } else {
-            ret = OB_ERR_PARSER_SYNTAX; // ORA-31011: XML parsing failed
+            ret = OB_ERR_PARSER_SYNTAX; // OBE-31011: XML parsing failed
             LOG_WARN("Function call with invalid arguments", K(ret));
           }
         }
@@ -1697,7 +1697,7 @@ int ObPathParser::parse_double_dot_node(bool is_absolute)
         LOG_WARN("failed to append location node.", K(ret), K(index_), K(expression_));
       } else if (index_ < len_ && expression_[index_] != ObPathItem::SLASH) {
         // '/..' must be followed by a new step, if not end
-        ret = OB_ERR_PARSER_SYNTAX; // ORA-31011: XML parsing failed
+        ret = OB_ERR_PARSER_SYNTAX; // OBE-31011: XML parsing failed
         LOG_WARN("Function call with invalid arguments", K(ret));
       }
     }
@@ -1741,7 +1741,7 @@ int ObPathParser::parse_single_dot_node(bool is_absolute)
           root_node->need_trans_++;
         }
       } else if (index_ < len_ && expression_[index_] == ObPathItem::WILDCARD) {
-        // ORA-31012: Given XPATH expression not supported
+        // OBE-31012: Given XPATH expression not supported
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("/.* is not allowed", K(ret), K(index_), K(expression_));
       } else if (index_ < len_ && ObPathParserUtil::is_xml_name_start_char(expression_[index_])) {

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/oblog/ob_log_module.h"
 #include "ob_rl_struct.h"
 
 namespace oceanbase {

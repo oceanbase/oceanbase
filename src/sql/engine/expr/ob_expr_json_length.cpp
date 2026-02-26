@@ -12,13 +12,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "deps/oblib/src/lib/json_type/ob_json_path.h"
-#include "lib/json_type/ob_json_tree.h"
 #include "ob_expr_json_length.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "objit/common/ob_item_type.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "ob_expr_json_func_helper.h"
 
 using namespace oceanbase::common;
@@ -63,8 +57,8 @@ int ObExprJsonLength::calc_result_typeN(ObExprResType& type,
 
 int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta meta1, bool has_lob_header1,
                            const ObDatum *data2, ObDatumMeta meta2, bool has_lob_header2,
-                           ObIAllocator *allocator, ObDatum &res,
-                           ObJsonPathCache* path_cache)
+                           MultimodeAlloctor *allocator, ObDatum &res,
+                           ObJsonPathCache* path_cache, bool is_const)
 {
   INIT_SUCC(ret);
   bool is_null = false;
@@ -88,8 +82,10 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data1, meta1, has_lob_header1, j_doc))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_doc));
+    } else if (OB_FALSE_IT(allocator->add_baseline_size(j_doc.length()))) {
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_doc, j_in_type,
-        j_in_type, j_base))) {
+                                                        j_in_type, j_base, 0,
+                                                        ObJsonExprHelper::get_json_max_depth_config()))) {
       LOG_WARN("fail to get json base", K(ret), K(type1), K(j_doc), K(j_in_type));
     }
   }
@@ -108,7 +104,7 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
         ObJsonPath *j_path = NULL;
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, *data2, meta2, has_lob_header2, j_path_text))) {
           LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
-        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 1, true))) {
+        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(*allocator, path_cache, j_path, j_path_text, 1, true, is_const))) {
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH);
           LOG_WARN("fail to parse json path", K(ret), K(type2), K(j_path_text));
         } else if (OB_FAIL(j_base->seek(*j_path, j_path->path_node_cnt(), true, false, hit))) {
@@ -146,16 +142,18 @@ int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObDatum *datum0 = NULL;
   ObExpr *arg0 = expr.args_[0];
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
-
-  if (OB_FAIL(arg0->eval(ctx, datum0))) { // json doc
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  bool is_const = false;
+  if (OB_FAIL(tmp_allocator.eval_arg(arg0, ctx, datum0))) { // json doc
     LOG_WARN("fail to eval json arg", K(ret), K(arg0->datum_meta_));
   } else {
     if (expr.arg_cnt_ > 1) { // json path
       ObExpr *arg1 = expr.args_[1];
+      is_const = arg1->is_const_expr();
       meta1 = arg1->datum_meta_;
       has_lob_header1 = arg1->obj_meta_.has_lob_header();
-      if (OB_FAIL(arg1->eval(ctx, datum1))) {
+      if (OB_FAIL(tmp_allocator.eval_arg(arg1, ctx, datum1))) {
         LOG_WARN("fail to eval path arg", K(ret), K(meta1));
       }
     }
@@ -167,7 +165,7 @@ int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     path_cache = ((path_cache != NULL) ? path_cache : &ctx_cache);
 
     if (OB_FAIL(calc(ctx, *datum0, arg0->datum_meta_, arg0->obj_meta_.has_lob_header(),
-                     datum1, meta1, has_lob_header1, &tmp_allocator, res, path_cache))) {
+                     datum1, meta1, has_lob_header1, &tmp_allocator, res, path_cache, is_const))) {
       LOG_WARN("fail to calc json length result", K(ret), K(datum0), K(expr.arg_cnt_));
     }
   }

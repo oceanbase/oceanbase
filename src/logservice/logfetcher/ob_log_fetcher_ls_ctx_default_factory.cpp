@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include "share/ob_errno.h"                     // OB_SUCCESS, ..
-#include "lib/oblog/ob_log_module.h"            // LOG_*
 #include "ob_log_fetcher_ls_ctx_default_factory.h"
 
 namespace oceanbase

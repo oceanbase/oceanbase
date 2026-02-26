@@ -7,7 +7,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"}]"}]
 f = 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -15,7 +15,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -23,7 +23,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -31,7 +31,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -39,7 +39,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_bin"};{"VARCHAR":"a", collation:"utf8mb4_bin"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_bin"};{"VARCHAR":"a", collation:"utf8mb4_bin"}]"}]
 f = 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -47,7 +47,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -55,7 +55,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -63,7 +63,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -71,7 +71,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"a", collation:"binary"};{"VARCHAR":"a", collation:"binary"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"a", collation:"binary"};{"VARCHAR":"a", collation:"binary"}]"}]
 
 [2] f != 'a'
 f != 'a'--------------connection_collation = 45 col_type = 45
@@ -83,7 +83,7 @@ end_border_flag[0] = 0
 star_border_flag[1] = 0
 end_border_flag[1] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"})"}, {"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"})"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
 f != 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -91,7 +91,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f != 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -99,7 +99,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f != 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -107,7 +107,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f != 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 2
@@ -117,7 +117,7 @@ end_border_flag[0] = 0
 star_border_flag[1] = 0
 end_border_flag[1] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_bin"})"}, {"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_bin"})"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"};MAX)"}]
 f != 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -125,7 +125,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f != 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -133,7 +133,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f != 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -141,7 +141,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f != 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 2
@@ -151,7 +151,7 @@ end_border_flag[0] = 0
 star_border_flag[1] = 0
 end_border_flag[1] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"binary"})"}, {"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"binary"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"binary"})"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"binary"};MAX)"}]
 
 [3] f > 'a'
 f > 'a'--------------connection_collation = 45 col_type = 45
@@ -161,7 +161,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
 f > 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -169,7 +169,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -177,7 +177,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -185,7 +185,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -193,7 +193,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"};MAX)"}]
 f > 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -201,7 +201,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -209,7 +209,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -217,7 +217,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -225,7 +225,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"binary"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"binary"};MAX)"}]
 
 [4] f < 'a'
 f < 'a'--------------connection_collation = 45 col_type = 45
@@ -235,7 +235,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"})"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"})"}]
 f < 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -243,7 +243,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -251,7 +251,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -259,7 +259,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -267,7 +267,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_bin"})"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_bin"})"}]
 f < 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -275,7 +275,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -283,7 +283,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -291,7 +291,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -299,7 +299,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"binary"})"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"binary"})"}]
 
 [5] f >= 'a'
 f >= 'a'--------------connection_collation = 45 col_type = 45
@@ -309,7 +309,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
 f >= 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -317,7 +317,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f >= 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -325,7 +325,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f >= 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -333,7 +333,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f >= 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -341,7 +341,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_bin"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_bin"};MAX)"}]
 f >= 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -349,7 +349,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f >= 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -357,7 +357,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f >= 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -365,7 +365,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f >= 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -373,7 +373,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"a", collation:"binary"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"a", collation:"binary"};MAX)"}]
 
 [6] f <= 'a'
 f <= 'a'--------------connection_collation = 45 col_type = 45
@@ -383,7 +383,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"}]"}]
 f <= 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -391,7 +391,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f <= 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -399,7 +399,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f <= 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -407,7 +407,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f <= 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -415,7 +415,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_bin"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_bin"}]"}]
 f <= 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -423,7 +423,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f <= 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -431,7 +431,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f <= 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -439,7 +439,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f <= 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -447,7 +447,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"binary"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"binary"}]"}]
 
 [7] f is TRUE
 f is TRUE--------------connection_collation = 45 col_type = 45
@@ -457,7 +457,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is TRUE--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -465,7 +465,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is TRUE--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -473,7 +473,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is TRUE--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -481,7 +481,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is TRUE--------------connection_collation = 46 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -489,7 +489,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is TRUE--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -497,7 +497,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is TRUE--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -505,7 +505,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is TRUE--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -513,7 +513,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is TRUE--------------connection_collation = 63 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -521,7 +521,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 
 [8] f is FALSE
 f is FALSE--------------connection_collation = 45 col_type = 45
@@ -531,7 +531,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is FALSE--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -539,7 +539,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is FALSE--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -547,7 +547,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is FALSE--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -555,7 +555,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is FALSE--------------connection_collation = 46 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -563,7 +563,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is FALSE--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -571,7 +571,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is FALSE--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -579,7 +579,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is FALSE--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -587,7 +587,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f is FALSE--------------connection_collation = 63 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -595,7 +595,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 
 [9] f is NULL
 f is NULL--------------connection_collation = 45 col_type = 45
@@ -605,7 +605,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
 f is NULL--------------connection_collation = 45 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -613,7 +613,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
 f is NULL--------------connection_collation = 45 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -621,7 +621,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
 f is NULL--------------connection_collation = 46 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
@@ -629,7 +629,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
 f is NULL--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -637,7 +637,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
 f is NULL--------------connection_collation = 46 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -645,7 +645,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
 f is NULL--------------connection_collation = 63 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
@@ -653,7 +653,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
 f is NULL--------------connection_collation = 63 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -661,7 +661,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
 f is NULL--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -669,7 +669,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
 
 [10] f > 'a' and false
 f > 'a' and false--------------connection_collation = 45 col_type = 45
@@ -679,7 +679,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
 f > 'a' and false--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -687,7 +687,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and false--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -695,7 +695,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and false--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -703,7 +703,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and false--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -711,7 +711,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"};MAX)"}]
 f > 'a' and false--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -719,7 +719,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and false--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -727,7 +727,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and false--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -735,7 +735,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and false--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -743,7 +743,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"binary"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"binary"};MAX)"}]
 
 [11] false and f > 'a'
 false and f > 'a'--------------connection_collation = 45 col_type = 45
@@ -753,7 +753,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
 false and f > 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -761,7 +761,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 false and f > 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -769,7 +769,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 false and f > 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -777,7 +777,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 false and f > 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -785,7 +785,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"};MAX)"}]
 false and f > 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -793,7 +793,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 false and f > 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -801,7 +801,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 false and f > 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -809,7 +809,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 false and f > 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -817,7 +817,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"binary"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"binary"};MAX)"}]
 
 [12] f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 45 col_type = 45
@@ -831,7 +831,7 @@ end_border_flag[1] = 0
 star_border_flag[2] = 1
 end_border_flag[2] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"})"}, {"range":"table_id:3003,group_idx:0,({"VARCHAR":"b", collation:"utf8mb4_general_ci"};MAX)"}, {"range":"table_id:3003,group_idx:0,[{"VARCHAR":"adas", collation:"utf8mb4_general_ci"};{"VARCHAR":"adas", collation:"utf8mb4_general_ci"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"})"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"b", collation:"utf8mb4_general_ci"};MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"adas", collation:"utf8mb4_general_ci"};{"VARCHAR":"adas", collation:"utf8mb4_general_ci"}]"}]
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -839,7 +839,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -847,7 +847,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -855,7 +855,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 3
@@ -867,7 +867,7 @@ end_border_flag[1] = 0
 star_border_flag[2] = 1
 end_border_flag[2] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_bin"})"}, {"range":"table_id:3003,group_idx:0,({"VARCHAR":"b", collation:"utf8mb4_bin"};MAX)"}, {"range":"table_id:3003,group_idx:0,[{"VARCHAR":"adas", collation:"utf8mb4_bin"};{"VARCHAR":"adas", collation:"utf8mb4_bin"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_bin"})"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"b", collation:"utf8mb4_bin"};MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"adas", collation:"utf8mb4_bin"};{"VARCHAR":"adas", collation:"utf8mb4_bin"}]"}]
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -875,7 +875,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -883,7 +883,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -891,7 +891,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 3
@@ -903,7 +903,7 @@ end_border_flag[1] = 0
 star_border_flag[2] = 1
 end_border_flag[2] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"binary"})"}, {"range":"table_id:3003,group_idx:0,({"VARCHAR":"b", collation:"binary"};MAX)"}, {"range":"table_id:3003,group_idx:0,[{"VARCHAR":"adas", collation:"binary"};{"VARCHAR":"adas", collation:"binary"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"NULL":"NULL"};{"VARCHAR":"a", collation:"binary"})"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"b", collation:"binary"};MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"adas", collation:"binary"};{"VARCHAR":"adas", collation:"binary"}]"}]
 
 [13] f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 45 col_type = 45
@@ -913,7 +913,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"},MAX;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"},MAX;MAX,MAX)"}]
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -921,7 +921,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -929,7 +929,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -937,7 +937,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -945,7 +945,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"},MAX;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"},MAX;MAX,MAX)"}]
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -953,7 +953,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -961,7 +961,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -969,7 +969,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -977,7 +977,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"binary"},MAX;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"binary"},MAX;MAX,MAX)"}]
 
 [14] f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 45 col_type = 45
@@ -987,7 +987,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"},MAX,MAX,MAX,MAX;MAX,MAX,MAX,MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"},MAX,MAX,MAX,MAX;MAX,MAX,MAX,MAX,MAX)"}]
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -995,7 +995,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1003,7 +1003,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1011,7 +1011,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -1019,7 +1019,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"},MAX,MAX,MAX,MAX;MAX,MAX,MAX,MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_bin"},MAX,MAX,MAX,MAX;MAX,MAX,MAX,MAX,MAX)"}]
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1027,7 +1027,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1035,7 +1035,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1043,7 +1043,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN,MIN,MIN,MIN;MAX,MAX,MAX,MAX,MAX)"}]
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -1051,7 +1051,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"binary"},MAX,MAX,MAX,MAX;MAX,MAX,MAX,MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"binary"},MAX,MAX,MAX,MAX;MAX,MAX,MAX,MAX,MAX)"}]
 
 [15] f > 'a' and f < 'B' 
 f > 'a' and f < 'B' --------------connection_collation = 45 col_type = 45
@@ -1061,7 +1061,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"B", collation:"utf8mb4_general_ci"})"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"B", collation:"utf8mb4_general_ci"})"}]
 f > 'a' and f < 'B' --------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1069,7 +1069,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and f < 'B' --------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1077,7 +1077,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and f < 'B' --------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1085,7 +1085,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and f < 'B' --------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -1093,7 +1093,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MAX;MIN)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MAX;MIN)"}]
 f > 'a' and f < 'B' --------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1101,7 +1101,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and f < 'B' --------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1109,7 +1109,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and f < 'B' --------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1117,7 +1117,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'a' and f < 'B' --------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -1125,7 +1125,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MAX;MIN)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MAX;MIN)"}]
 
 [16] f > 'B' and f < 'a' and g > 'a' and g < 'b'
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 45 col_type = 45
@@ -1135,7 +1135,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MAX,MAX;MIN,MIN)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MAX,MAX;MIN,MIN)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1143,7 +1143,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1151,7 +1151,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1159,7 +1159,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -1167,7 +1167,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"B", collation:"utf8mb4_bin"},MAX;{"VARCHAR":"a", collation:"utf8mb4_bin"},MIN)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"B", collation:"utf8mb4_bin"},MAX;{"VARCHAR":"a", collation:"utf8mb4_bin"},MIN)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1175,7 +1175,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1183,7 +1183,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1191,7 +1191,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -1199,7 +1199,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"B", collation:"binary"},MAX;{"VARCHAR":"a", collation:"binary"},MIN)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"B", collation:"binary"},MAX;{"VARCHAR":"a", collation:"binary"},MIN)"}]
 
 [17] f > 'B' or f < 'a' and g > 'a' or g < 'b'
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 45 col_type = 45
@@ -1209,7 +1209,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1217,7 +1217,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1225,7 +1225,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1233,7 +1233,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 46 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1241,7 +1241,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1249,7 +1249,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1257,7 +1257,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1265,7 +1265,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 63 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1273,7 +1273,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 
 [18] f > 'B' and f < 'a' and g > 'a' and g < 'B'
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 45 col_type = 45
@@ -1283,7 +1283,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MAX,MAX;MIN,MIN)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MAX,MAX;MIN,MIN)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1291,7 +1291,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1299,7 +1299,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1307,7 +1307,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -1315,7 +1315,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MAX,MAX;MIN,MIN)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MAX,MAX;MIN,MIN)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1323,7 +1323,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1331,7 +1331,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1339,7 +1339,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -1347,7 +1347,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MAX,MAX;MIN,MIN)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MAX,MAX;MIN,MIN)"}]
 
 [19] f > 'B' and 'a' = 'A'
 f > 'B' and 'a' = 'A'--------------connection_collation = 45 col_type = 45
@@ -1357,7 +1357,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"B", collation:"utf8mb4_general_ci"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"B", collation:"utf8mb4_general_ci"};MAX)"}]
 f > 'B' and 'a' = 'A'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1365,7 +1365,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'B' and 'a' = 'A'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1373,7 +1373,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'B' and 'a' = 'A'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1381,7 +1381,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'B' and 'a' = 'A'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -1389,7 +1389,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"B", collation:"utf8mb4_bin"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"B", collation:"utf8mb4_bin"};MAX)"}]
 f > 'B' and 'a' = 'A'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1397,7 +1397,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'B' and 'a' = 'A'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1405,7 +1405,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'B' and 'a' = 'A'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1413,7 +1413,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f > 'B' and 'a' = 'A'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -1421,7 +1421,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"VARCHAR":"B", collation:"binary"};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"VARCHAR":"B", collation:"binary"};MAX)"}]
 
 [20] #(f, g) in (('a', 'b'), ('B', 'A'))
 [21] #(f, g) > ('a', 'b') and (f, g) < ('B', 'A')
@@ -1433,7 +1433,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"b", collation:"utf8mb4_general_ci"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"b", collation:"utf8mb4_general_ci"}]"}]
 f between 'a' and 'b'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1441,7 +1441,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'a' and 'b'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1449,7 +1449,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'a' and 'b'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1457,7 +1457,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'a' and 'b'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -1465,7 +1465,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_bin"};{"VARCHAR":"b", collation:"utf8mb4_bin"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"a", collation:"utf8mb4_bin"};{"VARCHAR":"b", collation:"utf8mb4_bin"}]"}]
 f between 'a' and 'b'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1473,7 +1473,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'a' and 'b'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1481,7 +1481,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'a' and 'b'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1489,7 +1489,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'a' and 'b'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -1497,7 +1497,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"a", collation:"binary"};{"VARCHAR":"b", collation:"binary"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"a", collation:"binary"};{"VARCHAR":"b", collation:"binary"}]"}]
 
 [23] f between 'B' and 'a'
 f between 'B' and 'a'--------------connection_collation = 45 col_type = 45
@@ -1507,7 +1507,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MAX;MIN)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MAX;MIN)"}]
 f between 'B' and 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1515,7 +1515,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'B' and 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1523,7 +1523,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'B' and 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1531,7 +1531,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'B' and 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
@@ -1539,7 +1539,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"B", collation:"utf8mb4_bin"};{"VARCHAR":"a", collation:"utf8mb4_bin"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"B", collation:"utf8mb4_bin"};{"VARCHAR":"a", collation:"utf8mb4_bin"}]"}]
 f between 'B' and 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1547,7 +1547,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'B' and 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1555,7 +1555,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'B' and 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1563,7 +1563,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f between 'B' and 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
@@ -1571,7 +1571,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"VARCHAR":"B", collation:"binary"};{"VARCHAR":"a", collation:"binary"}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"VARCHAR":"B", collation:"binary"};{"VARCHAR":"a", collation:"binary"}]"}]
 
 [24] f not between 'a' and 'b'
 f not between 'a' and 'b'--------------connection_collation = 45 col_type = 45
@@ -1581,7 +1581,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f not between 'a' and 'b'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1589,7 +1589,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f not between 'a' and 'b'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1597,7 +1597,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f not between 'a' and 'b'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1605,7 +1605,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f not between 'a' and 'b'--------------connection_collation = 46 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1613,7 +1613,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f not between 'a' and 'b'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1621,7 +1621,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f not between 'a' and 'b'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1629,7 +1629,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f not between 'a' and 'b'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1637,7 +1637,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f not between 'a' and 'b'--------------connection_collation = 63 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1645,7 +1645,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 
 [25] f = 'a' + 'b'
 f = 'a' + 'b'--------------connection_collation = 45 col_type = 45
@@ -1655,7 +1655,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a' + 'b'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1663,7 +1663,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a' + 'b'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1671,7 +1671,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a' + 'b'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1679,7 +1679,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a' + 'b'--------------connection_collation = 46 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1687,7 +1687,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a' + 'b'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1695,7 +1695,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a' + 'b'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
@@ -1703,7 +1703,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a' + 'b'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
@@ -1711,7 +1711,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 f = 'a' + 'b'--------------connection_collation = 63 col_type = 63
 is min_to_max_range
 ranges.count() = 1
@@ -1719,5 +1719,5 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 

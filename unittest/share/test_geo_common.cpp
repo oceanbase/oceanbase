@@ -11,12 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/geo/ob_geo_common.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "lib/json_type/ob_json_common.h"
-#include "rpc/obmysql/ob_mysql_global.h"
-#include "src/pl/ob_pl_user_type.h"
-#include "src/pl/ob_pl_allocator.h"
+#include "src/pl/ob_pl.h"
 #include "src/sql/engine/expr/ob_expr_sql_udt_utils.h"
 #define private public
 #undef private
@@ -176,11 +172,13 @@ void mock_write_sdo_elem_info(ObArray<uint64_t> &elem_info, common::ObIAllocator
 {
   pl::ObPLVArray *elem_array = reinterpret_cast<pl::ObPLVArray *>(ctx_allocator.alloc(sizeof(pl::ObPLVArray)));
   ASSERT_EQ(elem_array != NULL, true);
-  pl::ObPLCollAllocator *coll_allocator = reinterpret_cast<pl::ObPLCollAllocator *>(ctx_allocator.alloc(sizeof(pl::ObPLCollAllocator)));
+  pl::ObPLAllocator1 *coll_allocator = reinterpret_cast<pl::ObPLAllocator1 *>(ctx_allocator.alloc(sizeof(pl::ObPLAllocator1)));
   ASSERT_EQ(coll_allocator != NULL, true);
 
   elem_array = new (elem_array) pl::ObPLVArray(300029);
-  coll_allocator = new (coll_allocator) pl::ObPLCollAllocator(elem_array);
+  coll_allocator = new (coll_allocator) pl::ObPLAllocator1(PL_MOD_IDX::OB_PL_COLLECTION, &ctx_allocator);
+  coll_allocator->init(nullptr);
+  ASSERT_EQ(coll_allocator->is_inited(), true);
   elem_array->set_allocator(coll_allocator);
   ObIAllocator *allocator = coll_allocator->get_allocator();
   uint64_t elem_cnt = elem_info.size();
@@ -197,7 +195,7 @@ void mock_write_sdo_elem_info(ObArray<uint64_t> &elem_info, common::ObIAllocator
   elem_array->set_capacity(elem_cnt);
   elem_array->set_column_count(elem_cnt);
   elem_array->set_count(elem_cnt);
-  elem_array->set_data(array_data);
+  elem_array->set_data(array_data, elem_cnt);
   elem_desc.set_pl_type(PL_VARRAY_TYPE);
   elem_desc.set_not_null(false);
   elem_desc.set_field_count(elem_cnt);
@@ -211,11 +209,13 @@ void mock_write_sdo_ordinates(ObArray<double> &ordinate, common::ObIAllocator &c
 {
   pl::ObPLVArray *elem_array = reinterpret_cast<pl::ObPLVArray *>(ctx_allocator.alloc(sizeof(pl::ObPLVArray)));
   ASSERT_EQ(elem_array != NULL, true);
-  pl::ObPLCollAllocator *coll_allocator = reinterpret_cast<pl::ObPLCollAllocator *>(ctx_allocator.alloc(sizeof(pl::ObPLCollAllocator)));
+  pl::ObPLAllocator1 *coll_allocator = reinterpret_cast<pl::ObPLAllocator1 *>(ctx_allocator.alloc(sizeof(pl::ObPLAllocator1)));
   ASSERT_EQ(coll_allocator != NULL, true);
 
   elem_array = new (elem_array) pl::ObPLVArray(300028);
-  coll_allocator = new (coll_allocator) pl::ObPLCollAllocator(elem_array);
+  coll_allocator = new (coll_allocator) pl::ObPLAllocator1(PL_MOD_IDX::OB_PL_COLLECTION, &ctx_allocator);
+  coll_allocator->init(nullptr);
+  ASSERT_EQ(coll_allocator->is_inited(), true);
   elem_array->set_allocator(coll_allocator);
   ObIAllocator *allocator = coll_allocator->get_allocator();
   uint64_t ori_size = ordinate.size();
@@ -232,7 +232,7 @@ void mock_write_sdo_ordinates(ObArray<double> &ordinate, common::ObIAllocator &c
   elem_array->set_capacity(ori_size);
   elem_array->set_column_count(ori_size);
   elem_array->set_count(ori_size);
-  elem_array->set_data(array_data);
+  elem_array->set_data(array_data, ori_size);
   elem_desc.set_pl_type(PL_VARRAY_TYPE);
   elem_desc.set_not_null(false);
   elem_desc.set_field_count(ori_size);

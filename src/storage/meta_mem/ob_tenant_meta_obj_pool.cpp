@@ -12,8 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "ob_tenant_meta_obj_pool.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
 
 using namespace oceanbase::common;
 

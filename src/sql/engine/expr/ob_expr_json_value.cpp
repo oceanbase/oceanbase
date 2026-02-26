@@ -13,19 +13,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_value.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/object/ob_obj_cast_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/ob_json_access_utils.h"
-#include "sql/engine/expr/ob_expr_cast.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "lib/oblog/ob_log_module.h"
-#include "ob_expr_json_func_helper.h"
-#include "lib/charset/ob_charset.h"
-#include "sql/engine/expr/ob_expr_json_utils.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -228,7 +215,8 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   uint8_t is_type_mismatch = 0;
   ObDatum *return_val = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObJsonBin st_json(&temp_allocator);
   ObIJsonBase *j_base = &st_json;
   ObJsonSeekResult hits;
@@ -319,7 +307,8 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
   uint8_t is_type_mismatch = 0;
   ObDatum *return_val = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObJsonBin st_json(&temp_allocator);
   ObIJsonBase *j_base = &st_json;
   ObJsonSeekResult hits;
@@ -331,8 +320,12 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
   if (OB_ISNULL(param_ctx)) {
     param_ctx = &ctx_cache;
   }
-  // init flag
-  if (param_ctx->is_first_exec_ && OB_FAIL(init_ctx_var(expr, param_ctx))) {
+
+  // add version protection, as lower version has handle input in a defference way
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("json value raw expr number has change in 4.2.2 version", K(ret));
+  } else if (param_ctx->is_first_exec_ && OB_FAIL(init_ctx_var(expr, param_ctx))) {
     is_cover_by_error = false;
     LOG_WARN("fail to init param ctx", K(ret));
   } else if (OB_ISNULL(param_ctx->json_param_.json_path_) // parse json path

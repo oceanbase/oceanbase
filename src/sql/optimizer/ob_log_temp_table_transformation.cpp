@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "ob_log_temp_table_transformation.h"
-#include "ob_opt_est_cost.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_join_order.h"
 
 using namespace oceanbase;
@@ -116,13 +114,21 @@ int ObLogTempTableTransformation::compute_op_parallel_and_server_info()
     LOG_WARN("failed to assign server list", K(ret));
   } else {
     set_parallel(last_child->get_parallel());
+    set_available_parallel(last_child->get_available_parallel());
     set_server_cnt(last_child->get_server_cnt());
-    if (is_single()) {
-      set_available_parallel(last_child->get_available_parallel());
-    }
   }
   return ret;
 }
+
+int ObLogTempTableTransformation::est_ambient_card()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inner_est_ambient_card_by_child(get_num_of_child() - 1))) {
+    LOG_WARN("failed to est ambient cards by last child", K(ret), K(get_type()));
+  }
+  return ret;
+}
+
 
 int ObLogTempTableTransformation::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {

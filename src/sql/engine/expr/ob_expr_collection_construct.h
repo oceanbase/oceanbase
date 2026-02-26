@@ -62,8 +62,10 @@ public:
         type_(pl::ObPLType::PL_INVALID_TYPE),
         not_null_(false),
         elem_type_(),
+        index_type_(),
         capacity_(common::OB_INVALID_SIZE),
-        udt_id_(common::OB_INVALID_ID)
+        udt_id_(common::OB_INVALID_ID),
+        is_associative_array_with_param_assign_op_(false)
     {
     }
     virtual int deep_copy(common::ObIAllocator &allocator,
@@ -73,8 +75,10 @@ public:
     pl::ObPLType type_;
     bool not_null_;
     common::ObDataType elem_type_;
+    common::ObDataType index_type_;
     int64_t capacity_;
     uint64_t udt_id_;
+    bool is_associative_array_with_param_assign_op_;
   };
 
 private:

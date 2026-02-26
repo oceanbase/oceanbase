@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/join/ob_basic_nested_loop_join_op.h"
-#include "sql/engine/ob_exec_context.h"
+#include "ob_basic_nested_loop_join_op.h"
 #include "sql/engine/join/ob_nested_loop_join_op.h"
 
 namespace oceanbase

@@ -260,6 +260,7 @@ private:
   typedef WriteHandle<BtreeKey, BtreeVal> WriteHandle;
   typedef ScanHandle<BtreeKey, BtreeVal> ScanHandle;
   typedef GetHandle<BtreeKey, BtreeVal> GetHandle;
+  using BtreeKvCreator = typename WriteHandle::BtreeKvCreator;
 
 public:
   ObKeyBtree(BtreeNodeAllocator &node_allocator)
@@ -276,7 +277,9 @@ public:
 
   // ===================== Ob Btree Operator  =====================
   int insert(const BtreeKey key, BtreeVal &value);
+  int insert_or_get(const BtreeKey key, const BtreeKvCreator &creator, BtreeVal &val);
   int get(const BtreeKey key, BtreeVal &value);
+  int get(const BtreeKey key, BtreeVal &value, BtreeKey &copy_inner_key);
   int set_key_range(BtreeIterator &iter, const BtreeKey min_key, const bool start_exclude,
                     const BtreeKey max_key, const bool end_exclude) const;
   int set_key_range(BtreeRawIterator &handle, const BtreeKey min_key, const bool start_exclude,

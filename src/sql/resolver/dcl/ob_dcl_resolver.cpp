@@ -11,12 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "observer/ob_server_struct.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/engine/expr/ob_expr_validate_password_strength.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
+#include "share/catalog/ob_catalog_utils.h"
+#include "lib/encrypt/ob_encrypted_helper.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -83,6 +82,8 @@ int ObDCLResolver::check_password_strength(common::ObString &password)
                                                                            *session_info_,
                                                                            passed))) {
     LOG_WARN("password len dont satisfied current pw policy", K(ret));
+  } else if (OB_UNLIKELY(!passed)) {
+    // do nothing
   } else if (ObPasswordPolicy::LOW == pw_policy) {
     // do nothing
   } else if (ObPasswordPolicy::MEDIUM == pw_policy) {
@@ -117,7 +118,10 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
   if (profile_id == OB_INVALID_ID) {
     profile_id = OB_ORACLE_TENANT_INNER_PROFILE_ID;
   }
-  if (OB_ISNULL(schema_checker_) ||
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Session info is not inited", K(ret));
+  } else if (OB_ISNULL(schema_checker_) ||
       OB_ISNULL(schema_checker_->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema checker is null", K(ret));
@@ -139,7 +143,14 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
         sqlclient::ObMySQLResult *sql_result = NULL;
         ObISQLConnection *conn = NULL;
         ObInnerSQLConnectionPool *pool = NULL;
-        if (OB_FAIL(sql.append_fmt("SELECT  %.*s('%.*s', '%.*s', %.*s) AS RES FROM DUAL",
+        share::ObSwitchCatalogHelper switch_catalog_helper;
+        int tmp_ret = OB_SUCCESS;
+        if (session_info_->is_in_external_catalog()
+            && OB_FAIL(session_info_->set_internal_catalog_db(&switch_catalog_helper))) {
+          LOG_WARN("failed to set catalog", K(ret));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(sql.append_fmt("SELECT  %.*s('%.*s', '%.*s', %.*s) AS RES FROM DUAL",
             function_name.length(), function_name.ptr(), 
             user_name.length(), user_name.ptr(),
             password.length(), password.ptr(),
@@ -173,6 +184,12 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
         }
         if (OB_NOT_NULL(conn) && OB_NOT_NULL(sql_proxy)) {
           sql_proxy->close(conn, true);
+        }
+        if (switch_catalog_helper.is_set()) {
+          if (OB_SUCCESS != (tmp_ret = switch_catalog_helper.restore())) {
+            ret = OB_SUCCESS == ret ? tmp_ret : ret;
+            LOG_WARN("failed to reset catalog", K(ret), K(tmp_ret));
+          }
         }
       }
     }
@@ -268,12 +285,12 @@ int ObDCLResolver::mask_password_for_passwd_node(
     LOG_WARN("fail to ob_write_string", K(src), K(ret));
   } else if (OB_ISNULL(passwd_node)) {
     // do nothing
-  } else if (passwd_node->stmt_loc_.last_column_ >= src_len) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("last column overflow", K(src_len), K(passwd_node->stmt_loc_.last_column_), K(ret));
+  } else if (passwd_node->stmt_loc_.first_column_ >= src_len) {
+    // do nothing
   } else {
     int64_t start_pos = passwd_node->stmt_loc_.first_column_;
-    int64_t end_pos = passwd_node->stmt_loc_.last_column_ + 1;
+    int64_t end_pos = passwd_node->stmt_loc_.last_column_ >= src_len ?
+                      src_len : passwd_node->stmt_loc_.last_column_ + 1;
     if (skip_enclosed_char && end_pos - start_pos >= 2) {
       start_pos += 1;
       end_pos -= 1;
@@ -410,15 +427,22 @@ int ObDCLResolver::resolve_user_list_node(ParseNode *user_node,
     LOG_WARN("The child of user node should not be NULL", K(ret));
   } else {
     ParseNode *user_hostname_node = user_node;
+
     user_name = ObString (user_hostname_node->children_[0]->str_len_, user_hostname_node->children_[0]->str_value_);
-    if (NULL == user_hostname_node->children_[1]) {
+    if (user_hostname_node->children_[0]->type_ != T_IDENT && OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+                     *allocator_, session_info_->get_dtc_params(), user_name))) {
+      LOG_WARN("fail to convert user name to utf8", K(ret), K(user_name),
+                KPHEX(user_name.ptr(), user_name.length()));
+    } else if (NULL == user_hostname_node->children_[1]) {
       host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
     } else {
       host_name.assign_ptr(user_hostname_node->children_[1]->str_value_,
                            static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));
     }
-    if (OB_FAIL(schema_checker_->get_user_info(params_.session_info_->get_effective_tenant_id(),
-                                               user_name, host_name, user_info))) {
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get user name", K(ret), K(user_name));
+    } else if (OB_FAIL(schema_checker_->get_user_info(params_.session_info_->get_effective_tenant_id(),
+                                                      user_name, host_name, user_info))) {
       LOG_WARN("failed to get user info", K(ret), K(user_name));
       if (OB_USER_NOT_EXIST == ret) {
         // 跳过, RS统一处理, 兼容MySQL行为
@@ -479,14 +503,14 @@ int ObDCLResolver::resolve_user_host(const ParseNode *user_pass,
       /* here code is to mock a auth plugin check. */
       ObString auth_plugin(static_cast<int32_t>(user_pass->children_[4]->str_len_),
                             user_pass->children_[4]->str_value_);
-      ObString default_auth_plugin;
-      if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
-                                                  default_auth_plugin))) {
-        LOG_WARN("fail to get block encryption variable", K(ret));
-      } else if (0 != auth_plugin.compare(default_auth_plugin)) {
-        ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
-        LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
-      } else {/* do nothing */}
+      bool is_plugin_supported = true;
+      if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(auth_plugin,
+        session_info_->get_effective_tenant_id(), is_plugin_supported))) {
+        LOG_WARN("failed to check data version for auth plugin", K(ret));
+      } else if (OB_UNLIKELY(!is_plugin_supported)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+      }
     }
     if (OB_SUCC(ret) && lib::is_oracle_mode() && 0 != host_name.compare(OB_DEFAULT_HOST_NAME)) {
       ret = OB_NOT_SUPPORTED;

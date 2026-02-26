@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx_table/ob_tx_table_define.h"
-#include "share/rc/ob_tenant_base.h"
+#include "ob_tx_table_define.h"
 #include "storage/tx_table/ob_tx_data_table.h"
 
 namespace oceanbase
@@ -115,6 +114,14 @@ int ObTxCtxTableInfo::serialize_(char *buf,
     TRANS_LOG(WARN, "serialize exec_info fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, (int64_t)cluster_version_))) {
     TRANS_LOG(WARN, "encode cluster_version fail", K(buf_len), K(pos), K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else {
+    if (GCTX.is_shared_storage_mode()) {
+      if (OB_FAIL(notify_task_queue_view_.serialize(buf, buf_len, pos))) {
+        TRANS_LOG(WARN, "encode notify_task_queue_ fail", K(buf_len), K(pos), K(ret));
+      }
+    }
+#endif
   }
 
   return ret;
@@ -176,6 +183,19 @@ int ObTxCtxTableInfo::deserialize_(const char *buf,
       TRANS_LOG(ERROR, "cluster version malformed", K(cluster_version_), KPC(this));
     }
   }
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    if (OB_SUCC(ret)) {
+      if (pos == buf_len) {
+        if (REACH_TIME_INTERVAL(1_s)) {
+          TRANS_LOG(INFO, "skip deserialize notify_task_queue_ in compat scenario", K(buf_len), K(pos), K(ret));
+        }
+      } else if (OB_FAIL(notify_task_queue_view_.deserialize(buf, buf_len, pos))) {
+        TRANS_LOG(WARN, "dencode notify_task_queue_ fail", K(buf_len), K(pos), K(ret));
+      }
+    }
+  }
+#endif
 
   return ret;
 }
@@ -202,6 +222,11 @@ int64_t ObTxCtxTableInfo::get_serialize_size_(void) const
   len += (OB_NOT_NULL(tx_data_guard_.tx_data()) ? tx_data_guard_.tx_data()->get_serialize_size() : 0);
   len += exec_info_.get_serialize_size();
   len += table_lock_info_.get_serialize_size();
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    len += notify_task_queue_view_.get_serialize_size();
+  }
+#endif
   return len;
 }
 
@@ -332,6 +357,13 @@ DEF_TO_STRING(ObCommitVersionsArray)
 {
   int64_t pos = 0;
   J_KV(KP(this), K(array_.count()));
+  int64_t cnt = array_.count();
+  for (int64_t i = 0; i < cnt && i < 5; i++) {
+    J_KV("idx", i, "node", array_.at(i));
+  }
+  for (int64_t i = cnt - 5; i >= 5 && i < cnt; i++) {
+    J_KV("idx", i, "node", array_.at(i));
+  }
   return pos;
 }
 
@@ -441,6 +473,7 @@ bool ObCommitVersionsArray::is_valid()
   for (int i = 0; i < array_.count() - 1; i++) {
     if (!array_.at(i).start_scn_.is_valid() ||
         !array_.at(i).commit_version_.is_valid() ||
+        array_.at(i).commit_version_.is_max() ||
         array_.at(i).start_scn_ > array_.at(i + 1).start_scn_ ||
         array_.at(i).start_scn_ > array_.at(i).commit_version_) {
       bool_ret = false;
@@ -448,6 +481,13 @@ bool ObCommitVersionsArray::is_valid()
                   K(array_.at(i + 1)));
     }
   }
+
+  int64_t last_node_idx = array_.count() - 1;
+  if (!array_.at(last_node_idx).start_scn_.is_max() && array_.at(last_node_idx).commit_version_.is_max()) {
+    bool_ret = false;
+    STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "this commit version array is invalid", K(array_.at(last_node_idx)));
+  }
+
   return bool_ret;
 }
 

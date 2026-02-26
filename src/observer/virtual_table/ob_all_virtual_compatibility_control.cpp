@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_all_virtual_compatibility_control.h"
-#include "share/ob_compatibility_control.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase

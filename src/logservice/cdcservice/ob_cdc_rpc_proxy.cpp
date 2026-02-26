@@ -11,7 +11,6 @@
  */
 
 #include "ob_cdc_rpc_proxy.h"
-
 namespace oceanbase
 {
 namespace obrpc

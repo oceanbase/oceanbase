@@ -11,7 +11,6 @@
  */
 
 #include "sql/engine/expr/ob_expr_last_trace_id.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
@@ -61,8 +60,7 @@ int ObExprLastTraceId::eval_last_trace_id(const ObExpr &expr, ObEvalCtx &ctx,
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "buff is null", K(ret));
       } else {
-        if (OB_FAIL(databuff_printf(buf, MAX_BUF_LEN, pos, "%s",
-                                    to_cstring(trace_id)))) {
+        if (OB_FAIL(databuff_printf(buf, MAX_BUF_LEN, pos, trace_id))) {
           SQL_ENG_LOG(WARN, "fail to databuff_printf", K(ret));
         } else {
           expr_datum.set_string(buf, pos);

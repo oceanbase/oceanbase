@@ -10,16 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 
 #define private public
 #define protected public
 
-#include "share/schema/ob_column_schema.h"
-#include "storage/ob_storage_schema.h"
-#include "share/ob_encryption_util.h"
+#include "src/share/schema/ob_table_schema.h"
 #include "storage/test_schema_prepare.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
+#include "storage/ob_storage_schema_util.h"
 
 namespace oceanbase
 {
@@ -278,6 +276,121 @@ TEST_F(TestStorageSchema, compat_serialize_and_deserialize)
 
   COMMON_LOG(INFO, "test", K(storage_schema), K(des_storage_schema));
   ASSERT_EQ(true, judge_storage_schema_equal(storage_schema, des_storage_schema));
+}
+
+TEST_F(TestStorageSchema, test_update_tablet_store_schema)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema storage_schema1;
+  ObStorageSchema storage_schema2;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  ASSERT_EQ(OB_SUCCESS, storage_schema1.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+  ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+  storage_schema2.column_cnt_ += 1;
+  storage_schema2.column_info_simplified_ = true;
+  storage_schema2.schema_version_ += 100;
+  storage_schema1.progressive_merge_round_ = 3;
+  storage_schema2.progressive_merge_round_ = 2;
+  storage_schema1.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  storage_schema2.compressor_type_ = ObCompressorType::LZ4_COMPRESSOR;
+
+  // schema 2 have large store column cnt
+  ObStorageSchema *result_storage_schema = NULL;
+  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), allocator_, storage_schema1, storage_schema2, result_storage_schema);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(result_storage_schema->schema_version_, storage_schema2.schema_version_);
+  ASSERT_EQ(result_storage_schema->store_column_cnt_, storage_schema2.store_column_cnt_);
+  ASSERT_EQ(result_storage_schema->is_column_info_simplified(), true);
+  ASSERT_EQ(result_storage_schema->progressive_merge_round_, storage_schema1.progressive_merge_round_);
+  ASSERT_EQ(result_storage_schema->compressor_type_, ObCompressorType::NONE_COMPRESSOR);
+  ObStorageSchemaUtil::free_storage_schema(allocator_, result_storage_schema);
+
+  // mock schema with virtual column, same column_cnt & store_column_cnt, simplified = false
+  storage_schema2.reset();
+  ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+  storage_schema1.store_column_cnt_ -= 1;
+  storage_schema2.store_column_cnt_ -= 1;
+  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), allocator_, storage_schema1, storage_schema2, result_storage_schema);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(result_storage_schema->schema_version_, storage_schema2.schema_version_);
+  ASSERT_EQ(result_storage_schema->store_column_cnt_, storage_schema2.store_column_cnt_);
+  ASSERT_EQ(result_storage_schema->is_column_info_simplified(), false);
+  ObStorageSchemaUtil::free_storage_schema(allocator_, result_storage_schema);
+
+  // schema_on_tablet and schema1 have same store column cnt, but storage_schema1 have full column info
+  ObStorageSchema schema_on_tablet;
+  ASSERT_EQ(OB_SUCCESS, schema_on_tablet.init(allocator_, storage_schema1, true/*skip_column_info*/));
+
+  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), allocator_, schema_on_tablet, storage_schema1, result_storage_schema);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, judge_storage_schema_equal(storage_schema1, *result_storage_schema));
+  ASSERT_EQ(result_storage_schema->is_column_info_simplified(), false);
+  ObStorageSchemaUtil::free_storage_schema(allocator_, result_storage_schema);
+}
+
+TEST_F(TestStorageSchema, test_clipped_schema_for_tablet_split)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema storage_schema1;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  table_schema.set_compress_func_name("compress_func_1");
+  table_schema.add_aux_vp_tid(8989789);
+
+  int64_t stored_column_cnt;
+  int64_t column_id = 100;
+  share::schema::ObColumnSchemaV2 column;
+  char name[OB_MAX_FILE_NAME_LENGTH];
+  memset(name, 0, sizeof(name));
+
+  for (int i = 0; i < 800; ++i) {
+    ObObjType obj_type = ObIntType;
+    column.reset();
+    column.set_table_id(table_schema.table_id_);
+    column.set_column_id(column_id);
+    sprintf(name, "test%020ld", column_id);
+    ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
+    column.set_data_type(obj_type);
+    column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    column.set_data_length(10);
+    column.set_rowkey_position(0);
+    if (i % 2 == 0) {
+       column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG); // virtual column.
+    }
+    ASSERT_EQ(OB_SUCCESS, table_schema.add_column(column));
+    ++column_id;
+  }
+  table_schema.set_max_used_column_id(column_id);
+  ASSERT_EQ(OB_SUCCESS, table_schema.get_store_column_count(stored_column_cnt));
+  ASSERT_EQ(OB_SUCCESS, storage_schema1.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+
+  const int64_t buf_len = 1024 * 1024;
+  char buf[buf_len] = "\0";
+  const ObTabletID src_tablet_id(200001);
+  for (int i = TestSchemaPrepare::TEST_ROWKEY_COLUMN_CNT; i <= stored_column_cnt; i++) {
+    memset(buf, 0, sizeof(buf));
+    int64_t ser_pos = 0;
+    int64_t deser_pos = 0;
+
+    ObStorageSchema storage_schema2; // clipped storage schema.
+    ObUpdateCSReplicaSchemaParam update_param;
+    ASSERT_EQ(OB_SUCCESS, update_param.init(src_tablet_id,
+          i + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()/*major_column_cnt*/,
+          ObUpdateCSReplicaSchemaParam::UpdateType::TRUNCATE_COLUMN_ARRAY));
+    ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_,
+            storage_schema1/*old_schema*/,
+            false/*skip_column_info*/,
+            nullptr/*column_group_schema*/,
+            false/*generate_cs_replica_cg_array*/,
+            &update_param/*ObUpdateCSReplicaSchemaParam*/));
+    ASSERT_EQ(OB_SUCCESS, storage_schema2.serialize(buf, buf_len, ser_pos));
+    ASSERT_EQ(ser_pos, storage_schema2.get_serialize_size());
+
+    ObStorageSchema des_storage_schema;
+    ASSERT_EQ(OB_SUCCESS, des_storage_schema.deserialize(allocator_, buf, ser_pos, deser_pos));
+    COMMON_LOG(INFO, "test", K(storage_schema2), K(des_storage_schema));
+    ASSERT_EQ(true, judge_storage_schema_equal(storage_schema2, des_storage_schema));
+  }
 }
 
 } // namespace unittest

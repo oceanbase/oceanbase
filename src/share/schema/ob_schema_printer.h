@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_SCHEMA_OB_SCHEMA_PRINTER_H_
 #include <stdint.h>
 #include "share/ob_define.h"
+#include "share/schema/ob_udt_info.h"
 #include "lib/container/ob_iarray.h"
 #include "share/schema/ob_schema_struct.h"
 #include "pl/parser/ob_pl_parser.h"
@@ -23,7 +24,8 @@ namespace oceanbase
 {
 namespace sql
 {
-  class ObExecEnv;
+class ObExecEnv;
+class ObSqlSchemaGuard;
 }
 namespace common
 {
@@ -133,6 +135,15 @@ public:
                            bool agent_mode,
                            ObSQLMode sql_mode) const;
 
+  int print_materialized_view_definition(const uint64_t tenant_id,
+                                         const uint64_t table_id,
+                                         char *buf,
+                                         const int64_t &buf_len,
+                                         int64_t &pos,
+                                         const ObTimeZoneInfo *tz_info,
+                                         bool agent_mode,
+                                         ObSQLMode sql_mode) const;
+
   int print_database_definiton(const uint64_t tenant_id,
                                const uint64_t database_id,
                                bool if_not_exists,
@@ -186,7 +197,19 @@ public:
                          char *buf,
                          int64_t buf_len,
                          int64_t &pos) const;
+  int print_vector_index_column(const ObTableSchema &table_schema,
+                                const ObColumnSchemaV2 &column,
+                                bool is_last,
+                                char *buf,
+                                int64_t buf_len,
+                                int64_t &pos) const;
   int print_fulltext_index_column(const ObTableSchema &table_schema,
+                                  const ObColumnSchemaV2 &column,
+                                  bool is_last,
+                                  char *buf,
+                                  int64_t buf_len,
+                                  int64_t &pos) const;
+  int print_multivalue_index_column(const ObTableSchema &table_schema,
                                   const ObColumnSchemaV2 &column,
                                   bool is_last,
                                   char *buf,
@@ -203,10 +226,11 @@ public:
                                 int64_t buf_len,
                                 int64_t &pos) const;
   int print_ordinary_index_column_expr(const ObColumnSchemaV2 &column,
-                              bool is_last,
-                              char *buf,
-                              int64_t buf_len,
-                              int64_t &pos) const;
+                                       bool is_oracle_mode,
+                                       bool is_last,
+                                       char *buf,
+                                       int64_t buf_len,
+                                       int64_t &pos) const;
   int print_table_definition_fulltext_indexs(
       const bool is_oracle_mode,
       const common::ObIArray<common::ObString> &fulltext_indexs,
@@ -215,9 +239,7 @@ public:
                                      char* buf,
                                      const int64_t& buf_len,
                                      int64_t& pos) const;
-  int print_rowkey_info(const common::ObRowkeyInfo& rowkey_info,
-                        const uint64_t tenant_id,
-                        const uint64_t table_id,
+  int print_rowkey_info(const ObTableSchema &table_schema,
                         char* buf,
                         const int64_t& buf_len,
                         int64_t& pos) const;
@@ -251,6 +273,13 @@ public:
                                                   char* buf,
                                                   const int64_t& buf_len,
                                                   int64_t& pos) const;
+  int print_partition_func(const ObTableSchema &table_schema,
+                           char* buf,
+                           const int64_t& buf_len,
+                           int64_t& pos,
+                           bool is_subpart,
+                           bool strict_compat,
+                           const ObTimeZoneInfo *tz_info) const;
   int print_interval_if_ness(const ObTableSchema &table_schema,
                              char* buf,
                              const int64_t& buf_len,
@@ -379,6 +408,11 @@ public:
   int print_foreign_key_definition(const uint64_t tenant_id,
                                    const share::schema::ObForeignKeyInfo &foreign_key_info,
                                    char *buf, int64_t buf_len, int64_t &pos) const;
+  int print_package_definition(const uint64_t tenant_id,
+                               uint64_t package_id,
+                               char* buf,
+                               const int64_t& buf_len,
+                               int64_t &pos) const;
   int print_udt_definition(const uint64_t tenant_id,
                            const uint64_t udt_id,
                            char* buf,
@@ -394,12 +428,17 @@ public:
                                 char *buf,
                                 const int64_t &buf_len,
                                 int64_t &pos) const;
-  int print_element_type(const uint64_t tenant_id,
-                         const uint64_t element_type_id,
+  int print_element_type(const uint64_t element_type_id,
                          const ObUDTBase *element_type_info,
                          char* buf,
                          const int64_t& buf_len,
                          int64_t &pos) const;
+  int print_object_spec_definition(const uint64_t tenant_id,
+                                   ObUDTTypeInfo *udt_info,
+                                   char* buf,
+                                   const int64_t& buf_len,
+                                   int64_t& pos,
+                                   ObString methods_definition) const;
   int print_trigger_definition(const share::schema::ObTriggerInfo &trigger_info,
                                char *buf, int64_t buf_len, int64_t &pos,
                                bool get_ddl = false) const;
@@ -409,6 +448,9 @@ public:
   int print_compound_instead_trigger_definition(const ObTriggerInfo &trigger_info,
                                                 char *buf, int64_t buf_len, int64_t &pos,
                                                 bool get_ddl) const;
+  int print_system_trigger_definition(const ObTriggerInfo &trigger_info,
+                                      char *buf, int64_t buf_len, int64_t &pos,
+                                      bool get_ddl) const;
   int print_trigger_status(const ObTriggerInfo &trigger_info, char *buf, int64_t buf_len, int64_t &pos) const;
   int print_trigger_base_object(const ObTriggerInfo &trigger_info,
                                 char *buf, int64_t buf_len, int64_t &pos) const;
@@ -449,7 +491,8 @@ public:
                             char *buf,
                             const int64_t &buf_len,
                             int64_t &pos,
-                            bool is_role);
+                            bool is_role,
+                            bool print_password_secret = false);
   int print_synonym_definition(const ObSynonymInfo &synonym_info,
                                 char *buf,
                                 const int64_t &buf_len,
@@ -494,7 +537,28 @@ public:
                                         char* buf,
                                         const int64_t& buf_len,
                                         int64_t& pos) const;
-
+  int print_heap_table_pk_info(const ObTableSchema &table_schema,
+                               char* buf,
+                               const int64_t& buf_len,
+                               int64_t& pos) const;
+  int print_semistruct_encodng_options(const ObTableSchema &table_schema,
+                                       char* buf,
+                                       const int64_t& buf_len,
+                                       int64_t& pos) const;
+  int print_dynamic_partition_policy(const ObTableSchema &table_schema,
+                                     char* buf,
+                                     const int64_t& buf_len,
+                                     int64_t& pos) const;
+  int print_location_definiton(const uint64_t tenant_id,
+                               const uint64_t location_id,
+                               char *buf,
+                               const int64_t &buf_len,
+                               int64_t &pos) const;
+  void set_sql_schema_guard(sql::ObSqlSchemaGuard *sql_schema_guard);
+  int print_table_definition_clustering_key(const ObTableSchema &table_schema,
+                                            char* buf,
+                                            const int64_t& buf_len,
+                                            int64_t& pos) const;
 private:
   static bool is_subpartition_valid_in_mysql(const ObTableSchema &table_schema)
   {
@@ -504,8 +568,16 @@ private:
     ObPartitionFuncType sub_type = sub_part_opt.get_part_func_type();
     return is_hash_like_part(sub_type) && !is_hash_like_part(type);
   }
+  int get_database_schema_(const uint64_t tenant_id, const uint64_t database_id, const ObDatabaseSchema *&database_schema) const;
+  int get_table_schema_(const uint64_t tenant_id, const uint64_t table_id, const ObTableSchema *&table_schema) const;
+#ifdef OB_BUILD_ORACLE_PL
+  int print_base64_cipher(ObIAllocator &allocator,
+                          const ObString &cipher,
+                          ObString &formatted_cipher) const;
+#endif  // OB_BUILD_ORACLE_PL
 
   ObSchemaGetterGuard &schema_guard_;
+  sql::ObSqlSchemaGuard *sql_schema_guard_;
   bool strict_compat_;
   bool sql_quote_show_create_;
   bool ansi_quotes_;

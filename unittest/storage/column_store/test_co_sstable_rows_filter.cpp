@@ -11,28 +11,14 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define private public
 #define protected public
 
-#include "lib/allocator/page_arena.h"
-#include "lib/container/ob_se_array.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
-#include "sql/engine/expr/ob_expr.h"
-#include "sql/engine/ob_exec_context.h"
-#include "storage/access/ob_table_access_context.h"
 #include "storage/access/ob_vector_store.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/column_store/ob_cg_scanner.h"
 #include "storage/column_store/ob_cg_tile_scanner.h"
-#include "storage/ob_i_table.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/ob_storage_schema.h"
-#include "storage/schema_utils.h"
-#include "storage/tablet/ob_table_store_util.h"
 #include "storage/column_store/ob_co_sstable_rows_filter.h"
 
 namespace oceanbase
@@ -178,6 +164,7 @@ public:
   ObPushdownFilterExecutor *filter_;
   ObPushdownOperator *pushdown_operator_;
   ObPushdownExprSpec *expr_spec_;
+  ObBitVector *skip_bit_;
   MockObCOSSTableRowsFilter co_filter_;
 };
 
@@ -186,7 +173,9 @@ void TestCOSSTableRowsFilter::init_vector_store()
   ObIAllocator* allocator_ptr = &allocator_;
   exec_ctx_ = OB_NEWx(ObExecContext, allocator_ptr, allocator_);
   eval_ctx_ = OB_NEWx(ObEvalCtx, allocator_ptr, *exec_ctx_);
-  vector_store_ = OB_NEWx(ObVectorStore, allocator_ptr, 64, *eval_ctx_, context_);
+  skip_bit_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(64)));
+  ASSERT_NE(nullptr, skip_bit_);
+  vector_store_ = OB_NEWx(ObVectorStore, allocator_ptr, 64, *eval_ctx_, context_, skip_bit_);
   vector_store_->is_inited_ = true;
 }
 
@@ -257,7 +246,7 @@ ObPushdownFilterExecutor* TestCOSSTableRowsFilter::create_physical_filter(
     column_exprs->push_back(nullptr);
     cg_idxes.push_back(_cg_idxes.at(i));
   }
-  filter->cg_col_exprs_ = cg_col_exprs;
+  filter->cg_col_exprs_.assign(*cg_col_exprs);
   return filter;
 }
 
@@ -286,6 +275,7 @@ void TestCOSSTableRowsFilter::init_single_white_filter()
   ASSERT_FALSE(nullptr == filter_);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::init_single_black_filter()
@@ -297,6 +287,7 @@ void TestCOSSTableRowsFilter::init_single_black_filter()
   ASSERT_FALSE(nullptr == filter_);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::init_multi_white_filter(bool is_common)
@@ -319,6 +310,7 @@ void TestCOSSTableRowsFilter::init_multi_white_filter(bool is_common)
   filter_->set_childs(3, childs);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::init_multi_black_filter(bool is_common)
@@ -348,6 +340,7 @@ void TestCOSSTableRowsFilter::init_multi_black_filter(bool is_common)
   filter_->set_childs(3, childs);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::init_multi_white_and_black_filter_case_one()
@@ -380,6 +373,7 @@ void TestCOSSTableRowsFilter::init_multi_white_and_black_filter_case_one()
   filter_->set_childs(2, childs);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::init_multi_white_and_black_filter_case_two()
@@ -431,6 +425,7 @@ void TestCOSSTableRowsFilter::init_multi_white_and_black_filter_case_two()
   filter_->set_childs(3, childs);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::reset_filter()
@@ -543,8 +538,8 @@ TEST_F(TestCOSSTableRowsFilter, co_sstable_rows_filter_test_rewrite_filter_case_
   init_multi_white_and_black_filter_case_two();
   ret = co_filter_.rewrite_filter();
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(3, co_filter_.filter_iters_.count());
-  ASSERT_EQ(3, co_filter_.iter_filter_node_.count());
+  ASSERT_EQ(5, co_filter_.filter_iters_.count());
+  ASSERT_EQ(5, co_filter_.iter_filter_node_.count());
   ASSERT_EQ(3, co_filter_.bitmap_buffer_.count());
   ASSERT_EQ(ObICGIterator::ObCGIterType::OB_CG_SCANNER,
              co_filter_.filter_iters_[0]->get_type());

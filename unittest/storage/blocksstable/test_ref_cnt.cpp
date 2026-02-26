@@ -15,12 +15,7 @@
 #define private public
 #define protected public
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "share/ob_thread_pool.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "storage/ob_super_block_struct.h"
 
 namespace oceanbase
 {
@@ -39,6 +34,16 @@ public:
   virtual ~TestRefCnt();
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 };
 
 TestRefCnt::TestRefCnt()
@@ -163,11 +168,11 @@ TEST_F(TestRefCnt, server_super_block)
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(des_sb.get_serialize_size(), pos);
 
-  ret = OB_SERVER_BLOCK_MGR.write_super_block(super_block);
+  ret = OB_SERVER_BLOCK_MGR.write_super_block(super_block, OB_STORAGE_OBJECT_MGR.super_block_buf_holder_);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObServerSuperBlock ret_sb;
-  ret = OB_SERVER_BLOCK_MGR.read_super_block(ret_sb);
+  ret = OB_SERVER_BLOCK_MGR.read_super_block(ret_sb,  OB_STORAGE_OBJECT_MGR.super_block_buf_holder_);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ASSERT_EQ(super_block.body_.macro_block_size_, ret_sb.body_.macro_block_size_);

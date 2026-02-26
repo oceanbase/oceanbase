@@ -12,7 +12,6 @@
 
 #include "lib/profile/ob_perf_event.h"
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 
 using namespace oceanbase::common;
 class TestPerfEvent: public ::testing::Test

@@ -10,13 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_disk_usage_table_operator.h"
-#include "lib/number/ob_number_v2.h"
+#include "ob_disk_usage_table_operator.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/inner_table/ob_inner_table_schema.h"
-#include "storage/ob_disk_usage_reporter.h"
-#include "lib/container/ob_iarray.h"
+#include "src/observer/report/ob_i_disk_report.h"
 
 namespace oceanbase
 {
@@ -74,7 +72,7 @@ int ObDiskUsageTableOperator::update_tenant_space_usage(const uint64_t tenant_id
     int64_t affected_rows = 0;
     const char *file_type_str = NULL;
     switch (file_type) {
-      case ObDiskReportFileType::TENANT_DATA:
+      case ObDiskReportFileType::TENANT_FILE_DATA:
         file_type_str = "tenant file data";
         break;
       case ObDiskReportFileType::TENANT_META_DATA:
@@ -92,11 +90,20 @@ int ObDiskUsageTableOperator::update_tenant_space_usage(const uint64_t tenant_id
       case ObDiskReportFileType::TENANT_CLOG_DATA:
         file_type_str = "tenant clog data";
         break;
-      case ObDiskReportFileType::TENANT_MAJOR_SSTABLE_DATA:
-        file_type_str = "tenant shared_major data";
+      case ObDiskReportFileType::TENANT_SS_PUBLIC_DATA:
+        file_type_str = "tenant shared data";
         break;
-      case ObDiskReportFileType::TENANT_MAJOR_LOCAL_DATA:
+      case ObDiskReportFileType::TENANT_LOCAL_DATA:
         file_type_str = "tenant local data";
+        break;
+      case ObDiskReportFileType::TENANT_BACKUP_DATA:
+        file_type_str = "tenant backup data";
+        break;
+      case ObDiskReportFileType::TENANT_SS_PRIV_DATA:
+        file_type_str = "tenant private data";
+        break;
+      case ObDiskReportFileType::TENANT_EXT_DISK_CACHE:
+        file_type_str = "tenant ext disk cache";
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -105,13 +112,23 @@ int ObDiskUsageTableOperator::update_tenant_space_usage(const uint64_t tenant_id
     }
     if  (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
+    } else if (ObDiskReportFileType::TENANT_SS_PUBLIC_DATA == file_type && // special treatment for shared data
+        (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
+        ||  OB_FAIL(dml.add_pk_column("svr_ip", "0.0.0.0"))
+        ||  OB_FAIL(dml.add_pk_column("svr_port", 0))
+        ||  OB_FAIL(dml.add_pk_column("start_seq", seq_num))
+        ||  OB_FAIL(dml.add_pk_column("file_type", file_type_str))
+        ||  OB_FAIL(dml.add_column("data_size", data_size))
+        ||  OB_FAIL(dml.add_column("used_size", used_size)))) {
+      SHARE_LOG(WARN, "dml fail to add column", K(ret));
+    } else if (ObDiskReportFileType::TENANT_SS_PUBLIC_DATA != file_type &&
+        (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
         ||  OB_FAIL(dml.add_pk_column("svr_ip", svr_ip))
         ||  OB_FAIL(dml.add_pk_column("svr_port", svr_port))
         ||  OB_FAIL(dml.add_pk_column("start_seq", seq_num))
         ||  OB_FAIL(dml.add_pk_column("file_type", file_type_str))
         ||  OB_FAIL(dml.add_column("data_size", data_size))
-        ||  OB_FAIL(dml.add_column("used_size", used_size))) {
+        ||  OB_FAIL(dml.add_column("used_size", used_size)))) {
       SHARE_LOG(WARN, "dml fail to add column", K(ret));
     } else if (OB_FAIL(exec.exec_insert_update(OB_ALL_SPACE_USAGE_TNAME, dml, affected_rows))) {
       SHARE_LOG(WARN, "fail to exec insert", K(ret));
@@ -120,78 +137,7 @@ int ObDiskUsageTableOperator::update_tenant_space_usage(const uint64_t tenant_id
       SHARE_LOG(WARN, "affected rows unexpected", K(ret), K(affected_rows), K(tenant_id),
                                                   K(file_type), K(data_size));
     } else {
-      SHARE_LOG(INFO, "insert successful ", K(ret), K(tenant_id), K(file_type), K(data_size));
-    }
-  }
-  return ret;
-}
-
-int ObDiskUsageTableOperator::delete_tenant_space_usage(const uint64_t tenant_id,
-                              const char *svr_ip,
-                              const int32_t svr_port,
-                              const int64_t seq_num,
-                              const storage::ObDiskReportFileType file_type)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    SHARE_LOG(WARN, "not init", K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-      || nullptr == svr_ip || svr_port <= 0 || seq_num <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(svr_ip), K(svr_port),
-                                        K(file_type), K(seq_num));
-  } else {
-    ObDMLSqlSplicer dml;
-    ObDMLExecHelper exec(*proxy_, common::OB_SYS_TENANT_ID);
-    int64_t affected_rows = 0;
-    const char *file_type_str = NULL;
-    switch (file_type) {
-      case ObDiskReportFileType::TENANT_DATA:
-        file_type_str = "tenant file data";
-        break;
-      case ObDiskReportFileType::TENANT_META_DATA:
-        file_type_str = "tenant file meta data";
-        break;
-      case ObDiskReportFileType::TENANT_INDEX_DATA:
-        file_type_str = "tenant index data";
-        break;
-      case ObDiskReportFileType::TENANT_TMP_DATA:
-        file_type_str = "tenant tmp data";
-        break;
-      case ObDiskReportFileType::TENANT_SLOG_DATA:
-        file_type_str = "tenant slog data";
-        break;
-      case ObDiskReportFileType::TENANT_CLOG_DATA:
-        file_type_str = "tenant clog data";
-        break;
-      case ObDiskReportFileType::TENANT_MAJOR_SSTABLE_DATA:
-        file_type_str = "tenant shared_major data";
-        break;
-      case ObDiskReportFileType::TENANT_MAJOR_LOCAL_DATA:
-        file_type_str = "tenant local data";
-        break;
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        SHARE_LOG(WARN, "unexpected", K(ret), K(file_type));
-        break;
-    }
-    if  (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
-          ||  OB_FAIL(dml.add_pk_column("svr_ip", svr_ip))
-          ||  OB_FAIL(dml.add_pk_column("svr_port", svr_port))
-          ||  OB_FAIL(dml.add_pk_column("start_seq", seq_num))
-          ||  OB_FAIL(dml.add_pk_column("file_type", file_type_str))) {
-      SHARE_LOG(WARN, "dml fail to add column", K(ret));
-    } else if (OB_FAIL(exec.exec_delete(OB_ALL_SPACE_USAGE_TNAME, dml, affected_rows))) {
-      SHARE_LOG(WARN, "fail to exec delete", K(ret));
-    } else if (affected_rows > 1) {
-      ret = OB_ERR_UNEXPECTED;
-      SHARE_LOG(WARN, "affected rows unexpected", K(ret), K(affected_rows), K(tenant_id),
-                                                  K(file_type));
-    } else {
-      SHARE_LOG(INFO, "delete successful ", K(ret), K(tenant_id), K(file_type));
+      SHARE_LOG(INFO, "insert successful ", K(ret), K(tenant_id), K(file_type), K(data_size), K(used_size));
     }
   }
   return ret;
@@ -214,9 +160,23 @@ int ObDiskUsageTableOperator::delete_tenant_all(const uint64_t tenant_id,
     ObDMLSqlSplicer dml;
     ObDMLExecHelper exec(*proxy_, common::OB_SYS_TENANT_ID);
     int64_t affected_rows = 0;
+    // delete row except shared data row
     if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
           ||  OB_FAIL(dml.add_pk_column("svr_ip", svr_ip))
           ||  OB_FAIL(dml.add_pk_column("svr_port", svr_port))
+          ||  OB_FAIL(dml.add_pk_column("start_seq", seq_num))) {
+      SHARE_LOG(WARN, "dml fail to add column", K(ret));
+    } else if (OB_FAIL(exec.exec_delete(OB_ALL_SPACE_USAGE_TNAME, dml, affected_rows))) {
+      SHARE_LOG(WARN, "fail to exec delete", K(ret));
+    }
+
+    // delete shared data rows
+    dml.reset();
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
+          ||  OB_FAIL(dml.add_pk_column("svr_ip", "0.0.0.0"))
+          ||  OB_FAIL(dml.add_pk_column("svr_port", 0))
           ||  OB_FAIL(dml.add_pk_column("start_seq", seq_num))) {
       SHARE_LOG(WARN, "dml fail to add column", K(ret));
     } else if (OB_FAIL(exec.exec_delete(OB_ALL_SPACE_USAGE_TNAME, dml, affected_rows))) {
@@ -228,29 +188,6 @@ int ObDiskUsageTableOperator::delete_tenant_all(const uint64_t tenant_id,
   return ret;
 }
 
-int ObDiskUsageTableOperator::delete_tenant_all(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    SHARE_LOG(WARN, "not init", K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid argument", K(ret), K(tenant_id));
-  } else {
-    ObDMLSqlSplicer dml;
-    ObDMLExecHelper exec(*proxy_, common::OB_SYS_TENANT_ID);
-    int64_t affected_rows = 0;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))) {
-      SHARE_LOG(WARN, "dml fail to add column", K(ret));
-    } else if (OB_FAIL(exec.exec_delete(OB_ALL_SPACE_USAGE_TNAME, dml, affected_rows))) {
-      SHARE_LOG(WARN, "fail to exec delete", K(ret));
-    } else {
-      SHARE_LOG(INFO, "delete successful ", K(ret), K(tenant_id));
-    }
-  }
-  return ret;
-}
 
 int ObDiskUsageTableOperator::get_all_tenant_ids(const char *svr_ip,
                                                  const int32_t svr_port,
@@ -298,6 +235,53 @@ int ObDiskUsageTableOperator::get_all_tenant_ids(const char *svr_ip,
       } else {
         SHARE_LOG(WARN, "fail to get all tenant ids from __all_space_usage", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+// for residual "tenant shared_major data" and "tenant shared data"
+int ObDiskUsageTableOperator::delete_residual_shared_data(const char *svr_ip,
+                                                       const int32_t svr_port,
+                                                       const int64_t seq_num)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    SHARE_LOG(WARN, "not init", K(ret));
+  } else if (OB_UNLIKELY(nullptr == svr_ip || svr_port <= 0 || seq_num <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "invalid argument", K(ret), KP(svr_ip), K(svr_port), K(seq_num));
+  } else {
+    ObDMLSqlSplicer dml;
+    ObDMLExecHelper exec(*proxy_, common::OB_SYS_TENANT_ID);
+    int64_t affected_rows = 0;
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(dml.add_pk_column("file_type", "tenant shared_major data"))) {
+      SHARE_LOG(WARN, "dml fail to add column", K(ret));
+    } else if (OB_FAIL(exec.exec_delete(OB_ALL_SPACE_USAGE_TNAME, dml, affected_rows))) {
+      SHARE_LOG(WARN, "fail to exec delete", K(ret));
+    } else if (affected_rows > 1) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "affected rows unexpected", K(ret), K(affected_rows));
+    }
+    // delete residual shared data row where seq_num=0
+    dml.reset();
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(dml.add_pk_column("svr_ip", "0.0.0.0"))
+            || OB_FAIL(dml.add_pk_column("svr_port", 0))
+            || OB_FAIL(dml.add_pk_column("start_seq", 0))
+            || OB_FAIL(dml.add_pk_column("file_type", "tenant shared data"))) {
+      SHARE_LOG(WARN, "dml fail to add column", K(ret));
+    } else if (OB_FAIL(exec.exec_delete(OB_ALL_SPACE_USAGE_TNAME, dml, affected_rows))) {
+      SHARE_LOG(WARN, "fail to exec delete", K(ret));
+    } else if (affected_rows > 1) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "affected rows unexpected", K(ret), K(affected_rows));
+    } else {
+      SHARE_LOG(INFO, "delete successful ", K(ret));
     }
   }
   return ret;

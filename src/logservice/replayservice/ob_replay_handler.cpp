@@ -12,7 +12,6 @@
 
 #include "ob_replay_handler.h"
 #include "logservice/ob_log_service.h"
-#include "storage/ls/ob_ls.h"
 
 namespace oceanbase
 {

@@ -19,6 +19,7 @@
 #include "common/ob_store_format.h"
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
 #include "storage/blocksstable/ob_imicro_block_writer.h"
+#include "storage/blocksstable/ob_micro_block_header.h"
 #include "ob_stream_encoding_struct.h"
 
 
@@ -26,6 +27,7 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+class ObMicroBufferWriter;
 struct ObCSColumnHeader
 {
   static const uint8_t OB_COLUMN_HEADER_V1 = 0;
@@ -36,6 +38,7 @@ struct ObCSColumnHeader
     STRING = 1,
     INT_DICT = 2,
     STR_DICT = 3,
+    SEMISTRUCT = 4,
     MAX_TYPE
   };
 
@@ -46,6 +49,7 @@ struct ObCSColumnHeader
       case STRING :  { return "STRING"; }
       case INT_DICT: { return "INT_DICT"; }
       case STR_DICT: { return "STR_DICT"; }
+      case SEMISTRUCT: { return "SEMISTRUCT"; }
       default:       { return "MAX_TYPE"; }
     }
   }
@@ -53,8 +57,10 @@ struct ObCSColumnHeader
   enum Attribute : uint8_t
   {
     IS_FIXED_LENGTH = 0x01,
-    HAS_NULL_BITMAP = 0x02,
+    HAS_NULL_OR_NOP_BITMAP = 0x02, // FARM COMPAT WHITELIST
     OUT_ROW = 0x04,
+    HAS_NOP_BITMAP = 0x08,
+    HAS_NOP = 0x10,
     MAX_ATTRIBUTE,
   };
 
@@ -90,13 +96,29 @@ struct ObCSColumnHeader
   {
     return INT_DICT == type_;
   }
-  inline bool has_null_bitmap() const
+  inline bool has_null_or_nop_bitmap() const
   {
-    return attrs_ & HAS_NULL_BITMAP;
+    return attrs_ & HAS_NULL_OR_NOP_BITMAP;
   }
-  inline void set_has_null_bitmap()
+  inline void set_has_null_or_nop_bitmap()
   {
-    attrs_ |= HAS_NULL_BITMAP;
+    attrs_ |= HAS_NULL_OR_NOP_BITMAP;
+  }
+  inline bool has_nop_bitmap() const
+  {
+    return attrs_ & HAS_NOP_BITMAP;
+  }
+  inline void set_has_nop_bitmap()
+  {
+    attrs_ |= HAS_NOP_BITMAP;
+  }
+  inline bool has_nop() const
+  {
+    return attrs_ & HAS_NOP;
+  }
+  inline void set_has_nop()
+  {
+    attrs_ |= HAS_NOP;
   }
   inline bool is_out_row() const
   {
@@ -231,40 +253,66 @@ struct ObColumnEncodingIdentifier
 
 struct ObPreviousColumnEncoding
 {
-  ObPreviousColumnEncoding() { memset(this, 0, sizeof(*this)); }
+  ObPreviousColumnEncoding()
+    : identifier_(),
+      column_idx_(0),
+      cur_block_count_(0),
+      column_redetect_cycle_(0),
+      column_need_redetect_(false),
+      stream_redetect_cycle_(0),
+      is_stream_encoding_type_valid_(false),
+      stream_need_redetect_(false),
+      force_no_redetect_(false)
+  {
+  }
 
-  TO_STRING_KV(K_(identifier),
-               "stream0_encoding_type",  ObIntegerStream::get_encoding_type_name(stream_encoding_types_[0]),
-               "stream1_encoding_type",  ObIntegerStream::get_encoding_type_name(stream_encoding_types_[1]),
-               "stream2_encoding_type",  ObIntegerStream::get_encoding_type_name(stream_encoding_types_[2]),
-               "stream3_encoding_type",  ObIntegerStream::get_encoding_type_name(stream_encoding_types_[3]),
-               K_(redetect_cycle), K_(is_valid), K_(need_redetect),
-               K_(cur_block_count), K_(force_no_redetect));
+  TO_STRING_KV(K_(identifier), K_(column_idx), K_(cur_block_count),
+               K_(column_redetect_cycle), K_(column_need_redetect),
+               K_(stream_redetect_cycle), K_(is_stream_encoding_type_valid),
+               K_(stream_need_redetect), K_(force_no_redetect));
 
+  bool is_column_encoding_type_valid() const
+  {
+    return ObCSColumnHeader::MAX_TYPE != identifier_.column_encoding_type_;
+  }
+
+  bool column_encoding_type_can_be_reused() const
+  {
+    return is_column_encoding_type_valid() && !column_need_redetect_;
+  }
   ObColumnEncodingIdentifier identifier_;
-  ObIntegerStream::EncodingType stream_encoding_types_[ObCSColumnHeader::MAX_INT_STREAM_COUNT_OF_COLUMN];
-  int32_t redetect_cycle_;
+  int32_t column_idx_;
   int64_t cur_block_count_;
-  bool is_valid_;
-  bool need_redetect_;
+  // for column encoding type
+  int32_t column_redetect_cycle_;
+  bool column_need_redetect_;
+
+  // for stream encoding type
+  ObIntegerStream::EncodingType stream_encoding_types_[ObCSColumnHeader::MAX_INT_STREAM_COUNT_OF_COLUMN];
+  int32_t stream_redetect_cycle_;
+  bool is_stream_encoding_type_valid_;
+  bool stream_need_redetect_;
+
   bool force_no_redetect_; // just for test to specify the stream encoding type
 };
 
 class ObPreviousCSEncoding
 {
 public:
-  static const int32_t MAX_REDETECT_CYCLE;
   ObPreviousCSEncoding() :
     is_inited_(false),
     previous_encoding_of_columns_() {}
   int init(const int32_t col_count);
-  int check_and_set_state(const int32_t column_idx,
-                          const ObColumnEncodingIdentifier identifier,
-                          const int64_t cur_block_count);
-  int update_column_encoding_types(const int32_t column_idx,
-                                   const ObColumnEncodingIdentifier identifier,
-                                   const ObIntegerStream::EncodingType *stream_types,
-                                   bool force_no_redetect = false);
+  void reset();
+  int update_column_detect_info(const int32_t column_idx,
+                             const ObColumnEncodingIdentifier identifier,
+                             const int64_t cur_block_count,
+                             const int64_t major_working_cluster_version);
+  int update_stream_detect_info(const int32_t column_idx,
+                                     const ObColumnEncodingIdentifier identifier,
+                                     const ObIntegerStream::EncodingType *stream_types,
+                                     const int64_t major_working_cluster_version,
+                                     bool force_no_redetect = false);
   ObPreviousColumnEncoding *get_column_encoding(const int32_t column_idx)
   {
     return &previous_encoding_of_columns_.at(column_idx);
@@ -288,9 +336,6 @@ struct ObCSEncodingOpt
       case CS_ENCODING_ROW_STORE:
         encodings_ = STREAM_ENCODINGS_DEFAULT;
         break;
-      //case SELECTIVE_CS_ENCODING_ROW_STORE:
-      //  encodings_ = STREAM_ENCODINGS_FOR_PERFORMANCE;
-      //  break;
       default:
         encodings_ = STREAM_ENCODINGS_NONE;
         break;
@@ -302,38 +347,60 @@ struct ObCSEncodingOpt
 };
 
 
-class ObEncodingHashTable;
+class ObDictEncodingHashTable;
 class ObMicroBlockEncodingCtx;
+class ObSemiStructColumnEncodeCtx;
 struct ObColumnCSEncodingCtx
 {
   ObIAllocator *allocator_;
-  int64_t null_cnt_;
-  int64_t nope_cnt_;
+  int64_t null_or_nop_cnt_; // = null_cnt_ + nop_cnt_
+  int64_t nop_cnt_;
   int64_t var_data_size_;
   int64_t dict_var_data_size_;
   int64_t fix_data_size_;
   int64_t max_string_size_;
   const ObPodFix2dArray<ObDatum, 1 << 20, common::OB_MALLOC_NORMAL_BLOCK_SIZE> *col_datums_;
-  ObEncodingHashTable *ht_;
+  ObDictEncodingHashTable *ht_;
   const ObMicroBlockEncodingCtx *encoding_ctx_;
+  ObSemiStructColumnEncodeCtx *semistruct_ctx_;
   ObMicroBufferWriter *all_string_buf_writer_;
 
   bool need_sort_;
   bool force_raw_encoding_;
   bool has_zero_length_datum_;
   bool is_wide_int_;
+  bool is_semistruct_sub_col_;
+  bool has_stored_meta_;
+
   uint64_t integer_min_;
   uint64_t integer_max_;
 
-  ObColumnCSEncodingCtx() { reset(); }
-  void reset() { memset(this, 0, sizeof(*this)); }
+  ObColumnCSEncodingCtx()
+    : allocator_(nullptr),
+      null_or_nop_cnt_(0), nop_cnt_(0),
+      var_data_size_(0), dict_var_data_size_(0),
+      fix_data_size_(0), max_string_size_(0),
+      col_datums_(nullptr), ht_(nullptr),
+      encoding_ctx_(nullptr), semistruct_ctx_(nullptr), all_string_buf_writer_(nullptr),
+      need_sort_(false), force_raw_encoding_(false),
+      has_zero_length_datum_(false), is_wide_int_(0),
+      is_semistruct_sub_col_(false), has_stored_meta_(false),
+      integer_min_(0), integer_max_(0)
+  {
+  }
+  void try_set_need_sort(const ObCSColumnHeader::Type type,
+                         const int64_t column_index,
+                         const bool micro_block_has_lob_out_row,
+                         const int64_t major_working_cluster_version);
+  void try_set_need_sort(const ObCSColumnHeader::Type type,
+                         const ObObjTypeClass col_tc,
+                         const bool micro_block_has_lob_out_row,
+                         const int64_t major_working_cluster_version);
 
-  void try_set_need_sort(const ObCSColumnHeader::Type type, const int64_t column_index, const bool micro_block_has_lob_out_row);
-
-  TO_STRING_KV(K_(null_cnt), K_(nope_cnt), K_(var_data_size),
+  TO_STRING_KV(K_(null_or_nop_cnt), K_(nop_cnt), K_(var_data_size),
                K_(dict_var_data_size), K_(fix_data_size),
-               KP_(col_datums), KP_(ht), KP_(encoding_ctx), K_(max_string_size),
-               K_(need_sort), K_(force_raw_encoding),
+               KP_(col_datums), KP_(ht), KP_(encoding_ctx), KP_(semistruct_ctx), K_(max_string_size),
+               K_(need_sort), K_(force_raw_encoding), K_(is_semistruct_sub_col), K_(has_stored_meta),
                K_(has_zero_length_datum), K_(is_wide_int), K_(integer_min), K_(integer_max));
 };
 
@@ -345,30 +412,60 @@ struct ObBaseColumnDecoderCtx
   common::ObObjMeta obj_meta_;
   enum ObNullFlag : uint8_t
   {
-    HAS_NO_NULL = 0, // has no null
-    HAS_NULL_BITMAP = 1, // must be not dict encoding, because dict encoding use max ref as null
+    HAS_NO_NULL_OR_NOP = 0, // FARM COMPAT WHITELIST has no null or nope
+    HAS_NULL_OR_NOP_BITMAP = 1, // FARM COMPAT WHITELIST must be not dict encoding, because dict encoding use max ref as null
     IS_NULL_REPLACED = 2, // represet use_null_replaced_value or use_zero_len_as_null
     IS_NULL_REPLACED_REF = 3, // must be dict encoding
     MAX = 4
   };
   ObNullFlag null_flag_;
+  enum class ObNopFlag : uint8_t
+  {
+    HAS_NO_NOP = 0,
+    HAS_NOP_BITMAP = 1,
+    IS_NOP_REPLACED = 2,
+    MAX = 3
+  };
+  // IS_NOP_REPLACED: no null value and has nop value
+  // null (replace value or bitmap) is considered as nop
+  ObNopFlag nop_flag_;
   union
   {
     const void *null_desc_;
-    const char *null_bitmap_; // 1 is null, 0 not null, valid when null_flag_ == HAS_NULL_BITMAP
+    const char *null_or_nop_bitmap_; // 1 is null / nop, 0 not null / nop, valid when null_flag_ == HAS_NULL_OR_NOP_BITMAP
     int64_t null_replaced_ref_; // dict may use a special ref(usually max_ref + 1) to replace null, valid when null_flag_ == IS_NULL_REPLACED_REF
     int64_t null_replaced_value_; // valid when column type is integer and  null_flag_ == IS_NULL_REPLACED
   };
+  const char* nop_bitmap_; // 1 is nop, 0 not nop
+  // nop_bitmap_ is after null_bitmap_ aka nop_bitmap_ == null_bitmap_ + null_bitmap_size
+  // when using replaced value / ref as null, null_bitmap_size is 0
+  // and if there has nop bitmap, nop_bitmap_ == null_bitmap_
+  // -----------------------------------------------------
+  // | null_bitmap | nop_bitmap | description           |
+  // -----------------------------------------------------
+  // |      0      |      0      | not null and not nop |
+  // -----------------------------------------------------
+  // |      1      |      0      | null                  |
+  // -----------------------------------------------------
+  // |      0      |      1      | impossible            |
+  // -----------------------------------------------------
+  // |      1      |      1      | nop                  |
+  // -----------------------------------------------------
   const ObMicroBlockHeader *micro_block_header_;
   const ObCSColumnHeader *col_header_;
    // Pointer to ColumnParam for padding in filter pushdown
   const share::schema::ObColumnParam *col_param_;
   common::ObIAllocator *allocator_;
+  // `datum` must be null before calling this function
+  void set_nop_if_is_null(const int32_t row_id, ObStorageDatum &datum) const;
 
-  OB_INLINE bool has_no_null() const { return HAS_NO_NULL == null_flag_; }
-  OB_INLINE bool has_null_bitmap() const { return HAS_NULL_BITMAP == null_flag_; }
+  OB_INLINE bool has_no_null_or_nop() const { return HAS_NO_NULL_OR_NOP == null_flag_; }
+  OB_INLINE bool has_null_or_nop_bitmap() const { return HAS_NULL_OR_NOP_BITMAP == null_flag_; }
   OB_INLINE bool is_null_replaced() const { return IS_NULL_REPLACED == null_flag_; }
   OB_INLINE bool is_null_replaced_ref() const { return IS_NULL_REPLACED_REF == null_flag_; }
+  OB_INLINE bool has_no_nop() const { return ObNopFlag::HAS_NO_NOP == nop_flag_; }
+  OB_INLINE bool has_nop_bitmap() const { return ObNopFlag::HAS_NOP_BITMAP == nop_flag_; }
+  OB_INLINE bool is_nop_replaced() const { return ObNopFlag::IS_NOP_REPLACED == nop_flag_; }
 
   OB_INLINE void set_col_param(const share::schema::ObColumnParam *col_param)
   {
@@ -376,7 +473,13 @@ struct ObBaseColumnDecoderCtx
   }
   void reset() { MEMSET(this, 0, sizeof(ObBaseColumnDecoderCtx));}
 
-  TO_STRING_KV(K_(obj_meta), KPC_(micro_block_header), KPC_(col_header), KP_(allocator), K_(null_flag), KP_(col_param));
+  TO_STRING_KV(K_(obj_meta),
+               KPC_(micro_block_header),
+               KPC_(col_header),
+               KP_(allocator),
+               K_(null_flag),
+               K_(nop_flag),
+               KP_(col_param));
 };
 
 struct ObIntegerColumnDecoderCtx : public ObBaseColumnDecoderCtx
@@ -441,8 +544,33 @@ struct ObDictColumnDecoderCtx : public ObBaseColumnDecoderCtx
       KPC_(dict_meta), K_(need_copy), K_(datum_len));
 };
 
+class ObColumnCSDecoderCtx;
+class ObIColumnCSDecoder;
+class ObSemiStructEncodeHeader;
+class ObSemiStructDecodeHandler;
+struct ObSemiStructColumnDecoderCtx : public ObBaseColumnDecoderCtx
+{
+  ObSemiStructColumnDecoderCtx()
+    : ObBaseColumnDecoderCtx(),
+      semistruct_header_(nullptr),
+      sub_col_headers_(nullptr),
+      sub_schema_data_ptr_(nullptr),
+      sub_col_ctxs_(nullptr),
+      sub_col_decoders_(nullptr),
+      handler_(nullptr) {}
 
-struct ObColumnCSDecoderCtx
+  const ObSemiStructEncodeHeader *semistruct_header_;
+  const ObCSColumnHeader *sub_col_headers_;
+  const char *sub_schema_data_ptr_;
+  ObColumnCSDecoderCtx *sub_col_ctxs_;
+  const ObIColumnCSDecoder **sub_col_decoders_;
+  ObSemiStructDecodeHandler *handler_;
+  INHERIT_TO_STRING_KV("ObBaseColumnDecoderCtx", ObBaseColumnDecoderCtx, KP_(semistruct_header), KP_(sub_col_headers),
+      KP_(sub_schema_data_ptr), KP_(sub_col_ctxs), KP_(sub_col_decoders), KP_(handler));
+};
+
+
+struct ObColumnCSDecoderCtx final
 {
   ObColumnCSDecoderCtx() { reset(); }
   ObCSColumnHeader::Type type_;
@@ -451,12 +579,26 @@ struct ObColumnCSDecoderCtx
     ObIntegerColumnDecoderCtx integer_ctx_;
     ObStringColumnDecoderCtx string_ctx_;
     ObDictColumnDecoderCtx dict_ctx_;
+    ObBaseColumnDecoderCtx new_col_ctx_;
+    ObSemiStructColumnDecoderCtx semistruct_ctx_;
+    ObBaseColumnDecoderCtx base_ctx_;
   };
+  bool is_padding_mode_;
   void reset() { MEMSET(this, 0, sizeof(ObColumnCSDecoderCtx));}
   OB_INLINE bool is_integer_type() const { return ObCSColumnHeader::INTEGER == type_; }
   OB_INLINE bool is_string_type() const { return ObCSColumnHeader::STRING == type_; }
   OB_INLINE bool is_int_dict_type() const { return ObCSColumnHeader::INT_DICT == type_; }
   OB_INLINE bool is_string_dict_type() const { return ObCSColumnHeader::STR_DICT == type_; }
+  OB_INLINE bool is_semistruct_type() const { return ObCSColumnHeader::SEMISTRUCT == type_; }
+  // just for new added column
+  OB_INLINE void fill_for_new_column(const share::schema::ObColumnParam *col_param, common::ObIAllocator *allocator)
+  {
+    reset();
+    new_col_ctx_.col_param_ = col_param;
+    new_col_ctx_.allocator_ = allocator;
+  }
+  OB_INLINE const share::schema::ObColumnParam* get_col_param() const { return new_col_ctx_.col_param_; }
+  OB_INLINE common::ObIAllocator* get_allocator() const { return new_col_ctx_.allocator_; }
 
   ObBaseColumnDecoderCtx& get_base_ctx()
   {
@@ -467,11 +609,13 @@ struct ObColumnCSDecoderCtx
       base_ctx = &string_ctx_;
     } else if (is_int_dict_type() || is_string_dict_type()) {
       base_ctx = &dict_ctx_;
+    } else if (is_semistruct_type()) {
+      base_ctx = &semistruct_ctx_;
     }
     return *base_ctx;
   }
 
-  TO_STRING_KV(K_(type));
+  TO_STRING_KV(K_(type), K_(is_padding_mode));
 };
 
 }  // namespace blocksstable

@@ -31,6 +31,7 @@
 #include "ob_log_ls_callback.h"
 #include "ob_log_systable_helper.h"
 #include "ob_log_fetching_mode.h"
+#include "ob_log_lsn_filter.h"
 #include "lib/allocator/ob_block_alloc_mgr.h"   // ObBlockAllocMgr
 #include "lib/allocator/ob_vslice_alloc.h"      // ObVSliceAlloc
 
@@ -286,6 +287,7 @@ private:
   ObFsContainerMgr              fs_container_mgr_;
   IObLogFetcherDispatcher       *dispatcher_;
   ObLogClusterIDFilter          cluster_id_filter_;
+  ObLogLsnFilter                lsn_filter_;
 
   pthread_t                     misc_tid_;                // Fetcher misc thread
   pthread_t                     heartbeat_dispatch_tid_;  // Dispatch heartbeat thread

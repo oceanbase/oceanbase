@@ -13,15 +13,10 @@
 
 
 #define USING_LOG_PREFIX LIB
-#include "lib/geo/ob_srs_info.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
+#include "ob_srs_info.h"
 #include "lib/geo/ob_geo_common.h"
 #include "rpc/obmysql/ob_mysql_global.h"
 #include "lib/charset/ob_dtoa.h"
-#include <stdio.h>
-#include <stdlib.h>
 
 namespace oceanbase
 {

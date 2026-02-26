@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX RPC_OBMYSQL
 
 #include "rpc/obmysql/packet/ompk_change_user.h"
-#include "lib/charset/ob_charset.h"
 #include "rpc/obmysql/ob_mysql_util.h"
 
 using namespace oceanbase::common;

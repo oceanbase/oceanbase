@@ -185,9 +185,10 @@ TEST(ObLoggerTest, key_value_log)
   //type defined in OB
   ob_str.assign_ptr("hello world", static_cast<ObString::obstr_size_t>(strlen("hello world")));
   ObString empty;
-  _OB_LOG(WARN, " %s, %s, %s, %s, %s", to_cstring(ob_str), to_cstring(ob_str), to_cstring(ob_str), to_cstring(ob_str),
-                                                to_cstring(ob_str));
-  _OB_LOG(WARN, "empty%s", to_cstring(empty));
+  ObCStringHelper helper;
+  _OB_LOG(WARN, " %s, %s, %s, %s, %s", helper.convert(ob_str), helper.convert(ob_str),
+      helper.convert(ob_str), helper.convert(ob_str), helper.convert(ob_str));
+  _OB_LOG(WARN, "empty%s", helper.convert(empty));
   ObBitSet<32> bit_set;
   bit_set.add_member(12);
   ObSqlString sql_str;

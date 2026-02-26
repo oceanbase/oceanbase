@@ -113,7 +113,8 @@ question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_USE_DATABASE], str_value_=[], value=[0]
-		|--[0],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
+		|--[0],[T_DATABASE_FACTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
 
 **************   Case 7   ***************
 start transaction read only;
@@ -325,7 +326,7 @@ question_mask_size: 0
 					|--[0],[T_IDENT], str_value_=[d], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
-			|--[0],[T_OP_AND], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_OP_AND], str_value_=[], value=[2]
 				|--[0],[T_OP_GT], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[0],[T_IDENT], str_value_=[d], value=[9223372036854775807]
@@ -357,7 +358,7 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[d1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 					|--[1],[T_SORT_DESC], str_value_=[], value=[2]
-		|--[15],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
+		|--[16],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
@@ -382,7 +383,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
-			|--[0],[T_OP_AND], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_OP_AND], str_value_=[], value=[2]
 				|--[0],[T_OP_GT], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
@@ -410,7 +411,7 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 					|--[1],[T_SORT_DESC], str_value_=[], value=[2]
-		|--[15],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
+		|--[16],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
@@ -434,7 +435,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
-			|--[0],[T_OP_AND], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_OP_AND], str_value_=[], value=[2]
 				|--[0],[T_OP_GT], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
@@ -458,7 +459,7 @@ question_mask_size: 0
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 					|--[1],[T_SORT_DESC], str_value_=[], value=[2]
-		|--[15],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
+		|--[16],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
@@ -473,8 +474,8 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
 					|--[1],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
@@ -491,8 +492,8 @@ question_mask_size: 0
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[0],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
 					|--[1],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
@@ -511,10 +512,10 @@ question_mask_size: 0
 				|--[1],[T_COLUMN_LIST], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
-				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
@@ -533,10 +534,10 @@ question_mask_size: 0
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
-				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
@@ -557,10 +558,10 @@ question_mask_size: 0
 						|--[0],[T_IDENT], str_value_=[d], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
-				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
@@ -800,11 +801,11 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
 					|--[1],[T_INT], str_value_=[2], value=[2]
-				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[3], value=[3]
 					|--[1],[T_INT], str_value_=[4], value=[4]
 			|--[2],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
@@ -839,11 +840,11 @@ question_mask_size: 0
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[0],[T_IDENT], str_value_=[d], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
 					|--[1],[T_INT], str_value_=[2], value=[2]
-				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[3], value=[3]
 					|--[1],[T_INT], str_value_=[4], value=[4]
 			|--[2],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
@@ -1120,8 +1121,8 @@ question_mask_size: 0
 						|--[0],[T_NAME_LIST], str_value_=[], value=[9223372036854775807]
 							|--[0],[T_IDENT], str_value_=[p3], value=[9223372036854775807]
 							|--[1],[T_IDENT], str_value_=[p4], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[8]
 					|--[0],[T_INT], str_value_=[24], value=[24]
 					|--[1],[T_VARCHAR], str_value_=[Tim], value=[9223372036854775807]
 						|--[1],[T_VARCHAR], str_value_=[Tim], value=[9223372036854775807]
@@ -1129,7 +1130,7 @@ question_mask_size: 0
 						|--[1],[T_VARCHAR], str_value_=[Greene], value=[9223372036854775807]
 					|--[3],[T_INT], str_value_=[3], value=[3]
 					|--[4],[T_INT], str_value_=[1], value=[1]
-				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+				|--[1],[T_VALUE_VECTOR], str_value_=[], value=[8]
 					|--[0],[T_INT], str_value_=[26], value=[26]
 					|--[1],[T_VARCHAR], str_value_=[Linda], value=[9223372036854775807]
 						|--[1],[T_VARCHAR], str_value_=[Linda], value=[9223372036854775807]
@@ -1154,8 +1155,8 @@ question_mask_size: 0
 					|--[2],[T_USE_PARTITION], str_value_=[], value=[9223372036854775807]
 						|--[0],[T_NAME_LIST], str_value_=[], value=[9223372036854775807]
 							|--[0],[T_IDENT], str_value_=[p0], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[8]
 					|--[0],[T_INT], str_value_=[20], value=[20]
 					|--[1],[T_VARCHAR], str_value_=[Jan], value=[9223372036854775807]
 						|--[1],[T_VARCHAR], str_value_=[Jan], value=[9223372036854775807]
@@ -2586,7 +2587,7 @@ question_mask_size: 0
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_OP_IN], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_EXPR_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_EXPR_LIST], str_value_=[], value=[2]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 					|--[1],[T_COLUMN_REF], str_value_=[c2], value=[9223372036854775807]
@@ -2619,7 +2620,7 @@ question_mask_size: 0
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_OP_IN], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_EXPR_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_EXPR_LIST], str_value_=[], value=[2]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 					|--[1],[T_COLUMN_REF], str_value_=[c2], value=[9223372036854775807]
@@ -2952,8 +2953,8 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[test], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[test], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
 					|--[1],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_REPLACE], str_value_=[], value=[9223372036854775807]
@@ -2969,8 +2970,8 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[test], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[test], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
 					|--[1],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_REPLACE], str_value_=[], value=[9223372036854775807]
@@ -2987,8 +2988,8 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[test], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[test], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
 					|--[1],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
@@ -3005,8 +3006,8 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[test], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[test], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_INT], str_value_=[1], value=[1]
 					|--[1],[T_INT], str_value_=[2], value=[2]
 			|--[2],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
@@ -3037,6 +3038,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 157   ***************
 create or replace outline out_name on select * from t1;
@@ -3056,6 +3058,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 158   ***************
 create outline out_name on select * from t1;
@@ -3074,6 +3077,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 159   ***************
 create outline out_name on select /*+ssssss*/* from t1;
@@ -3092,6 +3096,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 160   ***************
 create outline out_name on select /*+ssssss*/* from t1 to select /*+ssssss*/* from t1;
@@ -3118,6 +3123,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 161   ***************
 create outline out_name on select /*+ssssss*/* from t1 to select * from t1;
@@ -3144,6 +3150,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 162   ***************
 create outline out_name on insert /*+ssssss*/ into t1 values(1, 2)  to insert /*+ssssss*/ into t1 values(1, 2);
@@ -3160,8 +3167,8 @@ question_mask_size: 0
 					|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 						|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 							|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-				|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-					|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+				|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+					|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 						|--[0],[T_INT], str_value_=[1], value=[1]
 						|--[1],[T_INT], str_value_=[2], value=[2]
 			|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
@@ -3171,11 +3178,12 @@ question_mask_size: 0
 					|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 						|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 							|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-				|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-					|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+				|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+					|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 						|--[0],[T_INT], str_value_=[1], value=[1]
 						|--[1],[T_INT], str_value_=[2], value=[2]
 			|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 163   ***************
 drop outline out_name;
@@ -3185,6 +3193,7 @@ question_mask_size: 0
 	|--[0],[T_DROP_OUTLINE], str_value_=[], value=[0]
 		|--[0],[T_RELATION_FACTOR], str_value_=[out_name], value=[9223372036854775807]
 			|--[1],[T_IDENT], str_value_=[out_name], value=[9223372036854775807]
+		|--[1],[T_INT], str_value_=[], value=[0]
 
 **************   Case 164   ***************
 drop outline db_name.out_name;
@@ -3195,6 +3204,7 @@ question_mask_size: 0
 		|--[0],[T_RELATION_FACTOR], str_value_=[out_name], value=[9223372036854775807]
 			|--[0],[T_IDENT], str_value_=[db_name], value=[9223372036854775807]
 			|--[1],[T_IDENT], str_value_=[out_name], value=[9223372036854775807]
+		|--[1],[T_INT], str_value_=[], value=[0]
 
 **************   Case 165   ***************
 create tenant tt1 replica_num = 1, primary_zone = 'zone1', resource_pool_list = ('zone1') set ob_tcp_invited_nodes='%';
@@ -3340,7 +3350,7 @@ question_mask_size: 0
 			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-		|--[17],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
+		|--[19],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
 
 **************   Case 172   ***************
 select /*+max_concurrent(10)*/* from t1;
@@ -3355,36 +3365,405 @@ question_mask_size: 0
 			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-		|--[17],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
+		|--[19],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_MAX_CONCURRENT], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_INT], str_value_=[10], value=[10]
 
 **************   Case 173   ***************
-alter system refresh time_zone_info;
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_REFRESH_TIME_ZONE_INFO], str_value_=[], value=[0]
+	|--[0],[T_MERGE], str_value_=[], value=[0]
+		|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[targetTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[1],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[sourceTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+		|--[2],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+			|--[1],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+		|--[3],[T_UPDATE], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_ASSIGN_ITEM], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+		|--[4],[T_INSERT], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
 
 **************   Case 174   ***************
-merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 175   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t2.id!= t1.id when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 176   ***************
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MERGE], str_value_=[], value=[0]
+		|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[targetTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[1],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[sourceTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+		|--[2],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+			|--[1],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+		|--[3],[T_UPDATE], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_ASSIGN_ITEM], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[1],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_OP_NE], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+		|--[4],[T_INSERT], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+
+**************   Case 175   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id < 3 delete where t1.id < 5 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 177   ***************
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MERGE], str_value_=[], value=[0]
+		|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[targetTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[1],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[sourceTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+		|--[2],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+			|--[1],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+		|--[3],[T_UPDATE], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_ASSIGN_ITEM], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[1],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_OP_LT], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_INT], str_value_=[3], value=[3]
+			|--[2],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_OP_LT], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_INT], str_value_=[5], value=[5]
+		|--[4],[T_INSERT], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+
+**************   Case 176   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales delete where t1.sales =2 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 178   ***************
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MERGE], str_value_=[], value=[0]
+		|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[targetTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[1],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[sourceTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+		|--[2],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+			|--[1],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+		|--[3],[T_UPDATE], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_ASSIGN_ITEM], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[2],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_INT], str_value_=[2], value=[2]
+		|--[4],[T_INSERT], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+
+**************   Case 177   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
-**************   Case 179   ***************
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MERGE], str_value_=[], value=[0]
+		|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[targetTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[1],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[sourceTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+		|--[2],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+			|--[1],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+		|--[4],[T_INSERT], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[2],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_OP_GT], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_INT], str_value_=[0], value=[0]
+
+**************   Case 178   ***************
 merge into targetTable t1 using sourceTable t2 on (1 = 2) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
-**************   Case 180   ***************
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MERGE], str_value_=[], value=[0]
+		|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[targetTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[1],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[sourceTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+		|--[2],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[2], value=[2]
+		|--[4],[T_INSERT], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+			|--[2],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_OP_GT], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+					|--[1],[T_INT], str_value_=[0], value=[0]
+
+**************   Case 179   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales;
-**************   Case 181   ***************
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MERGE], str_value_=[], value=[0]
+		|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[targetTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[1],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[sourceTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+		|--[2],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+			|--[1],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+		|--[3],[T_UPDATE], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_ASSIGN_ITEM], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+
+**************   Case 180   ***************
 merge into targetTable using sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
-**************   Case 182   ***************
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MERGE], str_value_=[], value=[0]
+		|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[targetTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+		|--[1],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[sourceTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+		|--[2],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+			|--[1],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+		|--[3],[T_UPDATE], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_ASSIGN_ITEM], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+
+**************   Case 181   ***************
 merge into targetTable using (select * from t1 ) sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
-**************   Case 183   ***************
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MERGE], str_value_=[], value=[0]
+		|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_RELATION_FACTOR], str_value_=[targetTable], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+		|--[1],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_SELECT], str_value_=[], value=[9223372036854775807]
+				|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_PROJECT_STRING], str_value_=[*], value=[9223372036854775807]
+						|--[0],[T_STAR], str_value_=[], value=[9223372036854775807]
+				|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
+							|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+		|--[2],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+			|--[1],[T_COLUMN_REF], str_value_=[id], value=[9223372036854775807]
+				|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+				|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
+		|--[3],[T_UPDATE], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_ASSIGN_ITEM], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[targetTable], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[sales], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[sourceTable], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[sales], value=[9223372036854775807]
+
+**************   Case 182   ***************
 select unique(c1), c2 from t1;
 question_mask_size: 0
 
@@ -3404,7 +3783,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 184   ***************
+**************   Case 183   ***************
 select unique(c1+1), c2 from t1;
 question_mask_size: 0
 
@@ -3426,7 +3805,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 185   ***************
+**************   Case 184   ***************
 select distinct unique(    max(c1)), c2 from t1;
 question_mask_size: 0
 
@@ -3448,7 +3827,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 186   ***************
+**************   Case 185   ***************
 select unique distinct(    max(c1)), c2 from t1;
 question_mask_size: 0
 
@@ -3470,9 +3849,9 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 187   ***************
+**************   Case 186   ***************
 select unique(*) from t1;
-**************   Case 188   ***************
+**************   Case 187   ***************
 delete from t1 where c1 = 1 returning c1 + 1, c2 * 2;
 question_mask_size: 0
 
@@ -3501,7 +3880,7 @@ question_mask_size: 0
 							|--[0],[T_IDENT], str_value_=[C2], value=[1]
 						|--[1],[T_INT], str_value_=[2], value=[2]
 
-**************   Case 189   ***************
+**************   Case 188   ***************
 update t1 set c1 = 1 where c2 = 2 returning c1, c2 + 3, c3 * c4;
 question_mask_size: 0
 
@@ -3538,7 +3917,7 @@ question_mask_size: 0
 						|--[1],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
 							|--[0],[T_IDENT], str_value_=[C4], value=[1]
 
-**************   Case 190   ***************
+**************   Case 189   ***************
 insert into t1 values(1, 2, 3) returning c1, c2, c3;
 question_mask_size: 0
 
@@ -3549,8 +3928,8 @@ question_mask_size: 0
 				|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[T1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[T1], value=[1]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[4]
 					|--[0],[T_INT], str_value_=[1], value=[1]
 					|--[1],[T_INT], str_value_=[2], value=[2]
 					|--[2],[T_INT], str_value_=[3], value=[3]
@@ -3567,9 +3946,9 @@ question_mask_size: 0
 							|--[0],[T_IDENT], str_value_=[C3], value=[1]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 191   ***************
+**************   Case 190   ***************
 replace into t1 values(1, 2) returning c1, c2, c3, c4, c5, c6;
-**************   Case 192   ***************
+**************   Case 191   ***************
 alter tablegroup tg2 add table t1,t2;
 question_mask_size: 0
 
@@ -3582,7 +3961,7 @@ question_mask_size: 0
 			|--[1],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 				|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 193   ***************
+**************   Case 192   ***************
 insert into t1 values(X'');
 question_mask_size: 0
 
@@ -3593,12 +3972,12 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[2]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[2]
 					|--[0],[T_HEX_STRING], str_value_=[], value=[9223372036854775807]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 194   ***************
+**************   Case 193   ***************
 create table t1(`thedate` date NOT NULL COMMENT '日期');
 question_mask_size: 0
 
@@ -3616,7 +3995,7 @@ question_mask_size: 0
 					|--[1],[T_COMMENT], str_value_=[], value=[9223372036854775807]
 						|--[0],[T_VARCHAR], str_value_=[日期], value=[9223372036854775807]
 
-**************   Case 195   ***************
+**************   Case 194   ***************
 alter system bootstrap REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
 question_mask_size: 0
 
@@ -3628,7 +4007,7 @@ question_mask_size: 0
 				|--[1],[T_VARCHAR], str_value_=[zone1], value=[9223372036854775807]
 				|--[2],[T_VARCHAR], str_value_=["10.101.74.122":41425], value=[9223372036854775807]
 
-**************   Case 196   ***************
+**************   Case 195   ***************
 alter system transfer partition table_id = 1, object_id = 1 to ls 1001;
 question_mask_size: 0
 
@@ -3640,7 +4019,7 @@ question_mask_size: 0
 				|--[1],[T_INT], str_value_=[1], value=[1]
 			|--[1],[T_INT], str_value_=[1001], value=[1001]
 
-**************   Case 197   ***************
+**************   Case 196   ***************
 alter system transfer partition table_id = 1, object_id = 1 to ls 1001 tenant 'mysql';
 question_mask_size: 0
 
@@ -3654,7 +4033,7 @@ question_mask_size: 0
 		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
 
-**************   Case 198   ***************
+**************   Case 197   ***************
 alter system cancel transfer partition  table_id = 1, object_id = 1;
 question_mask_size: 0
 
@@ -3664,7 +4043,7 @@ question_mask_size: 0
 			|--[0],[T_INT], str_value_=[1], value=[1]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 199   ***************
+**************   Case 198   ***************
 alter system cancel transfer partition  table_id = 1, object_id = 1 tenant 'mysql';
 question_mask_size: 0
 
@@ -3676,7 +4055,7 @@ question_mask_size: 0
 		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
 
-**************   Case 200   ***************
+**************   Case 199   ***************
 alter system cancel transfer partition ALL;
 question_mask_size: 0
 
@@ -3684,7 +4063,7 @@ question_mask_size: 0
 	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
 		|--[0],[T_ALL], str_value_=[], value=[9223372036854775807]
 
-**************   Case 201   ***************
+**************   Case 200   ***************
 alter system cancel transfer partition ALL tenant 'mysql';
 question_mask_size: 0
 
@@ -3694,18 +4073,403 @@ question_mask_size: 0
 		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
 
-**************   Case 202   ***************
+**************   Case 201   ***************
 alter system cancel balance job;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_CANCEL_BALANCE_JOB], str_value_=[], value=[0]
+	|--[0],[T_BALANCE_JOB_OP], str_value_=[], value=[0]
+		|--[0],[T_INT], str_value_=[], value=[1]
 
-**************   Case 203   ***************
+**************   Case 202   ***************
 alter system cancel balance job tenant 'mysql';
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_CANCEL_BALANCE_JOB], str_value_=[], value=[0]
-		|--[0],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_BALANCE_JOB_OP], str_value_=[], value=[0]
+		|--[0],[T_INT], str_value_=[], value=[1]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 203   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ADD_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
+		|--[4],[T_INT], str_value_=[3], value=[3]
+		|--[5],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 204   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ADD_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
+		|--[4],[T_INT], str_value_=[3], value=[3]
+
+**************   Case 205   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ADD_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
+
+**************   Case 206   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ADD_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+
+**************   Case 207   ***************
+alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_REMOVE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_INT], str_value_=[3], value=[3]
+		|--[3],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 208   ***************
+alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_REMOVE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_INT], str_value_=[3], value=[3]
+
+**************   Case 209   ***************
+alter system remove replica ls=100 server='100.88.107.212:5000';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_REMOVE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+
+**************   Case 210   ***************
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MODIFY_LS_REPLICA_TYPE], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+		|--[3],[T_INT], str_value_=[3], value=[3]
+		|--[4],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 211   ***************
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MODIFY_LS_REPLICA_TYPE], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+		|--[3],[T_INT], str_value_=[3], value=[3]
+
+**************   Case 212   ***************
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MODIFY_LS_REPLICA_TYPE], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+
+**************   Case 213   ***************
+alter system modify ls=100 paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MODIFY_LS_PAXOS_REPLICA_NUM], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_INT], str_value_=[3], value=[3]
+		|--[2],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 214   ***************
+alter system modify ls=100 paxos_replica_num=3;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MODIFY_LS_PAXOS_REPLICA_NUM], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_INT], str_value_=[3], value=[3]
+
+**************   Case 215   ***************
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001' tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MIGRATE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
+		|--[4],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 216   ***************
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MIGRATE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
+
+**************   Case 217   ***************
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MIGRATE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+
+**************   Case 218   ***************
+alter system cancel replica task task_id = 'xxx' tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_LS_REPLICA_TASK], str_value_=[], value=[0]
+		|--[0],[T_VARCHAR], str_value_=[xxx], value=[9223372036854775807]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 219   ***************
+alter system cancel replica task task_id = 'xxx';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_LS_REPLICA_TASK], str_value_=[], value=[0]
+		|--[0],[T_VARCHAR], str_value_=[xxx], value=[9223372036854775807]
+
+**************   Case 220   ***************
+alter system create ls unit_group 1001, primary_zone 'z1';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ALTER_LS], str_value_=[], value=[0]
+		|--[0],[T_INT], str_value_=[], value=[1]
+		|--[1],[T_LS_ATTR_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_UNIT_GROUP], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_INT], str_value_=[1001], value=[1001]
+			|--[1],[T_PRIMARY_ZONE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VARCHAR], str_value_=[z1], value=[9223372036854775807]
+
+**************   Case 221   ***************
+alter system modify ls 1001 unit_group 1001, primary_zone  'z1';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ALTER_LS], str_value_=[], value=[0]
+		|--[0],[T_INT], str_value_=[], value=[2]
+		|--[1],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1001], value=[1001]
+		|--[2],[T_LS_ATTR_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_UNIT_GROUP], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_INT], str_value_=[1001], value=[1001]
+			|--[1],[T_PRIMARY_ZONE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VARCHAR], str_value_=[z1], value=[9223372036854775807]
+
+**************   Case 222   ***************
+alter system drop ls 1001;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ALTER_LS], str_value_=[], value=[0]
+		|--[0],[T_INT], str_value_=[], value=[3]
+		|--[1],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1001], value=[1001]
+
+**************   Case 223   ***************
+select 'hello' || 'world' from dual;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=['HELLO'||'WORLD'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_CHAR], str_value_=[hello], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[hello], value=[9223372036854775807]
+					|--[1],[T_CHAR], str_value_=[world], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[world], value=[9223372036854775807]
+
+**************   Case 224   ***************
+select col1 || col2 from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=[COL1||COL2], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_IDENT], str_value_=[COL1], value=[1]
+					|--[1],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_IDENT], str_value_=[COL2], value=[1]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[TEST_TABLE], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[TEST_TABLE], value=[1]
+
+**************   Case 225   ***************
+select  'prefix_' || column_name || '_suffix' from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=['PREFIX_'||COLUMN_NAME||'_SUFFIX'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[4]
+					|--[0],[T_CHAR], str_value_=[prefix_], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+					|--[1],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_IDENT], str_value_=[COLUMN_NAME], value=[9223372036854775807]
+					|--[2],[T_CHAR], str_value_=[_suffix], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[TEST_TABLE], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[TEST_TABLE], value=[1]
+
+**************   Case 226   ***************
+select  ('prefix_' || column_name) || '_suffix' from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=[('PREFIX_'||COLUMN_NAME)||'_SUFFIX'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_EXPR_LIST], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_OP_CNN], str_value_=[], value=[2]
+							|--[0],[T_CHAR], str_value_=[prefix_], value=[9223372036854775807]
+								|--[1],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+							|--[1],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+								|--[0],[T_IDENT], str_value_=[COLUMN_NAME], value=[9223372036854775807]
+					|--[1],[T_CHAR], str_value_=[_suffix], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[TEST_TABLE], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[TEST_TABLE], value=[1]
+
+**************   Case 227   ***************
+select 'hello' || 'world';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=['hello' || 'world'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_VARCHAR], str_value_=[hello], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[hello], value=[9223372036854775807]
+					|--[1],[T_VARCHAR], str_value_=[world], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[world], value=[9223372036854775807]
+
+**************   Case 228   ***************
+select col1 || col2 from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=[col1 || col2], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[2]
+					|--[0],[T_COLUMN_REF], str_value_=[col1], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[col1], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[col2], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[col2], value=[9223372036854775807]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[test_table], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[test_table], value=[9223372036854775807]
+
+**************   Case 229   ***************
+select 'prefix_' || column_name || '_suffix' from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=['prefix_' || column_name || '_suffix'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[4]
+					|--[0],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[column_name], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[column_name], value=[9223372036854775807]
+					|--[2],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[test_table], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[test_table], value=[9223372036854775807]
+
+**************   Case 230   ***************
+select  ('prefix_' || column_name) || '_suffix' from test_table;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_SELECT], str_value_=[], value=[0]
+		|--[2],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_STRING], str_value_=[('prefix_' || column_name) || '_suffix'], value=[9223372036854775807]
+				|--[0],[T_OP_CNN], str_value_=[], value=[4]
+					|--[0],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[prefix_], value=[9223372036854775807]
+					|--[1],[T_COLUMN_REF], str_value_=[column_name], value=[9223372036854775807]
+						|--[2],[T_IDENT], str_value_=[column_name], value=[9223372036854775807]
+					|--[2],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+						|--[1],[T_VARCHAR], str_value_=[_suffix], value=[9223372036854775807]
+		|--[4],[T_FROM_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[test_table], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[test_table], value=[9223372036854775807]

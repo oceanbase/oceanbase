@@ -31,7 +31,7 @@ class ObGtsRequest;
 class ObTimestampAccess
 {
 public:
-  ObTimestampAccess() : service_type_(FOLLOWER) {}
+  ObTimestampAccess() : service_type_(FOLLOWER), is_sslog_leader_(false) {}
   ~ObTimestampAccess() {}
   static int mtl_init(ObTimestampAccess *&timestamp_access)
   {
@@ -48,7 +48,8 @@ public:
   void set_service_type(const ServiceType service_type) { service_type_ = service_type; }
   ServiceType get_service_type() const { return service_type_; }
   int handle_request(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result);
-  int get_number(int64_t &gts);
+  int get_number(int64_t &gts, const bool sslog_gts = false);
+  int get_number_from_sslog(int64_t &gts);
   void get_virtual_info(int64_t &ts_value,
                         ServiceType &service_type,
                         common::ObRole &role,
@@ -82,8 +83,12 @@ public:
     }
     return str;
   }
+  void set_sslog_leader(const bool is_sslog_leader);
 private:
+  // for gts and sts
   ServiceType service_type_;
+  // only for sslog
+  bool is_sslog_leader_;
 };
 
 

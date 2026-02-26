@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX  SQL_ENG
-#include "lib/time/ob_time_utility.h" /* time */
 #include "sql/engine/expr/ob_expr_random.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -68,6 +67,8 @@ int ObExprRandom::calc_result_typeN(ObExprResType &type,
 			types[0].set_calc_type(ObIntType);
 		}
 		type.set_int();
+    ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY[type.get_type()];
+    type.set_accuracy(acc);
 	}
 	return ret;
 }

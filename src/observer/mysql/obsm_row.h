@@ -39,6 +39,7 @@ public:
   ObSMRow(obmysql::MYSQL_PROTOCOL_TYPE type,
           const ObNewRow &obrow,
           const ObDataTypeCastParams &dtc_params,
+          const sql::ObSQLSessionInfo &session,
           const ColumnsFieldIArray *fields = NULL,
           share::schema::ObSchemaGetterGuard *schema_guard = NULL,
           uint64_t tenant = common::OB_INVALID_ID);
@@ -59,6 +60,7 @@ protected:
 private:
   const ObNewRow &obrow_;
   const ObDataTypeCastParams dtc_params_;
+  const sql::ObSQLSessionInfo &session_;
   const ColumnsFieldIArray *fields_;
   share::schema::ObSchemaGetterGuard *schema_guard_;
   uint64_t tenant_id_;

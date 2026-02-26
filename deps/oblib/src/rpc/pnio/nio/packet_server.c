@@ -35,6 +35,7 @@ static int pkts_sk_read(void** b, pkts_sk_t* s, int64_t sz, int64_t* avail_bytes
 static int pkts_sk_handle_msg(pkts_sk_t* s, pkts_msg_t* msg) {
   pkts_t* pkts = structof(s->fty, pkts_t, sf);
   s->sk_diag_info.doing_cnt ++;
+  s->processing_cnt ++;
   int ret = pkts->on_req(pkts, s->ib.b, msg->payload, msg->sz, s->id);
   ib_consumed(&s->ib, msg->sz);
   return ret;
@@ -68,19 +69,22 @@ static int pkts_wq_flush(sock_t* s, write_queue_t* wq, dlink_t** old_head) {
 #include "pkts_sk_factory.h"
 #include "pkts_post.h"
 
+void hold_by_uplayer_timeout(time_wheel_t* tw, dlink_t* l);
 int pkts_init(pkts_t* io, eloop_t* ep, pkts_cfg_t* cfg) {
   int err = 0;
   int lfd = -1;
   io->ep = ep;
+  char cfg_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
   ef(err = pkts_sf_init(&io->sf, cfg));
   sc_queue_init(&io->req_queue);
   ef(err = evfd_init(io->ep, &io->evfd, (handle_event_t)pkts_evfd_cb));
   lfd = cfg->accept_qfd >= 0 ?cfg->accept_qfd: listen_create(cfg->addr);
   ef(err = listenfd_init(io->ep, &io->listenfd, (sf_t*)&io->sf, lfd));
-  rk_info("pkts listen at %s", T2S(addr, cfg->addr));
+  rk_info("pkts listen at %s", addr_str(cfg->addr, cfg_addr_buf, sizeof(cfg_addr_buf)));
   idm_init(&io->sk_map, arrlen(io->sk_table));
   io->on_req = cfg->handle_func;
   dlink_init(&io->sk_list);
+  tw_init(&io->resp_ctx_hold, hold_by_uplayer_timeout);
   el();
   return err;
 }

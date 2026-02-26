@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_receive_op.h"
-#include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/exchange/ob_transmit_op.h"
-#include "sql/engine/px/ob_px_basic_info.h"
 
 namespace oceanbase
 {

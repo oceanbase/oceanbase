@@ -72,6 +72,10 @@ int ObCOSSTableRowMultiGetter::inner_get_next_row(const blocksstable::ObDatumRow
         }
       } else if (!prefetcher_.current_read_handle().cur_prefetch_end_) {
         continue;
+      } else if (prefetcher_.current_read_handle().is_skip_prefetch_) {
+        LOG_DEBUG("skip prefetch", K(ret), K(prefetcher_.current_read_handle()), K(prefetcher_));
+        prefetcher_.mark_cur_rowkey_fetched(prefetcher_.current_read_handle());
+        break;
       } else if (OB_FAIL(fetch_row(prefetcher_.current_read_handle(), nullptr, store_row))) {
         if (OB_LIKELY(OB_ITER_END == ret)) {
           prefetcher_.mark_cur_rowkey_fetched(prefetcher_.current_read_handle());

@@ -18,7 +18,7 @@
 #include "lib/list/ob_list.h"
 #include "lib/lock/ob_spin_rwlock.h"
 #include "sql/monitor/ob_exec_stat.h"
-
+#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -41,6 +41,36 @@ private:
   lib::MemoryContext mem_context_;
   bool inited_;
 };
+
+class ObSpmBaselineLoader
+{
+public:
+  ObSpmBaselineLoader()
+  : tenant_id_(0),
+    alloc_guard_(),
+    baseline_count_(0),
+    origin_(0),
+    flags_(0)
+   {}
+  virtual ~ObSpmBaselineLoader()  {}
+  int init_baseline_loader(const obrpc::ObLoadPlanBaselineArg &arg);
+  int add_one_plan_baseline(const ObPhysicalPlan &plan, bool &added);
+  int get_baseline_item_dml(ObSqlString &item_dml);
+  int get_baseline_info_dml(ObSqlString &info_dml);
+  inline uint64_t get_baseline_count() { return baseline_count_; }
+  ObIAllocator *get_allocator() { return alloc_guard_.get_allocator();  }
+private:
+  uint64_t tenant_id_;
+  SpmTmpAllocatorGuard alloc_guard_;
+  share::ObDMLSqlSplicer item_dml_splicer_;
+  share::ObDMLSqlSplicer info_dml_splicer_;
+  uint64_t baseline_count_;
+  // info same as ObPlanBaselineItem
+  int64_t origin_;  // baseline source, 1 for AUTO-CAPTURE, 2 for MANUAL-LOAD
+  common::ObString db_version_;  // database version when generate baseline
+  int64_t flags_;
+};
+
 class ObPlanBaselineRefreshTask : public common::ObTimerTask
 {
 public:
@@ -54,7 +84,7 @@ public:
   ObPlanBaselineMgr* baseline_mgr_;
 };
 
-typedef ObList<EvoResultUpdateTask*, ObIAllocator> task_result_list;
+typedef ObList<EvolutionTaskResult*, ObIAllocator> task_result_list;
 
 class ObPlanBaselineMgr
 {
@@ -79,16 +109,26 @@ public:
   int check_baseline_exists(ObSpmCacheCtx& spm_ctx,
                             const uint64_t plan_hash,
                             bool& is_exists,
-                            bool& need_add_baseline);
+                            bool& is_accepted,
+                            bool& is_fixed);
   int get_best_baseline(ObSpmCacheCtx& spm_ctx,
                         ObCacheObjGuard& obj_guard);
-  int add_baseline(ObSpmCacheCtx& spm_ctx,
-                   ObPlanCacheCtx& pc_ctx,
-                   ObPhysicalPlan* plan);
-  int update_plan_baseline_statistic(EvolutionTaskResult& result);
-  int accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, const ObAuditRecordData &audit_record);
+  int add_unaccepted_baseline(ObSpmCacheCtx& spm_ctx,
+                              ObPlanCacheCtx& pc_ctx,
+                              ObPhysicalPlan* plan);
+  int add_unaccepted_baseline(ObSpmCacheCtx &spm_ctx,
+                              const ObPhysicalPlan *plan,
+                              ObCacheObjGuard &guard);
+  int check_and_update_plan_baseline(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan &plan);
+  int update_plan_baseline_statistic(const ObPhysicalPlan *evo_plan,
+                                     EvolutionTaskResult& result);
+  int update_statistic_for_baseline(const ObPhysicalPlan *evo_plan,
+                                    EvolutionTaskResult& result);
+  static int update_baseline_item(const ObEvolutionStat &stat,
+                                  const bool is_verified,
+                                  ObPlanBaselineItem *item);
   int force_accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, uint64_t plan_hash, const bool with_plan_hash);
-  int sync_baseline_from_inner_table();
+  int sync_baseline_from_inner_table(ObSpmCacheCtx& spm_ctx);
   int sync_baseline_from_server();
 
   int alter_plan_baseline(const uint64_t tenant_id,
@@ -101,11 +141,11 @@ public:
                          const ObString &sql_id,
                          const uint64_t plan_hash,
                          const bool with_plan_hash,
+                         const uint64_t parallel,
                          int64_t &baseline_affected);
-  int load_baseline(ObBaselineKey &key, ObPhysicalPlan* plan, const bool fixed, const bool enabled);
-  int purge_baselines(const uint64_t tenant_id, int64_t baseline_affected);
-  int evict_plan_baseline(ObSpmCacheCtx& spm_ctx);
-  int check_evolution_task();
+  int load_baseline(ObSpmBaselineLoader &baseline_loader);
+  int purge_baselines(const uint64_t tenant_id, int64_t &baseline_affected);
+  int handle_spm_evo_record(const uint64_t tenant_id);
 private:
   int init(uint64_t tenant_id);
   int init_mem_context(uint64_t tenant_id);

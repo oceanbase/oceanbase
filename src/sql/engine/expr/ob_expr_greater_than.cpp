@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_greater_than.h"
-#include <math.h>
-#include "common/object/ob_obj_compare.h"
-#include "sql/engine/expr/ob_expr_greater_equal.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 
 namespace oceanbase
 {

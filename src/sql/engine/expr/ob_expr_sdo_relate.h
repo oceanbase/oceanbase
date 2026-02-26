@@ -67,9 +67,9 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
+  static int set_relate_result(ObIAllocator &res_alloc, ObDatum &res, bool result);
 private:
   static int get_params(ObExpr *param_expr, ObArenaAllocator& temp_allocator, ObEvalCtx &ctx, ObSdoRelateMask& mask);
-  static int set_relate_result(ObIAllocator &res_alloc, ObDatum &res, bool result);
   DISALLOW_COPY_AND_ASSIGN(ObExprSdoRelate);
 };
 } // sql

@@ -120,6 +120,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
   HANDLE_TRANSFORM();
   int64_t col_offset = 0; // INTEGER: [0-996] + INT64_MIN, 0, INT32_MAX, INT64_MAX
   bool need_check = true;
+
   // check NU/NN
   {
     int32_t ref_arr[1];
@@ -260,7 +261,7 @@ TEST_F(TestDecimalIntPdFilter, test_decimal_int_decoder)
     decimal_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_BT, 5, 2, res_arr);
   }
 
-  col_offset = 3; // INT_DICT:  null, [-50-46]@10, (47,48,49)@9
+  col_offset = 3; // INT_DICT:  null, [-50-48]@10, (49)@9
   // check NU/NN
   {
     int128_t ref_arr[1];

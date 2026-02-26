@@ -59,16 +59,23 @@ int ObTxCtxMemtableMgr::init(const common::ObTabletID &tablet_id,
                              ObTenantMetaMemMgr *t3m)
 {
   UNUSED(tablet_id);
-  UNUSED(freezer);
-
   int ret = OB_SUCCESS;
 
-  ls_id_ = ls_id;
-  freezer_ = freezer;
-  t3m_ = t3m;
-  is_inited_ = true;
-  LOG_INFO("tx ctx memtable mgr init successfully", K(ls_id), K(tablet_id), K(this));
-
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("tx ctx memtable mgr init twice.", K(ret), K_(ls_id));
+  } else if (OB_UNLIKELY(!ls_id.is_valid()) ||
+             OB_ISNULL(freezer) ||
+             OB_ISNULL(t3m)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id), KP(freezer), KP(t3m));
+  } else {
+    ls_id_ = ls_id;
+    freezer_ = freezer;
+    t3m_ = t3m;
+    is_inited_ = true;
+    LOG_INFO("tx ctx memtable mgr init successfully", K(ls_id), K(tablet_id), K(this));
+  }
   return ret;
 }
 
@@ -102,7 +109,7 @@ int ObTxCtxMemtableMgr::create_memtable(const CreateMemtableArg &arg)
     if (NULL == tx_ctx_memtable) {
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid tx_ctx_memtable", K(ret), KPC(table));
-    } else if (OB_FAIL(tx_ctx_memtable->init(table_key, ls_id_))) {
+    } else if (OB_FAIL(tx_ctx_memtable->init(table_key, ls_id_, freezer_))) {
       LOG_WARN("memtable init fail.", KR(ret));
     } else if (OB_FAIL(add_memtable_(handle))) {
       LOG_WARN("add memtable fail.", KR(ret));

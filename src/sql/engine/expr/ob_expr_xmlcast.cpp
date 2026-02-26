@@ -12,17 +12,8 @@
  */
 
 #include "ob_expr_xmlcast.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/xml/ob_xml_parser.h"
-#include "lib/xml/ob_xml_tree.h"
-#include "lib/xml/ob_xml_util.h"
-#include "lib/xml/ob_xpath.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/ob_spi.h"
+#include "src/pl/ob_pl.h"
 
 #define USING_LOG_PREFIX SQL_ENG
 
@@ -153,11 +144,11 @@ int ObExprXmlcast::eval_xmlcast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
   ObIMulModeBase *xml_doc = NULL;
   ObString xml_res_str;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
   ObCollationType cs_type = CS_TYPE_INVALID;
 
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
 
   if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -167,9 +158,13 @@ int ObExprXmlcast::eval_xmlcast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
   } else if (OB_UNLIKELY(expr.arg_cnt_ != 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg_cnt_", K(ret), K(expr.arg_cnt_));
-  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum))) {
+  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum, allocator))) {
     // temporally use
     LOG_WARN("fail to get xml str", K(ret));
+  }
+
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObXMLExprHelper::get_xml_base(mem_ctx, xml_datum, cs_type, ObNodeMemType::BINARY_TYPE, xml_doc))) {
     LOG_WARN("fail to parse xml doc", K(ret));
   } else if (OB_FAIL(ObXMLExprHelper::extract_xml_text_node(mem_ctx, xml_doc, xml_res_str))) {

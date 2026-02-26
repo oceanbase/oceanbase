@@ -447,11 +447,6 @@ static SSL_CTX *ob_ssl_create_ssl_ctx(const ssl_config_item_t *ssl_config, int t
   if (NULL == ctx) {
     ret = ENOMEM;
     ussl_log_error("SSL_CTX_new failed, ret:%d", ret);
-  } else if (SSL_CTX_set_cipher_list(
-                 ctx, (ssl_config->is_sm ? baba_tls_ciphers_list : tls_ciphers_list)) <= 0) {
-    ret = EINVAL;
-    ussl_log_warn("SSL_CTX_set_cipher_list failed, ret:%d, err:%s", ret,
-                  ERR_error_string(ERR_get_error(), NULL));
   } else if (0 != (ret = ob_ssl_set_verify_mode_and_load_CA(ctx, ssl_config, verify_flag))) {
     ussl_log_warn("ob_ssl_set_verify_mode_and_load_CA failed, ret:%d", ret);
   } else if (0 != (ret = ob_ssl_load_cert_and_pkey(ctx, ssl_config))) {
@@ -480,6 +475,10 @@ static SSL_CTX *ob_ssl_create_ssl_ctx(const ssl_config_item_t *ssl_config, int t
     * SSL handshake being unprocessed, forbid it.
     */
     SSL_CTX_set_read_ahead(ctx, 0);
+
+#ifdef SSL_OP_NO_RENEGOTIATION
+    SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION);
+#endif
   }
   if (0 != ret) {
     SSL_CTX_free(ctx);
@@ -554,7 +553,7 @@ int ssl_load_config(int ctx_id, const ssl_config_item_t *ssl_config)
   return ret;
 }
 
-int fd_enable_ssl_for_server(int fd, int ctx_id, int type, int has_method_none)
+int fd_enable_ssl_for_server(int fd, int ctx_id, int type)
 {
   int ret = 0;
   SSL_CTX *ctx = NULL;
@@ -575,10 +574,6 @@ int fd_enable_ssl_for_server(int fd, int ctx_id, int type, int has_method_none)
       ret = EINVAL;
       ussl_log_warn("SSL_set_fd failed, ret:%d, fd:%d, ctx_id:%d", ret, fd, ctx_id);
     } else {
-      //if server has auth method none, server does not verify client identity
-      if (has_method_none) {
-        SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
-      }
       SSL_set_accept_state(ssl);
       ATOMIC_STORE(&(gs_fd_ssl_array[fd].ssl), ssl);
       ATOMIC_STORE(&(gs_fd_ssl_array[fd].type), type);
@@ -648,13 +643,13 @@ int ssl_do_handshake(int fd)
       if (SSL_ERROR_WANT_READ == err) {
         ret = EAGAIN;
       } else if (SSL_ERROR_WANT_WRITE == err) {
-        fd_disable_ssl(fd);
-        ret = EIO;
         ussl_log_error("SSL_do_handshake want write, fd:%d", fd);
-      } else {
         fd_disable_ssl(fd);
         ret = EIO;
+      } else {
         ussl_log_warn("SSL_do_handshake failed, err:%s", ERR_error_string(ERR_get_error(), NULL));
+        fd_disable_ssl(fd);
+        ret = EIO;
       }
     }
   }

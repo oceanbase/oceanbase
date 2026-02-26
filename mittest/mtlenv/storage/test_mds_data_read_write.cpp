@@ -1,3 +1,6 @@
+// owner: gaishun.gs
+// owner group: storage
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -15,15 +18,8 @@
 #define protected public
 #define private public
 
-#include "lib/ob_errno.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/oblog/ob_log.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "mtlenv/storage/medium_info_helper.h"
-#include "storage/tablet/ob_tablet_mds_data.h"
-#include "storage/tablet/ob_tablet_complex_addr.h"
-#include "storage/tablet/ob_tablet_obj_load_helper.h"
-#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -76,7 +72,7 @@ int TestMdsDataReadWrite::mock_tablet_status_disk_addr(
     ObMetaDiskAddr &addr)
 {
   int ret = OB_SUCCESS;
-  ObTenantCheckpointSlogHandler *ckpt_slog_handler = MTL(ObTenantCheckpointSlogHandler*);
+  ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   mds::MdsDumpKV kv;
 
   {
@@ -108,15 +104,17 @@ int TestMdsDataReadWrite::mock_tablet_status_disk_addr(
   } else if (OB_FAIL(kv.serialize(buf, size, pos))) {
     LOG_WARN("failed to serialize", K(ret));
   } else {
-    ObSharedBlockWriteInfo write_info;
+    ObSharedObjectWriteInfo write_info;
     write_info.buffer_ = buf;
     write_info.offset_ = 0;
     write_info.size_ = size;
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+    blocksstable::ObStorageObjectOpt curr_opt;
+    curr_opt.set_private_object_opt();
 
-    ObSharedBlockWriteHandle handle;
-    ObSharedBlocksWriteCtx write_ctx;
-    if (OB_FAIL(ckpt_slog_handler->get_shared_block_reader_writer().async_write(write_info, handle))) {
+    ObSharedObjectWriteHandle handle;
+    ObSharedObjectsWriteCtx write_ctx;
+    if (OB_FAIL(meta_service->get_shared_object_reader_writer().async_write(write_info, curr_opt, handle))) {
       LOG_WARN("failed to do async write", K(ret));
     } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
       LOG_WARN("failed to get write ctx", K(ret));
@@ -137,7 +135,7 @@ int TestMdsDataReadWrite::mock_empty_tablet_status_disk_addr(
     ObMetaDiskAddr &addr)
 {
   int ret = OB_SUCCESS;
-  ObTenantCheckpointSlogHandler *ckpt_slog_handler = MTL(ObTenantCheckpointSlogHandler*);
+  ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   mds::MdsDumpKV kv;
   const int64_t size = kv.get_serialize_size();
   int64_t pos = 0;
@@ -149,15 +147,17 @@ int TestMdsDataReadWrite::mock_empty_tablet_status_disk_addr(
   } else if (OB_FAIL(kv.serialize(buf, size, pos))) {
     LOG_WARN("failed to serialize", K(ret));
   } else {
-    ObSharedBlockWriteInfo write_info;
+    ObSharedObjectWriteInfo write_info;
     write_info.buffer_ = buf;
     write_info.offset_ = 0;
     write_info.size_ = size;
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+    blocksstable::ObStorageObjectOpt curr_opt;
+    curr_opt.set_private_object_opt();
 
-    ObSharedBlockWriteHandle handle;
-    ObSharedBlocksWriteCtx write_ctx;
-    if (OB_FAIL(ckpt_slog_handler->get_shared_block_reader_writer().async_write(write_info, handle))) {
+    ObSharedObjectWriteHandle handle;
+    ObSharedObjectsWriteCtx write_ctx;
+    if (OB_FAIL(meta_service->get_shared_object_reader_writer().async_write(write_info, curr_opt, handle))) {
       LOG_WARN("failed to do async write", K(ret));
     } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
       LOG_WARN("failed to get write ctx", K(ret));
@@ -178,7 +178,7 @@ int TestMdsDataReadWrite::mock_auto_inc_seq_disk_addr(
     ObMetaDiskAddr &addr)
 {
   int ret = OB_SUCCESS;
-  ObTenantCheckpointSlogHandler *ckpt_slog_handler = MTL(ObTenantCheckpointSlogHandler*);
+  ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   share::ObTabletAutoincSeq auto_inc_seq;
 
   {
@@ -198,15 +198,17 @@ int TestMdsDataReadWrite::mock_auto_inc_seq_disk_addr(
   } else if (OB_FAIL(auto_inc_seq.serialize(buf, size, pos))) {
     LOG_WARN("failed to serialize", K(ret));
   } else {
-    ObSharedBlockWriteInfo write_info;
+    ObSharedObjectWriteInfo write_info;
     write_info.buffer_ = buf;
     write_info.offset_ = 0;
     write_info.size_ = size;
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+    blocksstable::ObStorageObjectOpt curr_opt;
+    curr_opt.set_private_object_opt();
 
-    ObSharedBlockWriteHandle handle;
-    ObSharedBlocksWriteCtx write_ctx;
-    if (OB_FAIL(ckpt_slog_handler->get_shared_block_reader_writer().async_write(write_info, handle))) {
+    ObSharedObjectWriteHandle handle;
+    ObSharedObjectsWriteCtx write_ctx;
+    if (OB_FAIL(meta_service->get_shared_object_reader_writer().async_write(write_info, curr_opt, handle))) {
       LOG_WARN("failed to do async write", K(ret));
     } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
       LOG_WARN("failed to get write ctx", K(ret));
@@ -227,7 +229,7 @@ int TestMdsDataReadWrite::mock_empty_auto_inc_seq_disk_addr(
     ObMetaDiskAddr &addr)
 {
   int ret = OB_SUCCESS;
-  ObTenantCheckpointSlogHandler *ckpt_slog_handler = MTL(ObTenantCheckpointSlogHandler*);
+  ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   share::ObTabletAutoincSeq auto_inc_seq;
   const int64_t size = auto_inc_seq.get_serialize_size();
   int64_t pos = 0;
@@ -239,15 +241,17 @@ int TestMdsDataReadWrite::mock_empty_auto_inc_seq_disk_addr(
   } else if (OB_FAIL(auto_inc_seq.serialize(buf, size, pos))) {
     LOG_WARN("failed to serialize", K(ret));
   } else {
-    ObSharedBlockWriteInfo write_info;
+    ObSharedObjectWriteInfo write_info;
     write_info.buffer_ = buf;
     write_info.offset_ = 0;
     write_info.size_ = size;
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+    blocksstable::ObStorageObjectOpt curr_opt;
+    curr_opt.set_private_object_opt();
 
-    ObSharedBlockWriteHandle handle;
-    ObSharedBlocksWriteCtx write_ctx;
-    if (OB_FAIL(ckpt_slog_handler->get_shared_block_reader_writer().async_write(write_info, handle))) {
+    ObSharedObjectWriteHandle handle;
+    ObSharedObjectsWriteCtx write_ctx;
+    if (OB_FAIL(meta_service->get_shared_object_reader_writer().async_write(write_info, curr_opt, handle))) {
       LOG_WARN("failed to do async write", K(ret));
     } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
       LOG_WARN("failed to get write ctx", K(ret));

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX TRANS
 #include "tx_node.h"
-#include "share/scn.h"
 #define FAST_FAIL() \
   do {                                                          \
   if (OB_FAIL(ret)) {                                           \
@@ -78,7 +77,7 @@ int ObTxDescGuard::release() {
   return ret;
 }
 
-ObString ObTxNode::get_identifer_str() const
+ObString ObTxNode::get_identifer_str()
 {
   struct ID {
     ObAddr addr;
@@ -95,7 +94,8 @@ ObString ObTxNode::get_identifer_str() const
     .addr = addr_,
     .ls_id = ls_id_.id()
   };
-  return ObString(to_cstring(&identifer));
+  int64_t pos = identifer.to_string(buf_, sizeof(buf_));
+  return ObString(pos, buf_);
 }
 ObTxNode::ObTxNode(const int64_t ls_id,
                    const ObAddr &addr,
@@ -104,7 +104,7 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   addr_(addr),
   ls_id_(ls_id),
   tenant_id_(1001),
-  tenant_(tenant_id_, 10, *GCTX.cgroup_ctrl_),
+  tenant_(tenant_id_, 0, 10, *GCTX.cgroup_ctrl_),
   fake_part_trans_ctx_pool_(1001, false, false, 4),
   memtable_(NULL),
   msg_consumer_(get_identifer_str(),
@@ -156,6 +156,9 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   tenant_.set(&fake_opt_stat_mgr_);
   OZ(fake_lock_wait_mgr_.init());
   tenant_.set(&fake_lock_wait_mgr_);
+  ls_service_.is_inited_ = true;
+  OZ(ls_service_.ls_map_.init(tenant_id_, lib::ObMallocAllocator::get_instance()));
+  tenant_.set(&ls_service_);
   OZ (create_memtable_(100000, memtable_));
   {
     ObColDesc col_desc;
@@ -202,11 +205,11 @@ int ObTxNode::start() {
     fake_tx_table_.ls_ = &fake_ls_;
     fake_tx_table_.online();
     int tx_data_table_offset = offsetof(storage::ObTxTable, tx_data_table_);
-    void* ls_tx_data_table_ptr = (void*)((int64_t)&(mock_ls_.tx_table_) + tx_data_table_offset);
+    void* ls_tx_data_table_ptr = (void*)((int64_t)&(fake_ls_.tx_table_) + tx_data_table_offset);
     ls_tx_data_table_ptr = &fake_tx_table_.tx_data_table_;
-    mock_ls_.tx_table_.is_inited_ = true;
-    mock_ls_.tx_table_.online();
-    mock_ls_.ls_meta_.clog_checkpoint_scn_ = share::SCN::max_scn();
+    fake_ls_.tx_table_.is_inited_ = true;
+    fake_ls_.tx_table_.online();
+    fake_ls_.ls_meta_.clog_checkpoint_scn_ = share::SCN::max_scn();
   } else {
     abort();
   }
@@ -305,8 +308,8 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
   } while(!is_tx_clean && ++retry_cnt < 1000);
   OX(txs_.stop());
   OZ(txs_.wait_());
+  OZ(drop_ls_(ls_id_));
   if (role_ == Leader && fake_tx_log_adapter_) {
-    OZ(drop_ls_(ls_id_));
     fake_tx_log_adapter_->stop();
     fake_tx_log_adapter_->wait();
     fake_tx_log_adapter_->destroy();
@@ -321,6 +324,7 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
   if (role_ == Leader && fake_tx_log_adapter_) {
     delete fake_tx_log_adapter_;
   }
+  fake_ls_.ls_meta_.ls_id_ = ObLSID(1001);
   FAST_FAIL();
   ObTenantEnv::set_tenant(NULL);
 }
@@ -334,8 +338,14 @@ int ObTxNode::create_memtable_(const int64_t tablet_id, memtable::ObMemtable *&m
   table_key.scn_range_.start_scn_.convert_for_gts(100);
   table_key.scn_range_.end_scn_.set_max();
   ObLSHandle ls_handle;
-  ls_handle.set_ls(fake_ls_map_, fake_ls_, ObLSGetMod::DATA_MEMTABLE_MOD);
-  OZ (t->init(table_key, ls_handle, &fake_freezer_, &fake_memtable_mgr_, 0, 0));
+  ls_handle.set_ls(ls_service_.ls_map_, fake_ls_, ObLSGetMod::DATA_MEMTABLE_MOD);
+  #ifdef TX_NODE_MEMTABLE_USE_HASH_INDEX_FLAG
+    const bool use_hash_index = TX_NODE_MEMTABLE_USE_HASH_INDEX_FLAG;
+  #else
+    const bool use_hash_index = true;  // 默认值为 true
+  #endif
+  TRANS_LOG(INFO, "create_memtable_with_use_hash_index", K(use_hash_index), KPC(this));
+  OZ (t->init(table_key, ls_handle, &fake_freezer_, &fake_memtable_mgr_, 0, 0, use_hash_index));
   if (OB_SUCC(ret)) {
     mt = t;
   } else { delete t; }
@@ -348,20 +358,24 @@ int ObTxNode::create_ls_(const ObLSID ls_id) {
                                 ls_id,
                                 &fake_tx_table_,
                                 &fake_lock_table_,
-                                *mock_ls_.get_tx_svr(),
+                                *fake_ls_.get_tx_svr(),
                                 (ObITxLogParam*)0x01,
                                 fake_tx_log_adapter_));
   if (Leader == role_) {
     OZ(get_location_adapter_().fill(ls_id, addr_));
   }
-  mock_ls_.get_tx_svr()->online();
+  fake_ls_.ls_meta_.ls_id_ = ls_id;
+  fake_ls_.get_tx_svr()->online();
+  fake_ls_.get_ref_mgr().inc(ObLSGetMod::TXSTORAGE_MOD);
+  MTL(ObLSService*)->ls_map_.add_ls(fake_ls_);
   return ret;
 }
 
 int ObTxNode::drop_ls_(const ObLSID ls_id) {
   int ret = OB_SUCCESS;
   OZ(txs_.tx_ctx_mgr_.remove_ls(ls_id, true));
-  OZ(get_location_adapter_().remove(ls_id));
+  get_location_adapter_().remove(ls_id);
+  OZ(MTL(ObLSService*)->ls_map_.del_ls(ls_id));
   return ret;
 }
 
@@ -547,7 +561,7 @@ int ObTxNode::read(const ObTxReadSnapshot &snapshot,
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(&tenant_);
   ObStoreCtx read_store_ctx;
-  read_store_ctx.ls_ = &mock_ls_;
+  read_store_ctx.ls_ = &fake_ls_;
   read_store_ctx.ls_id_ = ls_id_;
   OZ(txs_.get_read_store_ctx(snapshot, false, 5000ll * 1000, read_store_ctx));
   // HACK, refine: mock LS's each member in some way
@@ -647,7 +661,7 @@ int ObTxNode::write(ObTxDesc &tx,
   iter->reset();
   ObITable *mtb = memtable_;
   iter->add_table(mtb);
-  write_store_ctx.ls_ = &mock_ls_;
+  write_store_ctx.ls_ = &fake_ls_;
   write_store_ctx.ls_id_ = ls_id_;
   write_store_ctx.table_iter_ = iter;
   write_store_ctx.branch_ = branch;
@@ -658,12 +672,13 @@ int ObTxNode::write(ObTxDesc &tx,
                               write_store_ctx));
   write_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
   ObArenaAllocator allocator;
-  ObStoreRow row;
-  ObObj cols[2] = {ObObj(key), ObObj(value)};
-  row.capacity_ = 2;
-  row.row_val_.cells_ = cols;
-  row.row_val_.count_ = 2;
-  row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
+  ObDatumRow row;
+  ObStorageDatum cols[2] = {ObStorageDatum(), ObStorageDatum()};
+  cols[0].set_int(key);
+  cols[1].set_int(value);
+  row.count_ = 2;
+  row.storage_datums_ = cols;
+  row.row_flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
   row.trans_id_.reset();
 
   ObTableIterParam param;
@@ -687,8 +702,18 @@ int ObTxNode::write(ObTxDesc &tx,
   param.read_info_ = &read_info;
 
   context.init(query_flag, write_store_ctx, allocator, trans_version_range);
-  OZ(memtable_->set(param, context, columns_, row, encrypt_meta, false));
-  OZ(txs_.revert_store_ctx(write_store_ctx));
+  const ObMemtableSetArg arg(&row,
+                             &columns_,
+                             NULL, /*update_idx*/
+                             NULL, /*old_row*/
+                             1,    /*row_count*/
+                             false /*check_exist*/,
+                             encrypt_meta);
+  OZ(memtable_->set(param, context, arg));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(txs_.revert_store_ctx(write_store_ctx))) {
+    TRANS_LOG(WARN, "revert store ctx failed", KR(tmp_ret), K(write_store_ctx));
+  }
   delete iter;
   return ret;
 }
@@ -704,6 +729,7 @@ int ObTxNode::write_begin(ObTxDesc &tx,
   ObITable *mtb = memtable_;
   iter->add_table(mtb);
   write_store_ctx.ls_id_ = ls_id_;
+  write_store_ctx.ls_ = &fake_ls_;
   write_store_ctx.table_iter_ = iter;
   concurrent_control::ObWriteFlag write_flag;
   OZ(txs_.get_write_store_ctx(tx,
@@ -723,11 +749,13 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
   const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
   const int64_t schema_version = 100;
   read_info.init(allocator, 2, 1, false, columns_, nullptr/*storage_cols_index*/);
-  ObStoreRow row;
-  ObObj cols[2] = {ObObj(key), ObObj(value)};
-  row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
-  row.row_val_.cells_ = cols;
-  row.row_val_.count_ = 2;
+  ObDatumRow row;
+  ObStorageDatum cols[2] = {ObStorageDatum(), ObStorageDatum()};
+  cols[0].set_int(key);
+  cols[1].set_int(value);
+  row.row_flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
+  row.storage_datums_ = cols;
+  row.count_ = 2;
 
   ObTableIterParam param;
   ObTableAccessContext context;
@@ -748,7 +776,15 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
 
   OZ(context.init(query_flag, write_store_ctx, allocator, trans_version_range));
 
-  OZ(memtable_->set(param, context, columns_, row, encrypt_meta, false));
+  const ObMemtableSetArg arg(&row,
+                             &columns_,
+                             NULL, /*update_idx*/
+                             NULL, /*old_row*/
+                             1,    /*row_count*/
+                             false /*check_exist*/,
+                             encrypt_meta);
+
+  OZ(memtable_->set(param, context, arg));
 
   return ret;
 }
@@ -780,10 +816,10 @@ int ObTxNode::replay(const void *buffer,
   } else {
     share::SCN log_scn;
     log_scn.convert_for_tx(ts_ns);
-    ObFakeTxReplayExecutor executor(&mock_ls_,
+    ObFakeTxReplayExecutor executor(&fake_ls_,
                                     ls_id_,
                                     tenant_id_,
-                                    mock_ls_.get_tx_svr(),
+                                    fake_ls_.get_tx_svr(),
                                     lsn,
                                     log_scn,
                                     base_header);

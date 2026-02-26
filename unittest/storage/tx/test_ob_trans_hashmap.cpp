@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_light_hashmap.h"
 #include <gtest/gtest.h>
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 #include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase

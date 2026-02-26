@@ -13,17 +13,10 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ddl_server_client.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_sim_point.h"
-#include "storage/ddl/ob_ddl_heart_beat_task.h"
-#include "lib/ob_define.h"
-#include "lib/mysqlclient/ob_isql_client.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
-#include "rootserver/ddl_task/ob_table_redefinition_task.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "rootserver/ddl_task/ob_table_redefinition_task.h" // for ObTableRedefinitionTask
 
 namespace oceanbase
 {
@@ -51,29 +44,23 @@ int ObDDLServerClient::execute_recover_restore_table(const obrpc::ObRecoverResto
   return ret;
 }
 
+template<typename CreateHiddenTableArgType>
 int ObDDLServerClient::create_hidden_table(
-    const obrpc::ObCreateHiddenTableArg &arg,
+    const CreateHiddenTableArgType &arg,
     obrpc::ObCreateHiddenTableRes &res,
     int64_t &snapshot_version,
     uint64_t &data_format_version,
     sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  ObAddr rs_leader_addr;
   const int64_t retry_interval = 100 * 1000L;
-  obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
-  } else if (OB_ISNULL(common_rpc_proxy)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("common rpc proxy is null", K(ret));
-  } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
-    LOG_WARN("fail to rootservice address", K(ret));
   }
 
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).timeout(GCONF._ob_ddl_timeout).create_hidden_table(arg, res))) {
+    if (OB_FAIL(inner_create_hidden_table_(arg, res))) {
       LOG_WARN("failed to create hidden table", KR(ret), K(arg));
     } else {
       break;
@@ -91,7 +78,7 @@ int ObDDLServerClient::create_hidden_table(
     LOG_WARN("failed to set register task id", K(ret), K(res));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(wait_task_reach_pending(arg.tenant_id_, res.task_id_, snapshot_version, data_format_version, *GCTX.sql_proxy_))) {
+    if (OB_FAIL(wait_task_reach_pending(arg.get_tenant_id(), res.task_id_, snapshot_version, data_format_version, *GCTX.sql_proxy_, res.is_no_logging_))) {
       LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     }
 #ifdef ERRSIM
@@ -104,7 +91,7 @@ int ObDDLServerClient::create_hidden_table(
       int tmp_ret = OB_SUCCESS;
       obrpc::ObAbortRedefTableArg abort_redef_table_arg;
       abort_redef_table_arg.task_id_ = res.task_id_;
-      abort_redef_table_arg.tenant_id_ = arg.tenant_id_;
+      abort_redef_table_arg.tenant_id_ = arg.get_tenant_id();
       if (OB_TMP_FAIL(abort_redef_table(abort_redef_table_arg, &session))) {
         LOG_WARN("failed to abort redef table", K(tmp_ret), K(abort_redef_table_arg));
       }
@@ -113,7 +100,7 @@ int ObDDLServerClient::create_hidden_table(
   }
   char tenant_id_buffer[256];
   snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "tenant_id:%ld, dest_tenant_id:%ld",
-            arg.tenant_id_, arg.dest_tenant_id_);
+            arg.get_tenant_id(), arg.get_dest_tenant_id());
   SERVER_EVENT_ADD("ddl", "create hidden table",
     "tenant_id", tenant_id_buffer,
     "ret", ret,
@@ -125,6 +112,19 @@ int ObDDLServerClient::create_hidden_table(
   return ret;
 }
 
+template int ObDDLServerClient::create_hidden_table(
+             const oceanbase::obrpc::ObCreateHiddenTableArg &arg,
+             obrpc::ObCreateHiddenTableRes &res,
+             int64_t &snapshot_version,
+             uint64_t &data_format_version,
+             sql::ObSQLSessionInfo &session);
+template int ObDDLServerClient::create_hidden_table(
+             const ObCreateHiddenTableArgV2 &arg,
+             obrpc::ObCreateHiddenTableRes &res,
+             int64_t &snapshot_version,
+             uint64_t &data_format_version,
+             sql::ObSQLSessionInfo &session);
+
 int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res, sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
@@ -132,6 +132,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
   obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
   int64_t unused_snapshot_version = OB_INVALID_VERSION;
   uint64_t unused_data_format_version = 0;
+  bool unused_no_logging = false;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
@@ -144,7 +145,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
     LOG_WARN("failed to start redef table", KR(ret), K(arg));
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
-  } else if (OB_FAIL(wait_task_reach_pending(arg.orig_tenant_id_, res.task_id_, unused_snapshot_version, unused_data_format_version, *GCTX.sql_proxy_))) {
+  } else if (OB_FAIL(wait_task_reach_pending(arg.orig_tenant_id_, res.task_id_, unused_snapshot_version, unused_data_format_version, *GCTX.sql_proxy_, unused_no_logging))) {
     LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     int tmp_ret = OB_SUCCESS;
     obrpc::ObAbortRedefTableArg abort_redef_table_arg;
@@ -400,7 +401,8 @@ int ObDDLServerClient::wait_task_reach_pending(
     const int64_t task_id,
     int64_t &snapshot_version,
     uint64_t &data_format_version,
-    ObMySQLProxy &sql_proxy)
+    ObMySQLProxy &sql_proxy,
+    bool &is_no_logging)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_string;
@@ -417,10 +419,13 @@ int ObDDLServerClient::wait_task_reach_pending(
       LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
     } else {
       while (OB_SUCC(ret)) {
+        uint64_t unused_target_object_id = 0;
+        int64_t unused_schema_version = 0;
         share::ObDDLTaskStatus task_status = share::ObDDLTaskStatus::PREPARE;
+        bool unused_is_offline_index_rebuild = false;
         if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, task_id, data_format_version,
-            snapshot_version, task_status))) {
-          if (OB_LIKELY(OB_ITER_END == ret)) {
+            snapshot_version, task_status, unused_target_object_id, unused_schema_version, is_no_logging, unused_is_offline_index_rebuild))) {
+          if (OB_LIKELY(OB_ENTRY_NOT_EXIST == ret)) {
             ret = OB_ENTRY_NOT_EXIST;
             ObAddr unused_addr;
             int64_t forward_user_msg_len = 0;
@@ -479,6 +484,38 @@ int ObDDLServerClient::check_need_stop(const uint64_t tenant_id)
   } else if (observer::ObServer::get_instance().is_stopped()) {
     ret = OB_TIMEOUT;
     LOG_WARN("server is stopping", K(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObDDLServerClient::inner_create_hidden_table_(const ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  ObAddr rs_leader_addr;
+  obrpc::ObCommonRpcProxy common_rpc_proxy;
+  if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("common rpc proxy is null", KR(ret));
+  } else if (FALSE_IT(common_rpc_proxy = *GCTX.rs_rpc_proxy_)) {
+    // ignore
+  } else if (OB_FAIL(common_rpc_proxy.timeout(GCONF._ob_ddl_timeout).create_hidden_table(arg, res))) {
+    LOG_WARN("failed to create hidden table", KR(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObDDLServerClient::inner_create_hidden_table_(const ObCreateHiddenTableArgV2 &arg, obrpc::ObCreateHiddenTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  ObAddr rs_leader_addr;
+  obrpc::ObCommonRpcProxy common_rpc_proxy;
+  if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("common rpc proxy is null", KR(ret));
+  } else if (FALSE_IT(common_rpc_proxy = *GCTX.rs_rpc_proxy_)) {
+    // ignore
+  } else if (OB_FAIL(common_rpc_proxy.timeout(GCONF._ob_ddl_timeout).create_hidden_table_v2(arg, res))) {
+    LOG_WARN("failed to create hidden table", KR(ret), K(arg));
   }
   return ret;
 }

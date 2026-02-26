@@ -18,14 +18,13 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_iarray.h"
-#include "storage/ob_sstable_struct.h"
 
 namespace oceanbase
 {
 namespace compaction
 {
 class ObPartitionMergeProgress;
-
+struct ObSSTableMergeHistory;
 // 32 B
 struct ObCompactionHistogramBucket final
 {
@@ -117,7 +116,7 @@ public:
   int init(const int64_t max_cnt);
   void clear()
   {
-    SpinRLockGuard guard(lock_);
+    SpinWLockGuard guard(lock_);
     pos_ = 0;
   }
   void destroy()
@@ -184,14 +183,8 @@ struct ObCompactionDagStatus final
 
   DECLARE_TO_STRING;
 
-  // max COMPACTION mode dag is DAG_TYPE_MDS_MINI_MERGE, which is 9
-  static const int64_t COMPACTION_DAG_MAX = 10;
-  // max COMPACTION prio DAG_PRIO_COMPACTION_LOW = 4
-  static const int64_t COMPACTION_PRIORITY_MAX = 5;
-  // for mini/minor/major merge
-  static constexpr int64_t COST_LONG_TIME[COMPACTION_PRIORITY_MAX] = {
-    10 * 60 * 1000 * 1000L, INT64_MAX, 20 * 60 * 1000 * 1000L, INT64_MAX, 60 * 60 * 1000 * 1000L}; // 10m,30m,60m
-  static int64_t get_cost_long_time(const int64_t prio);
+  // count of dag whose DAG_MODULE_STR="COMPACTION"
+  static const int64_t COMPACTION_DAG_MAX = 12;
   ObCompactionHistogramStat histogram_stat_[COMPACTION_DAG_MAX];
 };
 
@@ -214,7 +207,8 @@ public:
       allocator_("CompSuggestMgr"),
       lock_(ObLatchIds::COMPACTION_DIAGNOSE_LOCK),
       compaction_dag_status_(),
-      array_(allocator_)
+      array_(allocator_),
+      prio_array_()
   {
   }
   ~ObCompactionSuggestionMgr() { destroy(); }
@@ -234,7 +228,7 @@ public:
   void clear_compaction_dag_status();
 
   int analyze_merge_info(
-    const ObSSTableMergeInfo &merge_info,
+    const ObSSTableMergeHistory &merge_history,
     const share::ObDagType::ObDagTypeEnum type,
     const int64_t cost_time);
 
@@ -247,13 +241,16 @@ public:
   static const int64_t TOO_MANY_FAILED_COUNT = 20;
   static const int64_t SCAN_AVERAGE_RAITO = 4; // 2 * 2
   static const int64_t INC_ROW_CNT_PARAM = 5 * 1000 * 1000; // 5 Million
+  static const int64_t ROW_COUNT_TO_CHECK_PARALLEL_EVEN = 1 * 1000 * 1000; // 1 Million
   static const int64_t SINGLE_PARTITION_MACRO_CNT_PARAM = 256 * 1024; // single partition size 500G
   static const int64_t MACRO_CNT_PARAM = 5 * 1000; // 5 k
 
   static const char *ObCompactionSuggestionReasonStr[];
   static const char* get_suggestion_reason(const int64_t reason);
-  static const char *ObAddWorkerThreadSuggestion[share::ObDagPrio::DAG_PRIO_MAX];
+  static const char *ObAddWorkerThreadSuggestion[];
   static const char* get_add_thread_suggestion(const int64_t priority);
+  static const int64_t ObCompactionLongTimeThreshold[];
+  static int64_t get_long_time_threshold(const int64_t priority);
 private:
   int64_t calc_variance(
       const int64_t count,
@@ -278,6 +275,7 @@ private:
   lib::ObMutex lock_;
   ObCompactionDagStatus compaction_dag_status_;
   ObInfoRingArray<ObCompactionSuggestion> array_;
+  ObCompactionSuggestion prio_array_[share::ObDagPrio::DAG_PRIO_MAX];
 };
 
 /*

@@ -18,6 +18,7 @@
 #include "observer/table_load/ob_table_load_struct.h"
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
+#include "share/table/ob_table_load_dml_stat.h"
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "storage/direct_load/ob_direct_load_struct.h"
@@ -25,6 +26,11 @@
 
 namespace oceanbase
 {
+namespace sql
+{
+  class ObExecContext;
+}
+
 namespace observer
 {
 enum class ObDirectLoadControlCommandType
@@ -47,6 +53,8 @@ enum class ObDirectLoadControlCommandType
   INSERT_TRANS = 13,
 
   HEART_BEAT = 14,
+
+  INIT_EMPTY_TABLETS = 15,
 
   MAX_TYPE
 };
@@ -171,7 +179,11 @@ public:
                "method", storage::ObDirectLoadMethod::get_type_string(method_),
                "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
                "load_mode", storage::ObDirectLoadMode::get_type_string(load_mode_),
-               K_(compressor_type));
+               K_(compressor_type),
+               K_(online_sample_percent),
+               K_(enable_inc_major));
+
+  int set_exec_ctx_serialized_str(const sql::ObExecContext &exec_ctx);
 
 public:
   uint64_t table_id_;
@@ -193,6 +205,10 @@ public:
   storage::ObDirectLoadInsertMode::Type insert_mode_;
   storage::ObDirectLoadMode::Type load_mode_;
   ObCompressorType compressor_type_;
+  double online_sample_percent_;
+  common::ObArenaAllocator allocator_;
+  common::ObString exec_ctx_serialized_str_;
+  bool enable_inc_major_;
 };
 
 class ObDirectLoadControlConfirmBeginArg final
@@ -254,11 +270,15 @@ class ObDirectLoadControlCommitRes final
 
 public:
   ObDirectLoadControlCommitRes() {}
-  TO_STRING_KV(K_(result_info), K_(sql_statistics))
+  TO_STRING_KV(K_(result_info),
+               K_(sql_statistics),
+               K_(trans_result),
+               K_(dml_stats));
 public:
   table::ObTableLoadResultInfo result_info_;
   table::ObTableLoadSqlStatistics sql_statistics_;
   transaction::ObTxExecResult trans_result_;
+  table::ObTableLoadDmlStat dml_stats_;
 };
 
 class ObDirectLoadControlAbortArg final
@@ -266,12 +286,16 @@ class ObDirectLoadControlAbortArg final
   OB_UNIS_VERSION(1);
 
 public:
-  ObDirectLoadControlAbortArg() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
-  TO_STRING_KV(K_(table_id), K_(task_id));
+  ObDirectLoadControlAbortArg()
+    : table_id_(common::OB_INVALID_ID), task_id_(0), error_code_(OB_CANCELED)
+  {
+  }
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(error_code));
 
 public:
   uint64_t table_id_;
   int64_t task_id_;
+  int error_code_;
 };
 
 class ObDirectLoadControlAbortRes final
@@ -447,6 +471,26 @@ public:
   int32_t session_id_; // 从1开始
   uint64_t sequence_no_; // 从1开始
   ObString payload_; //里面包的是ObTableLoadObjArray
+};
+
+class ObDirectLoadControlInitEmptyTabletsArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDirectLoadControlInitEmptyTabletsArg()
+  : table_id_(common::OB_INVALID_ID)
+  {
+  }
+  ~ObDirectLoadControlInitEmptyTabletsArg() {}
+  TO_STRING_KV(K_(table_id),
+               K_(ddl_param),
+               K_(partition_id_array),
+               K_(target_partition_id_array));
+public:
+  uint64_t table_id_;
+  ObTableLoadDDLParam ddl_param_;
+  ObSArray<table::ObTableLoadLSIdAndPartitionId> partition_id_array_; // origin table
+  ObSArray<table::ObTableLoadLSIdAndPartitionId> target_partition_id_array_; // target table
 };
 
 } // namespace observer

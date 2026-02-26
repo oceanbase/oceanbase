@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_seq.h"
-#include <netinet/in.h>
 #include "deps/oblib/src/lib/utility/ob_print_utils.h"
 
 namespace oceanbase

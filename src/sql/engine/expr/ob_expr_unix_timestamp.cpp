@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX  SQL_ENG
 
 #include "sql/engine/expr/ob_expr_unix_timestamp.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/allocator/ob_allocator.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;

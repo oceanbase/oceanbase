@@ -11,11 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "lib/oblog/ob_log_module.h"       // LOG_*
-#include "lib/oblog/ob_log.h"              // LOG_*
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/utility/serialization.h"
-#include "share/ob_errno.h"
 #include "share/tenant_snapshot/ob_tenant_snapshot_id.h"
 
 namespace oceanbase

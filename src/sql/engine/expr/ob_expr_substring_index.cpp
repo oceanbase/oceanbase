@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_substring_index.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/string/ob_string.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -66,12 +63,10 @@ inline int ObExprSubstringIndex::calc_result_type3(ObExprResType &type,
   if (OB_SUCC(ret)) {
     type.set_varchar();
     type.set_length(str.get_length());
-    common::ObArenaAllocator alloc;
-    ObExprResType types[2] = {alloc, alloc};
+    ObExprResType types[2] = {};
     types[0] = str;
     types[1] = delim;
-    if (OB_FAIL(aggregate_charsets_for_string_result_with_comparison(
-                type, types, 2, type_ctx.get_coll_type()))) {
+    if (OB_FAIL(aggregate_charsets_for_string_result_with_comparison(type, types, 2, type_ctx))) {
       LOG_WARN("aggregate_charsets_for_string_result_with_comparison failed", K(ret));
 
     } else {

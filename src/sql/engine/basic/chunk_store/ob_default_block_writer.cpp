@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/basic/chunk_store/ob_default_block_writer.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/container/ob_bitmap.h"
-#include "sql/engine/ob_bit_vector.h"
-#include "sql/engine/basic/ob_chunk_datum_store.h"
 
 namespace oceanbase
 {
@@ -224,14 +219,14 @@ int ObDefaultBlockWriter::inner_add_row(const blocksstable::ObStorageDatum *stor
   } else {
     sr->cnt_ = cg_schema.column_cnt_;
     for (int64_t i = 0; i < cg_schema.column_cnt_; ++i) {
-      int64_t column_idx = cg_schema.column_idxs_ ? cg_schema.column_idxs_[i] : i;
+      int64_t column_idx = cg_schema.get_column_idx(i);
       const ObDatum *tmp_datum = static_cast<const ObDatum *>(&storage_datums[column_idx]);
       MEMCPY(sr->payload_ + i * sizeof(ObDatum), tmp_datum, sizeof(ObDatum));
     }
     char* data_start = sr->payload_ + datum_size + extra_size;
     int64_t pos = 0;
     for (int64_t i = 0; i < cg_schema.column_cnt_; ++i) {
-      int64_t column_idx = cg_schema.column_idxs_ ? cg_schema.column_idxs_[i] : i;
+      int64_t column_idx = cg_schema.get_column_idx(i);
       MEMCPY(data_start + pos, storage_datums[column_idx].ptr_, storage_datums[column_idx].len_);
       sr->cells()[i].ptr_ = data_start + pos;
       pos += storage_datums[column_idx].len_;
@@ -390,7 +385,7 @@ int ObDefaultBlockWriter::get_row_stored_size(const blocksstable::ObStorageDatum
   int64_t datum_size = sizeof(ObDatum) * cg_schema.column_cnt_;
   int64_t data_size = 0;
   for (int64_t i = 0; i < cg_schema.column_cnt_; ++i) {
-    int64_t column_idx = cg_schema.column_idxs_ ? cg_schema.column_idxs_[i] : i;
+    int64_t column_idx = cg_schema.get_column_idx(i);
     data_size += storage_datums[column_idx].len_;
   }
   size = head_size + datum_size + extra_size + data_size;

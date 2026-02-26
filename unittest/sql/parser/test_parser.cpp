@@ -10,15 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "sql/parser/ob_parser.h"
-#include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 #include "../test_sql_utils.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/json/ob_json_print_utils.h"  // for SJ
-#include "sql/plan_cache/ob_sql_parameterization.h"
-#include <fstream>
-#include <iterator>
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 namespace test
@@ -630,6 +622,10 @@ bool TestParser::pretreat_cmd(std::string line, int64_t &expect_error)
     } else if (strncmp(p, "mysql", strlen("mysql")) == 0) {
       OB_LOG(INFO, "switch parser sql_mode to mysql");
       test::clp.sql_mode = DEFAULT_MYSQL_MODE;
+      set_compat_mode(oceanbase::lib::Worker::CompatMode::MYSQL);
+    } else if (strncmp(p, "PIPES_AS_CONCAT", strlen("PIPES_AS_CONCAT")) == 0) {
+      OB_LOG(INFO, "switch parser sql_mode to PIPES_AS_CONCAT");
+      test::clp.sql_mode = DEFAULT_MYSQL_MODE | SMO_PIPES_AS_CONCAT;
       set_compat_mode(oceanbase::lib::Worker::CompatMode::MYSQL);
     }
     skip_cmd = true;

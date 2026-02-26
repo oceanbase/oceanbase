@@ -14,8 +14,6 @@
 
 #include "ob_log_miner_utils.h"
 #include "lib/ob_define.h"
-#include "lib/function/ob_function.h"               // ObFunction
-#include <cerrno>
 
 #define APPEND_STR(buf, args...) \
   do {\

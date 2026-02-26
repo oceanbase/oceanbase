@@ -118,32 +118,6 @@ inline int ObTabletMemberWrapper<ObTabletTableStore>::set_cache_handle(const ObS
   return ret;
 }
 
-template <>
-inline int ObTabletMemberWrapper<share::ObTabletAutoincSeq>::set_cache_handle(const ObStorageMetaValue &value)
-{
-  int ret = OB_SUCCESS;
-  const share::ObTabletAutoincSeq *autoinc_seq = nullptr;
-  if (OB_FAIL(value.get_autoinc_seq(autoinc_seq))) {
-    STORAGE_LOG(WARN, "get auto inc seq failed", K(ret));
-  } else {
-    ptr_ = autoinc_seq;
-  }
-  return ret;
-}
-
-template <>
-inline int ObTabletMemberWrapper<ObTabletBindingMdsUserData>::set_cache_handle(const ObStorageMetaValue &value)
-{
-  int ret = OB_SUCCESS;
-  const ObTabletBindingMdsUserData *aux_tablet_info = nullptr;
-  if (OB_FAIL(value.get_aux_tablet_info(aux_tablet_info))) {
-    STORAGE_LOG(WARN, "get aux tablet info failed", K(ret));
-  } else {
-    ptr_ = aux_tablet_info;
-  }
-  return ret;
-}
-
 template <typename T, typename U>
 int ObTabletMemberWrapper<T, U>::get_member(const T *&t) const
 {

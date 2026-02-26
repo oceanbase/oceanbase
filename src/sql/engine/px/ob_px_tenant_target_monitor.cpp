@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #include "ob_px_tenant_target_monitor.h"
-#include "lib/oblog/ob_log_module.h"
-#include "ob_px_rpc_processor.h"
 #include "share/ob_rpc_share.h"
-#include "share/schema/ob_schema_utils.h"
-#include "storage/tx/ob_trans_service.h"
 #include "logservice/ob_log_service.h"
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -100,7 +95,8 @@ int ObPxTenantTargetMonitor::refresh_statistics(bool need_refresh_all)
   if (OB_FAIL(get_dummy_leader(leader))) {
     LOG_WARN("get dummy leader fail", K(ret));
   } else if (server_ != leader) {
-    LOG_TRACE("follower refresh statistics", K(tenant_id_), K(server_), K(leader), K(role_), K(version_));
+    LOG_TRACE("follower refresh statistics", K(tenant_id_), K(server_), K(leader),
+              K(dummy_cache_leader_), K(role_), K(version_));
     // 单机情况下，不走全局排队
     if (role_ == LEADER) {
       LOG_INFO("leader switch to follower", K(tenant_id_), K(server_), K(leader), K(version_));
@@ -116,7 +112,10 @@ int ObPxTenantTargetMonitor::refresh_statistics(bool need_refresh_all)
     }
   } else {
     // 只有leader能进，可以无主，但不能多主
-    LOG_TRACE("leader refresh statistics", K(tenant_id_), K(server_), K(leader), K(role_), K(need_refresh_all), K(version_));
+    LOG_TRACE("leader refresh statistics", K(tenant_id_), K(server_), K(leader),
+              K(dummy_cache_leader_), K(role_), K(need_refresh_all), K(version_));
+    // Only newly appointed leader need to reset the statistics, do nothing if the old leader become
+    // new leader again.
     if (role_ == FOLLOWER || need_refresh_all) {
       role_ = LEADER;
       // from follower to leader or observer is not longer alive, refresh all the statistics
@@ -163,7 +162,7 @@ int ObPxTenantTargetMonitor::get_dummy_leader(ObAddr &leader)
 
   if (need_refresh) {
     refresh_dummy_location();
-    LOG_WARN("refresh dummy location cache", K(ret));
+    LOG_WARN("refresh dummy location cache", K(ret), K(tenant_id_));
   }
   return ret;
 }
@@ -179,7 +178,8 @@ int ObPxTenantTargetMonitor::check_dummy_location_credible(bool &need_refresh)
              (server_ != dummy_cache_leader_ && role != LEADER)) {
     need_refresh = false;
   } else {
-    LOG_INFO("dummy location not credible, need refresh");
+    LOG_INFO("dummy location not credible, need refresh", K(tenant_id_), K(server_),
+             K(dummy_cache_leader_), K(role));
   }
   return ret;
 }
@@ -224,13 +224,13 @@ int ObPxTenantTargetMonitor::refresh_dummy_location()
       } else if (OB_FAIL(location_adapter->nonblock_renew(cluster_id_, tenant_id_, SYS_LS))) {
         LOG_WARN("nonblock renew failed", K(ret));
       } else {
-        LOG_INFO("refresh locatition cache for target_monitor", K(tenant_id_), K(refresh_ctrl));
+        LOG_INFO("refresh location cache for target_monitor", K(tenant_id_), K(refresh_ctrl));
       }
     } else {
       LOG_WARN("switch to tenant failed", K(tenant_id_));
     }
   } else {
-    LOG_INFO("waiting for refresh locatition cache for target_monitor", K(tenant_id_), K(refresh_ctrl));
+    LOG_INFO("waiting for refresh location cache for target_monitor", K(tenant_id_), K(refresh_ctrl));
   }
   return ret;
 }
@@ -300,9 +300,7 @@ int ObPxTenantTargetMonitor::query_statistics(ObAddr &leader)
 
 bool ObPxTenantTargetMonitor::is_leader()
 {
-  ObRole role = FOLLOWER;
-  (void)get_role(role);
-  return (server_ == dummy_cache_leader_) && (role == LEADER);
+  return role_ == LEADER;
 }
 
 uint64_t ObPxTenantTargetMonitor::get_version()
@@ -373,6 +371,7 @@ int ObPxTenantTargetMonitor::reset_follower_statistics(uint64_t version)
 int ObPxTenantTargetMonitor::reset_leader_statistics()
 {
   int ret = OB_SUCCESS;
+  const uint64_t server_index = GCTX.get_server_index();
   // write lock before reset map and refresh version.
   SpinWLockGuard wlock_guard(spin_lock_);
   global_target_usage_.clear();
@@ -381,7 +380,7 @@ int ObPxTenantTargetMonitor::reset_leader_statistics()
   } else {
     version_ = get_new_version();
   }
-  LOG_INFO("reset leader statistics", K(tenant_id_), K(ret), K(version_), K(GCTX.server_id_));
+  LOG_INFO("reset leader statistics", K(tenant_id_), K(ret), K(version_), K(server_index));
   return ret;
 }
 
@@ -503,10 +502,26 @@ int ObPxTenantTargetMonitor::release_target(hash::ObHashMap<ObAddr, int64_t> &wo
         LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
       } else if (print_debug_log_) {
         LOG_INFO("release target success", K(tenant_id_), K(server), K(acquired_cnt), K(version_),
-                                            K(parallel_servers_target_));
+                 K(role_));
       }
     }
     target_cond_.notifyAll();
+  } else if (print_debug_log_) {
+    int tmp_ret = OB_SUCCESS;
+    for (hash::ObHashMap<ObAddr, int64_t>::iterator it = worker_map.begin(); it != worker_map.end();
+         it++) {
+      ObAddr &server = it->first;
+      int64_t acquired_cnt = it->second;
+      int64_t peer_used = 0;
+      ServerTargetUsage target_usage;
+      if (OB_TMP_FAIL(global_target_usage_.get_refactored(server, target_usage))) {
+        LOG_WARN("failed to get_refactored", K(server), K(tmp_ret));
+      } else {
+        peer_used = target_usage.get_peer_used();
+        LOG_INFO("version changed, print usage: ", K(tenant_id_), K(version_), K(version),
+                 K(server), K(acquired_cnt), K(peer_used));
+      }
+    }
   } else {
     LOG_INFO("version changed", K(tenant_id_), K(version_), K(version));
   }
@@ -545,12 +560,12 @@ int ObPxTenantTargetMonitor::get_all_target_info(common::ObIArray<ObPxTargetInfo
 uint64_t ObPxTenantTargetMonitor::get_new_version()
 {
   uint64_t current_time = common::ObTimeUtility::current_time();
-	uint64_t svr_id = GCTX.server_id_;
-	uint64_t new_version = ((current_time & 0x0000FFFFFFFFFFFF) | (svr_id << SERVER_ID_SHIFT));
+	uint64_t server_index = GCTX.get_server_index();
+	uint64_t new_version = ((current_time & 0x0000FFFFFFFFFFFF) | (server_index << SERVER_ID_SHIFT));
   return new_version;
 }
 
-uint64_t ObPxTenantTargetMonitor::get_server_id(uint64_t version) {
+uint64_t ObPxTenantTargetMonitor::get_server_index(uint64_t version) {
   return (version >> SERVER_ID_SHIFT);
 }
 
@@ -564,6 +579,8 @@ int ObPxTargetCond::wait(const int64_t wait_time_us)
     THIS_WORKER.sched_wait();
     {
       ObMonitor<Mutex>::Lock guard(monitor_);
+      oceanbase::common::ObWaitEventGuard
+        wait_guard(oceanbase::common::ObWaitEventIds::PX_TARGET_WAIT, wait_time_us, reinterpret_cast<uint64_t>(this));
       if (!monitor_.timed_wait(ObSysTime(wait_time_us))) { // timeout
         ret = OB_TIMEOUT;
       }
@@ -584,6 +601,8 @@ void ObPxTargetCond::usleep(const int64_t us)
   if (us > 0) {
     ObMonitor<Mutex> monitor;
     THIS_WORKER.sched_wait();
+    oceanbase::common::ObWaitEventGuard
+        wait_guard(oceanbase::common::ObWaitEventIds::PX_TARGET_WAIT, us);
     (void)monitor.timed_wait(ObSysTime(us));
     THIS_WORKER.sched_run();
   }

@@ -37,7 +37,10 @@ struct VirtualTxDataRow {
   char undo_status_list_str_[common::MAX_UNDO_LIST_CHAR_LENGTH];
   char tx_op_str_[common::MAX_TX_OP_CHAR_LENGTH];
 
-  VirtualTxDataRow() : state_(0), start_scn_(), end_scn_(), commit_version_() {}
+  VirtualTxDataRow() : state_(0), start_scn_(), end_scn_(), commit_version_() {
+    undo_status_list_str_[0] = '\0';
+    tx_op_str_[0] = '\0';
+  }
 
   TO_STRING_KV(K(state_), K(start_scn_), K(end_scn_), K(commit_version_), K(undo_status_list_str_), K(tx_op_str_));
 };
@@ -83,7 +86,7 @@ public:
 private:
   int get_primary_key_();
   int handle_key_range_(ObNewRange &key_range);
-  int generate_virtual_tx_data_row_(VirtualTxDataRow &tx_data_row);
+  int generate_virtual_tx_data_row_(VirtualTxDataRow &tx_data_row, bool &is_logonly_replica);
   int fill_in_row_(const VirtualTxDataRow &row_data, common::ObNewRow *&row);
 
 private:

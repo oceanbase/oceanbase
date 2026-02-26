@@ -12,14 +12,10 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <unordered_map>
 #include <gtest/gtest.h>
 
 #define private public
 #define protected public
-#include "lib/thread/thread_mgr.h"
-#include "share/ob_thread_mgr.h"
-#include "share/rc/ob_tenant_base.h"
 #include "observer/omt/ob_tenant_mtl_helper.h"
 #include "storage/tx/ob_trans_service.h"
 

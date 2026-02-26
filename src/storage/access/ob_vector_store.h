@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "ob_block_batched_row_store.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "ob_pushdown_aggregate_vec.h"
 
 namespace oceanbase
 {
@@ -30,20 +31,20 @@ class ObIMicroBlockReader;
 
 namespace storage
 {
-class ObGroupByCell;
 class ObVectorStore : public ObBlockBatchedRowStore {
 public:
   ObVectorStore(
       const int64_t batch_size,
       sql::ObEvalCtx &eval_ctx,
-      ObTableAccessContext &context);
+      ObTableAccessContext &context,
+      sql::ObBitVector *skip_bit);
   virtual ~ObVectorStore();
-  virtual int init(const ObTableAccessParam &param) override;
+  virtual int init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask = nullptr) override;
   virtual void reset() override;
   // shallow copy
   virtual int fill_rows(
       const int64_t group_idx,
-      blocksstable::ObIMicroBlockRowScanner *scanner,
+      blocksstable::ObIMicroBlockRowScanner &scanner,
       int64_t &begin_index,
       const int64_t end_index,
       const ObFilterResult &res) override;
@@ -56,16 +57,21 @@ public:
       eval_ctx_.set_batch_idx(0);
     }
   }
+  OB_INLINE bool can_refresh() const override
+  {
+    return !is_aggregated_in_prefetch_ && (nullptr == group_by_cell_ || group_by_cell_->can_refresh());
+  }
   OB_INLINE int64_t get_row_count() { return count_; }
-  OB_INLINE ObGroupByCell *get_group_by_cell() { return group_by_cell_; }
+  OB_INLINE ObGroupByCellBase *get_group_by_cell() { return group_by_cell_; }
   virtual int reuse_capacity(const int64_t capacity) override;
   virtual bool is_empty() const override final { return 0 == count_; }
-  DECLARE_TO_STRING;
-private:
+  int reuse_for_refresh_table() override;
+  DECLARE_VIRTUAL_TO_STRING;
+protected:
   int fill_group_idx(const int64_t group_idx);
   int fill_output_rows(
       const int64_t group_idx,
-      blocksstable::ObIMicroBlockRowScanner *scanner,
+      blocksstable::ObIMicroBlockRowScanner &scanner,
       int64_t &begin_index,
       const int64_t end_index,
       const ObFilterResult &res);
@@ -81,13 +87,19 @@ private:
       const int64_t end_index,
       const ObFilterResult &res,
       bool &can_group_by);
-
   int do_group_by(
       const int64_t group_idx,
       blocksstable::ObIMicroBlockReader *reader,
       int64_t begin_index,
       const int64_t end_index,
       const ObFilterResult &res);
+  int check_agg_mask(
+      const int32_t col_offset,
+      common::hash::ObHashSet<int32_t> *agg_col_mask,
+      bool &is_agg_mask) const;
+  int alloc_group_by_cell(const ObTableAccessParam &param);
+  int check_need_group_by(const ObTableAccessParam &param);
+  int fill_group_by_col_lob_locator(const bool has_lob_out_row);
 
   int64_t count_;
   // exprs needed fill in
@@ -96,9 +108,10 @@ private:
   common::ObFixedArray<blocksstable::ObSqlDatumInfo, common::ObIAllocator> datum_infos_;
   common::ObFixedArray<const share::schema::ObColumnParam*, common::ObIAllocator> col_params_;
   sql::ObExpr *group_idx_expr_;
-  blocksstable::ObDatumRow default_row_;
-  ObGroupByCell *group_by_cell_;
+  common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> default_datums_;
+  ObGroupByCellBase *group_by_cell_;
   const ObTableIterParam *iter_param_;
+  sql::ObBitVector *skip_bit_;
 };
 
 }

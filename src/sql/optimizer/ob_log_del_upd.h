@@ -45,7 +45,8 @@ public:
     new_rowid_expr_(NULL),
     trans_info_expr_(NULL),
     related_index_ids_(),
-    fk_lookup_part_id_expr_()
+    fk_lookup_part_id_expr_(),
+    is_vec_hnsw_index_vid_opt_(false)
   {
   }
   inline void reset()
@@ -76,6 +77,7 @@ public:
     trans_info_expr_ = NULL,
     related_index_ids_.reset();
     fk_lookup_part_id_expr_.reset();
+    is_vec_hnsw_index_vid_opt_ = false;
   }
   int64_t to_explain_string(char *buf, int64_t buf_len, ExplainType type) const;
   int init_assignment_info(const ObAssignments &assignments,
@@ -176,6 +178,8 @@ public:
 
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> fk_lookup_part_id_expr_;
 
+  bool is_vec_hnsw_index_vid_opt_;
+
   TO_STRING_KV(K_(table_id),
                K_(ref_table_id),
                K_(loc_table_id),
@@ -193,7 +197,8 @@ public:
                K_(is_update_part_key),
                K_(is_update_primary_key),
                K_(distinct_algo),
-               K_(related_index_ids));
+               K_(related_index_ids),
+               K_(is_vec_hnsw_index_vid_opt));
 };
 
 class ObDelUpdLogPlan;
@@ -203,6 +208,7 @@ public:
   ObLogDelUpd(ObDelUpdLogPlan &plan);
   virtual ~ObLogDelUpd() = default;
   int assign_dml_infos(const ObIArray<IndexDMLInfo *> &index_dml_infos);
+  int add_index_dml_info(IndexDMLInfo *index_dml_info);
 
   int add_table_columns_to_ctx(ObAllocExprContext &ctx,
                                const ObIArray<IndexDMLInfo> &index_dml_infos);
@@ -335,8 +341,17 @@ public:
   int replace_dml_info_exprs(
         ObRawExprReplacer &replacer,
         const ObIArray<IndexDMLInfo *> &index_dml_infos);
-  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override = 0;
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
+  void set_das_dop(int64_t dop) { das_dop_ = dop; }
+  int64_t get_das_dop() { return das_dop_; }
+  virtual int op_is_update_pk_with_dop(bool &is_update)
+  {
+    is_update = false;
+    return OB_SUCCESS;
+  }
+  int check_fts_docid_expr(const ObColumnRefRawExpr *expr, const uint64_t table_id, bool &need_column_ref_expr);
+
 protected:
   virtual int generate_rowid_expr_for_trigger() = 0;
   virtual int generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs) = 0;
@@ -359,6 +374,9 @@ protected:
                                     const ObIArray<ObRawExpr *> &dml_new_values,
                                     ObRawExpr *cur_value,
                                     ObRawExpr *&new_value);
+  int is_dml_fixed_expr(const ObRawExpr *expr,
+                        const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                        bool &is_fixed);
 
   static int get_update_exprs(const IndexDMLInfo &dml_info,
                               ObIArray<ObRawExpr *> &dml_columns,
@@ -371,6 +389,7 @@ protected:
    // 当前的DML算子作为partition id expr的consumer添加到ctx中
   // partition id 列是pdml操作中特有的一个column.
   int generate_pdml_partition_id_expr();
+  int generate_ddl_slice_id_expr();
 
   int print_table_infos(const ObString &prefix,
                         char *buf,
@@ -426,9 +445,11 @@ protected:
   //
   bool table_location_uncertain_;
   bool is_pdml_update_split_; // 标记delete, insert op是否由update拆分而来
+  int64_t das_dop_; // zero marks not use parallel_das_dml
 private:
   // 如果是PDML，那么对应的DML算子（insert，update，delete）需要一个partition id expr
   ObRawExpr *pdml_partition_id_expr_;
+  ObRawExpr *ddl_slice_id_expr_;
   bool pdml_is_returning_; // 如果计划是pdml计划，表示当前逻辑算子转化为的物理算子是否需要吐/返回行
   // add for error logging
   ObErrLogDefine err_log_define_;

@@ -17,6 +17,22 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
+class TestTG : public testing::Test
+{
+protected:
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
+};
+
 class TestTimerTask : public ObTimerTask
 {
 public:
@@ -34,7 +50,7 @@ public:
   int64_t task_run_count_;
 };
 
-TEST(TG, timer)
+TEST_F(TestTG, timer)
 {
   int tg_id = TGDefIDs::TEST1;
   TestTimerTask task;
@@ -80,7 +96,7 @@ public:
   int64_t handle_count_=0;
 };
 
-TEST(TG, queue_thread)
+TEST_F(TestTG, queue_thread)
 {
   int tg_id = TGDefIDs::TEST2;
   Handler handler;
@@ -133,7 +149,7 @@ public:
 };
 int64_t MyDTask::handle_count_ = 0;
 
-TEST(TG, dedup_queue)
+TEST_F(TestTG, dedup_queue)
 {
   int tg_id = TGDefIDs::TEST3;
   MyDTask task;
@@ -172,7 +188,7 @@ public:
   int64_t run_count_=0;
 };
 
-TEST(TG, thread_pool)
+TEST_F(TestTG, thread_pool)
 {
   int tg_id = TGDefIDs::TEST4;
   MyRunnable runnable;
@@ -197,7 +213,7 @@ TEST(TG, thread_pool)
   ASSERT_FALSE(TG_EXIST(tg_id));
 }
 
-TEST(TG, reentrant_thread_pool)
+TEST_F(TestTG, reentrant_thread_pool)
 {
   int tg_id = TGDefIDs::TEST8;
   MyRunnable runnable;
@@ -250,7 +266,7 @@ public:
 };
 int64_t MyTask::handle_count_ = 0;
 
-TEST(TG, async_task_queue)
+TEST_F(TestTG, async_task_queue)
 {
   int tg_id = TGDefIDs::TEST5;
   MyTask task;
@@ -291,7 +307,7 @@ public:
   int64_t handle_count_ = 0;
 };
 
-TEST(TG, map_queue_thread)
+TEST_F(TestTG, map_queue_thread)
 {
   int tg_id = TGDefIDs::TEST6;
   MapQueueThreadHandler handler;
@@ -299,7 +315,7 @@ TEST(TG, map_queue_thread)
   ASSERT_EQ(OB_SUCCESS, TG_SET_HANDLER(tg_id, handler));
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_PUSH_TASK(tg_id, &tg_id, 0));
-  ::usleep(50000);
+  ::usleep(500000);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_WAIT_R(tg_id));
   ASSERT_EQ(1, handler.handle_count_);
@@ -308,7 +324,7 @@ TEST(TG, map_queue_thread)
   ASSERT_EQ(OB_SUCCESS, TG_SET_HANDLER(tg_id, handler));
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_PUSH_TASK(tg_id, &tg_id, 1));
-  ::usleep(50000);
+  ::usleep(500000);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_WAIT_R(tg_id));
   ASSERT_EQ(2, handler.handle_count_);
@@ -316,6 +332,39 @@ TEST(TG, map_queue_thread)
   ASSERT_TRUE(TG_EXIST(tg_id));
   TG_DESTROY(tg_id);
   ASSERT_FALSE(TG_EXIST(tg_id));
+}
+
+TEST_F(TestTG, alloc_tg_id_inc)
+{
+  const int max_tg_count = 122880;
+  int test_tg_id = 137;
+  // occupy all tg_ids
+  for (int i = 0; i < test_tg_id; i++) {
+    int tg_id = TG_MGR.alloc_tg_id(0);
+    TG_MGR.free_tg_id(tg_id);
+  }
+  int alloc_tg_id = TG_MGR.alloc_tg_id(0);
+  EXPECT_EQ(test_tg_id + TGDefIDs::END, alloc_tg_id);
+  TG_MGR.free_tg_id(alloc_tg_id);
+}
+
+TEST_F(TestTG, alloc_tg_id_overflow)
+{
+  const int max_tg_count = 122880;
+  // make tg_seq_ overflow
+  for (int i = 0; i < max_tg_count; i++) {
+    int tg_id = TG_MGR.alloc_tg_id(0);
+    TG_MGR.free_tg_id(tg_id);
+    if (tg_id == max_tg_count - 1) {
+      break;
+    }
+  }
+
+  TG_MGR.free_tg_id(0);
+  // start from 0 after tg_seq_ overflow
+  int alloc_tg_id = TG_MGR.alloc_tg_id(0);
+  EXPECT_EQ(alloc_tg_id, 0);
+  TG_MGR.free_tg_id(alloc_tg_id);
 }
 
 int main(int argc, char *argv[])

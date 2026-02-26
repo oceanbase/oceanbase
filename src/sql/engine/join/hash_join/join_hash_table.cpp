@@ -50,8 +50,7 @@ int JoinHashTable::init(JoinTableCtx &hjt_ctx, ObIAllocator &allocator)
   if (hjt_ctx.is_shared_) {
     if (use_normalized ) {
       if (1 == hjt_ctx.build_keys_->count()) {
-        //hash_table_ = OB_NEWx(NormalizedSharedInt64Table, (&allocator));
-        hash_table_ = OB_NEWx(GenericSharedHashTable, (&allocator));
+        hash_table_ = OB_NEWx(NormalizedSharedInt64Table, (&allocator));
       } else if (2 == hjt_ctx.build_keys_->count()) {
         //hash_table_ = OB_NEWx(NormalizedSharedInt128Table, (&allocator));
         hash_table_ = OB_NEWx(GenericSharedHashTable, (&allocator));
@@ -62,12 +61,12 @@ int JoinHashTable::init(JoinTableCtx &hjt_ctx, ObIAllocator &allocator)
   } else {
     if (use_normalized ) {
       if (1 == hjt_ctx.build_keys_->count()) {
-        hash_table_ = OB_NEWx(NormalizedInt64Table, (&allocator));
+        hash_table_ = OB_NEWx(NormalizedInt64RobinTable, (&allocator));
       } else if (2 == hjt_ctx.build_keys_->count()) {
-        hash_table_ = OB_NEWx(NormalizedInt128Table, (&allocator));
+        hash_table_ = OB_NEWx(NormalizedInt128RobinTable, (&allocator));
       }
     } else {
-      hash_table_ = OB_NEWx(GenericTable, (&allocator));
+      hash_table_ = OB_NEWx(GenericRobinTable, (&allocator));
     }
   }
   if (NULL == hash_table_) {
@@ -79,9 +78,28 @@ int JoinHashTable::init(JoinTableCtx &hjt_ctx, ObIAllocator &allocator)
   return ret;
 }
 
-int JoinHashTable::build_prepare(JoinTableCtx &ctx, int64_t row_count, int64_t bucket_count) {
+int JoinHashTable::init_generic_ht(JoinTableCtx &hjt_ctx, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  hash_table_ = OB_NEWx(GenericTable, (&allocator));
+  if (NULL == hash_table_) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new hash table", K(ret));
+  } else if (OB_FAIL(hash_table_->init(allocator, hjt_ctx.max_batch_size_))) {
+    LOG_WARN("alloc bucket array failed", K(ret));
+  }
+  return ret;
+}
+
+int JoinHashTable::build_prepare(JoinTableCtx &ctx, int64_t row_count, int64_t bucket_count, ObIAllocator *alloc) {
+  int ret = OB_SUCCESS;
   ctx.reuse();
-  return hash_table_->build_prepare(row_count, bucket_count);
+  if (ctx.need_mark_match() && OB_FAIL(ctx.prepare_part_rows_array(row_count, alloc))) {
+    LOG_WARN("failed to prepare part rows array", K(ret));
+  } else if (OB_FAIL(hash_table_->build_prepare(row_count, bucket_count))) {
+    LOG_WARN("failed to hash table build prepare", K(ret));
+  }
+  return ret;
 }
 
 int JoinHashTable::build(JoinPartitionRowIter &iter, JoinTableCtx &ctx) {
@@ -99,6 +117,9 @@ int JoinHashTable::build(JoinPartitionRowIter &iter, JoinTableCtx &ctx) {
     } else if (OB_FAIL(hash_table_->insert_batch(ctx,
             const_cast<ObHJStoredRow **>(ctx.stored_rows_), read_size, used_buckets, collisions))) {
       LOG_WARN("fail to insert batch", K(ret));
+    }
+    if (OB_SUCC(ret) && ctx.need_mark_match() && OB_FAIL(ctx.insert_left_part_rows(read_size))) {
+      LOG_WARN("fail to insert batch into left part rows", K(ret));
     }
     LOG_DEBUG("build hash join table", K(read_size), K(ret));
   }
@@ -121,11 +142,6 @@ int JoinHashTable::probe_prepare(JoinTableCtx &ctx, OutputInfo &output_info) {
 
 int JoinHashTable::probe_batch(JoinTableCtx &ctx, OutputInfo &output_info) {
   return hash_table_->probe_batch(ctx, output_info);
-}
-
-int JoinHashTable::get_unmatched_rows(JoinTableCtx &ctx, OutputInfo &output_info)
-{
-  return hash_table_->get_unmatched_rows(ctx, output_info);
 }
 
 } // end namespace sql

@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_join_filter.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_log_granule_iterator.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -53,6 +51,8 @@ int ObLogJoinFilter::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to push back expr", K(ret));
   } else if (OB_FAIL(append(all_exprs, join_exprs_))) {
     LOG_WARN("failed to add exprs", K(ret));
+  } else if (OB_FAIL(append(all_exprs, all_join_key_left_exprs_))) {
+    LOG_WARN("failed to add exprs", K(ret));
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get op exprs", K(ret));
   } else { /*do nothing*/ }
@@ -75,6 +75,13 @@ int ObLogJoinFilter::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   } else if (OB_NOT_NULL(calc_tablet_id_expr_)
       && OB_FAIL(replace_expr_action(replacer, calc_tablet_id_expr_))) {
     LOG_WARN("failed to replace calc_tablet_id_expr_", K(ret));
+  } else if (is_create_ && OB_FAIL(replace_exprs_action(replacer, all_join_key_left_exprs_))) {
+    LOG_WARN("failed to replace all_join_key_left_exprs_", K(ret));
+  } else if (!is_create_ && OB_FAIL(replace_exprs_action(replacer, join_filter_exprs_))) {
+    LOG_WARN("failed to replace join_filter_exprs_", K(ret));
+  } else if (!is_create_ && (&replacer != &get_plan()->gen_col_replacer())
+             && OB_FAIL(replace_exprs_action(get_plan()->gen_col_replacer(), join_filter_exprs_))) {
+    LOG_WARN("failed to replace join_filter_exprs_", K(ret));
   }
   return ret;
 }
@@ -148,6 +155,22 @@ int ObLogJoinFilter::get_plan_item_info(PlanText &plan_text,
           } else if (OB_FAIL(BUF_PRINTF("]"))) {
             LOG_WARN("fail to print buf", K(ret));
           }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (plan_text.type_ == EXPLAIN_EXTENDED || plan_text.type_ == EXPLAIN_EXTENDED_NOADDR) {
+        // print filter merge and shuffle attribution
+        bool is_shared =
+            (SHARED_JOIN_FILTER == filter_type_ || SHARED_PARTITION_JOIN_FILTER == filter_type_);
+        if (is_shared && OB_FAIL(BUF_PRINTF(", merge required"))) {
+          LOG_WARN("fail to print rf", K(ret));
+        } else if (!is_shared && OB_FAIL(BUF_PRINTF(", independent"))) {
+          LOG_WARN("fail to print rf", K(ret));
+        } else if (is_use_filter_shuffle_ && OB_FAIL(BUF_PRINTF(", global"))) {
+          LOG_WARN("fail to print rf", K(ret));
+        } else if (!is_use_filter_shuffle_ && OB_FAIL(BUF_PRINTF(", local"))) {
+          LOG_WARN("fail to print rf", K(ret));
         }
       }
     }

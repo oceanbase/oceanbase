@@ -113,13 +113,10 @@ public:
            index_item_count_ > 0 &&
            index_block_count_ > 0 &&
            row_count_ > 0 &&
-           start_key_.is_valid() &&
-           end_key_.is_valid() &&
            !fragments_.empty();
   }
   TO_STRING_KV(K_(tablet_id), K_(rowkey_column_count), K_(column_count), K_(index_block_size),
-               K_(data_block_size), K_(index_item_count), K_(index_block_count), K_(row_count),
-               K_(start_key), K_(end_key), K_(fragments));
+               K_(data_block_size), K_(index_item_count), K_(index_block_count), K_(row_count), K_(fragments));
 public:
   common::ObTabletID tablet_id_;
   int64_t rowkey_column_count_;
@@ -129,12 +126,10 @@ public:
   int64_t index_item_count_; // 索引项个数
   int64_t index_block_count_; //索引块个数
   int64_t row_count_; // row的行数
-  blocksstable::ObDatumRowkey start_key_;
-  blocksstable::ObDatumRowkey end_key_;
   common::ObArray<ObDirectLoadSSTableFragment> fragments_;
 };
 
-class ObDirectLoadSSTable : public ObIDirectLoadPartitionTable
+class ObDirectLoadSSTable : public ObDirectLoadITable
 {
 public:
   ObDirectLoadSSTable();
@@ -153,21 +148,18 @@ public:
   const common::ObTabletID &get_tablet_id() const override { return meta_.tablet_id_; }
   bool is_empty() const { return 0 == meta_.row_count_; }
   bool is_valid() const override { return is_inited_; }
-  void release_data() override;
   int copy(const ObDirectLoadSSTable &other);
   const common::ObArray<ObDirectLoadSSTableFragment> &get_fragment_array() const
   {
     return fragments_;
   }
   const ObDirectLoadSSTableMeta &get_meta() const { return meta_; }
-  const blocksstable::ObDatumRowkey &get_start_key() const { return start_key_; }
-  const blocksstable::ObDatumRowkey &get_end_key() const { return end_key_; }
-  TO_STRING_KV(K_(meta), K_(start_key), K_(end_key), K(fragments_));
+  int get_start_key(blocksstable::ObDatumRowkey &start_key, ObIAllocator &allocator);
+  int get_end_key(blocksstable::ObDatumRowkey &end_key, ObIAllocator &allocator);
+
+  TO_STRING_KV(K_(meta), K(fragments_));
 private:
-  common::ObArenaAllocator allocator_;
   ObDirectLoadSSTableMeta meta_;
-  blocksstable::ObDatumRowkey start_key_;
-  blocksstable::ObDatumRowkey end_key_;
   common::ObArray<ObDirectLoadSSTableFragment> fragments_;
   bool is_inited_;
 };

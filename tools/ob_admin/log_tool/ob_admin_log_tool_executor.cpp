@@ -11,15 +11,10 @@
  */
 
 #define USING_LOG_PREFIX CLOG
-#include <getopt.h>
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "ob_admin_log_tool_executor.h"
 #include "dump/ob_admin_dump_block.h"
-#include "logservice/palf/log_group_entry.h"
 #include "cmd_args_parser.h"
 #include <fstream>
-#include <iostream>
 
 
 namespace oceanbase
@@ -63,6 +58,8 @@ int ObAdminLogExecutor::execute(int argc, char *argv[])
       LOG_INFO("finsh stat", K(ret));
     } else if (OB_NEED_RETRY != (ret = CmdCallSimple(new_argc, new_argv, decompress_log) : OB_NEED_RETRY)) {
       LOG_INFO("finsh decompress", K(ret));
+    } else if (OB_NEED_RETRY != (ret = CmdCallSimple(new_argc, new_argv, dump_inc_major_redo_log) : OB_NEED_RETRY)) {
+      LOG_INFO("finsh dump_inc_major_redo_log", K(ret));
     } else {
       fprintf(stderr, "failed %d", ret);
       print_usage();
@@ -73,23 +70,46 @@ int ObAdminLogExecutor::execute(int argc, char *argv[])
 
 void ObAdminLogExecutor::print_usage()
 {
-  fprintf(stdout,
-          "Usages:\n"
-          "$ob_admin log_tool dump_log log_files ## ./ob_admin log_tool dump_log log_files... ##将log文件中的内容全部打印出来\n"
-          "$ob_admin log_tool dump_tx_format log_files ## ./ob_admin log_tool dump_tx_format log_files ##将log文件中的事务相关内容以json格式打印\n"
-          "$ob_admin log_tool dump_filter 'filter_conditions' log_files ## ./ob_admin log_tool dump_filter 'tx_id=xxxx;tablet_id=xxx' '$path'"
-          "## 按照过滤条件将log文件中的事务相关内容打印,目前支持按照事务id(tx_id=xxxx),tablet_id(tablet_id=xxxx)进行过滤，多个条件之间以;隔开\n"
-          "$ob_admin log_tool stat log_files ## ./ob_admin log_tool stat 1\n"
-          "$ob_admin log_tool dmp_meta log_files ## ./ob_admin log_tool dump_meta 1\n"
-          "一些注意事项:\n"
-          "1. 为避免在clog目录生成一些ob_amdin的输出文件，强烈建议使用绝对路径\n"
-          "2. log_files 支持绝对路径、相对路径\n"
-          "3. log_files 支持同时解析多个文件\n"
-          "4. 支持解析归档文件\n"
-          "5. 如何通过LSN快速定位日志:\n"
-          "   1. 获取文件ID: BLOCK_ID=LSN/(64MB-4KB)\n"
-          "   2. 根据LSN去输出文件中执行grep操作"
-         );
+  if (is_ob_log_service_) {
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    fprintf(stdout,
+            "Usages:\n"
+            "$ob_admin log_service_log_tool dump_log log_files ## ./ob_admin log_service_log_tool dump_log log_files... ##将log文件中的内容全部打印出来\n"
+            "$ob_admin log_service_log_tool dump_tx_format log_files ## ./ob_admin log_service_log_tool dump_tx_format log_files ##将log文件中的事务相关内容以json格式打印\n"
+            "$ob_admin log_service_log_tool dump_filter 'filter_conditions' log_files ## ./ob_admin log_service_log_tool dump_filter 'tx_id=xxxx;tablet_id=xxx' '$path'"
+            "## 按照过滤条件将log文件中的事务相关内容打印,目前支持按照事务id(tx_id=xxxx),tablet_id(tablet_id=xxxx)进行过滤，多个条件之间以;隔开\n"
+            "$ob_admin log_service_log_tool stat log_files ## ./ob_admin log_service_log_tool stat 1\n"
+            "$ob_admin log_service_log_tool dump_inc_major_redo_log output_dir filter_conditions clog_dir ## ./ob_admin log_service_log_tool dump_inc_major_redo_log output_dir filter_conditions\n"
+            "一些注意事项:\n"
+            "1. 为避免在clog目录生成一些ob_amdin的输出文件，强烈建议使用绝对路径\n"
+            "2. log_files 支持绝对路径、相对路径\n"
+            "3. log_files 支持同时解析多个文件\n"
+            "4. 支持解析归档文件\n"
+            "5. 如何通过LSN快速定位日志:\n"
+            "   1. 获取文件ID: BLOCK_ID=LSN/(64MB-4KB)\n"
+            "   2. 根据LSN去输出文件中执行grep操作"
+           );
+#endif
+  } else {
+    fprintf(stdout,
+            "Usages:\n"
+            "$ob_admin log_tool dump_log log_files ## ./ob_admin log_tool dump_log log_files... ##将log文件中的内容全部打印出来\n"
+            "$ob_admin log_tool dump_tx_format log_files ## ./ob_admin log_tool dump_tx_format log_files ##将log文件中的事务相关内容以json格式打印\n"
+            "$ob_admin log_tool dump_filter 'filter_conditions' log_files ## ./ob_admin log_tool dump_filter 'tx_id=xxxx;tablet_id=xxx' '$path'"
+            "## 按照过滤条件将log文件中的事务相关内容打印,目前支持按照事务id(tx_id=xxxx),tablet_id(tablet_id=xxxx)进行过滤，多个条件之间以;隔开\n"
+            "$ob_admin log_tool stat log_files ## ./ob_admin log_tool stat 1\n"
+            "$ob_admin log_tool dmp_meta log_files ## ./ob_admin log_tool dump_meta 1\n"
+            "$ob_admin log_tool dump_inc_major_redo_log output_dir filter_conditions clog_dir ## ./ob_admin log_tool dump_inc_major_redo_log output_dir filter_conditions\n"
+            "一些注意事项:\n"
+            "1. 为避免在clog目录生成一些ob_amdin的输出文件，强烈建议使用绝对路径\n"
+            "2. log_files 支持绝对路径、相对路径\n"
+            "3. log_files 支持同时解析多个文件\n"
+            "4. 支持解析归档文件\n"
+            "5. 如何通过LSN快速定位日志:\n"
+            "   1. 获取文件ID: BLOCK_ID=LSN/(64MB-4KB)\n"
+            "   2. 根据LSN去输出文件中执行grep操作"
+           );
+  }
 }
 
 int ObAdminLogExecutor::dump_log(int argc, char **argv)
@@ -104,7 +124,14 @@ int ObAdminLogExecutor::decompress_log(int argc, char **argv)
 
 int ObAdminLogExecutor::dump_meta(int argc, char **argv)
 {
-  return dump_all_blocks_(argc, argv, share::LogFormatFlag::META_FORMAT);
+  int ret = OB_SUCCESS;
+  if (is_ob_log_service_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dump_meta is not supported for log service", K(ret));
+  } else {
+    ret = dump_all_blocks_(argc, argv, share::LogFormatFlag::META_FORMAT);
+  }
+  return ret;
 }
 
 int ObAdminLogExecutor::dump_tx_format(int argc,char ** argv)
@@ -136,6 +163,45 @@ int ObAdminLogExecutor::stat(int argc,char ** argv)
   return ret;
 }
 
+int ObAdminLogExecutor::dump_inc_major_redo_log(int argc,char ** argv)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(argc < 2) || OB_ISNULL(argv)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments, need at least directory and filter", K(argc), K(ret));
+  } else if (OB_FAIL(filter_.parse(argv[1]))) {
+    LOG_WARN("parse filter failed", K(ret), K(argv[1]));
+  } else {
+    LOG_INFO("dump with filter", K_(filter), K(argv[1]));
+    const char *dir_path = argv[0];
+    struct stat dir_stat;
+
+    // Check if directory exists
+    if (0 != ::stat(dir_path, &dir_stat)) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("directory does not exist or cannot access", K(ret), K(dir_path), K(errno));
+    } else if (!S_ISDIR(dir_stat.st_mode)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("path is not a directory", K(ret), K(dir_path));
+    } else {
+      // Save directory path to member variable
+      int64_t path_len = snprintf(dir_path_, sizeof(dir_path_), "%s", dir_path);
+      if (path_len < 0 || path_len >= static_cast<int64_t>(sizeof(dir_path_))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("directory path too long", K(ret), K(dir_path));
+      } else {
+        LOG_INFO("directory exists and path saved", K(dir_path), K_(dir_path));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(dump_all_blocks_(argc - 2 , argv + 2, LogFormatFlag::BLOCK_FORMAT))) {
+        LOG_WARN("failed to dump filter", K(ret), K(argv[2]));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAdminLogExecutor::dump_all_blocks_(int argc, char **argv, LogFormatFlag flag)
 {
   int ret = OB_SUCCESS;
@@ -154,6 +220,11 @@ int ObAdminLogExecutor::dump_all_blocks_(int argc, char **argv, LogFormatFlag fl
     str_arg.decompress_buf_len_ = decompress_buf_size_;
     str_arg.pos_ = 0;
     str_arg.filter_ = filter_;
+    if (LogFormatFlag::BLOCK_FORMAT == flag) {
+      str_arg.dir_path_ = dir_path_;
+    } else {
+      str_arg.dir_path_ = nullptr;
+    }
     if (LogFormatFlag::DECOMPRESS_FORMAT != flag) {
       for (int i = 0; i < argc && OB_SUCC(ret); i++) {
         if (OB_FAIL(dump_single_block_(argv[i], str_arg))) {
@@ -243,11 +314,26 @@ int ObAdminLogExecutor::dump_single_log_block_(const char *block_path,
                                                ObAdminMutatorStringArg &str_arg)
 {
   int ret = OB_SUCCESS;
-  ObAdminDumpBlock dump_block(block_path, str_arg);
-  if (OB_FAIL(dump_block.dump())) {
-    LOG_WARN("ObAdminDumpBlock dump failed", K(ret), K(block_path));
-  } else if (LogFormatFlag::STAT_FORMAT == str_arg.flag_) {
-    fprintf(stdout, "LOG_STAT : %s, total_size:%ld\n", to_cstring(*(str_arg.log_stat_)), str_arg.log_stat_->total_size());
+  if (is_ob_log_service_) {
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    ObAdminLogServiceDumpBlock dump_block(block_path, str_arg);
+    if (OB_FAIL(dump_block.dump())) {
+      LOG_WARN("ObAdminLogServiceDumpBlock dump failed", K(ret), K(block_path));
+    } else if (LogFormatFlag::STAT_FORMAT == str_arg.flag_) {
+      ObCStringHelper helper;
+      fprintf(stdout, "LOG_STAT : %s, total_size:%ld\n",
+          helper.convert(*(str_arg.log_stat_)), str_arg.log_stat_->total_size());
+    }
+#endif
+  } else {
+    ObAdminDumpBlock dump_block(block_path, str_arg);
+    if (OB_FAIL(dump_block.dump())) {
+      LOG_WARN("ObAdminDumpBlock dump failed", K(ret), K(block_path));
+    } else if (LogFormatFlag::STAT_FORMAT == str_arg.flag_) {
+      ObCStringHelper helper;
+      fprintf(stdout, "LOG_STAT : %s, total_size:%ld\n",
+          helper.convert(*(str_arg.log_stat_)), str_arg.log_stat_->total_size());
+    }
   }
   return ret;
 }

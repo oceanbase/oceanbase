@@ -11,8 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_conflict_detector.h"
-#include "sql/optimizer/ob_log_plan.h"
+#include "ob_conflict_detector.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/rewrite/ob_transform_utils.h"
 
@@ -22,7 +21,7 @@ using namespace oceanbase::common;
 
 #include "sql/optimizer/ob_join_property.map"
 
-int ObConflictDetector::build_confict(ObIAllocator &allocator, ObConflictDetector* &detector)
+int ObConflictDetector::build_detector(ObIAllocator &allocator, ObConflictDetector* &detector)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(detector = static_cast<ObConflictDetector*>(allocator.alloc(sizeof(ObConflictDetector))))) {
@@ -274,33 +273,193 @@ int ObConflictDetector::check_join_legal(const ObRelIds &left_set,
   return ret;
 }
 
+/**
+ * 为左右连接树选择合法的连接条件
+ * is_strict_order：
+ * true：left join right是合法的，right join left是非法的
+ * false：left join right是非法的，right join left是合法的
+ */
+int ObConflictDetector::choose_detectors(ObRelIds &left_tables,
+                                         ObRelIds &right_tables,
+                                         ObIArray<ObConflictDetector*> &left_used_detectors,
+                                         ObIArray<ObConflictDetector*> &right_used_detectors,
+                                         ObIArray<TableDependInfo> &table_depend_infos,
+                                         ObIArray<ObConflictDetector*> &all_detectors,
+                                         ObIArray<ObConflictDetector*> &valid_detectors,
+                                         bool delay_cross_product,
+                                         bool &is_strict_order)
+{
+  int ret = OB_SUCCESS;
+  bool is_legal = false;
+  ObRelIds combined_relids;
+  if (OB_FAIL(combined_relids.add_members(left_tables))) {
+    LOG_WARN("failed to add left relids into combined relids", K(ret));
+  } else if (OB_FAIL(combined_relids.add_members(right_tables))) {
+    LOG_WARN("failed to add right relids into combined relids", K(ret));
+  }
+  is_strict_order = true;
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_detectors.count(); ++i) {
+    ObConflictDetector *detector = all_detectors.at(i);
+    bool is_used = false;
+    if (OB_ISNULL(detector)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("conflict detector is null", K(ret));
+    } else if (INNER_JOIN == detector->get_join_info().join_type_ &&
+               detector->get_join_info().where_conditions_.empty()) {
+      // 笛卡尔积的冲突检测器可以重复使用
+    } else if (ObOptimizerUtil::find_item(left_used_detectors, detector)) {
+      is_used = true;
+    } else if (ObOptimizerUtil::find_item(right_used_detectors, detector)) {
+      is_used = true;
+    }
+    if (OB_FAIL(ret) || is_used) {
+      // do nothing
+    } else if (OB_FAIL(detector->check_join_legal(left_tables,
+                                                  right_tables,
+                                                  combined_relids,
+                                                  delay_cross_product,
+                                                  table_depend_infos,
+                                                  is_legal))) {
+      LOG_WARN("failed to check join legal", K(ret));
+    } else if (!is_legal) {
+      //对于可交换的join如inner join，既left join right合法
+      //也right join left合法，但是我们只需要保存left inner join right
+      //因为在generate join path的时候会生成right inner join left的path
+      //并且不可能存在一种join，既有left join1 right合法，又有right join2 left合法
+      LOG_TRACE("left tree join right tree is not legal", K(left_tables),
+                K(right_tables), K(*detector));
+      //尝试right tree join left tree
+      if (OB_FAIL(detector->check_join_legal(right_tables,
+                                             left_tables,
+                                             combined_relids,
+                                             delay_cross_product,
+                                             table_depend_infos,
+                                             is_legal))) {
+        LOG_WARN("failed to check join legal", K(ret));
+      } else if (!is_legal) {
+        LOG_TRACE("right tree join left tree is not legal", K(right_tables),
+                K(left_tables), K(*detector));
+      } else if (OB_FAIL(valid_detectors.push_back(detector))) {
+        LOG_WARN("failed to push back detector", K(ret));
+      } else {
+        is_strict_order = false;
+        LOG_TRACE("succeed to find join info for ", K(left_tables),
+                  K(right_tables), KPC(detector));
+      }
+    } else if (OB_FAIL(valid_detectors.push_back(detector))) {
+      LOG_WARN("failed to push back detector", K(ret));
+    } else {
+      LOG_TRACE("succeed to find join info for ", K(left_tables),
+                  K(right_tables), KPC(detector));
+    }
+  }
+  return ret;
+}
+
+/**
+ * 只允许多个inner join叠加成一个join info
+ * 例如：select * from A, B where A.c1 = B.c1 and A.c2 = B.c2
+ * 或者单个OUTER JOIN加上多个inner join info，inner join info作为join qual
+ * 例如：select * from A left join B on A.c1 = B.c1 where A.c2 = B.c2
+ */
+int ObConflictDetector::check_join_info(const ObIArray<ObConflictDetector*> &valid_detectors,
+                                        ObJoinType &join_type,
+                                        bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  ObConflictDetector *detector = NULL;
+  bool has_non_inner_join = false;
+  is_valid = true;
+  join_type = INNER_JOIN;
+  if (valid_detectors.empty()) {
+    is_valid = false;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < valid_detectors.count(); ++i) {
+    detector = valid_detectors.at(i);
+    if (OB_ISNULL(detector)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null detectors", K(ret));
+    } else if (INNER_JOIN == detector->get_join_info().join_type_) {
+      //do nothing
+    } else if (has_non_inner_join) {
+      //不允许出现多个非inner join的join info
+      is_valid = false;
+    } else {
+      has_non_inner_join = true;
+      join_type = detector->get_join_info().join_type_;
+    }
+  }
+  return ret;
+}
+
+int ObConflictDetector::merge_join_info(const ObIArray<ObConflictDetector*> &valid_detectors,
+                                        JoinInfo &join_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  if (OB_FAIL(check_join_info(valid_detectors,
+                              join_info.join_type_,
+                              is_valid))) {
+    LOG_WARN("failed to check join info", K(ret));
+  } else if (!is_valid) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect different join info", K(valid_detectors), K(ret));
+  } else {
+    ObConflictDetector *detector = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < valid_detectors.count(); ++i) {
+      detector = valid_detectors.at(i);
+      if (OB_ISNULL(detector)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null detectors", K(ret));
+      } else if (OB_FAIL(join_info.table_set_.add_members(detector->get_join_info().table_set_))) {
+        LOG_WARN("failed to add members", K(ret));
+      } else if (OB_FAIL(append_array_no_dup(join_info.where_conditions_, detector->get_join_info().where_conditions_))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      } else if (INNER_JOIN == join_info.join_type_ &&
+                 OB_FAIL(append_array_no_dup(join_info.where_conditions_, detector->get_join_info().on_conditions_))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      } else if (INNER_JOIN != join_info.join_type_ &&
+                 OB_FAIL(append_array_no_dup(join_info.on_conditions_, detector->get_join_info().on_conditions_))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObConflictDetectorGenerator::generate_conflict_detectors(const ObDMLStmt *stmt,
                                                              const ObIArray<TableItem*> &table_items,
                                                              const ObIArray<SemiInfo*> &semi_infos,
-                                                             ObIArray<ObRawExpr*> &quals,
-                                                             ObIArray<ObJoinOrder*> &baserels,
+                                                             const ObIArray<ObRawExpr*> &quals,
+                                                             ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters,
                                                              ObIArray<ObConflictDetector*> &conflict_detectors)
 {
   int ret = OB_SUCCESS;
   ObRelIds table_ids;
   ObSEArray<ObConflictDetector*, 8> semi_join_detectors;
   ObSEArray<ObConflictDetector*, 8> inner_join_detectors;
+  ObSEArray<ObRawExpr*, 8> new_quals;
   LOG_TRACE("start to generate conflict detector", K(table_items), K(semi_infos), K(quals));
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(table_items, table_ids))) {
     LOG_WARN("failed to get table ids", K(ret));
+  } else if (OB_FALSE_IT(baserel_filters.reuse())) {
+  } else if (OB_FAIL(baserel_filters.prepare_allocate(stmt->get_table_size()))) {
+    LOG_WARN("failed to prepare allocate base rel filters", K(ret));
+  } else if (OB_FAIL(new_quals.assign(quals))) {
+    LOG_WARN("failed to assign quals", K(ret));
   } else if (OB_FAIL(generate_inner_join_detectors(stmt,
                                                    table_items,
-                                                   quals,
-                                                   baserels,
+                                                   new_quals,
+                                                   baserel_filters,
                                                    inner_join_detectors))) {
     LOG_WARN("failed to generate inner join detectors", K(ret));
   } else if (OB_FAIL(generate_semi_join_detectors(stmt,
                                                   semi_infos,
                                                   table_ids,
+                                                  baserel_filters,
                                                   inner_join_detectors,
                                                   semi_join_detectors))) {
     LOG_WARN("failed to generate semi join detectors", K(ret));
@@ -483,11 +642,14 @@ int ObConflictDetectorGenerator::generate_conflict_rule(ObConflictDetector *pare
 int ObConflictDetectorGenerator::generate_semi_join_detectors(const ObDMLStmt *stmt,
                                                               const ObIArray<SemiInfo*> &semi_infos,
                                                               ObRelIds &left_rel_ids,
+                                                              ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters,
                                                               const ObIArray<ObConflictDetector*> &inner_join_detectors,
                                                               ObIArray<ObConflictDetector*> &semi_join_detectors)
 {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> right_rel_ids;
+  ObSEArray<ObRawExpr *, 4> right_quals;
+  ObSEArray<ObRawExpr *, 4> semi_conds;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpected null", K(ret), K(stmt));
@@ -496,11 +658,13 @@ int ObConflictDetectorGenerator::generate_semi_join_detectors(const ObDMLStmt *s
     right_rel_ids.reuse();
     SemiInfo *info = semi_infos.at(i);
     ObConflictDetector *detector = NULL;
+    right_quals.reuse();
+    semi_conds.reuse();
     if (OB_ISNULL(info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null semi info", K(ret));
       //1. create conflict detector
-    } else if (OB_FAIL(ObConflictDetector::build_confict(allocator_, detector))) {
+    } else if (OB_FAIL(ObConflictDetector::build_detector(allocator_, detector))) {
       LOG_WARN("failed to build conflict detector", K(ret));
     } else if (OB_ISNULL(detector)) {
       ret = OB_ERR_UNEXPECTED;
@@ -513,20 +677,21 @@ int ObConflictDetectorGenerator::generate_semi_join_detectors(const ObDMLStmt *s
       LOG_WARN("failed to add members", K(ret));
     } else if (OB_FAIL(semi_join_detectors.push_back(detector))) {
       LOG_WARN("failed to push back detector", K(ret));
+    } else if (OB_FAIL(pushdown_semi_conditions(stmt, info, right_quals, semi_conds))) {
+      LOG_WARN("failed to pushdown semi conditions", K(ret));
+    } else if (OB_FAIL(distribute_quals(stmt, info->right_table_id_, right_quals, baserel_filters))) {
+      LOG_WARN("failed to distribute table filter", K(ret));
     } else {
       detector->join_info_.join_type_ = info->join_type_;
       // 2. add equal join conditions
       ObRawExpr *expr = NULL;
-      for (int64_t j = 0; OB_SUCC(ret) && j < info->semi_conditions_.count(); ++j) {
-        if (OB_ISNULL(expr = info->semi_conditions_.at(j))) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < semi_conds.count(); ++j) {
+        if (OB_ISNULL(expr = semi_conds.at(j))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), K(expr));
-        } else if (NULL != onetime_copier_
-                   && OB_FAIL(ObRawExprUtils::copy_and_formalize(expr, onetime_copier_, session_info_))) {
-          LOG_WARN("failed to try replace onetime subquery", K(ret));
         } else if (OB_FAIL(detector->join_info_.table_set_.add_members(expr->get_relation_ids()))) {
           LOG_WARN("failed to add members", K(ret));
-        } else if (OB_FAIL(detector->join_info_.where_conditions_.push_back(expr))) {
+        } else if (OB_FAIL(detector->join_info_.on_conditions_.push_back(expr))) {
           LOG_WARN("failed to push back exprs", K(ret));
         } else if (expr->has_flag(IS_JOIN_COND) &&
                    OB_FAIL(detector->join_info_.equal_join_conditions_.push_back(expr))) {
@@ -566,7 +731,7 @@ int ObConflictDetectorGenerator::generate_semi_join_detectors(const ObDMLStmt *s
 int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *stmt,
                                                                const ObIArray<TableItem*> &table_items,
                                                                ObIArray<ObRawExpr*> &quals,
-                                                               ObIArray<ObJoinOrder*> &baserels,
+                                                               ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters,
                                                                ObIArray<ObConflictDetector*> &inner_join_detectors)
 {
   int ret = OB_SUCCESS;
@@ -577,9 +742,9 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
   ObSEArray<ObRawExpr*, 4> all_quals;
   ObRelIds all_table_ids;
   ObRelIds table_ids;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(stmt), K(query_ctx_));
   } else if (OB_FAIL(ObOptimizerUtil::split_or_quals(stmt,
                                                      expr_factory_,
                                                      session_info_,
@@ -598,8 +763,6 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
     LOG_WARN("failed to assign array", K(ret));
   } else if (OB_FAIL(append(all_quals, redundant_quals))) {
     LOG_WARN("failed to append array", K(ret));
-  } else {
-    OPT_TRACE("deduce redundant qual:", redundant_quals);
   }
   //1. 生成单个table item内部的冲突规则
   for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
@@ -614,11 +777,17 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
     //找到table item的过滤谓词
     for (int64_t j = 0; OB_SUCC(ret) && j < quals.count(); ++j) {
       ObRawExpr *expr = quals.at(j);
+      bool has_risky_state_func = false;
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::check_has_risky_state_func(expr, has_risky_state_func))) {
+        LOG_WARN("failed to check has risky state func", K(ret));
+      } else if (has_risky_state_func) {
+        // don't pushdown condition which is not deterministic
+        // do nothing
       } else if (!expr->get_relation_ids().is_subset(table_ids) ||
-                  expr->has_flag(CNT_SUB_QUERY)) {
+                 (expr->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, expr))) {
         //do nothing
       } else if (expr->get_relation_ids().is_empty() &&
                  !expr->is_const_expr() &&
@@ -634,7 +803,7 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
       if (OB_FAIL(generate_outer_join_detectors(stmt,
                                                 table_items.at(i),
                                                 table_filters,
-                                                baserels,
+                                                baserel_filters,
                                                 outer_join_detectors))) {
         LOG_WARN("failed to generate outer join detectors", K(ret));
       }
@@ -649,7 +818,12 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
     } else if (ObOptimizerUtil::find_item(all_table_filters, expr)) {
-      //do nothing
+      // do nothing
+    } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                    COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                    COMPAT_VERSION_4_4_1)
+               && ObOptimizerUtil::find_item(new_or_quals_, expr)) {
+      // do nothing, no need to gen detector for new or quals
     } else if (OB_FAIL(join_conditions.push_back(expr))) {
       LOG_WARN("failed to push back expr", K(ret));
     } else if (OB_FAIL(find_inner_conflict_detector(inner_join_detectors,
@@ -657,7 +831,7 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
                                                     detector))) {
       LOG_WARN("failed to find conflict detector", K(ret));
     } else if (NULL == detector) {
-      if (OB_FAIL(ObConflictDetector::build_confict(allocator_, detector))) {
+      if (OB_FAIL(ObConflictDetector::build_detector(allocator_, detector))) {
         LOG_WARN("failed to build conflict detector", K(ret));
       } else if (OB_ISNULL(detector)) {
         ret = OB_ERR_UNEXPECTED;
@@ -669,7 +843,7 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
         LOG_WARN("failed to push back qual", K(ret));
       } else if (OB_FAIL(detector->join_info_.table_set_.add_members(expr->get_relation_ids()))) {
         LOG_WARN("failed to add members", K(ret));
-      } else if (expr->has_flag(CNT_SUB_QUERY) &&
+      } else if (expr->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, expr) &&
                  OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
         LOG_WARN("failed to add members", K(ret));
       } else if (OB_FAIL(inner_join_detectors.push_back(detector))) {
@@ -694,7 +868,7 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
     } else if (expr->has_flag(IS_JOIN_COND) &&
                OB_FAIL(detector->join_info_.equal_join_conditions_.push_back(expr))) {
         LOG_WARN("failed to push back qual", K(ret));
-    } else if (expr->has_flag(CNT_SUB_QUERY) &&
+    } else if (expr->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, expr) &&
                OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
       LOG_WARN("failed to add members", K(ret));
     }
@@ -737,7 +911,7 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
       if (OB_ISNULL(outer_detector)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null detector", K(ret));
-      } else if (!IS_OUTER_OR_CONNECT_BY_JOIN(outer_detector->join_info_.join_type_)) {
+      } else if (IS_INNER_JOIN(outer_detector->join_info_.join_type_)) {
         //inner join与inner join之前没有冲突，do nothing
       } else if (OB_FAIL(generate_conflict_rule(inner_detector,
                                                 outer_detector,
@@ -769,7 +943,7 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
 int ObConflictDetectorGenerator::generate_outer_join_detectors(const ObDMLStmt *stmt,
                                                                TableItem *table_item,
                                                                ObIArray<ObRawExpr*> &table_filter,
-                                                               ObIArray<ObJoinOrder*> &baserels,
+                                                               ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters,
                                                                ObIArray<ObConflictDetector*> &outer_join_detectors)
 {
   int ret = OB_SUCCESS;
@@ -779,7 +953,7 @@ int ObConflictDetectorGenerator::generate_outer_join_detectors(const ObDMLStmt *
     LOG_WARN("unexpect null table item", K(ret));
   } else if (!table_item->is_joined_table()) {
     //如果是基表，直接把过程谓词分发到join order里
-    if (OB_FAIL(distribute_quals(stmt, table_item, table_filter, baserels))) {
+    if (OB_FAIL(distribute_quals(stmt, table_item->table_id_, table_filter, baserel_filters))) {
       LOG_WARN("failed to distribute table filter", K(ret));
     }
   } else if (INNER_JOIN == joined_table->joined_type_) {
@@ -789,10 +963,10 @@ int ObConflictDetectorGenerator::generate_outer_join_detectors(const ObDMLStmt *
     if (OB_FAIL(flatten_inner_join(table_item, table_filter, table_items))) {
       LOG_WARN("failed to flatten inner join", K(ret));
     } else if (OB_FAIL(SMART_CALL(generate_inner_join_detectors(stmt,
-                                                     table_items,
-                                                     table_filter,
-                                                     baserels,
-                                                     detectors)))) {
+                                                                table_items,
+                                                                table_filter,
+                                                                baserel_filters,
+                                                                detectors)))) {
       LOG_WARN("failed to generate inner join detectors", K(ret));
     } else if (OB_FAIL(append(outer_join_detectors, detectors))) {
       LOG_WARN("failed to append detectors", K(ret));
@@ -800,7 +974,7 @@ int ObConflictDetectorGenerator::generate_outer_join_detectors(const ObDMLStmt *
   } else if (OB_FAIL(inner_generate_outer_join_detectors(stmt,
                                                          joined_table,
                                                          table_filter,
-                                                         baserels,
+                                                         baserel_filters,
                                                          outer_join_detectors))) {
     LOG_WARN("failed to generate outer join detectors", K(ret));
   }
@@ -808,31 +982,21 @@ int ObConflictDetectorGenerator::generate_outer_join_detectors(const ObDMLStmt *
 }
 
 int ObConflictDetectorGenerator::distribute_quals(const ObDMLStmt *stmt,
-                                                  TableItem *table_item,
+                                                  uint64_t table_id,
                                                   const ObIArray<ObRawExpr*> &table_filter,
-                                                  ObIArray<ObJoinOrder*> &baserels)
+                                                  ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters)
 {
   int ret = OB_SUCCESS;
-  ObJoinOrder *cur_rel = NULL;
-  ObSEArray<int64_t, 8> relids;
-  ObRelIds table_ids;
-  if (OB_ISNULL(stmt) || OB_ISNULL(table_item)) {
+  int64_t rel_id = OB_INVALID_INDEX;
+  if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Get unexpected null", K(ret), K(stmt), K(table_item));
-  } else if (OB_FAIL(stmt->get_table_rel_ids(*table_item, table_ids))) {
-    LOG_WARN("failed to get table ids", K(ret));
-  } else if (OB_FAIL(table_ids.to_array(relids))) {
-    LOG_WARN("to_array error", K(ret));
-  }  else if (1 != relids.count()) {
+    LOG_WARN("get unexpected stmt", K(ret), K(stmt));
+  } else if (OB_FALSE_IT(rel_id = stmt->get_table_bit_index(table_id))) {
+  } else if (OB_UNLIKELY(rel_id < 1 || rel_id > baserel_filters.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect basic table item", K(ret));
-  } else if (OB_FAIL(find_base_rel(baserels, relids.at(0), cur_rel))) {
-    LOG_WARN("find_base_rel fails", K(ret));
-  } else if (OB_ISNULL(cur_rel)) {
-    ret = OB_SQL_OPT_ERROR;
-    LOG_WARN("failed to distribute qual to rel", K(baserels), K(relids), K(ret));
-  } else if (OB_FAIL(append(cur_rel->get_restrict_infos(), table_filter))) {
-    LOG_WARN("failed to distribute qual to rel", K(ret));
+    LOG_WARN("unexpected rel id", K(ret), K(rel_id), K(baserel_filters.count()), K(table_id));
+  } else if (OB_FAIL(append(baserel_filters.at(rel_id - 1), table_filter))) {
+    LOG_WARN("failed to append table filters", K(ret));
   }
   return ret;
 }
@@ -864,6 +1028,9 @@ int ObConflictDetectorGenerator::flatten_inner_join(TableItem *table_item,
                                                            onetime_copier_,
                                                            session_info_))) {
     LOG_WARN("failed to adjust join conditions with onetime", K(ret));
+  } else if (NULL == onetime_copier_
+             && OB_FAIL(new_conditions.assign(joined_table->join_conditions_))) {
+    LOG_WARN("failed to assign join conditions", K(ret));
   } else if (OB_FAIL(append(table_filter, new_conditions))) {
     LOG_WARN("failed to append exprs", K(ret));
   }
@@ -873,7 +1040,7 @@ int ObConflictDetectorGenerator::flatten_inner_join(TableItem *table_item,
 int ObConflictDetectorGenerator::inner_generate_outer_join_detectors(const ObDMLStmt *stmt,
                                                                      JoinedTable *joined_table,
                                                                      ObIArray<ObRawExpr*> &table_filter,
-                                                                     ObIArray<ObJoinOrder *> &baserels,
+                                                                     ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters,
                                                                      ObIArray<ObConflictDetector*> &outer_join_detectors)
 {
   int ret = OB_SUCCESS;
@@ -908,24 +1075,24 @@ int ObConflictDetectorGenerator::inner_generate_outer_join_detectors(const ObDML
     LOG_WARN("failed to pushdown on conditions", K(ret));
     //3. generate left child detectors
   } else if (OB_FAIL(SMART_CALL(generate_outer_join_detectors(stmt,
-                                                   joined_table->left_table_,
-                                                   left_quals,
-                                                   baserels,
-                                                   left_detectors)))) {
+                                                             joined_table->left_table_,
+                                                             left_quals,
+                                                             baserel_filters,
+                                                             left_detectors)))) {
     LOG_WARN("failed to generate outer join detectors", K(ret));
   } else if (OB_FAIL(append(outer_join_detectors, left_detectors))) {
     LOG_WARN("failed to append detectors", K(ret));
     //4. generate right child detectors
   } else if (OB_FAIL(SMART_CALL(generate_outer_join_detectors(stmt,
-                                                   joined_table->right_table_,
-                                                   right_quals,
-                                                   baserels,
-                                                   right_detectors)))) {
+                                                              joined_table->right_table_,
+                                                              right_quals,
+                                                              baserel_filters,
+                                                              right_detectors)))) {
     LOG_WARN("failed to generate outer join detectors", K(ret));
   } else if (OB_FAIL(append(outer_join_detectors, right_detectors))) {
     LOG_WARN("failed to append detectors", K(ret));
     //5. create outer join detector
-  } else if (OB_FAIL(ObConflictDetector::build_confict(allocator_, detector))) {
+  } else if (OB_FAIL(ObConflictDetector::build_detector(allocator_, detector))) {
     LOG_WARN("failed to build conflict detector", K(ret));
   } else if (OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
@@ -989,23 +1156,23 @@ int ObConflictDetectorGenerator::inner_generate_outer_join_detectors(const ObDML
     //6. generate conflict rules
     for (int64_t i = 0; OB_SUCC(ret) && i < left_detectors.count(); ++i) {
       if (OB_FAIL(generate_conflict_rule(detector,
-                                          left_detectors.at(i),
-                                          true,
-                                          detector->CR_))) {
+                                         left_detectors.at(i),
+                                         true,
+                                         detector->CR_))) {
         LOG_WARN("failed to generate conflict rule", K(ret));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < right_detectors.count(); ++i) {
       if (OB_FAIL(generate_conflict_rule(detector,
-                                          right_detectors.at(i),
-                                          false,
-                                          detector->CR_))) {
+                                         right_detectors.at(i),
+                                         false,
+                                         detector->CR_))) {
         LOG_WARN("failed to generate conflict rule", K(ret));
       }
     }
     //7. generate conflict detector for table filter
     if (OB_SUCC(ret) && !table_filter.empty()) {
-      if (OB_FAIL(ObConflictDetector::build_confict(allocator_, detector))) {
+      if (OB_FAIL(ObConflictDetector::build_detector(allocator_, detector))) {
         LOG_WARN("failed to build conflict detector", K(ret));
       } else if (OB_ISNULL(detector)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1059,11 +1226,15 @@ int ObConflictDetectorGenerator::pushdown_where_filters(const ObDMLStmt *stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(qual), K(ret));
       } else if (qual->has_flag(CNT_ROWNUM)) {
-        if (OB_FAIL(new_quals.push_back(qual))) {
+        if (OB_FAIL(push_back_join_cond_if_needed(new_quals, qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
       } else if (qual->get_relation_ids().is_empty()) {
-        if (OB_FAIL(left_quals.push_back(qual))) {
+        if (!should_pushdown_const_filters_) {
+          if (OB_FAIL(push_back_join_cond_if_needed(new_quals, qual))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          }
+        } else if (OB_FAIL(left_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         } else if (qual->is_const_expr() &&
                    OB_FAIL(right_quals.push_back(qual))) {
@@ -1079,7 +1250,7 @@ int ObConflictDetectorGenerator::pushdown_where_filters(const ObDMLStmt *stmt,
         if (OB_FAIL(right_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
-      } else if (OB_FAIL(new_quals.push_back(qual))) {
+      } else if (OB_FAIL(push_back_join_cond_if_needed(new_quals, qual))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else if (T_OP_OR == qual->get_expr_type()) {
         ObOpRawExpr *or_qual = static_cast<ObOpRawExpr *>(qual);
@@ -1143,6 +1314,9 @@ int ObConflictDetectorGenerator::pushdown_on_conditions(const ObDMLStmt *stmt,
                                                              onetime_copier_,
                                                              session_info_))) {
       LOG_WARN("failed to adjust join conditions with onetime", K(ret));
+    } else if (NULL == onetime_copier_
+               && OB_FAIL(new_conditions.assign(joined_table->join_conditions_))) {
+      LOG_WARN("failed to assign join conditions", K(ret));
     } else if (OB_UNLIKELY(new_conditions.count() != N)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr count mismatch", K(ret));
@@ -1151,8 +1325,9 @@ int ObConflictDetectorGenerator::pushdown_on_conditions(const ObDMLStmt *stmt,
       if (OB_ISNULL(qual = new_conditions.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(qual), K(ret));
-      } else if (qual->has_flag(CNT_ROWNUM) || qual->has_flag(CNT_SUB_QUERY)) {
-        if (OB_FAIL(join_quals.push_back(qual))) {
+      } else if (qual->has_flag(CNT_ROWNUM) ||
+                 (qual->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, qual))) {
+        if (OB_FAIL(push_back_join_cond_if_needed(join_quals, qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
       } else if (RIGHT_OUTER_JOIN == join_type &&
@@ -1174,7 +1349,7 @@ int ObConflictDetectorGenerator::pushdown_on_conditions(const ObDMLStmt *stmt,
         if (OB_FAIL(right_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
-      } else if (OB_FAIL(join_quals.push_back(qual))) {
+      } else if (OB_FAIL(push_back_join_cond_if_needed(join_quals, qual))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else if (!qual->get_relation_ids().is_empty() &&
                   T_OP_OR == qual->get_expr_type()) {
@@ -1216,6 +1391,77 @@ int ObConflictDetectorGenerator::pushdown_on_conditions(const ObDMLStmt *stmt,
   return ret;
 }
 
+int ObConflictDetectorGenerator::pushdown_semi_conditions(const ObDMLStmt *stmt,
+                                                          SemiInfo *info,
+                                                          ObIArray<ObRawExpr*> &right_quals,
+                                                          ObIArray<ObRawExpr*> &semi_conds)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 16> new_conditions;
+  if (OB_ISNULL(stmt) || OB_ISNULL(info) || OB_ISNULL(query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null param", K(ret), K(stmt), K(info), K(query_ctx_));
+  } else if (NULL != onetime_copier_
+             && OB_FAIL(ObRawExprUtils::copy_and_formalize(info->semi_conditions_,
+                                                           new_conditions,
+                                                           onetime_copier_,
+                                                           session_info_))) {
+    LOG_WARN("failed to adjust semi conditions with onetime", K(ret));
+  } else if (NULL == onetime_copier_
+             && OB_FAIL(new_conditions.assign(info->semi_conditions_))) {
+    LOG_WARN("failed to assign semi conditions", K(ret));
+  } else if (OB_UNLIKELY(new_conditions.count() != info->semi_conditions_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr count mismatch", K(ret), K(new_conditions.count()), K(info->semi_conditions_.count()));
+  } else if (!query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                   COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                   COMPAT_VERSION_4_4_1)) {
+    if (OB_FAIL(semi_conds.assign(new_conditions))) {
+      LOG_WARN("failed to assign semi conditions", K(ret));
+    }
+  } else {
+    ObRawExpr *qual = NULL;
+    ObRelIds right_rel_ids;
+    if (OB_FAIL(stmt->get_table_rel_ids(info->right_table_id_, right_rel_ids))) {
+      LOG_WARN("failed to get table ids", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < new_conditions.count(); ++i) {
+      if (OB_ISNULL(qual = new_conditions.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null expr", K(qual), K(ret));
+      } else if (qual->has_flag(CNT_ROWNUM) ||
+                 (qual->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, qual))) {
+        if (OB_FAIL(push_back_join_cond_if_needed(semi_conds, qual))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      } else if (!qual->is_deterministic()) {
+        if (OB_FAIL(push_back_join_cond_if_needed(semi_conds, qual))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      } else if (qual->get_relation_ids().is_subset(right_rel_ids)) {
+        if (OB_FAIL(right_quals.push_back(qual))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      } else if (OB_FAIL(push_back_join_cond_if_needed(semi_conds, qual))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (!qual->get_relation_ids().is_empty() &&
+                  T_OP_OR == qual->get_expr_type()) {
+        ObOpRawExpr *or_qual = static_cast<ObOpRawExpr *>(qual);
+        if (OB_FAIL(ObOptimizerUtil::try_split_or_qual(stmt,
+                                                       expr_factory_,
+                                                       session_info_,
+                                                       right_rel_ids,
+                                                       *or_qual,
+                                                       right_quals,
+                                                       new_or_quals_))) {
+          LOG_WARN("failed to split or qual on right table", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObConflictDetectorGenerator::generate_cross_product_detector(const ObDMLStmt *stmt,
                                                                  const ObIArray<TableItem*> &table_items,
                                                                  ObIArray<ObRawExpr*> &quals,
@@ -1233,7 +1479,7 @@ int ObConflictDetectorGenerator::generate_cross_product_detector(const ObDMLStmt
     //do nothing
   } else if (OB_FAIL(stmt->get_table_rel_ids(table_items, table_ids))) {
     LOG_WARN("failed to get table ids", K(ret));
-  } else if (OB_FAIL(ObConflictDetector::build_confict(allocator_, detector))) {
+  } else if (OB_FAIL(ObConflictDetector::build_detector(allocator_, detector))) {
     LOG_WARN("failed to build conflict detector", K(ret));
   } else if (OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1449,21 +1695,28 @@ int ObConflictDetectorGenerator::deduce_redundant_join_conds(const ObDMLStmt *st
 {
   int ret = OB_SUCCESS;
   EqualSets all_equal_sets;
+  ObSEArray<ObRawExpr*, 8> normal_quals;
+  ObSEArray<ObRawExpr*, 8> subquery_quals;
   ObSEArray<ObRelIds, 8> connect_infos;
   ObSEArray<ObRelIds, 8> single_table_ids;
   ObRelIds table_ids;
   ObArenaAllocator allocator(ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator,
-                                                 quals,
-                                                 all_equal_sets))) {
+  if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(quals,
+                                                       subquery_quals,
+                                                       normal_quals,
+                                                       false /* with_onetime */ ))) {
+    LOG_WARN("failed to classify subquery exprs", K(ret));
+  } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator,
+                                                        normal_quals,
+                                                        all_equal_sets))) {
     LOG_WARN("failed to compute equal set", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
-    if (OB_ISNULL(quals.at(i))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < normal_quals.count(); ++i) {
+    if (OB_ISNULL(normal_quals.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else if (OB_FAIL(add_var_to_array_no_dup(connect_infos,
-                                               quals.at(i)->get_relation_ids()))) {
+                                               normal_quals.at(i)->get_relation_ids()))) {
       LOG_WARN("failed to add var to array no dup", K(ret));
     }
   }
@@ -1490,6 +1743,9 @@ int ObConflictDetectorGenerator::deduce_redundant_join_conds(const ObDMLStmt *st
       LOG_WARN("failed to deduce redundancy quals with equal set", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    OPT_TRACE("deduce redundant qual:", redundant_quals);
+  }
   return ret;
 }
 
@@ -1501,49 +1757,60 @@ int ObConflictDetectorGenerator::deduce_redundant_join_conds_with_equal_set(cons
   int ret = OB_SUCCESS;
   ObRelIds table_ids;
   ObRawExpr *new_expr = NULL;
-  if (OB_ISNULL(session_info_)) {
+  bool contain_const = false;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(session_info_), K(query_ctx_));
+  } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3, COMPAT_VERSION_4_3_0,
+                                                  COMPAT_VERSION_4_3_5_BP2)) {
+    for (int64_t i = 0; OB_SUCC(ret) && !contain_const && i < equal_set.count(); i ++) {
+      if (OB_ISNULL(equal_set.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (equal_set.at(i)->is_const_expr()) {
+        contain_const = true;
+      }
+    }
   }
-  for (int64_t m = 0; OB_SUCC(ret) && m < equal_set.count() - 1; ++m) {
-    for (int64_t n = m + 1; OB_SUCC(ret) && n < equal_set.count(); ++n) {
-      table_ids.reuse();
-      new_expr = NULL;
-      if (OB_ISNULL(equal_set.at(m)) ||
-          OB_ISNULL(equal_set.at(n))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (equal_set.at(m)->get_result_meta() !=
-                  equal_set.at(n)->get_result_meta()) {
-        // do nothing
-      } else if (!equal_set.at(m)->has_flag(CNT_COLUMN) ||
-                 !equal_set.at(n)->has_flag(CNT_COLUMN) ||
-                 equal_set.at(m)->get_relation_ids().overlap(equal_set.at(n)->get_relation_ids())) {
-        // do nothing
-      } else if (OB_FAIL(table_ids.add_members(equal_set.at(m)->get_relation_ids())) ||
-                 OB_FAIL(table_ids.add_members(equal_set.at(n)->get_relation_ids()))) {
-        LOG_WARN("failed to add members", K(ret));
-      } else if (ObOptimizerUtil::find_item(connect_infos, table_ids)) {
-        // do nothing
-      } else if (ObOptimizerUtil::find_superset(table_ids, single_table_ids)) {
-        // do nothing
-      } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
-                         expr_factory_,
-                         session_info_,
-                         T_OP_EQ,
-                         new_expr,
-                         equal_set.at(m),
-                         equal_set.at(n)))) {
-          LOG_WARN("failed to create double op expr", K(ret));
-      } else if (OB_ISNULL(new_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(new_expr->pull_relation_id())) {
-        LOG_WARN("failed to pull releation id");
-      } else if (OB_FAIL(connect_infos.push_back(table_ids))) {
+  if (OB_SUCC(ret) && !contain_const) {
+    for (int64_t m = 0; OB_SUCC(ret) && m < equal_set.count() - 1; ++m) {
+      for (int64_t n = m + 1; OB_SUCC(ret) && n < equal_set.count(); ++n) {
+        table_ids.reuse();
+        new_expr = NULL;
+        if (OB_ISNULL(equal_set.at(m)) ||
+            OB_ISNULL(equal_set.at(n))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (equal_set.at(m)->get_result_meta() !=
+                    equal_set.at(n)->get_result_meta()) {
+          // do nothing
+        } else if (!equal_set.at(m)->has_flag(CNT_COLUMN) ||
+                  !equal_set.at(n)->has_flag(CNT_COLUMN) ||
+                  equal_set.at(m)->get_relation_ids().overlap(equal_set.at(n)->get_relation_ids())) {
+          // do nothing
+        } else if (OB_FAIL(table_ids.add_members(equal_set.at(m)->get_relation_ids())) ||
+                  OB_FAIL(table_ids.add_members(equal_set.at(n)->get_relation_ids()))) {
+          LOG_WARN("failed to add members", K(ret));
+        } else if (ObOptimizerUtil::find_item(connect_infos, table_ids)) {
+          // do nothing
+        } else if (ObOptimizerUtil::find_superset(table_ids, single_table_ids)) {
+          // do nothing
+        } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
+                          expr_factory_,
+                          session_info_,
+                          T_OP_EQ,
+                          new_expr,
+                          equal_set.at(m),
+                          equal_set.at(n)))) {
+            LOG_WARN("failed to create double op expr", K(ret));
+        } else if (OB_ISNULL(new_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(new_expr->pull_relation_id())) {
+          LOG_WARN("failed to pull releation id");
+        } else if (OB_FAIL(redundant_quals.push_back(new_expr))) {
           LOG_WARN("failed to push back array", K(ret));
-      } else if (OB_FAIL(redundant_quals.push_back(new_expr))) {
-        LOG_WARN("failed to push back array", K(ret));
+        }
       }
     }
   }
@@ -1571,36 +1838,32 @@ int ObConflictDetectorGenerator::find_inner_conflict_detector(const ObIArray<ObC
   return ret;
 }
 
+int ObConflictDetectorGenerator::push_back_join_cond_if_needed(ObIArray<ObRawExpr*> &join_conds,
+                                                               ObRawExpr *cond)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(query_ctx_) || OB_ISNULL(cond)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(query_ctx_), K(cond));
+  } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                  COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                  COMPAT_VERSION_4_4_1)
+             && ObOptimizerUtil::find_item(new_or_quals_, cond)) {
+    // do nothing, no need to keep new or quals on join conds or filters
+  } else if (OB_FAIL(join_conds.push_back(cond))) {
+    LOG_WARN("failed to push back join cond", K(ret));
+  }
+  return ret;
+}
+
 bool ObConflictDetectorGenerator::has_depend_table(const ObRelIds& table_ids)
 {
   bool b_ret = false;
   for (int64_t i = 0; !b_ret && i < table_depend_infos_.count(); ++i) {
-    TableDependInfo &info = table_depend_infos_.at(i);
+    const TableDependInfo &info = table_depend_infos_.at(i);
     if (table_ids.has_member(info.table_idx_)) {
       b_ret = true;
     }
   }
   return b_ret;
-}
-
-int ObConflictDetectorGenerator::find_base_rel(ObIArray<ObJoinOrder*> &base_level,
-                                               int64_t table_idx,
-                                               ObJoinOrder *&base_rel)
-{
-  int ret = OB_SUCCESS;
-  ObJoinOrder *cur_rel = NULL;
-  bool find = false;
-  base_rel = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && !find && i < base_level.count(); ++i) {
-    //如果是OJ，这里table_set_可能不止一项，所以不能认为cur_rel->table_set_.num_members() == 1
-    if (OB_ISNULL(cur_rel = base_level.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(cur_rel));
-    } else if (cur_rel->get_tables().has_member(table_idx)){
-      find = true;
-      base_rel = cur_rel;
-      LOG_TRACE("succeed to find base rel", K(cur_rel->get_tables()), K(table_idx));
-    } else { /* do nothing */ }
-  }
-  return ret;
 }

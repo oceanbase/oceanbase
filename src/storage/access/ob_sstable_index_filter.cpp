@@ -14,7 +14,6 @@
 
 #include "ob_sstable_index_filter.h"
 #include "ob_table_access_param.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {
@@ -138,7 +137,8 @@ int ObSSTableIndexFilter::build_skipping_filter_nodes(
     sql::ObPushdownFilterExecutor &filter)
 {
   int ret = OB_SUCCESS;
-  if (filter.is_logic_op_node()) {
+  if (filter.is_truncate_node()) {
+  } else if (filter.is_logic_op_node()) {
     sql::ObPushdownFilterExecutor **children = filter.get_childs();
     for (uint32_t i = 0; OB_SUCC(ret) && i < filter.get_child_count(); ++i) {
       if (OB_ISNULL(children[i])) {

@@ -13,14 +13,8 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_outline_resolver.h"
 
-#include "sql/ob_sql_utils.h"
+#include "share/catalog/ob_catalog_utils.h"
 #include "sql/resolver/ob_resolver.h"
-#include "sql/resolver/ob_stmt_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/dml/ob_insert_resolver.h"
-#include "sql/resolver/dml/ob_update_resolver.h"
-#include "sql/resolver/dml/ob_delete_resolver.h"
-#include "sql/resolver/dml/ob_select_resolver.h"
 
 namespace oceanbase
 {
@@ -53,8 +47,15 @@ int ObOutlineResolver::resolve_outline_name(const ParseNode *node, ObString &db_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL", K(ret));
   } else {
+    ObString catalog_name;
+    uint64_t catalog_id = OB_INVALID_ID;
+    UNUSED(catalog_id);
+    const ParseNode *catalog_node = NULL;
     const ParseNode *db_name_node = node->children_[0];
     const ParseNode *outline_name_node = node->children_[1];
+    if (node->num_child_ >= 4) {
+      catalog_node = node->children_[3];
+    }
 
     //get outline name, TODO(tingshuai.yts):check outline_name length
     outline_name.assign_ptr(outline_name_node->str_value_, static_cast<ObString::obstr_size_t>(outline_name_node->str_len_));
@@ -62,7 +63,13 @@ int ObOutlineResolver::resolve_outline_name(const ParseNode *node, ObString &db_
     //get database name
     bool perserve_lettercase = lib::is_oracle_mode() ?
         true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
-    if (NULL == db_name_node) {
+    if (OB_FAIL(resolve_catalog_node(catalog_node, catalog_id, catalog_name))) {
+      LOG_WARN("fail to resolve catalog node", K(ret));
+    } else if (!ObCatalogUtils::is_internal_catalog_name(catalog_name)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support in internal catalog", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "This operation in catalog is");
+    } else if (NULL == db_name_node) {
       if (session_info_->get_database_name().empty()) {
         db_name = OB_MOCK_DEFAULT_DATABASE_NAME;
       } else {

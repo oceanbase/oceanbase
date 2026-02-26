@@ -19,6 +19,7 @@
 #include "storage/utl_file/ob_utl_file_handler.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "share/ob_simple_mem_limit_getter.h"
+#include "share/ob_device_manager.h"
 
 namespace oceanbase
 {
@@ -37,6 +38,7 @@ public:
   }
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase();
 private:
   struct md5str
   {
@@ -74,8 +76,12 @@ void TestUtlFileHandler::SetUp()
 
 void TestUtlFileHandler::TearDown()
 {
-  THE_IO_DEVICE->destroy();
   TestDataFilePrepare::TearDown();
+}
+
+static void TestUtlFileHandler::SetUpTestCase()
+{
+  ASSERT_EQ(OB_SUCCESS, ObDeviceManager::get_instance().init_devices_env());
 }
 
 int TestUtlFileHandler::md5sum(const char *dir, const char *filename, int64_t begin, int64_t end, md5str &result)

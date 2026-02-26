@@ -12,27 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_basic_channel.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/lock/ob_thread_cond.h"
-#include "lib/random/ob_random.h"
-#include "common/row/ob_row.h"
-#include "share/ob_cluster_version.h"
-#include "share/rc/ob_context.h"
-#include "share/rc/ob_tenant_base.h"
-#include "sql/dtl/ob_dtl_rpc_proxy.h"
-#include "sql/dtl/ob_dtl.h"
-#include "sql/dtl/ob_dtl_flow_control.h"
-#include "sql/engine/px/ob_px_row_store.h"
-#include "sql/engine/px/ob_px_bloom_filter.h"
-#include "sql/engine/px/ob_px_dtl_msg.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
-#include "sql/dtl/ob_dtl_channel_watcher.h"
-#include "observer/omt/ob_th_worker.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -50,19 +31,23 @@ SendMsgResponse::~SendMsgResponse()
 {
   int ret = OB_SUCCESS;
   if (in_process_) {
-    if (OB_FAIL(wait())) {
+    if (OB_FAIL(wait(ObDtlChannel::DtlChannelType::BASIC_CHANNEL))) {
       LOG_DEBUG("send dtl message failed", K(ret));
     }
   }
 }
 
-int SendMsgResponse::init()
+int SendMsgResponse::init(bool is_transmit)
 {
   int ret = OB_SUCCESS;
+  int32_t event_no = common::ObWaitEventIds::DTL_RECEIVE_MSG_WAIT;
+  if (is_transmit) {
+    event_no = common::ObWaitEventIds::DTL_TRANSMIT_MSG_WAIT;
+  }
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice");
-  } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT))) {
+  } else if (OB_FAIL(cond_.init(event_no))) {
     LOG_WARN("thread condition init failed", K(ret));
   } else {
     inited_ = true;
@@ -117,7 +102,7 @@ int SendMsgResponse::on_finish(const bool is_block, const int return_code)
   return ret;
 }
 
-int SendMsgResponse::wait()
+int SendMsgResponse::wait(ObDtlLocalChannel::DtlChannelType channel_type)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -129,10 +114,11 @@ int SendMsgResponse::wait()
     int64_t start_t = 0;
     int64_t end_t = 0;
     int64_t interval = 60000; // ms
+    oceanbase::lib::Thread::WaitGuard wait_guard(oceanbase::lib::Thread::WAIT_FOR_PX_MSG);
     while (!finish_ && OB_SUCC(ret)) {
       // 这里为什么是while true等待，因为callback引用了当前线程一些变量，
       // 如果采用中断，提前退出，会导致callback如果晚于线程退出，则引用非法东西而core掉
-      cond_.wait(1);
+      cond_.wait(1, static_cast<int64_t>(channel_type));
       ++count_v;
       // 60s
       if (count_v > interval) {
@@ -166,6 +152,8 @@ ObDtlBasicChannel::ObDtlBasicChannel(
       peer_id_(id ^ 1),
       write_buffer_(nullptr),
       process_buffer_(nullptr),
+      send_sem_(common::ObWaitEventIds::DTL_PROCESS_BUFFER_SEND_WAIT),
+      recv_sem_(common::ObWaitEventIds::DTL_PROCESS_BUFFER_RECEIVE_WAIT),
       alloc_new_buf_(false),
       seq_no_(0),
       send_buffer_cnt_(0),
@@ -182,7 +170,8 @@ ObDtlBasicChannel::ObDtlBasicChannel(
       write_buf_use_time_(0),
       send_use_time_(0),
       msg_count_(0),
-      result_info_guard_()
+      result_info_guard_(),
+      meta_(nullptr)
 {
   ObRandom rand;
   hash_val_ = rand.get();
@@ -218,7 +207,8 @@ ObDtlBasicChannel::ObDtlBasicChannel(
           times_(0),
           write_buf_use_time_(0),
           send_use_time_(0),
-          msg_count_(0)
+          msg_count_(0),
+          meta_(nullptr)
 {
   // dtl创建时候的server版本决定发送老的ser方式还是新的chunk row store方式
   use_crs_writer_ = true;
@@ -231,10 +221,14 @@ ObDtlBasicChannel::~ObDtlBasicChannel()
   LOG_TRACE("dtl use time", KP(id_), K(times_), K(write_buf_use_time_), K(send_use_time_), K(msg_count_));
 }
 
-int ObDtlBasicChannel::init()
+int ObDtlBasicChannel::init(ObDtlFlowControl *dfc)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(msg_response_.init())) {
+  bool is_transmit = false;
+  if (dfc) {
+    is_transmit = dfc->is_transmit();
+  }
+  if (OB_FAIL(msg_response_.init(is_transmit))) {
     LOG_WARN("int message response failed", K(ret));
   } else {
     is_inited_ = true;
@@ -246,7 +240,7 @@ int ObDtlBasicChannel::wait_response()
 {
   int ret = OB_SUCCESS;
   if (msg_response_.is_in_process()) {
-    if (OB_FAIL(msg_response_.wait())) {
+    if (OB_FAIL(msg_response_.wait(get_channel_type()))) {
       LOG_WARN("send previous message fail", K(ret));
     }
     if (OB_HASH_NOT_EXIST == ret) {
@@ -354,7 +348,7 @@ int ObDtlBasicChannel::feedup(ObDtlLinkedBuffer *&buffer)
   return common::OB_NOT_IMPLEMENT;
 }
 
-int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts)
+int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts, uint64_t dfo_id)
 {
   int ret = OB_SUCCESS;
   int64_t min_buf_size = ObChunkDatumStore::Block::min_buf_size(0);
@@ -377,8 +371,14 @@ int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts)
       buffer->seq_no() = 1;
       buffer->pos() = 0;
       if (use_interm_result_) {
-        if (OB_FAIL(MTL(ObDTLIntermResultManager*)->process_interm_result(buffer, id_))) {
-          LOG_WARN("fail to process internal result", K(ret));
+        if (OB_UNLIKELY(dfo_id == OB_INVALID_ID)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("dfo_id is invalid", K(ret), K(dfo_id));
+        } else {
+          buffer->set_dfo_id(dfo_id);
+          if (OB_FAIL(MTL(ObDTLIntermResultManager*)->process_interm_result(buffer, id_))) {
+            LOG_WARN("fail to process internal result", K(ret));
+          }
         }
       } else {
         bool inc_recv_buf_cnt = false;
@@ -545,6 +545,9 @@ int ObDtlBasicChannel::get_processed_buffer(int64_t timeout)
         }
       }
     } else {
+      if (ret == OB_EAGAIN) {
+        ret = OB_DTL_WAIT_EAGAIN;
+      }
       if (nullptr != msg_watcher_) {
         msg_watcher_->remove_data_list(this);
       }
@@ -568,7 +571,7 @@ int ObDtlBasicChannel::process1(
     if (!use_interm_result()) {
       do {
         if (nullptr == process_buffer_ && OB_FAIL(get_processed_buffer(timeout))) {
-          if (OB_EAGAIN == ret) {
+          if (OB_DTL_WAIT_EAGAIN == ret) {
           } else {
             LOG_WARN("failed to get buffer", K(ret));
           }
@@ -596,7 +599,7 @@ int ObDtlBasicChannel::process1(
                   msg_watcher_->remove_data_list(this);
                 }
               } else {
-                ret = OB_EAGAIN;
+                ret = OB_DTL_WAIT_EAGAIN;
               }
             }
             LOG_TRACE("process one piece", KP(id_), K_(peer), K(ret),
@@ -629,11 +632,12 @@ int ObDtlBasicChannel::process1(
       key.batch_id_ = batch_id_;
       MTL_SWITCH(tenant_id_) {
         if (channel_is_eof_) {
-          ret = OB_EAGAIN;
+          ret = OB_DTL_WAIT_EAGAIN;
         } else if (OB_FAIL(MTL(ObDTLIntermResultManager*)->atomic_get_interm_result_info(
               key, result_info_guard_))) {
           if (is_px_channel()) {
-            ret = OB_EAGAIN;
+            ret = OB_DTL_WAIT_EAGAIN;
+          // This will result in ret = OB_SUCCESS and result_info being null.
           } else if (ignore_error()) {
             ret = OB_SUCCESS;
           } else {
@@ -649,9 +653,13 @@ int ObDtlBasicChannel::process1(
           LOG_WARN("there is no row store in internal result", K(ret));
         } else if (OB_FAIL(DTL_IR_STORE_DO(*result_info, finish_add_row, true))) {
           LOG_WARN("failed to finish add row", K(ret));
-        } else {
+        } else if (!result_info->is_rich_format()) {
           if (OB_FAIL(result_info->datum_store_->begin(datum_iter_))) {
             LOG_WARN("begin iterator failed", K(ret));
+          }
+        } else {
+          if (OB_FAIL(result_info->get_row_store()->begin(row_iter_))) {
+            LOG_WARN("failed to begin chunk row store.", K(ret));
           }
         }
       }
@@ -659,10 +667,16 @@ int ObDtlBasicChannel::process1(
         ObDtlLinkedBuffer mock_buffer;
         mock_buffer.set_data_msg(true);
         ObDtlMsgType type = ObDtlMsgType::PX_DATUM_ROW;
+        if (OB_ISNULL(result_info) || !result_info->is_rich_format()) {
+          mock_buffer.set_buf(reinterpret_cast<char *>(&datum_iter_));
+        } else {
+          mock_buffer.set_buf(reinterpret_cast<char *>(&row_iter_));
+          mock_buffer.set_row_meta(result_info->get_row_store()->get_row_meta());
+          type = ObDtlMsgType::PX_VECTOR_ROW;
+        }
         type = static_cast<ObDtlMsgType>(-type);
         // set type to negative value for interm result mock buffer.
         mock_buffer.set_msg_type(type);
-        mock_buffer.set_buf(reinterpret_cast<char *>(&datum_iter_));
         bool transferred = false;
         ret = proc->process(mock_buffer, transferred);
         // EOF after send iterator to processor.
@@ -812,7 +826,7 @@ int ObDtlBasicChannel::wait_unblocking()
             &block_proc_,
             got_channel_idx))) {
           // no msg, then don't process
-          if (OB_EAGAIN == ret) {
+          if (OB_DTL_WAIT_EAGAIN == ret) {
             // 这里需要检查是否超时以及worker是否已经处于异常状态(退出等)，否则当worker退出时，一直陷入在while中
             int64_t end_t = ObTimeUtility::current_time();
             if (end_t > timeout_ts) {
@@ -985,9 +999,12 @@ int ObDtlBasicChannel::switch_writer(const ObDtlMsg &msg)
       } else if (DtlWriterType::CHUNK_DATUM_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &datum_msg_writer_;
       } else if (DtlWriterType::VECTOR_FIXED_WRITER == msg_writer_map[px_row.get_data_type()]) {
+        vector_fixed_msg_writer_.set_size_per_buffer(send_buffer_size_);
         msg_writer_ = &vector_fixed_msg_writer_;
       } else if (DtlWriterType::VECTOR_ROW_WRITER == msg_writer_map[px_row.get_data_type()]) {
+        vector_row_msg_writer_.set_row_meta(meta_);
         msg_writer_ = &vector_row_msg_writer_;
+        vector_row_msg_writer_.set_plan_min_cluster_version(plan_min_cluster_version_);
       } else if (DtlWriterType::VECTOR_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &vector_msg_writer_;
       } else {
@@ -1100,6 +1117,9 @@ int ObDtlBasicChannel::switch_buffer(const int64_t min_size, const bool is_eof,
       write_buffer_ = nullptr;
       LOG_WARN("failed to init message writer", K(ret));
     } else {
+      if (VECTOR_ROW_WRITER == msg_writer_->type()) {
+        (static_cast<ObDtlVectorRowMsgWriter *> (msg_writer_))->set_row_meta(meta_);
+      }
       if (OB_NOT_NULL(dfc_)) {
         write_buffer_->set_dfo_key(dfc_->get_dfo_key());
         write_buffer_->set_sqc_id(dfc_->get_sender_sqc_info().sqc_id_);
@@ -1125,6 +1145,7 @@ int ObDtlBasicChannel::switch_buffer(const int64_t min_size, const bool is_eof,
         if (OB_NOT_NULL(kit) && OB_NOT_NULL(kit->op_)) {
           write_buffer_->set_input_rows(kit->op_->get_spec().rows_);
           write_buffer_->set_input_width(kit->op_->get_spec().width_);
+          write_buffer_->set_max_batch_size(kit->op_->get_spec().max_batch_size_);
         }
       }
       write_buffer_->timeout_ts() = timeout_ts;
@@ -1358,7 +1379,7 @@ int ObDtlDatumMsgWriter::serialize()
 //-----------------start ObDtlVectorRowMsgWrite-------------
 ObDtlVectorRowMsgWriter::ObDtlVectorRowMsgWriter() :
   type_(VECTOR_ROW_WRITER), write_buffer_(nullptr), block_(nullptr),
-  block_buffer_(nullptr), row_meta_(), row_cnt_(0), write_ret_(OB_SUCCESS)
+  block_buffer_(nullptr), meta_(nullptr), row_cnt_(0), write_ret_(OB_SUCCESS)
 {}
 
 ObDtlVectorRowMsgWriter::~ObDtlVectorRowMsgWriter()
@@ -1376,11 +1397,12 @@ int ObDtlVectorRowMsgWriter::init(ObDtlLinkedBuffer *buffer, uint64_t tenant_id)
   } else {
     reset();
     ObTempBlockStore::Block *blk = NULL;
-    if (OB_FAIL(ObTempBlockStore::init_block_buffer(buffer->buf(), buffer->size(), blk))) {
+    if (OB_FAIL(ObTempBlockStore::init_dtl_block_buffer(buffer->buf(), buffer->size(), blk))) {
       LOG_WARN("fail to init block buffer", K(ret));
     } else {
-      block_ = static_cast<ObTempRowStore::RowBlock*>(blk);
-      block_buffer_ = block_->get_buffer();
+      block_ = static_cast<ObTempRowStore::DtlRowBlock *>(blk);
+      block_buffer_ = static_cast<ObTempBlockStore::ShrinkBuffer *>(
+        static_cast<void *>(reinterpret_cast<char *>(blk) + blk->buf_off_));
       write_buffer_ = buffer;
     }
   }
@@ -1398,13 +1420,16 @@ int ObDtlVectorRowMsgWriter::need_new_buffer(
     const ObPxNewRow &px_row = static_cast<const ObPxNewRow&>(msg);
     const ObIArray<ObExpr *> *row = px_row.get_exprs();
     if (nullptr == row) {
-      serialize_need_size = ObTempRowStore::Block::min_blk_size(0);
+      serialize_need_size = ObTempRowStore::Block::min_blk_size<true>(0);
       need_size = serialize_need_size;
     } else {
-      if (OB_FAIL(ObTempRowStore::RowBlock::calc_row_size(*row, row_meta_, *ctx, serialize_need_size))) {
+      if (OB_ISNULL(meta_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get meta", K(ret));
+      } else if (OB_FAIL(ObTempRowStore::RowBlock::calc_row_size(*row, *meta_, *ctx, serialize_need_size))) {
         LOG_WARN("failed to calc row store size", K(ret));
       }
-      need_size = ObTempRowStore::Block::min_blk_size(serialize_need_size);
+      need_size = ObTempRowStore::Block::min_blk_size<true>(serialize_need_size);
     }
     need_new = nullptr == write_buffer_ || (remain() < serialize_need_size);
     if(need_new && nullptr != write_buffer_) {
@@ -1421,7 +1446,7 @@ void ObDtlVectorRowMsgWriter::reset()
   write_buffer_ = nullptr;
   row_cnt_ = 0;
   block_buffer_ = nullptr;
-  row_meta_.reset();
+  meta_ = nullptr;
 }
 
 int ObDtlVectorRowMsgWriter::serialize()
@@ -1508,7 +1533,7 @@ int ObDtlVectorMsgWriter::serialize()
 //--------------end ObDtlVectorsFixedMsgWriter---------------
 ObDtlVectorFixedMsgWriter::ObDtlVectorFixedMsgWriter() :
   type_(VECTOR_FIXED_WRITER), write_buffer_(nullptr), vector_buffer_(),
-  write_ret_(OB_SUCCESS)
+  write_ret_(OB_SUCCESS), size_per_buffer_(-1)
 {}
 
 ObDtlVectorFixedMsgWriter::~ObDtlVectorFixedMsgWriter()
@@ -1520,12 +1545,12 @@ int ObDtlVectorFixedMsgWriter::init(ObDtlLinkedBuffer *buffer, uint64_t tenant_i
 {
   int ret = OB_SUCCESS;
   UNUSED(tenant_id);
-  if (nullptr == buffer) {
+  if (nullptr == buffer || size_per_buffer_ < 0 || buffer->size() < size_per_buffer_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("write buffer is null", K(ret));
+    LOG_WARN("write buffer is null", K(ret), K(size_per_buffer_), K(buffer->size()), K(lbt()));
   } else {
     reset();
-    vector_buffer_.set_buf(buffer->buf(), buffer->size());
+    vector_buffer_.set_buf(buffer->buf(), size_per_buffer_); /*keep fixed msg use buffer with same size*/
     write_buffer_ = buffer;
   }
   return ret;

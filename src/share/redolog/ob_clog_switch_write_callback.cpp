@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "share/redolog/ob_clog_switch_write_callback.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "lib/allocator/ob_malloc.h"
 
 namespace oceanbase

@@ -141,7 +141,7 @@ private:
   public: \
   bool operator()(ObTransCtx *tx_ctx_base) { \
     bool bool_ret = false; \
-    ObPartTransCtx *tx_ctx = dynamic_cast<transaction::ObPartTransCtx*>(tx_ctx_base); \
+    ObPartTransCtx *tx_ctx = static_cast<transaction::ObPartTransCtx*>(tx_ctx_base); \
     ObTransID tx_id = tx_ctx->get_trans_id(); \
     share::ObLSID ls_id = tx_ctx->get_ls_id(); \
     func_stat_.begin_iter_single(); \
@@ -713,14 +713,12 @@ public:
         uint64_t mgr_state;
         bool is_master = false;
         bool is_stopped = true;
-        const char *state_str =
         ls_tx_ctx_mgr->tx_ls_state_mgr_.iter_ctx_mgr_stat_info(mgr_state, is_master, is_stopped);
         tmp_ret = ls_tx_ctx_mgr_stat.init(addr_,
                                           ls_tx_ctx_mgr->ls_id_,
                                           is_master,
                                           is_stopped,
                                           mgr_state,
-                                          state_str,
                                           ls_tx_ctx_mgr->total_tx_ctx_count_,
                                           (int64_t)(&(*ls_tx_ctx_mgr)));
         if (OB_SUCCESS != tmp_ret) {
@@ -1016,6 +1014,7 @@ public:
                                  tx_ctx->get_flushed_log_size(),
                                  tx_ctx->role_state_,
                                  tx_ctx->session_id_,
+                                 tx_ctx->client_sid_,
                                  tx_ctx->exec_info_.scheduler_,
                                  tx_ctx->is_exiting_,
                                  tx_ctx->exec_info_.xid_,
@@ -1184,6 +1183,7 @@ public:
                                         tx_ctx->get_ls_id(),
                                         memtable_key_info_arr.at(i),
                                         tx_ctx->get_session_id(),
+                                        tx_ctx->get_client_sid(),
                                         0,
                                         tx_id,
                                         tx_ctx->get_ctx_create_time(),
@@ -1512,6 +1512,7 @@ public:
       } else if (OB_TMP_FAIL(tx_scheduler_stat.init(tx_desc->tenant_id_,
                                                     tx_desc->addr_,
                                                     tx_desc->sess_id_,
+                                                    tx_desc->client_sid_,
                                                     tx_desc->tx_id_,
                                                     (int64_t)tx_desc->state_,
                                                     tx_desc->cluster_id_,
@@ -1530,7 +1531,7 @@ public:
                                                     tx_desc,
                                                     copy_savepoints,
                                                     tx_desc->abort_cause_,
-                                                    tx_desc->can_elr_))) {
+                                                    false))) {
         TRANS_LOG_RET(WARN, tmp_ret, "ObTxSchedulerStat init error", K(tmp_ret), KPC(tx_desc));
       } else if (OB_TMP_FAIL(tx_scheduler_stat_iter_.push(tx_scheduler_stat))) {
         TRANS_LOG_RET(WARN, tmp_ret, "ObTxSchedulerStatIterator push trans scheduler error", K(tmp_ret));

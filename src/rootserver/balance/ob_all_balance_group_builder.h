@@ -20,13 +20,55 @@
 #include "share/schema/ob_multi_version_schema_service.h"   // share::schema
 #include "share/schema/ob_schema_getter_guard.h"            // ObSchemaGetterGuard
 #include "share/tablet/ob_tenant_tablet_to_ls_map.h"        // ObTenantTabletToLSMap
-
+#include "rootserver/balance/ob_object_balance_weight_mgr.h" // ObObjectBalanceWeightMgr
 #include "ob_balance_group_define.h"                         //ObBalanceGroupID, ObBalanceGroup
 
 namespace oceanbase
 {
 namespace rootserver
 {
+class ObPartitionHelper
+{
+public:
+  class ObPartInfo {
+  public:
+    ObPartInfo() {}
+    int init(common::ObTabletID tablet_id, common::ObObjectID part_id)
+    {
+      int ret = OB_SUCCESS;
+      tablet_id_ = tablet_id;
+      part_id_ = part_id;
+      return ret;
+    }
+    common::ObTabletID get_tablet_id() { return tablet_id_; }
+    common::ObObjectID get_part_id() { return part_id_; }
+    TO_STRING_KV(K_(tablet_id), K_(part_id));
+  private:
+    common::ObTabletID tablet_id_;
+    common::ObObjectID part_id_;
+  };
+  static int get_part_info(
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
+      int64_t part_idx,
+      ObPartInfo &part_info);
+  static int get_sub_part_num(
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
+      int64_t part_idx,
+      int64_t &sub_part_num);
+  static int get_sub_part_info(
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
+      int64_t part_idx,
+      int64_t sub_part_idx,
+      ObPartInfo &part_info);
+  static int check_partition_option(
+      const share::schema::ObSimpleTableSchemaV2 &t1,
+      const share::schema::ObSimpleTableSchemaV2 &t2,
+      bool is_subpart, bool &is_matched);
+  static int check_partition_match(
+      const share::schema::ObSimpleTableSchemaV2 &t1,
+      const share::schema::ObSimpleTableSchemaV2 &t2,
+      bool &match);
+};
 
 // Tenant all balance group builder
 //
@@ -75,27 +117,25 @@ public:
 
     // callback function callled when find new partition in one balance group
     // NOTE: partitions in same partition group will output successively.
-    //       You can check 'in_new_partition_group' to find whether new partition group found
     //
     // @param [in]  bg                        balance group
-    // @param [in]  table_id                  table id of partition
-    // @param [in]  part_object_id            partition object id: part id for one-level part table, subpart id for two-level part table
-    // @param [in]  tablet_id                 tablet id
+    // @param [in]  table_schema              table schema of the table which this partition belongs to
+    // @param [in]  part_object_id            partition object id: part id for one-level part table,
+    //                                        subpart id for two-level part table
     // @param [in]  src_ls_id                 the LS that partition is current located
     // @param [in]  dest_ls_id                the LS that partition should be located
     // @param [in]  tablet_size               tablet data size
-    // @param [in]  in_new_partition_group    is this partition in new partition group
     // @param [in]  part_group_uid            partition group unique id
+    // @param [in]  balance_weight            balance weight of the partition
     virtual int on_new_partition(
         const ObBalanceGroup &bg,
-        const common::ObObjectID table_id,
+        const share::schema::ObSimpleTableSchemaV2 &table_schema,
         const common::ObObjectID part_object_id,
-        const common::ObTabletID tablet_id,
         const share::ObLSID &src_ls_id,
         const share::ObLSID &dest_ls_id,
         const int64_t tablet_size,
-        const bool in_new_partition_group,
-        const uint64_t part_group_uid) = 0;
+        const uint64_t part_group_uid,
+        const int64_t balance_weight) = 0;
   };
 
 private:
@@ -135,20 +175,43 @@ private:
   int build_bg_for_partlevel_two_(const share::schema::ObSimpleTableSchemaV2 &table_schema);
   int add_new_part_(
       const ObBalanceGroup &bg,
-      const common::ObObjectID table_id,
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
       const common::ObObjectID part_object_id,
       const common::ObTabletID tablet_id,
-      share::ObLSID &dest_ls_id,
-      bool &in_new_partition_group,
-      const uint64_t part_group_uid);
+      const uint64_t part_group_uid,
+      const int64_t balance_weight);
   int prepare_tablet_data_size_();
-
+  int prepare_related_tablets_map_();
+  int add_to_related_tablets_map_(
+      const share::schema::ObSimpleTableSchemaV2 &primary_table_schema,
+      const share::schema::ObSimpleTableSchemaV2 &related_table_schema);
+  int get_data_size_with_related_tablets_(const ObTabletID &tablet_id, uint64_t &data_size);
+  // defensive check
+  int check_table_schemas_in_tablegroup_(
+      const ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas);
+  int get_dup_to_normal_dest_ls_id_(share::ObLSID &dest_ls_id);
+  int add_part_to_bg_for_tablegroup_sharding_none_(
+      const ObBalanceGroup &bg,
+      const uint64_t tablegroup_id,
+      const ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
+      const int64_t tablegroup_weight);
+  int get_global_indexes_of_tables_(
+      const ObArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
+      ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &global_index_schemas);
 private:
   static const int64_t MAP_BUCKET_NUM = 40960;
+  static const int64_t SET_BUCKET_NUM = 1024;
 
   bool inited_;
   const char* mod_;
   uint64_t tenant_id_;
+  share::ObLSID dup_ls_id_;
+  // previous info is used for all_new_part_
+  share::ObLSID pre_dest_ls_id_;
+  share::ObLSID pre_dup_to_normal_dest_ls_id_;
+  ObBalanceGroupID pre_bg_id_;
+  int64_t pre_part_group_uid_;
+
   NewPartitionCallback *callback_;
   common::ObMySQLProxy *sql_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
@@ -157,6 +220,11 @@ private:
   share::ObTenantTabletToLSMap tablet_to_ls_;
 
   hash::ObHashMap<ObTabletID, uint64_t> tablet_data_size_;
+
+  ObArenaAllocator allocator_;
+  hash::ObHashMap<ObTabletID, common::ObIArray<ObTabletID> *> related_tablets_map_;
+  hash::ObHashSet<uint64_t> sharding_none_tg_global_indexes_; // global indexes of the primary table in tablegroup sharding none
+  ObObjectBalanceWeightMgr obj_weight_mgr_;
 };
 
 }

@@ -14,10 +14,6 @@
 
 #include "rpc/obrpc/ob_rpc_session_handler.h"
 
-#include "lib/atomic/ob_atomic.h"
-#include "lib/thread_local/ob_tsi_utils.h"
-#include "rpc/ob_request.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "rpc/obrpc/ob_rpc_reverse_keepalive_struct.h"
 
@@ -30,9 +26,7 @@ ObRpcSessionHandler::ObRpcSessionHandler()
   sessid_ = ObTimeUtility::current_time();
   ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_HASH_NODE_NEXT_WAIT_MAP);
   SET_USE_500(attr);
-  next_wait_map_.create(MAX_COND_COUNT, attr, attr);
-  max_waiting_thread_count_ = MAX_WAIT_THREAD_COUNT;
-  waiting_thread_count_ = 0;
+  next_wait_map_.create(WAIT_MAP_BUCKET_COUNT, attr, attr);
 
   for (int64_t i = 0; i < MAX_COND_COUNT; ++i) {
     next_cond_[i].init(ObWaitEventIds::RPC_SESSION_HANDLER_COND_WAIT);
@@ -190,16 +184,10 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
   int64_t thid = get_itid();
 
   req = NULL;
-  bool continue_loop = true;
-  while (OB_SUCCESS == ret && continue_loop) {
-    //waiting_thread_count_ The number of threads waiting for packets of the streaming interface
-    oldv = waiting_thread_count_;
-    if (oldv > max_waiting_thread_count_) {
-      ret = OB_EAGAIN;
-      LOG_INFO("current wait thread  >= max wait",
-               K(ret), K(oldv), K_(max_waiting_thread_count));
-    } else if (ATOMIC_BCAS(&waiting_thread_count_, oldv, oldv + 1)) {
-      continue_loop = false;
+
+  if (OB_FAIL(THIS_WORKER.try_add_stream_rpc_session_wait_cnt(1))) {
+    LOG_WARN("failed to add stream rpc session wait cnt", K(ret));
+  } else {
       get_next_cond_(thid).lock();
       hash_ret = next_wait_map_.get_refactored(sessid, wait_object);
       if (OB_HASH_NOT_EXIST == hash_ret) {
@@ -241,11 +229,20 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
             // when waiting for OB_REMOTE_EXECUTE/OB_REMOTE_SYNC_EXECUTE/OB_INNER_SQL_SYNC_TRANSMIT request more than 30s,
             // try to send reverse keepalive request.
             if (current_time_us >= keepalive_timeout_us && reverse_keepalive_arg.is_valid()) {
-              get_next_cond_(wait_object.thid_).unlock();
-              ret = stream_rpc_reverse_probe(reverse_keepalive_arg);
-              get_next_cond_(wait_object.thid_).lock();
-              if (OB_FAIL(ret)) {
+              get_next_cond_(thid).unlock();
+              int tmp_ret = stream_rpc_reverse_probe(reverse_keepalive_arg);
+              get_next_cond_(thid).lock();
+              if (OB_SUCCESS != tmp_ret) {
                 LOG_WARN("stream rpc sender has been aborted, unneed to wait", K(sessid), K(timeout), K(reverse_keepalive_arg));
+                if (OB_FAIL(next_wait_map_.get_refactored(sessid, wait_object))) {
+                  LOG_ERROR("wait object has been released", K(sessid), K(ret));
+                } else if (OB_ISNULL(wait_object.req_)) {
+                  // keepalive faild and the req is null, set the error and break
+                  ret = tmp_ret;
+                } else {
+                  req = wait_object.req_;
+                  LOG_INFO("got the next request though keepalive failed, break and return success", K(sessid), K(tmp_ret), K(ret));
+                }
                 break;
               }
             }
@@ -272,15 +269,13 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
       int overwrite = 1;
       hash_ret = next_wait_map_.set_refactored(sessid, wait_object, overwrite);
       if (OB_SUCCESS != hash_ret) {
+        ret = hash_ret;
         LOG_WARN("rewrite clear session req error",
                   K(hash_ret), K(sessid), K(req));
       }
 
-      get_next_cond_(wait_object.thid_).unlock();
-      ATOMIC_DEC(&waiting_thread_count_);
-    } else {
-      //do nothing
-    }
+      get_next_cond_(thid).unlock();
+      IGNORE_RETURN THIS_WORKER.try_add_stream_rpc_session_wait_cnt(-1);
   }
   return ret;
 }

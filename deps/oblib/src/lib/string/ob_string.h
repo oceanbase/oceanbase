@@ -170,7 +170,7 @@ public:
    * DO NOT USE THIS ANY MORE
    */
 
-  inline void assign(char *bytes, const int64_t length) //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later 4.3
+  inline void assign(char *bytes, const int64_t length) // for -Wshorten-64-to-32
   {
     if (length > INT32_MAX) {
       LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid length for assign", K(length));
@@ -207,7 +207,7 @@ public:
     }
   }
 
-  inline void assign_ptr(const char *bytes, const int64_t length)  //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later 4.3
+  inline void assign_ptr(const char *bytes, const int64_t length)  // for -Wshorten-64-to-32
   {
     if (length < 0 || length > INT32_MAX) {
       LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid length for assign ptr", K(length));
@@ -215,7 +215,7 @@ public:
     assign_ptr(bytes, static_cast<int32_t>(length));
   }
 
-  inline void assign_ptr(const char *bytes, const uint64_t length)  //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later 4.3
+  inline void assign_ptr(const char *bytes, const uint64_t length)  // for -Wshorten-64-to-32
   {
     if (length < 0 || length > INT32_MAX) {
       LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid length for assign ptr", K(length));
@@ -223,7 +223,7 @@ public:
     assign_ptr(bytes, static_cast<int32_t>(length));
   }
 
-  inline void assign_ptr(const char *bytes, const uint32_t length)  //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later 4.3
+  inline void assign_ptr(const char *bytes, const uint32_t length)  // for -Wshorten-64-to-32
   {
     if (length > INT32_MAX) {
       LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid length for assign ptr", K(length));
@@ -304,6 +304,24 @@ public:
     return OB_SUCCESS;
   }
 
+  inline bool case_compare_equal(const ObString &obstr) const
+  {
+    bool cmp = true;
+    if (NULL == ptr_) {
+      if (NULL != obstr.ptr_) {
+        cmp = false;
+      }
+    } else if (NULL == obstr.ptr_) {
+      cmp = false;
+    } else if (data_length_ != obstr.data_length_) {
+      cmp = false;
+    } else {
+      cmp = (0 == strncasecmp(ptr_, obstr.ptr_, data_length_));
+    }
+
+    return cmp;
+  }
+
   inline int case_compare(const ObString &obstr) const
   {
     int cmp = 0;
@@ -320,6 +338,17 @@ public:
       }
     }
     return cmp;
+  }
+
+  inline bool case_compare_equal(const char *str) const
+  {
+    obstr_size_t len = 0;
+    if (NULL != str) {
+      len = static_cast<obstr_size_t>(strlen(str));
+    }
+    char *p = const_cast<char *>(str);
+    const ObString rv(0, len, p);
+    return case_compare_equal(rv);
   }
 
   inline int case_compare(const char *str) const
@@ -345,6 +374,32 @@ public:
       cmp = data_length_ - obstr.data_length_;
     }
     return cmp;
+  }
+
+  inline bool compare_equal(const ObString &obstr) const
+  {
+    bool cmp = true;
+    if (ptr_ == obstr.ptr_) {
+      cmp = data_length_ == obstr.data_length_;
+    } else if (0 == data_length_ && 0 == obstr.data_length_) {
+      cmp = true;
+    } else if (data_length_ != obstr.data_length_) {
+      cmp = false;
+    } else {
+      cmp = (0 == MEMCMP(ptr_, obstr.ptr_, data_length_));
+    }
+    return cmp;
+  }
+
+  inline bool compare_equal(const char *str) const
+  {
+    obstr_size_t len = 0;
+    if (NULL != str) {
+      len = static_cast<obstr_size_t>(strlen(str));
+    }
+    char *p = const_cast<char *>(str);
+    const ObString rv(0, len, p);
+    return compare_equal(rv);
   }
 
   inline int32_t compare(const char *str) const
@@ -379,6 +434,26 @@ public:
       if (len <= data_length_ && 0 == MEMCMP(str, ptr_ + data_length_ - len, len)) {
         match = true;
       }
+    }
+    return match;
+  }
+
+  inline bool suffix_match_ci(const ObString &obstr) const
+  {
+    bool match = false;
+    if (data_length_ < obstr.data_length_) {
+    } else if (0 == STRNCASECMP(ptr_ + data_length_ - obstr.data_length_, obstr.ptr_, obstr.data_length_)) {
+      match = true;
+    }
+    return match;
+  }
+
+  inline bool suffix_match_ci(const char *str) const
+  {
+    bool match = false;
+    if (OB_NOT_NULL(str)) {
+      ObString obstr(str);
+      match = suffix_match_ci(obstr);
     }
     return match;
   }
@@ -450,12 +525,12 @@ public:
 
   inline bool operator==(const ObString &obstr) const
   {
-    return compare(obstr) == 0;
+    return compare_equal(obstr);
   }
 
   inline bool operator!=(const ObString &obstr) const
   {
-    return compare(obstr) != 0;
+    return !compare_equal(obstr);
   }
 
   inline bool operator<(const char *str) const
@@ -480,15 +555,15 @@ public:
 
   inline bool operator==(const char *str) const
   {
-    return compare(str) == 0;
+    return compare_equal(str);
   }
 
   inline bool operator!=(const char *str) const
   {
-    return compare(str) != 0;
+    return !compare_equal(str);
   }
 
-  const ObString trim()
+  const ObString trim() const
   {
     ObString ret;
     if (NULL != ptr_) {
@@ -514,6 +589,20 @@ public:
       while (start < end && ' ' == *start) {
         start++;
       }
+      while (start < end && ' ' == *(end - 1)) {
+        end--;
+      }
+      ret.assign_ptr(start, static_cast<obstr_size_t>(end - start));
+    }
+    return ret;
+  }
+
+  const ObString trim_end_space_only()
+  {
+    ObString ret;
+    if (NULL != ptr_) {
+      char *start = ptr_;
+      char *end = ptr_ + data_length_;
       while (start < end && ' ' == *(end - 1)) {
         end--;
       }
@@ -602,6 +691,33 @@ public:
   // @return A pointer to the first occurrence of @a c in @a this
   // or @c NULL if @a c is not found.
   const char *reverse_find(char c) const { return static_cast<const char *>(memrchr(ptr_, c, data_length_)); }
+
+  // reverse find @n @c from @str backwards.
+  // return a pointer to the found position.
+  // return nullptr if not found.
+  // e.g., reverse_find("/a/b/c/d", '/', 3), return the pointer to "/b/c/d".
+  //       reverse_find("/a/b/c/d", '/', 10), return nulltpr.
+  const char *reverse_find(const char c, const int64_t n)
+  {
+    const char *p_ret = nullptr;
+    int64_t find_cnt = 0;
+    if (OB_UNLIKELY(OB_ISNULL(ptr_) || (0 == STRLEN(ptr_)) || (n <= 0))) {
+      LIB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", KP_(ptr), K(n));
+    } else {
+      const char *cur = ptr_ + STRLEN(ptr_) - 1;
+      while (cur >= ptr_) {
+        if (*cur == c) {
+          find_cnt++;
+          if (find_cnt == n) {
+            p_ret = cur;
+            break;
+          }
+        }
+        cur--;
+      }
+    }
+    return p_ret;
+  }
 
   // Split the buffer on the character at @a p.
   //
@@ -729,6 +845,73 @@ int ob_write_string(AllocatorT &allocator, const ObString &src, ObString &dst, b
       ptr[src_len] = 0;
     }
     dst.assign_ptr(ptr, src_len);
+  }
+  return ret;
+}
+
+template <typename AllocatorT>
+int ob_write_string(AllocatorT &allocator, const ObString &src, ObString &dst, int len, int padding = 0, bool c_style = false)
+{
+  int ret = OB_SUCCESS;
+  const ObString::obstr_size_t src_len = src.length();
+  char *ptr = NULL;
+  if (NULL == (ptr = static_cast<char *>(allocator.alloc(len + (c_style ? 1 : 0))))) {
+    dst.assign(NULL, 0);
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(ERROR, "allocate memory failed", K(ret), "size", len);
+  } else if (OB_NOT_NULL(src.ptr()) && 0 < src_len) {
+    int copy_len = src_len > len ? len : src_len;
+    MEMCPY(ptr, src.ptr(), copy_len);
+    if (len > copy_len) {
+      MEMSET(ptr + copy_len, padding, len - copy_len);
+    }
+    if (c_style) {
+      ptr[len] = 0;
+    }
+    dst.assign_ptr(ptr, len);
+  } else {
+    MEMSET(ptr, padding, len);
+    dst.assign_ptr(ptr, len);
+  }
+  return ret;
+}
+
+template <typename AllocatorT>
+int ob_concat_string(AllocatorT &allocator, ObString &dst, int64_t num, const ObString sources[], bool c_style = false)
+{
+  int ret = OB_SUCCESS;
+  ObString::obstr_size_t dst_length = 0;
+  if (OB_ISNULL(sources) || num < 0) {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
+    if (OB_NOT_NULL(sources[i]) && OB_NOT_NULL(sources[i].ptr()) && sources[i].length() > 0) {
+      dst_length += sources[i].length();
+    }
+  }
+
+  char *buf = nullptr;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(dst_length + (c_style ? 1 : 0))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "allocate memory failed", K(ret), K(dst_length));
+  }
+
+  ObString::obstr_size_t pos = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
+    if (OB_NOT_NULL(sources[i]) && OB_NOT_NULL(sources[i].ptr()) && sources[i].length() > 0) {
+      MEMCPY(buf + pos, sources[i].ptr(), sources[i].length());
+      pos += sources[i].length();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (c_style) {
+      buf[pos] = 0;
+    }
+    dst.assign_ptr(buf, dst_length);
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
+    allocator.free(buf);
   }
   return ret;
 }

@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX RS
 #include "ob_backup_clean_ls_task_mgr.h"
 #include "share/backup/ob_backup_clean_operator.h"
-#include "share/backup/ob_backup_clean_struct.h"
-#include "ob_backup_schedule_task.h"
 #include "ob_backup_task_scheduler.h"
 
 namespace oceanbase
@@ -75,6 +73,7 @@ int ObBackupCleanLSTaskMgr::process(int64_t &finish_cnt)
   //        observer will advance stautus to finish. 
   //        when task status is in finish, process only to update can_advance_ls_task_status to  true and result = ls_attr.result
   int ret = OB_SUCCESS;
+  bool can_add_task = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -82,7 +81,11 @@ int ObBackupCleanLSTaskMgr::process(int64_t &finish_cnt)
     LOG_INFO("schedule backup ls task", K(*ls_attr_));
     switch (ls_attr_->status_.status_) {
       case ObBackupTaskStatus::Status::INIT: {
-        if (OB_FAIL(add_task_())) {
+        if (OB_FAIL(task_scheduler_->check_can_add_task(can_add_task))) {
+          LOG_WARN("failed to check can add task", K(ret));
+        } else if (!can_add_task) {
+          LOG_INFO("queue is full, skip add task now", K(ret));
+        } else if (OB_FAIL(add_task_())) {
           LOG_WARN("failed to add task into task schedulers", K(ret), KP(ls_attr_));
         }
         break;
@@ -105,11 +108,13 @@ int ObBackupCleanLSTaskMgr::process(int64_t &finish_cnt)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_BACKUP_CLEAN_ADD_TASK_FAIL);
 int ObBackupCleanLSTaskMgr::add_task_()
 {
   // add log stream task into task scheduler
   // then advance log stream task status to PENDING
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObBackupCleanLSTask task;
   ObBackupTaskStatus next_status;
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
@@ -117,6 +122,10 @@ int ObBackupCleanLSTaskMgr::add_task_()
     LOG_WARN("failed to build task", K(ret), KP(task_attr_), KP(ls_attr_));
   } else if (OB_FAIL(advance_ls_task_status(*backup_service_, *sql_proxy_, *ls_attr_, next_status))) {
     LOG_WARN("failed to advance ls task status", K(ret), K(*task_attr_));
+#ifdef ERRSIM
+  } else if (OB_FAIL(tmp_ret = ERRSIM_BACKUP_CLEAN_ADD_TASK_FAIL)) {
+    LOG_WARN("errsim add task forced fail", K(ret), K(*task_attr_), K(task));
+#endif
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
     LOG_WARN("failed to add task", K(ret), K(*task_attr_), K(task));
   } else {
@@ -176,6 +185,9 @@ int ObBackupCleanLSTaskMgr::finish_(int64_t &finish_cnt)
       } else {
         backup_service_->wakeup();
       }
+    } else {
+      // leave idle time for next retry
+      backup_service_->set_idle_time(OB_BACKUP_RETRY_TIME_INTERVAL);
     }
   } else {
     ret = ls_attr_->result_;

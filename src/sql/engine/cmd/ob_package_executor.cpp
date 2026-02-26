@@ -15,10 +15,8 @@
 #include "sql/resolver/ddl/ob_create_package_stmt.h"
 #include "sql/resolver/ddl/ob_alter_package_stmt.h"
 #include "sql/resolver/ddl/ob_drop_package_stmt.h"
-#include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_rpc_struct.h"
+#include "pl/ob_pl_resolver.h"
+#include "pl/ob_pl_compile_utils.h"
 
 namespace oceanbase
 {
@@ -34,7 +32,17 @@ int ObCreatePackageExecutor::execute(ObExecContext &ctx, ObCreatePackageStmt &st
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   obrpc::UInt64 table_id;
   obrpc::ObCreatePackageArg &arg = stmt.get_create_package_arg();
+  uint64_t tenant_id = arg.package_info_.get_tenant_id();
+  bool has_error = ERROR_STATUS_HAS_ERROR == arg.error_info_.get_error_status();
+  ObString &db_name = arg.db_name_;
+  const ObString &package_name = arg.package_info_.get_package_name();
+  share::schema::ObPackageType type = arg.package_info_.get_type();
   ObString first_stmt;
+  obrpc::ObRoutineDDLRes res;
+  bool with_res = ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_3_0
+                    && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
+                   || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_my_session()->get_effective_tenant_id()));
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
@@ -49,9 +57,27 @@ int ObCreatePackageExecutor::execute(ObExecContext &ctx, ObCreatePackageStmt &st
   } else if (OB_ISNULL(common_rpc_proxy)){
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy should not be null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->create_package(arg))) {
+  } else if (!with_res && OB_FAIL(common_rpc_proxy->create_package(arg))) {
     LOG_WARN("rpc proxy create package failed", K(ret),
              "dst", common_rpc_proxy->get_server());
+  } else if (with_res && OB_FAIL(common_rpc_proxy->create_package_with_res(arg, res))) {
+    LOG_WARN("rpc proxy create package failed", K(ret),
+             "dst", common_rpc_proxy->get_server());
+  }
+  if (OB_SUCC(ret)
+      && !has_error
+      && with_res
+      && tenant_config.is_valid()
+      && tenant_config->plsql_v2_compatibility) {
+    OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
+    OZ (ctx.get_task_exec_ctx().schema_service_->
+      get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
+    OZ (pl::ObPLCompilerUtils::compile(ctx,
+                                       tenant_id,
+                                       db_name,
+                                       package_name,
+                                       pl::ObPLCompilerUtils::get_compile_type(type),
+                                       res.store_routine_schema_version_));
   }
   return ret;
 }
@@ -63,12 +89,23 @@ int ObAlterPackageExecutor::execute(ObExecContext &ctx, ObAlterPackageStmt &stmt
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   obrpc::UInt64 table_id;
   obrpc::ObAlterPackageArg &arg = stmt.get_alter_package_arg();
+  uint64_t tenant_id = arg.tenant_id_;
+  bool has_error = ERROR_STATUS_HAS_ERROR == arg.error_info_.get_error_status();
+  ObString &db_name = arg.db_name_;
+  const ObString &package_name = arg.package_name_;
+  share::schema::ObPackageType type = arg.package_type_;
   ObString first_stmt;
+  obrpc::ObRoutineDDLRes res;
+  bool with_res = ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_3_0
+                    && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
+                   || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_my_session()->get_effective_tenant_id()));
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
     arg.ddl_stmt_str_ = first_stmt;
   }
+  // we need send rpc for alter package, because it must refresh package state after alter package
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -78,9 +115,25 @@ int ObAlterPackageExecutor::execute(ObExecContext &ctx, ObAlterPackageStmt &stmt
   } else if (OB_ISNULL(common_rpc_proxy)){
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy should not be null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->alter_package(arg))) {
+  } else if (!with_res && OB_FAIL(common_rpc_proxy->alter_package(arg))) {
+    LOG_WARN("rpc proxy drop procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
+  } else if (with_res && OB_FAIL(common_rpc_proxy->alter_package_with_res(arg, res))) {
     LOG_WARN("rpc proxy drop procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
   }
+  if (OB_SUCC(ret) && !has_error && with_res &&
+      tenant_config.is_valid() &&
+      tenant_config->plsql_v2_compatibility) {
+    OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
+    OZ (ctx.get_task_exec_ctx().schema_service_->
+      get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
+    OZ (pl::ObPLCompilerUtils::compile(ctx,
+                                       tenant_id,
+                                       db_name,
+                                       package_name,
+                                       pl::ObPLCompilerUtils::get_compile_type(type),
+                                       res.store_routine_schema_version_));
+  }
+
   return ret;
 }
 

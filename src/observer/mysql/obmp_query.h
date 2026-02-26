@@ -74,6 +74,18 @@ private:
                  bool force_sync_resp,
                  bool &async_resp_used,
                  bool &need_disconnect);
+  int do_process_trans_ctrl(sql::ObSQLSessionInfo &session,
+                            bool has_more_result,
+                            bool force_sync_resp,
+                            bool &async_resp_used,
+                            bool &need_disconnect,
+                            stmt::StmtType stmt_type);
+  int process_trans_ctrl_cmd(ObSQLSessionInfo &session,
+                             bool &need_disconnect,
+                             bool &async_resp_used,
+                             const bool is_rollback,
+                             const bool force_sync_resp,
+                             stmt::StmtType stmt_type);
   int process_with_tmp_context(sql::ObSQLSessionInfo &session,
                     bool has_more_result,
                     bool force_sync_resp,
@@ -86,9 +98,15 @@ private:
                           bool force_sync_resp,
                           bool &async_resp_used,
                           bool &need_disconnect);
+  void check_is_trans_ctrl_cmd(const ObString &sql,
+                               bool &is_trans_ctrl_cmd,
+                               stmt::StmtType &stmt_type);
 
-
-  void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
+  void record_stat(const sql::stmt::StmtType type, const int64_t end_time,
+                   const sql::ObSQLSessionInfo& session,
+                   const int64_t ret,
+                   const bool is_commit_cmd,
+                   const bool is_rollback_cmd) const;
   void update_audit_info(const ObWaitEventStat &total_wait_desc,
                          ObAuditRecordData &record);
   int fill_feedback_session_info(ObMySQLResultSet &result,
@@ -110,7 +128,7 @@ private:
                                 sql::ObSQLSessionInfo &session,
                                 common::ParamStore &params);
 public:
-  static const int64_t MAX_SELF_OBJ_SIZE = 2 * 1024L;
+  static const int64_t MAX_SELF_OBJ_SIZE = 2.5 * 1024L;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPQuery);
 private:

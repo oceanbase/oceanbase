@@ -39,6 +39,7 @@ public:
   ~ObKillSessionArg() {}
   int init(ObExecContext &ctx, const ObKillStmt &stmt);
   int calculate_sessid(ObExecContext &ctx, const ObKillStmt &stmt);
+  int check_auth_for_kill(uint64_t kill_tid, uint64_t kill_uid) const;
   TO_STRING_KV(K(sess_id_),
                K(tenant_id_),
                K(user_id_),

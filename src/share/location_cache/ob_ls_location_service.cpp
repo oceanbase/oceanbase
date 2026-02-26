@@ -13,20 +13,9 @@
 #define USING_LOG_PREFIX SHARE_LOCATION
 
 #include "share/location_cache/ob_ls_location_service.h"
-#include "share/ob_share_util.h" // ObShareUtil
-#include "share/ls/ob_ls_info.h" // ObLSInfo
 #include "share/ls/ob_ls_table_operator.h" // ObLSTableOperator
 #include "share/ls/ob_ls_status_operator.h" // ObLSStatusOperator
-#include "share/cache/ob_cache_name_define.h" // OB_LS_LOCATION_CACHE_NAME
-#include "common/ob_timeout_ctx.h" // ObTimeoutCtx
-#include "lib/stat/ob_diagnose_info.h" // EVENT_INC
-#include "lib/ob_running_mode.h" // lib::is_mini_mode()
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "share/ob_task_define.h" // ObTaskController
-#include "observer/ob_server_struct.h"
-#include "lib/hash/ob_hashset.h" // ObHashSet
 #include "rootserver/ob_rs_async_rpc_proxy.h" // ObGetLeaderLocationsProxy
-#include "share/resource_manager/ob_cgroup_ctrl.h" //CGID_DEF
 
 namespace oceanbase
 {
@@ -765,7 +754,9 @@ int ObLSLocationService::renew_all_ls_locations()
 
 int ObLSLocationService::renew_all_ls_locations_by_rpc()
 {
-  ObCurTraceId::init(GCONF.self_addr_);
+  ObCurTraceId::TraceId new_trace_id;
+  new_trace_id.init(GCONF.self_addr_);
+  ObTraceIdGuard guard(new_trace_id);
   int ret = OB_SUCCESS;
   ObArray<ObAddr> dests;
   ObArray<ObLSLeaderLocation> leaders;
@@ -834,10 +825,13 @@ int ObLSLocationService::construct_rpc_dests_(
   int ret = OB_SUCCESS;
   ObArray<ObAddr> rs_list;
   ObArray<ObAddr> all_server_list;
-  const bool check_ls_service = false;
+  // set check_ls_service is false is mainly to avoid blocking in the test RTO scenario,
+  // in the stage of bootstrap, no need to worry.
+  const bool check_ls_service = GCTX.in_bootstrap_ ? true : false;
+  const ObLSID &ls_id = GCTX.is_shared_storage_mode() ? SSLOG_LS : SYS_LS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(rs_mgr_->construct_initial_server_list(check_ls_service, rs_list))) {
+  } else if (OB_FAIL(rs_mgr_->construct_initial_server_list(check_ls_service, ls_id, rs_list))) {
     LOG_WARN("fail to get rs list", KR(ret));
   } else if (OB_FAIL(ObShareUtil::parse_all_server_list(rs_list, all_server_list))) {
     LOG_WARN("fail to get all server list", KR(ret), K(rs_list));
@@ -989,7 +983,7 @@ int ObLSLocationService::get_from_cache_(
   } else if(OB_UNLIKELY(!cache_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
-  } else  if (OB_FAIL(inner_cache_.get(cache_key, location))) {
+  } else if (OB_FAIL(inner_cache_.get(cache_key, location))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_CACHE_NOT_HIT;
       LOG_TRACE("location is not hit in inner cache", KR(ret), K(cache_key));
@@ -1054,6 +1048,10 @@ int ObLSLocationService::fill_location_(
       if (!replicas.at(i).is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("replica is not valid", KR(ret), "replica", replicas.at(i));
+      } else if (replicas.at(i).is_logonly_replica()) {
+        // logonly replica do not have read/write request
+        // should not exist in location cache
+        LOG_TRACE("replica type is logonly, just skip", KR(ret), "replica", replicas.at(i));
       } else {
         replica_location.reset();
         if(OB_FAIL(replica_location.init(
@@ -1231,6 +1229,37 @@ int ObLSLocationService::dump_cache()
         }
       } // end foreach tenant_ids
       ret = OB_FAIL(ret) ? ret : fail_ret;
+    }
+  }
+  return ret;
+}
+
+int ObLSLocationService::check_ls_needing_renew(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const int64_t expire_renew_time,
+    bool &need_renew)
+{
+  int ret = OB_SUCCESS;
+  need_renew = true;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("failed to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || !is_valid_key(GCONF.cluster_id, tenant_id, ls_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the input parameters are invalid", KR(ret), K(tenant_id), K(ls_id), K(expire_renew_time));
+  } else {
+    ObLSLocation ls_loc;
+    ret = get_from_cache_(GCONF.cluster_id, tenant_id, ls_id, ls_loc);
+    if (OB_SUCCESS != ret && OB_CACHE_NOT_HIT != ret) {
+      LOG_WARN("failed to get_from_cache_", KR(ret), K(tenant_id), K(ls_id));
+    } else if (OB_CACHE_NOT_HIT == ret
+        || ls_loc.get_renew_time() <= expire_renew_time) {
+      // ignore ret
+      ret = OB_SUCCESS;
+      need_renew = true;
+    } else {
+      need_renew = false;
     }
   }
   return ret;

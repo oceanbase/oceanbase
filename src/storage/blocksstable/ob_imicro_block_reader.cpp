@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_imicro_block_reader.h"
 #include "index_block/ob_index_block_row_struct.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
+#include "storage/access/ob_table_access_context.h"
 
 namespace oceanbase
 {
@@ -90,6 +90,34 @@ int ObIMicroBlockReader::locate_range(
   return ret;
 }
 
+int ObIMicroBlockReader::locate_border_row_id(
+    const ObDatumRowkey &rowkey,
+    const int64_t begin_idx,
+    const int64_t end_idx,
+    int64_t &border_row_idx,
+    bool &is_equal)
+{
+  int ret = OB_SUCCESS;
+  border_row_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+  is_equal = false;
+  if (OB_UNLIKELY(0 >= row_count_ || begin_idx >= end_idx ||
+                  0 > begin_idx || row_count_ < end_idx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K_(row_count), K(begin_idx), K(end_idx));
+  } else if (OB_ISNULL(datum_utils_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("datum utils is null", K(ret), KP_(datum_utils));
+  } else if (rowkey.is_min_rowkey()) {
+    border_row_idx = begin_idx;
+  } else if (rowkey.is_max_rowkey()) {
+    border_row_idx = end_idx;
+  } else if (OB_FAIL(find_bound(rowkey, true, begin_idx, end_idx, border_row_idx, is_equal))) {
+    LOG_WARN("fail to get lower bound border key", K(ret), K(begin_idx), K(end_idx), K(rowkey));
+  }
+  LOG_DEBUG("locate border key row id", K(ret), K(rowkey), K(begin_idx), K(end_idx), K(border_row_idx), K(is_equal));
+  return ret;
+}
+
 int ObIMicroBlockReader::validate_filter_info(
     const sql::PushdownFilterInfo &pd_filter_info,
     const sql::ObPushdownFilterExecutor &filter,
@@ -99,8 +127,6 @@ int ObIMicroBlockReader::validate_filter_info(
 {
   int ret = OB_SUCCESS;
   int64_t col_count = filter.get_col_count();
-  const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
-  const sql::ColumnParamFixedArray &col_params = filter.get_col_params();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -114,14 +140,6 @@ int ObIMicroBlockReader::validate_filter_info(
   } else if (OB_ISNULL(col_buf) && 0 < col_capacity) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null col buf", K(ret), K(col_capacity));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
-      if (OB_UNLIKELY(col_offsets.at(i) >= header->column_count_)) {
-        ret = OB_INDEX_OUT_OF_RANGE;
-        LOG_WARN("Filter col offset greater than store cnt",
-                 K(ret), K(header->column_count_), K(col_offsets.at(i)));
-      }
-    }
   }
   return ret;
 }
@@ -198,7 +216,7 @@ int ObIMicroBlockReader::filter_white_filter(
       }
       case sql::WHITE_OP_IN: {
         bool is_existed = false;
-        if (OB_FAIL(filter.exist_in_datum_set(datum, is_existed))) {
+        if (OB_FAIL(filter.exist_in_set(datum, is_existed))) {
           LOG_WARN("Failed to check object in hashset", K(ret), K(datum));
         } else if (is_existed) {
           filtered = false;
@@ -213,5 +231,31 @@ int ObIMicroBlockReader::filter_white_filter(
   }
   return ret;
 }
+
+int ObIMicroBlockReader::get_column_datum(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
+      const share::schema::ObColumnParam &col_param,
+      const int32_t col_offset,
+      const int64_t row_index,
+      ObStorageDatum &datum)
+{
+  INIT_SUCC(ret);
+  if (OB_FAIL(get_raw_column_datum(col_offset, row_index, datum))) {
+    LOG_WARN("Failed to get raw column datum", K(col_offset), K(row_index));
+  } else if (col_param.get_meta_type().is_lob_storage() && !datum.is_null() &&
+             !datum.get_lob_data().in_row_) {
+    if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(
+            datum, col_param, iter_param, context))) {
+      LOG_WARN("Failed to fill lob loactor",
+               K(ret),
+               K(datum),
+               K(context),
+               K(iter_param));
+    }
+  }
+  return ret;
+}
+
 }
 }

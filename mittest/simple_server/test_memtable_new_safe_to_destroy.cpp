@@ -11,17 +11,13 @@
  */
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <iostream>
 #define protected public
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
 #include "mittest/env/ob_simple_server_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_tx_loop_worker.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_trans_submit_log_cb.h"
 
 
 static const char *TEST_FILE_NAME = "test_memtable_new_safe_to_destroy";
@@ -35,16 +31,17 @@ namespace transaction
 int ObTxLogCb::on_success()
 {
   int ret = OB_SUCCESS;
-  const ObTransID tx_id = trans_id_;
 
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "ObTxLogCb not inited", K(ret));
-  } else if (NULL == ctx_) {
+  if (OB_ISNULL(group_ptr_)) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "ctx is null", K(ret), K(tx_id), KP(ctx_));
+    TRANS_LOG(ERROR, "ctx is null", K(ret), KP(group_ptr_));
   } else {
-    ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
+    const int64_t bk_submit_ts = submit_ts_;
+    const int64_t bk_log_size = log_size_;
+    const bool bk_is_reserved = group_ptr_->is_reserved();
+    ObTxLogCbGroup *bk_group_ptr = group_ptr_;
+    ObPartTransCtx *part_ctx = group_ptr_->get_tx_ctx();
+    const ObTransID tx_id = part_ctx->trans_id_;
     while (qcc_tx_id == tx_id) {
       TRANS_LOG(INFO, "qcc debug", KPC(part_ctx), K(tx_id));
       fprintf(stdout, "qcc debug\n");
@@ -52,6 +49,11 @@ int ObTxLogCb::on_success()
     }
     if (OB_FAIL(part_ctx->on_success(this))) {
       TRANS_LOG(WARN, "sync log success callback error", K(ret), K(tx_id));
+    }
+    if (!bk_is_reserved) {
+      ObTxLogCbPool::finish_syncing_with_stat(bk_group_ptr, bk_log_size,
+                                              ObTimeUtility::fast_current_time() - bk_submit_ts,
+                                              bk_submit_ts);
     }
   }
 
@@ -222,13 +224,13 @@ TEST_F(ObTestMemtableNewSafeToDestroy, test_safe_to_destroy)
   storage::ObTabletMemtableMgr *memtable_mgr = memtable->get_memtable_mgr();
   EXPECT_EQ(OB_SUCCESS, memtable_mgr->release_memtables());
 
-  TRANS_LOG(INFO, "qcc print2", KPC(memtable));;
+  TRANS_LOG(INFO, "qcc print2", KPC(memtable));
 
   ObTabletHandle tablet_handle;
   get_tablet(tenant_id, share::ObLSID(1001), tablet_id, tablet_handle);
   tablet_handle.get_obj()->reset_memtable();
 
-  TRANS_LOG(INFO, "qcc print3", KPC(memtable));;
+  TRANS_LOG(INFO, "qcc print3", KPC(memtable));
 
   usleep(5 * 1000 * 1000);
 

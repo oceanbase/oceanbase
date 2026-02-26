@@ -11,14 +11,11 @@
  */
 
 #include <gtest/gtest.h>
-#include <boost/geometry.hpp>
 #define private public
 #include "lib/json_type/ob_json_common.h"
 #include "lib/geo/ob_s2adapter.h"
 #include "lib/utility/ob_test_util.h"
 
-#include <vector>
-#include <iostream>
 #undef private
 
 namespace oceanbase {
@@ -236,8 +233,11 @@ void printCellid(ObS2Cellids &cells) {
     S2CellId tmp(it);
     std::cout << "F" << tmp.face();
     std::cout << "/L" << tmp.level() << "/";
-    for (int level = 1; level <= tmp.level(); level++) {
-      std::cout << tmp.child_position(level);
+    for (int level = 1; level <= tmp.level() && !tmp.is_leaf(); level++) {
+       std::cout << tmp.child_position(level);
+     }
+    if (tmp.is_leaf()) {
+      std::cout << tmp.id();
     }
     std::cout << std::endl;
   }

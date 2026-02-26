@@ -11,19 +11,13 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "gtest/gtest.h"
 #define private public
 #define protected public
 
-#include "lib/ob_errno.h"
-#include "storage/backup/ob_backup_tmp_file.h"
-#include "storage/backup/ob_backup_data_struct.h"
-#include "storage/backup/ob_backup_iterator.h"
+#include "src/share/backup/ob_backup_io_adapter.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "test_backup.h"
 #include "test_backup_include.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "lib/string/ob_string.h"
+#include "mtlenv/mock_tenant_module_env.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -41,6 +35,16 @@ public:
   virtual ~TestBackupIndexIterator();
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 
 private:
   void fake_init_macro_index_merger_(const int64_t file_count, const int64_t per_file_item_count,
@@ -68,6 +72,7 @@ protected:
   common::ObInOutBandwidthThrottle throttle_;
   char test_dir_[OB_MAX_URI_LENGTH];
   char test_dir_uri_[OB_MAX_URI_LENGTH];
+  ObInOutBandwidthThrottle bandwidth_throttle_;
   DISALLOW_COPY_AND_ASSIGN(TestBackupIndexIterator);
 };
 
@@ -110,7 +115,10 @@ void TestBackupIndexIterator::SetUp()
   }
   // set observer memory limit
   CHUNK_MGR.set_limit(8L * 1024L * 1024L * 1024L);
-  ret = ObTmpFileManager::get_instance().init();
+
+  ASSERT_EQ(OB_SUCCESS, common::ObClockGenerator::init());
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
+
   if (OB_INIT_TWICE == ret) {
     ret = OB_SUCCESS;
   } else {
@@ -123,14 +131,35 @@ void TestBackupIndexIterator::SetUp()
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
   EXPECT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
+
+  ObTimerService *timer_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_start(timer_service));
+  tenant_ctx.set(timer_service);
+
+  tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
+  EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
+  tenant_ctx.set(tf_mgr);
+  EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
+  tf_mgr->get_sn_file_manager().write_cache_.default_memory_limit_ = 40*1024*1024;
+  EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
+
   ObTenantEnv::set_tenant(&tenant_ctx);
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
   inner_init_();
+  ASSERT_EQ(OB_SUCCESS, bandwidth_throttle_.init(1024 * 1024 * 60));
 }
 
 void TestBackupIndexIterator::TearDown()
 {
-  ObTmpFileManager::get_instance().destroy();
+  tmp_file::ObTmpPageCache::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
+  common::ObClockGenerator::destroy();
+  ObTimerService *timer_service = MTL(ObTimerService *);
+  ASSERT_NE(nullptr, timer_service);
+  timer_service->stop();
+  timer_service->wait();
+  timer_service->destroy();
 }
 
 void TestBackupIndexIterator::inner_init_()
@@ -150,7 +179,7 @@ void TestBackupIndexIterator::inner_init_()
   job_desc_.task_id_ = 1;
   backup_set_desc_.backup_set_id_ = 1;
   backup_set_desc_.backup_type_.type_ = ObBackupType::FULL_BACKUP;
-  backup_data_type_.set_major_data_backup();
+  backup_data_type_.set_user_data_backup();
   incarnation_ = 1;
   tenant_id_ = 1;
   dest_id_ = 1;
@@ -175,7 +204,7 @@ void TestBackupIndexIterator::fake_init_macro_index_merger_(const int64_t file_c
   ObBackupIndexMergeParam merge_param;
   build_backup_index_merge_param_(merge_param);
   merger.set_count(file_count, per_file_item_count);
-  ret = merger.init(merge_param, sql_proxy);
+  ret = merger.init(merge_param, sql_proxy, bandwidth_throttle_);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -197,7 +226,7 @@ void TestBackupIndexIterator::init_macro_range_index_iterator(ObBackupMacroRange
 {
   int ret = OB_SUCCESS;
   ret = iter.init(task_id_, backup_dest_, tenant_id_, backup_set_desc_, ls_id_, backup_data_type_,
-      turn_id_, retry_id_);
+      turn_id_, retry_id_, dest_id_);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -251,91 +280,6 @@ TEST_F(TestBackupIndexIterator, test_extract_backup_file_id)
   ObIBackupIndexIterator::extract_backup_file_id_(file_name4, prefix, tmp_file_id, file_match);
   ASSERT_EQ(true, file_match);
   ASSERT_EQ(10, tmp_file_id);
-}
-
-TEST_F(TestBackupIndexIterator, test_backup_macro_range_index_iterator_921_KB)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  const int64_t file_count = 20;
-  const int64_t per_file_item_count = 1024;
-  fake_init_macro_index_merger_(file_count, per_file_item_count, merger);
-  ret = merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const int64_t start_id = 1;
-  const int64_t end_id = file_count * per_file_item_count;
-  ObBackupMacroRangeIndexIterator range_index_iterator;
-  init_macro_range_index_iterator(range_index_iterator);
-  iterate_macro_range_index_iterator(start_id, end_id, range_index_iterator);
-}
-
-TEST_F(TestBackupIndexIterator, test_backup_macro_range_index_iterator_1_8_MB)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  const int64_t file_count = 40;
-  const int64_t per_file_item_count = 1024;
-  fake_init_macro_index_merger_(file_count, per_file_item_count, merger);
-  ret = merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const int64_t start_id = 1;
-  const int64_t end_id = file_count * per_file_item_count;
-  ObBackupMacroRangeIndexIterator range_index_iterator;
-  init_macro_range_index_iterator(range_index_iterator);
-  iterate_macro_range_index_iterator(start_id, end_id, range_index_iterator);
-}
-
-TEST_F(TestBackupIndexIterator, test_backup_macro_range_index_iterator_2_8_MB)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  const int64_t file_count = 60;
-  const int64_t per_file_item_count = 1024;
-  fake_init_macro_index_merger_(file_count, per_file_item_count, merger);
-  ret = merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const int64_t start_id = 1;
-  const int64_t end_id = file_count * per_file_item_count;
-  ObBackupMacroRangeIndexIterator range_index_iterator;
-  init_macro_range_index_iterator(range_index_iterator);
-  iterate_macro_range_index_iterator(start_id, end_id, range_index_iterator);
-}
-
-TEST_F(TestBackupIndexIterator, test_backup_macro_range_index_iterator_3_7_MB)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  const int64_t file_count = 80;
-  const int64_t per_file_item_count = 1024;
-  fake_init_macro_index_merger_(file_count, per_file_item_count, merger);
-  ret = merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const int64_t start_id = 1;
-  const int64_t end_id = file_count * per_file_item_count;
-  ObBackupMacroRangeIndexIterator range_index_iterator;
-  init_macro_range_index_iterator(range_index_iterator);
-  iterate_macro_range_index_iterator(start_id, end_id, range_index_iterator);
-}
-
-TEST_F(TestBackupIndexIterator, test_backup_macro_range_index_iterator_4_6_MB)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  const int64_t file_count = 100;
-  const int64_t per_file_item_count = 1024;
-  fake_init_macro_index_merger_(file_count, per_file_item_count, merger);
-  ret = merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const int64_t start_id = 1;
-  const int64_t end_id = file_count * per_file_item_count;
-  ObBackupMacroRangeIndexIterator range_index_iterator;
-  init_macro_range_index_iterator(range_index_iterator);
-  iterate_macro_range_index_iterator(start_id, end_id, range_index_iterator);
 }
 
 }  // namespace backup

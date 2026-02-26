@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_SHARE_DEADLOCK_OB_DEADLOCK_TRANS_SERVICE_
 #define OCEANBASE_SHARE_DEADLOCK_OB_DEADLOCK_TRANS_SERVICE_
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "observer/ob_inner_sql_connection_pool.h"
+#include "observer/ob_server_struct.h"
 #include "ob_deadlock_detector_common_define.h"
 #include "lib/container/ob_iarray.h"
 #include "share/ob_event_history_table_operator.h"
@@ -24,10 +26,33 @@ namespace share
 namespace detector
 {
 
+class ObDeadLockInnerConnHelper
+{
+public:
+  ObDeadLockInnerConnHelper() : sql_client_(GCTX.sql_proxy_), conn_(nullptr)
+  {}
+  int init();
+  ~ObDeadLockInnerConnHelper() { reset(); }
+  void reset();
+  bool is_valid() const { return conn_ != nullptr; }
+  common::sqlclient::ObISQLConnection *get_connection() { return conn_; }
+  int sql_write(const uint64_t tenant_id,
+                const char *sql,
+                int64_t &affected_rows);
+  int sql_read(const uint64_t tenant_id,
+               const char *sql,
+               common::ObMySQLProxy::MySQLResult &result);
+private:
+  common::ObMySQLProxy *sql_client_;
+  common::sqlclient::ObISQLConnection *conn_;
+};
+
+
 class  ObDeadLockInnerTableService
 {
 public:
-  static int insert(const ObDetectorInnerReportInfo &inner_info,
+  static int insert(ObDeadLockInnerConnHelper &conn_helper,
+                    const ObDetectorInnerReportInfo &inner_info,
                     int64_t sequence,
                     int64_t size,
                     int64_t current_ts);

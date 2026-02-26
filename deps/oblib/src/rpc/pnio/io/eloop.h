@@ -14,6 +14,7 @@ typedef struct eloop_t {
   int fd;
   dlink_t ready_link;
   rl_impl_t rl_impl;
+  int8_t thread_usage[12];
 } eloop_t;
 
 extern int eloop_init(eloop_t* ep);

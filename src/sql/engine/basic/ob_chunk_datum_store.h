@@ -22,7 +22,7 @@
 #include "common/row/ob_row_iterator.h"
 #include "share/datum/ob_datum.h"
 #include "sql/engine/expr/ob_expr.h"
-#include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "sql/engine/basic/ob_sql_mem_callback.h"
 #include "sql/engine/basic/ob_batch_result_holder.h"
 
@@ -363,6 +363,9 @@ public:
         SQL_ENG_LOG(WARN, "NULL datums or count mismatch", K(ret),
                     KPC(store_row_), K(exprs.count()));
       } else {
+        if (saved_) {
+          reuse();
+        }
         ObDatum *datum = nullptr;
         ObDatum *cells = store_row_->cells();
         for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
@@ -501,6 +504,7 @@ public:
     int swizzling(int64_t *col_cnt);
     inline bool magic_check() { return MAGIC == magic_; }
     int get_store_row(int64_t &cur_pos, const StoredRow *&sr);
+    int get_cur_row(int64_t cur_pos, const StoredRow *&sr);
     inline Block* get_next() const { return next_; }
     inline bool is_empty() { return get_buffer()->is_empty(); }
     inline void set_block_size(uint32 blk_size) { blk_size_ = blk_size; }
@@ -656,6 +660,7 @@ public:
 
     /* from StoredRow to NewRow */
     int get_next_row(const StoredRow *&sr);
+    int get_cur_row(const StoredRow *&sr);
     int get_next_batch(const StoredRow **rows, const int64_t max_rows, int64_t &read_rows);
     int get_next_batch(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
                        const int64_t max_rows, int64_t &read_rows, const StoredRow **rows);
@@ -768,6 +773,7 @@ public:
                      const StoredRow **sr = nullptr);
     int get_next_row(common::ObDatum **datums);
     int get_next_row(const StoredRow *&sr);
+    int get_cur_row(const StoredRow *&sr);
     template <bool fill_invariable_res_buf = false>
     int get_next_row(ObEvalCtx &ctx, const common::ObIArray<ObExpr*> &exprs);
 
@@ -831,7 +837,7 @@ public:
      // cp from chunk iter
      ObChunkDatumStore* store_;
      Block* cur_iter_blk_;
-     blocksstable::ObTmpFileIOHandle aio_read_handle_;
+     tmp_file::ObTmpFileIOHandle aio_read_handle_;
      int64_t cur_nth_blk_;     //reading nth blk start from 1
      int64_t cur_chunk_n_blocks_; //the number of blocks of current chunk
      int64_t cur_iter_pos_;    //pos in file
@@ -966,7 +972,7 @@ public:
   virtual ~ObChunkDatumStore() { reset(); }
 
   int init(int64_t mem_limit,
-      uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
+      uint64_t tenant_id,
       int64_t mem_ctx_id = common::ObCtxIds::DEFAULT_CTX_ID,
       const char *label = common::ObModIds::OB_SQL_CHUNK_ROW_STORE,
       bool enable_dump = true,
@@ -1044,7 +1050,7 @@ public:
   inline int64_t get_mem_used() const { return mem_used_; }
   inline int64_t get_max_hold_mem() const { return max_hold_mem_; }
   inline int64_t get_file_fd() const { return io_.fd_; }
-  inline int64_t get_file_dir_id() const { return io_.dir_id_; }
+  inline int64_t get_file_dir_id() const { return dir_id_; }
   inline int64_t get_file_size() const { return file_size_; }
   inline int64_t min_blk_size(const int64_t row_store_size)
   {
@@ -1068,7 +1074,7 @@ public:
   }
   int dump(bool reuse, bool all_dump, int64_t dumped_size = INT64_MAX);
   // 目前dir id 的策略是上层逻辑（一般是算子）统一申请，然后再set过来
-  void set_dir_id(int64_t dir_id) { io_.dir_id_ = dir_id; }
+  void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
   int alloc_dir_id();
   TO_STRING_KV(K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit),
       K_(row_cnt), K_(file_size), K_(enable_dump));
@@ -1136,18 +1142,20 @@ private:
 
   int write_file(void *buf, int64_t size);
   int read_file(
-      void *buf, const int64_t size, const int64_t offset, blocksstable::ObTmpFileIOHandle &handle,
+      void *buf, const int64_t size, const int64_t offset, tmp_file::ObTmpFileIOHandle &handle,
       const int64_t file_size, const int64_t cur_pos, int64_t &tmp_file_size);
   int aio_read_file(void *buf,
                     const int64_t size,
                     const int64_t offset,
-                    blocksstable::ObTmpFileIOHandle &handle);
+                    tmp_file::ObTmpFileIOHandle &handle);
   bool need_dump(int64_t extra_size);
   BlockBuffer* new_block();
   void set_io(int64_t size, char *buf) { io_.size_ = size; io_.buf_ = buf; }
-  static void set_io(int64_t size, char *buf, blocksstable::ObTmpFileIOInfo &io) { io.size_ = size; io.buf_ = buf; }
+  static void set_io(int64_t size, char *buf, tmp_file::ObTmpFileIOInfo &io) { io.size_ = size; io.buf_ = buf; }
   bool find_block_can_hold(const int64_t size, bool &need_shrink);
   int get_store_row(RowIterator &it, const StoredRow *&sr);
+  int get_cur_row(RowIterator &it, const StoredRow *&sr);
+
   inline void callback_alloc(int64_t size) { if (callback_ != nullptr) callback_->alloc(size); }
   inline void callback_free(int64_t size) { if (callback_ != nullptr) callback_->free(size); }
 
@@ -1175,8 +1183,6 @@ private:
   int64_t row_cnt_;
   int64_t col_count_;
 
-  blocksstable::ObTmpFileIOHandle aio_write_handle_;
-
   bool enable_dump_;
   bool has_dumped_;
   int64_t dumped_row_cnt_;
@@ -1184,7 +1190,8 @@ private:
   ObIOEventObserver *io_event_observer_;
 
   //int fd_;
-  blocksstable::ObTmpFileIOInfo io_;
+  tmp_file::ObTmpFileIOInfo io_;
+  int64_t dir_id_;
   int64_t file_size_;
   int64_t n_block_in_file_;
 
@@ -1358,7 +1365,7 @@ int ObChunkDatumStore::Iterator::get_next_batch(
     const int64_t max_rows, int64_t &read_rows, const StoredRow **rows)
 {
   int ret = OB_SUCCESS;
-  int64_t max_batch_size = ctx.max_batch_size_;
+  int64_t max_batch_size = MAX(ctx.max_batch_size_, 1);
   const StoredRow **srows = rows;
   if (NULL == rows) {
     if (!is_valid()) {
@@ -1429,8 +1436,8 @@ void ObChunkDatumStore::Iterator::attach_rows(
       }
       e->set_evaluated_projected(ctx);
       ObEvalInfo &info = e->get_eval_info(ctx);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
   }
 }

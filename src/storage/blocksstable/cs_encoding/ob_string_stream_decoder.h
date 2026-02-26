@@ -28,12 +28,15 @@ typedef void (*ConvertStringToDatumFunc)(
     const ObStringStreamDecoderCtx &str_ctx,
     const char *offset_data,
     const char *ref_data,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap_or_id,
     common::ObDatum *datums);
 
-extern ObMultiDimArray_T<ConvertStringToDatumFunc, 5/*offset_width_V*/, ObRefStoreWidthV::MAX_WIDTH_V,
-    ObBaseColumnDecoderCtx::ObNullFlag::MAX, 2/*need_copy_V*/> convert_string_to_datum_funcs;
+extern ObMultiDimArray_T<ConvertStringToDatumFunc,
+    5/*offset_width_V*/,
+    ObRefStoreWidthV::MAX_WIDTH_V,
+    ObBaseColumnDecoderCtx::ObNullFlag::MAX,
+    2/*need_copy_V*/> convert_string_to_datum_funcs;
 
 class ObStringStreamDecoder
 {

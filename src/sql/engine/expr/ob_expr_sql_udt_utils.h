@@ -145,6 +145,8 @@ public:
                                        sql::ObExecContext *exec_context,
                                        ObSqlUDT &sql_udt,
                                        ObString &res_str);
+  static int convert_collection_to_string(ObObj &coll_obj, const ObSqlCollectionInfo &coll_meta,
+                                          common::ObIAllocator *allocator, ObString &res_str);
 
   static bool ob_udt_util_check_same_type(ObObjType type1, ObObjType type2)
   {

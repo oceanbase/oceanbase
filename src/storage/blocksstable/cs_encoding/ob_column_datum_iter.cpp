@@ -40,6 +40,20 @@ int ObDictDatumIter::get_next(const ObDatum *&datum)
   if (OB_UNLIKELY(iter_ == ht_.end())) {
     ret = OB_ITER_END;
   } else {
+    datum = &iter_->datum_;
+    iter_++;
+  }
+
+  return ret;
+}
+
+int ObEncodingHashTableDatumIter::get_next(const ObDatum *&datum)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(iter_ == ht_.end())) {
+    ret = OB_ITER_END;
+  } else {
     datum = iter_->header_->datum_;
     iter_++;
   }

@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX STORAGE_REDO
 
 #include "ob_storage_log_replayer.h"
-#include "share/ob_force_print_log.h"
-#include "share/redolog/ob_log_file_handler.h"
-#include "storage/slog/ob_storage_log_entry.h"
 #include "storage/slog/ob_storage_log_reader.h"
-#include "share/ob_force_print_log.h"
 
 namespace oceanbase
 {
@@ -307,9 +303,12 @@ int ObStorageLogReplayer::print_slog(
   int64_t pos = 0;
   if (OB_FAIL(slog_entry.deserialize(buf, len, pos))) {
     LOG_WARN("Fail to deserialize slog entry.", K(ret), KP(buf), K(len), K(pos));
-  } else if (0 > fprintf(stream, "%s\n%s\n", slog_name, to_cstring(slog_entry))) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("Fail to print slog to file.", K(ret));
+  } else {
+    ObCStringHelper helper;
+    if (0 > fprintf(stream, "%s\n%s\n", slog_name, helper.convert(slog_entry))) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("Fail to print slog to file.", K(ret));
+    }
   }
   return ret;
 }

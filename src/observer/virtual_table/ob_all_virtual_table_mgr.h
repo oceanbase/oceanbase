@@ -57,7 +57,23 @@ class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator,
     NESTED_SIZE,
     CG_IDX,
     DATA_CHECKSUM,
-    TABLE_FLAG
+    TABLE_FLAG,
+    REC_SCN,
+    ROW_COUNT,
+    UNCOMMIT_TX_INFO
+  };
+  enum INDEX_KEY_ID
+  {
+    IDX_KEY_TENANT_ID_IDX = 0,
+    IDX_KEY_LS_ID_IDX = 1,
+    IDX_KEY_TABLET_ID_IDX = 2,
+    IDX_KEY_MAX,
+  };
+public:
+  enum INDEX_TYPE
+  {
+    INDEX_TYPE_I1 = 0,     // index: tenant_id, ls_id, tablet_id
+    INDEX_TYPE_MAX = 1,    // without index
   };
 public:
   ObAllVirtualTableMgr();
@@ -67,6 +83,7 @@ public:
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
   inline void set_addr(common::ObAddr &addr) { addr_ = addr; }
+  void use_index_scan(INDEX_TYPE index_type);
 private:
   // 过滤得到需要处理的租户
   virtual bool is_need_process(uint64_t tenant_id) override;
@@ -74,9 +91,9 @@ private:
   virtual int process_curr_tenant(common::ObNewRow *&row) override;
   // 释放上一个租户的资源
   virtual void release_last_tenant() override;
-
   int get_next_tablet();
   int get_next_table(storage::ObITable *&table);
+  int match_in_range(const int key_idx, const common::ObObj &obj, bool &is_match);
 private:
   common::ObAddr addr_;
   storage::ObTenantTabletIterator *tablet_iter_;
@@ -86,6 +103,8 @@ private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   storage::ObTableStoreIterator table_store_iter_;
   void *iter_buf_;
+  INDEX_TYPE index_type_;
+  char uncommit_tx_info_buf_[common::MAX_UNCOMMIT_TX_INFO_LENGTH];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTableMgr);
 };

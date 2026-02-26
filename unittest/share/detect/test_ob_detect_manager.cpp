@@ -16,8 +16,6 @@
 #define private public
 #define protected public
 #include "share/detect/ob_detect_manager.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/thread/thread_mgr.h"
 #include "lib/alloc/memory_dump.h"
 #include "share/detect/ob_detect_manager_utils.h"
 
@@ -38,7 +36,7 @@ rpc::frame::ObReqTransport mock_transport(nullptr, nullptr);
 static int init_dm()
 {
   int ret = OB_SUCCESS;
-  GCTX.server_id_ = 10086;
+  (void) GCTX.set_server_id(4095);
   ObAddr self;
   self.set_ip_addr("127.0.0.1", 8086);
   if (OB_FAIL(dm->init(self, 1))) {
@@ -108,7 +106,10 @@ public:
     }
     return ret;
   }
-  int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::VIRTUAL; }
+  const char *get_type() const override
+  {
+    return get_detect_callback_type_string(DetectCallBackType::VIRTUAL);
+  }
 private:
   ObMockResource* resouce_;
 };

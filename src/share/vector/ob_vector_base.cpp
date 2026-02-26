@@ -11,11 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-
-#include "share/vector/ob_vector_base.h"
-#include "sql/engine/expr/ob_expr.h"
-#include "sql/engine/basic/ob_compact_row.h"
-#include "share/vector/vector_basic_op.h"
+#include "ob_vector_base.h"
 
 namespace oceanbase
 {

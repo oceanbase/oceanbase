@@ -37,9 +37,10 @@ public:
       obrpc::ObStorageRpcProxy *svr_rpc_proxy,
       storage::ObStorageRpc *storage_rpc);
   virtual int on_rebuild(const int64_t id, const palf::LSN &lsn);
+  virtual bool is_rebuilding(const int64_t id) const;
   void destroy();
 private:
-  int check_ls_in_rebuild_status_(bool &is_ls_in_rebuild);
+  int check_ls_in_rebuild_status_(bool &is_ls_in_rebuild) const;
   int execute_rebuild_();
   void wakeup_rebuild_service_();
 private:

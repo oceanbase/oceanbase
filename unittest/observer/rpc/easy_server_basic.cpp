@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include "rpc/frame/ob_net_easy.h"
 #include "observer/mysql/obsm_handler.h"
 
 

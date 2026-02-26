@@ -14,12 +14,7 @@
 
 #include "sql/engine/join/ob_hash_join_op.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "share/diagnosis/ob_sql_monitor_statname.h"
 
 namespace oceanbase
 {
@@ -59,7 +54,7 @@ int ObHashJoinInput::sync_wait(ObExecContext &ctx, int64_t &sync_event, EventPre
         if (ATOMIC_LOAD(&sync_event) + 1 >= exit_cnt) {
           // last thread, it will singal and exit by self
           ATOMIC_INC(&sync_event);
-          shared_hj_info->cond_.signal();
+          shared_hj_info->cond_.signal(INT32_MAX);
           LOG_DEBUG("debug sync event", K(ret), K(lbt()), K(sync_event));
           break;
         }
@@ -107,7 +102,11 @@ ObHashJoinSpec::ObHashJoinSpec(common::ObIAllocator &alloc, const ObPhyOperatorT
   is_naaj_(false),
   is_sna_(false),
   is_shared_ht_(false),
-  is_ns_equal_cond_(alloc)
+  is_ns_equal_cond_(alloc),
+  adaptive_hj_scan_cols_(alloc),
+  adaptive_nlj_scan_cols_(alloc),
+  is_adaptive_(false),
+  left_join_row_(alloc)
 {
 }
 
@@ -119,7 +118,11 @@ OB_SERIALIZE_MEMBER((ObHashJoinSpec, ObJoinSpec),
                     is_naaj_,
                     is_sna_,
                     is_shared_ht_,
-                    is_ns_equal_cond_);
+                    is_ns_equal_cond_,
+                    adaptive_hj_scan_cols_,
+                    adaptive_nlj_scan_cols_,
+                    is_adaptive_,
+                    left_join_row_);
 
 int ObHashJoinOp::PartHashJoinTable::init(ObIAllocator &alloc)
 {
@@ -179,7 +182,6 @@ ObHashJoinOp::ObHashJoinOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput 
   tuple_need_join_(false),
   first_get_row_(true),
   drain_mode_(HashJoinDrainMode::NONE_DRAIN),
-  cur_bkid_(0),
   remain_data_memory_size_(0),
   nth_nest_loop_(0),
   cur_nth_row_(0),
@@ -256,7 +258,10 @@ ObHashJoinOp::ObHashJoinOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput 
   non_preserved_side_is_not_empty_(false),
   null_random_hash_value_(0),
   skip_left_null_(false),
-  skip_right_null_(false)
+  skip_right_null_(false),
+  cur_row_idx_(0),
+  part_rows_alloc_(nullptr),
+  left_part_rows_(nullptr)
 {
   /*
                         read_left_row -> build_hash_table
@@ -308,50 +313,24 @@ ObHashJoinOp::ObHashJoinOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput 
   get_next_left_batch_func_ = &ObHashJoinOp::get_next_left_row_batch;
 }
 
-int ObHashJoinOp::set_hash_function(int8_t hash_join_hasher)
+int ObHashJoinOp::set_hash_function()
 {
   int ret = OB_SUCCESS;
   const common::ObIArray<common::ObHashFunc> *cur_hash_funcs = &MY_SPEC.all_hash_funcs_;
-  if (DEFAULT_MURMUR_HASH != (hash_join_hasher & HASH_FUNCTION_MASK)) {
-    ObHashFunc hash_func;
-    if (OB_FAIL(tmp_hash_funcs_.init(MY_SPEC.all_hash_funcs_.count()))) {
-      LOG_WARN("failed to init tmp hash func", K(ret));
-    } else {
-      for (int64_t i = 0; i < MY_SPEC.all_hash_funcs_.count() && OB_SUCC(ret); ++i) {
-        if (ENABLE_WY_HASH == (hash_join_hasher & HASH_FUNCTION_MASK)) {
-          hash_func.hash_func_ = MY_SPEC.all_join_keys_.at(i)->basic_funcs_->wy_hash_;
-        } else  if (ENABLE_XXHASH64 == (hash_join_hasher & HASH_FUNCTION_MASK)) {
-          hash_func.hash_func_ = MY_SPEC.all_join_keys_.at(i)->basic_funcs_->xx_hash_;
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected status: hash join hasher is invalid", K(ret), K(hash_join_hasher));
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(tmp_hash_funcs_.push_back(hash_func))) {
-          LOG_WARN("failed to push back wy hash func", K(ret));
-        } else {
-          LOG_DEBUG("debug hash function", K(hash_func), K(i), K(*MY_SPEC.all_join_keys_.at(i)));
-        }
-      }
-      cur_hash_funcs = &tmp_hash_funcs_;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    int64_t all_cnt = cur_hash_funcs->count();
-    left_hash_funcs_.init(
-      all_cnt / 2, const_cast<ObHashFunc*>(&cur_hash_funcs->at(0)), all_cnt / 2);
-    right_hash_funcs_.init(all_cnt / 2,
-      const_cast<ObHashFunc*>(&cur_hash_funcs->at(0) + left_hash_funcs_.count()),
-      cur_hash_funcs->count() - left_hash_funcs_.count());
-    if (left_hash_funcs_.count() != right_hash_funcs_.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status: hash func is not match", K(ret), K(cur_hash_funcs->count()),
-        K(left_hash_funcs_.count()), K(right_hash_funcs_.count()));
-    } else if (MY_SPEC.all_join_keys_.count() != cur_hash_funcs->count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status: hash func is not match", K(ret), K(cur_hash_funcs->count()),
-        K(MY_SPEC.all_join_keys_.count()));
-    }
+  int64_t all_cnt = cur_hash_funcs->count();
+  left_hash_funcs_.init(
+    all_cnt / 2, const_cast<ObHashFunc*>(&cur_hash_funcs->at(0)), all_cnt / 2);
+  right_hash_funcs_.init(all_cnt / 2,
+    const_cast<ObHashFunc*>(&cur_hash_funcs->at(0) + left_hash_funcs_.count()),
+    cur_hash_funcs->count() - left_hash_funcs_.count());
+  if (left_hash_funcs_.count() != right_hash_funcs_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: hash func is not match", K(ret), K(cur_hash_funcs->count()),
+      K(left_hash_funcs_.count()), K(right_hash_funcs_.count()));
+  } else if (MY_SPEC.all_join_keys_.count() != cur_hash_funcs->count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: hash func is not match", K(ret), K(cur_hash_funcs->count()),
+      K(MY_SPEC.all_join_keys_.count()));
   }
   return ret;
 }
@@ -424,7 +403,7 @@ int ObHashJoinOp::inner_open()
       if (0 == (hash_join_processor_ & HJ_PROCESSOR_MASK)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect hash join processor", K(ret), K(hash_join_processor_));
-      } else if (OB_FAIL(set_hash_function(tenant_config->_enable_hash_join_hasher))) {
+      } else if (OB_FAIL(set_hash_function())) {
         LOG_WARN("unexpect hash join function", K(ret));
       }
     } else {
@@ -575,6 +554,7 @@ void ObHashJoinOp::reset_base()
 void ObHashJoinOp::reset()
 {
   free_bloom_filter();
+  free_part_rows_array();
   clean_batch_mgr();
   part_rescan();
   reset_base();
@@ -587,7 +567,7 @@ void ObHashJoinOp::part_rescan()
   right_has_matched_ = false;
   tuple_need_join_ = false;
   first_get_row_ = true;
-  cur_bkid_ = 0;
+  cur_row_idx_ = 0;
   hash_table_.reset();
   cur_tuple_ = NULL;
   if (nullptr != bloom_filter_) {
@@ -1088,7 +1068,7 @@ int ObHashJoinOp::get_next_left_row_batch(bool is_from_row_store,
       // for opt, we not set evaluted flag when convert exprs,
       // and depended projected flag is true
       FOREACH_CNT_X(e, left_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
     }
   } else {
@@ -1133,7 +1113,7 @@ int ObHashJoinOp::get_next_left_row_batch_na(bool is_from_row_store, const ObBat
       // for opt, we not set evaluted flag when convert exprs,
       // and depended projected flag is true
       FOREACH_CNT_X(e, left_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
     } else if (FALSE_IT(non_preserved_side_is_not_empty_
                         |= (RIGHT_ANTI_JOIN == MY_SPEC.join_type_))) {
@@ -1207,6 +1187,13 @@ int ObHashJoinOp::reuse_for_next_chunk()
     OZ(hash_table.buckets_->init(hash_table.nbuckets_));
     hash_table.collisions_ = 0;
     hash_table.used_buckets_ = 0;
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(left_part_rows_)) {
+      left_part_rows_->reuse();
+      if (OB_FAIL(left_part_rows_->reserve(row_count))) {
+        LOG_WARN("failed to reserve left part rows", K(ret), K(row_count));
+      }
+    }
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(init_bloom_filter(mem_context_->get_malloc_allocator(), hash_table_.nbuckets_))) {
@@ -1298,6 +1285,18 @@ int ObHashJoinOp::build_hash_table_for_nest_loop(int64_t &num_left_rows)
           curr_ht_row_cnt += read_size;
           num_left_rows += read_size;
           cur_nth_row_ += read_size;
+          if ((need_left_join() || LEFT_ANTI_JOIN == MY_SPEC.join_type_)) {
+            if (OB_UNLIKELY(OB_ISNULL(left_part_rows_))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("left part rows is null", K(ret), K(MY_SPEC.join_type_));
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < read_size; i++) {
+                if (OB_FAIL(left_part_rows_->push_back(left_stored_rows[i]))) {
+                  LOG_WARN("failed to push back left part rows", K(ret), K(i));
+                }
+              }
+            }
+          }
           if (curr_ht_row_cnt >= row_bound
               || curr_ht_memory_size >= memory_bound) {
             ret = OB_ITER_END;
@@ -1728,6 +1727,7 @@ int ObHashJoinOp::build_hash_table_in_memory(int64_t &num_left_rows)
   const ObHashJoinStoredJoinRow *left_stored_rows[PREFETCH_BATCH_SIZE];
   int64_t used_buckets = 0;
   int64_t collisions = 0;
+  int64_t part_rows_idx = 0;
   if (OB_FAIL(left_batch_->set_iterator())) {
     LOG_WARN("failed to set iterator", K(ret));
   }
@@ -1795,6 +1795,16 @@ int ObHashJoinOp::build_hash_table_in_memory(int64_t &num_left_rows)
           num_left_rows += read_size;
         }
       }
+      if (OB_SUCC(ret) && (need_left_join() || LEFT_ANTI_JOIN == MY_SPEC.join_type_)) {
+        if (OB_UNLIKELY(OB_ISNULL(left_part_rows_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("left part rows is null", K(ret), K(MY_SPEC.join_type_));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < read_size; i++) {
+            left_part_rows_->push_back(left_stored_rows[i]);
+          }
+        }
+      }
     }
     if (OB_SUCC(ret) || OB_ITER_END == ret) {
       if (is_shared_) {
@@ -1826,7 +1836,8 @@ int ObHashJoinOp::in_memory_process(bool &need_not_read_right)
     LOG_WARN("failed to build hash table", K(ret), K(part_level_));
   }
   if (OB_SUCC(ret)
-      && !is_shared_
+      && (!is_shared_ || (0 == cur_hash_table_->row_count_
+                          && cur_dumped_partition_ == max_partition_count_per_level_))
       && ((0 == num_left_rows
           && RIGHT_ANTI_JOIN != MY_SPEC.join_type_
           && RIGHT_OUTER_JOIN != MY_SPEC.join_type_
@@ -2878,6 +2889,9 @@ int ObHashJoinOp::prepare_hash_table()
   if (OB_SUCC(ret) && is_shared_ && OB_FAIL(sync_wait_init_build_hash(build_ht_thread_ptr))) {
     LOG_WARN("failed to sync wait init hash table", K(ret));
   }
+  if (OB_SUCC(ret) && (need_left_join() || MY_SPEC.join_type_ == LEFT_ANTI_JOIN)) {
+    prepare_part_rows_array(hash_table.row_count_);
+  }
   return ret;
 }
 
@@ -2917,6 +2931,7 @@ int ObHashJoinOp::build_hash_table_for_recursive()
   int64_t step = 64;
   int64_t used_buckets = 0;
   int64_t collisions = 0;
+  int64_t part_rows_idx = 0;
   for (int64_t i = start_id, idx = 0; OB_SUCC(ret) && idx < part_count_; ++idx, ++i) {
     i = i % part_count_;
     ObHashJoinPartition &hj_part = hj_part_array_[i];
@@ -2979,6 +2994,16 @@ int ObHashJoinOp::build_hash_table_for_recursive()
             }
             if (OB_SUCC(ret)) {
               nth_row += read_size;
+            }
+          }
+          if (OB_SUCC(ret) && (need_left_join() || LEFT_ANTI_JOIN == MY_SPEC.join_type_)) {
+            if (OB_UNLIKELY(OB_ISNULL(left_part_rows_))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("left part rows is null", K(ret), K(MY_SPEC.join_type_));
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < read_size; i++) {
+                left_part_rows_->push_back(part_stored_rows[i]);
+              }
             }
           }
         }
@@ -3622,7 +3647,8 @@ int ObHashJoinOp::recursive_process(bool &need_not_read_right)
     LOG_WARN("failed to build hash table", K(ret), K(part_level_));
   }
   if (OB_SUCC(ret)
-      && !is_shared_
+      && (!is_shared_ || (0 == cur_hash_table_->row_count_
+                          && cur_dumped_partition_ == max_partition_count_per_level_))
       && ((0 == num_left_rows
           && RIGHT_ANTI_JOIN != MY_SPEC.join_type_
           && RIGHT_OUTER_JOIN != MY_SPEC.join_type_
@@ -3708,7 +3734,7 @@ int ObHashJoinOp::get_next_right_batch_na()
     } else if (HashJoinDrainMode::RIGHT_DRAIN == drain_mode_ ||
         (read_null_in_naaj_ && is_shared_)) {
       FOREACH_CNT_X(e, right_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
       right_brs_ = &child_brs_;
       const_cast<ObBatchRows *>(right_brs_)->size_ = 0;
@@ -3722,7 +3748,7 @@ int ObHashJoinOp::get_next_right_batch_na()
       // for opt, we not set evaluted flag when convert exprs,
       // and depended projected flag is true
       FOREACH_CNT_X(e, right_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
     } else if (FALSE_IT(non_preserved_side_is_not_empty_
                         |= (LEFT_ANTI_JOIN == MY_SPEC.join_type_))) {
@@ -3798,7 +3824,7 @@ int ObHashJoinOp::get_next_right_batch()
     if (OB_FAIL(ret)) {
     } else if (HashJoinDrainMode::RIGHT_DRAIN == drain_mode_) {
       FOREACH_CNT_X(e, right_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
       right_brs_ = &child_brs_;
       const_cast<ObBatchRows *>(right_brs_)->size_ = 0;
@@ -3812,7 +3838,7 @@ int ObHashJoinOp::get_next_right_batch()
       // for opt, we not set evaluted flag when convert exprs,
       // and depended projected flag is true
       FOREACH_CNT_X(e, right_->get_spec().output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        (*e)->get_eval_info(eval_ctx_).set_projected(true);
       }
     }
   } else {
@@ -4446,7 +4472,8 @@ int ObHashJoinOp::calc_hash_value(
     if (skip_null) {
       skipped = true;
     } else {
-      hash_value = null_random_hash_value_++;
+      hash_value = common::murmurhash64A(&null_random_hash_value_, sizeof(int64_t), HASH_SEED);
+      null_random_hash_value_++;
     }
   }
   hash_value = hash_value & ObHashJoinStoredJoinRow::HASH_VAL_MASK;
@@ -4493,7 +4520,8 @@ int ObHashJoinOp::calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
         if (need_null_random) {
           if (skip_null) {
           } else {
-            hash_vals[i] = null_random_hash_value_++;
+            hash_vals[i] = common::murmurhash64A(&null_random_hash_value_, sizeof(int64_t), HASH_SEED);
+            null_random_hash_value_++;
             right_selector_[selector_idx++] = i;
           }
         } else {
@@ -4609,11 +4637,11 @@ int ObHashJoinOp::read_right_func_end()
   if (LEFT_ANTI_JOIN == MY_SPEC.join_type_) {
     state_ = JS_LEFT_ANTI_SEMI;
     cur_tuple_ = hash_table_.buckets_->at(0).get_stored_row();
-    cur_bkid_ = 0;
+    cur_row_idx_ = 0;
   } else if (need_left_join()) {
     state_ = JS_FILL_LEFT;
     cur_tuple_ = hash_table_.buckets_->at(0).get_stored_row();
-    cur_bkid_ = 0;
+    cur_row_idx_ = 0;
   } else {
     state_  = JS_JOIN_END;
   }
@@ -5281,17 +5309,17 @@ int ObHashJoinOp::outer_join_read_hashrow_going_batch()
 void ObHashJoinOp::set_output_eval_info() {
   for (int64_t i = 0; i < left_->get_spec().output_.count(); i++) {
     ObEvalInfo &info = left_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
-    info.evaluated_ = true;
-    info.projected_ = true;
-    info.notnull_ = false;
-    info.point_to_frame_ = false;
+    info.set_evaluated(true);
+    info.set_projected(true);
+    info.set_notnull(false);
+    info.set_point_to_frame(false);
   }
   for (int64_t i = 0; i < right_->get_spec().output_.count(); i++) {
     ObEvalInfo &info = right_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
-    info.evaluated_ = true;
-    info.projected_ = true;
-    info.notnull_ = false;
-    info.point_to_frame_ = false;
+    info.set_evaluated(true);
+    info.set_projected(true);
+    info.set_notnull(false);
+    info.set_point_to_frame(false);
   }
 }
 
@@ -5530,23 +5558,20 @@ int ObHashJoinOp::read_hashrow_func_end()
 int ObHashJoinOp::find_next_matched_tuple(ObHashJoinStoredJoinRow *&tuple)
 {
   int ret = OB_SUCCESS;
-  PartHashJoinTable &htable = hash_table_;
+  if (OB_ISNULL(left_part_rows_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left part rows is null", K(ret));
+  }
   while (OB_SUCC(ret)) {
-    if (NULL != tuple) {
-      if (!tuple->is_match()) {
-        tuple = tuple->get_next();
-      } else {
-        break;
-      }
-    } else {
-      int64_t bucket_id = cur_bkid_ + 1;
-      if (bucket_id < htable.nbuckets_) {
-        tuple = htable.buckets_->at(bucket_id).get_stored_row();
-        cur_bkid_ = bucket_id;
-      } else {
-        ret = OB_ITER_END;
-      }
+    if (cur_row_idx_ >= left_part_rows_->count()) {
+      ret = OB_ITER_END;
+      break;
     }
+    if (left_part_rows_->at(cur_row_idx_)->is_match()) {
+      tuple = const_cast<ObHashJoinStoredJoinRow *>(left_part_rows_->at(cur_row_idx_));
+      break;
+    }
+    cur_row_idx_ += 1;
   }
   return ret;
 }
@@ -5630,26 +5655,70 @@ int ObHashJoinOp::left_anti_semi_end()
   return ret;
 }
 
+void ObHashJoinOp::free_part_rows_array()
+{
+  if (nullptr != left_part_rows_) {
+    left_part_rows_->reset();
+    mem_context_->get_malloc_allocator().free(left_part_rows_);
+    part_rows_alloc_->reset();
+    part_rows_alloc_->~ModulePageAllocator();
+    mem_context_->get_malloc_allocator().free(part_rows_alloc_);
+  }
+  left_part_rows_ = nullptr;
+  part_rows_alloc_ = nullptr;
+}
+
+int ObHashJoinOp::prepare_part_rows_array(uint64_t row_num)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == left_part_rows_) {
+    void *buf = nullptr;
+    ObIAllocator &allocator = mem_context_->get_malloc_allocator();
+    void *alloc_buf = allocator.alloc(sizeof(ModulePageAllocator));
+    void *array_buf = allocator.alloc(sizeof(PartRowsArray));
+    if (OB_ISNULL(alloc_buf) || OB_ISNULL(array_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      if (OB_NOT_NULL(alloc_buf)) {
+        allocator.free(alloc_buf);
+      }
+      if (OB_NOT_NULL(array_buf)) {
+        allocator.free(array_buf);
+      }
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else {
+      part_rows_alloc_ = new (alloc_buf) ModulePageAllocator(allocator);
+      part_rows_alloc_->set_label("HtOpAlloc");
+      left_part_rows_ = new (array_buf) PartRowsArray(*part_rows_alloc_);
+      if (OB_FAIL(left_part_rows_->reserve(row_num))) {
+        LOG_WARN("failed to init left_part_rows", K(ret), K(row_num));
+      }
+    }
+  } else {
+    left_part_rows_->reuse();
+    if (OB_FAIL(left_part_rows_->reserve(row_num))) {
+      LOG_WARN("failed to init left_part_rows", K(ret), K(row_num));
+    }
+  }
+  return ret;
+}
+
 int ObHashJoinOp::find_next_unmatched_tuple(ObHashJoinStoredJoinRow *&tuple)
 {
   int ret = OB_SUCCESS;
-  PartHashJoinTable &htable = hash_table_;
+  if (OB_ISNULL(left_part_rows_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left part rows is null", K(ret));
+  }
   while (OB_SUCC(ret)) {
-    if (NULL != tuple) {
-      if (tuple->is_match()) {
-        tuple = tuple->get_next();
-      } else {
-        break;
-      }
-    } else {
-      int64_t bucket_id = cur_bkid_ + 1;
-      if (bucket_id < htable.nbuckets_) {
-        tuple = htable.buckets_->at(bucket_id).get_stored_row();
-        cur_bkid_ = bucket_id;
-      } else {
-        ret = OB_ITER_END;
-      }
+    if (cur_row_idx_ >= left_part_rows_->count()) {
+      ret = OB_ITER_END;
+      break;
     }
+    if (!left_part_rows_->at(cur_row_idx_)->is_match()) {
+      tuple = const_cast<ObHashJoinStoredJoinRow *>(left_part_rows_->at(cur_row_idx_));
+      break;
+    }
+    cur_row_idx_ += 1;
   }
   return ret;
 }
@@ -5664,29 +5733,25 @@ int ObHashJoinOp::fill_left_join_result_batch()
     brs_.skip_->reset(brs_.size_);
   }
   const ObHashJoinStoredJoinRow **left_result_rows = hj_part_stored_rows_;
-  while (OB_SUCC(ret) && batch_idx < max_output_cnt_) {
-    if (NULL != tuple) {
-      if ((LEFT_ANTI_JOIN == MY_SPEC.join_type_ && !tuple->is_match())
-         || (need_left_join() && !tuple->is_match()))  {
-        left_result_rows[batch_idx] = tuple;
-        batch_idx++;
-      }
-      tuple = tuple->get_next();
-    } else {
-      int64_t bucket_id = cur_bkid_ + 1;
-      if (bucket_id < htable.nbuckets_) {
-        tuple = htable.buckets_->at(bucket_id).get_stored_row();
-        cur_bkid_ = bucket_id;
-      } else {
-        ret = OB_ITER_END;
-      }
-    }
+  if (OB_ISNULL(left_part_rows_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left part rows is null", K(ret));
   }
-  cur_tuple_ = tuple;
+  while (OB_SUCC(ret) && batch_idx < max_output_cnt_) {
+    if (cur_row_idx_ >= left_part_rows_->count()) {
+      ret = OB_ITER_END;
+      break;
+    }
+    if ((LEFT_ANTI_JOIN == MY_SPEC.join_type_ || need_left_join()) &&
+        !left_part_rows_->at(cur_row_idx_)->is_match()) {
+      left_result_rows[batch_idx++] = left_part_rows_->at(cur_row_idx_);
+    }
+    cur_row_idx_ += 1;
+  }
   if (OB_ITER_END == ret && 0 != batch_idx) {
     ret = OB_SUCCESS;
   }
-  if (OB_SUCCESS == ret) {
+  if (OB_SUCC(ret)) {
     ObChunkDatumStore::Iterator::attach_rows(left_->get_spec().output_, eval_ctx_,
                    reinterpret_cast<const ObChunkDatumStore::StoredRow **>(left_result_rows),
                    batch_idx);
@@ -5698,7 +5763,6 @@ int ObHashJoinOp::fill_left_join_result_batch()
       }
     }
   }
-
   brs_.size_ = batch_idx;
 
   return ret;
@@ -5865,6 +5929,7 @@ int ObHashJoinOp::read_hashrow_batch_for_left_semi_anti()
                     K(ROWEXPR2STR(eval_ctx_, MY_SPEC.all_join_keys_)));
         //for semi join, we delete tuple and not use
         //for anti join, we delete tuple and use it to return
+        tuple->set_is_match(true);
         if (LEFT_SEMI_JOIN == MY_SPEC.join_type_) {
           cur_tuples_[result_idx] = tuple->get_next();
           right_selector_[result_idx] = right_selector_[i];

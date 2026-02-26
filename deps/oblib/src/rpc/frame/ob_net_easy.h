@@ -155,6 +155,7 @@ protected:
 private:
   ObListener rpc_listener_;
   uint32_t rpc_port_;
+  int sql_io_cnt_; // the count of MysqlIO thread under the old easy framework, default is 0
 }; // end of class ObNetEasy
 
 } // end of namespace frame

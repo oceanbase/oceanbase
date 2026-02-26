@@ -163,33 +163,29 @@ class ObDirectLoadSSTableBuilder : public ObIDirectLoadPartitionTableBuilder
 {
 public:
   ObDirectLoadSSTableBuilder()
-    : allocator_("TLD_sstablebdr"),
-      rowkey_allocator_("TLD_Rowkey"),
+    : rowkey_allocator_("TLD_Rowkey"),
       is_closed_(false),
       is_inited_(false)
   {
-    allocator_.set_tenant_id(MTL_ID());
     rowkey_allocator_.set_tenant_id(MTL_ID());
   }
   virtual ~ObDirectLoadSSTableBuilder() = default;
   int init(const ObDirectLoadSSTableBuildParam &param);
   int append_row(const common::ObTabletID &tablet_id,
-                const table::ObTableLoadSequenceNo &seq_no,
-                 const blocksstable::ObDatumRow &datum_row) override;
+                 const ObDirectLoadDatumRow &datum_row) override;
   int append_row(const ObDirectLoadExternalRow &external_row);
   int close() override;
   int64_t get_row_count() const override { return data_block_writer_.get_total_row_count(); }
-  int get_tables(common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
-                 common::ObIAllocator &allocator) override;
+  int get_tables(ObDirectLoadTableHandleArray &table_array,
+                 ObDirectLoadTableManager *table_manager) override;
+
 private:
   int check_rowkey_order(const blocksstable::ObDatumRowkey &rowkey);
 private:
   ObDirectLoadSSTableBuildParam param_;
   ObDirectLoadDataBlockWriter2 data_block_writer_;
   ObDirectLoadIndexBlockWriter index_block_writer_;
-  common::ObArenaAllocator allocator_;
   common::ObArenaAllocator rowkey_allocator_;
-  blocksstable::ObDatumRowkey start_key_;
   blocksstable::ObDatumRowkey end_key_;
   ObDirectLoadTmpFileHandle data_file_handle_;
   ObDirectLoadTmpFileHandle index_file_handle_;

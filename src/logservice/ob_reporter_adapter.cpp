@@ -11,8 +11,6 @@
  */
 
 #include "ob_reporter_adapter.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/ob_ls_id.h"
 
 namespace oceanbase
 {

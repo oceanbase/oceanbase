@@ -14,12 +14,6 @@
 
 #include "ob_tablet_filter.h"
 #include "share/tablet/ob_tablet_info.h"
-#include "lib/string/ob_string.h"
-#include "lib/container/ob_iarray.h"
-#include "lib/container/ob_array.h"
-#include "lib/utility/utility.h"
-#include "common/ob_region.h"
-#include "common/ob_zone.h"
 #include "share/ob_iserver_trace.h"
 
 namespace oceanbase

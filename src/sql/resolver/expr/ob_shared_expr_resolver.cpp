@@ -11,11 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "common/ob_smart_call.h"
 #include "sql/resolver/expr/ob_shared_expr_resolver.h"
-#include "sql/ob_sql_context.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/oblog/ob_log_print_kv.h"
 #include "sql/rewrite/ob_transform_utils.h"
 
 using namespace oceanbase;
@@ -38,10 +34,8 @@ bool ObQuestionmarkEqualCtx::compare_const(const ObConstRawExpr &left,
   } else if (left.get_expr_type() != T_QUESTIONMARK) {
     bret = left.get_value().strict_equal(right.get_value());
   } else {
-    bret = !left.get_result_type().get_param().is_null() &&
-           !right.get_result_type().get_param().is_null() &&
-        left.get_result_type().get_param().strict_equal(
-          right.get_result_type().get_param());
+    bret = !left.get_param().is_null() && !right.get_param().is_null() &&
+        left.get_param().strict_equal(right.get_param());
     if (bret) {
       ObPCParamEqualInfo equal_info;
       equal_info.first_param_idx_ = left.get_value().get_unknown();
@@ -176,6 +170,9 @@ int ObSharedExprResolver::get_shared_instance(ObRawExpr *expr,
         // skip const null
       } else if (expr->get_expr_type() == T_FUN_SYS_CAST && i == 1) {
         // skip exec var and question mark
+      } else if (expr->get_expr_type() == T_FUN_INNER_TYPE_TO_ENUMSET) {
+        // skip spi enum set param
+        disable_share_expr = true;
       } else if (OB_FAIL(SMART_CALL(get_shared_instance(old_param_expr,
                                                         new_param_expr,
                                                         is_param_new,

@@ -710,7 +710,7 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t   |2       |3           |
+|0 |TABLE FULL SCAN|t   |2       |16          |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -730,11 +730,11 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t   |2       |3           |
+|0 |TABLE FULL SCAN|t   |2       |16          |
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t25, DOUBLE(-1, -1)))]), filter(nil)
+  0 - output([abs(cast(t.t25, DOUBLE(-1, -1)))]), filter(nil), rowset=16
       access([t.t25]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -750,11 +750,11 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t   |2       |3           |
+|0 |TABLE FULL SCAN|t   |2       |16          |
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t26, DOUBLE(-1, -1)))]), filter(nil)
+  0 - output([abs(cast(t.t26, DOUBLE(-1, -1)))]), filter(nil), rowset=16
       access([t.t26]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true

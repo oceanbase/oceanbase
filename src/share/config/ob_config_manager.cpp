@@ -12,18 +12,14 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/config/ob_config_manager.h"
 
-#include "lib/file/file_directory_utils.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/thread/thread_mgr.h"
-#include "share/ob_cluster_version.h"
-#include "lib/worker.h"
+#include "ob_config_manager.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server.h"
+#include "lib/oblog/ob_log_compressor.h"
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "logservice/libpalf/libpalf_logger.h"
+#endif
 
 namespace oceanbase
 {
@@ -73,6 +69,73 @@ int ObConfigManager::init(ObMySQLProxy &sql_proxy, const ObAddr &server)
   return ret;
 }
 
+int ObConfigManager::ob_logger_config_update(const ObServerConfig& config)
+{
+  int ret = OB_SUCCESS;
+  int64_t max_log_cnt = 0;
+  const bool record_old_log_file = config.enable_syslog_recycle;
+  int64_t max_disk_size = 0;
+  const char *compress_func_ptr = config.syslog_compress_func.str();
+  const int64_t min_uncompressed_count = config.syslog_file_uncompressed_count;
+  const bool log_warn = config.enable_syslog_wf;
+  const bool enable_async_syslog = config.enable_async_syslog;
+
+  LOG_INFO("Whether record old log file", K(record_old_log_file));
+  LOG_INFO("Whether log warn", K(log_warn));
+  LOG_INFO("Whether compress syslog file", K(compress_func_ptr));
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  int64_t libpalf_max_log_cnt = 0;
+  if (GCONF.enable_logservice) {
+    if (OB_FAIL(libpalf::LibPalfLogger::cal_libpalf_shared_syslog_capacity(
+      config.max_syslog_file_count,
+      config.syslog_disk_size,
+      libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE,
+      OB_LOGGER.DEFAULT_MAX_FILE_SIZE,
+      libpalf_max_log_cnt,
+      max_log_cnt,
+      max_disk_size))) {
+      LOG_WARN("cal libpalf shared syslog capacity failed", KR(ret));
+    } else if (OB_FAIL(libpalf::LibPalfLogger::set_max_syslog_file_count(libpalf_max_log_cnt))) {
+      LOG_WARN("set libpalf shared syslog capacity failed", KR(ret));
+    } else {
+      LOG_INFO("libpalf shared syslog capacity set success", K(libpalf_max_log_cnt), K(max_log_cnt), K(max_disk_size));
+    }
+  } else {
+    max_log_cnt = config.max_syslog_file_count;
+    max_disk_size = config.syslog_disk_size;
+  }
+#else
+  max_log_cnt = config.max_syslog_file_count;
+  max_disk_size = config.syslog_disk_size;
+#endif
+
+  if (OB_FAIL(ret)) { // do nothing
+  } else if (OB_FAIL(OB_LOGGER.set_max_file_index(max_log_cnt))) {
+    OB_LOG(ERROR, "fail to set_max_file_index", K(max_log_cnt), K(ret));
+  } else if (OB_FAIL(OB_LOGGER.set_record_old_log_file(record_old_log_file))) {
+    OB_LOG(ERROR, "fail to set_record_old_log_file", K(record_old_log_file), K(ret));
+  } else if (OB_FAIL(OB_LOG_COMPRESSOR.set_max_disk_size(max_disk_size))) {
+    OB_LOG(ERROR, "fail to set_max_disk_size", K(max_disk_size), KR(ret));
+  } else if (OB_FAIL(OB_LOG_COMPRESSOR.set_compress_func(compress_func_ptr))) {
+    OB_LOG(ERROR, "fail to set_compress_func", K(compress_func_ptr), KR(ret));
+  } else if (OB_FAIL(OB_LOG_COMPRESSOR.set_min_uncompressed_count(min_uncompressed_count))) {
+    OB_LOG(ERROR, "fail to set_min_uncompressed_count", K(min_uncompressed_count), KR(ret));
+  } else {
+    OB_LOGGER.set_log_warn(log_warn);
+    OB_LOGGER.set_enable_async_log(enable_async_syslog);
+
+    LOG_INFO("init log config", K(record_old_log_file), K(log_warn), K(enable_async_syslog),
+              K(max_disk_size), K(compress_func_ptr), K(min_uncompressed_count));
+    if (0 == max_log_cnt) {
+      LOG_INFO("won't recycle log file");
+    } else {
+      LOG_INFO("recycle log file", "count", max_log_cnt);
+    }
+  }
+  return ret;
+}
+
 void ObConfigManager::stop()
 {
   TG_STOP(lib::TGDefIDs::CONFIG_MGR);
@@ -105,6 +168,8 @@ int ObConfigManager::reload_config()
     LOG_WARN("reload config for tde encrypt engine fail", K(ret));
   } else if (OB_FAIL(GCTX.omt_->update_hidden_sys_tenant())) {
     LOG_WARN("update hidden sys tenant failed", K(ret));
+  } else {
+    g_enable_ob_error_msg_style = GCONF.enable_ob_error_msg_style;
   }
   return ret;
 }
@@ -144,7 +209,7 @@ int ObConfigManager::load_config(const char *path)
       ret = OB_BUF_NOT_ENOUGH;
       LOG_ERROR("Config file is too long", K(path), K(ret));
     } else {
-      ret = server_config_.deserialize_with_compat(buf, len, pos);
+      ret = server_config_.deserialize(buf, len, pos);
     }
     if (OB_FAIL(ret)) {
       LOG_ERROR("Deserialize server config failed", K(path), K(ret));
@@ -207,7 +272,7 @@ int ObConfigManager::check_header_change(const char* path, const char* buf) cons
   return ret;
 }
 
-int ObConfigManager::dump2file(const char* path) const
+int ObConfigManager::dump2file_unsafe(const char* path) const
 {
   int ret = OB_SUCCESS;
   int fd = 0;
@@ -314,6 +379,12 @@ int ObConfigManager::dump2file(const char* path) const
   return ret;
 }
 
+int ObConfigManager::dump2file(const char* path) const
+{
+  DRWLock::RDLockGuard guard(OTC_MGR.rwlock_);
+  return dump2file_unsafe(path);
+}
+
 int ObConfigManager::config_backup()
 {
   int ret = OB_SUCCESS;
@@ -327,7 +398,7 @@ int ObConfigManager::config_backup()
           LOG_ERROR("create additional configure directory fail", K(path), K(ret));
         } else if (STRLEN(path) + STRLEN(CONF_COPY_NAME) < static_cast<uint64_t>(MAX_PATH_SIZE)) {
           strcat(path, CONF_COPY_NAME);
-          if (OB_FAIL(dump2file(path))) {
+          if (OB_FAIL(dump2file_unsafe(path))) {
             LOG_WARN("make additional configure file copy fail", K(path), K(ret));
             ret = OB_SUCCESS;  // ignore ret code.
           }
@@ -356,8 +427,13 @@ int ObConfigManager::update_local(int64_t expected_version)
           "from __all_sys_parameter";
       if (OB_FAIL(sql_client_retry_weak.read(result, sqlstr))) {
         LOG_WARN("read config from __all_sys_parameter failed", K(sqlstr), K(ret));
-      } else if (OB_FAIL(system_config_.update(result))) {
-        LOG_WARN("failed to load system config", K(ret));
+      } else {
+        DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
+        if (OB_FAIL(system_config_.update(result))) {
+          LOG_WARN("failed to load system config", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (expected_version != ObSystemConfig::INIT_VERSION && (system_config_.get_version() < current_version_
                  || system_config_.get_version() < expected_version)) {
         ret = OB_EAGAIN;
@@ -382,7 +458,7 @@ int ObConfigManager::update_local(int64_t expected_version)
       LOG_WARN("Reload configuration failed", K(ret));
     } else {
       DRWLock::RDLockGuard guard(OTC_MGR.rwlock_); // need protect tenant config because it will also serialize tenant config
-      if (OB_FAIL(dump2file())) {
+      if (OB_FAIL(dump2file_unsafe())) {
         LOG_WARN("Dump to file failed", K_(dump_path), K(ret));
       } else {
         GCONF.cluster.set_dumped_version(GCONF.cluster.version());
@@ -443,13 +519,8 @@ int ObConfigManager::got_version(int64_t version, const bool remove_repeat/* = f
       // 如果决策了本次要调度一个新 task，那么现将队列中排队的所有 task 全部移除
       // 有一点可以确保，到达这个点时无论移除的 task 是什么，下一个要添加的 task
       // 的 version 一定是最新的。
-      bool task_exist = false;
-      int tmp_ret = TG_TASK_EXIST(lib::TGDefIDs::CONFIG_MGR, update_task_, task_exist);
-      if (task_exist) {
-        TG_CANCEL(lib::TGDefIDs::CONFIG_MGR, update_task_);
-        LOG_INFO("Cancel pending update task",
-                 K(tmp_ret), K_(current_version), K(version));
-      }
+      TG_CANCEL(lib::TGDefIDs::CONFIG_MGR, update_task_);
+      LOG_INFO("May cancel pending update task", K_(current_version), K(version));
     }
 
     if (schedule) {

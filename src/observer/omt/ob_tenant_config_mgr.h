@@ -48,6 +48,7 @@ public:
    * Requires: check is_valid().
    */
   ObTenantConfig *operator->() { return config_; }
+  void trace_all_config() const;
 private:
   ObTenantConfig *config_;
 };
@@ -92,6 +93,7 @@ struct ObTenantID {
   }
   uint64_t hash() const { return tenant_id_; }
   int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+  TO_STRING_KV(K_(tenant_id));
   uint64_t tenant_id_;
 };
 using TenantConfigMap = common::__ObConfigContainer<ObTenantID, ObTenantConfig, common::OB_MAX_SERVER_TENANT_CNT>;
@@ -103,6 +105,32 @@ using UpdateTenantConfigCb = common::ObFunction<void(uint64_t tenant_id)>;
 
 class ObTenantConfigMgr
 {
+  friend class ObTenantConfig;
+public:
+  class TenantConfigUpdateTask : public common::ObTimerTask
+  {
+  public:
+    TenantConfigUpdateTask() : config_mgr_(nullptr),
+                               scheduled_time_(0),
+                               update_local_(false),
+                               running_task_count_(0) {}
+    int init(ObTenantConfigMgr *config_mgr)
+    {
+      config_mgr_ = config_mgr;
+      return common::OB_SUCCESS;
+    }
+    virtual ~TenantConfigUpdateTask() {}
+    TenantConfigUpdateTask(const TenantConfigUpdateTask &) = delete;
+    TenantConfigUpdateTask &operator=(const TenantConfigUpdateTask &) = delete;
+    void update_local_configs(const common::ObIArray<std::pair<uint64_t, ObTenantConfig*>> &configs, bool &need_retry);
+    void dump_and_publish_configs(const common::ObIArray<std::pair<uint64_t, ObTenantConfig*>> &configs, bool &need_retry);
+    int schedule();
+    void runTimerTask(void) override;
+    ObTenantConfigMgr *config_mgr_;
+    volatile int64_t scheduled_time_;
+    bool update_local_;
+    volatile int64_t running_task_count_;
+  };
 public:
   static ObTenantConfigMgr &get_instance();
   virtual ~ObTenantConfigMgr();
@@ -115,7 +143,7 @@ public:
            const UpdateTenantConfigCb &update_tenant_config_cb);
   int refresh_tenants(const common::ObIArray<uint64_t> &tenants);
   int add_tenant_config(uint64_t tenant_id);
-  int del_tenant_config(uint64_t tenant_id);
+  int del_tenant_config(uint64_t tenant_id, const int64_t abs_timeout_us);
   int init_tenant_config(const obrpc::ObTenantConfigArg &arg);
 
   ObTenantConfig *get_tenant_config(uint64_t tenant_id) const;
@@ -142,17 +170,18 @@ public:
   int64_t get_tenant_config_version(uint64_t tenant_id);
   void get_lease_request(share::ObLeaseRequest &lease_request);
   int get_lease_response(share::ObLeaseResponse &lease_response);
-  int get_all_tenant_config_info(common::ObArray<TenantConfigInfo> &config_info);
+  int get_tenant_config_info(common::ObArray<TenantConfigInfo> &tenant_config_info,
+                                 common::ObIAllocator *allocator, uint64_t tenant_id);
+  int get_all_tenant_id(common::ObArray<ObTenantID> &tenant_ids);
   int got_versions(const common::ObIArray<std::pair<uint64_t, int64_t> > &versions);
   int got_version(uint64_t tenant_id, int64_t version, const bool remove_repeat = true);
-  int update_local(uint64_t tenant_id, int64_t expected_version);
+  int update_local(uint64_t tenant_id, ObTenantConfig *config, int64_t expected_version);
   void notify_tenant_config_changed(uint64_t tenatn_id);
   int add_config_to_existing_tenant(const char *config_str);
   int add_extra_config(const obrpc::ObTenantConfigArg &arg);
-  int schedule(ObTenantConfig::TenantConfigUpdateTask &task, const int64_t delay);
-  int cancel(const ObTenantConfig::TenantConfigUpdateTask &task);
-  int wait(const ObTenantConfig::TenantConfigUpdateTask &task);
+  int schedule(ObTenantConfigMgr::TenantConfigUpdateTask &task, const int64_t delay);
   bool inited() { return inited_; }
+  const TenantConfigUpdateTask &get_update_task() const { return update_task_; }
 
   static uint64_t default_fallback_tenant_id()
   {
@@ -173,6 +202,8 @@ public:
 private:
   static const int64_t RECYCLE_LATENCY = 30L * 60L * 1000L * 1000L;
   ObTenantConfigMgr();
+  // whitout lock, only used inner
+  int dump2file_unsafe();
   bool inited_;
   common::ObAddr self_;
   common::ObMySQLProxy *sql_proxy_;
@@ -182,6 +213,7 @@ private:
   common::ObConfigManager *sys_config_mgr_;
   bool version_has_refreshed_;
   UpdateTenantConfigCb update_tenant_config_cb_;
+  TenantConfigUpdateTask update_task_;
   // reload cb
 
 };

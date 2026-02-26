@@ -63,7 +63,7 @@ class ObMajorMergeScheduler : public ObFreezeReentrantThread
 {
 public:
   ObMajorMergeScheduler(const uint64_t tenant_id);
-  virtual ~ObMajorMergeScheduler() {}
+  virtual ~ObMajorMergeScheduler();
 
   int init(const bool is_primary_service,
            ObMajorMergeInfoManager &merge_info_mgr,
@@ -103,7 +103,7 @@ private:
   int update_merge_status(
     const share::SCN &global_broadcast_scn,
     const int64_t expected_epoch);
-  int handle_merge_progress(const compaction::ObMergeProgress &progress,
+  int handle_merge_progress(const compaction::ObBasicMergeProgress &progress,
                             const share::SCN &global_broadcast_scn,
                             const int64_t expected_epoch);
   int try_update_global_merged_scn(const int64_t expected_epoch);
@@ -116,7 +116,7 @@ private:
   int update_all_tablets_report_scn(const uint64_t global_broadcast_scn_val,
                                     const int64_t expected_epoch);
 
-  void check_merge_interval_time(const bool is_merging);
+  void check_merge_interval_time(const bool is_merging, const int64_t expected_epoch);
 private:
   const static int64_t DEFAULT_IDLE_US = 10 * 1000L * 1000L; // 10s
   static const int64_t MAJOR_MERGE_SCHEDULER_THREAD_CNT = 1;

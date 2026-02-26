@@ -91,8 +91,8 @@ void TestConstDecoder::batch_decode_to_vector_no_exc_test(const VectorFormat vec
     int32_t col_offset = i;
     LOG_INFO("Current col: ", K(i), K(col_meta),  K(*decoder.decoders_[col_offset].ctx_), K(precision), K(vec_tc));
 
-    int64_t row_ids[ROW_CNT];
-    for (int64_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
+    int32_t row_ids[ROW_CNT];
+    for (int32_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
       row_ids[datum_idx] = datum_idx;
     }
 
@@ -783,8 +783,8 @@ TEST_F(TestConstDecoder, batch_decode_to_datum_test_without_expection)
     int32_t col_offset = i;
     STORAGE_LOG(INFO, "Current col: ", K(i),K(col_descs_.at(i)), K(*decoder.decoders_[col_offset].ctx_));
     ObDatum datums[ROW_CNT];
-    int64_t row_ids[ROW_CNT];
-    for (int64_t j = 0; j < ROW_CNT; ++j) {
+    int32_t row_ids[ROW_CNT];
+    for (int32_t j = 0; j < ROW_CNT; ++j) {
       datums[j].ptr_ = reinterpret_cast<char *>(datum_buf) + j * 128;
       row_ids[j] = j;
     }

@@ -31,7 +31,8 @@ public:
   ObGrantStmt();
   virtual ~ObGrantStmt();
   int add_user(const common::ObString &user_name, const common::ObString &host_name,
-               const common::ObString &pwd, const common::ObString &need_enc);
+               const common::ObString &pwd, const common::ObString &need_enc,
+               const common::ObString &plugin);
   int add_role(const common::ObString &role);
   int add_user(const common::ObString &user_name, const common::ObString &host_name);
   void add_priv(const ObPrivType priv);
@@ -51,6 +52,7 @@ public:
   bool get_need_create_user() const { return need_create_user_; }
   bool need_create_user_priv() const { return need_create_user_priv_; }
   const common::ObStrings& get_users() const { return users_; }
+  const common::ObStrings& get_plugins() const { return plugins_; }
   const common::ObSArray<common::ObString>& get_role_names() const { return grant_arg_.roles_; };
   const common::ObString& get_database_name() const { return database_; }
   const common::ObString& get_table_name() const { return table_; }
@@ -89,6 +91,10 @@ public:
   const ObIArray<std::pair<ObString, ObPrivType>> &get_column_privs() const { return column_names_priv_; }
   void set_table_schema_version(int64_t schema_version) { table_schema_version_ = schema_version; }
   int64_t get_table_schema_version() { return table_schema_version_; }
+  void set_catalog_name(const common::ObString &catalog_name) { grant_arg_.catalog_ = catalog_name; }
+  void set_sensitive_rule_name(const common::ObString &sensitive_rule_name) { grant_arg_.sensitive_rule_ = sensitive_rule_name; }
+  const common::ObString& get_catalog_name() const { return grant_arg_.catalog_; }
+  const common::ObString& get_sensitive_rule_name() const { return grant_arg_.sensitive_rule_; }
 
   bool is_grant_stmt() const { return true; }
   DECLARE_VIRTUAL_TO_STRING;
@@ -101,6 +107,7 @@ private:
   uint64_t tenant_id_;
   common::ObStrings grantees_;
   common::ObStrings users_;//user1, host1, pwd1, nec1; user2, host2, pwd2, nec2;..
+  common::ObStrings plugins_; // plugin1, plugin2, ... 单独记录plugin信息，使用时校验user数量和plugin数量
   common::ObString masked_sql_;
   bool need_create_user_;
   bool need_create_user_priv_; // grant user identified by pwd

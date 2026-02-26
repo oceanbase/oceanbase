@@ -22,7 +22,6 @@ namespace oceanbase
 {
 namespace share
 {
-
 // Define one archive dest parameter item.
 class ObArchiveDestParaItem : public ObInnerKVItem
 {
@@ -49,7 +48,7 @@ private:
 
 
 
-class ObArchivePersistHelper final : public ObIExecTenantIdProvider
+class ObArchivePersistHelper : public ObIExecTenantIdProvider
 {
 public:
   ObArchivePersistHelper();
@@ -102,10 +101,10 @@ public:
       const common::ObString &name, common::ObSqlString &value) const;
 
   // Get all <dest_no, dest_id> dest pairs that archive dest channels are using no matter its archive state is STOP or not.
-  int get_valid_dest_pairs(common::ObISQLClient &proxy, common::ObIArray<std::pair<int64_t, int64_t>> &pair_array) const;
+  virtual int get_valid_dest_pairs(common::ObISQLClient &proxy, common::ObIArray<std::pair<int64_t, int64_t>> &pair_array) const;
 
   // Get all <dest_no, backup_dest> dest pairs that archive dest channels are using no matter its archive state is STOP or not.
-  int get_valid_dest_pairs(common::ObISQLClient &proxy, common::ObIArray<std::pair<int64_t, ObBackupPathString>> &pair_array) const;
+  virtual int get_valid_dest_pairs(common::ObISQLClient &proxy, common::ObIArray<std::pair<int64_t, ObBackupPathString>> &pair_array) const;
 
   // dest round operation
   int get_round(common::ObISQLClient &proxy, const int64_t dest_no,
@@ -122,12 +121,14 @@ public:
   int switch_round_state_to(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &old_round, 
       const ObTenantArchiveRoundAttr &new_round) const;
   int get_all_active_rounds(common::ObISQLClient &proxy, common::ObIArray<ObTenantArchiveRoundAttr> &rounds) const;
-  int stop_round(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &round) const;
-
+  int stop_round(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &old_round,
+    const ObTenantArchiveRoundAttr &new_round) const;
 
   // his round operation
   int get_his_round(common::ObISQLClient &proxy, const int64_t dest_no,
       const int64_t round_id, ObTenantArchiveHisRoundAttr &his_round) const;
+  int is_all_piece_in_round_deleted(common::ObISQLClient &proxy,
+          const int64_t round_id, bool &is_piece_all_deleted) const;
   int insert_his_round(common::ObISQLClient &proxy, const ObTenantArchiveHisRoundAttr &his_round) const;
 
 
@@ -137,7 +138,9 @@ public:
       ObTenantArchivePieceAttr &piece) const;
   int get_piece(common::ObISQLClient &proxy, const int64_t dest_id,
       const int64_t piece_id, const bool need_lock, ObTenantArchivePieceAttr &piece) const;
-  int get_pieces(common::ObISQLClient &proxy, const int64_t dest_id, common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const;
+  virtual int get_piece(common::ObISQLClient &proxy, const int64_t piece_id, const bool need_lock,
+      ObTenantArchivePieceAttr &piece) const;
+  virtual int get_pieces(common::ObISQLClient &proxy, const int64_t dest_id, common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const;
   // Get all frozen pieces whose piece ids are smaller than `upper_piece_id`.
   int get_frozen_pieces(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t upper_piece_id, 
       common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const;
@@ -172,6 +175,8 @@ public:
       const share::SCN &scn, ObTenantArchivePieceAttr &piece) const;
   int get_pieces_by_range(common::ObISQLClient &proxy, const int64_t dest_id,
       const int64_t start_piece_id, const int64_t end_piece_id, ObIArray<ObTenantArchivePieceAttr> &pieces) const;
+  int check_piece_continuity_between_two_scn(common::ObISQLClient &proxy, const int64_t dest_id,
+      const share::SCN &start_scn, const share::SCN &end_scn, bool &is_continuous) const;
 
 private:
   int parse_round_result_(sqlclient::ObMySQLResult &result, common::ObIArray<ObTenantArchiveRoundAttr> &rounds) const;

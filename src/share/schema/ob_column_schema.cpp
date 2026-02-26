@@ -11,12 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "share/schema/ob_column_schema.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "share/schema/ob_table_schema.h"
+#include "ob_column_schema.h"
 #include "share/schema/ob_schema_service.h"
-#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -217,6 +213,17 @@ bool ObColumnSchemaV2::is_prefix_column() const
   return bret;
 }
 
+bool ObColumnSchemaV2::is_prefix_index_column() const
+{
+  bool bret = false;
+  if (is_hidden() && !is_generated_column()) {
+    const char *prefix_str = "__substr";
+    int64_t min_len = min(column_name_.length(), static_cast<int64_t>(strlen(prefix_str)));
+    bret = (0 == strncasecmp(get_column_name(), prefix_str, min_len));
+  }
+  return bret;
+}
+
 bool ObColumnSchemaV2::is_func_idx_column() const
 {
   bool bret = false;
@@ -367,7 +374,7 @@ OB_DEF_DESERIALIZE(ObColumnSchemaV2)
 
   if (!OB_SUCC(ret)) {
     LOG_WARN("Fail to deserialize data, ", K(ret));
-  } else if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_))) {
+  } else if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_, get_allocator()))) {
     LOG_WARN("deserialize_string_array failed", K(ret));
   } else if (OB_FAIL(deep_copy_obj(orig_default_value, orig_default_value_))) {
     LOG_WARN("Fail to deep copy orig_default_value, ", K(ret), K_(orig_default_value));
@@ -546,9 +553,9 @@ int ObColumnSchemaV2::get_byte_length(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("collation type is invalid", K(ret));
   } else if (ob_is_text_tc(meta_type_.get_type()) || ob_is_json(meta_type_.get_type())
-             || ob_is_geometry(meta_type_.get_type())) {
+             || ob_is_geometry(meta_type_.get_type()) || ob_is_roaringbitmap(meta_type_.get_type())) {
     if (for_check_length) {
-      // when check row length, a lob will occupy at most 2KB
+      // when check row length, a lob will occupy at most 512B
       length = min(get_data_length(), OB_MAX_LOB_HANDLE_LENGTH);
     } else {
       length = get_data_length();
@@ -727,7 +734,7 @@ int ObColumnSchemaV2::deserialize_extended_type_info(const char *buf,
                                                       int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_))) {
+  if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_, get_allocator()))) {
     LOG_WARN("fail to deserialize extended type info", K(ret));
   }
   return ret;
@@ -791,8 +798,10 @@ int ObColumnSchemaV2::get_each_column_group_name(ObString &cg_name) const {
   /* to avoid column_name_str not end with \0, write cg_name using ObString::write*/
   char tmp_cg_name[OB_MAX_COLUMN_GROUP_NAME_LENGTH] = {'\0'};
   int32_t write_len = snprintf(tmp_cg_name, OB_MAX_COLUMN_GROUP_NAME_LENGTH, "%.*s_%.*s",
-                               static_cast<int>(sizeof(OB_COLUMN_GROUP_NAME_PREFIX)),
-                               OB_COLUMN_GROUP_NAME_PREFIX, column_name_.length(), column_name_.ptr());
+                               static_cast<int>(strlen(OB_COLUMN_GROUP_NAME_PREFIX)),
+                               OB_COLUMN_GROUP_NAME_PREFIX,
+                               column_name_.length(),
+                               column_name_.ptr());
   if (write_len < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to format column group_name", K(ret), K(write_len));
@@ -809,6 +818,41 @@ int ObColumnSchemaV2::get_each_column_group_name(ObString &cg_name) const {
     }
   }
   return ret;
+}
+
+int ObColumnSchemaV2::is_same_collection_column(const ObColumnSchemaV2 &other, bool &is_same) const
+{
+  int ret = OB_SUCCESS;
+  if (get_extended_type_info().count() == other.get_extended_type_info().count()) {
+    if (get_extended_type_info().count() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to check type info incremental change", K(ret));
+    } else {
+      ObString src_sub_name = get_extended_type_info().at(0);
+      ObString dst_sub_name = other.get_extended_type_info().at(0);
+      is_same = (src_sub_name.case_compare(dst_sub_name) == 0);
+    }
+  }
+  return ret;
+}
+
+bool ObColumnSchemaV2::can_set_on_update_column_type(const common::ObObjMeta &meta_type)
+{
+  return meta_type.is_timestamp() ||
+         meta_type.is_datetime() ||
+         meta_type.is_mysql_datetime();
+}
+
+bool ObColumnSchemaV2::is_minimal_mode_related_time_column() const
+{
+  const ObObjMeta &meta_type = get_meta_type();
+  // can_set_on_update_column_type should be enough for minimal mode,
+  // but for safety, we still consider other time types here for now
+  return can_set_on_update_column_type(meta_type) ||
+         meta_type.is_time() ||
+         meta_type.is_date() ||
+         meta_type.is_otimestamp_type() ||
+         meta_type.is_mysql_date();
 }
 
 } //end of namespace schema

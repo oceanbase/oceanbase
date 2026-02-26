@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_resource_limit.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/json/ob_json.h"
 #include "share/config/ob_config_helper.h"
 

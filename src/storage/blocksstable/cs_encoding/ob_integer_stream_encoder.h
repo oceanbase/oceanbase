@@ -88,6 +88,7 @@ private:
     uint64_t out_pos = 0;
 
     codec.set_uint_bytes(sizeof(T));
+    codec.set_pfor_packing_type(ctx_->meta_.get_pfor_packing_type());
 
     const char *in = reinterpret_cast<const char *>(in_arr);
     uint64_t in_len = arr_count * sizeof(T);
@@ -380,7 +381,7 @@ private:
         }
 
         if (OB_SUCC(ret)) {
-          std::sort(cost_arr, cost_arr + candidate_count);
+          lib::ob_sort(cost_arr, cost_arr + candidate_count);
           // use most space-saving encoding type
           const ObCodecCost &best_codec = cost_arr[0];
           for (int64_t i = 0; i < candidate_count; i++) {

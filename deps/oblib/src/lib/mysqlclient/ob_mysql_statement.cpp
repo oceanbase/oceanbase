@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include <mysql.h>
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
+#include <poll.h>
 #include "lib/mysqlclient/ob_mysql_statement.h"
 #include "lib/mysqlclient/ob_server_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
@@ -29,8 +27,7 @@ namespace sqlclient
 ObMySQLStatement::ObMySQLStatement() :
     conn_(NULL),
     result_(*this),
-    stmt_(NULL),
-    sql_str_(NULL)
+    stmt_(NULL)
 {
 
 }
@@ -54,11 +51,11 @@ ObMySQLConnection *ObMySQLStatement::get_connection()
   return conn_;
 }
 
-int ObMySQLStatement::init(ObMySQLConnection &conn, const char *sql)
+int ObMySQLStatement::init(ObMySQLConnection &conn, const ObString &sql, int64_t param_count)
 {
   int ret = OB_SUCCESS;
   conn_ = &conn;
-  if (OB_ISNULL(sql)) {
+  if (sql.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sql, sql is null", K(ret));
   } else if (OB_ISNULL(stmt_ = conn.get_handler())) {
@@ -90,16 +87,16 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
   const int CR_SERVER_LOST = 2013;
-  if (OB_ISNULL(conn_) || OB_ISNULL(stmt_) || OB_ISNULL(sql_str_)) {
+  if (OB_ISNULL(conn_) || OB_ISNULL(stmt_) || sql_str_.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid mysql stmt", K_(conn), KP_(stmt), KP_(sql_str), K(ret));
+    LOG_ERROR("invalid mysql stmt", K_(conn), KP_(stmt), K_(sql_str), K(ret));
   } else if (OB_UNLIKELY(!conn_->usable())) {
     ret = -CR_SERVER_LOST;
     conn_->set_last_error(ret);
     LOG_WARN("conn already failed, should not execute query again!", K(conn_));
   } else {
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
-    if (0 != (tmp_ret = mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_)))) {
+    if (0 != (tmp_ret = mysql_real_query(stmt_, sql_str_.ptr(), sql_str_.length()))) {
       ret = -mysql_errno(stmt_);
       char errmsg[256] = {0};
       const char *srcmsg = mysql_error(stmt_);
@@ -110,20 +107,7 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
         // conn -> server pool -> connection pool
         conn_->get_root()->get_root()->signal_refresh(); // refresh server pool immediately
       }
-      if (OB_INVALID_ID != conn_->get_dblink_id()) {
-        LOG_WARN("dblink connection error", K(ret),
-                                            KP(conn_),
-                                            K(conn_->get_dblink_id()),
-                                            K(conn_->get_sessid()),
-                                            K(conn_->usable()),
-                                            K(conn_->ping()),
-                                            K(stmt_->host),
-                                            K(stmt_->port),
-                                            K(errmsg),
-                                            K(STRLEN(sql_str_)),
-                                            K(sql_str_));
-        TRANSLATE_CLIENT_ERR(ret, errmsg);
-      }
+      conn_->handler_dblink_error(ret, false, errmsg);
       if (is_need_disconnect_error(ret)) {
         conn_->set_usable(false);
       }
@@ -136,22 +120,61 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
   return ret;
 }
 
+int ObMySQLStatement::wait_for_mysql(int &status)
+{
+  int ret = OB_SUCCESS;
+  struct pollfd pfd;
+  int input_status = status;
+  status = 0;
+  // check status every 10ms.
+  int timeout = 10;
+  pfd.fd = mysql_get_socket(stmt_);
+  pfd.events =
+    (input_status & MYSQL_WAIT_READ ? POLLIN : 0) |
+    (input_status & MYSQL_WAIT_WRITE ? POLLOUT : 0) |
+    (input_status & MYSQL_WAIT_EXCEPT ? POLLPRI : 0);
+  int res = 0;
+  while (res <= 0 && OB_SUCC(ret)) {
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    } else {
+      res = poll(&pfd, 1, timeout);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    status |= pfd.revents & POLLIN ? MYSQL_WAIT_READ : 0;
+    status |= pfd.revents & POLLOUT ? MYSQL_WAIT_WRITE : 0;
+    status |= pfd.revents & POLLPRI ? MYSQL_WAIT_EXCEPT : 0;
+  }
+  return ret;
+}
 
 ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
 {
   ObMySQLResult *result = NULL;
   int ret = OB_SUCCESS;
   const int CR_SERVER_LOST = 2013;
-  if (OB_ISNULL(conn_) || OB_ISNULL(stmt_) || OB_ISNULL(sql_str_)) {
+  if (OB_ISNULL(conn_) || OB_ISNULL(stmt_) || sql_str_.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid mysql stmt", K_(conn), K_(stmt), KP_(sql_str), K(ret));
+    LOG_ERROR("invalid mysql stmt", K_(conn), K_(stmt), K(sql_str_), K(ret));
   } else if (OB_UNLIKELY(!conn_->usable())) {
     ret = -CR_SERVER_LOST;
     conn_->set_last_error(ret);
     LOG_WARN("conn already failed, should not execute query again", K(conn_));
   } else {
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
-    if (0 != mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_))) {
+    int err = 0;
+    int status = mysql_real_query_start(&err, stmt_, sql_str_.ptr(), sql_str_.length());
+    LOG_TRACE("status after mysql_real_query_start", K(status), K(err), K(sql_str_));
+    while (status && OB_SUCC(ret)) {
+      if (OB_FAIL(wait_for_mysql(status))) {
+        LOG_WARN("wait for mysql failed", K(ret));
+      } else {
+        status = mysql_real_query_cont(&err, stmt_, status);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (0 != err) {
       ret = -mysql_errno(stmt_);
       char errmsg[256] = {0};
       const char *srcmsg = mysql_error(stmt_);
@@ -162,24 +185,13 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
                "err_msg", errmsg, K(ret), K(sql_str_));
       } else {
         LOG_WARN("fail to query server", "host", stmt_->host, "port", stmt_->port, K(conn_->get_sessid()),
-               "err_msg", errmsg, K(ret), K(STRLEN(sql_str_)), K(sql_str_), K(lbt()));
+               "err_msg", errmsg, K(ret), K(sql_str_.length()), K(sql_str_), K(lbt()));
       }
       if (OB_SUCCESS == ret) {
         ret = OB_ERR_SQL_CLIENT;
         LOG_WARN("can not get errno", K(ret));
-      } else if (OB_INVALID_ID != conn_->get_dblink_id()) {
-        LOG_WARN("dblink connection error", K(ret),
-                                            KP(conn_),
-                                            K(conn_->get_dblink_id()),
-                                            K(conn_->get_sessid()),
-                                            K(conn_->usable()),
-                                            K(conn_->ping()),
-                                            K(stmt_->host),
-                                            K(stmt_->port),
-                                            K(errmsg),
-                                            K(STRLEN(sql_str_)),
-                                            K(sql_str_));
-        TRANSLATE_CLIENT_ERR(ret, errmsg);
+      } else {
+        conn_->handler_dblink_error(ret, false, errmsg);
       }
       if (is_need_disconnect_error(ret)) {
         conn_->set_usable(false);

@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_del_upd_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "common/ob_smart_call.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 using namespace oceanbase;
 using namespace sql;
@@ -176,6 +174,7 @@ int ObInsertTableInfo::assign(const ObInsertTableInfo &other)
     LOG_WARN("failed to assign exprs", K(ret));
   } else {
     is_replace_ = other.is_replace_;
+    all_values_simple_const_ = other.all_values_simple_const_;
   }
   return ret;
 }
@@ -201,6 +200,7 @@ int ObInsertTableInfo::deep_copy(ObIRawExprCopier &expr_copier,
     LOG_WARN("failed to do propare allocate array", K(ret));
   } else {
     is_replace_ = other.is_replace_;
+    all_values_simple_const_ = other.all_values_simple_const_;
     for (int64_t i = 0; OB_SUCC(ret) && i < assignments_.count(); i++) {
       if (OB_FAIL(assignments_.at(i).deep_copy(expr_copier, other.assignments_.at(i)))) {
         LOG_WARN("failed to deep copy expr", K(ret));
@@ -229,24 +229,28 @@ int ObInsertTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column expr is null", K(ret));
     } else if (col_expr->is_table_part_key_column()) {
-      for (int64_t j = i; OB_SUCC(ret) && j < values_vector_.count(); j += value_desc_cnt) {
+      for (int64_t j = i; OB_SUCC(ret) && visitor.is_required(SCOPE_INSERT_VECTOR) &&
+                          j < values_vector_.count(); j += value_desc_cnt) {
         if (OB_FAIL(visitor.visit(values_vector_.at(j), SCOPE_INSERT_VECTOR))) {
           LOG_WARN("add expr to expr checker failed", K(ret), K(i), K(j));
         }
       }
     }
   }
-  // !value_from_select() && !subquery_exprs_.empty()
-  for (int64_t i = 0; OB_SUCC(ret) && i < values_vector_.count(); ++i) {
-    if (OB_ISNULL(values_vector_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if ((values_vector_.at(i)->has_flag(CNT_SUB_QUERY) ||
-                values_vector_.at(i)->has_flag(CNT_ONETIME) ||
-                values_vector_.at(i)->has_flag(CNT_PL_UDF)) &&
-               OB_FAIL(visitor.visit(values_vector_.at(i), SCOPE_INSERT_VECTOR))) {
-      LOG_WARN("failed to add expr to expr checker", K(ret));
-    } else { /*do nothing*/ }
+  if (OB_SUCC(ret) && visitor.is_required(SCOPE_INSERT_VECTOR)) {
+    // For large insert queries, just traversing the values is time-consuming,
+    // so add a short-circuit check before traversal.
+    for (int64_t i = 0; OB_SUCC(ret) && i < values_vector_.count(); ++i) {
+      if (OB_ISNULL(values_vector_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if ((values_vector_.at(i)->has_flag(CNT_SUB_QUERY) ||
+                  values_vector_.at(i)->has_flag(CNT_ONETIME) ||
+                  values_vector_.at(i)->has_flag(CNT_PL_UDF)) &&
+                OB_FAIL(visitor.visit(values_vector_.at(i), SCOPE_INSERT_VECTOR))) {
+        LOG_WARN("failed to add expr to expr checker", K(ret));
+      } else { /*do nothing*/ }
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < assignments_.count(); ++i) {
     ObAssignment &assign = assignments_.at(i);
@@ -408,6 +412,9 @@ int ObDelUpdStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
   } else if (OB_FAIL(expr_copier.copy(other.returning_agg_items_,
                                       returning_agg_items_))) {
     LOG_WARN("failed to deep copy returning aggregation exprs", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(other.group_param_exprs_,
+                                      group_param_exprs_))) {
+    LOG_WARN("failed to deep copy group param fileds", K(ret));
   } else if (OB_FAIL(deep_copy_stmt_objects<OrderItem>(expr_copier,
                                                        other.order_items_,
                                                        order_items_))) {
@@ -424,6 +431,7 @@ int ObDelUpdStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     ignore_ = other.ignore_;
     has_global_index_ = other.has_global_index_;
     has_instead_of_trigger_ = other.has_instead_of_trigger_;
+    dml_source_from_join_ = other.dml_source_from_join_;
     pdml_disabled_ = other.pdml_disabled_;
   }
   return ret;
@@ -444,11 +452,14 @@ int ObDelUpdStmt::assign(const ObDelUpdStmt &other)
     LOG_WARN("failed to assign error log info", K(ret));
   } else if (OB_FAIL(sharding_conditions_.assign(other.sharding_conditions_))) {
     LOG_WARN("failed to assign sharding conditions", K(ret));
+  } else if (OB_FAIL(group_param_exprs_.assign(other.group_param_exprs_))) {
+    LOG_WARN("failed to assign group params exprs", K(ret));
   } else {
     ignore_ = other.ignore_;
     has_global_index_ = other.has_global_index_;
     has_instead_of_trigger_ = other.has_instead_of_trigger_;
     ab_stmt_id_expr_ = other.ab_stmt_id_expr_;
+    dml_source_from_join_ = other.dml_source_from_join_;
     pdml_disabled_ = other.pdml_disabled_;
   }
   return ret;
@@ -486,10 +497,13 @@ int ObDelUpdStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     LOG_WARN("failed to visit errlog exprs", K(ret));
   } else if (OB_FAIL(visitor.visit(sharding_conditions_, SCOPE_DMLINFOS))) {
     LOG_WARN("failed to visit sharding conditions", K(ret));
+  } else if (OB_FAIL(visitor.visit(group_param_exprs_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to visit group params exprs", K(ret));
   } else if (OB_FAIL(get_dml_table_infos(dml_table_infos))) {
     LOG_WARN("failed to get dml table infos", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < dml_table_infos.count(); ++i) {
+    bool hit_updatable_view = false;
     if (OB_ISNULL(dml_table_infos.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dml table info is null", K(ret));
@@ -498,17 +512,16 @@ int ObDelUpdStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     } else if (dml_table_infos.at(i)->table_id_ != OB_INVALID_ID &&
                dml_table_infos.at(i)->table_id_ != dml_table_infos.at(i)->loc_table_id_) {
       // handle updatable view in a speical way
-      for (int64_t j = 0; OB_SUCC(ret) && j < part_expr_items_.count(); ++j) {
-        if (part_expr_items_.at(j).table_id_ == dml_table_infos.at(i)->loc_table_id_) {
-          if (OB_FAIL(visitor.visit(part_expr_items_.at(j).part_expr_,
-                                    SCOPE_DMLINFOS))) {
-            LOG_WARN("failed to visit part expr items", K(ret));
-          } else if (OB_FAIL(visitor.visit(part_expr_items_.at(j).subpart_expr_,
-                                           SCOPE_DMLINFOS))) {
-            LOG_WARN("failed to visit subpart exprs", K(ret));
-          }
+      for (int64_t j = 0; OB_SUCC(ret) && !hit_updatable_view && j < part_expr_items_.count(); ++j) {
+        if (OB_FAIL(visitor.visit(part_expr_items_.at(j).part_expr_,
+                                  SCOPE_DMLINFOS))) {
+          LOG_WARN("failed to visit part expr items", K(ret));
+        } else if (OB_FAIL(visitor.visit(part_expr_items_.at(j).subpart_expr_,
+                                         SCOPE_DMLINFOS))) {
+          LOG_WARN("failed to visit subpart exprs", K(ret));
         }
       }
+      hit_updatable_view = true;
     }
   }
   return ret;
@@ -548,10 +561,11 @@ int ObDelUpdStmt::update_base_tid_cid()
             LOG_WARN("get unexpected null", K(col), K(ret));
           } else {
             const bool is_rowkey_doc = col->get_table_name().suffix_match("rowkey_doc");
+            const bool is_rowkey_vid = col->get_table_name().suffix_match("rowkey_vid_table");
             col_item->base_tid_ = col->get_table_id();
             col_item->base_cid_ = col->get_column_id();
             if (OB_UNLIKELY(col_item->base_tid_ == OB_INVALID_ID) ||
-            OB_UNLIKELY(j != 0 && col_item->base_tid_ != base_tid && !is_rowkey_doc)) {
+            OB_UNLIKELY(j != 0 && col_item->base_tid_ != base_tid && !is_rowkey_doc && !is_rowkey_vid)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("base table id is invalid", K(ret), K(col_item->base_tid_), K(base_tid));
             } else if (j == 0) {
@@ -755,6 +769,30 @@ int ObDelUpdStmt::check_dml_source_from_join()
     // do nothing
   } else {
     set_dml_source_from_join(true);
+  }
+  return ret;
+}
+
+int ObDelUpdStmt::get_modified_materialized_view_id(uint64_t &mview_id) const
+{
+  int ret = OB_SUCCESS;
+  mview_id = OB_INVALID_ID;
+  const ObIArray<TableItem*> &tables = get_table_items();
+  const TableItem *table_item = NULL;
+  bool is_modified = false;
+  for (int64_t i = 0; OB_INVALID_ID == mview_id && OB_SUCC(ret) && i < tables.count(); ++i) {
+    if (OB_ISNULL(table_item = tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null", K(ret), K(table_item));
+    } else if (MATERIALIZED_VIEW != table_item->table_type_) {
+      /* do nothing */
+    } else if (OB_FAIL(check_table_be_modified(table_item->ref_id_, is_modified))) {
+      LOG_WARN("fail to check table be modified", K(ret));
+    } else if (!is_modified) {
+      /* do nothing */
+    } else {
+      mview_id = table_item->mview_id_;
+    }
   }
   return ret;
 }

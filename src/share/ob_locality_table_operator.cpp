@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_define.h"
 #include "share/ob_locality_table_operator.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_locality_priority.h"
 #include "share/ob_primary_zone_util.h"
 #include "observer/ob_server_struct.h"

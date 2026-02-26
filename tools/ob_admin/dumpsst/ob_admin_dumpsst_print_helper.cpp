@@ -289,7 +289,8 @@ void PrintHelper::print_row_title(const bool use_csv, const ObStoreRow *row, con
 void PrintHelper::print_cell(const ObObj &cell, const bool use_csv)
 {
   if (!use_csv) {
-    P_VALUE_STR_B(to_cstring(cell));
+    ObCStringHelper helper;
+    P_VALUE_STR_B(helper.convert(cell));
   } else {
     int64_t pos = 0;
     char buf[MAX_BUF_SIZE];

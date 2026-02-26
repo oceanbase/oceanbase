@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
 #include "palf_base_info.h"
 
 namespace oceanbase
@@ -126,6 +125,21 @@ void PalfBaseInfo::generate_by_default()
   curr_lsn_ = default_prev_lsn;
 }
 
+int PalfBaseInfo::generate(const LSN &lsn, const LogInfo &prev_log_info)
+{
+  int ret = OB_SUCCESS;
+  if (false == prev_log_info.is_valid() ||
+      false == lsn.is_valid() ||
+      lsn < prev_log_info.lsn_) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(lsn), K(prev_log_info));
+  } else {
+    version_ = PALF_BASE_INFO_VERSION;
+    curr_lsn_ = lsn;
+    prev_log_info_ = prev_log_info;
+  }
+  return ret;
+}
 OB_SERIALIZE_MEMBER(PalfBaseInfo, version_, prev_log_info_, curr_lsn_);
 
 } // end namespace palf

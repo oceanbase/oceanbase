@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/table/ttl/ob_ttl_service.h"
-#include "observer/table/ttl/ob_tenant_ttl_manager.h"
 using namespace oceanbase::observer;
 namespace oceanbase
 {

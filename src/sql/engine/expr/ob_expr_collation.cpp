@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_collation.h"
-#include "lib/ob_name_def.h"
-#include "lib/utility/utility.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
@@ -64,7 +60,7 @@ int calc_charset_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else {
-    const ObCollationType &cs_type = expr.args_[0]->datum_meta_.cs_type_;
+    const ObCollationType &cs_type = expr.args_[0]->datum_meta_.get_cs_type();
     ObCharsetType charset_type = ObCharset::charset_type_by_coll(cs_type);
     if (CHARSET_INVALID == charset_type) {
       ret = OB_ERR_UNEXPECTED;
@@ -138,7 +134,7 @@ int calc_collation_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else {
-    const ObCollationType &cs_type = expr.args_[0]->datum_meta_.cs_type_;
+    const ObCollationType &cs_type = expr.args_[0]->datum_meta_.get_cs_type();
     ObString collation = ObCharset::collation_name(cs_type);
     res_datum.set_string(collation);
   }
@@ -194,6 +190,8 @@ int ObExprCoercibility::calc_result_type1(ObExprResType &type,
   type.set_int();
   type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
   type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
+  type.set_collation_type(CS_TYPE_BINARY);
+  type.set_collation_level(CS_LEVEL_NUMERIC);
   return ret;
 }
 
@@ -284,6 +282,9 @@ int ObExprSetCollation::calc_result_type2(ObExprResType &type,
   }
   if (OB_SUCC(ret)) {
     type1.set_calc_type(ObVarcharType);
+    if (!type1.is_string_type()) {
+      type1.set_calc_collation_type(type2.get_collation_type());
+    }
     type2.set_calc_type(ObIntType);
   }
   return ret;
@@ -382,7 +383,12 @@ int calc_cmp_meta_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   int ret = OB_SUCCESS;
   ObExprStrResAlloc res_alloc(expr, ctx);
   ObString res_str;
-  if (OB_FAIL(ob_alloc_printf(res_str, res_alloc, "%s", S(expr.args_[0]->obj_meta_)))) {
+  ObCStringHelper helper;
+  const char *ptr = helper.convert(expr.args_[0]->obj_meta_);
+  if (OB_ISNULL(ptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to convert obj_meta", K(ret));
+  } else if (OB_FAIL(ob_alloc_printf(res_str, res_alloc, "%s", ptr))) {
     LOG_WARN("failed to print", K(ret));
   } else {
     res_datum.set_string(res_str);

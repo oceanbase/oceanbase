@@ -12,9 +12,7 @@
 
 #include "observer/ob_server_struct.h"
 #include "ob_all_virtual_dump_tenant_info.h"
-#include "share/ob_errno.h"
 #include "observer/omt/ob_tenant.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

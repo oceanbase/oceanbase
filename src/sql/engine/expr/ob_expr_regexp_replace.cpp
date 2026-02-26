@@ -13,15 +13,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_regexp_replace.h"
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/engine/expr/ob_expr_regexp_count.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 
 using namespace oceanbase::common;
@@ -71,7 +62,7 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
   } else {
     const ObExprResType &text = real_text->get_result_type();
     for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
-      if (!types[i].is_null() && !is_type_valid(types[i].get_type())) {
+      if (!types[i].is_null() && !is_type_valid_regexp(types[i].get_type())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("the parameter is not castable", K(ret), K(i));
       }
@@ -109,14 +100,17 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
         type.set_length(max_allowed_packet);
         if (OB_FAIL(ObExprRegexContext::check_binary_compatible(types, 3))) {
           LOG_WARN("types are not compatible with binary.", K(ret));
+        } else if (OB_FAIL(extract_enum_set_collation_for_args(text, pattern, type_ctx, real_types))) {
+          LOG_WARN("fail to extract enum set meta", K(ret));
         } else {
-          ret = aggregate_charsets_for_string_result(type, real_types, 2, type_ctx.get_coll_type());
+          ret = aggregate_charsets_for_string_result(type, real_types, 2, type_ctx);
           is_case_sensitive = ObCharset::is_bin_sort(type.get_collation_type());
         }
       }
     }
     if (OB_SUCC(ret)) {
       bool need_utf8 = false;
+      bool is_use_hs = type_ctx.get_session()->get_enable_hyperscan_regexp_engine();
       switch (param_num) {
         case 6/*match type*/:
           types[5].set_calc_type(ObVarcharType);
@@ -141,7 +135,7 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(2), need_utf8))) {
             LOG_WARN("fail to check need utf8", K(ret));
-          } else if (need_utf8) {
+          } else if (need_utf8 || is_use_hs) {
             types[2].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
           } else {
             types[2].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
@@ -157,7 +151,7 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(1), need_utf8))) {
             LOG_WARN("fail to check need utf8", K(ret));
-          } else if (need_utf8) {
+          } else if (need_utf8 || is_use_hs) {
             types[1].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
           } else {
             types[1].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
@@ -166,7 +160,7 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(0), need_utf8))) {
             LOG_WARN("fail to check need utf8", K(ret));
-          } else if (need_utf8) {
+          } else if (need_utf8 || is_use_hs) {
             types[0].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
           } else {
             types[0].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
@@ -210,11 +204,15 @@ int ObExprRegexpReplace::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_ex
                            && rt_expr.args_[2]->datum_meta_.cs_type_ != CS_TYPE_UTF16_BIN)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(rt_expr));
+    } else if (OB_ISNULL(op_cg_ctx.session_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(op_cg_ctx.session_));
     } else {
       const bool const_text = text->is_const_expr();
       const bool const_pattern = pattern->is_const_expr();
       rt_expr.extra_ = (!const_text && const_pattern) ? 1 : 0;
-      rt_expr.eval_func_ = &eval_regexp_replace;
+      const bool is_use_hs = op_cg_ctx.session_->get_enable_hyperscan_regexp_engine();
+      rt_expr.eval_func_ = is_use_hs ? eval_hs_regexp_replace : eval_regexp_replace;
       LOG_DEBUG("regexp reeplace expr cg", K(const_text), K(const_pattern), K(rt_expr.extra_));
       if (rt_expr.arg_cnt_ >= 2 && rt_expr.args_[0]->is_batch_result()) {
         bool vector_flag = true;
@@ -224,7 +222,9 @@ int ObExprRegexpReplace::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_ex
           }
         }
         if (vector_flag) {
-          rt_expr.eval_vector_func_ = eval_regexp_replace_vector;
+          rt_expr.eval_vector_func_ = is_use_hs
+                                        ? eval_hs_regexp_replace_vector
+                                        : eval_regexp_replace_vector;
         }
       }
     }
@@ -232,8 +232,517 @@ int ObExprRegexpReplace::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_ex
   return ret;
 }
 
-int ObExprRegexpReplace::eval_regexp_replace(
-    const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+int ObExprRegexpReplace::is_valid_for_generated_column(const ObRawExpr*expr,
+                                                       const common::ObIArray<ObRawExpr *> &exprs,
+                                                       bool &is_valid) const {
+  int ret = OB_SUCCESS;
+  is_valid = lib::is_mysql_mode();
+  return ret;
+}
+
+template <typename TextVec, typename ResVec>
+int ObExprRegexpReplace::vector_regexp_replace_convert(VECTOR_EVAL_FUNC_ARG_DECL,
+                                                       ObString res_replace,
+                                                       bool is_no_pattern_to_replace,
+                                                       ObCollationType res_coll_type,
+                                                       ObExprStrResAlloc &out_alloc,
+                                                       ObIAllocator &tmp_alloc,
+                                                       const int64_t idx)
+{
+  int ret = OB_SUCCESS;
+  const TextVec *text_vec = static_cast<const TextVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+
+  ObString out;
+  if (is_no_pattern_to_replace && ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+    if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, idx, text_vec, res_replace))) {
+      LOG_WARN("get text string failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+    if (OB_FAIL(ObExprUtil::convert_string_collation(res_replace, res_coll_type, out,
+                                                     expr.datum_meta_.cs_type_, out_alloc))) {
+      LOG_WARN("convert charset failed", K(ret));
+    } else if (out.ptr() == res_replace.ptr()) {
+      // res_replace is allocated in temporary allocator, deep copy here.
+      char *mem = expr.get_str_res_mem(ctx, res_replace.length(), idx);
+      if (OB_ISNULL(mem)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        MEMCPY(mem, res_replace.ptr(), res_replace.length());
+        res_vec->set_string(idx, mem, res_replace.length());
+      }
+    } else {
+      res_vec->set_string(idx, out.ptr(), out.length());
+    }
+  } else { // output is text type
+    ObTextStringVectorResult<ResVec> text_res(expr.datum_meta_.type_, &expr, &ctx, res_vec, idx);
+    if (OB_FAIL(ObExprUtil::convert_string_collation_for_regexp(res_replace,
+                                                                res_coll_type,
+                                                                out,
+                                                                expr.datum_meta_.cs_type_,
+                                                                tmp_alloc))) {
+      LOG_WARN("convert charset failed", K(ret));
+    } else if (OB_FAIL(text_res.init_with_batch_idx(out.length(), idx))) {
+      LOG_WARN("init lob result failed", K(ret), K(out.length()));
+    } else if (OB_FAIL(text_res.append(out.ptr(), out.length()))) {
+      LOG_WARN("failed to append realdata", K(ret), K(out), K(text_res));
+    } else {
+      text_res.set_result();
+    }
+  }
+  return ret;
+}
+
+template <typename TextVec, typename ResVec>
+int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
+  int ret = OB_SUCCESS;
+  const TextVec *text_vec = static_cast<const TextVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  #define GET_VECTOR(arg_idx) expr.arg_cnt_ > arg_idx ? \
+      static_cast<ConstUniformFormat *>(expr.args_[arg_idx]->get_vector(ctx)) : NULL
+  const ConstUniformFormat *pattern = GET_VECTOR(1);
+  const ConstUniformFormat *to = GET_VECTOR(2);
+  const ConstUniformFormat *position = GET_VECTOR(3);
+  const ConstUniformFormat *occurrence = GET_VECTOR(4);
+  const ConstUniformFormat *match_type = GET_VECTOR(5);
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+  ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
+  ObExprStrResAlloc out_alloc(expr, ctx);
+  int64_t pos = 1;
+  int64_t occur = 0;
+  bool null_result = (position != NULL && position->is_null(0))
+                     || (occurrence != NULL && occurrence->is_null(0))
+                     || (lib::is_mysql_mode() && match_type != NULL && match_type->is_null(0));
+  if (lib::is_oracle_mode() && pattern->is_null(0)) {
+    for (int i = bound.start(); i < bound.end(); i++) {
+      if (skip.at(i) || eval_flags.at(i)) {
+        continue;
+      } else if (text_vec->is_null(i)) {
+        res_vec->set_null(i);
+      } else {
+        // if text is lob type, res_replace only get locator
+        ret = vector_regexp_replace_convert<TextVec, ResVec>(
+                                      VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
+                                      expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
+      }
+      eval_flags.set(i);
+    }
+  } else if (lib::is_mysql_mode() && !pattern->is_null(0) && pattern->get_string(0).empty()) {
+    if (NULL == match_type || !match_type->is_null(0)) {
+      ret = OB_ERR_REGEXP_ERROR;
+      LOG_WARN("empty regex expression", K(ret));
+    } else {
+      for (int i = bound.start(); i < bound.end(); i++) {
+        if (skip.at(i) || eval_flags.at(i)) {
+          continue;
+        } else {
+          res_vec->set_null(i);
+          eval_flags.set(i);
+        }
+      }
+    }
+  } else if (OB_FAIL(ObExprUtil::get_int_param_val(
+               const_cast<ObDatum *>(position == NULL ? NULL : &position->get_datum(0)),
+               expr.arg_cnt_ > 3 && expr.args_[3]->obj_meta_.is_decimal_int(), pos))
+             || OB_FAIL(ObExprUtil::get_int_param_val(
+                  const_cast<ObDatum *>(occurrence == NULL ? NULL : &occurrence->get_datum(0)),
+                  expr.arg_cnt_ > 4 && expr.args_[4]->obj_meta_.is_decimal_int(), occur))) {
+    LOG_WARN("get integer parameter value failed", K(ret));
+  } else if (!null_result && (pos <= 0 || occur < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("regexp_replace position or occurrence is invalid", K(ret), K(pos), K(occur));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "use position or occurrence in regexp_replace");
+  } else {
+    ObString to_str = (NULL != to && !to->is_null(0)) ? to->get_string(0) : ObString();
+    ObString match_param =
+      (NULL != match_type && !match_type->is_null(0)) ? match_type->get_string(0) : ObString();
+    ObExprRegexContext local_regex_ctx;
+    ObExprRegexContext *regexp_ctx = &local_regex_ctx;
+    const bool reusable = (0 != expr.extra_) && ObExpr::INVALID_EXP_CTX_ID != expr.expr_ctx_id_;
+    if (reusable) {
+      if (NULL == (regexp_ctx = static_cast<ObExprRegexContext *>(
+                  ctx.exec_ctx_.get_expr_op_ctx(expr.expr_ctx_id_)))) {
+        if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(expr.expr_ctx_id_, regexp_ctx))) {
+          LOG_WARN("create expr regex context failed", K(ret), K(expr));
+        } else if (OB_ISNULL(regexp_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL context returned", K(ret));
+        }
+      }
+    }
+    uint32_t flags = 0;
+    bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
+    bool params_contain_null =
+        pattern->is_null(0) || null_result || (NULL != position && position->is_null(0))
+        || (NULL != occurrence && occurrence->is_null(0))
+        || (lib::is_mysql_mode() && NULL != pattern && pattern->is_null(0))
+        || (lib::is_mysql_mode() && NULL != to && to->is_null(0))
+        || (lib::is_mysql_mode() && NULL != match_type && match_type->is_null(0));
+    ObString to_utf16;
+    ObExprRegexpSessionVariables regexp_vars;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_param, is_case_sensitive, false, false, flags))) {
+      LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
+    } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_regexp_session_vars(regexp_vars))) {
+      LOG_WARN("fail to get regexp");
+    } else if (!pattern->is_null(0) && !null_result &&
+                OB_FAIL(regexp_ctx->init(reusable ? ctx.exec_ctx_.get_allocator() : tmp_alloc,
+                    regexp_vars, pattern->get_string(0), flags, reusable,
+                    expr.args_[1]->datum_meta_.cs_type_))) {
+      LOG_WARN("fail to init regexp", K(pattern), K(flags), K(ret));
+    } else if (expr.arg_cnt_ > 2 && (expr.args_[2]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
+        expr.args_[2]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI)) {
+      if (OB_FAIL(ObExprUtil::convert_string_collation(to_str, expr.args_[2]->datum_meta_.cs_type_,
+            to_utf16, ObCharset::is_bin_sort(expr.args_[2]->datum_meta_.cs_type_) ?
+            CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI, tmp_alloc))) {
+        LOG_WARN("convert charset failed", K(ret));
+      }
+    } else {
+      to_utf16 = to_str;
+    }
+    for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+      if (skip.at(i) || eval_flags.at(i)) {
+        continue;
+      }
+      ObString res_replace;
+      bool is_no_pattern_to_replace = false;
+      ObCollationType res_coll_type = CS_TYPE_INVALID;
+      if (text_vec->is_null(i) || params_contain_null) {
+        if (lib::is_oracle_mode() && !text_vec->is_null(i) && !text_vec->get_string(i).empty()) {
+          if ((NULL != position && position->is_null(0)) ||
+              (NULL != occurrence && occurrence->is_null(0))) {
+            res_vec->set_null(i);
+          } else {
+            // if text is lob type, res_replace only get locator;
+            ret = vector_regexp_replace_convert<TextVec, ResVec>(
+                                      VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
+                                      expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
+          }
+        } else {
+          res_vec->set_null(i);
+        }
+      } else if (expr.args_[0]->datum_meta_.is_clob()
+                 && ob_is_empty_lob(expr.args_[0]->datum_meta_.type_, text_vec,
+                                    expr.args_[0]->obj_meta_.has_lob_header(), i)) {
+        res_vec->set_string(i, text_vec->get_string(i));
+        eval_flags.set(i);
+      } else {
+        ObString text_utf16;
+        ObString text_str;
+        if (ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+          if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, i, text_vec, text_str))) {
+            LOG_WARN("get text string failed", K(ret));
+          }
+        } else {
+          text_str = text_vec->get_string(i);
+        }
+        if (OB_FAIL(ret)) {
+        } else if (expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
+                  expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI) {
+          res_coll_type = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_) ?
+                            CS_TYPE_UTF16_BIN :
+                            CS_TYPE_UTF16_GENERAL_CI;
+          if (OB_FAIL(ObExprUtil::convert_string_collation(text_str,
+              expr.args_[0]->datum_meta_.cs_type_, text_utf16, res_coll_type, tmp_alloc))) {
+            LOG_WARN("convert charset failed", K(ret));
+          }
+        } else {
+          res_coll_type = expr.args_[0]->datum_meta_.cs_type_;
+          text_utf16 = text_str;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(regexp_ctx->replace(tmp_alloc, text_utf16, res_coll_type, to_utf16,
+                                               pos - 1, occur, res_replace))) {
+          LOG_WARN("failed to regexp replace str", K(ret));
+        } else if (res_replace.empty() && lib::is_oracle_mode()) {
+          res_vec->set_null(i);
+        } else {
+          ret = vector_regexp_replace_convert<TextVec, ResVec>(VECTOR_EVAL_FUNC_ARG_LIST,
+                    res_replace, is_no_pattern_to_replace, res_coll_type, out_alloc, tmp_alloc, i);
+        }
+      }
+      eval_flags.set(i);
+    }
+  }
+  #undef GET_VECTOR
+  return ret;
+}
+
+template <typename TextVec, typename ResVec>
+int ObExprRegexpReplace::vector_hs_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+#if defined(__x86_64__)
+  const TextVec *text_vec = static_cast<const TextVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  #define GET_VECTOR(arg_idx) expr.arg_cnt_ > arg_idx ? \
+      static_cast<ConstUniformFormat *>(expr.args_[arg_idx]->get_vector(ctx)) : NULL
+  const ConstUniformFormat *pattern = GET_VECTOR(1);
+  const ConstUniformFormat *to = GET_VECTOR(2);
+  const ConstUniformFormat *position = GET_VECTOR(3);
+  const ConstUniformFormat *occurrence = GET_VECTOR(4);
+  const ConstUniformFormat *match_type = GET_VECTOR(5);
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+  ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
+  ObExprStrResAlloc out_alloc(expr, ctx);
+  int64_t pos = 1;
+  int64_t occur = 0;
+  bool null_result = (position != NULL && position->is_null(0))
+                     || (occurrence != NULL && occurrence->is_null(0))
+                     || (lib::is_mysql_mode() && match_type != NULL && match_type->is_null(0));
+  if (lib::is_oracle_mode() && pattern->is_null(0)) {
+    for (int i = bound.start(); i < bound.end(); i++) {
+      if (skip.at(i) || eval_flags.at(i)) {
+        continue;
+      } else if (text_vec->is_null(i)) {
+        res_vec->set_null(i);
+      } else {
+        // if text is lob type, res_replace only get locator
+        ret = vector_regexp_replace_convert<TextVec, ResVec>(
+                                      VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
+                                      expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
+      }
+      eval_flags.set(i);
+    }
+  } else if (lib::is_mysql_mode() && !pattern->is_null(0) && pattern->get_string(0).empty()) {
+    if (NULL == match_type || !match_type->is_null(0)) {
+      ret = OB_ERR_REGEXP_ERROR;
+      LOG_WARN("empty regex expression", K(ret));
+    } else {
+      for (int i = bound.start(); i < bound.end(); i++) {
+        if (skip.at(i) || eval_flags.at(i)) {
+          continue;
+        } else {
+          res_vec->set_null(i);
+          eval_flags.set(i);
+        }
+      }
+    }
+  } else if (OB_FAIL(ObExprUtil::get_int_param_val(
+               const_cast<ObDatum *>(position == NULL ? NULL : &position->get_datum(0)),
+               expr.arg_cnt_ > 3 && expr.args_[3]->obj_meta_.is_decimal_int(), pos))
+             || OB_FAIL(ObExprUtil::get_int_param_val(
+                  const_cast<ObDatum *>(occurrence == NULL ? NULL : &occurrence->get_datum(0)),
+                  expr.arg_cnt_ > 4 && expr.args_[4]->obj_meta_.is_decimal_int(), occur))) {
+    LOG_WARN("get integer parameter value failed", K(ret));
+  } else if (!null_result && (pos <= 0 || occur < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("regexp_replace position or occurrence is invalid", K(ret), K(pos), K(occur));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "use position or occurrence in regexp_replace");
+  } else {
+    ObString to_str = (NULL != to && !to->is_null(0)) ? to->get_string(0) : ObString();
+    ObString match_param =
+      (NULL != match_type && !match_type->is_null(0)) ? match_type->get_string(0) : ObString();
+    ObExprHsRegexCtx local_regex_ctx;
+    ObExprHsRegexCtx *regexp_ctx = &local_regex_ctx;
+    const bool reusable = (0 != expr.extra_) && ObExpr::INVALID_EXP_CTX_ID != expr.expr_ctx_id_;
+    if (reusable) {
+      if (NULL == (regexp_ctx = static_cast<ObExprHsRegexCtx *>(
+                  ctx.exec_ctx_.get_expr_op_ctx(expr.expr_ctx_id_)))) {
+        if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(expr.expr_ctx_id_, regexp_ctx))) {
+          LOG_WARN("create expr hs regex context failed", K(ret), K(expr));
+        } else if (OB_ISNULL(regexp_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL context returned", K(ret));
+        }
+      }
+    }
+    uint32_t flags = 0;
+    bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
+    bool params_contain_null =
+        pattern->is_null(0) || null_result || (NULL != position && position->is_null(0))
+        || (NULL != occurrence && occurrence->is_null(0))
+        || (lib::is_mysql_mode() && NULL != pattern && pattern->is_null(0))
+        || (lib::is_mysql_mode() && NULL != to && to->is_null(0))
+        || (lib::is_mysql_mode() && NULL != match_type && match_type->is_null(0));
+    ObString to_utf8;
+    ObExprRegexpSessionVariables mock_regex_vars;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObExprHsRegexCtx::get_regexp_flags(match_param,
+                                                          is_case_sensitive,
+                                                          true,
+                                                          false,
+                                                          flags))) {
+      LOG_WARN("fail to get hs regexp flags", K(ret), K(match_param));
+    } else if (!pattern->is_null(0) &&
+               !null_result &&
+               !regexp_ctx->is_inited() &&
+               OB_FAIL(regexp_ctx->init(reusable ? ctx.exec_ctx_.get_allocator() : tmp_alloc,
+                       mock_regex_vars,
+                       pattern->get_string(0),
+                       flags,
+                       reusable,
+                       expr.args_[1]->datum_meta_.cs_type_))) {
+      LOG_WARN("init hyperscan regexp context failed", K(pattern), K(flags), K(ret));
+    } else if (expr.arg_cnt_ > 2 &&
+               (expr.args_[2]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+                expr.args_[2]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_GENERAL_CI)) {
+      if (OB_FAIL(ObExprUtil::convert_string_collation(to_str, expr.args_[2]->datum_meta_.cs_type_,
+            to_utf8, ObCharset::is_bin_sort(expr.args_[2]->datum_meta_.cs_type_) ?
+            CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI, tmp_alloc))) {
+        LOG_WARN("convert rewrite string failed", K(ret));
+      }
+    } else {
+      to_utf8 = to_str;
+    }
+    for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+      if (skip.at(i) || eval_flags.at(i)) {
+        continue;
+      }
+      ObString res_replace;
+      bool is_no_pattern_to_replace = false;
+      ObCollationType res_coll_type = CS_TYPE_INVALID;
+      if (text_vec->is_null(i) || params_contain_null) {
+        if (lib::is_oracle_mode() && !text_vec->is_null(i) && !text_vec->get_string(i).empty()) {
+          if ((NULL != position && position->is_null(0)) ||
+              (NULL != occurrence && occurrence->is_null(0))) {
+            res_vec->set_null(i);
+          } else {
+            // if text is lob type, res_replace only get locator;
+            ret = vector_regexp_replace_convert<TextVec, ResVec>(
+                                      VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
+                                      expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
+          }
+        } else {
+          res_vec->set_null(i);
+        }
+      } else if (expr.args_[0]->datum_meta_.is_clob()
+                 && ob_is_empty_lob(expr.args_[0]->datum_meta_.type_, text_vec,
+                                    expr.args_[0]->obj_meta_.has_lob_header(), i)) {
+        res_vec->set_string(i, text_vec->get_string(i));
+        eval_flags.set(i);
+      } else {
+        ObString text_utf8;
+        ObString text_str;
+        if (ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+          if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, i, text_vec, text_str))) {
+            LOG_WARN("get text string failed", K(ret));
+          }
+        } else {
+          text_str = text_vec->get_string(i);
+        }
+        if (OB_FAIL(ret)) {
+        } else if (expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+                   expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_GENERAL_CI) {
+          res_coll_type = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_) ?
+                            CS_TYPE_UTF8MB4_BIN :
+                            CS_TYPE_UTF8MB4_GENERAL_CI;
+          if (OB_FAIL(ObExprUtil::convert_string_collation(text_str,
+              expr.args_[0]->datum_meta_.cs_type_, text_utf8, res_coll_type, tmp_alloc))) {
+            LOG_WARN("convert string collation failed", K(ret));
+          }
+        } else {
+          res_coll_type = expr.args_[0]->datum_meta_.cs_type_;
+          text_utf8 = text_str;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(regexp_ctx->replace(tmp_alloc, text_utf8, res_coll_type, to_utf8, pos - 1,
+                                              occur, res_replace))) {
+          LOG_WARN("failed to hs regexp replace str", K(ret));
+        } else if (res_replace.empty() && lib::is_oracle_mode()) {
+          res_vec->set_null(i);
+        } else {
+          ret = vector_regexp_replace_convert<TextVec, ResVec>(VECTOR_EVAL_FUNC_ARG_LIST,
+                    res_replace, is_no_pattern_to_replace, res_coll_type, out_alloc, tmp_alloc, i);
+        }
+      }
+      eval_flags.set(i);
+    }
+  }
+  #undef GET_VECTOR
+#else
+  ret = OB_NOT_IMPLEMENT;
+#endif
+  return ret;
+}
+
+int ObExprRegexpReplace::eval_regexp_replace_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(skip.accumulate_bit_cnt(bound) == bound.range_size())) {
+    // do nothing
+  } else if (OB_FAIL(expr.eval_vector_param_value(ctx, skip, bound))) {
+    if (lib::is_mysql_mode() && ret == OB_ERR_INCORRECT_STRING_VALUE) {//compatible mysql
+      ret = OB_SUCCESS;
+      ObVectorBase* res_vec = static_cast<ObVectorBase *>(expr.get_vector(ctx));
+      for (int64_t i = bound.start(); i < bound.end(); i++) {
+        res_vec->set_null(i);
+      }
+      const char *charset_name = ObCharset::charset_name(expr.args_[0]->datum_meta_.cs_type_);
+      int64_t charset_name_len = strlen(charset_name);
+      const char *tmp_char = NULL;
+      LOG_USER_WARN(OB_ERR_INVALID_CHARACTER_STRING, static_cast<int>(charset_name_len),
+                    charset_name, 0, tmp_char);
+    } else {
+      LOG_WARN("evaluate parameters failed", K(ret));
+    }
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+      ret = vector_regexp_replace<StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
+      ret = vector_regexp_replace<StrUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
+      ret = vector_regexp_replace<StrContVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_regexp_replace<StrDiscVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_regexp_replace<StrUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_regexp_replace<StrContVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else {
+      ret = vector_regexp_replace<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
+    }
+  }
+  return ret;
+}
+
+int ObExprRegexpReplace::eval_hs_regexp_replace_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(skip.accumulate_bit_cnt(bound) == bound.range_size())) {
+    // do nothing
+  } else if (OB_FAIL(expr.eval_vector_param_value(ctx, skip, bound))) {
+    if (lib::is_mysql_mode() && ret == OB_ERR_INCORRECT_STRING_VALUE) {//compatible mysql
+      ret = OB_SUCCESS;
+      ObVectorBase* res_vec = static_cast<ObVectorBase *>(expr.get_vector(ctx));
+      for (int64_t i = bound.start(); i < bound.end(); i++) {
+        res_vec->set_null(i);
+      }
+      const char *charset_name = ObCharset::charset_name(expr.args_[0]->datum_meta_.cs_type_);
+      int64_t charset_name_len = strlen(charset_name);
+      const char *tmp_char = NULL;
+      LOG_USER_WARN(OB_ERR_INVALID_CHARACTER_STRING, static_cast<int>(charset_name_len),
+                    charset_name, 0, tmp_char);
+    } else {
+      LOG_WARN("evaluate parameters failed", K(ret));
+    }
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+      ret = vector_hs_regexp_replace<ObDiscreteFormat, ObDiscreteFormat>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
+      ret = vector_hs_regexp_replace<ObUniformFormat<false>, ObDiscreteFormat>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_hs_regexp_replace<ObDiscreteFormat, ObUniformFormat<false>>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_hs_regexp_replace<ObUniformFormat<false>, ObUniformFormat<false>>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else {
+      ret = vector_hs_regexp_replace<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
+    }
+  }
+  return ret;
+}
+
+template<typename RegExpCtx>
+int ObExprRegexpReplace::regexp_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   ObDatum *text = NULL;
@@ -296,14 +805,14 @@ int ObExprRegexpReplace::eval_regexp_replace(
     } else {
       ObString to_str = (NULL != to && !to->is_null()) ? to->get_string() : ObString();
       ObString match_param = (NULL != match_type && !match_type->is_null()) ? match_type->get_string() : ObString();
-      ObExprRegexContext local_regex_ctx;
-      ObExprRegexContext *regexp_ctx = &local_regex_ctx;
+      RegExpCtx local_regex_ctx;
+      RegExpCtx *regexp_ctx = &local_regex_ctx;
       ObExprRegexpSessionVariables regexp_vars;
       const bool reusable = (0 != expr.extra_) && ObExpr::INVALID_EXP_CTX_ID != expr.expr_ctx_id_;
       uint32_t flags = 0;
       bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
       if (reusable) {
-        if (NULL == (regexp_ctx = static_cast<ObExprRegexContext *>(
+        if (NULL == (regexp_ctx = static_cast<RegExpCtx *>(
                     ctx.exec_ctx_.get_expr_op_ctx(expr.expr_ctx_id_)))) {
           if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(expr.expr_ctx_id_, regexp_ctx))) {
             LOG_WARN("create expr regex context failed", K(ret), K(expr));
@@ -314,7 +823,7 @@ int ObExprRegexpReplace::eval_regexp_replace(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_param, is_case_sensitive, flags))) {
+      } else if (OB_FAIL(RegExpCtx::get_regexp_flags(match_param, is_case_sensitive, true, false, flags))) {
         LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
       } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_regexp_session_vars(regexp_vars))) {
         LOG_WARN("fail to get regexp");
@@ -346,8 +855,8 @@ int ObExprRegexpReplace::eval_regexp_replace(
           expr_datum.set_null();
         }
       } else {
-        ObString text_utf16;
-        ObString to_utf16;
+        ObString text_utf;
+        ObString to_utf;
         ObString text_str;
         if (ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
           if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, text, text_str))) {
@@ -356,31 +865,41 @@ int ObExprRegexpReplace::eval_regexp_replace(
         } else {
           text_str = text->get_string();
         }
+        const ObCollationType constexpr expected_bin_coll =
+          std::is_same<RegExpCtx, ObExprRegexContext>::value ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF8MB4_BIN;
+        const ObCollationType constexpr expected_ci_coll =
+          std::is_same<RegExpCtx, ObExprRegexContext>::value ? CS_TYPE_UTF16_GENERAL_CI :
+                                                               CS_TYPE_UTF8MB4_GENERAL_CI;
         if (OB_FAIL(ret)) {
-        } else if (expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
-                   expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI) {
-          res_coll_type = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_) ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI;
-          if (OB_FAIL(ObExprUtil::convert_string_collation(text_str, expr.args_[0]->datum_meta_.cs_type_, text_utf16,
+        } else if (expr.args_[0]->datum_meta_.cs_type_ != expected_bin_coll
+                   && expr.args_[0]->datum_meta_.cs_type_ != expected_ci_coll) {
+          res_coll_type = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_) ?
+                            expected_bin_coll :
+                            expected_ci_coll;
+          if (OB_FAIL(ObExprUtil::convert_string_collation(text_str, expr.args_[0]->datum_meta_.cs_type_, text_utf,
                                     res_coll_type, tmp_alloc))) {
             LOG_WARN("convert charset failed", K(ret));
           }
         } else {
           res_coll_type = expr.args_[0]->datum_meta_.cs_type_;
-          text_utf16 = text_str;
+          text_utf = text_str;
         }
         if (OB_FAIL(ret)) {
-        } else if (expr.arg_cnt_ > 2 && (expr.args_[2]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
-            expr.args_[2]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI)) {
-          if (OB_FAIL(ObExprUtil::convert_string_collation(to_str, expr.args_[2]->datum_meta_.cs_type_, to_utf16,
-                                    ObCharset::is_bin_sort(expr.args_[2]->datum_meta_.cs_type_) ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI,
-                                    tmp_alloc))) {
+        } else if (expr.arg_cnt_ > 2
+                   && (expr.args_[2]->datum_meta_.cs_type_ != expected_bin_coll
+                       && expr.args_[2]->datum_meta_.cs_type_ != expected_ci_coll)) {
+          if (OB_FAIL(ObExprUtil::convert_string_collation(
+                to_str, expr.args_[2]->datum_meta_.cs_type_, to_utf,
+                ObCharset::is_bin_sort(expr.args_[2]->datum_meta_.cs_type_) ? expected_bin_coll :
+                                                                              expected_ci_coll,
+                tmp_alloc))) {
             LOG_WARN("convert charset failed", K(ret));
           }
         } else {
-          to_utf16 = to_str;
+          to_utf = to_str;
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(regexp_ctx->replace(tmp_alloc, text_utf16, to_utf16, pos - 1,
+        } else if (OB_FAIL(regexp_ctx->replace(tmp_alloc, text_utf, res_coll_type, to_utf, pos - 1,
                                               occur, res_replace))) {
           LOG_WARN("failed to regexp replace str", K(ret));
         } else if (res_replace.empty() && lib::is_oracle_mode()) {
@@ -418,10 +937,14 @@ int ObExprRegexpReplace::eval_regexp_replace(
       } else {
         expr_datum.set_string(out.ptr(), out.length());
       }
+      LOG_DEBUG("replace result", K(ObString(expr_datum.len_, expr_datum.ptr_)));
     } else { // output is text type
       ObTextStringDatumResult text_res(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
-      if (OB_FAIL(ObExprUtil::convert_string_collation(res_replace, res_coll_type, out,
-                                                       expr.datum_meta_.cs_type_, tmp_alloc))) {
+      if (OB_FAIL(ObExprUtil::convert_string_collation_for_regexp(res_replace,
+                                                                  res_coll_type,
+                                                                  out,
+                                                                  expr.datum_meta_.cs_type_,
+                                                                  tmp_alloc))) {
         LOG_WARN("convert charset failed", K(ret));
       } else if (OB_FAIL(text_res.init(out.length()))) {
         LOG_WARN("init lob result failed", K(ret), K(out.length()));
@@ -435,280 +958,18 @@ int ObExprRegexpReplace::eval_regexp_replace(
   return ret;
 }
 
-int ObExprRegexpReplace::is_valid_for_generated_column(const ObRawExpr*expr,
-                                                       const common::ObIArray<ObRawExpr *> &exprs,
-                                                       bool &is_valid) const {
-  int ret = OB_SUCCESS;
-  is_valid = lib::is_mysql_mode();
-  return ret;
-}
-
-template <typename TextVec, typename ResVec>
-int ObExprRegexpReplace::vector_regexp_replace_convert(VECTOR_EVAL_FUNC_ARG_DECL,
-                                                       ObString res_replace,
-                                                       bool is_no_pattern_to_replace,
-                                                       ObCollationType res_coll_type,
-                                                       ObExprStrResAlloc &out_alloc,
-                                                       ObIAllocator &tmp_alloc,
-                                                       const int64_t idx)
+int ObExprRegexpReplace::eval_regexp_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
-  int ret = OB_SUCCESS;
-  const TextVec *text_vec = static_cast<const TextVec *>(expr.args_[0]->get_vector(ctx));
-  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
-
-  ObString out;
-  if (is_no_pattern_to_replace && ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
-    if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, idx, text_vec, res_replace))) {
-      LOG_WARN("get text string failed", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (!ob_is_text_tc(expr.datum_meta_.type_)) {
-    if (OB_FAIL(ObExprUtil::convert_string_collation(res_replace, res_coll_type, out,
-                                                     expr.datum_meta_.cs_type_, out_alloc))) {
-      LOG_WARN("convert charset failed", K(ret));
-    } else if (out.ptr() == res_replace.ptr()) {
-      // res_replace is allocated in temporary allocator, deep copy here.
-      char *mem = expr.get_str_res_mem(ctx, res_replace.length(), idx);
-      if (OB_ISNULL(mem)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret));
-      } else {
-        MEMCPY(mem, res_replace.ptr(), res_replace.length());
-        res_vec->set_string(idx, mem, res_replace.length());
-      }
-    } else {
-      res_vec->set_string(idx, out.ptr(), out.length());
-    }
-  } else { // output is text type
-    ObTextStringVectorResult<ResVec> text_res(expr.datum_meta_.type_, &expr, &ctx, res_vec, idx);
-    if (OB_FAIL(ObExprUtil::convert_string_collation(res_replace, res_coll_type, out,
-                                                     expr.datum_meta_.cs_type_, tmp_alloc))) {
-      LOG_WARN("convert charset failed", K(ret));
-    } else if (OB_FAIL(text_res.init_with_batch_idx(out.length(), idx))) {
-      LOG_WARN("init lob result failed", K(ret), K(out.length()));
-    } else if (OB_FAIL(text_res.append(out.ptr(), out.length()))) {
-      LOG_WARN("failed to append realdata", K(ret), K(out), K(text_res));
-    } else {
-      text_res.set_result();
-    }
-  }
-  return ret;
+  return regexp_replace<ObExprRegexContext>(expr, ctx, expr_datum);
 }
 
-template <typename TextVec, typename ResVec>
-int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
-  int ret = OB_SUCCESS;
-  const TextVec *text_vec = static_cast<const TextVec *>(expr.args_[0]->get_vector(ctx));
-  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
-  #define GET_VECTOR(arg_idx) expr.arg_cnt_ > arg_idx ? \
-      static_cast<ConstUniformFormat *>(expr.args_[arg_idx]->get_vector(ctx)) : NULL
-  const ConstUniformFormat *pattern = GET_VECTOR(1);
-  const ConstUniformFormat *to = GET_VECTOR(2);
-  const ConstUniformFormat *position = GET_VECTOR(3);
-  const ConstUniformFormat *occurrence = GET_VECTOR(4);
-  const ConstUniformFormat *match_type = GET_VECTOR(5);
-  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-  ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
-  ObExprStrResAlloc out_alloc(expr, ctx);
-  int64_t pos = 1;
-  int64_t occur = 0;
-  bool null_result = (position != NULL && position->is_null(0))
-                     || (occurrence != NULL && occurrence->is_null(0))
-                     || (lib::is_mysql_mode() && match_type != NULL && match_type->is_null(0));
-  if (lib::is_oracle_mode() && pattern->is_null(0)) {
-    for (int i = bound.start(); i < bound.end(); i++) {
-      if (skip.at(i) || eval_flags.at(i)) {
-        continue;
-      } else if (text_vec->is_null(i)) {
-        res_vec->set_null(i);
-      } else {
-        // if text is lob type, res_replace only get locator
-        ret = vector_regexp_replace_convert<TextDiscVec, TextDiscVec>(
-                                      VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
-                                      expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
-      }
-      eval_flags.set(i);
-    }
-  } else if (lib::is_mysql_mode() && !pattern->is_null(0) && pattern->get_string(0).empty()) {
-    if (NULL == match_type || !match_type->is_null(0)) {
-      ret = OB_ERR_REGEXP_ERROR;
-      LOG_WARN("empty regex expression", K(ret));
-    } else {
-      for (int i = bound.start(); i < bound.end(); i++) {
-        if (skip.at(i) || eval_flags.at(i)) {
-          continue;
-        } else {
-          res_vec->set_null(i);
-          eval_flags.set(i);
-        }
-      }
-    }
-  } else if (OB_FAIL(ObExprUtil::get_int_param_val(
-               const_cast<ObDatum *>(position == NULL ? NULL : &position->get_datum(0)),
-               expr.arg_cnt_ > 3 && expr.args_[3]->obj_meta_.is_decimal_int(), pos))
-             || OB_FAIL(ObExprUtil::get_int_param_val(
-                  const_cast<ObDatum *>(occurrence == NULL ? NULL : &occurrence->get_datum(0)),
-                  expr.arg_cnt_ > 4 && expr.args_[4]->obj_meta_.is_decimal_int(), occur))) {
-    LOG_WARN("get integer parameter value failed", K(ret));
-  } else if (!null_result && (pos <= 0 || occur < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("regexp_replace position or occurrence is invalid", K(ret), K(pos), K(occur));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "use position or occurrence in regexp_replace");
-  } else {
-    ObString to_str = (NULL != to && !to->is_null(0)) ? to->get_string(0) : ObString();
-    ObString match_param =
-      (NULL != match_type && !match_type->is_null(0)) ? match_type->get_string(0) : ObString();
-    ObExprRegexContext local_regex_ctx;
-    ObExprRegexContext *regexp_ctx = &local_regex_ctx;
-    const bool reusable = (0 != expr.extra_) && ObExpr::INVALID_EXP_CTX_ID != expr.expr_ctx_id_;
-    if (reusable) {
-      if (NULL == (regexp_ctx = static_cast<ObExprRegexContext *>(
-                  ctx.exec_ctx_.get_expr_op_ctx(expr.expr_ctx_id_)))) {
-        if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(expr.expr_ctx_id_, regexp_ctx))) {
-          LOG_WARN("create expr regex context failed", K(ret), K(expr));
-        } else if (OB_ISNULL(regexp_ctx)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL context returned", K(ret));
-        }
-      }
-    }
-    uint32_t flags = 0;
-    bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
-    bool params_contain_null =
-        pattern->is_null(0) || null_result || (NULL != position && position->is_null(0))
-        || (NULL != occurrence && occurrence->is_null(0))
-        || (lib::is_mysql_mode() && NULL != pattern && pattern->is_null(0))
-        || (lib::is_mysql_mode() && NULL != to && to->is_null(0))
-        || (lib::is_mysql_mode() && NULL != match_type && match_type->is_null(0));
-    ObString to_utf16;
-    ObExprRegexpSessionVariables regexp_vars;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_param, is_case_sensitive, flags))) {
-      LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
-    } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_regexp_session_vars(regexp_vars))) {
-      LOG_WARN("fail to get regexp");
-    } else if (!pattern->is_null(0) && !null_result &&
-                OB_FAIL(regexp_ctx->init(reusable ? ctx.exec_ctx_.get_allocator() : tmp_alloc,
-                    regexp_vars, pattern->get_string(0), flags, reusable,
-                    expr.args_[1]->datum_meta_.cs_type_))) {
-      LOG_WARN("fail to init regexp", K(pattern), K(flags), K(ret));
-    } else if (expr.arg_cnt_ > 2 && (expr.args_[2]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
-        expr.args_[2]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI)) {
-      if (OB_FAIL(ObExprUtil::convert_string_collation(to_str, expr.args_[2]->datum_meta_.cs_type_,
-            to_utf16, ObCharset::is_bin_sort(expr.args_[2]->datum_meta_.cs_type_) ?
-            CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI, tmp_alloc))) {
-        LOG_WARN("convert charset failed", K(ret));
-      }
-    } else {
-      to_utf16 = to_str;
-    }
-    for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-      if (skip.at(i) || eval_flags.at(i)) {
-        continue;
-      }
-      ObString res_replace;
-      bool is_no_pattern_to_replace = false;
-      ObCollationType res_coll_type = CS_TYPE_INVALID;
-      if (text_vec->is_null(i) || params_contain_null) {
-        if (lib::is_oracle_mode() && !text_vec->is_null(i) && !text_vec->get_string(i).empty()) {
-          if ((NULL != position && position->is_null(0)) ||
-              (NULL != occurrence && occurrence->is_null(0))) {
-            res_vec->set_null(i);
-          } else {
-            // if text is lob type, res_replace only get locator;
-            ret = vector_regexp_replace_convert<TextDiscVec, TextDiscVec>(
-                                      VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
-                                      expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
-          }
-        } else {
-          res_vec->set_null(i);
-        }
-      } else if (expr.args_[0]->datum_meta_.is_clob()
-                 && ob_is_empty_lob(expr.args_[0]->datum_meta_.type_, text_vec,
-                                    expr.args_[0]->obj_meta_.has_lob_header(), i)) {
-        res_vec->set_string(i, text_vec->get_string(i));
-        eval_flags.set(i);
-      } else {
-        ObString text_utf16;
-        ObString text_str;
-        if (ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
-          if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, i, text_vec, text_str))) {
-            LOG_WARN("get text string failed", K(ret));
-          }
-        } else {
-          text_str = text_vec->get_string(i);
-        }
-        if (OB_FAIL(ret)) {
-        } else if (expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
-                  expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI) {
-          res_coll_type = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_) ?
-                            CS_TYPE_UTF16_BIN :
-                            CS_TYPE_UTF16_GENERAL_CI;
-          if (OB_FAIL(ObExprUtil::convert_string_collation(text_str,
-              expr.args_[0]->datum_meta_.cs_type_, text_utf16, res_coll_type, tmp_alloc))) {
-            LOG_WARN("convert charset failed", K(ret));
-          }
-        } else {
-          res_coll_type = expr.args_[0]->datum_meta_.cs_type_;
-          text_utf16 = text_str;
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(regexp_ctx->replace(tmp_alloc, text_utf16, to_utf16, pos - 1,
-                                              occur, res_replace))) {
-          LOG_WARN("failed to regexp replace str", K(ret));
-        } else if (res_replace.empty() && lib::is_oracle_mode()) {
-          res_vec->set_null(i);
-        } else {
-          ret = vector_regexp_replace_convert<TextDiscVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST,
-                    res_replace, is_no_pattern_to_replace, res_coll_type, out_alloc, tmp_alloc, i);
-        }
-      }
-      eval_flags.set(i);
-    }
-  }
-  return ret;
-}
-
-int ObExprRegexpReplace::eval_regexp_replace_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+int ObExprRegexpReplace::eval_hs_regexp_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(expr.eval_vector_param_value(ctx, skip, bound))) {
-    if (lib::is_mysql_mode() && ret == OB_ERR_INCORRECT_STRING_VALUE) {//compatible mysql
-      ret = OB_SUCCESS;
-      ObVectorBase* res_vec = static_cast<ObVectorBase *>(expr.get_vector(ctx));
-      for (int64_t i = bound.start(); i < bound.end(); i++) {
-        res_vec->set_null(i);
-      }
-      const char *charset_name = ObCharset::charset_name(expr.args_[0]->datum_meta_.cs_type_);
-      int64_t charset_name_len = strlen(charset_name);
-      const char *tmp_char = NULL;
-      LOG_USER_WARN(OB_ERR_INVALID_CHARACTER_STRING, static_cast<int>(charset_name_len),
-                    charset_name, 0, tmp_char);
-    } else {
-      LOG_WARN("evaluate parameters failed", K(ret));
-    }
-  } else {
-    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
-    VectorFormat res_format = expr.get_format(ctx);
-    if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_regexp_replace<TextDiscVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_regexp_replace<TextUniVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_regexp_replace<TextContVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_regexp_replace<TextDiscVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_regexp_replace<TextUniVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_regexp_replace<TextContVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else {
-      ret = vector_regexp_replace<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
-    }
-  }
-  return ret;
+#if defined(__x86_64__)
+  return regexp_replace<ObExprHsRegexCtx>(expr, ctx, expr_datum);
+#else
+  return OB_NOT_IMPLEMENT;
+#endif
 }
 }
 }

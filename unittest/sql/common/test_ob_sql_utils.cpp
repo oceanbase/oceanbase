@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include <gtest/gtest.h>
-#include "lib/allocator/page_arena.h"
 #include "sql/ob_sql_utils.h"
 namespace oceanbase
 {

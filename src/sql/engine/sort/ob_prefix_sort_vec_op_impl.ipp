@@ -21,6 +21,7 @@ void ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::reset()
   full_sk_collations_ = nullptr;
   base_sk_collations_.reset();
   brs_holder_.reset();
+  brs_holder_.destroy();
   next_prefix_row_ = nullptr;
   prev_row_ = nullptr;
   child_ = nullptr;
@@ -84,9 +85,11 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext 
                  *sk_exprs_, INT64_MAX, batch_size, false, false /*enable dump*/,
                  Store_Row::get_extra_size(true /*is_sort_key*/), NONE_COMPRESSOR, im_sk_store_))) {
       SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
-    } else if (OB_FAIL(init_temp_row_store(
-                 *addon_exprs_, INT64_MAX, batch_size, false, false /*enable dump*/,
-                 Store_Row::get_extra_size(false /*is_sort_key*/), NONE_COMPRESSOR, im_addon_store_))) {
+    } else if (ctx.has_addon_
+               && OB_FAIL(init_temp_row_store(*addon_exprs_, INT64_MAX, batch_size, false,
+                                              false /*enable dump*/,
+                                              Store_Row::get_extra_size(false /*is_sort_key*/),
+                                              NONE_COMPRESSOR, im_addon_store_))) {
       SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
     } else {
       selector_ =
@@ -199,7 +202,7 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::add_immediate_prefix(
                                    enable_encode_sortkey_ && !(part_cnt_ > 0)))) {
     SQL_ENG_LOG(WARN, "init compare failed", K(ret));
   } else {
-    std::sort(im_sk_rows_ + pos, im_sk_rows_ + pos + selector_size_,
+    lib::ob_sort(im_sk_rows_ + pos, im_sk_rows_ + pos + selector_size_,
               CopyableComparer(comp_));
     if (OB_SUCCESS != comp_.ret_) {
       ret = comp_.ret_;
@@ -291,7 +294,7 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::fetch_rows_batch()
     selector_size_ = 0;
   }
   immediate_pos_ = 0;
-  if (im_sk_store_.get_row_cnt() > 0 || im_addon_store_.get_row_cnt() > 0) {
+  if (im_sk_store_.get_row_cnt() > 0) {
     im_sk_store_.reset();
     im_addon_store_.reset();
   }
@@ -309,7 +312,7 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::fetch_rows_batch()
         if (OB_FAIL(e->eval_vector(*eval_ctx_, *brs_))) {
           SQL_ENG_LOG(WARN, "eval batch failed", K(ret));
         } else {
-          e->get_eval_info(*eval_ctx_).projected_ = true;
+          e->get_eval_info(*eval_ctx_).set_projected(true);
         }
       }
       selector_size_ = 0;

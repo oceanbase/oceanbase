@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_calc_urowid.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "lib/container/ob_array_helper.h"
-#include "common/data_buffer.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

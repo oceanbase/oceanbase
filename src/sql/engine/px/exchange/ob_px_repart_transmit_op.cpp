@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_repart_transmit_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/engine/px/datahub/ob_dh_msg_provider.h"
 
 namespace oceanbase
 {
@@ -105,8 +102,8 @@ int ObPxRepartTransmitOp::do_transmit()
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *phy_plan_ctx = NULL;
   ObPxRepartTransmitOpInput *trans_input = static_cast<ObPxRepartTransmitOpInput*>(input_);
-
-  if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_)) || OB_ISNULL(trans_input)) {
+  if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_)) || OB_ISNULL(trans_input)
+       || OB_ISNULL(phy_plan_ctx->get_phy_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to op ctx", "op_id", MY_SPEC.id_, "op_type", MY_SPEC.type_,
               KP(trans_input), K(ret));
@@ -117,15 +114,13 @@ int ObPxRepartTransmitOp::do_transmit()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("repartition table id should be set for repart transmit op", K(ret));
   } else {
-    ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = NULL;
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+    if (OB_ISNULL(ctx_.get_sql_ctx()) || OB_ISNULL(ctx_.get_sql_ctx()->schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql ctx or schema guard is null", K(ret), KP(ctx_.get_sql_ctx()));
+    } else if (OB_FAIL(ctx_.get_sql_ctx()->schema_guard_->get_table_schema(
                 ctx_.get_my_session()->get_effective_tenant_id(),
-                schema_guard))) {
-      LOG_WARN("faile to get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_table_schema(
-               ctx_.get_my_session()->get_effective_tenant_id(),
-               MY_SPEC.repartition_ref_table_id_, table_schema))) {
+                MY_SPEC.repartition_ref_table_id_, table_schema))) {
       LOG_WARN("faile to get table schema", K(ret), K(MY_SPEC.repartition_ref_table_id_));
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_SCHEMA_ERROR;
@@ -161,7 +156,9 @@ int ObPxRepartTransmitOp::do_transmit()
                                                       task_channels_.count(),
                                                       MY_SPEC.dist_exprs_,
                                                       MY_SPEC.dist_hash_funcs_,
-                                                      MY_SPEC.repartition_type_);
+                                                      MY_SPEC.repartition_type_,
+                                                      ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                                                       >= CLUSTER_VERSION_4_3_5_0);
           if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::SM_REPART_HASH>(repart_slice_calc))) {
             LOG_WARN("failed to do repart transmit for pkey random", K(ret));
           }
@@ -177,7 +174,8 @@ int ObPxRepartTransmitOp::do_transmit()
                                                       MY_SPEC.dist_exprs_,
                                                       &MY_SPEC.sort_cmp_funs_,
                                                       &MY_SPEC.sort_collations_,
-                                                      MY_SPEC.repartition_type_);
+                                                      MY_SPEC.repartition_type_,
+                                                      MY_SPEC.ddl_slice_id_expr_);
           if (OB_FAIL(dynamic_sample())) {
             LOG_WARN("fail to do dynamic sample", K(ret));
           } else if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::SM_REPART_RANGE>(range_slice_calc))) {
@@ -196,7 +194,9 @@ int ObPxRepartTransmitOp::do_transmit()
                                                                   MY_SPEC.repartition_type_,
                                                                   &MY_SPEC.dist_exprs_,
                                                                   &MY_SPEC.dist_hash_funcs_,
-                                                                  &MY_SPEC.repartition_exprs_);
+                                                                  &MY_SPEC.repartition_exprs_,
+                                                                  ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                                                                   >= CLUSTER_VERSION_4_3_5_0);
             if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::NULL_AWARE_AFFINITY_REPART>(repart_slice_calc))) {
               LOG_WARN("failed to do repart transmit for pkey", K(ret));
             }
@@ -210,7 +210,9 @@ int ObPxRepartTransmitOp::do_transmit()
                                                               MY_SPEC.null_row_dist_method_,
                                                               MY_SPEC.repartition_type_,
                                                               &MY_SPEC.dist_exprs_,
-                                                              &MY_SPEC.dist_hash_funcs_);
+                                                              &MY_SPEC.dist_hash_funcs_,
+                                                              ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                                                                >= CLUSTER_VERSION_4_3_5_0);
             if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::AFFINITY_REPART>(repart_slice_calc))) {
               LOG_WARN("failed to do repart transmit for pkey", K(ret));
             }

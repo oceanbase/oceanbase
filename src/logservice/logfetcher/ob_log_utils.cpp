@@ -20,23 +20,15 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <linux/sockios.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
-#include <stdlib.h>                                     // strtoll
-#include <openssl/md5.h>                                // MD5
 
 #include "lib/string/ob_string.h"                       // ObString
 #include "lib/utility/serialization.h"                  // serialization
 #include "lib/charset/ob_charset.h"                     // ObCharset
 #include "lib/time/ob_time_utility.h"                   // ObTimeUtility
-#include "lib/file/file_directory_utils.h"              // FileDirectoryUtils
-#include "share/schema/ob_table_schema.h"               // ObTableSchema
-#include "share/schema/ob_column_schema.h"              // ObColumnSchemaV2
 #include "share/schema/ob_schema_struct.h"
-#include "share/ob_get_compat_mode.h"
 #include "rpc/obmysql/ob_mysql_global.h"                // MYSQL_TYPE_*
-#include "ob_log_config.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -252,34 +244,6 @@ int64_t ObLogTimeMonitor::mark_and_get_cost(const char *log_msg_suffix, bool nee
     last_mark_time_usec_ = cur_ts;
   }
   return cost;
-}
-
-char *lbt_oblog()
-{
-  int ret = OB_SUCCESS;
-  //As lbt used when print error log, can not print error log
-  //in this function and functions called.
-  static __thread void *addrs[100];
-  static __thread char buf[LBT_BUFFER_LENGTH];
-  int size = backtrace(addrs, 100);
-  char **res = backtrace_symbols(addrs, 100);
-  int64_t pos = 0;
-
-  for (int idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
-    char *res_idx = res[idx];
-
-    if (NULL != res_idx) {
-      if (OB_FAIL(databuff_printf(buf, LBT_BUFFER_LENGTH, pos, "%s", res_idx))) {
-        LOG_ERROR("databuff_printf fail", KR(ret), K(buf), K(pos), K(LBT_BUFFER_LENGTH));
-      }
-    }
-  }
-
-  if (NULL != res) {
-    free(res);
-  }
-
-  return buf;
 }
 
 //////////////////////////////////////////////////////////////////

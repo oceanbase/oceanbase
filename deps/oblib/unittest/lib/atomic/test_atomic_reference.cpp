@@ -13,7 +13,6 @@
 #include <gtest/gtest.h>
 #define private public
 #include "lib/atomic/ob_atomic_reference.h"
-#include "lib/ob_define.h"
 #include "lib/oblog/ob_log.h"
 
 namespace oceanbase

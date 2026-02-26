@@ -17,6 +17,7 @@
 #include "lib/container/ob_fixed_array.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "sql/engine/basic/ob_batch_result_holder.h"
+#include "sql/engine/basic/ob_vector_result_holder.h"
 #include "sql/engine/ob_phy_operator_type.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/ob_operator_reg.h"
@@ -29,6 +30,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_trigger_info.h"
 #include "common/ob_common_utility.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 namespace oceanbase
 {
@@ -207,10 +209,11 @@ public:
   virtual ~ObDynamicParamSetter() {}
 
   int set_dynamic_param(ObEvalCtx &eval_ctx) const;
+  int set_dynamic_param_vec2(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit) const;
   int set_dynamic_param(ObEvalCtx &eval_ctx, common::ObObjParam *&param) const;
   int update_dynamic_param(ObEvalCtx &eval_ctx, common::ObDatum &datum) const;
 
-  static void clear_parent_evaluated_flag(ObEvalCtx &eval_ctx, ObExpr &expr);
+  static void clear_parent_evaluated_flag(ObEvalCtx &eval_ctx, const ObExpr &expr);
 
 public:
   int64_t param_idx_; // param idx in param store
@@ -301,7 +304,6 @@ private:
   int create_op_input_recursive(ObExecContext &exec_ctx) const;
   // assign spec ptr to ObOpKitStore
   int assign_spec_ptr_recursive(ObExecContext &exec_ctx) const;
-  int link_sql_plan_monitor_node_recursive(ObExecContext &exec_ctx, ObMonitorNode *&pre_node) const;
   int create_exec_feedback_node_recursive(ObExecContext &exec_ctx) const;
   // Data members are accessed in ObOperator class, exposed for convenience.
 public:
@@ -358,6 +360,90 @@ public:
   virtual int post_visit(const ObOpSpec &spec) = 0;
 };
 
+class ObOutputPtrChecker
+{
+public:
+  ObOutputPtrChecker() : use_rich_format_(true), skip_(nullptr) {}
+  virtual ~ObOutputPtrChecker() {}
+  int init(const ObOpSpec &spec, ObEvalCtx &eval_ctx, ObIAllocator *alloc)
+  {
+    int ret = OB_SUCCESS;
+    use_rich_format_ = spec.use_rich_format_;
+    int64_t batch_size = (spec.max_batch_size_ > 0) ? spec.max_batch_size_ : 1;
+    int64_t alloc_size = use_rich_format_ ?
+                         sizeof(ObVectorsResultHolder) :
+                         sizeof(ObBatchResultHolder);
+    void * ptr = alloc->alloc(alloc_size);
+    if (OB_ISNULL(ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_ENG_LOG(WARN, "allocation failed for brs_checker_", K(ret), K(alloc_size));
+    } else {
+      if (use_rich_format_) {
+        brs_vec_checker_ = new(ptr) ObVectorsResultHolder();
+        if (OB_FAIL(brs_vec_checker_->init(spec.output_, eval_ctx))) {
+          SQL_ENG_LOG(WARN, "brs_vec_checker init failed", K(ret));
+        }
+      } else {
+        brs_checker_ = new(ptr) ObBatchResultHolder();
+        if (OB_FAIL(brs_checker_->init(spec.output_, eval_ctx))) {
+          SQL_ENG_LOG(WARN, "brs_checker init failed", K(ret));
+        }
+      }
+      void *mem = alloc->alloc(ObBitVector::memory_size(batch_size));
+      if (OB_ISNULL(mem)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_ENG_LOG(WARN, "allocate memory failed", K(ret));
+      } else {
+        skip_ = to_bit_vector(mem);
+        skip_->init(batch_size);
+      }
+    }
+    return ret;
+  }
+  int save(const ObBatchRows &brs)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(brs_vec_checker_) || OB_ISNULL(brs_checker_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "brs checker is null", K(ret));
+    } else if (use_rich_format_ && OB_FAIL(brs_vec_checker_->save(brs.size_))) {
+      SQL_ENG_LOG(WARN, "brs vec checker save failed", K(ret));
+    } else if (!use_rich_format_ && OB_FAIL(brs_checker_->save(brs.size_))) {
+      SQL_ENG_LOG(WARN, "brs checker save failed", K(ret));
+    }
+    if (OB_SUCCESS == ret) {
+      skip_->deep_copy(*(brs.skip_), brs.size_);
+    }
+    return ret;
+  }
+  int check()
+  {
+    int ret = OB_SUCCESS;
+    if (brs_vec_checker_ && use_rich_format_
+        && OB_FAIL(brs_vec_checker_->check_vec_modified(*skip_))) {
+      SQL_ENG_LOG(WARN, "check output vec failed", K(ret));
+    } else if (brs_checker_ && !use_rich_format_
+                && OB_FAIL(brs_checker_->check_datum_modified())) {
+      SQL_ENG_LOG(WARN, "check output datum failed", K(ret));
+    }
+    return ret;
+  }
+  void reset()
+  {
+    if (use_rich_format_ && brs_vec_checker_) {
+      brs_vec_checker_->reset();
+    } else if (brs_checker_) {
+      brs_checker_->reset();
+    }
+  }
+  bool use_rich_format_;
+  union {
+    ObBatchResultHolder *brs_checker_ = nullptr;
+    ObVectorsResultHolder *brs_vec_checker_;
+  };
+  ObBitVector *skip_;
+};
+
 // Physical operator, mutable in execution.
 // (same with the old ObPhyOperatorCtx)
 class ObOperator
@@ -368,7 +454,10 @@ public:
   const static int64_t MONITOR_RUNNING_TIME_THRESHOLD = 5000000; //5s
   const static int64_t REAL_TIME_MONITOR_THRESHOLD = 1000000; //1s
   const static uint64_t REAL_TIME_MONITOR_TRY_TIMES = 256;
-
+  const static uint64_t SMART_CALL_CLOSE_RETRY_TIMES = 10;
+  // Threshold for enabling dummy ptr check based on optimizer cost (only for root operator)
+  const static int64_t DUMMY_PTR_CHECK_COST_THRESHOLD = 1000000;
+  typedef ObOpProfile<ObMetric> ObProfile;
 public:
   ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   virtual ~ObOperator();
@@ -470,6 +559,7 @@ public:
   uint32_t get_child_cnt() const { return child_cnt_; }
   ObOperator *get_child() { return child_; }
   ObOperator *get_child(int32_t child_idx) { return children_[child_idx]; }
+  ObOperator *get_parent() { return parent_; }
   bool is_opened() { return opened_; }
   ObMonitorNode &get_monitor_info() { return op_monitor_info_; }
   bool is_vectorized() const { return spec_.is_vectorized(); }
@@ -485,10 +575,16 @@ public:
   // Drain exchange in data for PX, or producer DFO will be blocked.
   int drain_exch();
   void set_pushdown_param_null(const common::ObIArray<ObDynamicParamSetter> &rescan_params);
+  void set_pushdown_param_null_vec2(const ObIArray<ObDynamicParamSetter> &rescan_params);
   void set_feedback_node_idx(int64_t idx)
   { fb_node_idx_ = idx; }
 
   bool is_operator_end() { return batch_reach_end_ ||  row_reach_end_ ; }
+  TO_STRING_KV(K(spec_));
+
+  virtual int do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
+  { return OB_SUCCESS; };
+
 protected:
   virtual int do_drain_exch();
   int init_skip_vector();
@@ -535,6 +631,25 @@ protected:
       } else {
         SQL_ENG_LOG(WARN, "Failed to get_next_row", K(ret));
       }
+      /*
+        SORT (output: cast_expr, order_by: cast_expr)
+          TSC (output: cast_expr, filter: like(cast_expr, pattern_expr), access virtual table)
+      */
+      // output expr may have non-uniform format, and is shared and outputed in parent operator
+      // if parent is a vectorized operator which doesn't enable rich format
+      // cast_to_uniform is called when parent projecting expr and corresponding `datum.ptr_` becomes dangling pointer
+      // thus here we reset format to VEC_INVALID
+      if (OB_SUCC(ret)) {
+        FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
+          ObExpr *expr = *e;
+          // only non-uniform format need to set to vec_invalid
+          // if expr is a literal const expr, we can't set format_ to vec_invalid
+          // otherwise another thread using the same plan may read unexpected format
+          if (expr->enable_rich_format() && !is_uniform_format(expr->get_format(eval_ctx_))) {
+            expr->get_vector_header(eval_ctx_).format_ = VEC_INVALID;
+          }
+        }
+      }
     } else {
       brs_.size_ = 1;
       brs_.end_ = false;
@@ -543,7 +658,7 @@ protected:
         if (OB_FAIL((*e)->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
           SQL_ENG_LOG(WARN, "expr evaluate failed", K(ret), K(*e));
         } else {
-          (*e)->get_eval_info(eval_ctx_).projected_ = true;
+          (*e)->get_eval_info(eval_ctx_).set_projected(true);
         }
       }
     }
@@ -570,11 +685,20 @@ private:
   int check_stack_once();
   int output_expr_sanity_check();
   int output_expr_sanity_check_batch();
+  int output_expr_sanity_check_batch_inner(const ObExpr &expr);
+  int output_nested_expr_sanity_check_batch(const ObExpr &expr);
   int output_expr_decint_datum_len_check();
   int output_expr_decint_datum_len_check_batch();
+  int check_brs();
+  int save_brs();
   int setup_op_feedback_info();
   // child can implement this interface, but can't call this directly
-  virtual int inner_drain_exch() { return common::OB_SUCCESS; };
+  virtual int inner_drain_exch() { return common::OB_SUCCESS; }
+
+  bool enable_get_next_row() const;
+  int try_push_stash_rows(const int64_t max_row_cnt);
+  int push_stash_rows(const int64_t max_row_cnt, const int64_t output_row_cnt);
+  int pop_stash_rows(const int64_t max_row_cnt);
 protected:
   const ObOpSpec &spec_;
   ObExecContext &ctx_;
@@ -613,36 +737,43 @@ protected:
   // batch rows struct for get_next_row result.
   ObBatchRows brs_;
   ObBatchRowIter *br_it_ = nullptr;
-  ObBatchResultHolder *brs_checker_= nullptr;
+  bool need_check_brs_{false};
+  ObBatchRows backup_brs_;
+  ObOutputPtrChecker output_ptr_checker_;
+
+  // handling cases where inner_get_next_batch output row cnt more than max_row_cnt.
+  ObBatchRows stash_brs_;
+  int64_t stash_rows_cnt_ = 0;
+  int64_t stash_rows_idx_ = 0;
 
   inline void begin_cpu_time_counting()
   {
-    cpu_begin_time_ = rdtsc();
+    if (cpu_begin_level_ == 0) {
+      cpu_begin_time_ = rdtsc();
+    }
+    ++cpu_begin_level_;
   }
   inline void end_cpu_time_counting()
   {
-    total_time_ += (rdtsc() - cpu_begin_time_);
-  }
-  inline void begin_ash_line_id_reg()
-  {
-    // begin with current operator
-    ObActiveSessionGuard::get_stat().plan_line_id_ = static_cast<int32_t>(spec_.id_);//TODO(xiaochu.yh): fix uint64 to int32
-  }
-  inline void end_ash_line_id_reg()
-  {
-    // move back to parent operator
-    // known issue: when switch from batch to row in same op,
-    // we shift line id to parent op un-intently. but we tolerate this inaccuracy
-    if (OB_LIKELY(spec_.get_parent())) {
-      common::ObActiveSessionGuard::get_stat().plan_line_id_ = static_cast<int32_t>(spec_.get_parent()->id_);//TODO(xiaochu.yh): fix uint64 to int32
-    } else {
-      common::ObActiveSessionGuard::get_stat().plan_line_id_ = -1;
+    --cpu_begin_level_;
+    if (cpu_begin_level_ == 0) {
+      total_time_ += (rdtsc() - cpu_begin_time_);
     }
   }
-  #ifdef ENABLE_DEBUG_LOG
-  inline int init_dummy_mem_context(uint64_t tenant_id);
-  #endif
+  inline void end_ash_line_id_reg(int ret)
+  {
+    ObDiagnosticInfo *di = common::ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      if (OB_FAIL(ret) && -1 == di->get_ash_stat().retry_plan_line_id_) {
+        di->get_ash_stat().retry_plan_line_id_ = static_cast<int32_t>(spec_.id_);
+      }
+    }
+  }
+  inline int init_dummy_ptr(uint64_t tenant_id);
+  bool use_dummp_ptr_check_close() const;
+public:
   uint64_t cpu_begin_time_; // start of counting cpu time
+  uint64_t cpu_begin_level_; // level of counting cpu time
   uint64_t total_time_; //  total time cost on this op, including io & cpu time
 protected:
   bool batch_reach_end_;
@@ -652,11 +783,13 @@ protected:
   //has been closed && destroyed in test mode. We apply for a small
   //memory for each operator in open. If there is
   //no close, mem_context will release it and give an alarm
-  #ifdef ENABLE_DEBUG_LOG
-  lib::MemoryContext dummy_mem_context_;
+  //Controlled by tracepoint EN_ENABLE_OPERATOR_DUMMY_MEM_CHECK (default: disabled)
+  //dummy_allocator_ is only used to alloc and free dummy_ptr_
+  //don't use it to alloc other ptr
+  common::ObIAllocator *dummy_allocator_;
   char *dummy_ptr_;
-  #endif
   bool check_stack_overflow_;
+  ObProfile monitor_profile_;
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
 
@@ -711,12 +844,11 @@ int ObOpSpec::find_target_specs(T &spec, const FILTER &f, common::ObIArray<T *> 
 
 inline void ObOperator::destroy()
 {
-  #ifdef ENABLE_DEBUG_LOG
-   if (OB_LIKELY(nullptr != dummy_mem_context_)) {
-    DESTROY_CONTEXT(dummy_mem_context_);
-    dummy_mem_context_ = nullptr;
+  if (nullptr != dummy_allocator_ && nullptr != dummy_ptr_) {
+    dummy_allocator_->free(dummy_ptr_);
+    dummy_ptr_ = nullptr;
+    dummy_allocator_ = nullptr;
   }
-  #endif
 }
 
 OB_INLINE void ObOperator::clear_evaluated_flag()
@@ -749,6 +881,20 @@ inline int ObOperator::try_check_status_by_rows(const int64_t rows)
   if (try_check_tick_ > CHECK_STATUS_ROWS) {
     try_check_tick_ = 0;
     ret = check_status();
+  }
+  return ret;
+}
+
+inline int ObOperator::try_push_stash_rows(const int64_t max_row_cnt)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_UNLIKELY(brs_.size_ > max_row_cnt)) {
+    // When the number of unskipped rows in brs_ exceeds max_row_cnt,
+    // stash brs_.skip index to ensure emitted rows to the upper operator comply with the max_row_cnt limit.
+    int64_t output_row_cnt = brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_);
+    if (output_row_cnt > max_row_cnt && OB_FAIL(push_stash_rows(max_row_cnt, output_row_cnt))) {
+      SQL_ENG_LOG(WARN, "try push stash rows failed", K(ret));
+    }
   }
   return ret;
 }

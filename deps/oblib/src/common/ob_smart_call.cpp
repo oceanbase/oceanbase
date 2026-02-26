@@ -10,7 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_smart_call.h"
+#include "ob_smart_call.h"
+#include "deps/oblib/src/common/ob_common_utility.h"
 
 namespace oceanbase
 {

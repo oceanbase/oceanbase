@@ -78,6 +78,10 @@ private:
   common::ObString ipstr_;
   int32_t port_;
   char info_buf_[OB_MAX_INFO_LENGTH];
+  // according to the schema, the length of extend_info is
+  // OB_MAX_MONITOR_INFO_LENGTH (i.e. 65535),
+  // but __all_virtual_sql_monitor is deprecated since 4.0
+  char extend_info_buf_[OB_MAX_MONITOR_INFO_LENGTH + 1];
   int64_t execution_time_;
 };
 } //namespace observer

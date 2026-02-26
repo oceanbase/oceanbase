@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_directory_sql_service.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
 
 namespace oceanbase
 {

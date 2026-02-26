@@ -41,12 +41,15 @@ public:
     virtual bool is_inited() = 0;
     virtual double get_x_min() = 0;
     virtual double get_x_max() = 0;
+    virtual double get_y_min() = 0;
+    virtual double get_y_max() = 0;
     virtual ObGeoCacheType get_cache_type() = 0;
     virtual ObGeometry* get_cached_geom() = 0;
     virtual void set_cached_geom(ObGeometry* geo) = 0;
     virtual ObVertexes& get_vertexes() = 0;
     virtual ObLineSegments* get_line_segments() = 0;
     virtual ObSegments* get_segments() = 0;
+    virtual void destroy_cache() = 0;
 };
 
 class ObCachedGeomBase : public ObCachedGeom {
@@ -58,7 +61,7 @@ public:
       point_mode_arena_(DEFAULT_PAGE_SIZE_GEO, page_allocator_),
       vertexes_(&point_mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
       srs_(srs),
-      x_min_(NAN), x_max_(NAN), is_inited_(false) {}
+      x_min_(NAN), x_max_(NAN), y_min_(NAN), y_max_(NAN), is_inited_(false) {}
   virtual ~ObCachedGeomBase() {};
   // get vertex from origin_geo_
   virtual int init();
@@ -67,6 +70,7 @@ public:
   virtual int contains(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res) override;
   virtual int cover(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res) override;
   virtual int within(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res) override;
+  virtual void destroy_cache() {this->~ObCachedGeomBase();}
   virtual ObGeometry* get_cached_geom() { return origin_geo_;}
   virtual ObGeoCacheType get_cache_type() { return ObGeoCacheType::GEO_BASE_CACHE;}
   virtual void set_cached_geom(ObGeometry* geo) { origin_geo_ =  geo; }
@@ -75,6 +79,8 @@ public:
   virtual ObSegments* get_segments() { return nullptr; }
   virtual inline double get_x_min() { return x_min_; }
   virtual inline double get_x_max() { return x_max_; }
+  virtual inline double get_y_min() { return y_min_; }
+  virtual inline double get_y_max() { return y_max_; }
   virtual inline ObIAllocator *get_allocator() { return allocator_; }
   virtual inline bool is_inited() { return is_inited_; }
   int check_any_vertexes_in_geo(ObGeometry& geo, bool &res);
@@ -87,6 +93,8 @@ protected:
   const ObSrsItem *srs_;
   double x_min_;
   double x_max_;
+  double y_min_;
+  double y_max_;
   bool is_inited_;
 };
 

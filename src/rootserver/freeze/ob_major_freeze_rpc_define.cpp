@@ -11,9 +11,7 @@
  */
 
 #include "rootserver/freeze/ob_major_freeze_rpc_define.h"
-#include "share/rc/ob_tenant_base.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
-#include "rootserver/freeze/ob_major_freeze_util.h"
 
 namespace oceanbase
 {
@@ -22,7 +20,7 @@ namespace obrpc
 
 OB_SERIALIZE_MEMBER(ObSimpleFreezeInfo, tenant_id_);
 
-OB_SERIALIZE_MEMBER(ObMajorFreezeRequest, info_);
+OB_SERIALIZE_MEMBER(ObMajorFreezeRequest, info_, freeze_reason_);
 
 OB_SERIALIZE_MEMBER(ObMajorFreezeResponse, err_code_);
 
@@ -72,7 +70,7 @@ int ObTenantMajorFreezeP::process()
       ret = OB_ERR_UNEXPECTED;
       RS_LOG(WARN, "tenant_id does not match", K(req), 
             "local_tenant_id", major_freeze_service->get_tenant_id(), K(is_primary_service));
-    } else if (OB_FAIL(major_freeze_service->launch_major_freeze())) {
+    } else if (OB_FAIL(major_freeze_service->launch_major_freeze(req.freeze_reason_))) {
       if (OB_MAJOR_FREEZE_NOT_FINISHED != ret && (OB_FROZEN_INFO_ALREADY_EXIST != ret)) {
         RS_LOG(WARN, "fail to launch_major_freeze", KR(ret), K(req), K(is_primary_service));
       }

@@ -12,14 +12,12 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/allocator/ob_allocator.h"
-#include "storage/blocksstable/index_block/ob_sstable_meta_info.h"
+#include "ob_sstable_meta_info.h"
 #include "storage/blocksstable/ob_macro_block_reader.h"
-#include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
-#include "storage/blocksstable/cs_encoding/ob_cs_micro_block_transformer.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_reader.h"
+#include "storage/tablet/ob_tablet_create_sstable_param.h"
 
 namespace oceanbase
 {
@@ -104,9 +102,12 @@ int ObRootBlockInfo::deserialize(
     } else if (OB_FAIL(deserialize_(allocator, des_meta, buf + pos, data_len, tmp_pos))) {
       LOG_WARN("fail to deserialize address and load", K(ret), K(des_meta), KP(buf),
           K(data_len), K(pos));
-    } else if (OB_UNLIKELY(len != tmp_pos)) {
+    } else if (OB_UNLIKELY(len < tmp_pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, serialize may have bug", K(ret), K(len), K(tmp_pos), KPC(this));
+    } else if (len > tmp_pos) {
+      LOG_WARN("old server may deserialize value written by new server", K(ret), K(len), K(tmp_pos), KPC(this));
+      pos += len;
     } else {
       pos += tmp_pos;
     }
@@ -156,6 +157,7 @@ int ObRootBlockInfo::init_root_block_info(
     LOG_WARN("fail to get memory address", K(ret), K(addr));
   } else if (ObMicroBlockData::DDL_BLOCK_TREE == block_data.type_) {
     block_data_ = block_data;
+    orig_block_buf_ = block_data_.buf_;
   } else if (size > 0 && OB_ISNULL(orig_buf = static_cast<char *>(allocator.alloc(size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc buf", K(ret), K(size));
@@ -274,24 +276,25 @@ int ObRootBlockInfo::read_block_data(
   if (OB_UNLIKELY(!addr.is_valid())
       || OB_UNLIKELY(!addr.is_block())
       || OB_UNLIKELY(buf_len < addr.size())
-      || OB_UNLIKELY(addr.offset() >= OB_SERVER_BLOCK_MGR.get_macro_block_size())
-      || OB_UNLIKELY(0 == addr.size() || addr.size() > OB_SERVER_BLOCK_MGR.get_macro_block_size())
+      || OB_UNLIKELY(addr.offset() >=OB_STORAGE_OBJECT_MGR.get_macro_block_size())
+      || OB_UNLIKELY(0 == addr.size() || addr.size() >OB_STORAGE_OBJECT_MGR.get_macro_block_size())
       || OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(addr), KP(buf), K(buf_len));
   } else {
-    blocksstable::ObMacroBlockHandle handle;
-    blocksstable::ObMacroBlockReadInfo read_info;
-    handle.reset();
+    blocksstable::ObStorageObjectHandle handle;
+    blocksstable::ObStorageObjectReadInfo read_info;
+
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     read_info.buf_ = buf;
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.mtl_tenant_id_ = MTL_ID();
+    read_info.set_bypass_micro_cache(true);
     read_info.io_desc_.set_sys_module_id(ObIOModule::ROOT_BLOCK_IO);
     if (OB_FAIL(addr.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_))) {
       LOG_WARN("fail to get block address", K(ret), K(addr));
-    } else if (OB_FAIL(ObBlockManager::read_block(read_info, handle))) {
+    } else if (OB_FAIL(ObObjectManager::read_object(read_info, handle))) {
       LOG_WARN("fail to read block from macro block", K(ret), K(read_info));
     }
   }
@@ -462,7 +465,7 @@ int ObRootBlockInfo::deep_copy(
   const int64_t variable_size = get_variable_size();
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < variable_size + pos)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(variable_size), K(pos));
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(variable_size), K(pos), K(block_data_));
   } else if (ObMicroBlockData::DDL_BLOCK_TREE == block_data_.type_) {
     dest.block_data_ = block_data_;
     dest.addr_ = addr_;
@@ -677,6 +680,9 @@ int ObSSTableMacroInfo::init_macro_info(
     common::ObArenaAllocator &allocator,
     const storage::ObTabletCreateSSTableParam &param)
 {
+  // NOTE:
+  //  If the allocator were not ObArenaAllocator any more,
+  //  other_block_ids_ and data_block_ids_ need be free manually, such as persist_block_ids(...)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -686,10 +692,6 @@ int ObSSTableMacroInfo::init_macro_info(
     LOG_WARN("fail to init macro meta info", K(ret), K(param));
   } else if (FALSE_IT(data_block_count_ = param.data_block_ids_.count())) {
   } else if (FALSE_IT(other_block_count_ = param.other_block_ids_.count())) {
-  } else if (data_block_count_ + other_block_count_ >= BLOCK_CNT_THRESHOLD) {
-    if (OB_FAIL(persist_block_ids(param.data_block_ids_, param.other_block_ids_, allocator))) {
-      LOG_WARN("fail to persist block ids", K(ret), K(param));
-    }
   } else if (param.data_block_ids_.count() > 0
       && OB_ISNULL(data_block_ids_ = static_cast<MacroBlockId *>(allocator.alloc(
       sizeof(MacroBlockId) * param.data_block_ids_.count())))) {
@@ -810,18 +812,48 @@ int ObSSTableMacroInfo::serialize_(char *buf, const int64_t buf_len, int64_t &po
 }
 
 int ObSSTableMacroInfo::persist_block_ids(
-    const common::ObIArray<MacroBlockId> &data_ids,
-    const common::ObIArray<MacroBlockId> &other_ids,
-    common::ObArenaAllocator &allocator)
+    common::ObArenaAllocator &allocator,
+    const ObLinkedMacroInfoWriteParam &param,
+    int64_t &macro_start_seq,
+    ObSharedObjectsWriteCtx &linked_block_write_ctx)
 {
   int ret = OB_SUCCESS;
   ObLinkedMacroBlockItemWriter block_writer;
-  if (OB_FAIL(write_block_ids(data_ids, other_ids, block_writer, entry_id_))) {
-    LOG_WARN("fail to write other block ids", K(ret));
+  if (OB_FAIL(write_block_ids(param, block_writer, entry_id_, macro_start_seq))) {
+    LOG_WARN("fail to write other block ids", K(ret), K(macro_start_seq));
   } else if (OB_FAIL(save_linked_block_list(block_writer.get_meta_block_list(), allocator))) {
     LOG_WARN("fail to save linked block ids", K(ret));
-  } else if (OB_FAIL(inc_linked_block_ref_cnt(allocator))) {
-    LOG_WARN("fail to increase linked block ref cnt", K(ret));
+  } else {
+    ObMetaDiskAddr addr;
+    addr.set_block_addr(ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK,
+                        0, /*offset*/
+                        1, /*size*/
+                        ObMetaDiskAddr::DiskType::BLOCK); // unused;
+    linked_block_write_ctx.set_addr(addr);
+    for (int64_t i = 0;
+         OB_SUCC(ret) && i < block_writer.get_meta_block_list().count();
+         i++) {
+      if (OB_FAIL(linked_block_write_ctx.add_object_id(block_writer.get_meta_block_list().at(i)))) {
+        LOG_WARN("fail to push_back macro_block", K(ret), K(i), K(block_writer.get_meta_block_list()));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      // data_block_ids_ and other_block_ids are allocated by ArenaAllocator, need not free
+      data_block_ids_ = nullptr;
+      other_block_ids_ = nullptr;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (!block_writer.is_closed() && OB_TMP_FAIL(block_writer.close())) {
+      LOG_WARN("fail to close block_writer", K(tmp_ret));
+    }
+    for (int64_t i = 0; i < block_writer.get_meta_block_list().count(); ++i) {
+      if (OB_TMP_FAIL(linked_block_write_ctx.add_object_id(block_writer.get_meta_block_list().at(i)))) {
+        LOG_WARN("fail to push_back macro_block", K(tmp_ret), K(i));
+      }
+    }
   }
   return ret;
 }
@@ -838,7 +870,7 @@ void ObSSTableMacroInfo::dec_linked_block_ref_cnt()
   } else {
     for (; idx < linked_block_count_; idx++) {
       const MacroBlockId &macro_id = linked_block_ids_[idx];
-      if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+      if (OB_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
         LOG_ERROR("fail to decrease macro block ref cnt", K(ret), K(macro_id));
       }
     }
@@ -857,7 +889,7 @@ int ObSSTableMacroInfo::inc_linked_block_ref_cnt(common::ObArenaAllocator &alloc
   } else {
     for (; OB_SUCC(ret) && idx < linked_block_count_; idx++) {
       const MacroBlockId &macro_id = linked_block_ids_[idx];
-      if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
+      if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_id))) {
         LOG_ERROR("fail to increase macro block ref cnt", K(ret), K(macro_id));
       }
     }
@@ -866,7 +898,7 @@ int ObSSTableMacroInfo::inc_linked_block_ref_cnt(common::ObArenaAllocator &alloc
       int tmp_ret = OB_SUCCESS;
       for (int64_t i = 0; i < idx; i++) {
         const MacroBlockId &macro_id = linked_block_ids_[idx];
-        if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+        if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
           LOG_ERROR("fail to decrease macro block ref cnt", K(tmp_ret), K(macro_id));
         }
       }
@@ -889,7 +921,7 @@ int ObSSTableMacroInfo::save_linked_block_list(
     LOG_WARN("fail to allocate memory", K(ret), K(ids_cnt));
   } else {
     int64_t idx = 0;
-    for (int64_t idx = 0; idx < ids_cnt; ++idx) {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < ids_cnt; ++idx) {
       new (linked_block_ids_ + idx) MacroBlockId(list.at(idx));
     }
     linked_block_count_ = ids_cnt;
@@ -926,9 +958,12 @@ int ObSSTableMacroInfo::deserialize(
       LOG_WARN("payload is out of the buf's boundary", K(ret), K(data_len), K(pos), K(len));
     } else if (OB_FAIL(deserialize_(allocator, des_meta, buf + pos, len, tmp_pos))) {
       LOG_WARN("fail to deserialize_", K(ret), K(des_meta), KP(buf), K(len), K(tmp_pos));
-    } else if (OB_UNLIKELY(len != tmp_pos)) {
+    } else if (OB_UNLIKELY(len < tmp_pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, serialize may have bug", K(ret), K(len), K(tmp_pos), K(*this));
+    } else if (len > tmp_pos) {
+      LOG_WARN("old server may deserialize value written by new server", K(ret), K(len), K(tmp_pos), K(*this));
+      pos += len;
     } else {
       pos += tmp_pos;
     }
@@ -1115,28 +1150,30 @@ DEF_TO_STRING(ObSSTableMacroInfo)
 }
 
 int ObSSTableMacroInfo::write_block_ids(
-    const common::ObIArray<MacroBlockId> &data_ids,
-    const common::ObIArray<MacroBlockId> &other_ids,
+    const ObLinkedMacroInfoWriteParam &param,
     storage::ObLinkedMacroBlockItemWriter &writer,
-    MacroBlockId &entry_id) const
+    MacroBlockId &entry_id,
+    int64_t &macro_start_seq) const
 {
   int ret = OB_SUCCESS;
-  const int64_t data_blk_cnt = data_ids.count();
-  const int64_t other_blk_cnt = other_ids.count();
   ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
-  if (OB_UNLIKELY(0 == data_blk_cnt && 0 == other_blk_cnt)) {
+  if (OB_UNLIKELY(0 == data_block_count_ && 0 == other_block_count_) ||
+      OB_UNLIKELY((0 != data_block_count_ && OB_ISNULL(data_block_ids_)) ||
+      OB_UNLIKELY((0 != other_block_count_ && OB_ISNULL(other_block_ids_)))) ||
+      OB_UNLIKELY(!param.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("data_blk_cnt and other_blk_cnt shouldn't be both 0", K(ret), K(data_blk_cnt),
-        K(other_blk_cnt));
-  } else if (OB_FAIL(writer.init(false /*whether need addr*/, mem_attr))) {
-    LOG_WARN("fail to initialize item writer", K(ret));
-  } else if (OB_FAIL(flush_ids(data_ids, writer))) {
-    LOG_WARN("fail to flush data block ids", K(ret), K(data_blk_cnt));
-  } else if (OB_FAIL(flush_ids(other_ids, writer))) {
-    LOG_WARN("fail to flush other block ids", KP(ret), K(other_blk_cnt));
+    LOG_WARN("data_block_count_ and other_block_count_ shouldn't be both 0", K(ret), K(data_block_count_),
+        K(other_block_count_), K(param));
+  } else if (OB_FAIL(writer.init_for_macro_info(param))) {
+    LOG_WARN("fail to initialize item writer", K(ret), K(param));
+  } else if (OB_FAIL(flush_ids(data_block_ids_, data_block_count_, writer))) {
+    LOG_WARN("fail to flush data block ids", K(ret), K(data_block_count_));
+  } else if (OB_FAIL(flush_ids(other_block_ids_, other_block_count_, writer))) {
+    LOG_WARN("fail to flush other block ids", KP(ret), K(other_block_count_));
   } else if (OB_FAIL(writer.close())) {
     LOG_WARN("fail to close block id writer", K(ret));
   } else {
+    macro_start_seq += writer.get_written_macro_cnt();
     const ObIArray<MacroBlockId> &linked_block = writer.get_meta_block_list();
     entry_id = linked_block.at(linked_block.count() - 1);
   }
@@ -1144,28 +1181,36 @@ int ObSSTableMacroInfo::write_block_ids(
 }
 
 int ObSSTableMacroInfo::flush_ids(
-    const common::ObIArray<MacroBlockId> &blk_ids,
+    const MacroBlockId *blk_ids,
+    const int64_t blk_cnt,
     storage::ObLinkedMacroBlockItemWriter &writer)
 {
   int ret = OB_SUCCESS;
-  const int64_t buf_len = serialize_size_of_block_ids(blk_ids.get_data(), blk_ids.count());
-  const ObMemAttr attr(MTL_ID(), ObModIds::OB_BUFFER);
-  int64_t pos = 0;
-  char *buf = nullptr;
-  if (OB_ISNULL(buf = static_cast<char *>(ob_malloc(buf_len, attr)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory for writer buf", K(ret), K(buf_len));
+  if (OB_UNLIKELY(nullptr == blk_ids && 0 != blk_cnt) || OB_UNLIKELY(nullptr != blk_ids && blk_cnt < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("blk_ids should not be nullptr", KR(ret), KP(blk_ids), K(blk_cnt));
   } else {
-    OB_UNIS_ENCODE_ARRAY(blk_ids.get_data(), blk_ids.count());
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(writer.write_item(buf, buf_len))) {
-        LOG_WARN("fail to write block ids", K(ret), KP(buf), K(buf_len));
+    int64_t len = 0;
+    OB_UNIS_ADD_LEN_ARRAY(blk_ids, blk_cnt);
+    const ObMemAttr attr(MTL_ID(), ObModIds::OB_BUFFER);
+    int64_t pos = 0;
+    char *buf = nullptr;
+    if (OB_ISNULL(buf = static_cast<char *>(ob_malloc(len, attr)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for writer buf", K(ret), K(len));
+    } else {
+      int64_t buf_len = len;
+      OB_UNIS_ENCODE_ARRAY(blk_ids, blk_cnt);
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(writer.write_item(buf, buf_len))) {
+          LOG_WARN("fail to write block ids", K(ret), KP(buf), K(len));
+        }
       }
     }
-  }
-  if (OB_NOT_NULL(buf)) {
-    ob_free(buf);
-    buf = nullptr;
+    if (OB_NOT_NULL(buf)) {
+      ob_free(buf);
+      buf = nullptr;
+    }
   }
   return ret;
 }

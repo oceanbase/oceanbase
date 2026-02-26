@@ -13,12 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_temp_table_access_vec_op.h"
-#include "sql/engine/ob_operator_reg.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -351,13 +345,16 @@ int ObTempTableAccessVecOp::locate_interm_result(int64_t result_id)
   } else if (OB_SUCCESS != result_info->ret_) {
     ret = result_info->ret_;
     LOG_WARN("the interm result info meet a error", K(ret));
+  } else if (OB_UNLIKELY(result_info->store_type_ != dtl::ObDTLIntermResultInfo::StoreType::COLUMN)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result_info store_type unexpected", K(ret), K(result_info->store_type_));
   } else if (!result_info->is_store_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("there is no row store in internal result", K(ret));
-  } else if (OB_ISNULL(result_info->col_store_)) {
+  } else if (OB_ISNULL(result_info->get_column_store())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row store is null.", K(ret));
-  } else if (OB_FAIL(result_info->col_store_->begin(col_store_it_))) {
+  } else if (OB_FAIL(result_info->get_column_store()->begin(col_store_it_))) {
     LOG_WARN("failed to begin chunk row store.", K(ret));
   } else { /*do nothing.*/ }
   return ret;

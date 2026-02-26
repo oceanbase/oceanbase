@@ -14,7 +14,6 @@
 #include <dirent.h>
 #include <regex.h>
 #include <utime.h>
-#include <sys/statfs.h>
 
 #include "lib/oblog/ob_log_compressor.h"
 #include "lib/thread/thread_mgr.h"
@@ -225,12 +224,14 @@ void ObLogCompressor::log_compress_loop_()
     int64_t log_min_time[OB_SYSLOG_COMPRESS_TYPE_COUNT] = {0};
     int64_t compressed_file_count = 0;
     int64_t deleted_file_count = 0;
+    bool fast_delete_log_mode = false;
 
     while (!stopped_) {
       // wait until stoped or needing to work
       {
         common::ObThreadCondGuard guard(log_compress_cond_);
         while (!stopped_ && !is_enable_compress() && max_disk_size_ <= 0 && OB_LOGGER.get_max_file_index() <= 0) {
+          ObBKGDSessInActiveGuard inactive_guard;
           log_compress_cond_.wait_us(loop_interval_);
         }
       }
@@ -264,7 +265,7 @@ void ObLogCompressor::log_compress_loop_()
             }
             snprintf(syslog_file.file_name_, OB_MAX_SYSLOG_FILE_NAME_SIZE, "%s/%s", syslog_dir_, entry->d_name);
             if (stat(syslog_file.file_name_, &stat_info) == -1) {
-              ret = OB_ERR_SYS;
+              ret = OB_FILE_NOT_EXIST;
               LOG_WARN("failed to get file info", K(ret), K(errno), K(syslog_file.file_name_));
               continue;
             }
@@ -307,7 +308,7 @@ void ObLogCompressor::log_compress_loop_()
             }
             snprintf(syslog_file.file_name_, OB_MAX_SYSLOG_FILE_NAME_SIZE, "%s/%s", alert_log_dir_, entry->d_name);
             if (stat(syslog_file.file_name_, &stat_info) == -1) {
-              ret = OB_ERR_SYS;
+              ret = OB_FILE_NOT_EXIST;
               LOG_WARN("failed to get file info", K(ret), K(errno), K(syslog_file.file_name_));
               continue;
             }
@@ -336,7 +337,7 @@ void ObLogCompressor::log_compress_loop_()
         }
 
         // compress syslog file if necessary
-        if (OB_SUCC(ret) && !stopped_ && is_enable_compress() && disk_remaining_size < OB_SYSLOG_COMPRESS_RESERVE_SIZE) {
+        if (OB_SUCC(ret) && !stopped_ && is_enable_compress() && disk_remaining_size < OB_SYSLOG_COMPRESS_RESERVE_SIZE && !fast_delete_log_mode) {
           if (compressor_ != next_compressor_) {
             compressor_ = next_compressor_;
           }
@@ -348,7 +349,7 @@ void ObLogCompressor::log_compress_loop_()
               if (log_file_count[i] > min_uncompressed_count_) {
                 int64_t file_size = get_file_size_(compress_files[i]);
                 if (OB_FAIL(compress_single_file_(compress_files[i], src_buf, dest_buf))) {
-                  LOG_ERROR("failed to compress file", K(ret), K(compress_files[i]));
+                  LOG_WARN("failed to compress file", K(ret), K(compress_files[i]));
                 } else {
                   // estimated value
                   total_size -= file_size;
@@ -360,9 +361,16 @@ void ObLogCompressor::log_compress_loop_()
           }
         }
 
+        // get disk remaining size
+        disk_remaining_size = get_disk_remaining_size_();
+        disk_remaining_size = disk_remaining_size >=0 ? disk_remaining_size : INT64_MAX;
+        if (max_disk_size_ > 0 && max_disk_size_ - total_size < disk_remaining_size) {
+          disk_remaining_size = max_disk_size_ - total_size;
+        }
+
         // delete oldest syslog file if necessary
         enable_delete_file = enable_delete_file && (max_disk_size_ > 0 || OB_LOGGER.get_max_file_index() > 0);
-        if (OB_SUCC(ret) && !stopped_ && enable_delete_file && disk_remaining_size < OB_SYSLOG_DELETE_RESERVE_SIZE) {
+        if (!stopped_ && enable_delete_file && disk_remaining_size < OB_SYSLOG_DELETE_RESERVE_SIZE) {
           int array_size = oldest_files_.count();
           const char *delete_file = NULL;
           const ObSyslogFile *syslog_ptr = NULL;
@@ -386,13 +394,25 @@ void ObLogCompressor::log_compress_loop_()
           }
         }
 
+        // In the following two cases, we need to enter the fast log deletion mode (no compression).
+        // 1. If we need to delete the log file after compressing the log, it means that the log is printed too quickly.
+        // 2. deleted_file_count reaches the upper limit of the array size.
+        if ((compressed_file_count > 0 && deleted_file_count > 0)
+            || deleted_file_count >= OB_SYSLOG_DELETE_ARRAY_SIZE - 1) {
+          fast_delete_log_mode = true;
+        } else if (deleted_file_count == 0) {
+          fast_delete_log_mode = false;
+        }
+
         // record cost time, sleep
         int64_t cost_time = ObClockGenerator::getClock() - start_time;
         LOG_INFO("log compressor cycles once. ", K(ret), K(cost_time),
-                 K(compressed_file_count), K(deleted_file_count), K(disk_remaining_size));
+                 K(compressed_file_count), K(deleted_file_count), K(disk_remaining_size), K(fast_delete_log_mode));
         cost_time = cost_time >= 0 ? cost_time:0;
-        if (!stopped_ && cost_time < loop_interval_) {
-          usleep(loop_interval_ - cost_time);
+        if (!stopped_ && fast_delete_log_mode) {
+          ob_usleep(100000);
+        } else if (!stopped_ && cost_time < loop_interval_) {
+          ob_usleep(loop_interval_ - cost_time);
         }
       } // if (!stopped_)
     } // while (!stopped_)
@@ -476,11 +496,11 @@ int ObLogCompressor::compress_single_file_(const char *file_name, char *src_buf,
           if (OB_FAIL(compress_single_block_(dest_buf, dest_size, src_buf, read_size, write_size))) {
             LOG_ERROR("failed to compress syslog block", K(ret));
           } else if (write_size != fwrite(dest_buf, 1, write_size, output_file)) {
-            ret = OB_ERR_SYS;
-            LOG_ERROR("failed to write file", K(ret), K(errno), K(compressed_file_name));
+            ret = OB_FILE_NOT_EXIST;
+            LOG_WARN("failed to write file", K(ret), K(errno), K(compressed_file_name));
           }
         }
-        usleep(sleep_us);
+        ob_usleep(sleep_us);
       }
       fclose(input_file);
       fclose(output_file);
@@ -505,8 +525,8 @@ int ObLogCompressor::set_last_modify_time_(const char *file_name, const time_t &
   if (OB_ISNULL(file_name)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (utime(file_name, &newTimes) != 0) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("failed to set the file's last modified time", K(ret), K(file_name), K(newTime));
+    ret = OB_FILE_NOT_EXIST;
+    LOG_WARN("failed to set the file's last modified time", K(ret), K(strerror(errno)), K(file_name), K(newTime));
   }
 
   return ret;

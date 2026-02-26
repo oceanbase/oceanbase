@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "sql/executor/ob_job.h"
-#include "sql/executor/ob_task_event.h"
+#include "ob_job.h"
 #include "sql/executor/ob_task_spliter.h"
-#include "share/ob_define.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/px/ob_px_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -69,9 +62,11 @@ int ObJob::prepare_task_control(const ObExecContext &exec_ctx)
     while (OB_SUCC(ret) && OB_SUCC(task_spliter_->get_next_task(task))) {
       if (OB_FAIL(OB_I(t2) task_control_.add_task(task))) {
         task_control_.reset();
-        LOG_WARN("fail add task to taskq", K(ret), "task", to_cstring(task));
+        ObCStringHelper helper;
+        LOG_WARN("fail add task to taskq", K(ret), "task", helper.convert(task));
       }
-      LOG_DEBUG("add task", K(task), "task", to_cstring(task));
+      ObCStringHelper helper;
+      LOG_DEBUG("add task", K(task), "task", helper.convert(task));
     }
     if (OB_LIKELY(OB_ITER_END == ret)) {
       ret = OB_SUCCESS;

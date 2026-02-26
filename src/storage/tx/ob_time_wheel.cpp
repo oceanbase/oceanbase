@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/thread/ob_thread_name.h"
 #include "ob_time_wheel.h"
-#include "lib/oblog/ob_trace_log.h"
-#include "common/ob_clock_generator.h"
 #include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
@@ -368,6 +365,7 @@ int ObTimeWheel::init(const int64_t precision, const int64_t real_thread_num, co
     precision_ = precision;
     tname_[sizeof(tname_) - 1] = '\0';
     (void)snprintf(tname_, sizeof(tname_) - 1, "%s", name);
+    ObLocalDiagnosticInfo::set_thread_name(ob_get_tenant_id(), tname_);
     TRANS_LOG(INFO, "ObTimeWheel init success", K(precision), K(real_thread_num));
   }
 

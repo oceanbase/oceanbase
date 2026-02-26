@@ -10,9 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/utility/utility.h"
-#include "lib/ob_define.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/metrics/ob_accumulator.h"
 #include <gtest/gtest.h>
 using namespace oceanbase::common;

@@ -10,9 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx_table/ob_tx_data_memtable_mgr.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "ob_tx_data_memtable_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
+
+#define USING_LOG_PREFIX STORAGE
 
 namespace oceanbase
 {
@@ -29,7 +30,6 @@ namespace checkpoint
 ObTxDataMemtableMgr::ObTxDataMemtableMgr()
   : is_freezing_(false),
     ls_id_(),
-    mini_merge_recycle_commit_versions_ts_(0),
     tx_data_table_(nullptr),
     ls_tablet_svr_(nullptr)
 {
@@ -57,7 +57,6 @@ void ObTxDataMemtableMgr::destroy()
   tx_data_table_ = nullptr;
   ls_tablet_svr_ = nullptr;
   freezer_ = nullptr;
-  mini_merge_recycle_commit_versions_ts_ = 0;
   is_inited_ = false;
 }
 
@@ -75,8 +74,10 @@ int ObTxDataMemtableMgr::init(const common::ObTabletID &tablet_id,
   } else if (OB_UNLIKELY(!tablet_id.is_valid()) || OB_ISNULL(freezer) || OB_ISNULL(t3m)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), K(tablet_id), KP(freezer), KP(t3m));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))){
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))){
     STORAGE_LOG(WARN, "Get ls from ls service failed.", KR(ret));
+  } else if (ls_handle.get_ls()->is_logonly_replica()) {
+    STORAGE_LOG(TRACE, "logonly replica do not need tx data mem table", KR(ret));
   } else if (OB_ISNULL(tx_table = ls_handle.get_ls()->get_tx_table())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Get tx table from ls failed.", KR(ret));
@@ -88,7 +89,6 @@ int ObTxDataMemtableMgr::init(const common::ObTabletID &tablet_id,
     freezer_ = freezer;
     tx_data_table_ = tx_table->get_tx_data_table();
     ls_tablet_svr_ = ls_handle.get_ls()->get_tablet_svr();
-    mini_merge_recycle_commit_versions_ts_ = 0;
     ObLSTxService *ls_tx_svr = nullptr;
     if (OB_ISNULL(ls_tx_svr = freezer_->get_ls_tx_svr())) {
       ret = OB_ERR_UNEXPECTED;
@@ -116,7 +116,6 @@ int ObTxDataMemtableMgr::offline()
   if (OB_FAIL(release_memtables())) {
     STORAGE_LOG(WARN, "release tx data memtables failed", KR(ret));
   } else {
-    mini_merge_recycle_commit_versions_ts_ = 0;
     memtable_head_ = 0;
     memtable_tail_ = 0;
   }
@@ -136,9 +135,6 @@ int ObTxDataMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
     if (nullptr != tables_[idx] && memtable == tables_[idx]) {
       memtable->set_state(ObTxDataMemtable::State::RELEASED);
       memtable->set_release_time();
-      if (true == memtable->do_recycled()) {
-        mini_merge_recycle_commit_versions_ts_ = ObClockGenerator::getClock();
-      }
       STORAGE_LOG(INFO, "[TX DATA MERGE]tx data memtable mgr release head memtable", K(ls_id_), KP(memtable), KPC(memtable));
       release_head_memtable();
     } else {

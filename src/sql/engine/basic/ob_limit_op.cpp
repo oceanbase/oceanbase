@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_limit_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/basic/ob_material_op.h"
 #include "sql/engine/sort/ob_sort_op.h"
 

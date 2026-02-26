@@ -3,8 +3,13 @@
 --echo # ----------------------------------------------------------------------
 --echo # Test of GEOMETRY ST_BESTSRID
 --echo # ----------------------------------------------------------------------
---source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
-
+  connect (obsys, $OBMYSQL_MS0, root@sys,,oceanbase,$OBMYSQL_PORT);
+  connect (obmysql, $OBMYSQL_MS0, root@mysql, , oceanbase, $OBMYSQL_PORT);
+  connection obsys;
+  alter system load module data module=gis tenant=mysql infile = 'etc/';
+  connection obmysql;
+  sleep 10;
+  use test;
 
   --echo # st_transform is the same as mysql, use _st_transform instead
   select st_astext(_st_transform(ST_GeomFromText('point(-70 0)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-70 0)', 4326))));

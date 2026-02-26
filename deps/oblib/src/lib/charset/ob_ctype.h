@@ -23,16 +23,30 @@
 #define OB_UTF8MB4_GENERAL_CS OB_UTF8MB4 "_general_cs"
 #define OB_UTF8MB4_BIN        OB_UTF8MB4 "_bin"
 #define OB_UTF8MB4_UNICODE_CI OB_UTF8MB4 "_unicode_ci"
+#define OB_UTF8MB4_0900_AI_CI OB_UTF8MB4 "_0900_ai_ci"
 
 #define OB_UTF16                 "utf16"
+#define OB_UTF16LE               "utf16le"
 
 #define OB_UTF16_GENERAL_CI OB_UTF16 "_general_ci"
 #define OB_UTF16_BIN        OB_UTF16 "_bin"
 #define OB_UTF16_UNICODE_CI OB_UTF16 "_unicode_ci"
+#define OB_UTF16LE_GENERAL_CI OB_UTF16LE "_general_ci"
+#define OB_UTF16LE_BIN        OB_UTF16LE "_bin"
 
 #define OB_LATIN1 "latin1"
 #define OB_LATIN1_SWEDISH_CI OB_LATIN1 "_swedish_ci"
+#define OB_LATIN1_GERMAN1_CI OB_LATIN1 "_german1_ci"
+#define OB_LATIN1_DANISH_CI OB_LATIN1 "_danish_ci"
+#define OB_LATIN1_GENERAL_CI OB_LATIN1 "_general_ci"
+#define OB_LATIN1_GENERAL_CS OB_LATIN1 "_general_cs"
+#define OB_LATIN1_SPANISH_CI OB_LATIN1 "_spanish_ci"
+#define OB_LATIN1_GERMAN2_CI OB_LATIN1 "_german2_ci"
 #define OB_LATIN1_BIN OB_LATIN1 "_bin"
+
+#define OB_GB2312 "gb2312"
+#define OB_GB2312_CHINESE_CI OB_GB2312 "_chinese_ci"
+#define OB_GB2312_BIN OB_GB2312 "_bin"
 
 /* wm_wc and wc_mb return codes */
 #define OB_CS_ILSEQ	0     /* Wrong by sequence: wb_wc                   */
@@ -145,6 +159,8 @@ enum ObCharsetPadAttr { PAD_SPACE, NO_PAD };
     right_to_die_or_duty_to_live_c();\
   }
 
+extern "C" void right_to_die_or_duty_to_live_c();
+
 struct ObCharsetInfo;
 
 typedef char        ob_bool; /* Small bool */
@@ -195,7 +211,7 @@ typedef struct ObUnicaseInfo
 
 typedef struct ObCharsetHandler
 {
-  //my_bool (*init)(struct ObCharsetInfo *, MY_CHARSET_LOADER *loader);
+  bool (*init)(struct ObCharsetInfo *, ObCharsetLoader *loader);
   /* Multibyte routines */
   unsigned int    (*ismbchar)(const struct ObCharsetInfo *, const char *,
                       const char *);
@@ -259,6 +275,7 @@ typedef struct ObCharsetHandler
                                 char **endptr, int *error);
   size_t        (*scan)(const struct ObCharsetInfo *, const char *b,
                         const char *e, int sq);
+  const unsigned char * (*skip_trailing_space)(const struct ObCharsetInfo *,const unsigned char *ptr,size_t len);
 } ObCharsetHandler;
 
 static const int HASH_BUFFER_LENGTH = 128;
@@ -291,12 +308,14 @@ typedef struct ObCollationHandler
   //size_t    (*strnxfrmlen)(const struct ObCharsetInfo *, size_t);
 
   // creates a LIKE range, for optimizer，query range模块使用到了
+  // prifix_len should return **byte** length before the first '%'
   bool (*like_range)(const struct ObCharsetInfo *,
             const char *s, size_t s_length,
             pchar w_prefix, pchar w_one, pchar w_many,
             size_t res_length,
             char *min_str, char *max_str,
-            size_t *min_len, size_t *max_len);
+            size_t *min_len, size_t *max_len,
+            size_t *prefix_len);
   // wildcard comparison, for LIKE
   int     (*wildcmp)(const struct ObCharsetInfo *,
   		     const char *str,const char *str_end,
@@ -320,6 +339,17 @@ typedef struct ObCollationHandler
                        size_t len);
 } ObCollationHandler;
 
+typedef struct OB_UNI_IDX {
+  uint16 from;
+  uint16 to;
+  const uchar *tab;
+} OB_UNI_IDX;
+
+typedef struct {
+  int nchars;
+  OB_UNI_IDX uidx;
+} uni_idx;
+
 struct ObCharsetInfo
 {
   unsigned int      number;
@@ -336,8 +366,8 @@ struct ObCharsetInfo
   unsigned char    *to_upper;
   unsigned char    *sort_order;
   ObUCAInfo *uca;
-  //uint16      *tab_to_uni;
-  //MY_UNI_IDX  *tab_from_uni;
+  uint16      *tab_to_uni;
+  OB_UNI_IDX  *tab_from_uni;
   ObUnicaseInfo *caseinfo;
   unsigned char     *state_map;
   unsigned char     *ident_map;
@@ -385,8 +415,8 @@ struct ObCharsetInfo
 #define ob_strnxfrm(cs, d, dl, s, sl) \
    ((cs)->coll->strnxfrm((cs), (d), (dl), (dl), (s), (sl), MY_STRXFRM_PAD_WITH_SPACE))
 #define ob_strnncoll(s, a, b, c, d) ((s)->coll->strnncoll((s), (a), (b), (c), (d), 0))
-#define ob_like_range(s, a, b, c, d, e, f, g, h, i, j) \
-   ((s)->coll->like_range((s), (a), (b), (c), (d), (e), (f), (g), (h), (i), (j)))
+#define ob_like_range(s, a, b, c, d, e, f, g, h, i, j, k) \
+   ((s)->coll->like_range((s), (a), (b), (c), (d), (e), (f), (g), (h), (i), (j), (k)))
 #define ob_wildcmp(cs,s,se,w,we,e,o,m) ((cs)->coll->wildcmp((cs),(s),(se),(w),(we),(e),(o),(m)))
 #define ob_strcasecmp(s, a, b)        ((s)->coll->strcasecmp((s), (a), (b)))
 #define ob_charpos(cs, b, e, num)     (cs)->cset->charpos((cs), (const char*) (b), (const char *)(e), (num))
@@ -407,6 +437,17 @@ static inline unsigned int ob_ismbchar(const ObCharsetInfo *cs, const unsigned c
 #define ob_mbcharlen_2(s, a, b) ((s)->cset->mbcharlen((s), ((((a)&0xFF) << 8) + ((b)&0xFF))))
 
 #define ob_mbmaxlenlen(s) ((s)->mbmaxlenlen)
+#define test_all_bits(a, b) (((a) & (b)) == (b))
+
+#define OB_COLL_ALLOW_SUPERSET_CONV 1
+#define OB_COLL_ALLOW_COERCIBLE_CONV 2
+#define OB_COLL_DISALLOW_NONE 4
+#define OB_COLL_ALLOW_NUMERIC_CONV 8
+#define OB_COLL_ALLOW_NEW_CONV 16 //allow new rule set for charset aggregation
+
+#define OB_COLL_ALLOW_CONV \
+  (OB_COLL_ALLOW_SUPERSET_CONV | OB_COLL_ALLOW_COERCIBLE_CONV | OB_COLL_ALLOW_NEW_CONV)
+#define OB_COLL_CMP_CONV (OB_COLL_ALLOW_CONV | OB_COLL_DISALLOW_NONE)
 
 typedef struct ob_uni_ctype
 {
@@ -419,6 +460,7 @@ extern ObUniCtype ob_uni_ctype[256];
 //=============================================================================
 
 extern ObUnicaseInfo ob_unicase_default;
+extern ObUnicaseInfo ob_unicase_turkish;
 extern ObUnicaseInfo ob_unicase_unicode520;
 
 //=============================================================================
@@ -426,11 +468,14 @@ extern ObUnicaseInfo ob_unicase_unicode520;
 extern ObCharsetInfo ob_charset_bin;
 extern ObCharsetInfo ob_charset_utf8mb4_bin;
 extern ObCharsetInfo ob_charset_utf8mb4_general_ci;
-extern ObCharsetInfo ob_charset_latin1;
 extern ObCharsetInfo ob_charset_gbk_chinese_ci;
 extern ObCharsetInfo ob_charset_gbk_bin;
+extern ObCharsetInfo ob_charset_gb2312_chinese_ci;
+extern ObCharsetInfo ob_charset_gb2312_bin;
 extern ObCharsetInfo ob_charset_utf16_general_ci;
 extern ObCharsetInfo ob_charset_utf16_bin;
+extern ObCharsetInfo ob_charset_utf16le_general_ci;
+extern ObCharsetInfo ob_charset_utf16le_bin;
 extern ObCharsetInfo ob_charset_gb18030_chinese_ci;
 extern ObCharsetInfo ob_charset_gb18030_chinese_cs;
 extern ObCharsetInfo ob_charset_gb18030_bin;
@@ -441,21 +486,64 @@ extern ObCharsetInfo ob_charset_gb18030_2022_radical_cs;
 extern ObCharsetInfo ob_charset_gb18030_2022_stroke_ci;
 extern ObCharsetInfo ob_charset_gb18030_2022_stroke_cs;
 extern ObCharsetInfo ob_charset_gb18030_2022_bin;
-extern ObCharsetInfo ob_charset_utf8mb4_unicode_ci;
-extern ObCharsetInfo ob_charset_utf16_unicode_ci;
 extern ObCharsetInfo ob_charset_utf8mb4_zh_0900_as_cs;
 extern ObCharsetInfo ob_charset_utf8mb4_zh2_0900_as_cs;
 extern ObCharsetInfo ob_charset_utf8mb4_zh3_0900_as_cs;
+extern ObCharsetInfo ob_charset_utf8mb4_unicode_ci;
 extern ObCharsetInfo ob_charset_utf8mb4_0900_bin;
+extern ObCharsetInfo ob_charset_utf8mb4_0900_ai_ci;
+extern ObCharsetInfo ob_charset_utf16_unicode_ci;
 extern ObCharsetInfo ob_charset_latin1;
+extern ObCharsetInfo ob_charset_latin1_german1_ci;
+extern ObCharsetInfo ob_charset_latin1_danish_ci;
+extern ObCharsetInfo ob_charset_latin1_general_ci;
+extern ObCharsetInfo ob_charset_latin1_general_cs;
+extern ObCharsetInfo ob_charset_latin1_spanish_ci;
+extern ObCharsetInfo ob_charset_latin1_german2_ci;
 extern ObCharsetInfo ob_charset_latin1_bin;
-
+extern ObCharsetInfo ob_charset_utf8mb4_croatian_uca_ci;
+extern ObCharsetInfo ob_charset_utf8mb4_unicode_520_ci;
+extern ObCharsetInfo ob_charset_utf8mb4_czech_uca_ci;
+extern ObCharsetInfo ob_charset_ascii;
+extern ObCharsetInfo ob_charset_ascii_bin;
+extern ObCharsetInfo ob_charset_tis620_thai_ci;
+extern ObCharsetInfo ob_charset_tis620_bin;
+extern ObCharsetInfo ob_charset_ujis_japanese_ci;
+extern ObCharsetInfo ob_charset_ujis_bin;
+extern ObCharsetInfo ob_charset_euckr_korean_ci;
+extern ObCharsetInfo ob_charset_euckr_bin;
+extern ObCharsetInfo ob_charset_eucjpms_bin;
+extern ObCharsetInfo ob_charset_eucjpms_japanese_ci;
+extern ObCharsetInfo ob_charset_cp932_japanese_ci;
+extern ObCharsetInfo ob_charset_cp932_bin;
+extern ObCharsetInfo ob_charset_sjis_japanese_ci;
+extern ObCharsetInfo ob_charset_sjis_bin;
 extern ObCollationHandler ob_collation_mb_bin_handler;
 extern ObCharsetHandler ob_charset_utf8mb4_handler;
 extern ObCharsetHandler ob_charset_utf16_handler;
+extern ObCharsetHandler ob_charset_utf16le_handler;
 extern ObCollationHandler ob_collation_binary_handler;
 extern ObCollationHandler ob_collation_8bit_bin_handler;
 extern ObCollationHandler ob_collation_8bit_simple_ci_handler;
+extern ObCharsetInfo ob_charset_big5_chinese_ci;
+extern ObCharsetInfo ob_charset_big5_bin;
+extern ObCharsetInfo ob_charset_hkscs_bin;
+extern ObCharsetInfo ob_charset_hkscs31_bin;
+extern ObCharsetInfo ob_charset_dec8_swedish_ci;
+extern ObCharsetInfo ob_charset_dec8_bin;
+extern ObCharsetInfo ob_charset_cp850_general_ci;
+extern ObCharsetInfo ob_charset_cp850_bin;
+extern ObCharsetInfo ob_charset_hp8_english_ci;
+extern ObCharsetInfo ob_charset_hp8_bin;
+extern ObCharsetInfo ob_charset_macroman_general_ci;
+extern ObCharsetInfo ob_charset_macroman_bin;
+extern ObCharsetInfo ob_charset_swe7_swedish_ci;
+extern ObCharsetInfo ob_charset_swe7_bin;
+extern ObCharsetInfo *uca900_collations[];
+extern size_t uca900_collations_size;
+extern ObCharsetInfo *euro_collations[];
+extern size_t euro_collations_size;
+
 //=============================================================================
 
 void ob_fill_8bit(const ObCharsetInfo *cs, char* to, size_t l, int fill);
@@ -489,11 +577,12 @@ size_t ob_scan_8bit(const ObCharsetInfo *cs, const char *b, const char *e,
 
 /* For 8-bit character set */
 bool  ob_like_range_simple(const ObCharsetInfo *cs,
-			      const char *ptr, size_t ptr_length,
-			      pbool escape, pbool w_one, pbool w_many,
-			      size_t res_length,
-			      char *min_str, char *max_str,
-			      size_t *min_length, size_t *max_length);
+            const char *ptr, size_t ptr_length,
+            pbool escape, pbool w_one, pbool w_many,
+            size_t res_length,
+            char *min_str, char *max_str,
+            size_t *min_length, size_t *max_length,
+            size_t *prefix_length);
 
 bool ob_propagate_simple(const ObCharsetInfo *cs, const unsigned char *str,
                             size_t len);
@@ -514,7 +603,8 @@ bool ob_like_range_mb(const ObCharsetInfo *cs,
 			 pbool escape, pbool w_one, pbool w_many,
 			 size_t res_length,
 			 char *min_str,char *max_str,
-       size_t *min_length,size_t *max_length);
+       size_t *min_length,size_t *max_length,
+       size_t *prefix_length);
 
 int ob_wildcmp_mb(const ObCharsetInfo *cs,
                   const char *str,const char *str_end,
@@ -538,7 +628,11 @@ void ob_hash_sort_simple(const ObCharsetInfo *cs,
                 ulong *nr1, ulong *nr2,
         const bool calc_end_space, hash_algo hash_algo);
 
-const unsigned char *skip_trailing_space(const unsigned char *ptr,size_t len, bool is_utf16);
+int ob_strcasecmp_mb(const ObCharsetInfo *cs, const char *s, const char *t);
+
+const unsigned char *skip_trailing_space(const struct ObCharsetInfo *, const unsigned char *ptr,size_t len);
+const unsigned char *skip_trailing_space_utf16(const struct ObCharsetInfo *, const unsigned char *ptr,size_t len);
+const unsigned char *skip_trailing_space_utf16le(const struct ObCharsetInfo *, const unsigned char *ptr,size_t len);
 
 size_t ob_numchars_mb(const ObCharsetInfo *cs __attribute__((unused)), const char *pos, const char *end);
 
@@ -609,7 +703,7 @@ bool ob_like_range_generic(const ObCharsetInfo *cs, const char *ptr,
                               size_t ptr_length, char escape, char w_one,
                               char w_many, size_t res_length, char *min_str,
                               char *max_str, size_t *min_length,
-                              size_t *max_length);
+                              size_t *max_length, size_t *prefix_length);
 
 size_t ob_strnxfrm_unicode(const ObCharsetInfo *cs,
                     unsigned char *dst, size_t dstlen, unsigned int nweights,
@@ -625,12 +719,33 @@ int ob_wildcmp_unicode(const ObCharsetInfo *cs,
                    const char *wildstr,const char *wildend,
                    int escape, int w_one, int w_many,
                    ObUnicaseInfo *weights);
+size_t ob_caseup_ujis(const ObCharsetInfo *cs, char *src, size_t srclen,
+                      char *dst, size_t dstlen);
+
+size_t ob_casedn_ujis(const ObCharsetInfo *cs, char *src, size_t srclen,
+                      char *dst, size_t dstlen);
+
+int ob_strnncoll_simple(const ObCharsetInfo *cs __attribute__((unused)),
+                        const unsigned char *s, size_t slen,
+                        const unsigned char *t, size_t tlen,
+                        bool is_prefix);
+
+int ob_strnncollsp_simple(const ObCharsetInfo *cs
+                          __attribute__((unused)),
+                          const unsigned char *s, size_t slen,
+                          const unsigned char *t, size_t tlen,
+                          bool diff_if_only_endspace_difference
+                          __attribute__((unused)));
+
 
 size_t ob_strxfrm_pad(const ObCharsetInfo *cs, unsigned char *str, unsigned char *frmend,
                       unsigned char *strend, unsigned int nweights, unsigned int flags);
 
 size_t ob_strnxfrmlen_simple(const struct ObCharsetInfo *, size_t);
-
+int ob_wildcmp_8bit(const ObCharsetInfo* cs, const char* str, const char* str_end, const char* wildstr,
+                    const char* wildend, int escape, int w_one, int w_many);
+uint32_t ob_instr_simple(const ObCharsetInfo* cs , const char* b, size_t b_length,
+    const char* s, size_t s_length, ob_match_t* match, unsigned int nmatch);
 size_t ob_strnxfrmlen_unicode_full_bin(const struct ObCharsetInfo *, size_t);
 
 size_t ob_strnxfrmlen_utf8mb4(const struct ObCharsetInfo *, size_t);
@@ -667,13 +782,28 @@ char *strmake(char *, const char *, size_t);
 size_t ob_casedn_8bit(const ObCharsetInfo *cs __attribute__((unused)),
     char* str __attribute__((unused)), size_t srclen __attribute__((unused)),
     char* dst __attribute__((unused)), size_t dstlen __attribute__((unused)));
-
+int ob_strcasecmp_8bit(const ObCharsetInfo *cs, const char *s, const char *t);
 size_t ob_caseup_8bit(const ObCharsetInfo *cs __attribute__((unused)),
     char* str __attribute__((unused)), size_t srclen __attribute__((unused)),
     char* dst __attribute__((unused)), size_t dstlen __attribute__((unused)));
 
+bool ob_cset_init_8bit(ObCharsetInfo *cs, ObCharsetLoader *loader);
+bool ob_coll_init_simple(ObCharsetInfo *cs, ObCharsetLoader *loader);
+size_t ob_well_formed_len_ascii(const ObCharsetInfo *cs,
+                                const char *start, const char *end,
+                                size_t nchars,
+                                int *error);
+int ob_8bit(const ObCharsetInfo *cs, ob_wc_t *wc, const uchar *str,
+                  const uchar *end);
+int ob_wc_mb_8bit(const ObCharsetInfo *cs, ob_wc_t wc, uchar *str, uchar *end);
+int ob_mb_wc_8bit(const ObCharsetInfo *cs, ob_wc_t *wc, const uchar *str,const uchar *end);
+unsigned int ob_ismbchar_8bit(const ObCharsetInfo *cs __attribute__((unused)), const char *p, const char *e);
+
 extern "C" void right_to_die_or_duty_to_live_c();
 
+static inline void OB_PUT_MB2(unsigned char *s, uint16 code) {
+  s[0] = code >> 8;
+  s[1] = code & 0xFF;
+}
 
 #endif /* OCEANBASE_LIB_OBMYSQL_OB_CTYPE_ */
-

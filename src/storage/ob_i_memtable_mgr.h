@@ -15,9 +15,9 @@
 
 #include "lib/lock/ob_spin_rwlock.h"
 #include "lib/lock/ob_qsync_lock.h"
-#include "ob_tablet_id.h"
+#include "common/ob_tablet_id.h"
 #include "storage/ob_i_table.h"
-// #include "storage/memtable/ob_multi_source_data.h"
+#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
@@ -25,15 +25,13 @@ namespace logservice
 {
 class ObLogHandler;
 }
-namespace memtable
-{
-class ObIMultiSourceDataUnit;
-}
 
 namespace storage
 {
 class ObIMemtable;
 class ObFreezer;
+class CreateMemtableArg;
+
 
 using ObTableHdlArray = common::ObIArray<ObTableHandleV2>;
 
@@ -100,8 +98,30 @@ public:
     if (!is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "unexpected lock or lock_type", K(ret), K_(lock_type), KP_(lock));
+    } else if (lock_type_ == OB_QSYNC_LOCK) {
+      ret = static_cast<common::ObQSyncLock *>(lock_)->try_wrlock();
     } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
-      ret = static_cast<common::SpinRWLock *>(lock_)->try_wrlock();
+      ret = static_cast<common::SpinRWLock *>(lock_)->try_wrlock()
+        ? OB_SUCCESS : OB_EAGAIN;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock_type", K(ret), K_(lock_type));
+    }
+    return ret;
+  }
+
+  int try_rdlock()
+  {
+    int ret = OB_SUCCESS;
+
+    if (!is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock or lock_type", K(ret), K_(lock_type), KP_(lock));
+    } else if (lock_type_ == OB_QSYNC_LOCK) {
+      ret = static_cast<common::ObQSyncLock *>(lock_)->try_rdlock();
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      ret = static_cast<common::SpinRWLock *>(lock_)->try_rdlock()
+        ? OB_SUCCESS : OB_EAGAIN;
     } else {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "unexpected lock_type", K(ret), K_(lock_type));
@@ -191,31 +211,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(MemMgrWLockGuard);
 };
 
-struct CreateMemtableArg {
-  int64_t schema_version_;
-  share::SCN clog_checkpoint_scn_;
-  share::SCN new_clog_checkpoint_scn_;
-  bool for_replay_;
-  bool for_inc_direct_load_;
-
-  CreateMemtableArg(const int64_t schema_version,
-                    const share::SCN clog_checkpoint_scn,
-                    const share::SCN new_clog_checkpoint_scn,
-                    const bool for_replay,
-                    const bool for_inc_direct_load)
-      : schema_version_(schema_version),
-        clog_checkpoint_scn_(clog_checkpoint_scn),
-        new_clog_checkpoint_scn_(new_clog_checkpoint_scn),
-        for_replay_(for_replay),
-        for_inc_direct_load_(for_inc_direct_load) {}
-
-  TO_STRING_KV(K(schema_version_),
-               K(clog_checkpoint_scn_),
-               K(new_clog_checkpoint_scn_),
-               K(for_replay_),
-               K(for_inc_direct_load_));
-};
-
 class ObIMemtableMgr
 {
 public:
@@ -268,6 +263,12 @@ public:
   // force release all memtables
   // WARNING: this will release all the ref of memtable, make sure you will not use it again.
   int release_memtables();
+
+  int64_t get_memtable_count() const
+  {
+    MemMgrRLockGuard lock_guard(lock_);
+    return get_memtable_count_();
+  }
 
   bool has_memtable()
   {

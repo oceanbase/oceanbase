@@ -11,9 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 #include "share/ob_cluster_version.h"
 #include <gtest/gtest.h>
 

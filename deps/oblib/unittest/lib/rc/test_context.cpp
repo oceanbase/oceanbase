@@ -17,10 +17,7 @@
 #include "lib/rc/context.h"
 #undef private
 #undef protected
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/thread_local/ob_tsi_factory.h"
 #include "lib/alloc/memory_dump.h"
-#include "lib/thread/thread_mgr.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include <csignal>
 

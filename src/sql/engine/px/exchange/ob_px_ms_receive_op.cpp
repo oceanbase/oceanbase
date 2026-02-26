@@ -13,15 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_ms_receive_op.h"
-#include "lib/container/ob_fixed_array.h"
-#include "sql/engine/px/exchange/ob_row_heap.h"
-#include "sql/engine/px/ob_dfo.h"
-#include "sql/engine/px/ob_px_dtl_msg.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/ob_px_data_ch_provider.h"
-#include "sql/engine/px/ob_px_dtl_proc.h"
-#include "sql/dtl/ob_dtl_channel_loop.h"
-#include "sql/engine/basic/ob_ra_row_store.h"
 #include "sql/engine/px/ob_px_scheduler.h"
 
 namespace oceanbase
@@ -357,7 +348,7 @@ int ObPxMSReceiveOp::GlobalOrderInput::get_one_row_from_channels(
   while (OB_SUCC(ret) && !fetched && !is_finish()) {
     got_channel_idx = hint_channel_idx;
     if (OB_FAIL(ms_receive_op->ptr_row_msg_loop_->process_one(got_channel_idx))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         ret = OB_SUCCESS;
         if (OB_FAIL(eval_ctx.exec_ctx_.check_status())) {
           LOG_WARN("check status failed", K(channel_idx), K(ret));
@@ -624,11 +615,11 @@ int ObPxMSReceiveOp::inner_get_next_row()
     while (OB_SUCC(ret) && row_heap_.capacity() > row_heap_.count()) {
       // Note:
       //   inner_get_next_row is invoked in two pathes (batch vs
-      //   non-batch). The eval flag should be cleared with seperated flags
+      //   non-batch). The eval flag should be cleared with separated flags
       //   under each invoke path (batch vs non-batch). Therefore call the
       //   overriding API do_clear_datum_eval_flag() to replace
       //   clear_evaluated_flag
-      // TODO qubin.qb: Implement seperated inner_get_next_batch to isolate them
+      // TODO qubin.qb: Implement separated inner_get_next_batch to isolate them
       do_clear_datum_eval_flag();
       clear_dynamic_const_parent_flag();
       if (OB_FAIL(get_one_row_from_channels(phy_plan_ctx,
@@ -732,6 +723,9 @@ int ObPxMSReceiveOp::new_local_order_input(MergeSortInput *&out_msi)
       LOG_WARN("failed to allocate dir id for chunk datum store", K(ret));
     } else if (OB_FAIL(merge_inputs_.push_back(local_input))) {
       LOG_WARN("fail push back MergeSortInput", K(ret));
+      local_input->clean_row_store(ctx_);
+      local_input->destroy();
+      mem_context_->get_malloc_allocator().free(local_input);
     } else {
       out_msi = local_input;
     }
@@ -767,8 +761,8 @@ int ObPxMSReceiveOp::get_all_rows_from_channels(
 
         int64_t got_channel_idx = OB_INVALID_INDEX_INT64;
         if (OB_FAIL(ptr_row_msg_loop_->process_one(got_channel_idx))) {
-          if (OB_EAGAIN == ret) {
-            // If no data fetch, then return OB_EAGAIN after OB_ITER_END
+          if (OB_DTL_WAIT_EAGAIN == ret) {
+            // If no data fetch, then return OB_DTL_WAIT_EAGAIN after OB_ITER_END
             ret = OB_SUCCESS;
             if (OB_FAIL(ctx_.check_status())) {
               LOG_WARN("check status failed", K(ret));
@@ -912,7 +906,7 @@ int ObPxMSReceiveOp::inner_rescan()
   finish_ = false;
   processed_cnt_ = 0;
   if (OB_FAIL(ObPxReceiveOp::inner_rescan())) {
-    LOG_WARN("fail to do recieve op rescan", K(ret));
+    LOG_WARN("fail to do receive op rescan", K(ret));
   } else if (!MY_SPEC.local_order_
              && OB_FAIL(row_heap_.init(get_channel_count(),
                                        &MY_SPEC.sort_collations_,

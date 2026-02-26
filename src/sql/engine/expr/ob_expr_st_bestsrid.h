@@ -15,6 +15,7 @@
 #define OCEANBASE_SQL_OB_EXPR_ST_BESTSRID_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "lib/geo/ob_geo_utils.h"
 
 namespace oceanbase
 {
@@ -31,7 +32,7 @@ public:
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int eval_st_bestsrid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int get_geog_box(ObEvalCtx &ctx,
-                          common::ObArenaAllocator &temp_allocator,
+                          lib::MemoryContext &mem_ctx,
                           ObString wkb,
                           ObObjType input_type,
                           bool &is_geo_empty,

@@ -53,15 +53,18 @@ public:
       null_row_dist_method_(ObNullDistributeMethod::NONE),
       slave_mapping_type_(SlaveMappingType::SM_NONE),
       gi_info_(),
+      px_batch_op_(NULL),
       px_batch_op_id_(OB_INVALID_ID),
       px_batch_op_type_(log_op_def::LOG_OP_INVALID),
       partition_id_expr_(NULL),
+      ddl_slice_id_expr_(NULL),
       random_expr_(NULL),
       need_null_aware_shuffle_(false),
       is_old_unblock_mode_(true),
       sample_type_(NOT_INIT_SAMPLE_TYPE),
       in_server_cnt_(0),
-      px_info_(NULL)
+      px_info_(NULL),
+      hidden_pk_expr_(NULL)
   {
     repartition_table_id_ = 0;
   }
@@ -100,7 +103,8 @@ public:
   const common::ObIArray<ObRawExpr *> &get_repart_func_exprs() const {return repartition_func_exprs_;}
   const common::ObIArray<ObExchangeInfo::HashExpr> &get_hash_dist_exprs() const {return hash_dist_exprs_;}
   const common::ObIArray<common::ObObj> *get_popular_values() const {return &popular_values_;}
-  const ObRawExpr *get_calc_part_id_expr() { return calc_part_id_expr_; }
+  const ObRawExpr *get_calc_part_id_expr() const { return calc_part_id_expr_; }
+  ObRawExpr *get_calc_part_id_expr() { return calc_part_id_expr_; }
   ObRepartitionType get_repartition_type() const {return repartition_type_;}
   int64_t get_repartition_ref_table_id() const {return repartition_ref_table_id_;}
   int64_t get_repartition_table_id() const {return repartition_table_id_;}
@@ -138,10 +142,13 @@ public:
   virtual int compute_plan_type() override;
   SlaveMappingType get_slave_mapping_type() { return slave_mapping_type_; }
   bool is_slave_mapping() const { return SlaveMappingType::SM_NONE != slave_mapping_type_; }
+  ObLogicalOperator *get_px_batch_op() { return px_batch_op_; }
+  void set_px_batch_op(ObLogicalOperator *op) { px_batch_op_ = op; }
+  int64_t get_px_batch_op_id() { return px_batch_op_id_; }
   void set_px_batch_op_id(int64_t id) { px_batch_op_id_ = id; }
+  log_op_def::ObLogOpType get_px_batch_op_type() { return px_batch_op_type_;}
   void set_px_batch_op_type(log_op_def::ObLogOpType px_batch_op_type)
   { px_batch_op_type_ = px_batch_op_type; }
-  int64_t get_px_batch_op_id() { return px_batch_op_id_; }
 
   void set_rollup_hybrid(bool is_rollup_hybrid) { is_rollup_hybrid_ = is_rollup_hybrid; }
   bool is_rollup_hybrid() { return is_rollup_hybrid_; }
@@ -159,7 +166,6 @@ public:
     return wf_hybrid_pby_exprs_cnt_array_;
   }
 
-  log_op_def::ObLogOpType get_px_batch_op_type() { return px_batch_op_type_;}
   common::ObIArray<ObTableLocation> &get_pruning_table_locations() { return table_locations_; }
   common::ObIArray<int64_t> &get_bloom_filter_ids() { return filter_id_array_; }
   int gen_px_pruning_table_locations();
@@ -168,6 +174,10 @@ public:
   bool is_old_unblock_mode() { return is_old_unblock_mode_; }
   void set_partition_id_expr(ObOpPseudoColumnRawExpr *expr) { partition_id_expr_ = expr; }
   ObOpPseudoColumnRawExpr *get_partition_id_expr() { return partition_id_expr_; }
+  void set_ddl_slice_id_expr(ObRawExpr *expr) { ddl_slice_id_expr_ = expr; }
+  ObRawExpr *get_ddl_slice_id_expr() { return ddl_slice_id_expr_; }
+  void set_hidden_pk_expr(ObRawExpr *expr) { hidden_pk_expr_ = expr; }
+  ObRawExpr *get_hidden_pk_expr() { return hidden_pk_expr_; }
   bool need_null_aware_shuffle() const { return need_null_aware_shuffle_; }
   void set_need_null_aware_shuffle(const bool need_null_aware_shuffle)
                     { need_null_aware_shuffle_ = need_null_aware_shuffle; }
@@ -254,9 +264,11 @@ private:
   //granule info
   ObAllocGIInfo gi_info_;
   // px batch rescan drive op
+  ObLogicalOperator *px_batch_op_;
   int64_t px_batch_op_id_;
   log_op_def::ObLogOpType px_batch_op_type_;
   ObOpPseudoColumnRawExpr *partition_id_expr_;
+  ObRawExpr *ddl_slice_id_expr_;
 
   // produce random number, added in %sort_keys_ of range distribution to splitting big range.
   ObRawExpr *random_expr_;
@@ -272,6 +284,9 @@ private:
   // -end pkey range/range
   int64_t in_server_cnt_; // for producer, need use exchange in server cnt to compute cost
   ObPxResourceAnalyzer::PxInfo *px_info_;
+  // Hidden primary key expression for PDML heap table insert scenario.
+  // Needs to be passed through exchange but not used for hash calculation.
+  ObRawExpr *hidden_pk_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObLogExchange);
 };
 } // end of namespace sql

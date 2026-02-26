@@ -11,7 +11,6 @@
  */
 
 #include "ob_gts_info.h"
-#include "lib/ob_define.h"
 
 namespace oceanbase
 {

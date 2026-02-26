@@ -11,29 +11,18 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
-#include "rpc/obmysql/ob_sql_nio.h"
+#include "ob_sql_nio.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "rpc/obmysql/ob_i_sql_sock_handler.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "lib/ob_running_mode.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/allocator/ob_malloc.h"
 #include "lib/queue/ob_link_queue.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/thread/ob_thread_name.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/profile/ob_trace_id.h"
 #include "lib/net/ob_net_util.h"
-#include "common/ob_clock_generator.h"
 #include <sys/epoll.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/eventfd.h>
-#include <arpa/inet.h>
-#include <linux/futex.h>
-#include <netinet/tcp.h>
-#include "rpc/obrpc/ob_listener.h"
-#include "common/ob_clock_generator.h"
+#include "lib/ash/ob_active_session_guard.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::common;
 
@@ -503,6 +492,7 @@ public:
     ObSqlSockSession* sess = (ObSqlSockSession *)sess_;
     return sess->on_disconnect();
   }
+  void* get_sql_session_info() { return sql_session_info_; }
   void set_sql_session_info(void* sess) { sql_session_info_ = sess; }
   void reset_sql_session_info() { ATOMIC_STORE(&sql_session_info_, NULL); }
   bool sql_session_info_is_null() { return NULL == ATOMIC_LOAD(&sql_session_info_); }
@@ -555,7 +545,7 @@ private:
   }
 
 public:
-  char sess_[3000] __attribute__((aligned(16)));
+  char sess_[sizeof(ObSqlSockSession)] __attribute__((aligned(16)));
 };
 
 static ObSqlSock *sess2sock(void *sess)
@@ -574,6 +564,19 @@ int get_fd_from_sess(void *sess)
     fd = sock->get_fd();
   }
   return fd;
+}
+
+void* get_sql_sess_from_sess(void *sess)
+{
+  ObSqlSock *sock = nullptr;
+  void* sql_sess = nullptr;
+  if (OB_NOT_NULL(sess)) {
+    sock = sess2sock(sess);
+  }
+  if (OB_NOT_NULL(sock) && !sock->sql_session_info_is_null()) {
+    sql_sess = sock->get_sql_session_info();
+  }
+  return sql_sess;
 }
 
 int ObSqlSock::set_ssl_enabled()
@@ -926,9 +929,11 @@ public:
   }
 private:
   void handle_epoll_event() {
+    ObDIActionGuard ag("HandleEpollEvent");
     const int maxevents = 512;
     struct epoll_event events[maxevents];
     int cnt = ob_epoll_wait(epfd_, events, maxevents, 1000);
+
     for(int i = 0; i < cnt; i++) {
       uint64_t num64 = events[i].data.u64;
       if (is_wrapped_fd(num64)) {
@@ -952,6 +957,7 @@ private:
   }
 
   void handle_close_req_queue() {
+    ObDIActionGuard ag("HandleCloseReq");
     ObSqlSock* s = NULL;
     while((s = (ObSqlSock*)close_req_queue_.pop())) {
       prepare_destroy(s);
@@ -965,6 +971,7 @@ private:
   }
 
   void handle_pending_destroy_list() {
+    ObDIActionGuard ag("HandlePendingDestroy");
     ObDLink* head = pending_destroy_list_.head();
     ObLink* cur = head->next_;
     while(cur != head) {
@@ -1034,6 +1041,7 @@ private:
     return ret;
   }
   void handle_write_req_queue() {
+    ObDIActionGuard ag("HandleWriteReq");
     ObLink* p = NULL;
     while((p = (ObLink*)write_req_queue_.pop())) {
       ObSqlSock* s = CONTAINER_OF(p, ObSqlSock, write_task_link_);
@@ -1233,17 +1241,12 @@ void ObSqlNio::destroy()
   }
 }
 
-int __attribute__((weak)) sql_nio_add_cgroup(const uint64_t tenant_id)
-{
-  return 0;
-}
 void ObSqlNio::run(int64_t idx)
 {
   if (NULL != impl_) {
+    common::ObBackGroundSessionGuard backgroud_session_guard(GET_TENANT_ID(), THIS_WORKER.get_group_id());
     lib::set_thread_name("sql_nio", idx);
-    // if (tenant_id_ != common::OB_INVALID_ID) {
-    //   obmysql::sql_nio_add_cgroup(tenant_id_);
-    // }
+    // SET_GROUP_ID(OBCG_SQL_NIO);
     while(!has_set_stop() && !(OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {
       impl_[idx].do_work();
     }

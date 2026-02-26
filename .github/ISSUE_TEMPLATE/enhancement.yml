@@ -1,0 +1,67 @@
+name: "🌟 Enhancement"
+description: Suggest an enhancement or new feature
+labels:
+  - type: enhancement
+body:
+  - type: checkboxes
+    attributes:
+      label: Self Checks
+      description: "To make sure we get to you in time, please check the following :)"
+      options:
+        - label: I have read the [Contributing Guide](https://github.com/oceanbase/oceanbase/blob/develop/CONTRIBUTING.md).
+          required: true
+        - label: I have searched for existing issues [search for existing issues](https://github.com/oceanbase/oceanbase/issues), including closed ones.
+          required: true
+        - label: I confirm that I am using English to submit this request, otherwise it will be closed.
+          required: true
+        - label: 【中文用户 & Non English User】请使用英语提交，否则会被关闭 ：）
+          required: true
+        - label: "Please do not modify this template :) and fill in all the required fields."
+          required: true
+
+  - type: input
+    attributes:
+      label: OceanBase version
+      description: See about section in OceanBase console
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Enhancement Description
+      description: A clear and concise description of the enhancement you're proposing.
+      placeholder: What would you like OceanBase to be able to do?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Current Behavior
+      description: Describe the current behavior that you want to improve or extend.
+      placeholder: How does OceanBase behave now in relation to this enhancement?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Proposed Behavior
+      description: Describe the behavior you would like to see implemented.
+      placeholder: How would you like OceanBase to behave after this enhancement?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Use Case
+      description: Explain why this enhancement would be useful.
+      placeholder: Provide examples of how this enhancement would benefit users or solve specific problems.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Additional Context
+      description: Add any other context or screenshots about the enhancement request here.
+      placeholder: Include any other information that might help us understand and implement this enhancement.
+    validations:
+      required: false

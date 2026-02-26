@@ -11,11 +11,8 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_table_mgr.h"
-#include "storage/memtable/ob_memtable.h"
-#include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -31,7 +28,8 @@ ObAllVirtualTableMgr::ObAllVirtualTableMgr()
       tablet_handle_(),
       ls_id_(share::ObLSID::INVALID_LS_ID),
       table_store_iter_(),
-      iter_buf_(nullptr)
+      iter_buf_(nullptr),
+      index_type_(INDEX_TYPE_MAX)
 {
 }
 
@@ -96,11 +94,25 @@ void ObAllVirtualTableMgr::release_last_tenant()
 
 bool ObAllVirtualTableMgr::is_need_process(uint64_t tenant_id)
 {
+  int ret = OB_SUCCESS;
+  bool is_need = false;
   if (!is_virtual_tenant_id(tenant_id) &&
       (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_)){
-    return true;
+    if (INDEX_TYPE_I1 == index_type_) {
+      bool is_match = false;
+      common::ObObj obj_tenant_id;
+      obj_tenant_id.set_int(tenant_id);
+      if(OB_FAIL(match_in_range(IDX_KEY_TENANT_ID_IDX, obj_tenant_id, is_match))) {
+        SERVER_LOG(WARN, "fail to match in range", K(ret), K(IDX_KEY_TENANT_ID_IDX), K(obj_tenant_id), K(is_match));
+      } else if (is_match) {
+        is_need = true;
+      }
+    } else {
+      is_need = true;
+    }
   }
-  return false;
+
+  return is_need;
 }
 
 int ObAllVirtualTableMgr::get_next_tablet()
@@ -117,19 +129,35 @@ int ObAllVirtualTableMgr::get_next_tablet()
       SERVER_LOG(WARN, "fail to new tablet_iter_", K(ret));
     }
   }
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(tablet_iter_->get_next_tablet(tablet_handle_))) {
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      SERVER_LOG(WARN, "fail to get tablet iter", K(ret));
+  while(OB_SUCC(ret)) {
+    if (OB_FAIL(tablet_iter_->get_next_tablet(tablet_handle_))) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        SERVER_LOG(WARN, "fail to get tablet iter", K(ret));
+      }
+    } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle_));
+    } else {
+      ls_id_ = tablet_handle_.get_obj()->get_tablet_meta().ls_id_.id();
+      if (INDEX_TYPE_I1 == index_type_) {
+        // use index scan
+        common::ObObj obj_ls_id;
+        common::ObObj obj_tablet_id;
+        obj_ls_id.set_int(ls_id_);
+        obj_tablet_id.set_int(tablet_handle_.get_obj()->get_tablet_meta().tablet_id_.id());
+        bool is_match = false;
+        if(OB_FAIL(match_in_range(IDX_KEY_LS_ID_IDX, obj_ls_id, is_match))) {
+          SERVER_LOG(WARN, "fail to match in range", K(ret), K(IDX_KEY_LS_ID_IDX), K(obj_ls_id), K(is_match));
+        } else if (is_match && OB_FAIL(match_in_range(IDX_KEY_TABLET_ID_IDX, obj_tablet_id, is_match))) {
+          SERVER_LOG(WARN, "fail to match in range", K(ret), K(IDX_KEY_TABLET_ID_IDX), K(obj_tablet_id), K(is_match));
+        } else if (is_match) {
+          break;
+        }
+      } else {
+        break;
+      }
     }
-  } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle_));
-  } else {
-    ls_id_ = tablet_handle_.get_obj()->get_tablet_meta().ls_id_.id();
   }
-
   return ret;
 }
 
@@ -189,6 +217,10 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
     const int64_t nested_size = table->is_sstable() ? static_cast<ObSSTable *>(table)->get_macro_read_size() : 0;
     const ObITable::TableKey &table_key = table->get_key();
     const int64_t col_count = output_column_ids_.count();
+    blocksstable::ObSSTableMetaHandle sst_meta_hdl;
+    if (table->is_sstable() && OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+      SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
@@ -260,12 +292,7 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case LINKED_BLOCK_CNT: {
           int64_t blk_cnt = 0;
           if (table->is_sstable()) {
-            blocksstable::ObSSTableMetaHandle sst_meta_hdl;
-            if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-              SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
-            } else {
-              blk_cnt = sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count();
-            }
+            blk_cnt = sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count();
           }
           cur_row_.cells_[i].set_int(blk_cnt);
           break;
@@ -306,7 +333,7 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           int64_t data_checksum = 0;
           if (table->is_memtable()) {
             // memtable has no data checksum, do nothing
-          } else if (table->is_co_sstable()) {
+          } else if (table->is_co_sstable() && !static_cast<const ObCOSSTableV2 *>(table)->is_cgs_empty_co_table()) {
             data_checksum = static_cast<storage::ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_;
           } else if (table->is_sstable()) {
             data_checksum = static_cast<blocksstable::ObSSTable *>(table)->get_data_checksum();
@@ -314,10 +341,51 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(data_checksum);
           break;
         }
-        case TABLE_FLAG:
-          // TODO(yanfeng): only for place holder purpose, need change when auto_split branch merge
-          cur_row_.cells_[i].set_int(0);
+        case TABLE_FLAG: {
+          int32_t flag = 0;
+          if (table->is_sstable()) {
+#ifdef OB_BUILD_SHARED_STORAGE
+            if (!GCTX.is_shared_storage_mode()) {
+              flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag().get_flag();
+            } else {
+              flag = sst_meta_hdl.get_sstable_meta().get_table_shared_flag().get_flag();
+            }
+#else
+            flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag().get_flag();
+#endif
+          }
+          cur_row_.cells_[i].set_int(flag);
           break;
+        }
+        case REC_SCN: {
+          uint64_t v = table->get_rec_scn().get_val_for_inner_table_field();
+          cur_row_.cells_[i].set_int(v);
+          break;
+        }
+        case ROW_COUNT: {
+          int64_t row_count = -1;
+          if (table->is_sstable()) {
+            row_count = static_cast<blocksstable::ObSSTable *>(table)->get_row_count();
+          } else if (table->is_data_memtable()) {
+            row_count = static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
+          }
+          cur_row_.cells_[i].set_int(row_count);
+          break;
+        }
+        case UNCOMMIT_TX_INFO: {
+          if (table->is_sstable()) {
+            const compaction::ObMetaUncommitTxInfo &uncommit_tx_info = sst_meta_hdl.get_sstable_meta().get_uncommit_tx_info();
+            if (uncommit_tx_info.to_string(uncommit_tx_info_buf_, sizeof(uncommit_tx_info_buf_), true/*is_simplified*/) >= 0) {
+              cur_row_.cells_[i].set_varchar(uncommit_tx_info_buf_);
+              cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            } else {
+              cur_row_.cells_[i].set_null();
+            }
+          } else {
+            cur_row_.cells_[i].set_null();
+          }
+          break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));
@@ -331,3 +399,31 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
   return ret;
 }
 
+void ObAllVirtualTableMgr::use_index_scan(INDEX_TYPE index_type) {
+  index_type_ = index_type;
+}
+
+int ObAllVirtualTableMgr::match_in_range(const int key_idx, const common::ObObj &obj, bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges_.count(); ++i) {
+    int cmp_low = 0, cmp_high = 0;
+    common::ObObj &obj_low = key_ranges_.at(i).start_key_.get_obj_ptr()[key_idx];
+    common::ObObj &obj_high = key_ranges_.at(i).end_key_.get_obj_ptr()[key_idx];
+    ObObjType obj_type = obj.get_type();
+    if ((!obj_low.is_min_value() && obj_type != obj_low.get_type()) ||
+        (!obj_high.is_max_value() && obj_type != obj_high.get_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "unexpected value type", K(ret), K(key_idx), K(obj_type), K(obj_low), K(obj_high));
+    } else if (OB_FAIL(obj.compare(obj_low, cmp_low)) ||
+              OB_FAIL(obj.compare(obj_high, cmp_high))) {
+      SERVER_LOG(WARN, "fail to compare", K(ret), K(key_idx), K(obj), K(obj_low), K(obj_high));
+    } else if (cmp_low >= 0 && cmp_high <= 0) {
+      is_match = true;
+      break;
+    }
+  }
+
+  return ret;
+}

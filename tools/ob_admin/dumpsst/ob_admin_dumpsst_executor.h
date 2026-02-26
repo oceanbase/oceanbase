@@ -13,6 +13,7 @@
 #ifndef OB_ADMIN_DUMPSST_EXECUTOR_H_
 #define OB_ADMIN_DUMPSST_EXECUTOR_H_
 #include "../ob_admin_executor.h"
+#include "../ob_admin_common_utils.h"
 #include "lib/container/ob_array.h"
 #include "storage/ob_i_table.h"
 #include "observer/ob_server_struct.h"
@@ -23,31 +24,27 @@
 
 namespace oceanbase
 {
+namespace storage {
+  struct ObHotTabletInfoIndex;
+}
 namespace tools
 {
 
 enum ObAdminDumpsstCmd
 {
-  DUMP_SUPER_BLOCK,
-  DUMP_MACRO_DATA,
-  PRINT_MACRO_BLOCK,
+  DUMP_SUPER_BLOCK = 0,
+  DUMP_MACRO_DATA = 1,
+  PRINT_MACRO_BLOCK = 2,
+  DUMP_TABLET_META = 3,
+  DUMP_TABLE_STORE = 4,
+  DUMP_STORAGE_SCHEMA = 5,
+  DUMP_SSTABLE = 6,
+  DUMP_IS_DELETED_OBJ = 7,
+  DUMP_META_LIST = 8,
+  DUMP_GC_INFO = 9,
+  DUMP_PREWARM_INDEX = 10,
+  DUMP_PREWARM_DATA = 11,
   DUMP_MAX,
-};
-
-struct ObDumpMacroBlockContext final
-{
-public:
-  ObDumpMacroBlockContext()
-    : first_id_(-1), second_id_(-1), micro_id_(-1), tablet_id_(0), scn_(-1)
-  {}
-  ~ObDumpMacroBlockContext() = default;
-  bool is_valid() const { return second_id_ >= 0; }
-  TO_STRING_KV(K(first_id_), K(second_id_), K(micro_id_), K_(tablet_id), K_(scn));
-  uint64_t first_id_;
-  int64_t second_id_;
-  int64_t micro_id_;
-  uint64_t tablet_id_;
-  int64_t scn_;
 };
 
 class ObAdminDumpsstExecutor : public ObAdminExecutor
@@ -63,11 +60,21 @@ private:
   void print_usage();
   void print_macro_meta();
   void print_super_block();
-  int dump_macro_block(const ObDumpMacroBlockContext &context);
-  int dump_single_macro_block(const char* buf, const int64_t size);
-  int dump_shared_macro_block(const char* buf, const int64_t size);
   void dump_sstable();
   void dump_sstable_meta();
+  void dump_macro_block(const ObDumpMacroBlockContext &macro_block_context);
+  void dump_tablet_meta(const ObDumpMacroBlockContext &macro_block_context);
+  void dump_table_store(const ObDumpMacroBlockContext &macro_block_context);
+  void dump_storage_schema(const ObDumpMacroBlockContext &macro_block_context);
+#ifdef OB_BUILD_SHARED_STORAGE
+  void dump_prewarm_index(const ObDumpMacroBlockContext &macro_block_context);
+  void dump_prewarm_data(const ObDumpMacroBlockContext &macro_block_context);
+  void dump_is_deleted_obj(const ObDumpMacroBlockContext &macro_block_context);
+  void dump_meta_list(const ObDumpMacroBlockContext &macro_block_context);
+  void dump_gc_info(const ObDumpMacroBlockContext &macro_block_context);
+  int do_dump_prewarm_index(const char *path, storage::ObHotTabletInfoIndex &index);
+#endif
+
 #ifdef OB_BUILD_TDE_SECURITY
   int init_master_key_getter();
 #endif

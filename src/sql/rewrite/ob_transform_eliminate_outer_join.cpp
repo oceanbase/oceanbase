@@ -13,15 +13,7 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "ob_transform_eliminate_outer_join.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_common_utility.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "common/ob_smart_call.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 
 using namespace oceanbase::common;
@@ -59,6 +51,7 @@ int ObTransformEliminateOuterJoin::eliminate_outer_join(ObIArray<ObParentDMLStmt
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 16> conditions;
   trans_happened = false;
+  ObDMLStmt* parent_stmt = parent_stmts.empty() ? NULL : parent_stmts.at(parent_stmts.count() - 1).stmt_;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be null", K(ret));
@@ -66,7 +59,7 @@ int ObTransformEliminateOuterJoin::eliminate_outer_join(ObIArray<ObParentDMLStmt
     /*do nothing*/
   } else if (OB_FAIL(stmt->get_equal_set_conditions(conditions, true))) {
     LOG_WARN("failed to get equal set conditions", K(ret));
-  } else if (OB_FAIL(get_extra_condition_from_parent(parent_stmts, stmt, conditions))) {
+  } else if (OB_FAIL(ObTransformUtils::get_extra_condition_from_parent(parent_stmt, stmt, conditions))) {
     LOG_WARN("failed to get null reject select", K(ret));
   } else {
     common::ObArray<FromItem> from_item_list;
@@ -472,6 +465,7 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_foreign_primary_join(O
                                                                   right_col_exprs,
                                                                   ctx_->schema_checker_,
                                                                   ctx_->session_info_,
+                                                                  true,
                                                                   is_foreign_primary_join,
                                                                   is_first_table_parent,
                                                                   foreign_key_info))) {
@@ -628,75 +622,6 @@ int ObTransformEliminateOuterJoin::extract_columns_from_join_conditions(const Ob
       LOG_WARN("extract columns failed", K(ret));
     } else {
       /*do nothing*/
-    }
-  }
-  return ret;
-}
-
-int ObTransformEliminateOuterJoin::get_extra_condition_from_parent(ObIArray<ObParentDMLStmt> &parent_stmts,
-                                                                   ObDMLStmt *&stmt,
-                                                                   ObIArray<ObRawExpr *> &conditions)
-{
-  int ret = OB_SUCCESS;
-  bool has_rownum = false;
-  ObDMLStmt *parent_stmt = NULL;
-  TableItem *table_item = NULL;
-  if (parent_stmts.empty()) {
-    // do nothing
-  } else if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(stmt->has_rownum(has_rownum))) {
-    LOG_WARN("failed to check stmt has rownum", K(ret));
-  } else if (stmt->has_limit() ||
-             stmt->has_sequence() ||
-             has_rownum) {
-    // do nothing
-  } else if (stmt->is_select_stmt() &&
-             !static_cast<const ObSelectStmt*>(stmt)->get_window_func_exprs().empty()) {
-    // do nothing
-  } else if (OB_ISNULL(parent_stmt = parent_stmts.at(parent_stmts.count() - 1).stmt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_generated_table_item(*parent_stmt, stmt, table_item))) {
-    LOG_WARN("failed to get table_item", K(ret));
-  } else if (OB_NOT_NULL(table_item)) {
-    ObSEArray<ObColumnRefRawExpr *, 8> table_columns;
-    ObSEArray<ObRawExpr *, 16> all_conditions;
-    bool has_null_reject = false;
-    ObColumnRefRawExpr *col = NULL;
-    ObRawExpr *select_expr = NULL;
-    if (OB_FAIL(parent_stmt->get_column_exprs(table_item->table_id_, table_columns))) {
-      LOG_WARN("failed to get column exprs", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::get_table_related_condition(*parent_stmt,
-                                                                     table_item,
-                                                                     all_conditions))) {
-      LOG_WARN("failed to get table related condition", K(ret));
-    } else if (OB_LIKELY(stmt->is_select_stmt())) {
-      ObSelectStmt *child_stmt = static_cast<ObSelectStmt *>(stmt);
-      for (int64_t i = 0; OB_SUCC(ret) && i < table_columns.count(); ++i) {
-        if (OB_ISNULL(col = table_columns.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_UNLIKELY(col->get_column_id() < 16 ||
-                   col->get_column_id() - 16 >= child_stmt->get_select_item_size())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected view column", K(ret), K(*col));
-        } else if (OB_ISNULL(select_expr = child_stmt->get_select_item(col->get_column_id() - 16).expr_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (select_expr->has_flag(CNT_AGG) ||
-                   select_expr->has_flag(CNT_WINDOW_FUNC) ||
-                   select_expr->has_flag(CNT_SUB_QUERY)) {
-          // do nothing
-        } else if (OB_FAIL(ObTransformUtils::has_null_reject_condition(all_conditions,
-                                                                       col,
-                                                                       has_null_reject))) {
-          LOG_WARN("faield to check has null reject condition", K(ret));
-        } else if (has_null_reject && OB_FAIL(conditions.push_back(select_expr))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        }
-      }
     }
   }
   return ret;

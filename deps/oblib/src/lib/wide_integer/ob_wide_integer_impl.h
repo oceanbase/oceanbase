@@ -987,9 +987,7 @@ struct ObWideInteger<Bits, Signed>::_impl
   }
 };
 
-template <typename Allocator>
-int from_number(const number::ObNumber &nmb, Allocator &allocator, const int16_t scale,
-                ObDecimalInt *&decint, int32_t &int_bytes)
+inline int from_number_to_int512(const number::ObNumber &nmb, const int16_t scale, int512_t &res)
 {
   static const int64_t pows[5] = {
     10,
@@ -999,21 +997,14 @@ int from_number(const number::ObNumber &nmb, Allocator &allocator, const int16_t
     10000000000000000,
   };
   int ret = OB_SUCCESS;
-  int512_t res = 0;
+  res = 0;
   bool is_neg = nmb.is_negative();
   int64_t in_scale = nmb.get_scale();
   uint32_t nmb_base = number::ObNumber::BASE;
   uint32_t *digits = nmb.get_digits();
   uint32_t last_digit = 0, last_base = nmb_base;
-  void *cp_data = nullptr;
   if (nmb.is_zero()) {
-    if (OB_ISNULL(decint = (ObDecimalInt *)allocator.alloc(sizeof(int32_t)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      COMMON_LOG(WARN, "allocate memory failed", K(ret));
-    } else {
-      *(reinterpret_cast<int32_t *>(decint)) = 0;
-      int_bytes = sizeof(int32_t);
-    }
+    // do nothing
   } else {
     if (OB_ISNULL(digits)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1074,27 +1065,69 @@ int from_number(const number::ObNumber &nmb, Allocator &allocator, const int16_t
         }
       }
       if (is_neg) { res = -res; }
-
-      ObDecimalIntBuilder bld;
-      if (res <= wide::Limits<int32_t>::max() && res >= wide::Limits<int32_t>::min()) {
-        int_bytes = sizeof(int32_t);
-      } else if (res <= wide::Limits<int64_t>::max() && res >= wide::Limits<int64_t>::min()) {
-        int_bytes = sizeof(int64_t);
-      } else if (res <= wide::Limits<int128_t>::max() && res >= wide::Limits<int128_t>::min()) {
-        int_bytes = sizeof(int128_t);
-      } else if (res <= wide::Limits<int256_t>::max() && res >= wide::Limits<int256_t>::min()) {
-        int_bytes = sizeof(int256_t);
-      } else {
-        int_bytes = sizeof(int512_t);
-      }
-      if (OB_ISNULL(cp_data = allocator.alloc(int_bytes))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        COMMON_LOG(WARN, "allocate memory failed", K(ret));
-      } else {
-        MEMCPY(cp_data, res.items_, int_bytes);
-        decint = reinterpret_cast<ObDecimalInt *>(cp_data);
-      }
     }
+  }
+  return ret;
+}
+
+template <typename Allocator>
+int from_number(const number::ObNumber &nmb, Allocator &allocator, const int16_t scale,
+                ObDecimalInt *&decint, int32_t &int_bytes)
+{
+  int ret = OB_SUCCESS;
+  int512_t res = 0;
+  void *cp_data = nullptr;
+  if (OB_FAIL(from_number_to_int512(nmb, scale, res))) {
+    COMMON_LOG(WARN, "from number to int512_t failed", K(ret));
+  } else if (nmb.is_zero()) {
+    if (OB_ISNULL(decint = (ObDecimalInt *)allocator.alloc(sizeof(int32_t)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(WARN, "allocate memory failed", K(ret));
+    } else {
+      *(reinterpret_cast<int32_t *>(decint)) = 0;
+      int_bytes = sizeof(int32_t);
+    }
+  } else {
+    if (res <= wide::Limits<int32_t>::max() && res >= wide::Limits<int32_t>::min()) {
+      int_bytes = sizeof(int32_t);
+    } else if (res <= wide::Limits<int64_t>::max() && res >= wide::Limits<int64_t>::min()) {
+      int_bytes = sizeof(int64_t);
+    } else if (res <= wide::Limits<int128_t>::max() && res >= wide::Limits<int128_t>::min()) {
+      int_bytes = sizeof(int128_t);
+    } else if (res <= wide::Limits<int256_t>::max() && res >= wide::Limits<int256_t>::min()) {
+      int_bytes = sizeof(int256_t);
+    } else {
+      int_bytes = sizeof(int512_t);
+    }
+    if (OB_ISNULL(cp_data = allocator.alloc(int_bytes))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(WARN, "allocate memory failed", K(ret));
+    } else {
+      MEMCPY(cp_data, res.items_, int_bytes);
+      decint = reinterpret_cast<ObDecimalInt *>(cp_data);
+    }
+  }
+  return ret;
+}
+
+template <typename Allocator>
+int from_number_to_decimal_fixed_length(const number::ObNumber &nmb,
+                                        Allocator &allocator,
+                                        const int16_t scale,
+                                        const int32_t int_bytes,
+                                        ObDecimalInt *&decint)
+{
+  int ret = OB_SUCCESS;
+  int512_t res = 0;
+  void *cp_data = nullptr;
+  if (OB_FAIL(from_number_to_int512(nmb, scale, res))) {
+    COMMON_LOG(WARN, "from number to int512_t failed", K(ret));
+  } else if (OB_ISNULL(cp_data = allocator.alloc(int_bytes))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    COMMON_LOG(WARN, "allocate memory failed", K(ret));
+  } else {
+    MEMCPY(cp_data, res.items_, int_bytes);
+    decint = reinterpret_cast<ObDecimalInt *>(cp_data);
   }
   return ret;
 }

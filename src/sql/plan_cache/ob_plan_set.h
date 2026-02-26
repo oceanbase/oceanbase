@@ -102,6 +102,15 @@ struct ObPCUserVarMeta
 {
 public:
   ObPCUserVarMeta(): precision_(-1), obj_meta_() {}
+  ObPCUserVarMeta(const ObPrecision precision, const ObObjType type,
+                  const ObCollationLevel coll_level,
+                  const ObCollationType coll_type):
+  precision_(precision), obj_meta_()
+  {
+    obj_meta_.set_type(type);
+    obj_meta_.set_collation_level(coll_level);
+    obj_meta_.set_collation_type(coll_type);
+  }
   ObPCUserVarMeta(const ObSessionVariable &sess_var)
   {
     obj_meta_ = sess_var.meta_;
@@ -131,6 +140,10 @@ public:
   {
     return !this->operator==(other);
   }
+  inline void parse_from_variable(const ObSessionVariable &sess_var)
+  {
+    *this = ObPCUserVarMeta(sess_var);
+  }
   TO_STRING_KV(K_(precision), K_(obj_meta));
 
 private:
@@ -143,6 +156,7 @@ class ObPlanSet : public common::ObDLinkBase<ObPlanSet>
 {
   friend struct ObPhyLocationGetter;
 public:
+  static const ObPCUserVarMeta UNKNOWN_VAR_DEFAULT_META;
   explicit ObPlanSet(ObPlanSetType type)
       : alloc_(common::ObNewModIds::OB_SQL_PLAN_CACHE),
         plan_cache_value_(NULL),
@@ -155,7 +169,6 @@ public:
         outline_param_idx_(common::OB_INVALID_INDEX),
         related_user_var_names_(alloc_),
         related_user_sess_var_metas_(alloc_),
-        all_possible_const_param_constraints_(alloc_),
         all_plan_const_param_constraints_(alloc_),
         all_pre_calc_constraints_(),
         all_priv_constraints_(),
@@ -164,9 +177,9 @@ public:
         pre_cal_expr_handler_(NULL),
         can_skip_params_match_(false),
         can_delay_init_datum_store_(false),
-        res_map_rule_id_(common::OB_INVALID_ID),
-        res_map_rule_param_idx_(common::OB_INVALID_INDEX),
-        is_cli_return_rowid_(false)
+        resource_map_rule_(),
+        is_cli_return_rowid_(false),
+        params_constraint_(alloc_)
   {}
   virtual ~ObPlanSet();
 
@@ -180,6 +193,7 @@ public:
                         common::ObWrapperAllocator, false> &infos,
                         int64_t outline_param_idx,
                         const ObPlanCacheCtx &pc_ctx,
+                        const bool need_match_cons,
                         bool &is_same);
   bool can_skip_params_match();
   bool can_delay_init_datum_store();
@@ -225,6 +239,8 @@ public:
 
   bool get_can_skip_params_match() { return can_skip_params_match_; }
   bool get_can_delay_init_datum_store() { return can_delay_init_datum_store_; }
+  int match_and_merge_plan_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched);
+  virtual bool has_any_plan() = 0;
 
 private:
   bool is_match_outline_param(int64_t param_idx)
@@ -236,8 +252,7 @@ private:
    * @brief set const param constraints
    *
    */
-  int set_const_param_constraint(common::ObIArray<ObPCConstParamInfo> &const_param_constraint,
-                                 const bool is_all_constraint);
+  int set_const_param_constraint(common::ObIArray<ObPCConstParamInfo> &const_param_constraint);
 
   int set_equal_param_constraint(common::ObIArray<ObPCParamEqualInfo> &equal_param_constraint);
 
@@ -245,12 +260,14 @@ private:
 
   int set_priv_constraint(common::ObIArray<ObPCPrivInfo> &priv_constraint);
 
+  int deep_copy_pre_calc_constraint(ObIAllocator &allocator,
+                                    ObPreCalcExprConstraint* src,
+                                    ObPreCalcExprConstraint*& dst);
+
   int match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched);
   /**
    * @brief Match const param constraint.
    * If all_plan_const_param_constraints_ is not empty, check wether the constraints is mached and return the result.
-   * If all_plan_const_param_constraints_ is empty, but any of the constraints in all_possible_const_param_constraints_ is
-   * matched, the is_matched is false (new plan shoule be generated).
    *
    * @param params Const Params about to match
    * @retval is_matched Matching result
@@ -267,6 +284,7 @@ private:
                                          bool &is_same);
 
   bool match_decint_precision(const ObParamInfo &param_info, ObPrecision other_prec) const;
+  int get_variable_meta(const ObSQLSessionInfo *session_info, const ObString &var_name, ObPCUserVarMeta &meta);
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanSet);
   friend class ::test::TestPlanSet_basic_Test;
@@ -284,7 +302,6 @@ protected:
   // related user session var names
   common::ObFixedArray<common::ObString, common::ObIAllocator> related_user_var_names_;
   UserSessionVarMetaArray related_user_sess_var_metas_;
-  ConstParamConstraint all_possible_const_param_constraints_;
   ConstParamConstraint all_plan_const_param_constraints_;
   EqualParamConstraint all_equal_param_constraints_;
   PreCalcExprConstraint all_pre_calc_constraints_;
@@ -299,10 +316,10 @@ protected:
   bool can_delay_init_datum_store_;
 
 public:
-  //variables for resource map rule
-  uint64_t res_map_rule_id_;
-  int64_t res_map_rule_param_idx_;
+  //variable for resource map rule
+  ObPCResourceMapRule resource_map_rule_;
   bool is_cli_return_rowid_;
+  common::ObFixedArray<ObPCParamConstraint *, common::ObIAllocator> params_constraint_;
 };
 
 class ObSqlPlanSet : public ObPlanSet
@@ -310,23 +327,17 @@ class ObSqlPlanSet : public ObPlanSet
 public:
   ObSqlPlanSet()
     : ObPlanSet(PST_SQL_CRSR),
-      is_all_non_partition_(true),
-      table_locations_(alloc_),
       array_binding_plan_(),
-      local_plan_(NULL),
+      local_plans_(),
       remote_plan_(NULL),
       direct_local_plan_(NULL),
       dist_plans_(),
-      need_try_plan_(0),
       has_duplicate_table_(false),
       //has_array_binding_(false),
       is_contain_virtual_table_(false),
-#ifdef OB_BUILD_SPM
       enable_inner_part_parallel_exec_(false),
-      is_spm_closed_(false)
-#else
-      enable_inner_part_parallel_exec_(false)
-#endif
+      is_single_table_(false),
+      is_contain_inner_table_(false)
       {
       }
 
@@ -357,9 +368,15 @@ public:
   inline bool has_duplicate_table() const { return has_duplicate_table_; }
   //inline bool has_array_binding() const { return has_array_binding_; }
   inline bool enable_inner_part_parallel() const { return enable_inner_part_parallel_exec_; }
+  int get_plan_type(const ObIArray<ObTableLocation> &table_locations,
+                    const bool is_contain_uncertain_op,
+                    ObPlanCacheCtx &pc_ctx,
+                    ObPhyPlanType &plan_type);
 #ifdef OB_BUILD_SPM
   int add_evolution_plan_for_spm(ObPhysicalPlan *plan, ObPlanCacheCtx &ctx);
   int get_evolving_evolution_task(EvolutionPlanList &evo_task_list);
+  int alloc_evolution_records(ObEvolutionRecords *&evolution_records);
+  void free_evolution_records(ObEvolutionRecords *&evolution_records);
 #endif
 private:
   enum
@@ -419,11 +436,11 @@ private:
   int set_concurrent_degree(int64_t outline_param_idx,
                             ObPhysicalPlan &plan);
 
-  int get_plan_type(const ObIArray<ObTableLocation> &table_locations,
-                    const bool is_contain_uncertain_op,
-                    ObPlanCacheCtx &pc_ctx,
-                    ObIArray<ObCandiTableLoc> &candi_table_locs,
-                    ObPhyPlanType &plan_type);
+  ObPhysicalPlan* get_local_plan(ObPlanCacheCtx &pc_ctx);
+  bool is_exist_local_plan();
+  int add_local_plan(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan &plan);
+  void remove_all_local_plan();
+  int64_t get_local_plan_mem_size();
 
   static int is_partition_in_same_server(const ObIArray<ObCandiTableLoc> &candi_table_locs,
                                          bool &is_same,
@@ -434,12 +451,11 @@ private:
                                 ObIArray<ParamStore *> &expanded_params);
 
   bool is_local_plan_opt_allowed(int last_retry_err);
+  virtual bool has_any_plan();
 private:
-  bool is_all_non_partition_; //判断该plan对应的表是否均为非分区表
-  TableLocationFixedArray table_locations_;
   //used for array binding, only local plan
   ObPhysicalPlan *array_binding_plan_;
-  ObPhysicalPlan *local_plan_;
+  common::ObSEArray<ObPhysicalPlan *, 4> local_plans_;
 #ifdef OB_BUILD_SPM
   ObEvolutionPlan local_evolution_plan_;
   ObEvolutionPlan dist_evolution_plan_;
@@ -449,10 +465,6 @@ private:
   ObPhysicalPlan *direct_local_plan_;
   ObDistPlans dist_plans_;
 
-  // 用于处理or expansion、晚期物化，全局索引等特殊场景
-  // 以上的特殊场景的共同特点是plan_set缓存的table location和计划内的table location不一致，
-  // 必须从计划内拿table location去计算物理分区地址
-  int64_t need_try_plan_;
   //计划中是否含有复制表
   bool has_duplicate_table_;
   ObSEArray<int64_t, 4> part_param_idxs_;
@@ -460,9 +472,8 @@ private:
   bool is_contain_virtual_table_;
   // px并行度是否大于1
   bool enable_inner_part_parallel_exec_;
-#ifdef OB_BUILD_SPM
-  bool is_spm_closed_;
-#endif
+  bool is_single_table_;
+  bool is_contain_inner_table_;
 };
 
 inline ObPlanSetType ObPlanSet::get_plan_set_type_by_cache_obj_type(ObLibCacheNameSpace ns)

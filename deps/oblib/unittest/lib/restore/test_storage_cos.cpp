@@ -11,10 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 #include "lib/restore/ob_storage.h"
-#include "lib/restore/ob_storage_cos_base.h"
-#include "lib/allocator/page_arena.h"
 #include "test_storage_cos.h"
 
 using namespace oceanbase::common;
@@ -121,7 +118,7 @@ TEST_F(TestStorageCos, test_append)
     // operate before open
     char tmp_buf[10] = {0};
     ASSERT_FALSE(appender.is_opened());
-    ASSERT_EQ(OB_NOT_INIT, appender.write(tmp_buf, sizeof(tmp_buf)));
+    ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.close());
@@ -129,20 +126,20 @@ TEST_F(TestStorageCos, test_append)
     // wrong uri
     uri[0] = '\0';
     ASSERT_EQ(OB_INVALID_ARGUMENT, appender.open(uri, &cos_base));
-    ASSERT_EQ(OB_NOT_INIT, appender.write(tmp_buf, sizeof(tmp_buf)));
+    ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.close());
 
     uri[0] = 'a';
     uri[1] = '\0';
     ASSERT_EQ(OB_INVALID_BACKUP_DEST, appender.open(uri, &cos_base));
-    ASSERT_EQ(OB_NOT_INIT, appender.write(tmp_buf, sizeof(tmp_buf)));
+    ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.close());
 
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_append_file_////", dir_uri));
     ASSERT_EQ(OB_INVALID_ARGUMENT, appender.open(uri, &cos_base));
-    ASSERT_EQ(OB_NOT_INIT, appender.write(tmp_buf, sizeof(tmp_buf)));
+    ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.close());
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_append_file", dir_uri));
@@ -151,7 +148,7 @@ TEST_F(TestStorageCos, test_append)
 
     // invalid storage info
     ASSERT_EQ(OB_INVALID_ARGUMENT, appender.open(uri, NULL));
-    ASSERT_EQ(OB_NOT_INIT, appender.write(tmp_buf, sizeof(tmp_buf)));
+    ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.close());
 
@@ -168,9 +165,9 @@ TEST_F(TestStorageCos, test_append)
     // second append
     const char second_write[] = "4567";
     // repeatable_pwrite returned err code
-    ASSERT_EQ(OB_BACKUP_PWRITE_CONTENT_NOT_MATCH,
+    ASSERT_EQ(OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH,
         appender.pwrite(second_write, strlen(second_write), strlen(first_write) - 1));
-    ASSERT_EQ(OB_BACKUP_PWRITE_OFFSET_NOT_MATCH,
+    ASSERT_EQ(OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH,
         appender.pwrite(second_write, strlen(second_write) - 1, strlen(first_write) + 1));
     ASSERT_EQ(OB_SUCCESS, appender.pwrite(second_write, strlen(second_write), strlen(first_write)));
     ASSERT_EQ(strlen(first_write) + strlen(second_write), appender.get_length());
@@ -204,7 +201,7 @@ TEST_F(TestStorageCos, test_append)
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
 
     // operate after close
-    ASSERT_EQ(OB_NOT_INIT, appender.write(tmp_buf, sizeof(tmp_buf)));
+    ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.pwrite(tmp_buf, sizeof(tmp_buf), 0));
     ASSERT_EQ(OB_NOT_INIT, appender.close());
 
@@ -320,7 +317,7 @@ TEST_F(TestStorageCos, test_basic_rw)
       // read not exist object
       const int64_t ts = ObTimeUtility::current_time();
       ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%snot_exist_%ld", dir_uri, ts));
-      ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, reader.open(uri, &cos_base));
+      ASSERT_EQ(OB_OBJECT_NOT_EXIST, reader.open(uri, &cos_base));
       ASSERT_EQ(OB_NOT_INIT, reader.close());
 
       // open after fail
@@ -631,7 +628,7 @@ TEST_F(TestStorageCos, test_util_is_tagging)
     ASSERT_FALSE(is_tagging);
 
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
-    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     tmp_cos_base.reset();
     util.close();
 
@@ -666,7 +663,7 @@ TEST_F(TestStorageCos, test_util_is_tagging)
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_cos_base));
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
-    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     util.close();
   }
 }
@@ -685,7 +682,7 @@ TEST_F(TestStorageCos, test_multipartupload)
     memset(content, 'a', content_size);
 
     // operate before open
-    ASSERT_EQ(OB_COS_ERROR, multi_upload.write(content, content_size));
+    ASSERT_EQ(OB_OBJECT_STORAGE_IO_ERROR, multi_upload.write(content, content_size));
 
     const int64_t ts = ObTimeUtility::current_time();
     ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",

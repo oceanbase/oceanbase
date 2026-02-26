@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/ob_mview_refresh_stats_purge.h"
-#include "share/schema/ob_schema_utils.h"
 
 namespace oceanbase
 {

@@ -24,13 +24,20 @@
 namespace oceanbase
 {
 
+namespace compaction
+{
+  class ObTabletIDObj;
+}
+
 namespace blocksstable
 {
 struct ObSSTableMergeRes;
+class ObMacroMetaTempStore;
 }
 
 namespace logservice
 {
+class ObILogHandler;
 class ObLogHandler;
 }
 
@@ -38,30 +45,26 @@ class ObLogHandler;
 namespace storage
 {
 class ObLSHandle;
+
 class ObDDLNeedStopWriteChecker
 {
 public:
-  virtual bool check_need_stop_write() = 0;
-};
-
-class ObDDLFullNeedStopWriteChecker : public ObDDLNeedStopWriteChecker
-{
+  ObDDLNeedStopWriteChecker();
+  ~ObDDLNeedStopWriteChecker() {}
+  int init(const uint64_t tenant_id,
+           const int64_t task_id,
+           const ObDirectLoadType direct_load_type,
+           const ObTabletHandle &tablet_handle);
+  int check_status(const int64_t loop_cnt, bool &is_need_stop_write);
+  bool check_need_stop_write();
 public:
-  ObDDLFullNeedStopWriteChecker(ObDDLKvMgrHandle &ddl_kv_mgr_handle) : ddl_kv_mgr_handle_(ddl_kv_mgr_handle) {}
-  virtual ~ObDDLFullNeedStopWriteChecker() {}
-  virtual bool check_need_stop_write() override;
-public:
-  ObDDLKvMgrHandle &ddl_kv_mgr_handle_;
-};
-
-class ObDDLIncNeedStopWriteChecker : public ObDDLNeedStopWriteChecker
-{
-public:
-  ObDDLIncNeedStopWriteChecker(ObTablet &tablet) : tablet_(tablet) {}
-  virtual ~ObDDLIncNeedStopWriteChecker() {}
-  virtual bool check_need_stop_write() override;
-public:
-  ObTablet &tablet_;
+  uint64_t tenant_id_;
+  int64_t task_id_;
+  ObDirectLoadType direct_load_type_;
+  ObTabletHandle tablet_handle_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
+  ObProtectedMemtableMgrHandle *memtable_mgr_handle_;
+  bool is_inited_;
 };
 
 // control the write speed of ddl clog for 4.0 . More detailly,
@@ -124,7 +127,7 @@ public:
                       const int64_t task_id,
                       ObDDLNeedStopWriteChecker &checker,
                       int64_t &real_sleep_us);
-
+  ObIAllocator &get_allocator() { return allocator_; }
 private:
   struct SpeedHandleKey {
     public:
@@ -203,7 +206,7 @@ private:
   static const int64_t MAP_BUCKET_NUM  = 1024;
   bool is_inited_;
   common::hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedItem*> speed_handle_map_;
-  common::ObArenaAllocator allocator_;
+  common::ObConcurrentFIFOAllocator allocator_;
   common::ObBucketLock bucket_lock_;
   RefreshSpeedHandleTask refreshTimerTask_;
 };
@@ -218,6 +221,7 @@ public:
   int wait(const int64_t timeout = DDL_REDO_LOG_TIMEOUT);
   void reset();
   bool is_valid() const { return nullptr != cb_  && scn_.is_valid_and_not_min(); }
+  TO_STRING_KV(KPC_(cb), K_(scn));
 public:
   ObDDLMacroBlockClogCb *cb_;
   share::SCN scn_;
@@ -235,6 +239,18 @@ public:
   ObDDLCommitClogCb *cb_;
   share::SCN commit_scn_;
 };
+#ifdef OB_BUILD_SHARED_STORAGE
+class ObDDLFinishLogHandle final
+{
+public:
+  ObDDLFinishLogHandle();
+  ~ObDDLFinishLogHandle();
+  int wait(const int64_t timeout = ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT);
+  void reset();
+public:
+  ObDDLFinishClogCb *cb_;
+};
+#endif
 
 class ObDDLRedoLock final
 {
@@ -298,6 +314,12 @@ public:
       share::SCN &commit_scn,
       bool &is_remote_write,
       uint32_t &lock_tid);
+  template <typename T>
+  static int write_auto_split_log(const share::ObLSID &ls_id,
+                                  const ObDDLClogType &clog_type,
+                                  const logservice::ObReplayBarrierType &replay_barrier_type,
+                                  const T &log,
+                                  SCN &scn);
   int write_commit_log_with_retry(
       const bool allow_remote_write,
       const ObITable::TableKey &table_key,
@@ -309,6 +331,36 @@ public:
       uint32_t &lock_tid);
   static const int64_t DEFAULT_RETRY_TIMEOUT_US = 60L * 1000L * 1000L; // 1min
   static bool need_retry(int ret_code);
+  static int  write_block_to_disk(const storage::ObDDLMacroBlockRedoInfo &redo_info,
+                                  const share::ObLSID &ls_id,
+                                  blocksstable::ObMacroBlockHandle &macro_handle,
+                                  blocksstable::MacroBlockId &block_id);
+  static int wait_gts_elapse_with_timeout(const uint64_t tenant_id,
+                                          const share::SCN &scn,
+                                          const int64_t timeout_us);
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  const ObTabletID &get_tablet_id() const { return tablet_id_; }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int write_gc_flag(const share::ObLSID &ls_id,
+                           ObTabletHandle &tablet_handle,
+                           const ObITable::TableKey &table_key,
+                           const int64_t parallel_cnt,
+                           const int64_t cg_cnt);
+  int write_finish_log_with_retry(
+      const bool allow_remote_write,
+      const ObDDLFinishLog &log,
+      bool &is_remote_write);
+
+  int write_finish_log(
+      const bool allow_remote_write,
+      const ObDDLFinishLog &log,
+      bool &is_remote_write);
+  int wait_finish_log(
+      const share::ObLSID &ls_id,
+      const ObITable::TableKey &table_key,
+      const uint64_t data_format_version);
+#endif
 private:
   int switch_to_remote_write();
   int local_write_ddl_start_log(
@@ -349,15 +401,70 @@ private:
   int remote_write_ddl_macro_redo(
       const int64_t task_id,
       const storage::ObDDLMacroBlockRedoInfo &redo_info);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int local_write_ddl_finish_log(
+      const ObDDLFinishLog &log,
+      const share::ObLSID &ls_id,
+      logservice::ObILogHandler *log_handler,
+      ObDDLFinishLogHandle &handle);
+
+  int retry_remote_write_finish_log(
+      const obrpc::ObRpcRemoteWriteDDLFinishLogArg &arg);
+
+  int remote_write_ddl_finish_log(
+      const obrpc::ObRpcRemoteWriteDDLFinishLogArg &arg);
+#endif
 private:
   bool is_inited_;
   bool remote_write_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
-  ObDDLRedoLogHandle ddl_redo_handle_;
+  ObSEArray<ObDDLRedoLogHandle, 1> ddl_redo_handle_array_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObDDLFinishLogHandle ddl_finish_handle_;
+#endif
   ObAddr leader_addr_;
   share::ObLSID leader_ls_id_;
   char *buffer_;
+  ObArenaAllocator allocator_;
+  ObTablet shared_tablet_;
+};
+
+struct ObDDLRedoLogWriterCallbackInitParam
+{
+  ObDDLRedoLogWriterCallbackInitParam();
+  ~ObDDLRedoLogWriterCallbackInitParam();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(direct_load_type), K_(block_type),
+               K_(table_key), K_(start_scn), K_(task_id), K_(data_format_version),
+               K_(parallel_cnt), K_(cg_cnt), K_(with_cs_replica), K_(need_delay),
+               K_(need_submit_io), K_(row_id_offset), K_(merge_slice_idx),
+               KP_(macro_meta_store), KP_(write_stat), KP_(tx_desc), K_(trans_id), K_(seq_no));
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  storage::ObDirectLoadType direct_load_type_;
+  storage::ObDDLMacroBlockType block_type_;
+  ObITable::TableKey table_key_;
+  share::SCN start_scn_;
+  int64_t task_id_;
+  uint64_t data_format_version_;
+  int64_t parallel_cnt_;
+  int64_t cg_cnt_;
+  bool with_cs_replica_;
+  bool need_delay_;
+  bool need_submit_io_;
+  // if has one macro block with 100 rows before, this macro block's ddl_start_row_offset will be 100.
+  // if current macro block finish with 50 rows, current macro block's end_row_offset will be 149.
+  // end_row_offset = ddl_start_row_offset + curr_row_count - 1.
+  int64_t row_id_offset_;
+  int64_t merge_slice_idx_;
+  blocksstable::ObMacroMetaTempStore *macro_meta_store_;
+  ObDDLWriteStat *write_stat_;
+  transaction::ObTxDesc *tx_desc_;
+  transaction::ObTransID trans_id_;
+  transaction::ObTxSEQ seq_no_;
+  bool is_inc_major_log_;
 };
 
 // write macro redo for data block, need to set lsn on ObDDLRedoLogWriter when commit.
@@ -366,45 +473,64 @@ class ObDDLRedoLogWriterCallback : public blocksstable::ObIMacroBlockFlushCallba
 public:
   ObDDLRedoLogWriterCallback();
   virtual ~ObDDLRedoLogWriterCallback();
-  int init(
-      const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id,
-      const storage::ObDDLMacroBlockType block_type,
-      const ObITable::TableKey &table_key,
-      const int64_t task_id,
-      const share::SCN &start_scn,
-      const uint64_t data_format_version,
-      const storage::ObDirectLoadType direct_load_type,
-      const int64_t row_id_offset = -1);
+  int init(ObDDLRedoLogWriterCallbackInitParam &init_param);
   void reset();
   int write(
-      const blocksstable::ObMacroBlockHandle &macro_handle,
+      const blocksstable::ObStorageObjectHandle &macro_handle,
       const blocksstable::ObLogicMacroBlockId &logic_id,
       char *buf,
       const int64_t buf_len,
-      const int64_t row_count);
+      const int64_t row_count) override;
   int wait();
-  virtual int64_t get_ddl_start_row_offset() const override { return row_id_offset_; }
+  virtual int64_t get_ddl_start_row_offset() const override { return param_.row_id_offset_; }
+  void set_merge_slice_idx(const int64_t slice_idx) { param_.merge_slice_idx_ = slice_idx; }
+  OB_INLINE blocksstable::ObMacroMetaTempStore *get_macro_meta_store() { return param_.macro_meta_store_; }
 private:
   bool is_column_group_info_valid() const;
-  int retry(const int64_t timeout_us);
+  int inner_write(const ObDDLMacroBlockRedoInfo &redo_info);
+  int write_redo_info_array();
+  int retry(const int64_t timeout_us,
+            const ObDDLMacroBlockRedoInfo &redo_info,
+            const blocksstable::MacroBlockId &macro_block_id);
 private:
   bool is_inited_;
-  storage::ObDDLMacroBlockRedoInfo redo_info_;
-  storage::ObDDLMacroBlockType block_type_;
-  ObITable::TableKey table_key_;
-  blocksstable::MacroBlockId macro_block_id_;
+  ObDDLRedoLogWriterCallbackInitParam param_;
   ObDDLRedoLogWriter ddl_writer_;
-  int64_t task_id_;
-  share::SCN start_scn_;
-  uint64_t data_format_version_;
-  storage::ObDirectLoadType direct_load_type_;
-  // if has one macro block with 100 rows before, this macro block's ddl_start_row_offset will be 100.
-  // if current macro block finish with 50 rows, current macro block's end_row_offset will be 149.
-  // end_row_offset = ddl_start_row_offset + curr_row_count - 1.
-  int64_t row_id_offset_;
+  ObDDLKvMgrHandle kv_mgr_handle_;
+  ObArenaAllocator allocator_;
+  ObSEArray<ObDDLMacroBlockRedoInfo, 2> redo_info_array_;
 };
 
+#ifdef OB_BUILD_SHARED_STORAGE
+class ObDDLFinishLogWriterCallback : public blocksstable::ObIMacroBlockFlushCallback
+{
+public:
+  ObDDLFinishLogWriterCallback();
+  virtual ~ObDDLFinishLogWriterCallback();
+  int init(const share::ObLSID &ls_id,
+           const ObITable::TableKey &table_key,
+           const int64_t task_id,
+           const uint64_t data_format_version,
+           ObDDLRedoLogWriter *ddl_writer);
+  void reset();
+  int write(const blocksstable::ObStorageObjectHandle &macro_handle,
+            const blocksstable::ObLogicMacroBlockId &logic_id,
+            char *buf,
+            const int64_t buf_len,
+            const int64_t row_count) override;
+  int do_write_io() override;
+  int wait();
+private:
+  bool is_inited_;
+  share::ObLSID ls_id_;
+  ObITable::TableKey table_key_;
+  ObDDLRedoLogWriter *ddl_writer_;
+  int64_t task_id_;
+  uint64_t data_format_version_;
+  ObArenaAllocator arena_allocator_;
+  ObDDLFinishLog finish_log_;
+};
+#endif
 }  // end namespace storage
 }  // end namespace oceanbase
 

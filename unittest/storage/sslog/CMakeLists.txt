@@ -1,0 +1,5 @@
+if(OB_BUILD_CLOSE_MODULES)
+  storage_unittest(test_sslog_notify_queue test_sslog_notify_queue.cpp)
+  storage_unittest(test_sslog_kv_logical_row test_sslog_kv_logical_row.cpp)
+  storage_unittest(test_sslog_kv_proxy test_sslog_kv_proxy.cpp)
+endif()

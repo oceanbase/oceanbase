@@ -14,13 +14,8 @@
 
 #include "share/ob_service_epoch_proxy.h"
 
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/ob_force_print_log.h"
-#include "logservice/palf/log_define.h"
+#include "rootserver/ob_root_utils.h"
+#include "deps/oblib/src/lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -34,7 +29,8 @@ int ObServiceEpochProxy::init_service_epoch(
     const int64_t freeze_service_epoch,
     const int64_t arbitration_service_epoch,
     const int64_t server_zone_op_service_epoch,
-    const int64_t heartbeat_service_epoch)
+    const int64_t heartbeat_service_epoch,
+    const int64_t service_name_epoch)
 {
   int ret = OB_SUCCESS;
   if (is_user_tenant(tenant_id)) {
@@ -94,6 +90,12 @@ int ObServiceEpochProxy::init_service_epoch(
         ARBITRATION_SERVICE_EPOCH,
         arbitration_service_epoch))) {
       LOG_WARN("fail to init arb service epoch", KR(ret), K(user_tenant_id), K(arbitration_service_epoch));
+    } else if (OB_FAIL(ObServiceEpochProxy::insert_service_epoch(
+        sql_proxy,
+        user_tenant_id,
+        SERVICE_NAME_EPOCH,
+        service_name_epoch))) {
+      LOG_WARN("fail to init service name epoch", KR(ret), K(user_tenant_id), K(service_name_epoch));
     } else {}
   } else {}
   return ret;
@@ -215,6 +217,7 @@ int ObServiceEpochProxy::inner_get_service_epoch_(
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     ObSqlString sql;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RS_GET_SERVICE_EPOCH);
       ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE tenant_id = '%lu' AND name = '%s' %s", 
           OB_ALL_SERVICE_EPOCH_TNAME, tenant_id, name, (is_for_update ? "FOR UPDATE" : "")))) {
@@ -275,6 +278,7 @@ int ObServiceEpochProxy::check_and_update_service_epoch(
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
       || palf::INVALID_PROPOSAL_ID == service_epoch)
       || OB_ISNULL(name)) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(service_epoch), KP(name));
   } else if (OB_FAIL(ObServiceEpochProxy::select_service_epoch_for_update(
       trans,
@@ -306,6 +310,26 @@ int ObServiceEpochProxy::check_and_update_service_epoch(
   } else {}
   FLOG_INFO("check and update service epoch", KR(ret), K(tenant_id), K(name),
       K(service_epoch), K(persistent_service_epoch));
+  return ret;
+}
+
+int ObServiceEpochProxy::check_and_update_server_zone_op_service_epoch(ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  int64_t proposal_id = palf::INVALID_PROPOSAL_ID;
+  ObRole role;
+  if (OB_FAIL(rootserver::ObRootUtils::get_proposal_id_from_sys_ls(proposal_id, role))) {
+    LOG_WARN("fail to get proposal id from sys ls", KR(ret));
+  } else if (ObRole::LEADER != role) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("not leader ls", KR(ret), K(proposal_id), K(role));
+  } else if (palf::INVALID_PROPOSAL_ID == proposal_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid proposal id", KR(ret), K(proposal_id));
+  } else if (OB_FAIL(check_and_update_service_epoch(trans, OB_SYS_TENANT_ID,
+          SERVER_ZONE_OP_SERVICE_EPOCH, proposal_id))) {
+    LOG_WARN("fail to check and update server zone op service epoch", KR(ret), K(proposal_id));
+  }
   return ret;
 }
 

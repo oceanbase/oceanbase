@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <stdlib.h>
 #include "lib/checksum/ob_crc64.h"
-#include "lib/ob_define.h"
 #include "isa-l/crc64.h"
 #include "isa-l/crc.h"
 

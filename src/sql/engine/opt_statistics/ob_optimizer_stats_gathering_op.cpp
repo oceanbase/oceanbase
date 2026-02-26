@@ -12,17 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_optimizer_stats_gathering_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_px_sqc_proxy.h"
-#include "sql/engine/px/ob_px_sqc_handler.h"
-#include "share/stat/ob_opt_stat_sql_service.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "sql/engine/aggregate/ob_aggregate_processor.h"
-#include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_dbms_stats_executor.h"
-#include "pl/sys_package/ob_dbms_stats.h"
 
 namespace oceanbase
 {
@@ -39,7 +28,8 @@ ObOptimizerStatsGatheringSpec::ObOptimizerStatsGatheringSpec(ObIAllocator &alloc
       target_osg_id_(OB_INVALID_ID),
       generated_column_exprs_(alloc),
       col_conv_exprs_(alloc),
-      column_ids_(alloc)
+      column_ids_(alloc),
+      online_sample_rate_(1.)
 {
 }
 
@@ -76,7 +66,8 @@ OB_SERIALIZE_MEMBER((ObOptimizerStatsGatheringSpec, ObOpSpec),
                     target_osg_id_,
                     generated_column_exprs_,
                     col_conv_exprs_,
-                    column_ids_);
+                    column_ids_,
+                    online_sample_rate_);
 
 ObOptimizerStatsGatheringOp::ObOptimizerStatsGatheringOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(exec_ctx, spec, input),
@@ -108,6 +99,7 @@ void ObOptimizerStatsGatheringOp::reset()
   part_map_.destroy();
   piece_msg_.reset();
   arena_.reset();
+  sample_helper_.reset();
 }
 
 int ObOptimizerStatsGatheringOp::inner_rescan()
@@ -122,6 +114,7 @@ int ObOptimizerStatsGatheringOp::inner_rescan()
   table_stats_map_.reuse();
   osg_col_stats_map_.reuse();
   arena_.reset();
+  sample_helper_.reset();
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to rescan");
   }
@@ -145,6 +138,7 @@ int ObOptimizerStatsGatheringOp::inner_open()
   } else {
     arena_.set_tenant_id(tenant_id_);
     piece_msg_.set_tenant_id(tenant_id_);
+    sample_helper_.init(MY_SPEC.online_sample_rate_);
     int64_t map_size = MY_SPEC.column_ids_.count();
     if (OB_FAIL(table_stats_map_.create(map_size,
         "TabStatBucket",
@@ -353,7 +347,7 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr, uint64_t column
   } else if (OB_ISNULL(global_col_stat)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (!ObColumnStatParam::is_valid_opt_col_type(expr->obj_meta_.get_type())) {
+  } else if (!ObColumnStatParam::is_valid_opt_col_type(expr->obj_meta_.get_type(), true)) {
     // do nothing yet, should use the plain stats.
   } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
     LOG_WARN("failed to eval expr", K(*expr));
@@ -397,7 +391,7 @@ int ObOptimizerStatsGatheringOp::calc_columns_stats(int64_t &row_len)
   return ret;
 }
 
-int ObOptimizerStatsGatheringOp::calc_table_stats(int64_t &row_len)
+int ObOptimizerStatsGatheringOp::calc_table_stats(int64_t &row_len, bool is_sample_row)
 {
   int ret = OB_SUCCESS;
   ObOptTableStat *global_tab_stat = NULL;
@@ -411,7 +405,10 @@ int ObOptimizerStatsGatheringOp::calc_table_stats(int64_t &row_len)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
-    global_tab_stat->add_avg_row_size(row_len);
+    if (!is_sample_row) {
+      global_tab_stat->add_avg_row_size(row_len);
+      global_tab_stat->add_sample_size(1);
+    }
     global_tab_stat->add_row_count(1);
     global_tab_stat->set_object_type(StatLevel::TABLE_LEVEL);
   }
@@ -422,9 +419,13 @@ int ObOptimizerStatsGatheringOp::calc_stats()
 {
   int ret = OB_SUCCESS;
   int64_t row_len = 0;
-  if (OB_FAIL(calc_columns_stats(row_len))) {
+  bool ignore = false;
+  if (OB_FAIL(sample_helper_.sample_row(ignore))) {
+    LOG_WARN("failed to sample row", K(ret));
+  } else if (!ignore &&
+             OB_FAIL(calc_columns_stats(row_len))) {
     LOG_WARN("failed to calc column stats", K(ret));
-  } else if (OB_FAIL(calc_table_stats(row_len))) {
+  } else if (OB_FAIL(calc_table_stats(row_len, ignore))) {
     LOG_WARN("failed to calc table stats", K(ret));
   }
   return ret;

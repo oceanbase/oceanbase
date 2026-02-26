@@ -24,6 +24,7 @@ namespace table
 {
 struct ObTableLoadDmlStat
 {
+  OB_UNIS_VERSION(1);
 public:
   ObTableLoadDmlStat() : allocator_("TLD_Dmlstat")
   {
@@ -42,7 +43,7 @@ public:
     dml_stat_array_.reset();
     allocator_.reset();
   }
-  bool is_empty() const { return dml_stat_array_.count() == 0; }
+  bool is_empty() const { return dml_stat_array_.empty(); }
   int allocate_dml_stat(ObOptDmlStat *&dml_stat)
   {
     int ret = OB_SUCCESS;
@@ -60,6 +61,23 @@ public:
         new_dml_stat->~ObOptDmlStat();
         allocator_.free(new_dml_stat);
         new_dml_stat = nullptr;
+      }
+    }
+    return ret;
+  }
+  int merge(const ObTableLoadDmlStat &other)
+  {
+    int ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.dml_stat_array_.count(); i++) {
+      ObOptDmlStat *dml_stat = other.dml_stat_array_.at(i);
+      ObOptDmlStat *new_dml_stat = nullptr;
+      if (OB_ISNULL(dml_stat)) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "unexpected dml stat is null", KR(ret));
+      } else if (OB_FAIL(allocate_dml_stat(new_dml_stat))) {
+        OB_LOG(WARN, "fail to allocate dml stat", KR(ret));
+      } else {
+        *new_dml_stat = *dml_stat;
       }
     }
     return ret;

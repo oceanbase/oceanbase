@@ -18,6 +18,7 @@
 #include "fixed_sliding_window.h"
 #include "log_define.h"                         // block_id_t
 #include "lsn.h"
+#include "log_req.h"                            // PushLogType
 
 namespace oceanbase
 {
@@ -141,10 +142,13 @@ public:
   void set_freeze_ts(const int64_t ts);
   void set_submit_ts(const int64_t ts);
   void set_flushed_ts(const int64_t ts);
+  void set_push_log_type(const PushLogType &push_log_type);
   int64_t get_gen_ts() const { return ATOMIC_LOAD(&(gen_ts_)); }
   int64_t get_freeze_ts() const { return ATOMIC_LOAD(&(freeze_ts_)); }
   int64_t get_submit_ts() const { return ATOMIC_LOAD(&(submit_ts_)); }
   int64_t get_flushed_ts() const { return ATOMIC_LOAD(&(flushed_ts_)); }
+  PushLogType get_push_log_type() const { return ATOMIC_LOAD(&push_log_type_);}
+  bool is_fetch_log_type() const;
   TO_STRING_KV(K_(header), K_(state_map), K_(ref_cnt),
       K_(gen_ts), K_(freeze_ts), K_(submit_ts), K_(flushed_ts),
       "gen_to_freeze cost time", freeze_ts_ - gen_ts_,
@@ -162,6 +166,7 @@ private:
   mutable int64_t freeze_ts_;
   mutable int64_t submit_ts_;
   mutable int64_t flushed_ts_;
+  mutable PushLogType push_log_type_;
   mutable common::ObLatch lock_;
 };
 } // end namespace palf

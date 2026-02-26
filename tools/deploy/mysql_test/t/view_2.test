@@ -435,7 +435,6 @@ select * from v3;
 ## 主要测试在非select语句引用select_stmt(view展开)的问题，select结果作为其它stmt的输入暂时不支持，
 ## 这里仅仅针对bug加入回归case
 #
---error 1235
 SET optimizer_switch = (SELECT variable_value FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'optimizer_switch');
 --disable_warnings
 drop table if exists t1,t2;

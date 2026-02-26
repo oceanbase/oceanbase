@@ -17,8 +17,9 @@
 #include "sql/optimizer/ob_log_join.h"
 #include "sql/resolver/dml/ob_sql_hint.h"
 #include "sql/engine/px/ob_px_basic_info.h"
-#include "sql/engine/join/ob_join_filter_op.h"
 #include "sql/engine/expr/ob_expr_join_filter.h"
+#include "sql/engine/join/ob_join_filter_material_control_info.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -42,7 +43,10 @@ public:
       skip_subpart_(false),
       rf_prefix_col_idxs_(),
       probe_table_id_(OB_INVALID_ID),
-      range_column_cnt_(-1)
+      range_column_cnt_(-1),
+      jf_material_control_info_(),
+      enable_runtime_filter_adaptive_apply_(true),
+      basic_table_row_count_(0)
   { }
   virtual ~ObLogJoinFilter() = default;
   const char *get_name() const;
@@ -78,7 +82,7 @@ public:
       { return join_filter_exprs_.push_back(filter_expr); }
   const common::ObIArray<ObRawExpr *> &get_join_filter_exprs()
       { return join_filter_exprs_; }
-common::ObIArray<ObRawExpr *> &get_join_filter_exprs_for_update()
+  common::ObIArray<ObRawExpr *> &get_join_filter_exprs_for_update()
       { return join_filter_exprs_; }
   int add_join_filter_cmp_funcs(const common::ObDatumCmpFuncType &cmp_fun)
       { return join_filter_cmp_funcs_.push_back(cmp_fun);}
@@ -127,6 +131,39 @@ common::ObIArray<ObRawExpr *> &get_join_filter_exprs_for_update()
     range_column_cnt_ = range_column_cnt;
   }
   inline int64_t get_range_column_cnt() const { return range_column_cnt_; }
+  inline bool use_realistic_runtime_bloom_filter_size()
+  {
+    return jf_material_control_info_.enable_material_;
+  }
+
+  inline const ObJoinFilterMaterialControlInfo &get_jf_material_control_info() const
+  {
+    return jf_material_control_info_;
+  }
+
+  inline ObJoinFilterMaterialControlInfo &get_jf_material_control_info()
+  {
+    return jf_material_control_info_;
+  }
+  inline double get_basic_table_row_count() const {
+    return basic_table_row_count_;
+  }
+  inline void set_basic_table_row_count(double basic_table_row_count) {
+    basic_table_row_count_ = basic_table_row_count;
+  }
+
+  const common::ObIArray<ObRawExpr *> &get_all_join_key_left_exprs()
+  {
+    return all_join_key_left_exprs_;
+  }
+  int set_all_join_key_left_exprs(const common::ObIArray<ObRawExpr *> &exprs)
+  {
+    return all_join_key_left_exprs_.assign(exprs);
+  }
+
+  void set_runtime_filter_adaptive_apply(bool value) { enable_runtime_filter_adaptive_apply_ = value; }
+  bool enable_runtime_filter_adaptive_apply() { return enable_runtime_filter_adaptive_apply_; }
+
 private:
   bool is_create_;   //判断是否是create算子
   int64_t filter_id_; //设置filter_id
@@ -152,6 +189,10 @@ private:
   ObSEArray<int64_t, 4, common::ModulePageAllocator, true> rf_prefix_col_idxs_;
   int64_t probe_table_id_;
   int64_t range_column_cnt_;
+  ObJoinFilterMaterialControlInfo jf_material_control_info_;
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> all_join_key_left_exprs_;
+  bool enable_runtime_filter_adaptive_apply_;
+  double basic_table_row_count_;
   DISALLOW_COPY_AND_ASSIGN(ObLogJoinFilter);
 };
 

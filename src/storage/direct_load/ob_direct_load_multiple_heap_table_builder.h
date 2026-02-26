@@ -53,13 +53,12 @@ public:
   virtual ~ObDirectLoadMultipleHeapTableBuilder();
   int init(const ObDirectLoadMultipleHeapTableBuildParam &param);
   int append_row(const common::ObTabletID &tablet_id,
-                 const table::ObTableLoadSequenceNo &seq_no,
-                 const blocksstable::ObDatumRow &datum_row) override;
+                 const ObDirectLoadDatumRow &datum_row) override;
   int append_row(const RowType &row);
   int close() override;
   int64_t get_row_count() const override { return row_count_; }
-  int get_tables(common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
-                 common::ObIAllocator &allocator) override;
+  int get_tables(ObDirectLoadTableHandleArray &table_array,
+                 ObDirectLoadTableManager *table_manager) override;
 private:
   class DataBlockFlushCallback : public ObIDirectLoadDataBlockFlushCallback
   {

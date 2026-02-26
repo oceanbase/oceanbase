@@ -1,4 +1,4 @@
-#owner: yanmu.ztl
+#owner: shouju.zyp
 #owner group: RS
 #tags: schema
 #description: check virtual table in mysql
@@ -12,6 +12,7 @@ let $svr_ip = query_get_value(select svr_ip from oceanbase.__all_virtual_unit or
 let $svr_port = query_get_value(select svr_port from oceanbase.__all_virtual_unit order by svr_ip limit 1, svr_port, 1);
 
 let $idx = 1;
+
 while ($idx <= $cnt)
 {
 connection sys;
@@ -33,7 +34,9 @@ case when "$table_name" in (
 "__tenant_virtual_show_create_procedure" ,
 "__tenant_virtual_show_create_tablegroup" ,
 "__tenant_virtual_object_definition" ,
-"__tenant_virtual_show_create_trigger") then 2
+"__tenant_virtual_show_create_trigger",
+"__tenant_virtual_show_create_location",
+"__tenant_virtual_list_file") then 2
 when "$table_name" in (
 "__all_virtual_proxy_schema" ,
 "__all_virtual_proxy_partition_info" ,
@@ -45,6 +48,13 @@ when "$table_name" in (
 "__all_virtual_sysstat",
 "__all_virtual_sesstat",
 "__all_virtual_session_event") then 4
+when "$table_name" in (
+"__all_virtual_ss_tablet_meta",
+"__all_virtual_ss_ls_meta",
+"__all_virtual_ss_sstable_mgr",
+"__all_virtual_ss_existing_tablet_meta",
+"__all_virtual_ss_existing_sstable_mgr",
+"__all_virtual_ss_notify_tablets_stat") then 5
 else 1 end) as query_type from dual`;
 
 if ($query_type == 1)

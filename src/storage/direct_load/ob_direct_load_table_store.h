@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2024 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -9,95 +9,79 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
 #pragma once
 
-#include "share/table/ob_table_load_array.h"
-#include "share/table/ob_table_load_define.h"
-#include "storage/blocksstable/ob_datum_row.h"
+#include "lib/hash/ob_hashmap.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
+#include "storage/direct_load/ob_direct_load_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-class ObDirectLoadTableDataDesc;
-class ObDirectLoadTmpFileManager;
-class ObDirectLoadTableBuilderAllocator;
-class ObDirectLoadInsertTableContext;
-class ObDirectLoadDMLRowHandler;
-
-struct ObDirectLoadTableStoreParam
-{
-public:
-  ObDirectLoadTableStoreParam();
-  ~ObDirectLoadTableStoreParam();
-  bool is_valid() const;
-  TO_STRING_KV(K_(table_data_desc),
-               KP_(datum_utils),
-               KP_(file_mgr),
-               K_(is_multiple_mode),
-               K_(is_fast_heap_table),
-               KP_(insert_table_ctx),
-               KP_(dml_row_handler),
-               KP_(extra_buf),
-               K_(extra_buf_size));
-public:
-  ObDirectLoadTableDataDesc table_data_desc_;
-  const blocksstable::ObStorageDatumUtils *datum_utils_;
-  ObDirectLoadTmpFileManager *file_mgr_;
-  bool is_multiple_mode_;
-  bool is_fast_heap_table_;
-  ObDirectLoadInsertTableContext *insert_table_ctx_;
-  ObDirectLoadDMLRowHandler *dml_row_handler_;
-  char *extra_buf_;
-  int64_t extra_buf_size_;
-};
-
-class ObDirectLoadTableStoreBucket
-{
-public:
-  ObDirectLoadTableStoreBucket();
-  ~ObDirectLoadTableStoreBucket();
-  int init(const ObDirectLoadTableStoreParam &param, const common::ObTabletID &tablet_id);
-  int append_row(const common::ObTabletID &tablet_id, const table::ObTableLoadSequenceNo &seq_no, const blocksstable::ObDatumRow &datum_row);
-  int close();
-  int get_tables(common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
-                 common::ObIAllocator &allocator);
-  void clean_up();
-  TO_STRING_KV(KP(param_));
-private:
-  const ObDirectLoadTableStoreParam *param_;
-  ObDirectLoadTableBuilderAllocator *table_builder_allocator_;
-  ObIDirectLoadPartitionTableBuilder *table_builder_;
-  bool is_inited_;
-};
-
 class ObDirectLoadTableStore
 {
 public:
-  const static constexpr int64_t MAX_BUCKET_CNT = 1024;
-  ObDirectLoadTableStore() : allocator_("TLD_TSBucket"), is_inited_(false)
-  {
-    allocator_.set_tenant_id(MTL_ID());
-    bucket_ptr_array_.set_tenant_id(MTL_ID());
-  }
+  typedef hash::ObHashMap<common::ObTabletID, ObDirectLoadTableHandleArray *> TabletTableMap;
+  typedef typename TabletTableMap::iterator iterator;
+  typedef typename TabletTableMap::const_iterator const_iterator;
+  ObDirectLoadTableStore();
   ~ObDirectLoadTableStore();
-  int init(const ObDirectLoadTableStoreParam &param);
-  int append_row(const common::ObTabletID &tablet_id, const table::ObTableLoadSequenceNo &seq_no, const blocksstable::ObDatumRow &datum_row);
-  int close();
-  void clean_up();
-  int get_tables(common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
-                 common::ObIAllocator &allocator);
+
+  // 恢复到init前的状态
+  void reset();
+  // 恢复到刚init的状态
+  void reuse();
+  // 清空table
+  void clear();
+
+  int init();
+  bool is_inited() const { return tablet_table_map_.created(); }
+  bool is_valid() const;
+
+#define DEFINE_TABLE_TYPE_INTERFACE(type, classType, name, shortName) \
+  void set_##name() { table_type_ = type; }                           \
+  bool is_##name() const { return ObDirectLoadTableType::is_##name(table_type_); }
+
+  OB_DIRECT_LOAD_TABLE_DEF(DEFINE_TABLE_TYPE_INTERFACE);
+
+#undef DEFINE_TABLE_TYPE_INTERFACE
+  void set_table_type(ObDirectLoadTableType::Type table_type) { table_type_ = table_type; }
+  int get_tablet_tables(const ObTabletID &tablet_id,
+                        ObDirectLoadTableHandleArray *&table_handle_array);
+  // 添加table之前需要先设置 table_data_desc_, table_type_
+  int add_table(const ObDirectLoadTableHandle &table_handle);
+  int add_tables(const ObDirectLoadTableHandleArray &table_handle_array);
+  int add_tablet_tables(const ObTabletID &tablet_id,
+                        const ObDirectLoadTableHandleArray &table_handle_array);
+
+  void set_table_data_desc(const ObDirectLoadTableDataDesc &table_data_desc)
+  {
+    table_data_desc_ = table_data_desc;
+  }
+  ObDirectLoadTableType::Type get_table_type() const { return table_type_; }
+  const ObDirectLoadTableDataDesc &get_table_data_desc() const { return table_data_desc_; }
+
+  bool empty() const { return tablet_table_map_.empty(); }
+  int64_t size() const { return tablet_table_map_.size(); }
+  iterator begin() { return tablet_table_map_.begin(); }
+  const_iterator begin() const { return tablet_table_map_.begin(); }
+  iterator end() { return tablet_table_map_.end(); }
+  const_iterator end() const { return tablet_table_map_.end(); }
+
+  DECLARE_TO_STRING;
+
 private:
-  int new_bucket(ObDirectLoadTableStoreBucket *&bucket);
-  int get_bucket(const common::ObTabletID &tablet_id, ObDirectLoadTableStoreBucket *&bucket);
+  int get_or_create_tablet_tables(const ObTabletID &tablet_id,
+                                  ObDirectLoadTableHandleArray *&table_handle_array);
+
 private:
-  ObDirectLoadTableStoreParam param_;
-  common::ObArenaAllocator allocator_;
-  common::ObArray<ObDirectLoadTableStoreBucket *> bucket_ptr_array_;
-  common::hash::ObHashMap<common::ObTabletID, ObDirectLoadTableStoreBucket *> tablet_index_;
-  bool is_inited_;
+  ObArenaAllocator allocator_;
+  ObDirectLoadTableDataDesc table_data_desc_;
+  ObDirectLoadTableType::Type table_type_;
+  TabletTableMap tablet_table_map_;
 };
 
 } // namespace storage

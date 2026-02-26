@@ -11,19 +11,12 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/tx/ob_trans_service.h"
 #include "observer/ob_server.h"
 #define private public
 #include "mock_ob_server.h"
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/net/ob_net_util.h"
-#include "rpc/obrpc/ob_rpc_proxy.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/tx/ob_ts_mgr.h"
-#include "share/ob_tenant_mgr.h"
 #include "share/ob_simple_mem_limit_getter.h"
+#include "share/ob_device_manager.h"
 
 namespace oceanbase
 {
@@ -164,7 +157,9 @@ int MockObServer::init(const char *schema_file,
   }
   // init net frame
   if (OB_SUCC(ret)) {
-    if (OB_SUCCESS != (ret = net_frame_.init())) {
+    const char* mysql_unix_path = "unix:run/sql.sock";
+    const char* rpc_unix_path = "unix:run/rpc.sock";
+    if (OB_SUCCESS != (ret = net_frame_.init(mysql_unix_path, rpc_unix_path))) {
       STORAGE_LOG(ERROR, "net frame init error", K(ret));
     } else if (OB_FAIL(batch_rpc_.init(net_frame_.get_batch_rpc_req_transport(),
                                        net_frame_.get_high_prio_req_transport(),
@@ -200,7 +195,9 @@ int MockObServer::init(const char *schema_file,
 
   // init io
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObIOManager::get_instance().init())) {
+    if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+      STORAGE_LOG(WARN, "init device manager failed", K(ret));
+    } else if (OB_FAIL(ObIOManager::get_instance().init())) {
       STORAGE_LOG(WARN, "io manager init failead", K(ret));
     }
   }
@@ -227,7 +224,6 @@ int MockObServer::init(const char *schema_file,
   }
 
   //init multi tenant
-  GCTX = gctx_;
   if (OB_SUCC(ret)) {
     if (OB_SUCCESS != (ret = init_multi_tenant())) {
       STORAGE_LOG(WARN, "init multi tenant failed", K(ret));

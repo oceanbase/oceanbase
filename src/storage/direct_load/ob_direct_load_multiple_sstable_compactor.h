@@ -39,9 +39,10 @@ public:
   ObDirectLoadMultipleSSTableCompactor();
   virtual ~ObDirectLoadMultipleSSTableCompactor();
   int init(const ObDirectLoadMultipleSSTableCompactParam &param);
-  int add_table(ObIDirectLoadPartitionTable *table) override;
+  int add_table(const ObDirectLoadTableHandle &table_handle) override;
   int compact() override;
-  int get_table(ObIDirectLoadPartitionTable *&table, common::ObIAllocator &allocator) override;
+  int get_table(ObDirectLoadTableHandle &table_handle,
+                ObDirectLoadTableManager *table_manager) override;
   void stop() override;
 private:
   int check_table_compactable(ObDirectLoadMultipleSSTable *sstable);
@@ -49,12 +50,10 @@ private:
   ObDirectLoadMultipleSSTableCompactParam param_;
   int64_t index_block_count_;
   int64_t data_block_count_;
+  int64_t rowkey_block_count_;
   int64_t row_count_;
+  int64_t rowkey_count_;
   int64_t max_data_block_size_;
-  common::ObArenaAllocator start_key_allocator_;
-  common::ObArenaAllocator end_key_allocator_;
-  ObDirectLoadMultipleDatumRowkey start_key_;
-  ObDirectLoadMultipleDatumRowkey end_key_;
   common::ObArray<ObDirectLoadMultipleSSTableFragment> fragments_;
   bool is_inited_;
 };

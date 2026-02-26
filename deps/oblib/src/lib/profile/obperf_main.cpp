@@ -56,8 +56,16 @@ public:
   virtual int init() { return OB_SUCCESS; }
   virtual int handle_record()
   {
-    fprintf(stdout, "%s\n", S(*rec_));
-    return OB_SUCCESS;
+    int ret = OB_SUCCESS;
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(*rec_);
+    if (OB_ISNULL(ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "failed to convert rec", K(ret));
+    } else {
+      fprintf(stdout, "%s\n", ptr);
+    }
+    return ret;
   }
   virtual int report() { return OB_SUCCESS; }
 };
@@ -79,8 +87,8 @@ private:
     uint64_t min_;
     uint64_t max_;
   };
-  typedef ObConcurrentHashMap<uint64_t, EventStat*> EventStatMap;
-  typedef ObConcurrentHashMap<uint64_t, EventStatMap*> CatStatMap;
+  typedef ObConcurrentHashMapDoNotUse<uint64_t, EventStat*> EventStatMap;
+  typedef ObConcurrentHashMapDoNotUse<uint64_t, EventStatMap*> CatStatMap;
   static bool for_each_cat_id(uint64_t cat_id, EventStatMap* event_stats);
   static bool for_each_event(uint64_t event, EventStat* event_stat);
 private:
@@ -205,8 +213,8 @@ private:
     uint64_t total_;
     int64_t cur_begin_ts_;
   };
-  typedef ObConcurrentHashMap<uint64_t, EventStat*> EventStatMap;
-  typedef ObConcurrentHashMap<uint64_t, EventStatMap*> CatStatMap;
+  typedef ObConcurrentHashMapDoNotUse<uint64_t, EventStat*> EventStatMap;
+  typedef ObConcurrentHashMapDoNotUse<uint64_t, EventStatMap*> CatStatMap;
   static inline bool is_pair_begin(uint64_t event_id);
   static bool for_each_cat_id(uint64_t cat_id, EventStatMap* event_stats);
   static bool for_each_event(uint64_t event, EventStat* event_stat);
@@ -336,7 +344,8 @@ public:
   virtual int init() { return OB_SUCCESS; }
   virtual int handle_record()
   {
-    fprintf(stdout, "%s\n", S(*rec_));
+    ObCStringHelper helper;
+    fprintf(stdout, "%s\n", helper.convert(*rec_));
     return OB_SUCCESS;
   }
   virtual int report() { return OB_SUCCESS; }
@@ -360,7 +369,7 @@ private:
   {
     uint64_t count_;
   };
-  typedef ObConcurrentHashMap<uint64_t, EventStat*> EventStatMap;
+  typedef ObConcurrentHashMapDoNotUse<uint64_t, EventStat*> EventStatMap;
   static bool for_each_event(uint64_t event, EventStat* event_stat);
   static int64_t elapsed_time_;
 private:

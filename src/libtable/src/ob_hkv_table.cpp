@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX CLIENT
 #include "ob_hkv_table.h"
-#include "ob_table_service_client.h"
-#include "share/table/ob_table.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 
@@ -208,11 +206,11 @@ int ObHKVTable::Entity::get_properties_names(ObIArray<ObString> &properties) con
   return ret;
 }
 
-int ObHKVTable::Entity::get_properties_values(ObIArray<ObObj> &values) const
+int ObHKVTable::Entity::get_properties_values(ObIArray<ObObj*> &values) const
 {
   int ret = OB_SUCCESS;
   if (has_property_set_) {
-    ret = values.push_back(value_);
+    ret = values.push_back(const_cast<ObObj*>(&value_));
   }
   return ret;
 }

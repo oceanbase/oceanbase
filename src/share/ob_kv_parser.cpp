@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <string.h>
-#include <ctype.h>
 #include "ob_kv_parser.h"
 
 using namespace oceanbase::common;

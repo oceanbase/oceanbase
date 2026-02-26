@@ -69,6 +69,10 @@ namespace common
 #define CM_CONST_TO_DECIMAL_INT_EQ        (1ULL << 19)
 #define CM_BY_TRANSFORMER                (1ULL << 20)
 #define CM_CONST_TO_DECIMAL_INT_UP       (1ULL << 21)
+#define CM_FAST_COLUMN_CONV              (1ULL << 22)
+#define CM_ORA_SYS_VIEW_CAST             (1ULL << 23)
+#define CM_DEMOTE_CAST                   (1ULL << 24)
+#define CM_IMPLICIT_FIRST_CENTURY_YEAR   (1ULL << 25)
 // string->integer(int/uint)时默认进行round(round to nearest)，
 // 如果设置该标记，则会进行trunc(round to zero)
 // ceil(round to +inf)以及floor(round to -inf)暂时没有支持
@@ -142,6 +146,8 @@ typedef uint64_t ObCastMode;
 #define CM_SET_GEOMETRY_MULTILINESTRING(mode)     ((mode) &= 0xFFFE0FFF, (mode) |= (5 << 12))
 #define CM_SET_GEOMETRY_MULTIPOLYGON(mode)        ((mode) &= 0xFFFE0FFF, (mode) |= (6 << 12))
 #define CM_SET_GEOMETRY_GEOMETRYCOLLECTION(mode)  ((mode) &= 0xFFFE0FFF, (mode) |= (7 << 12))
+#define CM_IS_DEMOTE_CAST(mode)                   ((CM_DEMOTE_CAST & (mode)) != 0)
+#define CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(mode)   ((CM_IMPLICIT_FIRST_CENTURY_YEAR & (mode)) != 0)
 
 #define CM_GET_CS_LEVEL(mode)                     (((mode) >> CM_CS_LEVEL_SHIFT) & CM_CS_LEVEL_MASK)
 #define CM_SET_CS_LEVEL(mode, level) \
@@ -154,6 +160,7 @@ typedef uint64_t ObCastMode;
    || (((mode)&CM_CONST_TO_DECIMAL_INT_EQ) != 0))
 #define CM_IS_BY_TRANSFORMER(mode) ((CM_BY_TRANSFORMER & (mode)) != 0)
 #define CM_SET_BY_TRANSFORMERN(mode)  (CM_BY_TRANSFORMER | (mode))
+#define CM_IS_ORA_SYS_VIEW_CAST(mode)            ((CM_ORA_SYS_VIEW_CAST & (mode)) != 0)
 
 struct ObObjCastParams
 {
@@ -172,7 +179,9 @@ struct ObObjCastParams
       dtc_params_(),
       format_number_with_limit_(true),
       is_ignore_(false),
-      exec_ctx_(NULL)
+      exec_ctx_(NULL),
+      gen_query_range_(false),
+      dest_max_length_(LENGTH_UNKNOWN_YET)
   {
     set_compatible_cast_mode();
   }
@@ -192,7 +201,9 @@ struct ObObjCastParams
       dtc_params_(),
       format_number_with_limit_(true),
       is_ignore_(false),
-      exec_ctx_(NULL)
+      exec_ctx_(NULL),
+      gen_query_range_(false),
+      dest_max_length_(LENGTH_UNKNOWN_YET)
   {
     set_compatible_cast_mode();
     if (NULL != dtc_params) {
@@ -217,7 +228,9 @@ struct ObObjCastParams
       dtc_params_(),
       format_number_with_limit_(true),
       is_ignore_(false),
-      exec_ctx_(NULL)
+      exec_ctx_(NULL),
+      gen_query_range_(false),
+      dest_max_length_(LENGTH_UNKNOWN_YET)
   {
     set_compatible_cast_mode();
     if (NULL != dtc_params) {
@@ -252,6 +265,11 @@ struct ObObjCastParams
     return;
   }
 
+  void set_allow_invalid_dates_cast_mode()
+  {
+    cast_mode_ |= CM_ALLOW_INVALID_DATES;
+  }
+
   TO_STRING_KV(K(cur_time_),
                KP(cast_mode_),
                K(warning_),
@@ -259,7 +277,8 @@ struct ObObjCastParams
                K(expect_obj_collation_),
                K(res_accuracy_),
                K(format_number_with_limit_),
-               K(is_ignore_));
+               K(is_ignore_),
+               K_(dest_max_length));
 
   IAllocator *allocator_;
   ObIAllocator *allocator_v2_;
@@ -274,6 +293,8 @@ struct ObObjCastParams
   bool format_number_with_limit_;
   bool is_ignore_;
   sql::ObExecContext *exec_ctx_;
+  bool gen_query_range_;
+  int32_t dest_max_length_;
 };
 
 class ObExpectType

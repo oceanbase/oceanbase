@@ -11,9 +11,6 @@
  */
 
 #include "ob_mem_leak_checker_info.h"
-#include "lib/allocator/ob_mem_leak_checker.h"
-#include "common/object/ob_object.h"
-#include "share/config/ob_server_config.h"
 
 using namespace oceanbase::common;
 using oceanbase::common::ObMemLeakChecker;
@@ -94,9 +91,6 @@ int ObMemLeakCheckerInfo::fill_row(common::ObNewRow *&row)
   ObObj *cells = NULL;
   if (OB_FAIL(sanity_check())) {
     // error
-  } else if (0 == col_count) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "col count could not be zero");
   } else if (OB_ISNULL(cells = cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cur row cell is NULL", K(ret));

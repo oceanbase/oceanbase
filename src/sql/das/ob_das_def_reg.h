@@ -130,6 +130,10 @@ struct ObDASIRScanCtDef;
 struct ObDASIRScanRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_IR_SCAN, ObDASIRScanCtDef, ObDASIRScanRtDef);
 
+struct ObDASVecAuxScanCtDef;
+struct ObDASVecAuxScanRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_VEC_SCAN, ObDASVecAuxScanCtDef, ObDASVecAuxScanRtDef);
+
 struct ObDASIRAuxLookupCtDef;
 struct ObDASIRAuxLookupRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_IR_AUX_LOOKUP, ObDASIRAuxLookupCtDef, ObDASIRAuxLookupRtDef);
@@ -138,6 +142,37 @@ struct ObDASSortCtDef;
 struct ObDASSortRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_SORT, ObDASSortCtDef, ObDASSortRtDef);
 
+struct ObDASDocIdMergeCtDef;
+struct ObDASDocIdMergeRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_DOC_ID_MERGE, ObDASDocIdMergeCtDef, ObDASDocIdMergeRtDef);
+
+struct ObDASVIdMergeCtDef;
+struct ObDASVIdMergeRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_VID_MERGE, ObDASVIdMergeCtDef, ObDASVIdMergeRtDef);
+
+struct ObDASFuncLookupCtDef;
+struct ObDASFuncLookupRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_FUNC_LOOKUP, ObDASFuncLookupCtDef, ObDASFuncLookupRtDef);
+
+struct ObDASIndexMergeCtDef;
+struct ObDASIndexMergeRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_INDEX_MERGE, ObDASIndexMergeCtDef, ObDASIndexMergeRtDef);
+
+struct ObDASIndexProjLookupCtDef;
+struct ObDASIndexProjLookupRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_INDEX_PROJ_LOOKUP, ObDASIndexProjLookupCtDef, ObDASIndexProjLookupRtDef);
+
+struct ObDASDomainIdMergeCtDef;
+struct ObDASDomainIdMergeRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_DOMAIN_ID_MERGE, ObDASDomainIdMergeCtDef, ObDASDomainIdMergeRtDef);
+
+struct ObDASIREsMatchCtDef;
+struct ObDASIREsMatchRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_IR_ES_MATCH, ObDASIREsMatchCtDef, ObDASIREsMatchRtDef);
+
+struct ObDASIREsScoreCtDef;
+struct ObDASIREsScoreRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_IR_ES_SCORE, ObDASIREsScoreCtDef, ObDASIREsScoreRtDef);
 #undef REGISTER_DAS_ATTACH_OP
 }  // namespace sql
 }  // namespace oceanbase

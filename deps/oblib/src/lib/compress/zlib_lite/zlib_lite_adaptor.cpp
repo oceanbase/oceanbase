@@ -17,7 +17,7 @@
 #endif
 
 #include "codec_deflate_qpl.h"
-#include "zlib_lite_src/deflate.h"
+#include "zlib_lite_src/zutil.h"
 #include "zlib_lite_src/zlib.h"
 
 namespace oceanbase

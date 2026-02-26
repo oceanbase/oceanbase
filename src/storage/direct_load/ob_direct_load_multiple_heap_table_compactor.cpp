@@ -136,20 +136,19 @@ int ObDirectLoadMultipleHeapTableCompactor::init(
   return ret;
 }
 
-int ObDirectLoadMultipleHeapTableCompactor::add_table(ObIDirectLoadPartitionTable *table)
+int ObDirectLoadMultipleHeapTableCompactor::add_table(const ObDirectLoadTableHandle &table_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadMultipleHeapTableCompactor not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!table_handle.is_valid() || !table_handle.get_table()->is_multiple_heap_table())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(table_handle));
   } else {
     int cmp_ret = 0;
-    ObDirectLoadMultipleHeapTable *heap_table =
-      dynamic_cast<ObDirectLoadMultipleHeapTable *>(table);
-    if (OB_ISNULL(heap_table)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid args", KR(ret), KPC(table));
-    } else if (OB_FAIL(check_table_compactable(heap_table))) {
+    ObDirectLoadMultipleHeapTable *heap_table = static_cast<ObDirectLoadMultipleHeapTable*>(table_handle.get_table());
+    if (OB_FAIL(check_table_compactable(heap_table))) {
       LOG_WARN("fail to check table compactable", KR(ret), KPC(heap_table));
     } else if (OB_FAIL(construct_index_scanner(heap_table))) {
       LOG_WARN("fail to construct index scanner", KR(ret), KPC(heap_table));
@@ -297,8 +296,8 @@ int ObDirectLoadMultipleHeapTableCompactor::compact()
   return ret;
 }
 
-int ObDirectLoadMultipleHeapTableCompactor::get_table(ObIDirectLoadPartitionTable *&table,
-                                                      ObIAllocator &allocator)
+int ObDirectLoadMultipleHeapTableCompactor::get_table(ObDirectLoadTableHandle &table,
+                                                      ObDirectLoadTableManager *table_mgr)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -322,21 +321,16 @@ int ObDirectLoadMultipleHeapTableCompactor::get_table(ObIDirectLoadPartitionTabl
       LOG_WARN("fail to assign data fragments", KR(ret));
     }
     if (OB_SUCC(ret)) {
+      ObDirectLoadTableHandle heap_table_handle;
+      ObDirectLoadITable *itable = nullptr;
       ObDirectLoadMultipleHeapTable *heap_table = nullptr;
-      if (OB_ISNULL(heap_table = OB_NEWx(ObDirectLoadMultipleHeapTable, (&allocator)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new ObDirectLoadMultipleHeapTable", KR(ret));
+
+      if (OB_FAIL(table_mgr->alloc_multiple_heap_table(heap_table_handle))) {
+        LOG_WARN("fail to alloc multiple heap table table", KR(ret));
+      } else if (FALSE_IT(heap_table = static_cast<ObDirectLoadMultipleHeapTable*>(heap_table_handle.get_table()))){
       } else if (OB_FAIL(heap_table->init(create_param))) {
         LOG_WARN("fail to init multiple heap table table", KR(ret));
-      } else {
-        table = heap_table;
-      }
-      if (OB_FAIL(ret)) {
-        if (nullptr != heap_table) {
-          heap_table->~ObDirectLoadMultipleHeapTable();
-          allocator.free(heap_table);
-          heap_table = nullptr;
-        }
+      } else if (FALSE_IT(table = heap_table_handle)) {
       }
     }
   }

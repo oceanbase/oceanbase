@@ -62,18 +62,21 @@ public:
                    int32_t stmt_id,
                    bool first_time,
                    bool is_packed,
+                   sql::ObExecContext *exec_ctx,
                    ObSchemaGetterGuard *schema_guard);
-  int response_row(sql::ObSQLSessionInfo &session,
-                   common::ObNewRow &row,
-                   const ColumnsFieldArray *fields,
-                   bool is_packed,
-                   sql::ObExecContext *exec_ctx = NULL,
-                   ObSchemaGetterGuard *schema_guard = NULL) {
-    return ObMPBase::response_row(session, row, fields, is_packed, exec_ctx, true, schema_guard);
-  }
   bool need_close_cursor() { return need_close_cursor_; }
   void set_close_cursor() { need_close_cursor_ = true; }
   void reset_close_cursor() { need_close_cursor_ = false; }
+  inline void set_has_process_ok() { has_process_ok_ = true; }
+  inline bool has_process_ok() { return has_process_ok_; }
+  int ps_cursor_fetch(sql::ObExecContext &exec_ctx,
+                      sql::ObSQLSessionInfo &session,
+                      const ColumnsFieldArray &fields,
+                      pl::ObPLCursorInfo &cursor,
+                      ObSchemaGetterGuard &schema_guard,
+                      int64_t fetch_limit,
+                      int64_t &row_num,
+                      int64_t &cur);
   
 protected:
   virtual int deserialize()  { return common::OB_SUCCESS; }
@@ -90,6 +93,10 @@ private:
   virtual int before_process();
   void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
   //重载response，在response中不去调用flush_buffer(true)；flush_buffer(true)在需要回包时显示调用
+  int cursor_fetch_last_row(sql::ObSQLSessionInfo &session,
+                            pl::ObPLCursorInfo &cursor,
+                            const common::ObNewRow *&row,
+                            int64_t &cur);
 private:
   int64_t cursor_id_;
   int64_t fetch_rows_;
@@ -101,6 +108,7 @@ private:
   int32_t extend_flag_;
   char    *column_flag_;
   bool    need_close_cursor_;
+  bool has_process_ok_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtFetch);
 }; //end of class

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/recursive_cte/ob_fake_cte_table_op.h"
-#include "lib/rc/context.h"
 
 namespace oceanbase
 {
@@ -23,7 +22,8 @@ OB_SERIALIZE_MEMBER((ObFakeCTETableSpec, ObOpSpec),
                       column_involved_offset_,
                       column_involved_exprs_,
                       is_bulk_search_,
-                      identify_seq_expr_);
+                      identify_seq_expr_,
+                      is_union_distinct_);
 
 int ObFakeCTETableOp::inner_get_next_row()
 {
@@ -434,8 +434,8 @@ int ObFakeCTETableOp::attach_rows(
     if (OB_SUCC(ret)) {
       e->set_evaluated_projected(ctx);
       ObEvalInfo &info = e->get_eval_info(ctx);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
+      info.set_notnull(false);
+      info.set_point_to_frame(false);
     }
   }
   return ret;

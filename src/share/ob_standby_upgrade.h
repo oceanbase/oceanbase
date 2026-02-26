@@ -16,6 +16,7 @@
 #include "lib/utility/ob_print_utils.h"       // Print*
 #include "lib/utility/ob_unify_serialize.h"       // OB_UNIS_VERSION
 #include "share/ob_cluster_version.h"
+#include "storage/multi_data_source/buffer_ctx.h"
 
 namespace oceanbase
 {
@@ -42,6 +43,20 @@ struct ObStandbyUpgrade
   TO_STRING_KV(K_(data_version));
 private:
   uint64_t data_version_;
+};
+
+class ObUpgradeDataVersionMDSHelper
+{
+public:
+  static int on_register(
+      const char* buf,
+      const int64_t len,
+      storage::mds::BufferCtx &ctx);
+  static int on_replay(
+      const char* buf,
+      const int64_t len,
+      const share::SCN &scn,
+      storage::mds::BufferCtx &ctx);
 };
 
 }

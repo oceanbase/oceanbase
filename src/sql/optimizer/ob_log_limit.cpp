@@ -12,16 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_limit.h"
-#include "ob_log_group_by.h"
-#include "ob_log_operator_factory.h"
-#include "ob_log_sort.h"
 #include "ob_log_table_scan.h"
-#include "ob_optimizer_util.h"
-#include "ob_opt_est_cost.h"
-#include "ob_log_exchange.h"
-#include "sql/rewrite/ob_transform_utils.h"
-#include "sql/optimizer/ob_join_order.h"
-#include "common/ob_smart_call.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
@@ -82,8 +73,7 @@ int ObLogLimit::do_re_est_cost(EstimateCostInfo &param, double &card, double &op
                          || parallel < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected parallel degree", K(ret), K(param), K(percent_expr_), K(offset_expr_));
-  } else if (!is_calc_found_rows_ &&
-             OB_FAIL(get_limit_offset_value(percent_expr_, limit_expr_, offset_expr_,
+  } else if (OB_FAIL(get_limit_offset_value(percent_expr_, limit_expr_, offset_expr_,
                                             limit_percent, limit_count, offset_count))) {
     LOG_WARN("failed to get limit offset value", K(ret));
   } else {
@@ -114,6 +104,9 @@ int ObLogLimit::do_re_est_cost(EstimateCostInfo &param, double &card, double &op
       double child_card = 0.0;
       double child_cost = 0.0;
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+      if (is_calc_found_rows_) {
+        param.need_row_count_ = -1;
+      }
       if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
         LOG_WARN("failed to re-est cost", K(ret));
       } else {

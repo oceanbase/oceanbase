@@ -20,6 +20,8 @@
 #define MODE_DEFAULT_VAL_TTL true
 #define MODE_DEFAULT_VAL_REROUTING false
 #define MODE_DEFAULT_VAL_HOTKEY false
+#define MODE_DEFAULT_VAL_SECONDARY_PARTITION false
+#define MODE_DEFAULT_VAL_TIME_SERIES false
 
 // mode value
 #define MODE_VAL_ON "on"

@@ -11,8 +11,7 @@
  */
 
 #include "ob_micro_block_writer.h"
-#include "lib/checksum/ob_crc64.h"
-#include "storage/ob_i_store.h"
+#include "storage/blocksstable/ob_data_store_desc.h"
 
 namespace oceanbase
 {
@@ -20,7 +19,49 @@ using namespace common;
 using namespace storage;
 namespace blocksstable
 {
-ObMicroBlockWriter::ObMicroBlockWriter()
+/**
+ * ----------------------------------------------------------------ObMicroBufferFlatWriter----------------------------------------------------------------
+ */
+
+template <bool EnableNewFlatFormat>
+int ObMicroBufferFlatWriter<EnableNewFlatFormat>::write_row(const ObDatumRow &row,
+                                                            const int64_t rowkey_cnt,
+                                                            const ObIArray<ObColDesc> *col_descs,
+                                                            int64_t &size)
+{
+  int ret = OB_SUCCESS;
+
+  if (remain_buffer_size() <= 0 && OB_FAIL(expand(ObCompactionBuffer::size()))) {
+    STORAGE_LOG(WARN, "failed to reserve", K(ret));
+  }
+
+  while (OB_SUCC(ret)) {
+    if (OB_SUCC(row_writer_.write(rowkey_cnt,
+                                  row,
+                                  /* update_array */ nullptr,
+                                  col_descs,
+                                  current(),
+                                  remain_buffer_size(),
+                                  size))) {
+      break;
+    } else {
+      if (OB_UNLIKELY(ret != OB_BUF_NOT_ENOUGH)) {
+        STORAGE_LOG(WARN, "failed to write row", K(ret), KPC(this));
+      } else if (!check_could_expand()) { // break
+      } else if (OB_FAIL(expand(ObCompactionBuffer::size()))) {
+        STORAGE_LOG(WARN, "failed to reserve", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    write_nop(size);
+  }
+  return ret;
+}
+
+template<bool EnableNewFlatFormat>
+ObMicroBlockWriter<EnableNewFlatFormat>::ObMicroBlockWriter()
   :micro_block_size_limit_(0),
    column_count_(0),
    rowkey_column_count_(0),
@@ -28,38 +69,67 @@ ObMicroBlockWriter::ObMicroBlockWriter()
    row_count_(0),
    data_buffer_(),
    index_buffer_(DEFAULT_INDEX_BUFFER_SIZE),
+   hash_index_builder_(),
+   reuse_hash_index_builder_(false),
    is_major_(false),
    is_inited_(false)
 {
 }
 
-ObMicroBlockWriter::~ObMicroBlockWriter()
+template<bool EnableNewFlatFormat>
+ObMicroBlockWriter<EnableNewFlatFormat>::~ObMicroBlockWriter()
 {
 }
 
-int ObMicroBlockWriter::init(
-    const int64_t micro_block_size_limit,
-    const int64_t rowkey_column_count,
-    const int64_t column_count/* = 0*/,
-    const common::ObIArray<share::schema::ObColDesc> *col_desc_array /* nullptr */,
-    const bool need_opt_row_chksum/* false */,
-    const bool is_major/* = false*/)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::init(const int64_t micro_block_size_limit,
+                             const int64_t rowkey_column_count,
+                             const int64_t column_count)
 {
   int ret = OB_SUCCESS;
   reset();
-  if (OB_FAIL(check_input_param(micro_block_size_limit, column_count, rowkey_column_count))) {
-    STORAGE_LOG(WARN, "micro block writer fail to check input param.", K(ret),
-        K(micro_block_size_limit), K(column_count), K(rowkey_column_count));
+  if (micro_block_size_limit <= 0 || rowkey_column_count <= 0 || column_count <= 0
+      || column_count < rowkey_column_count) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN,
+                "micro block writer fail to check input param.",
+                K(ret),
+                K(micro_block_size_limit),
+                K(column_count),
+                K(rowkey_column_count));
   } else {
     micro_block_size_limit_ = micro_block_size_limit;
     rowkey_column_count_ = rowkey_column_count;
     column_count_ = column_count;
+    is_major_ = false;
+    need_check_lob_ = true;
+    col_desc_array_ = nullptr;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::init(const ObDataStoreDesc *data_store_desc)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_ISNULL(data_store_desc) || OB_UNLIKELY(!data_store_desc->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN,
+                "micro block writer fail to check input param.",
+                KR(ret),
+                KPC(data_store_desc));
+  } else {
+    micro_block_size_limit_ = data_store_desc->get_micro_block_size_limit();
+    rowkey_column_count_ = data_store_desc->get_rowkey_column_count();
+    column_count_ = data_store_desc->get_row_column_count();
     // major need calc column checksum
-    is_major_ = is_major;
+    is_major_ = data_store_desc->is_major_merge_type();
     // there are only rowkey column descs during minor merge, so we should alwasy check lob storage -_-
     need_check_lob_ = true;
-    if (is_major) {
-      if (OB_NOT_NULL(col_desc_array_ = col_desc_array)) {
+    if (is_major_) {
+      if (OB_NOT_NULL(col_desc_array_ = &data_store_desc->get_rowkey_col_descs())) {
         for (int64_t i = 0; OB_SUCC(ret) && !need_check_lob_ && i < col_desc_array_->count(); i++) {
           need_check_lob_ = col_desc_array_->at(i).col_type_.is_lob_storage();
         }
@@ -67,19 +137,24 @@ int ObMicroBlockWriter::init(
         need_check_lob_ = false;
       }
     }
-    if (OB_NOT_NULL(col_desc_array_ = col_desc_array)) {
-      if (FAILEDx(checksum_helper_.init(col_desc_array_, need_opt_row_chksum))) {
+    if (OB_NOT_NULL(col_desc_array_ = &data_store_desc->get_rowkey_col_descs())) {
+      if (FAILEDx(checksum_helper_.init(col_desc_array_, data_store_desc->contain_full_col_descs()))) {
         STORAGE_LOG(WARN, "fail to init checksum_helper", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
-      is_inited_ = true;
+      if (OB_FAIL(init_hash_index_builder(data_store_desc))) {
+        STORAGE_LOG(WARN, "Fail to init hash index builder", KR(ret));
+      } else {
+        is_inited_ = true;
+      }
     }
   }
   return ret;
 }
 
-int ObMicroBlockWriter::inner_init()
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::inner_init()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -110,7 +185,8 @@ int ObMicroBlockWriter::inner_init()
   return ret;
 }
 
-int ObMicroBlockWriter::try_to_append_row()
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::try_to_append_row()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(get_future_block_size() > block_size_upper_bound_)) {
@@ -119,7 +195,8 @@ int ObMicroBlockWriter::try_to_append_row()
   return ret;
 }
 
-int ObMicroBlockWriter::process_out_row_columns(const ObDatumRow &row)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::process_out_row_columns(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
 
@@ -154,7 +231,8 @@ int ObMicroBlockWriter::process_out_row_columns(const ObDatumRow &row)
   return ret;
 }
 
-int ObMicroBlockWriter::append_row(const ObDatumRow &row)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::append_row(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -173,7 +251,7 @@ int ObMicroBlockWriter::append_row(const ObDatumRow &row)
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "append row column count is not consistent with init column count",
           K(get_header(data_buffer_)->column_count_), K(row.get_column_count()), K(ret));
-    } else if (OB_FAIL(data_buffer_.write_row(row, rowkey_column_count_, pos))) {
+    } else if (OB_FAIL(data_buffer_.write_row(row, rowkey_column_count_, col_desc_array_, pos))) {
       if (OB_BUF_NOT_ENOUGH != ret) {
         STORAGE_LOG(WARN, "row writer fail to write row.", K(ret), K(rowkey_column_count_),
             K(row), K(OB_P(data_buffer_.remain())), K(pos));
@@ -191,6 +269,8 @@ int ObMicroBlockWriter::append_row(const ObDatumRow &row)
       }
     } else if (OB_FAIL(finish_row())) {
       STORAGE_LOG(WARN, "micro block writer fail to finish row.", K(ret), K(pos));
+    } else if (OB_FAIL(append_row_to_hash_index(row))) {
+      STORAGE_LOG(WARN, "Fail to append row into hash index", KR(ret), K(row));
     } else if (get_header(data_buffer_)->has_column_checksum_ && OB_FAIL(checksum_helper_.cal_column_checksum(
         row, get_header(data_buffer_)->column_checksums_))) {
       STORAGE_LOG(WARN, "fail to cal column chksum", K(ret), K(row), KPC(get_header(data_buffer_)));
@@ -205,7 +285,8 @@ int ObMicroBlockWriter::append_row(const ObDatumRow &row)
   return ret;
 }
 
-int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::build_block(char *&buf, int64_t &size)
 {
   int ret = OB_SUCCESS;
   if(!is_inited_){
@@ -214,6 +295,8 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
   } else if (OB_UNLIKELY(data_buffer_.length() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected empty block", K(ret));
+  } else if (OB_FAIL(build_hash_index_block())) {
+    STORAGE_LOG(WARN, "Fail to build hash index block", KR(ret));
   } else {
     ObMicroBlockHeader *header = get_header(data_buffer_);
     if (last_rows_count_ == header->row_count_) {
@@ -230,6 +313,7 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
     header->has_string_out_row_ = has_string_out_row_;
     header->all_lob_in_row_ = !has_lob_out_row_;
     header->is_last_row_last_flag_ = is_last_row_last_flag_;
+    header->is_first_row_first_flag_ = is_first_row_first_flag_;
 
     if (data_buffer_.remain() < get_index_size()) {
       ret = OB_SIZE_OVERFLOW;
@@ -248,13 +332,18 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
   return ret;
 }
 
-int ObMicroBlockWriter::append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder)
 {
   int ret = OB_SUCCESS;
   get_header(data_buffer_)->contains_hash_index_ = 0;
   if (hash_index_builder.is_valid()) {
     if (is_contain_uncommitted_row()) {
       ret = OB_NOT_SUPPORTED;
+    } else if (data_buffer_.remain() < get_index_size() + hash_index_builder.estimate_size()) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "row data buffer is overflow", KR(ret), K(data_buffer_.remain()),
+                  K(get_index_size()));
     } else if (OB_FAIL(hash_index_builder.build_block(index_buffer_))) {
       if (ret != OB_NOT_SUPPORTED) {
         STORAGE_LOG(WARN, "data buffer fail to write hash index.", K(ret));
@@ -267,12 +356,8 @@ int ObMicroBlockWriter::append_hash_index(ObMicroBlockHashIndexBuilder& hash_ind
   return ret;
 }
 
-bool ObMicroBlockWriter::has_enough_space_for_hash_index(const int64_t hash_index_size) const {
-  const int64_t total_size = get_data_size() + get_index_size() + hash_index_size;
-  return total_size <= micro_block_size_limit_ && total_size <= block_size_upper_bound_;
-}
-
-void ObMicroBlockWriter::reset()
+template<bool EnableNewFlatFormat>
+void ObMicroBlockWriter<EnableNewFlatFormat>::reset()
 {
   ObIMicroBlockWriter::reset();
   micro_block_size_limit_ = 0;
@@ -282,37 +367,26 @@ void ObMicroBlockWriter::reset()
   is_major_ = false;
   data_buffer_.reset();
   index_buffer_.reset();
+  hash_index_builder_.reset();
   col_desc_array_ = nullptr;
   is_inited_ = false;
 }
 
-void ObMicroBlockWriter::reuse()
+template<bool EnableNewFlatFormat>
+void ObMicroBlockWriter<EnableNewFlatFormat>::reuse()
 {
   ObIMicroBlockWriter::reuse();
   data_buffer_.reuse();
   index_buffer_.reuse();
+  if (hash_index_builder_.is_valid() || reuse_hash_index_builder_) {
+    reuse_hash_index_builder_ = false;
+    hash_index_builder_.reuse();
+  }
   row_count_ = 0;
 }
 
-int ObMicroBlockWriter::check_input_param(
-    const int64_t micro_block_size_limit,
-    const int64_t column_count,
-    const int64_t rowkey_column_count)
-{
-  int ret = OB_SUCCESS;
-  if (micro_block_size_limit <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid micro block writer input argument.", K(micro_block_size_limit), K(ret));
-  } else if (rowkey_column_count < 0 ||
-      (column_count <= 0 || column_count < rowkey_column_count)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid micro block writer input argument.", K(ret), K(column_count),
-                    K(rowkey_column_count));
-  }
-  return ret;
-}
-
-int ObMicroBlockWriter::finish_row()
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::finish_row()
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -331,7 +405,8 @@ int ObMicroBlockWriter::finish_row()
   return ret;
 }
 
-int ObMicroBlockWriter::reserve_header(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::reserve_header(
     const int64_t column_count,
     const int64_t rowkey_column_count,
     const bool need_calc_column_chksum)
@@ -352,7 +427,7 @@ int ObMicroBlockWriter::reserve_header(
       header->header_size_ = header_size;
       header->column_count_ = static_cast<int32_t>(column_count);
       header->rowkey_column_count_ = static_cast<int32_t>(rowkey_column_count);
-      header->row_store_type_ = FLAT_ROW_STORE;
+      header->row_store_type_ = EnableNewFlatFormat ? FLAT_OPT_ROW_STORE : FLAT_ROW_STORE;
       header->has_column_checksum_ = need_calc_column_chksum;
       if (need_calc_column_chksum) {
         header->column_checksums_ = reinterpret_cast<int64_t *>(
@@ -364,11 +439,68 @@ int ObMicroBlockWriter::reserve_header(
   return ret;
 }
 
-bool ObMicroBlockWriter::is_exceed_limit()
+template<bool EnableNewFlatFormat>
+bool ObMicroBlockWriter<EnableNewFlatFormat>::is_exceed_limit()
 {
   ObMicroBlockHeader *header = get_header(data_buffer_);
   return header->row_count_ > 0 && get_future_block_size() > micro_block_size_limit_;
 }
+
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::init_hash_index_builder(const ObDataStoreDesc *data_store_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(data_store_desc) && data_store_desc->get_tablet_id().is_user_tablet()
+      && !data_store_desc->is_major_or_meta_merge_type()
+      && !data_store_desc->is_for_index_or_meta()) {
+    // only build hash index for data block in minor
+    if (OB_FAIL(hash_index_builder_.init_if_needed(data_store_desc))) {
+      STORAGE_LOG(WARN, "Fail to build hash_index builder", KR(ret));
+    }
+  }
+  return ret;
+}
+
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::append_row_to_hash_index(const ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (hash_index_builder_.is_valid()) {
+    if (OB_FAIL(hash_index_builder_.add(row))) {
+      if (ret != OB_NOT_SUPPORTED) {
+        STORAGE_LOG(WARN, "Fail to append hash index", KR(ret), K(row));
+      } else {
+        // hash index is not supported for this micro block data
+        // but the hash index builder can be reuse if we call micro_block->reuse()
+        reuse_hash_index_builder_ = true;
+        ret = OB_SUCCESS;
+      }
+      hash_index_builder_.reset();
+    }
+  }
+  return ret;
+}
+
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::build_hash_index_block()
+{
+  int ret = OB_SUCCESS;
+  if (hash_index_builder_.is_valid()) {
+    if (OB_FAIL(append_hash_index(hash_index_builder_))) {
+      if (ret != OB_NOT_SUPPORTED) {
+        STORAGE_LOG(WARN, "Fail to append hash index to micro block writer", KR(ret));
+      } else {
+        reuse_hash_index_builder_ = true;
+        ret = OB_SUCCESS;
+      }
+      hash_index_builder_.reset();
+    }
+  }
+  return ret;
+}
+
+template class ObMicroBlockWriter<true>;
+template class ObMicroBlockWriter<false>;
 
 }//end namespace blocksstable
 }//end namespace oceanbase

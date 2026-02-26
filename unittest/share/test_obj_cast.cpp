@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/object/ob_obj_cast.h"
 #include <gtest/gtest.h>
-#include "lib/worker.h"
 
 
 namespace oceanbase

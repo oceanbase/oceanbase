@@ -13,17 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/resolver/cmd/ob_kill_stmt.h"
 #include "sql/engine/cmd/ob_kill_executor.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/cmd/ob_kill_session_arg.h"
-#include "lib/net/ob_addr.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
-#include "share/ob_rpc_struct.h"
 namespace oceanbase
 {
 using namespace common;
@@ -46,7 +36,7 @@ int ObKillExecutor::execute(ObExecContext &ctx, ObKillStmt &stmt)
       is_client_id_support = ctx.get_my_session()->is_client_sessid_support();
     }
     bool direct_mode = !is_client_id_support ||
-        ((arg.sess_id_ & SERVER_SESSID_TAG) >> 31) || arg.is_query_ == true;
+        ((arg.sess_id_ & SERVER_SESSID_TAG) >> 31);
     // Direct connection scenario kill session or kill query
     if (direct_mode) {
       if (OB_FAIL(kill_session(arg, session_mgr))) {
@@ -61,14 +51,20 @@ int ObKillExecutor::execute(ObExecContext &ctx, ObKillStmt &stmt)
         }
       }
     } else {
-      // Proxy connection scenario kill session.
-      if (OB_FAIL(kill_client_session(arg, session_mgr, ctx))) {
-        if (ret == OB_ERR_KILL_CLIENT_SESSION) {
-          LOG_DEBUG("Succ to Kill Client Session", K(ret), K(arg));
-        } else {
-          LOG_WARN("Fail to kill client session", K(ret), K(arg));
+      // Proxy connection scenario kill session or kill query.
+      if (arg.is_query_ == true) {
+        // kill query proxy cs id scene
+        if (OB_FAIL(kill_query_cs_id(arg, session_mgr, ctx))) {
+          LOG_WARN("Fail to kill query cs id", K(ret), K(arg));
         }
       } else {
+        if (OB_FAIL(kill_client_session(arg, session_mgr, ctx))) {
+          if (ret == OB_ERR_KILL_CLIENT_SESSION) {
+            LOG_DEBUG("Succ to Kill Client Session", K(ret), K(arg));
+          } else {
+            LOG_WARN("Fail to kill client session", K(ret), K(arg));
+          }
+        }
       }
     }
   }
@@ -78,6 +74,84 @@ int ObKillExecutor::execute(ObExecContext &ctx, ObKillStmt &stmt)
   } else if (OB_ERR_KILL_DENIED == ret) {
     LOG_USER_ERROR(OB_ERR_KILL_DENIED, static_cast<uint64_t>(arg.sess_id_));
   }
+  return ret;
+}
+
+int ObKillExecutor::kill_query_cs_id(const ObKillSessionArg &arg, ObSQLSessionMgr &sess_mgr,
+                                       ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObSQLSessionInfo *sess_info = NULL;
+  ObSQLSessionInfo *curr_sess_info = NULL;
+  ObAddr addr;
+  uint32_t client_sess_id = arg.sess_id_;
+  uint32_t server_sess_id = INVALID_SESSID;
+  // Proxy connection scenario kill session
+  ObArray<share::ObServerInfoInTable> servers_info;
+  common::ObZone zone;
+  obrpc::ObKillQueryClientSessionArg cs_arg;
+  bool is_kill_succ = true;
+  LOG_DEBUG("Begin to send kill query rpc", K(arg.sess_id_));
+  if (OB_ISNULL(curr_sess_info = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret), K(ctx));
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("fail to get srv_rpc_proxy", K(ret), K(GCTX.srv_rpc_proxy_),
+              K(GCTX.root_service_));
+  } else if (OB_FAIL(share::ObAllServerTracer::get_instance().get_active_servers_info(
+    zone, servers_info))) {
+    LOG_WARN("fail to get servers info", K(ret));
+  } else if (FALSE_IT(cs_arg.set_client_sess_id(client_sess_id))) {
+  } else {
+    ObAddr addr;
+    const int64_t rpc_timeout = GCONF.rpc_timeout;
+    rootserver::ObKillQueryClientSessionProxy proxy(*GCTX.srv_rpc_proxy_,
+                        &obrpc::ObSrvRpcProxy::kill_query_client_session);
+    for (int64_t i = 0; OB_SUCC(ret) && i < servers_info.count(); i++) {
+      addr = servers_info.at(i).get_server();
+      if (OB_FAIL(proxy.call(addr, rpc_timeout,
+                        curr_sess_info->get_effective_tenant_id(), cs_arg))) {
+        LOG_WARN("send rpc failed", KR(ret),
+            K(rpc_timeout), K(arg), "server", addr);
+        ret = OB_SUCCESS;
+      }
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    ObArray<int> return_code_array;
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      LOG_WARN("wait result failed", KR(tmp_ret));
+      is_kill_succ = false;
+    } else if (return_code_array.count() != proxy.get_results().count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cnt not match",
+          K(ret),
+          "return_cnt",
+          return_code_array.count(),
+          "result_cnt",
+          proxy.get_results().count());
+    } else {
+      for (int64_t i = 0; i < proxy.get_results().count() && OB_SUCC(ret); i++) {
+        if (OB_FAIL(return_code_array.at(i))) {
+          if (return_code_array.at(i) == OB_TENANT_NOT_IN_SERVER) {
+            ret = OB_SUCCESS;  // ignore error
+          } else {
+            ret = return_code_array.at(i);
+            LOG_WARN("rpc execute failed", KR(ret));
+          }
+        } else {
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("Fail to Kill Query Client Session", K(ret), K(client_sess_id));
+  } else {
+    LOG_INFO("Succ to Kill Query Client Session", K(ret), K(client_sess_id));
+  }
+
   return ret;
 }
 
@@ -91,6 +165,7 @@ int ObKillExecutor::kill_client_session(const ObKillSessionArg &arg, ObSQLSessio
   ObAddr addr;
   uint32_t client_sess_id = arg.sess_id_;
   uint32_t server_sess_id = INVALID_SESSID;
+  int64_t local_session_create_time = 0;
   // Proxy connection scenario kill session
   if (OB_ISNULL(curr_sess_info = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -111,17 +186,29 @@ int ObKillExecutor::kill_client_session(const ObKillSessionArg &arg, ObSQLSessio
   } else if (OB_ISNULL(sess_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret), K(client_sess_id));
-  } else if (client_sess_id == curr_sess_info->get_client_sessid()) {
-    // If it is kill the session currently executing the kill command
-    // it can directly return the error code to the proxy.
-    sess_info->set_mark_killed(true);
-    ret = OB_ERR_KILL_CLIENT_SESSION;
-    LOG_INFO("current server conclude kill client session", K(arg.sess_id_));
+  } else if (OB_FAIL(arg.check_auth_for_kill(sess_info->get_priv_tenant_id(), sess_info->get_user_id()))) {
+    ret = OB_ERR_KILL_DENIED;
+    LOG_WARN("no permissions for kill", K(ret), K(arg.sess_id_));
   } else {
+    // sess_info is the session need to be killed.
+    // 1. If the current session is the session currently executing the kill command
+    // it can directly return the error code (OB_ERR_KILL_CLIENT_SESSION) to the proxy.
+    // 2. If not, return OB_SUCCESS.
+    local_session_create_time = sess_info->get_client_create_time();
+    if (OB_FAIL(sess_mgr.kill_session(*sess_info))) {
+        LOG_WARN("fail to kill session", K(ret), K(arg));
+    } else {
+      if (client_sess_id == curr_sess_info->get_client_sid()) {
+        ret = OB_ERR_KILL_CLIENT_SESSION;
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+    LOG_INFO("current server conclude kill client session", K(arg.sess_id_));
   }
   if (OB_SUCC(ret)) {
     ObAddr cs_addr;
-    int64_t create_time = 0;
+    int64_t create_time = local_session_create_time;
     // current server not have cs_id, find it in remote.
     // If there is no link between proxy and server,
     // unknown client session id will be reported.
@@ -129,9 +216,11 @@ int ObKillExecutor::kill_client_session(const ObKillSessionArg &arg, ObSQLSessio
       LOG_WARN("fail to get client session location, unknown client sessid",
               K(ret), K(arg), K(ctx), K(cs_addr));
       // Obtain the client establishment time for map maintenance.
-    } else if (OB_FAIL(get_client_session_create_time_and_auth(arg, ctx, cs_addr, create_time))) {
-      LOG_WARN("fail to get client session create time or no auth",
-              K(ret), K(arg), K(ctx), K(cs_addr), K(ret));
+    } else if (cs_addr != GCTX.self_addr() &&
+               OB_FAIL(get_client_session_create_time_and_auth(
+                   arg, ctx, cs_addr, create_time))) {
+      LOG_WARN("fail to get client session create time or no auth", K(ret),
+               K(arg), K(ctx), K(cs_addr), K(ret));
       // If the time cannot be obtained, return kill failure.
       if (ret == OB_ENTRY_NOT_EXIST) {
         ret = OB_ERR_KILL_CLIENT_SESSION_FAILED;
@@ -292,9 +381,13 @@ int ObKillSession::kill_session(const ObKillSessionArg &arg, ObSQLSessionMgr &se
   } else if (OB_ISNULL(sess_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret), K(arg));
-  } else if ((OB_SYS_TENANT_ID == arg.tenant_id_)
-             || ((arg.tenant_id_ == sess_info->get_priv_tenant_id())
-                 && (arg.has_user_super_privilege_ || arg.user_id_ == sess_info->get_user_id()))) {
+  } else if (sess_info->is_real_inner_session()) {
+    ret = OB_ERR_KILL_DENIED;
+    LOG_WARN("It is not allowed to close the inner session", K(ret), K(arg));
+  } else if (OB_FAIL(arg.check_auth_for_kill(sess_info->get_priv_tenant_id(), sess_info->get_user_id()))) {
+    ret = OB_ERR_KILL_DENIED;
+    LOG_WARN("no permissions for kill", K(ret), K(arg.sess_id_));
+  } else {
     if (arg.is_query_) {
       if (OB_FAIL(sess_mgr.kill_query(*sess_info))) {
         LOG_WARN("fail to kill query", K(ret), K(arg));
@@ -304,8 +397,6 @@ int ObKillSession::kill_session(const ObKillSessionArg &arg, ObSQLSessionMgr &se
         LOG_WARN("fail to kill session", K(ret), K(arg));
       }
     }
-  } else {
-    ret = OB_ERR_KILL_DENIED;
   }
   return ret;
 }

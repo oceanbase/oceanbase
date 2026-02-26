@@ -14,7 +14,6 @@
 
 #include "share/ob_time_utility2.h"
 #include "sql/session/ob_sql_session_mgr.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

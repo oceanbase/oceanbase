@@ -11,7 +11,6 @@
  */
 
 #include "lib/container/ob_2d_array.h"
-#include "lib/objectpool/ob_pool.h"
 #include "lib/utility/ob_test_util.h"
 #include <gtest/gtest.h>
 using namespace oceanbase::common;
@@ -225,10 +224,6 @@ using Tested2DArray = Ob2DArray<obj_type, block_size,
                                 ObSEArray<obj_type *, ptr_array_capacity,
                                           ModulePageAllocator, false>>;
 
-#include <stdio.h>      /* printf, scanf, NULL */
-#include <stdlib.h>     /* malloc, free, rand */
-#include <chrono>
-#include <deque>
 using namespace std;
 
 #if 0

@@ -12,36 +12,22 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "share/object/ob_obj_cast.h"
-#include <math.h>
-#include <float.h>
-#include "lib/charset/ob_dtoa.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "lib/worker.h"
+#include "ob_obj_cast.h"
 #include "share/object/ob_obj_cast_util.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/ob_json_access_utils.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
-#include "lib/json_type/ob_json_tree.h"
-#include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_base.h"
-#include "lib/json_type/ob_json_parse.h"
-#include "share/ob_lob_access_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "lib/roaringbitmap/ob_rb_utils.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/charset/ob_charset.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/expr/ob_array_cast.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/expr/ob_expr_type_to_str.h"
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "src/storage/lob/ob_lob_manager.h"
-#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"
 #endif
+
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_parser.h"
 
@@ -84,6 +70,16 @@ using namespace number;
 
 static const int64_t MAX_DOUBLE_STRICT_PRINT_SIZE = 512;
 
+static ObDateSqlMode get_date_sql_mode(const ObCastMode cast_mode) {
+  ObDateSqlMode date_sql_mode;
+  date_sql_mode.allow_invalid_dates_ =
+        CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_ALLOW_INVALID_DATES(cast_mode);
+  date_sql_mode.no_zero_date_ =
+        CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_DATE(cast_mode);
+  date_sql_mode.no_zero_in_date_ =
+        CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_IN_DATE(cast_mode);
+  return date_sql_mode;
+}
 static int cast_identity(const ObObjType expect_type,
                          ObObjCastParams &params,
                          const ObObj &in,
@@ -106,6 +102,9 @@ static int cast_not_support(const ObObjType expect_type,
                             const ObCastMode cast_mode)
 {
   UNUSED(params);
+  char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
+  (void)snprintf(err_msg, sizeof(err_msg), "%s cast to %s", get_type_name(in.get_type()), get_type_name(expect_type));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
   LOG_WARN_RET(OB_NOT_SUPPORTED, "not supported obj type convert",
             K(expect_type), K(in), K(out), K(cast_mode));
   return OB_NOT_SUPPORTED;
@@ -402,6 +401,8 @@ OB_INLINE int get_cast_ret(const ObCastMode cast_mode,
       CM_IS_WARN_ON_FAIL(cast_mode)) {
     warning = ret;
     ret = OB_SUCCESS;
+  } else if (OB_INVALID_ZERO_DATE == ret) {
+    ret = OB_INVALID_DATE_VALUE;
   }
   return ret;
 }
@@ -420,6 +421,7 @@ OB_INLINE int get_cast_ret(const ObCastMode cast_mode,
           || OB_DATA_OUT_OF_RANGE == params.warning_                      \
           || OB_ERR_DATA_TRUNCATED == params.warning_                     \
           || OB_ERR_DOUBLE_TRUNCATED == params.warning_                   \
+          || OB_INVALID_ZERO_DATE == params.warning_                      \
           || OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD == params.warning_) { \
         res.set_##func_val(obj_type comma val);                           \
       } else if (CM_IS_ZERO_ON_WARN(cast_mode)) {                         \
@@ -439,7 +441,9 @@ OB_INLINE int get_cast_ret(const ObCastMode cast_mode,
 #define SET_RES_DOUBLE(res)       SET_RES_OBJ(res, double, expect_type, COMMA, value, 0.0)
 #define SET_RES_NUMBER(res)       SET_RES_OBJ(res, number, expect_type, COMMA, value, (value.set_zero(), value))
 #define SET_RES_DATETIME(res)     SET_RES_OBJ(res, datetime, expect_type, COMMA, value, ObTimeConverter::ZERO_DATETIME)
+#define SET_RES_MDATETIME(res)     SET_RES_OBJ(res, mysql_datetime, , , mdt_value, ObTimeConverter::MYSQL_ZERO_DATETIME)
 #define SET_RES_DATE(res)         SET_RES_OBJ(res, date, , , value, ObTimeConverter::ZERO_DATE)
+#define SET_RES_MDATE(res)         SET_RES_OBJ(res, mysql_date, , , md_value, ObTimeConverter::MYSQL_ZERO_DATE)
 #define SET_RES_TIME(res)         SET_RES_OBJ(res, time, , , value, ObTimeConverter::ZERO_TIME)
 #define SET_RES_YEAR(res)         SET_RES_OBJ(res, year, , , value, ObTimeConverter::ZERO_YEAR)
 #define SET_RES_BIT(res)          SET_RES_OBJ(res, bit, , , value, 0)
@@ -908,7 +912,8 @@ int ObHexUtils::rawtohex(const ObObj &text, ObCastCtx &cast_ctx, ObObj &result)
       case ObLongTextType:
       case ObRawType: 
       case ObJsonType:
-      case ObGeometryType: {
+      case ObGeometryType:
+      case ObRoaringBitmapType: {
         //https://www.techonthenet.com/oracle/functions/rawtohex.php
         //NOTE:: when convert string to raw, Oracle use utl_raw.cast_to_raw(), while PL/SQL use hextoraw()
         //       here we use utl_raw.cast_to_raw(), as we can not distinguish in which SQL
@@ -1283,8 +1288,37 @@ static int int_datetime(const ObObjType expect_type, ObObjCastParams &params,
       ret = ObTimeConverter::int_to_datetime(in.get_int(), 0, cvrt_ctx, value, date_sql_mode);
     }
     if (CAST_FAIL(ret)) {
+      LOG_WARN("fail to cast int to datetime", K(ret));
     } else {
       SET_RES_DATETIME(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int int_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObIntTC != in.get_type_class()
+                  ||  ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
+    ObMySQLDateTime mdt_value = 0;
+    if (in.get_int() < 0) {
+      ret = OB_INVALID_DATE_FORMAT;
+    } else {
+      ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
+      ret = ObTimeConverter::int_to_mdatetime(in.get_int(), 0, cvrt_ctx, mdt_value, date_sql_mode);
+    }
+    if (CAST_FAIL(ret)) {
+      LOG_WARN("int to mdatetime fail", K(ret));
+    } else {
+      SET_RES_MDATETIME(out);
     }
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
@@ -1326,8 +1360,31 @@ static int int_date(const ObObjType expect_type, ObObjCastParams &params,
     date_sql_mode.no_zero_date_ = CM_IS_EXPLICIT_CAST(cast_mode)
                                   ? false : CM_IS_NO_ZERO_DATE(cast_mode);
     if (CAST_FAIL(ObTimeConverter::int_to_date(in.get_int(), value, date_sql_mode))) {
+      LOG_WARN("int to date fail", K(ret));
     } else {
       SET_RES_DATE(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int int_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObIntTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObMySQLDate md_value = 0;
+    ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
+    if (CAST_FAIL(ObTimeConverter::int_to_mdate(in.get_int(), md_value, date_sql_mode))) {
+      LOG_WARN("int to mdate fail", K(ret));
+    } else {
+      SET_RES_MDATE(out);
     }
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
@@ -1424,6 +1481,8 @@ static int int_bit(const ObObjType expect_type, ObObjCastParams &params,
                   || ObBitTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (CM_NEED_RANGE_CHECK(cast_mode)
+             && CAST_FAIL(uint_range_check(ObUInt64Type, in.get_int(), value))) {
   } else if (OB_FAIL(get_bit_len(value, bit_len))) {
     LOG_WARN("fail to get bit len", K(ret), K(value), K(bit_len));
   } else {
@@ -1785,6 +1844,23 @@ static int uint_datetime(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int uint_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj int64;
+  if (OB_UNLIKELY(ObUIntTC != in.get_type_class()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(uint_int(ObIntType, params, in, int64, CM_UNSET_NO_CAST_INT_UINT(cast_mode)))) {
+  } else if (OB_FAIL(int_mdatetime(expect_type, params, int64, out, cast_mode))) {
+  }
+  //has set the accuracy in prev int_datetime call
+  return ret;
+}
+
 static int uint_date(const ObObjType expect_type, ObObjCastParams &params,
                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -1797,6 +1873,23 @@ static int uint_date(const ObObjType expect_type, ObObjCastParams &params,
         K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(uint_int(ObIntType, params, in, int64, CM_UNSET_NO_CAST_INT_UINT(cast_mode)))) {
   } else if (OB_FAIL(int_date(expect_type, params, int64, out, cast_mode))) {
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int uint_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj int64;
+  if (OB_UNLIKELY(ObUIntTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(uint_int(ObIntType, params, in, int64, CM_UNSET_NO_CAST_INT_UINT(cast_mode)))) {
+  } else if (OB_FAIL(int_mdate(expect_type, params, int64, out, cast_mode))) {
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
   return ret;
@@ -2199,10 +2292,10 @@ static int float_number(const ObObjType expect_type, ObObjCastParams &params,
     MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
     int64_t length = 0;
     if (lib::is_oracle_mode()) {
-      length = ob_gcvt_opt(in.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(sizeof(buf) - 1),
+      length = ob_gcvt_opt(value, OB_GCVT_ARG_FLOAT, static_cast<int32_t>(sizeof(buf) - 1),
                            buf, NULL, TRUE, TRUE);
     } else {
-      length = ob_gcvt(in.get_float(), OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL);
+      length = ob_gcvt(value, OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL);
     }
     ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
     number::ObNumber nmb;
@@ -2231,6 +2324,25 @@ static int float_datetime(const ObObjType expect_type, ObObjCastParams &params,
         K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(float_double(ObDoubleType, params, in, dbl, cast_mode))) {
   } else if (OB_FAIL(double_datetime(expect_type, params, dbl, out, cast_mode))) {
+  }
+  //has set accuracy in prev double_datetime call
+  return ret;
+}
+
+static int double_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode);
+static int float_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj dbl;
+  if (OB_UNLIKELY(ObFloatTC != in.get_type_class()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(float_double(ObDoubleType, params, in, dbl, cast_mode))) {
+  } else if (OB_FAIL(double_mdatetime(expect_type, params, dbl, out, cast_mode))) {
   }
   //has set accuracy in prev double_datetime call
   return ret;
@@ -2268,6 +2380,25 @@ static int float_date(const ObObjType expect_type, ObObjCastParams &params,
         K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(float_double(ObDoubleType, params, in, dbl, cast_mode))) {
   } else if (OB_FAIL(double_date(expect_type, params, dbl, out, cast_mode))) {
+  }
+  //has set accuracy in prev double_date call
+  return ret;
+}
+
+static int double_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode);
+static int float_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj dbl;
+  if (OB_UNLIKELY(ObFloatTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(float_double(ObDoubleType, params, in, dbl, cast_mode))) {
+  } else if (OB_FAIL(double_mdate(expect_type, params, dbl, out, cast_mode))) {
   }
   //has set accuracy in prev double_date call
   return ret;
@@ -2632,7 +2763,7 @@ static int double_number(const ObObjType expect_type, ObObjCastParams &params,
   } else {
     char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
     MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
-    int64_t length = ob_gcvt_opt(in.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(sizeof(buf) - 1),
+    int64_t length = ob_gcvt_opt(value, OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(sizeof(buf) - 1),
                                  buf, NULL, lib::is_oracle_mode(), TRUE);
     ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
     number::ObNumber nmb;
@@ -2680,6 +2811,40 @@ static int double_datetime(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int number_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode);
+static int double_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  // double to datetime must cast to number first, then cast string to datetime.
+  // because double 20151016153421.8 may actually 20151016153421.801 in memory,
+  // so we will get '2015-10-16 15:34:21.801' instead of '2015-10-16 15:34:21.8'.
+  // this problem can be resolved by cast double to number.
+  int ret = OB_SUCCESS;
+  ObObj tmp_num_obj;
+  if (OB_UNLIKELY(ObDoubleTC != in.get_type_class()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(double_number(ObNumberType, params, in, tmp_num_obj, cast_mode))) {
+    LOG_WARN("cast double to number failed", K(ret), K(cast_mode));
+    if (CM_IS_WARN_ON_FAIL(cast_mode)){
+      ret = OB_SUCCESS;
+      if (CM_IS_ZERO_ON_WARN(cast_mode)) {
+        out.set_mysql_datetime(ObTimeConverter::MYSQL_ZERO_DATETIME);
+      } else {
+        out.set_null();
+      }
+    } else {
+      ret = OB_INVALID_DATE_VALUE;
+    }
+  } else if (CAST_FAIL(number_mdatetime(expect_type, params, tmp_num_obj, out, cast_mode))) {
+    LOG_WARN("number to datetime failed", K(ret));
+  }
+  return ret;
+}
+
 static int double_datetime_interval(const ObObjType expect_type, ObObjCastParams &params,
                                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -2712,6 +2877,23 @@ static int double_date(const ObObjType expect_type, ObObjCastParams &params,
         K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(double_int(ObIntType, params, in, int64, cast_mode))) {
   } else if (OB_FAIL(int_date(expect_type, params, int64, out, cast_mode))) {
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int double_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj int64;
+  if (OB_UNLIKELY(ObDoubleTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(double_int(ObIntType, params, in, int64, cast_mode))) {
+  } else if (OB_FAIL(int_mdate(expect_type, params, int64, out, cast_mode))) {
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
   return ret;
@@ -2795,16 +2977,38 @@ static int double_string(const ObObjType expect_type, ObObjCastParams &params,
       if (0 <= scale) {
         length = ob_fcvt(in.get_double(), scale, sizeof(buf) - 1, buf, NULL);
       } else {
+        const int32_t buf_length = static_cast<int32_t>(sizeof(buf) - 1);
+        int32_t double_width = buf_length;
+        bool error = false;
+        if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(cast_mode) && params.dest_max_length_ > 0) {
+          double_width = min(double_width, params.dest_max_length_);
+        }
         length = ob_gcvt_opt(in.get_double(), OB_GCVT_ARG_DOUBLE,
-                              static_cast<int32_t>(sizeof(buf) - 1), buf, NULL, lib::is_oracle_mode(), TRUE);
+                             double_width, buf, &error, lib::is_oracle_mode(), TRUE);
+        if (length == 0 && double_width < buf_length) {
+          length = double_width;
+          buf[length] = '\0';
+          if (OB_UNLIKELY(error) && CM_IS_COLUMN_CONVERT(cast_mode)) {
+            if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+              if (OB_NOT_NULL(params.exec_ctx_)) {
+                ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
+                  OB_ERR_DATA_TRUNCATED, "", "", cast_mode);
+              }
+            } else {
+              ret = OB_ERR_DATA_TOO_LONG;
+              LOG_WARN("fail to set truncated double string", K(ret));
+            }
+          }
+        }
       }
     }
     ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
     LOG_DEBUG("finish double_string", K(ret), K(in), K(expect_type), K(str));
     ObObj tmp_out;
     ObString tmp_str;
-    if (OB_FAIL(convert_string_collation(str, ObCharset::get_system_collation(),
-                                         tmp_str, params.dest_collation_, params))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(convert_string_collation(str, ObCharset::get_system_collation(),
+                                                tmp_str, params.dest_collation_, params))) {
       LOG_WARN("fail to convert string collation", K(ret));
     } else if (OB_FAIL(check_convert_string(expect_type, params, tmp_str, tmp_out))) {
       LOG_WARN("fail to check_convert_string", K(ret), K(in), K(expect_type));
@@ -3112,8 +3316,6 @@ static int number_number(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
-static int string_datetime(const ObObjType expect_type, ObObjCastParams &params,
-                           const ObObj &in, ObObj &out, const ObCastMode cast_mode);
 static int number_datetime(const ObObjType expect_type, ObObjCastParams &params,
                            const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -3121,13 +3323,15 @@ static int number_datetime(const ObObjType expect_type, ObObjCastParams &params,
   const int64_t three_digit_min = 100;
   const int64_t eight_digit_max = 99999999;
   if (OB_UNLIKELY(ObNumberTC != in.get_type_class()
-                  || ObDateTimeTC != ob_obj_type_class(expect_type))) {
+                  || (ObDateTimeTC != ob_obj_type_class(expect_type)
+                      && ObMySQLDateTimeTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type",
         K(ret), K(in), K(expect_type));
   } else {
     ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
     int64_t value = 0;
+    ObMySQLDateTime mdt_value = 0;
     int64_t int_part = 0;
     int64_t dec_part = 0;
     if (in.get_number().is_negative()) {
@@ -3147,20 +3351,32 @@ static int number_datetime(const ObObjType expect_type, ObObjCastParams &params,
       }
     }
     if (OB_SUCC(ret)) {
-      ObDateSqlMode date_sql_mode;
-      date_sql_mode.allow_invalid_dates_ = CM_IS_EXPLICIT_CAST(cast_mode)
-                                           ? false : CM_IS_ALLOW_INVALID_DATES(cast_mode);
-      date_sql_mode.no_zero_date_ = CM_IS_EXPLICIT_CAST(cast_mode)
-                                    ? false : CM_IS_NO_ZERO_DATE(cast_mode);
-      ret = ObTimeConverter::int_to_datetime(int_part, dec_part, cvrt_ctx, value, date_sql_mode);
+      ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
+      ret = ObMySQLDateTimeType == expect_type ?
+              ObTimeConverter::int_to_mdatetime(int_part, dec_part, cvrt_ctx, mdt_value,
+                                                date_sql_mode) :
+              ObTimeConverter::int_to_datetime(int_part, dec_part, cvrt_ctx, value, date_sql_mode);
       LOG_DEBUG("succ to number_datetime", K(ret), K(in), K(value), K(expect_type), K(int_part), K(dec_part));
     }
     if (CAST_FAIL(ret)) {
+      LOG_WARN("fail to cast int to datetime", K(ret));
+    } else if (ObMySQLDateTimeType == expect_type) {
+      SET_RES_MDATETIME(out);
     } else {
       SET_RES_DATETIME(out);
     }
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int number_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(number_datetime(expect_type, params, in, out, cast_mode))) {
+    LOG_WARN("number_datetime failed", K(ret));
+  }
   return ret;
 }
 
@@ -3197,8 +3413,10 @@ static int number_date(const ObObjType expect_type, ObObjCastParams &params,
   int ret = OB_SUCCESS;
   ObObj int64;
   int32_t value = 0;
+  ObMySQLDate md_value = 0;
   if (OB_UNLIKELY(ObNumberTC != in.get_type_class()
-                  || ObDateTC != ob_obj_type_class(expect_type))) {
+                  || (ObDateTC != ob_obj_type_class(expect_type)
+                      && ObMySQLDateTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type",
         K(ret), K(in), K(expect_type));
@@ -3213,12 +3431,10 @@ static int number_date(const ObObjType expect_type, ObObjCastParams &params,
       ret = OB_INVALID_DATE_VALUE;
       LOG_WARN("invalid date format", K(ret), K(nmb));
     } else {
-      ObDateSqlMode date_sql_mode;
-      date_sql_mode.allow_invalid_dates_ = CM_IS_EXPLICIT_CAST(cast_mode)
-                                           ? false : CM_IS_ALLOW_INVALID_DATES(cast_mode);
-      date_sql_mode.no_zero_date_ = CM_IS_EXPLICIT_CAST(cast_mode)
-                                    ? false : CM_IS_NO_ZERO_DATE(cast_mode);
-      ret = ObTimeConverter::int_to_date(int_part, value, date_sql_mode);
+      ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
+      ret = ObMySQLDateType == expect_type ?
+              ObTimeConverter::int_to_mdate(int_part, md_value, date_sql_mode) :
+              ObTimeConverter::int_to_date(int_part, value, date_sql_mode);
       if (OB_SUCC(ret) && OB_UNLIKELY(dec_part > 0)) {
         if (CM_IS_COLUMN_CONVERT(cast_mode) && !CM_IS_WARN_ON_FAIL(cast_mode)) {
           ret = OB_INVALID_DATE_VALUE;
@@ -3227,9 +3443,21 @@ static int number_date(const ObObjType expect_type, ObObjCastParams &params,
       }
     }
     if (CAST_FAIL(ret)) {
+    } else if (ObMySQLDateType == expect_type) {
+      SET_RES_MDATE(out);
     } else {
       SET_RES_DATE(out);
     }
+  }
+  return ret;
+}
+
+static int number_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(number_date(expect_type, params, in, out, cast_mode))) {
+    LOG_WARN("number_mdate failed", K(ret));
   }
   return ret;
 }
@@ -3554,6 +3782,29 @@ static int datetime_int(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int mdatetime_int(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObPrecision res_precision = -1;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObIntTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    int64_t value = 0;
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_int(in.get_mysql_datetime(), value))) {
+    } else if (expect_type < ObIntType && CAST_FAIL(int_range_check(expect_type, value, value))) {
+    } else {
+      out.set_int(expect_type, value);
+      res_precision = get_precision_for_integer(value);
+    }
+  }
+  SET_RES_ACCURACY(res_precision, DEFAULT_SCALE_FOR_INTEGER, DEFAULT_LENGTH_FOR_NUMERIC);
+  return ret;
+}
+
 static int datetime_uint(const ObObjType expect_type, ObObjCastParams &params,
                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -3568,6 +3819,32 @@ static int datetime_uint(const ObObjType expect_type, ObObjCastParams &params,
     const ObTimeZoneInfo *tz_info = (ObTimestampType == in.get_type()) ? params.dtc_params_.tz_info_ : NULL;
     int64_t int64 = 0;
     if (OB_FAIL(ObTimeConverter::datetime_to_int(in.get_datetime(), tz_info, int64))) {
+    } else {
+      uint64_t value = static_cast<uint64_t>(int64);
+      if (expect_type < ObUInt64Type && CAST_FAIL(uint_range_check(expect_type, int64, value))) {
+      } else {
+        out.set_uint(expect_type, value);
+        res_precision = get_precision_for_integer(value);
+      }
+    }
+  }
+  SET_RES_ACCURACY(res_precision, DEFAULT_SCALE_FOR_INTEGER, DEFAULT_LENGTH_FOR_NUMERIC);
+  return ret;
+}
+
+static int mdatetime_uint(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObPrecision res_precision = -1;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObUIntTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    int64_t int64 = 0;
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_int(in.get_mysql_datetime(), int64))) {
     } else {
       uint64_t value = static_cast<uint64_t>(int64);
       if (expect_type < ObUInt64Type && CAST_FAIL(uint_range_check(expect_type, int64, value))) {
@@ -3605,6 +3882,29 @@ static int datetime_float(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int mdatetime_float(const ObObjType expect_type, ObObjCastParams &params,
+                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObFloatTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    double value = 0.0;
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_double(in.get_mysql_datetime(), value))) {
+    } else {
+      // if datetime_to_double return OB_SUCCESS, double value must be in (0, INT64_MAX),
+      // so we can static_cast to float without range check.
+      out.set_float(expect_type, static_cast<float>(value));
+    }
+  }
+  SET_RES_ACCURACY(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET, LENGTH_UNKNOWN_YET);
+  UNUSED(cast_mode);
+  return ret;
+}
+
 static int datetime_double(const ObObjType expect_type, ObObjCastParams &params,
                            const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -3618,6 +3918,27 @@ static int datetime_double(const ObObjType expect_type, ObObjCastParams &params,
     const ObTimeZoneInfo *tz_info = (ObTimestampType == in.get_type()) ? params.dtc_params_.tz_info_ : NULL;
     double value = 0.0;
     if (OB_FAIL(ObTimeConverter::datetime_to_double(in.get_datetime(), tz_info, value))) {
+    } else {
+      out.set_double(expect_type, value);
+    }
+  }
+  SET_RES_ACCURACY(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET, LENGTH_UNKNOWN_YET);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int mdatetime_double(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObDoubleTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    double value = 0.0;
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_double(in.get_mysql_datetime(), value))) {
     } else {
       out.set_double(expect_type, value);
     }
@@ -3657,6 +3978,37 @@ static int datetime_number(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int mdatetime_number(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObPrecision res_precision = -1;
+  ObScale res_scale = -1;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObNumberTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObString nls_format;
+    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    int64_t len = 0;
+    number::ObNumber value;
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_str(in.get_mysql_datetime(), NULL, nls_format,
+                                                  in.get_scale(), buf, sizeof(buf), len, false))) {
+      LOG_WARN("failed to convert datetime to string", K(ret));
+    } else if (CAST_FAIL(value.from(buf, len, params, &res_precision, &res_scale))) {
+      LOG_WARN("failed to convert string to number", K(ret));
+    } else {
+      out.set_number(expect_type, value);
+    }
+  }
+  SET_RES_ACCURACY(res_precision, res_scale, DEFAULT_LENGTH_FOR_NUMERIC);
+  return ret;
+}
+
+// timestamp -> datetime
+// datetime -> timestamp
 static int datetime_datetime(const ObObjType expect_type, ObObjCastParams &params,
                              const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -3685,6 +4037,68 @@ static int datetime_datetime(const ObObjType expect_type, ObObjCastParams &param
   return ret;
 }
 
+// mdatetime -> datetime/timestamp
+static int mdatetime_datetime(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
+    int64_t value = in.get_datetime();
+    if (ObTimestampType == expect_type) {
+      ret = ObTimeConverter::mdatetime_to_timestamp(in.get_mysql_datetime(),
+                                                params.dtc_params_.tz_info_, value);
+      ret = OB_ERR_UNEXPECTED_TZ_TRANSITION == ret ? OB_INVALID_DATE_VALUE : ret;
+    } else if (ObDateTimeType == expect_type) {
+      ret = ObTimeConverter::mdatetime_to_datetime(in.get_mysql_datetime(), value, date_sql_mode);
+    }
+
+    if (CAST_FAIL(ret)) {
+    } else {
+      out.set_datetime(expect_type, value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, in.get_scale(), DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+// datetime/timestamp -> mdatetime
+static int datetime_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                                   const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObDateTimeTC != in.get_type_class()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObMySQLDateTime value = 0;
+    if (ObDateTimeType == in.get_type()) {
+      ret = ObTimeConverter::datetime_to_mdatetime(in.get_datetime(), value);
+      ret = OB_ERR_UNEXPECTED_TZ_TRANSITION == ret ? OB_INVALID_DATE_VALUE : ret;
+    } else if (ObTimestampType == in.get_type()) {
+      ret = ObTimeConverter::timestamp_to_mdatetime(in.get_datetime(),
+                                                         params.dtc_params_.tz_info_, value);
+    }
+
+    if (OB_FAIL(ret)) {
+    } else {
+      out.set_mysql_datetime(value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, in.get_scale(), DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+
 static int datetime_date(const ObObjType expect_type, ObObjCastParams &params,
                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -3707,6 +4121,77 @@ static int datetime_date(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int datetime_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObDateTimeTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    const ObTimeZoneInfo *tz_info = (ObTimestampType == in.get_type()) ? params.dtc_params_.tz_info_ : NULL;
+    ObMySQLDate value = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_mdate(in.get_datetime(), tz_info, value))) {
+      LOG_WARN("datetime to date failed", K(ret), K(in.get_datetime()), K(out.get_type()));
+    } else {
+      out.set_mysql_date(value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int mdatetime_date(const ObObjType expect_type, ObObjCastParams &params,
+                               const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    const ObTimeZoneInfo *tz_info = (ObTimestampType == in.get_type()) ? params.dtc_params_.tz_info_ : NULL;
+    int32_t value = 0;
+    ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
+    if (CAST_FAIL(ObTimeConverter::mdatetime_to_date(in.get_mysql_datetime(), value, date_sql_mode))) {
+      LOG_WARN("mdatetime to date failed", K(ret), K(in.get_mysql_datetime()), K(out.get_type()));
+    } else {
+      out.set_date(value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+
+static int mdatetime_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                               const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObMySQLDate value = 0;
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_mdate(in.get_mysql_datetime(), value))) {
+      LOG_WARN("mdatetime to date failed", K(ret), K(in.get_mysql_datetime()), K(out.get_type()));
+    } else {
+      out.set_mysql_date(value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+// datetime/mdatetime -> time
 static int datetime_time(const ObObjType expect_type, ObObjCastParams &params,
                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -3720,6 +4205,27 @@ static int datetime_time(const ObObjType expect_type, ObObjCastParams &params,
     const ObTimeZoneInfo *tz_info = (ObTimestampType == in.get_type()) ? params.dtc_params_.tz_info_ : NULL;
     int64_t value = 0;
     if (OB_FAIL(ObTimeConverter::datetime_to_time(in.get_datetime(), tz_info, value))) {
+    } else {
+      out.set_time(value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, in.get_scale(), DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int mdatetime_time(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    int64_t value = 0;
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_time(in.get_mysql_datetime(), value))) {
     } else {
       out.set_time(value);
     }
@@ -3751,12 +4257,35 @@ static int datetime_year(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int mdatetime_year(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObYearTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    uint8_t value = 0;
+    if (CAST_FAIL(ObTimeConverter::mdatetime_to_year(in.get_mysql_datetime(), value))) {
+    } else {
+      SET_RES_YEAR(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_YEAR, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+
+// datetime/mdatetime/timestamp -> string
 static int datetime_string(const ObObjType expect_type, ObObjCastParams &params,
                            const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
   ObLength res_length = -1;
-  if (OB_UNLIKELY(ObDateTimeTC != in.get_type_class()
+  if (OB_UNLIKELY((ObDateTimeTC != in.get_type_class() && ObMySQLDateTimeTC != in.get_type_class())
                   || (ObStringTC != ob_obj_type_class(expect_type)
                   && ObTextTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
@@ -3770,8 +4299,12 @@ static int datetime_string(const ObObjType expect_type, ObObjCastParams &params,
     }
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
-    if (OB_FAIL(ObTimeConverter::datetime_to_str(in.get_datetime(), tz_info,
-            nls_format, in.get_scale(), buf, sizeof(buf), len))) {
+    ret = in.is_mysql_datetime() ?
+                  ObTimeConverter::mdatetime_to_str(in.get_mysql_datetime(), tz_info, nls_format,
+                                                   in.get_scale(), buf, sizeof(buf), len) :
+                  ObTimeConverter::datetime_to_str(in.get_datetime(), tz_info, nls_format,
+                                                   in.get_scale(), buf, sizeof(buf), len);
+    if (OB_FAIL(ret)) {
       LOG_WARN("failed to convert datetime to string", K(ret));
     } else {
       out.set_type(expect_type);
@@ -3790,6 +4323,16 @@ static int datetime_string(const ObObjType expect_type, ObObjCastParams &params,
   }
   SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
   UNUSED(cast_mode);
+  return ret;
+}
+
+static int mdatetime_string(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(datetime_string(expect_type, params, in, out, cast_mode))) {
+    LOG_WARN("datetime_string failed", K(ret));
+  }
   return ret;
 }
 
@@ -3812,6 +4355,24 @@ static int datetime_bit(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int string_bit(const ObObjType expect_type, ObObjCastParams &params,
+                      const ObObj &in, ObObj &out, const ObCastMode cast_mode);
+static int mdatetime_bit(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj tmp_val;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class()
+                  || ObBitTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(mdatetime_string(ObVarcharType, params, in, tmp_val, cast_mode))) {
+    LOG_WARN("fail to cast datetime to string", K(ret), K(expect_type), K(in), K(tmp_val));
+  } else if (OB_FAIL(string_bit(expect_type, params, tmp_val, out, cast_mode))) {
+    LOG_WARN("fail to cast string to bit", K(ret), K(expect_type), K(in), K(tmp_val));
+  }
+  return ret;
+}
 
 static int string_enum(const ObExpectType &expect_type, ObObjCastParams &params, const ObObj &in, ObObj &out);
 static int datetime_enum(const ObExpectType &expect_type, ObObjCastParams &params,
@@ -3889,7 +4450,9 @@ static int datetime_otimestamp(const ObObjType expect_type, ObObjCastParams &par
 }
 
 CAST_TO_LOB_METHOD(datetime, ObDateTimeTC);
+CAST_TO_LOB_METHOD(mdatetime, ObMySQLDateTimeTC);
 CAST_TO_TEXT_METHOD(datetime, ObDateTimeTC);
+CAST_TO_TEXT_METHOD(mdatetime, ObMySQLDateTimeTC);
 
 static int datetime_json(const ObObjType expect_type, ObObjCastParams &params,
                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
@@ -3933,6 +4496,43 @@ static int datetime_json(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int mdatetime_json(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else {
+    ObMySQLDateTime in_val = in.get_mysql_datetime();
+    ObTime ob_time(DT_TYPE_MYSQL_DATETIME);
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_ob_time(in_val, ob_time))) {
+      LOG_WARN("fail to create datetime from int failed", K(ret), K(in));
+    } else {
+      ObJsonDatetime j_datetime(ObJsonNodeType::J_MYSQL_DATETIME, ob_time);
+      ObIJsonBase *j_base = &j_datetime;
+      ObString raw_bin;
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+        LOG_WARN("fail to get datetime json binary", K(ret), K(in), K(expect_type), K(*j_base));
+      } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
+        LOG_WARN("fail to fill json bin lob locator", K(ret));
+      } else {
+        res_length = out.get_val_len();
+      }
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
 static int datetime_geometry(const ObObjType expect_type, ObObjCastParams &params,
                              const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -3952,8 +4552,12 @@ static int datetime_geometry(const ObObjType expect_type, ObObjCastParams &param
     ObString nls_format;
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
-    if (OB_FAIL(ObTimeConverter::datetime_to_str(in.get_datetime(), tz_info, nls_format,
-        in.get_scale(), buf, sizeof(buf), len))) {
+    ret = in.is_mysql_datetime() ?
+                ObTimeConverter::mdatetime_to_str(in.get_mysql_datetime(), tz_info, nls_format,
+                                                 in.get_scale(), buf, sizeof(buf), len) :
+                ObTimeConverter::datetime_to_str(in.get_datetime(), tz_info, nls_format,
+                                                 in.get_scale(), buf, sizeof(buf), len);
+    if (OB_FAIL(ret)) {
       LOG_WARN("failed to convert datetime to string", K(ret));
     } else if (OB_FAIL(common_get_srs_item(srs_guard, ObString(len, buf), srs, cast_name))) {
       LOG_WARN("fail to get srs item", K(ret));
@@ -3979,6 +4583,16 @@ static int datetime_geometry(const ObObjType expect_type, ObObjCastParams &param
   return ret;
 }
 
+static int mdatetime_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(datetime_geometry(expect_type, params, in, out, cast_mode))) {
+    LOG_WARN("datetime_geometry failed", K(ret));
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // Date -> XXX
 
@@ -3994,6 +4608,27 @@ static int date_int(const ObObjType expect_type, ObObjCastParams &params,
     LOG_ERROR("invalid input type",
         K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(ObTimeConverter::date_to_int(in.get_date(), value))) {
+  } else if (expect_type < ObInt32Type && CAST_FAIL(int_range_check(expect_type, value, value))) {
+  } else {
+    out.set_int(expect_type, value);
+    res_precision = get_precision_for_integer(value);
+  }
+  SET_RES_ACCURACY(res_precision, DEFAULT_SCALE_FOR_INTEGER, DEFAULT_LENGTH_FOR_NUMERIC);
+  return ret;
+}
+
+static int mdate_int(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t value = 0;
+  ObPrecision res_precision = -1;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class()
+                  || ObIntTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::mdate_to_int(in.get_mysql_date(), value))) {
   } else if (expect_type < ObInt32Type && CAST_FAIL(int_range_check(expect_type, value, value))) {
   } else {
     out.set_int(expect_type, value);
@@ -4028,6 +4663,32 @@ static int date_uint(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int mdate_uint(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObPrecision res_precision = -1;
+  int64_t int64 = 0;
+  uint64_t value = 0;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class()
+                  || ObUIntTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::mdate_to_int(in.get_mysql_date(), int64))) {
+  } else {
+    value = static_cast<uint64_t>(int64);
+    if (expect_type < ObUInt32Type && CAST_FAIL(uint_range_check(expect_type, int64, value))) {
+    } else {
+      out.set_uint(expect_type, value);
+      res_precision = get_precision_for_integer(value);
+    }
+  }
+  SET_RES_ACCURACY(res_precision, DEFAULT_SCALE_FOR_INTEGER, DEFAULT_LENGTH_FOR_NUMERIC);
+  return ret;
+}
+
+
 static int date_float(const ObObjType expect_type, ObObjCastParams &params,
                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -4039,6 +4700,25 @@ static int date_float(const ObObjType expect_type, ObObjCastParams &params,
     LOG_ERROR("invalid input type",
         K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(ObTimeConverter::date_to_int(in.get_date(), value))) {
+  } else {
+    out.set_float(expect_type, static_cast<float>(value));
+  }
+  SET_RES_ACCURACY(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET, LENGTH_UNKNOWN_YET);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int mdate_float(const ObObjType expect_type, ObObjCastParams &params,
+                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t value = 0;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class()
+                  || ObFloatTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::mdate_to_int(in.get_mysql_date(), value))) {
   } else {
     out.set_float(expect_type, static_cast<float>(value));
   }
@@ -4066,6 +4746,25 @@ static int date_double(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int mdate_double(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t value = 0;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class()
+                  || ObDoubleTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::mdate_to_int(in.get_mysql_date(), value))) {
+  } else {
+    out.set_double(expect_type, static_cast<double>(value));
+  }
+  SET_RES_ACCURACY(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET, LENGTH_UNKNOWN_YET);
+  UNUSED(cast_mode);
+  return ret;
+}
+
 static int date_number(const ObObjType expect_type, ObObjCastParams &params,
                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -4077,6 +4776,23 @@ static int date_number(const ObObjType expect_type, ObObjCastParams &params,
     LOG_ERROR("invalid input type",
         K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(date_int(ObIntType, params, in, obj_int, cast_mode))) {
+  } else if (OB_FAIL(int_number(expect_type, params, obj_int, out, cast_mode))) {
+  }
+  //has set accuracy in prev int_number
+  return ret;
+}
+
+static int mdate_number(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj obj_int;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class()
+                  || ObNumberTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(mdate_int(ObIntType, params, in, obj_int, cast_mode))) {
   } else if (OB_FAIL(int_number(expect_type, params, obj_int, out, cast_mode))) {
   }
   //has set accuracy in prev int_number
@@ -4105,6 +4821,76 @@ static int date_datetime(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int mdate_datetime(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((ObMySQLDateTC != in.get_type_class())
+                  || ObDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
+    ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
+    int64_t value = 0;
+    if (CAST_FAIL(ObTimeConverter::mdate_to_datetime(in.get_mysql_date(), cvrt_ctx, value,
+                                                   date_sql_mode,  params.gen_query_range_))) {
+      LOG_WARN("date_to_datetime failed", K(ret), K(in.get_date()));
+    } else {
+      out.set_datetime(expect_type, value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int date_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObDateTC != in.get_type_class()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObMySQLDateTime value = 0;
+    if (OB_FAIL(ObTimeConverter::date_to_mdatetime(in.get_date(), value))) {
+      LOG_WARN("date_to_mdatetime failed", K(ret), K(in.get_date()), K(in.is_mysql_date()));
+    } else {
+      out.set_mysql_datetime(value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+
+static int mdate_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObMySQLDateTime value = 0;
+    if (OB_FAIL(ObTimeConverter::mdate_to_mdatetime(in.get_mysql_date(), value))) {
+      LOG_WARN("mdate_to_mdatetime failed", K(ret), K(in.get_mysql_date()));
+    } else {
+      out.set_mysql_datetime(value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
 static int date_time(const ObObjType expect_type, ObObjCastParams &params,
                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -4122,6 +4908,68 @@ static int date_time(const ObObjType expect_type, ObObjCastParams &params,
   return OB_SUCCESS;
 }
 
+static int mdate_time(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((ObMySQLDateTC != in.get_type_class())
+                  || ObTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    out.set_time(ObTimeConverter::ZERO_TIME);
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return OB_SUCCESS;
+}
+
+static int date_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObDateTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObMySQLDate value = 0;
+    if (OB_FAIL(ObTimeConverter::date_to_mdate(in.get_date(), value))) {
+      LOG_WARN("date_to_date failed", K(ret), K(in.get_datetime()));
+    } else {
+      out.set_mysql_date(value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int mdate_date(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class()
+                  || ObDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
+    int32_t value = 0;
+    if (CAST_FAIL(ObTimeConverter::mdate_to_date(in.get_mysql_date(), value, date_sql_mode))) {
+      LOG_WARN("date_to_date failed", K(ret), K(in.get_datetime()), K(in.is_mysql_date()));
+    } else {
+      out.set_date(value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
 static int date_year(const ObObjType expect_type, ObObjCastParams &params,
                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -4133,6 +4981,25 @@ static int date_year(const ObObjType expect_type, ObObjCastParams &params,
     LOG_ERROR("invalid input type",
         K(ret), K(in), K(expect_type));
   } else if (CAST_FAIL(ObTimeConverter::date_to_year(in.get_date(), value))) {
+  } else {
+    SET_RES_YEAR(out);
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_YEAR, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int mdate_year(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  uint8_t value = 0;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class()
+                  || ObYearTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (CAST_FAIL(ObTimeConverter::mdate_to_year(in.get_mysql_date(), value))) {
   } else {
     SET_RES_YEAR(out);
   }
@@ -4168,6 +5035,33 @@ static int date_string(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int mdate_string(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+  int64_t len = 0;
+  ObLength res_length = -1;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class()
+                  || (ObStringTC != ob_obj_type_class(expect_type)
+                  && ObTextTC != ob_obj_type_class(expect_type)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::mdate_to_str(in.get_mysql_date(), buf, sizeof(buf), len))) {
+  } else {
+    out.set_type(expect_type);
+    ret = copy_string(params, expect_type, buf, len, out);
+    if (OB_SUCC(ret)) {
+      res_length = static_cast<ObLength>(out.get_string_len());
+      out.set_collation_type(params.dest_collation_);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  UNUSED(cast_mode);
+  return ret;
+}
+
 static int date_bit(const ObObjType expect_type, ObObjCastParams &params,
                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -4178,6 +5072,23 @@ static int date_bit(const ObObjType expect_type, ObObjCastParams &params,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(date_string(ObVarcharType, params, in, tmp_val, cast_mode))) {
+    LOG_WARN("fail to cast datetime to string", K(ret), K(expect_type), K(in), K(tmp_val));
+  } else if (OB_FAIL(string_bit(expect_type, params, tmp_val, out, cast_mode))) {
+    LOG_WARN("fail to cast string to bit", K(ret), K(expect_type), K(in), K(tmp_val));
+  }
+  return ret;
+}
+
+static int mdate_bit(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj tmp_val;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class()
+                  || ObBitTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(mdate_string(ObVarcharType, params, in, tmp_val, cast_mode))) {
     LOG_WARN("fail to cast datetime to string", K(ret), K(expect_type), K(in), K(tmp_val));
   } else if (OB_FAIL(string_bit(expect_type, params, tmp_val, out, cast_mode))) {
     LOG_WARN("fail to cast string to bit", K(ret), K(expect_type), K(in), K(tmp_val));
@@ -4222,7 +5133,9 @@ static int date_set(const ObExpectType &expect_type, ObObjCastParams &params,
 }
 
 CAST_TO_LOB_METHOD(date, ObDateTC);
+CAST_TO_LOB_METHOD(mdate, ObMySQLDateTC);
 CAST_TO_TEXT_METHOD(date, ObDateTC);
+CAST_TO_TEXT_METHOD(mdate, ObMySQLDateTC);
 
 static int date_json(const ObObjType expect_type, ObObjCastParams &params,
                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
@@ -4261,6 +5174,43 @@ static int date_json(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int mdate_json(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else {
+    ObMySQLDate in_val = in.get_mysql_date();
+    ObTime ob_time(DT_TYPE_DATE);
+    if (OB_FAIL(ObTimeConverter::mdate_to_ob_time(in_val, ob_time))) {
+      LOG_WARN("fail to create datetime from int failed", K(ret), K(in));
+    } else {
+      ObJsonDatetime j_date(ObJsonNodeType::J_MYSQL_DATE, ob_time);
+      ObIJsonBase *j_base = &j_date;
+      ObString raw_bin;
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+        LOG_WARN("fail to get date json binary", K(ret), K(in), K(expect_type), K(*j_base));
+      } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
+        LOG_WARN("fail to fill json bin lob locator", K(ret));
+      } else {
+        res_length = out.get_val_len();
+      }
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
 static int date_geometry(const ObObjType expect_type, ObObjCastParams &params,
                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -4278,7 +5228,10 @@ static int date_geometry(const ObObjType expect_type, ObObjCastParams &params,
     const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
-    if ((OB_FAIL(ObTimeConverter::date_to_str(in.get_date(), buf, sizeof(buf), len)))) {
+    ret = in.is_mysql_date() ?
+            ObTimeConverter::mdate_to_str(in.get_mysql_date(), buf, sizeof(buf), len) :
+            ObTimeConverter::date_to_str(in.get_date(), buf, sizeof(buf), len);
+    if ((OB_FAIL(ret))) {
       LOG_WARN("failed to convert datetime to string", K(ret));
     } else if (OB_FAIL(common_get_srs_item(srs_guard, ObString(len, buf), srs, cast_name))) {
       LOG_WARN("fail to get srs item", K(ret));
@@ -4301,6 +5254,16 @@ static int date_geometry(const ObObjType expect_type, ObObjCastParams &params,
     }
   }
   SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
+static int mdate_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(date_geometry(expect_type, params, in, out, cast_mode))) {
+    LOG_WARN("date_geometry failed", K(ret));
+  }
   return ret;
 }
 
@@ -4410,6 +5373,8 @@ static int time_number(const ObObjType expect_type, ObObjCastParams &params,
         K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(ObTimeConverter::time_to_str(in.get_time(), in.get_scale(), buf, sizeof(buf), len, false))) {
   } else if (CAST_FAIL(value.from(buf, len, params, &res_precision, &res_scale))) {
+  } else if (ObUNumberType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
+    LOG_WARN("numeric_negative_check failed", K(ret));
   } else {
     out.set_number(expect_type, value);
   }
@@ -4437,6 +5402,26 @@ static int time_datetime(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int time_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  const ObTimeZoneInfo *tz_info = params.dtc_params_.tz_info_;
+  ObMySQLDateTime value = 0;
+  if (OB_UNLIKELY(ObTimeTC != in.get_type_class()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::time_to_mdatetime(in.get_time(), params.cur_time_, tz_info, value))) {
+  } else {
+    out.set_mysql_datetime(value);
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, in.get_scale(), DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
 static int time_date(const ObObjType expect_type, ObObjCastParams &params,
                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -4458,6 +5443,34 @@ static int time_date(const ObObjType expect_type, ObObjCastParams &params,
       LOG_WARN("date to datetime failed", K(ret), K(datetime_value));
     } else {
       out.set_date(value);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int time_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  const ObTimeZoneInfo *tz_info = params.dtc_params_.tz_info_;
+  ObMySQLDate value = 0;
+  int64_t datetime_value = 0;
+  if (OB_UNLIKELY(ObTimeTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    ObTimeConvertCtx cvrt_ctx(tz_info, false);
+    if (OB_FAIL(ObTimeConverter::time_to_datetime(in.get_time(), params.cur_time_, tz_info,
+                                                  datetime_value, ObDateTimeType))) {
+      LOG_WARN("time to datetime failed", K(ret), K(in), K(params.cur_time_));
+    } else if (OB_FAIL(ObTimeConverter::datetime_to_mdate(datetime_value, NULL, value))) {
+      LOG_WARN("date to datetime failed", K(ret), K(datetime_value));
+    } else {
+      out.set_mysql_date(value);
     }
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
@@ -4774,6 +5787,27 @@ static int year_datetime(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int year_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t int_value = 0;
+  ObObj int64;
+  if (OB_UNLIKELY(ObYearTC != in.get_type_class()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::year_to_int(in.get_year(), int_value))) {
+    LOG_WARN("year to int failed", K(ret));
+  } else if (FALSE_IT(int64.set_int(int_value))) {
+  } else if (OB_FAIL(int_mdatetime(expect_type, params, int64, out, cast_mode))) {
+    LOG_WARN("int_datetime failed", K(ret));
+  }
+  return ret;
+}
+
+
 static int year_date(const ObObjType expect_type, ObObjCastParams &params,
                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -4790,6 +5824,28 @@ static int year_date(const ObObjType expect_type, ObObjCastParams &params,
     if (CAST_FAIL(ObTimeConverter::int_to_date(in_value, value, false))) {
     } else {
       SET_RES_DATE(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int year_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t in_value = 0;
+  if (OB_UNLIKELY(ObYearTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::year_to_int(in.get_year(), in_value))) {
+  } else {
+    ObMySQLDate md_value = 0;
+    if (CAST_FAIL(ObTimeConverter::int_to_mdate(in_value, md_value, false))) {
+    } else {
+      SET_RES_MDATE(out);
     }
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
@@ -5290,6 +6346,21 @@ static int string_number(const ObObjType expect_type, ObObjCastParams &params,
         if (OB_SUCCESS != (tmp_ret = value.from(*bound_num, *params.allocator_v2_))) {
           LOG_WARN("copy min number failed", K(ret), K(tmp_ret), KPC(bound_num));
         }
+      } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret) {
+        const ObUserLoggingCtx *user_logging_ctx =
+          (params.exec_ctx_ == NULL) ? NULL : params.exec_ctx_->get_user_logging_ctx();
+        if (CM_IS_COLUMN_CONVERT(params.cast_mode_)) {
+          ObString decimal_type_str("decimal");
+          ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx,
+                                                     ret, decimal_type_str, in.get_string(),
+                                                     params.cast_mode_);
+        } else {
+          ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+          ObString decimal_type_str("DECIMAL");
+          ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx,
+                                                     ret, decimal_type_str, in.get_string(),
+                                                     params.cast_mode_);
+        }
       }
     }
     if (CAST_FAIL(ret)) {
@@ -5304,28 +6375,20 @@ static int string_number(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
-static int string_datetime(const ObObjType expect_type, ObObjCastParams &params,
-                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+static int common_string_datetime(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, int64_t &value, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
   ObScale res_scale = -1;
   ObString utf8_string;
-
-  if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                  && ObTextTC != in.get_type_class()
-                  && ObGeometryTC != in.get_type_class())
-                  || ObDateTimeTC != ob_obj_type_class(expect_type))) {
-     ret = OB_ERR_UNEXPECTED;
-     LOG_ERROR("invalid input type",
-         K(ret), K(in), K(expect_type));
-  } else if (lib::is_oracle_mode() && in.is_blob()) {
+  ObMySQLDateTime mdt_value = 0;
+  if (lib::is_oracle_mode() && in.is_blob()) {
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("invalid use of blob type", K(ret), K(in), K(expect_type));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cast to blob type");
   } else if (OB_FAIL(convert_string_collation(in.get_string(), in.get_collation_type(), utf8_string, ObCharset::get_system_collation(), params))) {
     LOG_WARN("convert_string_collation", K(ret));
   } else {
-    int64_t value = 0;
     bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
     ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type, need_truncate);
     if (lib::is_oracle_mode()) {
@@ -5334,11 +6397,45 @@ static int string_datetime(const ObObjType expect_type, ObObjCastParams &params,
     } else {
       ObDateSqlMode date_sql_mode;
       date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
-      date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(cast_mode);
-      CAST_RET(ObTimeConverter::str_to_datetime(utf8_string, cvrt_ctx, value, &res_scale,
-                                                date_sql_mode));
+      date_sql_mode.no_zero_date_ =
+        CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_DATE(cast_mode);
+      date_sql_mode.no_zero_in_date_ =
+        CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_IN_DATE(cast_mode);
+      date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
+      ObMySQLDateTime mdt_value = 0;
+      ret = ObMySQLDateTimeType == expect_type ?
+              ObTimeConverter::str_to_mdatetime(utf8_string, cvrt_ctx, mdt_value, &res_scale,
+                                                date_sql_mode) :
+              ObTimeConverter::str_to_datetime(utf8_string, cvrt_ctx, mdt_value.datetime_,
+                                               &res_scale, date_sql_mode);
+      if (ret == OB_ERR_UNEXPECTED_TZ_TRANSITION && CM_IS_WARN_ON_FAIL(cast_mode)) {
+        ret = OB_SUCCESS;
+      } else if (CAST_FAIL(ret)) {
+        LOG_WARN("str_to_datetime failed", K(ret), K(utf8_string));
+      }
+      value = mdt_value.datetime_;
     }
+  }
+  return ret;
+}
 
+static int string_datetime(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObScale res_scale = -1;
+  ObString utf8_string;
+  int64_t value = 0;
+  if (OB_UNLIKELY((ObStringTC != in.get_type_class()
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
+                  || ObDateTimeTC != ob_obj_type_class(expect_type))) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_ERROR("invalid input type",
+         K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(common_string_datetime(expect_type, params, in, value, cast_mode))) {
+    LOG_WARN("common_string_datetime failed", K(ret));
+  } else {
     // check zero date for scale over mode
     if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
         (value == ObTimeConverter::ZERO_DATE ||
@@ -5355,6 +6452,39 @@ static int string_datetime(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int string_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObScale res_scale = -1;
+  ObString utf8_string;
+  ObMySQLDateTime mdt_value = 0;
+  if (OB_UNLIKELY((ObStringTC != in.get_type_class()
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_ERROR("invalid input type",
+         K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(common_string_datetime(expect_type, params, in, mdt_value.datetime_, cast_mode))) {
+    LOG_WARN("string_datetime failed", K(ret));
+  } else {
+    // check zero date for scale over mode
+    if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
+        (mdt_value == ObTimeConverter::MYSQL_ZERO_DATE ||
+        mdt_value == ObTimeConverter::MYSQL_ZERO_DATETIME)) {
+      ret = OB_INVALID_DATE_VALUE;
+      LOG_USER_ERROR(OB_INVALID_DATE_VALUE, utf8_string.length(), utf8_string.ptr(), "");
+    }
+
+    if (OB_SUCC(ret)) {
+      SET_RES_MDATETIME(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
 static int string_date(const ObObjType expect_type, ObObjCastParams &params,
                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -5363,6 +6493,8 @@ static int string_date(const ObObjType expect_type, ObObjCastParams &params,
   ObDateSqlMode date_sql_mode;
   date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
   date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(cast_mode);
+  date_sql_mode.no_zero_in_date_ = CM_IS_NO_ZERO_IN_DATE(cast_mode);
+  date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
                   && ObTextTC != in.get_type_class()
                   && ObGeometryTC != in.get_type_class())
@@ -5381,6 +6513,41 @@ static int string_date(const ObObjType expect_type, ObObjCastParams &params,
     LOG_USER_ERROR(OB_INVALID_DATE_VALUE, in.get_string().length(), in.get_string().ptr(), "");
   } else {
     SET_RES_DATE(out);
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int string_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLDate md_value = 0;
+  ObDateSqlMode date_sql_mode;
+  date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
+  date_sql_mode.no_zero_date_ =
+    CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_DATE(cast_mode);
+  date_sql_mode.no_zero_in_date_ =
+    CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_IN_DATE(cast_mode);
+  date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
+  if (OB_UNLIKELY((ObStringTC != in.get_type_class()
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_ERROR("invalid input type",
+         K(ret), K(in), K(expect_type));
+  } else if (lib::is_oracle_mode() && in.is_blob()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("invalid use of blob type", K(ret), K(in), K(expect_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cast to blob type");
+  } else if (CAST_FAIL(ObTimeConverter::str_to_mdate(in.get_string(), md_value, date_sql_mode))) {
+  } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) && md_value == ObTimeConverter::MYSQL_ZERO_DATE) {
+    // check zero date for scale over mode
+    ret = OB_INVALID_DATE_VALUE;
+    LOG_USER_ERROR(OB_INVALID_DATE_VALUE, in.get_string().length(), in.get_string().ptr(), "");
+  } else {
+    SET_RES_MDATE(out);
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
   return ret;
@@ -6022,6 +7189,7 @@ static int string_text(const ObObjType expect_type, ObObjCastParams &params,
   bool is_null_result = false;
   bool is_different_charset_type = (ObCharset::charset_type_by_coll(in.get_collation_type())
                                     != ObCharset::charset_type_by_coll(params.expect_obj_collation_));
+  bool has_lob_header = (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0 && (expect_type != ObTinyTextType));
   if (is_different_charset_type) {
     if (OB_FAIL(string_string(expect_type, params, in, tmp_out, cast_mode))) {
       LOG_WARN("fail to cast string to longtext", K(ret), K(in));
@@ -6035,8 +7203,15 @@ static int string_text(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("Failed to get string from in obj", K(ret), K(tmp_out));
   } else { /* do nothing */ }
 
-  if (OB_SUCC(ret) && !is_null_result) {
-    bool has_lob_header = (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0 && (expect_type != ObTinyTextType));
+  if (OB_FAIL(ret)) {
+  } else if (is_null_result) {
+  } else if (has_lob_header && lib::is_mysql_mode() && nullptr == lob_locator) {
+    // fast path for mysql string_text
+    out = tmp_out; // copy meta
+    if (OB_FAIL(ObTextStringHelper::pack_to_disk_inrow_lob(params, res_str, expect_type, out))) {
+      LOG_WARN("pack_to_disk_inrow_lob fail", K(ret), K(expect_type), K(in));
+    }
+  } else {
     sql::ObTextStringObObjResult str_result(expect_type, &params, &out, has_lob_header);
     if (lob_locator == NULL) {
       if (OB_FAIL(str_result.init(res_str.length()))) {
@@ -6065,7 +7240,7 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
   bool need_charset_convert = ((CS_TYPE_BINARY != in.get_collation_type()) && 
                                (ObCharset::charset_type_by_coll(in.get_collation_type()) != 
                                 ObCharset::charset_type_by_coll(params.dest_collation_)));
-  if (lib::is_mysql_mode() && (params.dest_collation_ != CS_TYPE_UTF8MB4_BIN)) {
+  if (lib::is_mysql_mode() && (ObCharset::charset_type_by_coll(params.dest_collation_) != CHARSET_UTF8MB4)) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("fail to cast string to json invalid outtype", K(ret), K(params.dest_collation_));
   } else if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
@@ -6112,7 +7287,9 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
       if ((CM_IS_SQL_AS_JSON_SCALAR(cast_mode) && ob_is_string_type(in_type)) && j_text.compare("null") == 0) {
         j_base = &j_null;
       }
-    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text, j_tree, parse_flag))) {
+    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text,
+                                              j_tree, parse_flag,
+                                              sql::ObJsonExprHelper::get_json_max_depth_config()))) {
       if (!is_oracle && CM_IS_IMPLICIT_CAST(cast_mode)
                      && !CM_IS_COLUMN_CONVERT(cast_mode)
                      && is_convert_jstr_type) {
@@ -6469,19 +7646,25 @@ static int bit_datetime(const ObObjType expect_type, ObObjCastParams &params,
   int ret = OB_SUCCESS;
   uint64_t bit_value = in.get_bit();
   int64_t value = 0;
+  ObMySQLDateTime mdt_value = 0;
   ObScale res_scale = -1;
   ObDateSqlMode date_sql_mode;
   date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
   date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(cast_mode);
+  date_sql_mode.no_zero_in_date_ = CM_IS_NO_ZERO_IN_DATE(cast_mode);
+  date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
   if (OB_UNLIKELY((ObBitTC != in.get_type_class()
-                   || ObDateTimeTC != ob_obj_type_class(expect_type)))) {
+                   || (ObDateTimeTC != ob_obj_type_class(expect_type)
+                       && ObMySQLDateTimeTC != ob_obj_type_class(expect_type))))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
   } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
     // if cast mode is column convert, using bit as int64 to do cast.
     ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
-    if (CAST_FAIL(ObTimeConverter::int_to_datetime(bit_value, 0, cvrt_ctx, value,
-                                                   date_sql_mode))) {
+    ret = ObMySQLDateTimeType == expect_type ?
+            ObTimeConverter::int_to_mdatetime(bit_value, 0, cvrt_ctx, mdt_value, date_sql_mode) :
+            ObTimeConverter::int_to_datetime(bit_value, 0, cvrt_ctx, mdt_value.datetime_, date_sql_mode);
+    if (CAST_FAIL(ret)) {
       LOG_WARN("int_to_datetime failed", K(ret), K(bit_value));
     }
   } else {
@@ -6496,15 +7679,31 @@ static int bit_datetime(const ObObjType expect_type, ObObjCastParams &params,
     } else {
       ObString str(pos, buf);
       ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
-      if (CAST_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, value, &res_scale,
-                                                     date_sql_mode))) {
+      ret = ObMySQLDateTimeType == expect_type ?
+              ObTimeConverter::str_to_mdatetime(str, cvrt_ctx, mdt_value, &res_scale, date_sql_mode) :
+              ObTimeConverter::str_to_datetime(str, cvrt_ctx, value, &res_scale, date_sql_mode);
+      if (CAST_FAIL(ret)) {
         LOG_WARN("int_to_datetime failed", K(ret), K(bit_value), K(str));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    SET_RES_DATETIME(out);
+    if (ObMySQLDateTimeType == expect_type) {
+      SET_RES_MDATETIME(out);
+    } else {
+      SET_RES_DATETIME(out);
+    }
     SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
+  }
+  return ret;
+}
+
+static int bit_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(bit_datetime(expect_type, params, in, out, cast_mode))) {
+    LOG_WARN("bit_datetime failed", K(ret));
   }
   return ret;
 }
@@ -6519,13 +7718,20 @@ static int bit_date(const ObObjType expect_type, ObObjCastParams &params,
   ObDateSqlMode date_sql_mode;
   date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
   date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(cast_mode);
+  date_sql_mode.no_zero_in_date_ = CM_IS_NO_ZERO_IN_DATE(cast_mode);
+  date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
+  ObMySQLDate md_value = 0;
   if (OB_UNLIKELY((ObBitTC != in.get_type_class()
-                   || ObDateTC != ob_obj_type_class(expect_type)))) {
+                   || (ObDateTC != ob_obj_type_class(expect_type)
+                       && ObMySQLDateTC != ob_obj_type_class(expect_type))))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
   } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
     // if cast mode is column convert, using bit as int64 to do cast.
-    if (CAST_FAIL(ObTimeConverter::int_to_date(bit_value, value, date_sql_mode))) {
+    ret = ObMySQLDateType == expect_type ?
+            ObTimeConverter::int_to_mdate(bit_value, md_value, date_sql_mode) :
+            ObTimeConverter::int_to_date(bit_value, value, date_sql_mode);
+    if (CAST_FAIL(ret)) {
       LOG_WARN("int_to_date failed", K(ret), K(bit_value));
     }
   } else {
@@ -6539,14 +7745,31 @@ static int bit_date(const ObObjType expect_type, ObObjCastParams &params,
       LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
     } else {
       ObString str(pos, buf);
-      if (CAST_FAIL(ObTimeConverter::str_to_date(str, value, date_sql_mode))) {
+      ret = ObMySQLDateType == expect_type ?
+              ObTimeConverter::str_to_mdate(str, md_value, date_sql_mode) :
+              ObTimeConverter::str_to_date(str, value, date_sql_mode);
+      if (CAST_FAIL(ret)) {
         LOG_WARN("str_to_date failed", K(ret), K(bit_value), K(str));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    SET_RES_DATE(out);
+    if (ObMySQLDateType == expect_type) {
+      SET_RES_MDATE(out);
+    } else {
+      SET_RES_DATE(out);
+    }
     SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
+  }
+  return ret;
+}
+
+static int bit_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(bit_date(expect_type, params, in, out, cast_mode))) {
+    LOG_WARN("bit_date failed", K(ret));
   }
   return ret;
 }
@@ -6626,7 +7849,7 @@ static int bit_string(const ObObjType expect_type, ObObjCastParams &params,
     ObFastFormatInt ffi(value);
     ObString tmp_str;
     if (OB_FAIL(convert_string_collation(ObString(ffi.length(), ffi.ptr()),
-                ObCharset::get_system_collation(), tmp_str, params.dest_collation_, params))) {
+                CS_TYPE_BINARY, tmp_str, params.dest_collation_, params))) {
       LOG_WARN("fail to convert string collation", K(ret));
     } else if (OB_FAIL(copy_string(params, expect_type, tmp_str.ptr(), tmp_str.length(), out))) {
       LOG_WARN("fail to copy string", KP(tmp_str.ptr()), K(tmp_str.length()), K(value),
@@ -6639,9 +7862,13 @@ static int bit_string(const ObObjType expect_type, ObObjCastParams &params,
     int64_t pos = 0;
     char tmp_buf[BUF_LEN];
     MEMSET(tmp_buf, 0, BUF_LEN);
+    ObString tmp_str;
     if (OB_FAIL(bit_to_char_array(value, scale, tmp_buf, BUF_LEN, pos))) {
-      LOG_WARN("fail to store val", KP(tmp_buf), K(BUF_LEN), K(value), K(pos));
-    } else if (OB_FAIL(copy_string(params, expect_type, tmp_buf, pos, out))) {
+      LOG_WARN("fail to store val", K(ret), KP(tmp_buf), K(BUF_LEN), K(value), K(pos));
+    } else if (OB_FAIL(convert_string_collation(ObString(pos, tmp_buf),
+                CS_TYPE_BINARY, tmp_str, params.dest_collation_, params))) {
+      LOG_WARN("fail to convert string collation", K(ret));
+    } else if (OB_FAIL(copy_string(params, expect_type, tmp_str.ptr(), tmp_str.length(), out))) {
       LOG_WARN("fail to copy string", KP(tmp_buf), K(pos), K(value),
                                       K(out), K(expect_type));
     }
@@ -6798,6 +8025,74 @@ static int bit_geometry(const ObObjType expect_type, ObObjCastParams &params,
     }
   }
   SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
+static bool is_enum_set_with_subschema(const ObObj &in)
+{
+  return in.get_scale() == ObEnumSetMeta::MetaState::SQL;
+}
+
+static OB_INLINE int common_enumset_string(const ObObj &in,
+                                           ObObjCastParams &params,
+                                           ObTextStringResult &text_result)
+{
+  int ret = OB_SUCCESS;
+  const ObEnumSetMeta *meta = NULL;
+  const ObObjType in_type = in.get_type();
+  if (0 == in.get_uint64()) {
+    // empty string, do nothing
+  } else {
+    const uint16_t subschema_id = in.get_meta().get_subschema_id();
+    if (OB_ISNULL(params.exec_ctx_)) {
+      ret = OB_ERR_UNDEFINED;
+      LOG_WARN("exec ctx is null", K(ret));
+    } else if (OB_FAIL(params.exec_ctx_->get_enumset_meta_by_subschema_id(subschema_id, false, meta))) {
+      LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+    } else if (OB_ISNULL(meta) || OB_ISNULL(meta->get_str_values())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get meta", K(ret));
+    } else if (ObEnumType == in_type) {
+      ret = ObExprEnumToStr::inner_to_str(in.get_uint64(), *meta->get_str_values(), text_result);
+    } else if (ObSetType == in_type) {
+      ret = ObExprSetToStr::inner_to_str(meta->get_collation_type(), in.get_uint64(),
+                                          *meta->get_str_values(), text_result);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected expr type", K(ret), K(in_type));
+    }
+  }
+
+  return ret;
+}
+
+static int enumset_enumset(const ObExpectType &expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObEnumSetTC != ob_obj_type_class(expect_type.get_type()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (expect_type.get_type() == ObEnumType &&
+        OB_FAIL(string_enum(expect_type, params, temp_obj, out))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    } else if (expect_type.get_type() == ObSetType &&
+        OB_FAIL(string_set(expect_type, params, temp_obj, out))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
   return ret;
 }
 
@@ -6981,8 +8276,8 @@ ObCastEnumOrSetFunc OB_CAST_ENUM_OR_SET[ObMaxTC][2] =
   },
   {
     /*enumset tc -> enum_or_set*/
-    cast_not_expected_enum_set,/*enum*/
-    cast_not_expected_enum_set,/*set*/
+    enumset_enumset,/*enum*/
+    enumset_enumset,/*set*/
   },
   {
     /*enumset_inner tc -> enum_or_set*/
@@ -7045,6 +8340,11 @@ ObCastEnumOrSetFunc OB_CAST_ENUM_OR_SET[ObMaxTC][2] =
   },
   {
     /*ObMySQLDateTimeTC -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
+  {
+    /*ObRoaringBitmapTC -> enum_or_set*/
     cast_not_support_enum_set,/*enum*/
     cast_not_support_enum_set,/*set*/
   },
@@ -7150,6 +8450,84 @@ static int enumset_number(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int enumset_datetime(const ObObjType expect_type, ObObjCastParams &params,
+                            const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_datetime(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+static int enumset_date(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_date(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+static int enumset_time(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_time(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
 static int enumset_year(const ObObjType expect_type, ObObjCastParams &params,
                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -7166,6 +8544,64 @@ static int enumset_year(const ObObjType expect_type, ObObjCastParams &params,
     SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_YEAR, DEFAULT_LENGTH_FOR_TEMPORAL);
     return ret;
   }
+
+static int enumset_string(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObStringTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(expect_type, false, params.allocator_v2_);
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else {
+      ObString es_str;
+      text_result.get_result_buffer(es_str);
+      out.set_string(expect_type, es_str);
+      if (OB_SUCC(ret)) {
+        res_length = static_cast<ObLength>(out.get_string_len());
+        out.set_collation_type(params.dest_collation_);
+      }
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int enumset_text(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObTextTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_collation_type(params.dest_collation_))) {
+    } else if (OB_FAIL(string_text(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
 
 static int enumset_bit(const ObObjType expect_type, ObObjCastParams &params,
                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
@@ -7187,6 +8623,110 @@ static int enumset_bit(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int enumset_lob(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObLobTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_lob(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+
+static int enumset_json(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObJsonTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_json(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+static int enumset_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_mdate(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("string_mdate failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+static int enumset_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_mdatetime(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("string_mdatetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
 
 static int get_uint64_from_enumset_inner(const ObObj &in, ObObj &out)
 {
@@ -7464,6 +9004,24 @@ static int enumset_inner_datetime(const ObObjType expect_type, ObObjCastParams &
   return ret;
 }
 
+static int enumset_inner_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                               const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  //we regard enum as uint16 when int_value is needed
+  int ret = OB_SUCCESS;
+  ObObj str_value;
+  if (OB_UNLIKELY(ObEnumSetInnerTC != in.get_type_class()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(get_string_from_enumset_inner(in, str_value))) {
+    LOG_WARN("failed to get_string_from_enumset_inner", K(in), K(ret));
+  } else if (OB_FAIL(string_mdatetime(expect_type, params, str_value, out, cast_mode))) {
+    LOG_WARN("failed to cast string to datetime", K(in), K(str_value), K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
+
 static int enumset_inner_date(const ObObjType expect_type, ObObjCastParams &params,
                            const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -7477,6 +9035,25 @@ static int enumset_inner_date(const ObObjType expect_type, ObObjCastParams &para
   } else if (OB_FAIL(get_string_from_enumset_inner(in, str_value))) {
     LOG_WARN("failed to get_string_from_enumset_inner", K(in), K(ret));
   } else if (OB_FAIL(string_date(expect_type, params, str_value, out, cast_mode))) {
+    LOG_WARN("failed to cast string to date", K(in), K(str_value), K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
+
+
+static int enumset_inner_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  //we regard enum as uint16 when int_value is needed
+  int ret = OB_SUCCESS;
+  ObObj str_value;
+  if (OB_UNLIKELY(ObEnumSetInnerTC != in.get_type_class()
+                  || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(get_string_from_enumset_inner(in, str_value))) {
+    LOG_WARN("failed to get_string_from_enumset_inner", K(in), K(ret));
+  } else if (OB_FAIL(string_mdate(expect_type, params, str_value, out, cast_mode))) {
     LOG_WARN("failed to cast string to date", K(in), K(str_value), K(ret));
   } else {/*do nothing*/}
   return ret;
@@ -7618,6 +9195,41 @@ static int otimestamp_otimestamp(const ObObjType expect_type, ObObjCastParams &p
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, in.get_scale(), DEFAULT_LENGTH_FOR_TEMPORAL);
   UNUSED(cast_mode);
+  return ret;
+}
+
+//only use to convert Oracle timestamp type class to MySQL datetime type class,
+//for scenarios such as: scan inner table in the Oracle tenant, since the inner table use the MySQL type system,
+//when index conditions are involved,
+//it is necessary to convert the scan range that includes Oracle timestamp type class to the MySQL datetime type class.
+static int otimestamp_mydatetime(const ObObjType expect_type, ObObjCastParams &params,
+                                 const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  UNUSED(cast_mode);
+  int ret = OB_SUCCESS;
+  int64_t dt_value = 0;
+  if (OB_UNLIKELY(ObOTimestampTC != in.get_type_class())
+      || OB_UNLIKELY(ObDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::otimestamp_to_odate(in.get_type(), in.get_otimestamp_value(), params.dtc_params_.tz_info_, dt_value))) {
+    LOG_WARN("fail to timestamp_tz_to_timestamp", K(ret), K(in), K(expect_type));
+  } else if (ObTimestampType == expect_type) {
+    int64_t utc_value = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(dt_value,
+                                                       params.dtc_params_.tz_info_,
+                                                       utc_value))) {
+      LOG_WARN("failed to convert datetime to timestamp", K(ret));
+    } else {
+      dt_value = utc_value;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObTimeConverter::trunc_datetime(OB_MAX_DATETIME_PRECISION, dt_value);
+    out.set_datetime(expect_type, dt_value);
+    out.set_scale(OB_MAX_DATE_PRECISION);
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, in.get_scale(), DEFAULT_LENGTH_FOR_TEMPORAL);
   return ret;
 }
 
@@ -7955,6 +9567,8 @@ CAST_TEXT_TO_OTHER_TYPE(float, ObFloatTC);
 CAST_TEXT_TO_OTHER_TYPE(number, ObNumberTC);
 CAST_TEXT_TO_OTHER_TYPE(datetime, ObDateTimeTC);
 CAST_TEXT_TO_OTHER_TYPE(date, ObDateTC);
+CAST_TEXT_TO_OTHER_TYPE(mdate, ObMySQLDateTC);
+CAST_TEXT_TO_OTHER_TYPE(mdatetime, ObMySQLDateTimeTC);
 CAST_TEXT_TO_OTHER_TYPE(time, ObTimeTC);
 CAST_TEXT_TO_OTHER_TYPE(year, ObYearTC);
 CAST_TEXT_TO_OTHER_TYPE(bit, ObBitTC);
@@ -8052,6 +9666,8 @@ CAST_LOB_TO_OTHER_TYPE(float, ObFloatTC);
 CAST_LOB_TO_OTHER_TYPE(number, ObNumberTC);
 CAST_LOB_TO_OTHER_TYPE(datetime, ObDateTimeTC);
 CAST_LOB_TO_OTHER_TYPE(date, ObDateTC);
+CAST_LOB_TO_OTHER_TYPE(mdatetime, ObMySQLDateTimeTC);
+CAST_LOB_TO_OTHER_TYPE(mdate, ObMySQLDateTC);
 CAST_LOB_TO_OTHER_TYPE(time, ObTimeTC);
 CAST_LOB_TO_OTHER_TYPE(year, ObYearTC);
 CAST_LOB_TO_OTHER_TYPE(bit, ObBitTC);
@@ -8438,6 +10054,47 @@ static int json_datetime(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int json_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObMySQLDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    ObMySQLDateTime mdt_value;
+    ObString j_bin_str = in.get_string();
+    ObTimeConvertCtx cvrt_ctx(NULL, false);
+    cvrt_ctx.date_sql_mode_.allow_invalid_dates_ =
+      CM_IS_EXPLICIT_CAST(cast_mode) ? true : CM_IS_ALLOW_INVALID_DATES(cast_mode);
+    cvrt_ctx.date_sql_mode_.no_zero_date_ =
+      CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_DATE(cast_mode);
+    cvrt_ctx.date_sql_mode_.no_zero_in_date_ =
+      CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_IN_DATE(cast_mode);
+    if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
+    } else {
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
+      ObIJsonBase *j_base = &j_bin;
+      if (OB_FAIL(j_bin.reset_iter())) {
+        LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+      } else if (CAST_FAIL(j_base->to_mdatetime(mdt_value, &cvrt_ctx))) {
+        LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+        ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+        LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+      } else {
+        SET_RES_MDATETIME(out);
+      }
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
 static int json_date(const ObObjType expect_type, ObObjCastParams &params,
                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -8465,6 +10122,47 @@ static int json_date(const ObObjType expect_type, ObObjCastParams &params,
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
       } else {
         SET_RES_DATE(out);
+      }
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int json_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObMySQLDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    ObMySQLDate md_value;
+    ObString j_bin_str = in.get_string();
+    ObDateSqlMode date_sql_mode;
+    date_sql_mode.allow_invalid_dates_ =
+      CM_IS_EXPLICIT_CAST(cast_mode) ? true : CM_IS_ALLOW_INVALID_DATES(cast_mode);
+    date_sql_mode.no_zero_date_ =
+      CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_DATE(cast_mode);
+    date_sql_mode.no_zero_in_date_ =
+      CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_IN_DATE(cast_mode);
+    if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
+    } else {
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
+      ObIJsonBase *j_base = &j_bin;
+      if (OB_FAIL(j_bin.reset_iter())) {
+        LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+      } else if (CAST_FAIL(j_base->to_mdate(md_value, date_sql_mode))) {
+        LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+        ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+        LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+      } else {
+        SET_RES_MDATE(out);
       }
     }
   }
@@ -8536,7 +10234,12 @@ static int json_year(const ObObjType expect_type, ObObjCastParams &params,
         LOG_WARN("fail to cast json int to year type", K(ret), K(int_value), K(expect_type));
       } else {
         if (lib::is_mysql_mode() && (params.warning_ == OB_DATA_OUT_OF_RANGE)) {
-          out.set_null(); // not change the behavior of int_year
+          if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+            value = 0;
+            SET_RES_YEAR(out);
+          } else {
+            out.set_null(); // not change the behavior of int_year
+          }
         } else {
           SET_RES_YEAR(out);
         }
@@ -8571,7 +10274,7 @@ static int json_raw(const ObObjType expect_type, ObObjCastParams &params,
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+    } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
       LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -8643,7 +10346,7 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
         LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -8712,7 +10415,7 @@ static int common_json_string(const ObObjType expect_type,
       ObString j_str;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
         LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -8888,6 +10591,80 @@ static int json_geometry(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int json_array(const ObObjType expect_type, ObObjCastParams &params,
+                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(cast_mode);
+  if (OB_UNLIKELY(ObJsonType != in.get_type()) || OB_UNLIKELY(ObCollectionSQLTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to array type", K(ret), K(params.allocator_v2_));
+  } else {
+    ObString j_bin_str = in.get_string();
+    if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
+    } else {
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
+      ObJsonNode *j_tree = NULL;
+      if (OB_FAIL(j_bin.reset_iter())) {
+        LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+      } else if (OB_FAIL(j_bin.to_tree(j_tree))) {
+        LOG_WARN("fail to change bin to tree", K(ret), K(j_bin_str));
+      } else if (j_tree->json_type() != ObJsonNodeType::J_ARRAY) {
+        ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+        LOG_WARN("JSON value is not an array", K(ret), K(j_tree->json_type()));
+        LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+      }else {
+        const uint16_t dst_subschema_id = out.get_meta().get_subschema_id();
+        ObSubSchemaValue dst_meta;
+        if (OB_ISNULL(params.exec_ctx_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("exec ctx is null", K(ret), K(lbt()));
+        } else if (OB_FAIL(params.exec_ctx_->get_sqludt_meta_by_subschema_id(dst_subschema_id, dst_meta))) {
+          LOG_WARN("Failed to get subschema_meta_info", K(ret), K(dst_subschema_id));
+        } else {
+          const ObSqlCollectionInfo *dst_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(dst_meta.value_);
+          ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
+          ObIAllocator &temp_allocator = *params.allocator_v2_;
+          ObIArrayType *arr_dst = NULL;
+
+          if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
+            LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
+          } else {
+            ObJsonArray *json_arr = static_cast<ObJsonArray *>(j_tree);
+            ObJsonNode *node = NULL;
+            // 将 JSON 数组的每个元素添加到目标数组中
+            for (int i = 0; i < json_arr->element_count() && OB_SUCC(ret); i++) {
+              if (OB_ISNULL(node = json_arr->get_value(i))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get json node", K(ret), K(i));
+              } else if (OB_FAIL(ObArrayCastUtils::add_json_node_to_array(temp_allocator, *node, dst_arr_type->element_type_, arr_dst))) {
+                LOG_WARN("failed to add json node to array", K(ret), K(i));
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(arr_dst->init())) {
+                LOG_WARN("array init failed", K(ret));
+              } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {
+                LOG_WARN("check array validity failed", K(ret), K(dst_coll_info));
+                if (ret == OB_ERR_INVALID_VECTOR_DIM) {
+                  LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(dst_arr_type->dim_cnt_), arr_dst->size());
+                }
+              } else if (OB_FAIL(ObArrayExprUtils::set_array_obj_res(arr_dst, &params, &out))) {
+                LOG_WARN("get array binary string failed", K(ret), K(dst_coll_info));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // geometry -> XXX
 static int geometry_int(const ObObjType expect_type, ObObjCastParams &params,
@@ -9011,6 +10788,25 @@ static int geometry_datetime(const ObObjType expect_type, ObObjCastParams &param
   return ret;
 }
 
+static int geometry_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    ObString str = in.get_string();
+    ObObj temp_obj;
+    if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, str))) {
+      LOG_WARN("fail to get real data.", K(ret), K(str));
+    } else if (FALSE_IT(temp_obj.set_string(in.get_type(), str))) {
+    } else if (OB_FAIL(string_mdatetime(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("fail to cast string to datetime", K(ret));
+    }
+  } else {
+    out.set_null();
+  }
+  return ret;
+}
+
 static int geometry_date(const ObObjType expect_type, ObObjCastParams &params,
                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -9022,6 +10818,25 @@ static int geometry_date(const ObObjType expect_type, ObObjCastParams &params,
       LOG_WARN("fail to get real data.", K(ret), K(str));
     } else if (FALSE_IT(temp_obj.set_string(in.get_type(), str))) {
     } else if (OB_FAIL(string_date(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("fail to cast string to date", K(ret));
+    }
+  } else {
+    out.set_null();
+  }
+  return ret;
+}
+
+static int geometry_mdate(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    ObString str = in.get_string();
+    ObObj temp_obj;
+    if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, str))) {
+      LOG_WARN("fail to get real data.", K(ret), K(str));
+    } else if (FALSE_IT(temp_obj.set_string(in.get_type(), str))) {
+    } else if (OB_FAIL(string_mdate(expect_type, params, temp_obj, out, cast_mode))) {
       LOG_WARN("fail to cast string to date", K(ret));
     }
   } else {
@@ -9292,7 +11107,7 @@ static int cast_to_udt_not_support(const ObObjType expect_type, ObObjCastParams 
     LOG_WARN_RET(ret, "invalid CAST to a type that is not a nested table or VARRAY");
   } else {
     // other udts
-    // ORA-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
+    // OBE-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
     // currently other types to udt not supported
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN_RET(ret, "not expected obj type convert", K(expect_type), K(in), K(out), K(cast_mode));
@@ -9547,6 +11362,73 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
   return ret;
 }
 
+static int string_collection(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (in.is_null()) {
+    out.set_null();
+  } else {
+    const uint16_t dst_subschema_id = out.get_meta().get_subschema_id();
+    ObSubSchemaValue dst_meta;
+    if (OB_ISNULL(params.exec_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec ctx is null", K(ret), K(lbt()));
+    } else if (OB_FAIL(params.exec_ctx_->get_sqludt_meta_by_subschema_id(dst_subschema_id, dst_meta))) {
+      LOG_WARN("Failed to get subshcema_meta_info", K(ret), K(dst_subschema_id));
+    } else {
+      ObString in_str = in.get_string();
+      ObCollationType cs_type = in.meta_.get_collation_type();
+      ObIAllocator &temp_allocator = *params.allocator_v2_;
+      ObIArrayType *arr_dst = NULL;
+      ObString res_str;
+      const ObSqlCollectionInfo *dst_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(dst_meta.value_);
+      ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
+      if (dst_coll_info->collection_meta_->type_id_ != ObNestedType::OB_VECTOR_TYPE && OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
+        LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
+      } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+        bool is_binary = cs_type == CS_TYPE_BINARY;
+        if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst, is_binary))) {
+          LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
+        } else if (OB_FAIL(ObArrayCastUtils::string_cast_vector(temp_allocator, in_str, arr_dst, dst_arr_type, is_binary))) {
+          LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+        }
+      } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+        if (cs_type != CS_TYPE_BINARY) {
+          if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
+            LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+          }
+        } else {
+          if (OB_FAIL(ObArrayCastUtils::string_cast_array(in_str, arr_dst, dst_arr_type->element_type_))) {
+            LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+          }
+        }
+      } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
+                 || dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+        bool is_sparse_vector = dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE;
+        if (OB_FAIL(ObArrayCastUtils::string_cast_map(temp_allocator, in_str, arr_dst, static_cast<ObCollectionMapType *>(dst_coll_info->collection_meta_), cast_mode, is_sparse_vector))) {
+          LOG_WARN("map cast failed", K(ret), K(dst_coll_info));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected coll type", K(ret), K(dst_coll_info->collection_meta_->type_id_));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {
+        LOG_WARN("check array validty failed", K(ret), K(dst_coll_info));
+        if (ret == OB_ERR_INVALID_VECTOR_DIM) {
+          LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(dst_arr_type->dim_cnt_), arr_dst->size());
+        }
+      } else if (OB_FAIL(ObArrayExprUtils::set_array_obj_res(arr_dst, &params, &out))) {
+        LOG_WARN("get array binary string failed", K(ret), K(dst_coll_info));
+      }
+    }
+  }
+
+  return ret;
+}
+
 static int pl_extend_geometry(const ObObjType expect_type, ObObjCastParams &params,
                               const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -9614,6 +11496,7 @@ static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_ORACLE_PL
+  char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
   if (in.is_pl_extend()) {
     if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
       pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
@@ -9658,10 +11541,16 @@ static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params
       }
     } else {
       ret = OB_NOT_SUPPORTED;
+      (void)snprintf(err_msg, sizeof(err_msg), "%s type convert to %s",
+                          get_type_name(in.get_type()), get_type_name(expect_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
       LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
     }
   } else {
     ret = OB_NOT_SUPPORTED;
+    (void)snprintf(err_msg, sizeof(err_msg), "%s type convert to %s",
+                  get_type_name(in.get_type()), get_type_name(expect_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
     LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
   }
 #else
@@ -9681,7 +11570,7 @@ static int cast_udt_to_other_not_support(const ObObjType expect_type, ObObjCastP
     LOG_WARN_RET(ret, "inconsistent datatypes", K(expect_type), K(in), K(out), K(cast_mode));
   } else {
     // other udts
-    // ORA-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
+    // OBE-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
     // currently other types to udt not supported
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN_RET(ret, "not expected obj type convert", K(expect_type), K(in), K(out), K(cast_mode));
@@ -9961,6 +11850,26 @@ static int decimalint_datetime(const ObObjType expected_type, ObObjCastParams &p
   return ret;
 }
 
+static int decimalint_mdatetime(const ObObjType expected_type, ObObjCastParams &params,
+                               const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObNumber tmp_nmb;
+  ObObj tmp_obj;
+  if (OB_UNLIKELY(ObDecimalIntType != in.get_type()
+                  || ObMySQLDateTimeTC != ob_obj_type_class(expected_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid types", K(ret), K(in.get_type()), K(expected_type));
+  } else if (OB_FAIL(wide::to_number(in.get_decimal_int(), in.get_int_bytes(), in.get_scale(),
+                                     params, tmp_nmb))) {
+    LOG_WARN("failed to cast decimalint to number", K(ret));
+  } else {
+    tmp_obj.set_number(tmp_nmb);
+    ret = number_mdatetime(expected_type, params, tmp_obj, out, cast_mode);
+  }
+  return ret;
+}
+
 static int decimalint_date(const ObObjType expected_type, ObObjCastParams &params, const ObObj &in,
                            ObObj &out, const ObCastMode cast_mode)
 {
@@ -9977,6 +11886,26 @@ static int decimalint_date(const ObObjType expected_type, ObObjCastParams &param
   } else {
     tmp_obj.set_number(tmp_nmb);
     ret = number_date(expected_type, params, tmp_obj, out, cast_mode);
+  }
+  return ret;
+}
+
+static int decimalint_mdate(const ObObjType expected_type, ObObjCastParams &params, const ObObj &in,
+                           ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObNumber tmp_nmb;
+  ObObj tmp_obj;
+  if (OB_UNLIKELY(ObDecimalIntType != in.get_type()
+                  || ObMySQLDateTC != ob_obj_type_class(expected_type))) {
+    ret = OB_ERROR;
+    LOG_ERROR("invalid types", K(ret), K(in.get_type()), K(expected_type));
+  } else if (OB_FAIL(wide::to_number(in.get_decimal_int(), in.get_int_bytes(), in.get_scale(),
+                                     params, tmp_nmb))) {
+    LOG_WARN("cast decimal int to number failed", K(ret));
+  } else {
+    tmp_obj.set_number(tmp_nmb);
+    ret = number_mdate(expected_type, params, tmp_obj, out, cast_mode);
   }
   return ret;
 }
@@ -10330,6 +12259,43 @@ static int datetime_decimalint(const ObObjType expected_type, ObObjCastParams &p
   return ret;
 }
 
+static int mdatetime_decimalint(const ObObjType expected_type, ObObjCastParams &params,
+                               const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObScale scale = 0;
+  ObPrecision precision = 0;
+  ObDecimalInt *decint = nullptr;
+  int32_t int_bytes = 0;
+  if (OB_UNLIKELY(ObMySQLDateTimeTC != in.get_type_class() || ObDecimalIntType != expected_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid types", K(ret), K(in.get_type()), K(expected_type));
+  } else if (OB_ISNULL(params.allocator_v2_) || OB_ISNULL(params.res_accuracy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null params", K(ret), K(params.allocator_v2_), K(params.res_accuracy_));
+  } else {
+    ObString nls_format;
+    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    int64_t len = 0;
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_str(in.get_datetime(), NULL, nls_format,
+                                                 in.get_scale(), buf, sizeof(buf), len, false))) {
+      LOG_WARN("failed to convert datetime to string", K(ret));
+    } else if (CAST_FAIL(wide::from_string(buf, len, *params.allocator_v2_, scale, precision,
+                                           int_bytes, decint))) {
+      LOG_WARN("failed to parse decimal int", K(ret));
+    } else {
+      ObObj tmp_val;
+      tmp_val.set_decimal_int(int_bytes, scale, decint);
+      if (NEED_SCALE_DECIMAL_INT(tmp_val, scale, *params.res_accuracy_)) {
+        DO_SCALE_DECIMAL_INT(tmp_val, scale, out);
+      } else {
+        out = tmp_val;
+      }
+    }
+  }
+  return ret;
+}
+
 static int date_decimalint(const ObObjType expected_type, ObObjCastParams &params, const ObObj &in,
                            ObObj &out, const ObCastMode cast_mode)
 {
@@ -10347,6 +12313,39 @@ static int date_decimalint(const ObObjType expected_type, ObObjCastParams &param
     LOG_WARN("invalid null res accuracy", K(ret));
   } else if (FALSE_IT(params.res_accuracy_ = NULL)) { // set accuracy to null to avoid overwrite
   } else if (OB_FAIL(date_int(ObIntType, params, in, obj_int, cast_mode))) {
+    LOG_WARN("failed to cast date to int", K(ret));
+  } else if (FALSE_IT(params.res_accuracy_ = acc)) { // reset accuracy for decimal int dest cast
+  } else if (OB_FAIL(wide::from_integer(obj_int.get_int(), params, decint, int_bytes))) {
+    LOG_WARN("failed to cast int to decimal int", K(ret));
+  } else {
+    ObObj tmp_val;
+    tmp_val.set_decimal_int(int_bytes, DEFAULT_SCALE_FOR_INTEGER, decint);
+    if (NEED_SCALE_DECIMAL_INT(tmp_val, tmp_val.get_scale(), *params.res_accuracy_)) {
+      DO_SCALE_DECIMAL_INT(tmp_val, tmp_val.get_scale(), out);
+    } else {
+      out = tmp_val;
+    }
+  }
+  return ret;
+}
+
+static int mdate_decimalint(const ObObjType expected_type, ObObjCastParams &params, const ObObj &in,
+                           ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj obj_int;
+  ObDecimalInt *decint = nullptr;
+  int32_t int_bytes = 0;
+  ObPrecision res_precision = -1;
+  ObAccuracy *acc = params.res_accuracy_;
+  if (OB_UNLIKELY(ObMySQLDateTC != in.get_type_class() || ObDecimalIntType != expected_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid types", K(ret), K(in.get_type()), K(expected_type));
+  } else if (OB_ISNULL(params.res_accuracy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null res accuracy", K(ret));
+  } else if (FALSE_IT(params.res_accuracy_ = NULL)) { // set accuracy to null to avoid overwrite
+  } else if (OB_FAIL(mdate_int(ObIntType, params, in, obj_int, cast_mode))) {
     LOG_WARN("failed to cast date to int", K(ret));
   } else if (FALSE_IT(params.res_accuracy_ = acc)) { // reset accuracy for decimal int dest cast
   } else if (OB_FAIL(wide::from_integer(obj_int.get_int(), params, decint, int_bytes))) {
@@ -10436,6 +12435,9 @@ static int string_decimalint(const ObObjType expected_type, ObObjCastParams &par
   ObScale in_scale = NUMBER_SCALE_UNKNOWN_YET;
   ObPrecision in_precision = PRECISION_UNKNOWN_YET;
   ObString utf8_string;
+  ObPrecision out_prec = params.res_accuracy_->get_precision();
+  ObScale out_scale = params.res_accuracy_->get_scale();
+  ObObj tmp_val;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class() && ObTextTC != in.get_type_class()
                    && ObGeometryTC != in.get_type_class())
                   || ObDecimalIntType != expected_type)) {
@@ -10453,35 +12455,106 @@ static int string_decimalint(const ObObjType expected_type, ObObjCastParams &par
     if (OB_FAIL(wide::from_integer(hex_v, params, decint, int_bytes))) {
       LOG_WARN("cast integer to decimal int failed", K(ret));
     } else {
-      ObObj tmp_val;
       tmp_val.set_decimal_int(int_bytes, DEFAULT_SCALE_FOR_INTEGER, decint);
-      if (NEED_SCALE_DECIMAL_INT(tmp_val, tmp_val.get_scale(), *params.res_accuracy_)) {
-        DO_SCALE_DECIMAL_INT(tmp_val, tmp_val.get_scale(), out);
-      } else {
-        out = tmp_val;
-      }
+      in_precision = ob_fast_digits10(hex_v);
+      in_scale = 0;
     }
   } else if (OB_UNLIKELY(0 == in.get_string().length())) {
     ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD;
-    out.set_decimal_int(0, 0, nullptr); // zero value
+    decint = nullptr;
+    int_bytes = 0;
   } else if (OB_FAIL(convert_string_collation(in.get_string(), in.get_collation_type(), utf8_string,
                                               ObCharset::get_system_collation(), params))) {
     LOG_WARN("convert_string_collation failed", K(ret));
   } else if (OB_FAIL(wide::from_string(utf8_string.ptr(), utf8_string.length(),
                                        *params.allocator_v2_, in_scale, in_precision, int_bytes,
                                        decint))) {
-    LOG_WARN("parse decimal int failed", K(ret));
-  } else {
-    ObObj tmp_val;
+    if (OB_NUMERIC_OVERFLOW == ret && lib::is_mysql_mode()) {
+      // bug: 4263211. compatible with mysql behavior when value overflows type range.
+      // select cast('1e500' as decimal);  -> max_val
+      // select cast('-1e500' as decimal); -> min_val
+      int64_t i = 0;
+      while (i < utf8_string.length() && isspace(utf8_string[i])) { ++i; }
+      bool is_neg = (utf8_string[i] == '-');
+      const ObDecimalInt *limit_decint = nullptr;
+      if (is_neg) {
+        limit_decint = wide::ObDecimalIntConstValue::get_min_value(out_prec);
+        int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec);
+      } else {
+        limit_decint = wide::ObDecimalIntConstValue::get_max_value(out_prec);
+        int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec);
+      }
+      in_scale = out_scale;
+      in_precision = out_prec;
+      if (OB_ISNULL(limit_decint)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null decimal int", K(ret));
+      } else if (OB_ISNULL(decint = (ObDecimalInt *)params.alloc(int_bytes))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret));
+      } else {
+        MEMCPY(decint, limit_decint, int_bytes);
+      }
+    } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret) {
+      const ObUserLoggingCtx *user_logging_ctx =
+        (params.exec_ctx_ == NULL) ? NULL : params.exec_ctx_->get_user_logging_ctx();
+      if (CM_IS_COLUMN_CONVERT(params.cast_mode_)) {
+        ObString decimal_type_str("decimal");
+        ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx,
+                                                   ret, decimal_type_str, in.get_string(),
+                                                   params.cast_mode_);
+      } else {
+        ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+        ObString decimal_type_str("DECIMAL");
+        ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx,
+                                                   ret, decimal_type_str, in.get_string(),
+                                                   params.cast_mode_);
+      }
+    }
+  }
+  int warning = ret;
+  ret = OB_SUCCESS;
+  if (decint != nullptr && int_bytes != 0) {
     tmp_val.set_decimal_int(int_bytes, in_scale, decint);
+    // Decimal int not null means a valid decimal int was parsed regardless of wether there's
+    // error or not.We then do scale and calculate res_datum as normal in order to be compatible
+    // with mysql.
+    // e.g.
+    //  OceanBase(root@test)>set sql_mode = '';
+    //  Query OK, 0 rows affected (0.00 sec)
+    //
+    //  OceanBase(root@test)>insert into t2 values ('1ab');
+    //  Query OK, 1 row affected (0.00 sec)
+    //
+    //  OceanBase(root@test)>select * from t2;
+    //  +-------+
+    //  | a     |
+    //  +-------+
+    //  | 1.000 |
+    //  +-------+
+    //  1 row in set (0.01 sec)
     if (NEED_SCALE_DECIMAL_INT(tmp_val, in_scale, *params.res_accuracy_)) {
       DO_SCALE_DECIMAL_INT(tmp_val, in_scale, out);
     } else {
       out = tmp_val;
     }
+  } else {
+    // set to default zero
+    const ObDecimalInt *tmp_decint = nullptr;
+    if (OB_FAIL(wide::ObDecimalIntConstValue::get_zero_value_byte_precision(out_prec, tmp_decint, int_bytes))) {
+      LOG_WARN("get zero value failed", K(ret));
+    } else if (OB_ISNULL(decint = (ObDecimalInt *)params.alloc(int_bytes))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      MEMCPY(decint, tmp_decint, int_bytes);
+      out.set_decimal_int(int_bytes, out_scale, decint);
+    }
   }
-  if (CAST_FAIL(ret)) {
-    LOG_WARN("string_decimalint failed", K(ret), K(in), K(expected_type), K(cast_mode));
+  if (OB_SUCC(ret)) {
+    if (CAST_FAIL(warning)) {
+      LOG_WARN("string_decimalint failed", K(ret), K(in), K(expected_type), K(cast_mode));
+    }
   }
   return ret;
 }
@@ -10604,6 +12677,89 @@ static int geometry_decimalint(const ObObjType expected_type, ObObjCastParams &p
   return ret;
 }
 
+static int rb_copy_string(ObObjCastParams &params,
+                            const ObObjType expect_type,
+                            const ObString &src,
+                            ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t len = src.length();
+  if (is_lob_storage(expect_type)) {
+    sql::ObTextStringObObjResult str_result(expect_type, &params, &obj, true /*has_lob_header*/);
+    if (OB_FAIL(str_result.init(len))) {
+      LOG_WARN("failed to init ObTextStringObObjResult", K(ret));
+    } else if (OB_FAIL(str_result.append(src.ptr(), len))) {
+      LOG_WARN("failed to append string to ObTextStringObObjResult", K(ret), K(src));
+    } else {
+      str_result.set_result();
+    }
+  } else {
+    if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(params.alloc(len))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc buffer for string", K(ret));
+    } else {
+      MEMMOVE(buf, src.ptr(), len);
+      if (ob_is_raw(expect_type)) {
+        obj.set_raw(buf, static_cast<int32_t>(len));
+      } else {
+        obj.set_string(expect_type, buf, static_cast<int32_t>(len));
+      }
+    }
+  }
+  return ret;
+}
+
+static int roaringbitmap_string(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  ObString in_str = in.get_string();
+  if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, in_str))) {
+    LOG_WARN("fail to get real data.", K(ret), K(in_str));
+  } else if (OB_FAIL(rb_copy_string(params, expect_type, in_str, out))){
+    LOG_WARN("fail to copy string", K(ret), K(expect_type));
+  } else {
+    res_length = static_cast<ObLength>(out.get_string_len());
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
+static int string_roaringbitmap(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObCollationType in_cs_type = in.get_collation_type();
+  if (in_cs_type != CS_TYPE_BINARY) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid in_cs_type of string to cast to roaringbitmap", K(ret), K(in_cs_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast string collation type not in binary to roaringbitmap");
+  } else if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObString in_str = nullptr;
+    ObString out_str = nullptr;
+    if (OB_FAIL(in.get_string(in_str))) {
+      LOG_WARN("fail to get string", K(ret));
+    } else if (OB_FAIL(ObRbUtils::build_binary(temp_allocator, in_str, out_str))) {
+      LOG_WARN("failed to build rb binary", K(ret));
+    } else {
+      sql::ObTextStringObObjResult text_result(ObRoaringBitmapType, &params, &out, true /*has_lob_header*/);
+      if (OB_FAIL(text_result.init(out_str.length(), params.allocator_v2_))) {
+        LOG_WARN("init lob result failed");
+      } else if (OB_FAIL(text_result.append(out_str.ptr(), out_str.length()))) {
+        LOG_WARN("failed to append realdata", K(ret), K(out_str), K(text_result));
+      } else {
+        text_result.set_result();
+      }
+    }
+  }
+  return ret;
+}
 ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
 {
   {
@@ -10634,9 +12790,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_identity,/*geometry*/
     cast_not_expected,/*udt, mysql mode does not have udt*/
     cast_identity,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_identity,/*collection*/
+    cast_identity,/*mysql date*/
+    cast_identity,/*mysql datetime*/
+    cast_identity,/*roaringbitmap*/
   },
   {
     /*int -> XXX*/
@@ -10666,9 +12823,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     int_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     int_decimalint,/*decimal int*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    int_mdate,/*mysql date*/
+    int_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*uint -> XXX*/
@@ -10698,9 +12856,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     uint_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     uint_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    uint_mdate,/*mysql date*/
+    uint_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*float -> XXX*/
@@ -10730,9 +12889,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     float_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     float_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    float_mdate,/*mysql date*/
+    float_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*double -> XXX*/
@@ -10762,9 +12922,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     double_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     double_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    double_mdate,/*mysql date*/
+    double_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*number -> XXX*/
@@ -10794,9 +12955,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     number_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     number_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    number_mdate,/*mysql date*/
+    number_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*datetime -> XXX*/
@@ -10826,9 +12988,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     datetime_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     datetime_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    datetime_mdate,/*mysql date*/
+    datetime_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*date -> XXX*/
@@ -10858,9 +13021,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     date_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     date_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    date_mdate,/*mysql date*/
+    date_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*time -> XXX*/
@@ -10890,9 +13054,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     time_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     time_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    time_mdate,/*mysql date*/
+    time_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*year -> XXX*/
@@ -10922,9 +13087,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     year_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     year_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    year_mdate,/*mysql date*/
+    year_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*string -> XXX*/
@@ -10954,9 +13120,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     string_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     string_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    string_collection,/*collection*/
+    string_mdate,/*mysql date*/
+    string_mdatetime,/*mysql datetime*/
+    string_roaringbitmap,/*roaringbitmap*/
   },
   {
     /*extend -> XXX*/
@@ -10986,9 +13153,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     pl_extend_sql_udt,/*udt*/
     cast_not_support,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    cast_not_support,/*mysql date*/
+    cast_not_support,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*unknown -> XXX*/
@@ -11018,9 +13186,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_not_expected,/*udt*/
     unknown_other,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    unknown_other,/*mysql date*/
+    unknown_other,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*text -> XXX*/
@@ -11050,9 +13219,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     string_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     text_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    string_collection,/*collection*/
+    text_mdate,/*mysql date*/
+    text_mdatetime,/*mysql datetime*/
+    string_roaringbitmap,/*roaringbitmap*/
   },
   {
     /*bit -> XXX*/
@@ -11082,9 +13252,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     bit_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     bit_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    bit_mdate,/*mysql date*/
+    bit_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*enum -> XXX*/
@@ -11094,14 +13265,14 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     enumset_float,/*float*/
     enumset_double,/*double*/
     enumset_number,/*number*/
-    cast_not_expected,/*datetime*/
-    cast_not_expected,/*date*/
-    cast_not_expected,/*time*/
+    enumset_datetime,/*datetime*/
+    enumset_date,/*date*/
+    enumset_time,/*time*/
     enumset_year,/*year*/
-    cast_not_expected,/*string*/
+    enumset_string,/*string*/
     cast_not_support,/*extend*/
     cast_not_support,/*unknown*/
-    cast_not_expected,/*text*/
+    enumset_text,/*text*/
     enumset_bit,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
@@ -11109,14 +13280,15 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*raw*/
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
-    cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
-    cast_not_expected,/*geometry*/
+    enumset_lob,/*lob*/
+    enumset_json,/*json*/
+    cast_not_support,/*geometry*/
     cast_not_expected,/*udt*/
     enumset_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    enumset_mdate,/*mysql date*/
+    enumset_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -11146,9 +13318,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_not_expected,/*udt*/
     enumset_inner_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    enumset_inner_mdate,/*mysql date*/
+    enumset_inner_datetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*otimestamp -> XXX*/
@@ -11158,7 +13331,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*float*/
     cast_not_expected,/*double*/
     cast_not_expected,/*number*/
-    cast_not_expected,/*datetime*/
+    otimestamp_mydatetime,/*datetime*/
     cast_not_expected,/*date*/
     cast_not_expected,/*time*/
     cast_not_expected,/*year*/
@@ -11181,6 +13354,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*raw -> XXX*/
@@ -11213,6 +13387,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*interval -> XXX*/
@@ -11245,6 +13420,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*rowid -> XXX*/
@@ -11277,6 +13453,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*lob -> XXX*/
@@ -11306,9 +13483,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     lob_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     lob_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    lob_mdate,/*mysql date*/
+    lob_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*json -> XXX*/
@@ -11338,9 +13516,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     json_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     json_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    json_array,/*collection*/
+    json_mdate,/*mysql date*/
+    json_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*geometry -> XXX*/
@@ -11370,9 +13549,10 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     geometry_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     geometry_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    geometry_mdate,/*mysql date*/
+    geometry_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*udt -> XXX*/
@@ -11405,6 +13585,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*decimalint-> XXX*/
@@ -11434,105 +13615,142 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     decimalint_geometry,/*geometry*/
     cast_not_expected, /*udt*/
     decimalint_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*collection*/
+    decimalint_mdate,/*mysql date*/
+    decimalint_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*collection-> xxx*/
-    cast_not_expected,/*null*/
-    cast_not_expected,/*int*/
-    cast_not_expected,/*uint*/
-    cast_not_expected,/*float*/
-    cast_not_expected,/*double*/
-    cast_not_expected,/*number*/
-    cast_not_expected,/*datetime*/
-    cast_not_expected,/*date*/
-    cast_not_expected,/*time*/
-    cast_not_expected,/*year*/
-    cast_not_expected,/*string*/
-    cast_not_expected,/*extend*/
-    cast_not_expected,/*unknown*/
-    cast_not_expected,/*text*/
-    cast_not_expected,/*bit*/
+    cast_not_support,/*null*/
+    cast_not_support,/*int*/
+    cast_not_support,/*uint*/
+    cast_not_support,/*float*/
+    cast_not_support,/*double*/
+    cast_not_support,/*number*/
+    cast_not_support,/*datetime*/
+    cast_not_support,/*date*/
+    cast_not_support,/*time*/
+    cast_not_support,/*year*/
+    cast_not_support,/*string*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
+    cast_not_support,/*text*/
+    cast_not_support,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
-    cast_not_expected,/*otimestamp*/
-    cast_not_expected,/*raw*/
+    cast_not_support,/*otimestamp*/
+    cast_not_support,/*raw*/
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
-    cast_not_expected,/*geometry*/
+    cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
     cast_not_expected, /*udt*/
-    cast_not_expected,/*decimalint*/
+    cast_not_support,/*decimalint*/
     cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*mysql date*/
+    cast_not_support,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*mysql date-> xxx*/
-    cast_not_expected,/*null*/
-    cast_not_expected,/*int*/
-    cast_not_expected,/*uint*/
-    cast_not_expected,/*float*/
-    cast_not_expected,/*double*/
-    cast_not_expected,/*number*/
-    cast_not_expected,/*datetime*/
-    cast_not_expected,/*date*/
-    cast_not_expected,/*time*/
-    cast_not_expected,/*year*/
-    cast_not_expected,/*string*/
-    cast_not_expected,/*extend*/
-    cast_not_expected,/*unknown*/
-    cast_not_expected,/*text*/
-    cast_not_expected,/*bit*/
+    cast_not_support,/*null*/
+    mdate_int,/*int*/
+    mdate_uint,/*uint*/
+    mdate_float,/*float*/
+    mdate_double,/*double*/
+    mdate_number,/*number*/
+    mdate_datetime,/*datetime*/
+    mdate_date,/*date*/
+    mdate_time,/*time*/
+    mdate_year,/*year*/
+    mdate_string,/*string*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
+    mdate_text,/*text*/
+    mdate_bit,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
-    cast_not_expected,/*otimestamp*/
-    cast_not_expected,/*raw*/
+    cast_not_support,/*otimestamp*/
+    cast_inconsistent_types,/*raw*/
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
-    cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
-    cast_not_expected,/*geometry*/
+    mdate_lob,/*lob*/
+    mdate_json,/*json*/
+    mdate_geometry,/*geometry*/
     cast_not_expected, /*udt*/
-    cast_not_expected,/*decimalint*/
+    mdate_decimalint,/*decimalint*/
     cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_identity,/*mysql date*/
+    mdate_mdatetime,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*mysql datetime-> xxx*/
-    cast_not_expected,/*null*/
-    cast_not_expected,/*int*/
-    cast_not_expected,/*uint*/
-    cast_not_expected,/*float*/
-    cast_not_expected,/*double*/
-    cast_not_expected,/*number*/
-    cast_not_expected,/*datetime*/
-    cast_not_expected,/*date*/
-    cast_not_expected,/*time*/
-    cast_not_expected,/*year*/
-    cast_not_expected,/*string*/
-    cast_not_expected,/*extend*/
-    cast_not_expected,/*unknown*/
-    cast_not_expected,/*text*/
-    cast_not_expected,/*bit*/
+    cast_not_support,/*null*/
+    mdatetime_int,/*int*/
+    mdatetime_uint,/*uint*/
+    mdatetime_float,/*float*/
+    mdatetime_double,/*double*/
+    mdatetime_number,/*number*/
+    mdatetime_datetime,/*datetime*/
+    mdatetime_date,/*date*/
+    mdatetime_time,/*time*/
+    mdatetime_year,/*year*/
+    mdatetime_string,/*string*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
+    mdatetime_text,/*text*/
+    mdatetime_bit,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
     cast_not_expected,/*otimestamp*/
-    cast_not_expected,/*raw*/
+    cast_inconsistent_types,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    mdatetime_lob,/*lob*/
+    mdatetime_json,/*json*/
+    mdatetime_geometry,/*geometry*/
+    cast_not_expected, /*udt*/
+    mdatetime_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
+    mdatetime_mdate,/*mysql date*/
+    cast_identity,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
+  },
+  {
+    /*roaringbitmap-> xxx*/
+    cast_not_support,/*null*/
+    cast_not_support,/*int*/
+    cast_not_support,/*uint*/
+    cast_not_support,/*float*/
+    cast_not_support,/*double*/
+    cast_not_support,/*number*/
+    cast_not_support,/*datetime*/
+    cast_not_support,/*date*/
+    cast_not_support,/*time*/
+    cast_not_support,/*year*/
+    roaringbitmap_string,/*string*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
+    roaringbitmap_string,/*text*/
+    cast_not_support,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_support,/*otimestamp*/
+    cast_not_support,/*raw*/
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
-    cast_not_expected,/*geometry*/
+    cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
     cast_not_expected, /*udt*/
-    cast_not_expected,/*decimalint*/
-    cast_not_expected,/*collection*/
-    cast_not_expected,/*mysql date*/
-    cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*decimalint*/
+    cast_not_support,/*collection*/
+    cast_not_support,/*mysql date*/
+    cast_not_support,/*mysql datetime*/
+    cast_identity,/*roaringbitmap*/
   },
 };
 
@@ -11569,6 +13787,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*int -> XXX*/
@@ -11601,6 +13820,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*uint -> XXX*/
@@ -11633,6 +13853,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*float -> XXX*/
@@ -11665,6 +13886,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*double -> XXX*/
@@ -11697,6 +13919,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*number -> XXX*/
@@ -11729,6 +13952,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*datetime -> XXX*/
@@ -11761,6 +13985,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*date -> XXX*/
@@ -11793,6 +14018,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*time -> XXX*/
@@ -11825,6 +14051,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*year -> XXX*/
@@ -11857,6 +14084,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*string -> XXX*/
@@ -11889,6 +14117,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*extend -> XXX*/
@@ -11921,6 +14150,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     pl_extend_sql_udt,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*unknown -> XXX*/
@@ -11953,6 +14183,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*text -> XXX*/
@@ -11985,6 +14216,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*bit -> XXX*/
@@ -12017,6 +14249,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*enum -> XXX*/
@@ -12049,6 +14282,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -12081,6 +14315,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*otimestamp -> XXX*/
@@ -12113,6 +14348,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*raw -> XXX*/
@@ -12145,6 +14381,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*interval -> XXX*/
@@ -12177,6 +14414,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*rowid -> XXX*/
@@ -12209,6 +14447,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*lob -> XXX*/
@@ -12241,6 +14480,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*json -> XXX, not support oracle currently*/
@@ -12273,6 +14513,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*geometry -> XXX, not support oracle currently*/
@@ -12305,6 +14546,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*udt -> XXX, not support oracle currently*/
@@ -12337,6 +14579,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_udt_to_other_not_support,/*roaringbitmap*/
   },
   {
     /*decimalint -> XXX*/
@@ -12369,6 +14612,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support, /*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*collection -> XXX*/
@@ -12401,6 +14645,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_udt_to_other_not_support,/*roaringbitmap*/
   },
   {
     /*mysql date*/
@@ -12433,6 +14678,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*mysql datetime*/
@@ -12465,6 +14711,40 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
+  },
+  {
+    /*roaringbitmap -> XXX*/
+    cast_not_expected,/*null*/
+    cast_not_expected,/*int*/
+    cast_not_expected,/*uint*/
+    cast_not_expected,/*float*/
+    cast_not_expected,/*double*/
+    cast_not_expected,/*number*/
+    cast_not_expected,/*datetime*/
+    cast_not_expected,/*date*/
+    cast_not_expected,/*time*/
+    cast_not_expected,/*year*/
+    cast_not_expected,/*string*/
+    cast_not_expected,/*extend*/
+    cast_not_expected,/*unknown*/
+    cast_not_expected,/*text*/
+    cast_not_expected,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_expected,/*otimestamp*/
+    cast_not_expected,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
+    cast_not_expected,/*udt*/
+    cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
+    cast_identity,/*roaringbitmap*/
   },
 };
 
@@ -12510,6 +14790,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_identity,/*roaringbitmap*/
   },
   {
     /*int -> XXX*/
@@ -12542,6 +14823,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*uint -> XXX*/
@@ -12574,6 +14856,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*float -> XXX*/
@@ -12606,6 +14889,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*double -> XXX*/
@@ -12638,6 +14922,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*number -> XXX*/
@@ -12670,6 +14955,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*datetime -> XXX*/
@@ -12702,6 +14988,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*date -> XXX*/
@@ -12734,6 +15021,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*time -> XXX*/
@@ -12766,6 +15054,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*year -> XXX*/
@@ -12798,6 +15087,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*string -> XXX*/
@@ -12830,6 +15120,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*extend -> XXX*/
@@ -12862,6 +15153,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     pl_extend_sql_udt,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*unknown -> XXX*/
@@ -12894,6 +15186,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*text -> XXX*/
@@ -12926,6 +15219,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*bit -> XXX*/
@@ -12958,6 +15252,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*enum -> XXX*/
@@ -12987,9 +15282,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
-    cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*roaringbitmap*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*collection*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -13022,6 +15318,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*otimestamp -> XXX*/
@@ -13054,6 +15351,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*raw -> XXX*/
@@ -13086,6 +15384,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*interval -> XXX*/
@@ -13118,6 +15417,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /* rowid -> XXX */
@@ -13150,6 +15450,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*lob -> XXX*/
@@ -13182,6 +15483,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*json -> XXX*/
@@ -13214,6 +15516,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*geoemtry -> XXX, not support oracle currently*/
@@ -13246,6 +15549,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*udt -> XXX*/
@@ -13278,6 +15582,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_udt_to_other_not_support,/*roaringbitmap*/
   },
   {
     /*decimalint -> XXX*/
@@ -13310,6 +15615,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_inconsistent_types,/*roaringbitmap*/
   },
   {
     /*collection -> XXX*/
@@ -13342,6 +15648,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_udt_to_other_not_support,/*roaringbitmap*/
   },
   {
     /*mysql date*/
@@ -13374,6 +15681,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
   },
   {
     /*mysql datetime*/
@@ -13406,6 +15714,40 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
+    cast_not_expected,/*roaringbitmap*/
+  },
+  {
+    /*roaringbitmap -> XXX*/
+    cast_not_expected,/*null*/
+    cast_not_expected,/*int*/
+    cast_not_expected,/*uint*/
+    cast_not_expected,/*float*/
+    cast_not_expected,/*double*/
+    cast_not_expected,/*number*/
+    cast_not_expected,/*datetime*/
+    cast_not_expected,/*date*/
+    cast_not_expected,/*time*/
+    cast_not_expected,/*year*/
+    cast_not_expected,/*string*/
+    cast_not_expected,/*extend*/
+    cast_not_expected,/*unknown*/
+    cast_not_expected,/*text*/
+    cast_not_expected,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_expected,/*otimestamp*/
+    cast_not_expected,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
+    cast_not_expected,/*udt*/
+    cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
+    cast_identity,/*roaringbitmap*/
   },
 };
 
@@ -13451,7 +15793,10 @@ int float_range_check(ObObjCastParams &params, const ObAccuracy &accuracy,
   int ret = OB_SUCCESS;
   float value = obj.get_float();
   res_obj = &obj;
-  if (lib::is_oracle_mode() && 0.0 == value) {
+  if (obj.is_ufloat() && 0.0 > value) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unsiged type with negative value", K(ret), K(obj), K(value));
+  } else if (lib::is_oracle_mode() && 0.0 == value) {
     value = 0.0;
     buf_obj.set_float(obj.get_type(), value);
     res_obj = &buf_obj;
@@ -13478,7 +15823,10 @@ int double_check_precision(ObObjCastParams &params, const ObAccuracy &accuracy,
   int ret = OB_SUCCESS;
   double value = obj.get_double();
   res_obj = &obj;
-  if (lib::is_oracle_mode() && 0.0 == value) {
+  if (obj.is_udouble() && 0.0 > value) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unsiged type with negative value", K(ret), K(obj), K(value));
+  } else if (lib::is_oracle_mode() && 0.0 == value) {
     value = 0.0;
     buf_obj.set_double(obj.get_type(), value);
     res_obj = &buf_obj;
@@ -13702,7 +16050,10 @@ int number_range_check_v2(ObObjCastParams &params, const ObAccuracy &accuracy,
     const number::ObNumber *max_num_mysql = NULL;
     number::ObNumber out_val;
     bool is_finish = false;
-    if (obj.is_number_float()) {
+    if (obj.is_unumber() && in_val.is_negative()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unsiged type with negative value", K(ret), K(in_val));
+    } else if (obj.is_number_float()) {
       if (OB_MIN_NUMBER_FLOAT_PRECISION <= precision
           && precision <= OB_MAX_NUMBER_FLOAT_PRECISION) {
         const int64_t number_precision = static_cast<int64_t>(floor(precision * OB_PRECISION_BINARY_TO_DECIMAL_FACTOR));
@@ -13865,6 +16216,29 @@ int time_usec_scale_check(const ObCastMode &cast_mode,
   return ret;
 }
 
+// check usec scale for ObMySQLDateTimeType
+int time_usec_scale_check(const ObCastMode &cast_mode,
+                          const ObAccuracy &accuracy,
+                          const ObMySQLDateTime value)
+{
+  INIT_SUCC(ret);
+  bool need_check_zero_scale = CM_IS_ERROR_ON_SCALE_OVER(cast_mode);
+  // check usec scale for time part
+  if (need_check_zero_scale) {
+    ObScale scale = accuracy.get_scale();
+    if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+      // get usec part for value
+      ObMySQLDateTime temp_value = value;
+      ObTimeConverter::round_mdatetime(scale, temp_value);
+      if (temp_value != value) { // round success
+        ret = OB_OPERATE_OVERFLOW;
+        LOG_WARN("Invalid input value.", K(value), K(scale));
+      }
+    }
+  }
+  return ret;
+}
+
 int datetime_scale_check(ObObjCastParams &params, const ObAccuracy &accuracy,
                          const ObObj &obj, ObObj &buf_obj, const ObObj *&res_obj, const ObCastMode cast_mode)
 {
@@ -13882,6 +16256,35 @@ int datetime_scale_check(ObObjCastParams &params, const ObAccuracy &accuracy,
       ObTimeConverter::round_datetime(scale, value);
       if (ObTimeConverter::is_valid_datetime(value)) {
         buf_obj.set_datetime(obj.get_type(), value);
+      } else {
+        buf_obj.set_null();
+      }
+      res_obj = &buf_obj;
+    } else {
+      res_obj = &obj;
+    }
+  }
+  UNUSED(params);
+  return ret;
+}
+
+int mdatetime_scale_check(ObObjCastParams &params, const ObAccuracy &accuracy,
+                          const ObObj &obj, ObObj &buf_obj, const ObObj *&res_obj, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  res_obj = NULL;
+  ObScale scale = accuracy.get_scale();
+  if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
+    ret = OB_ERR_TOO_BIG_PRECISION;
+    LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST", static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
+  } else {
+    ObMySQLDateTime value = obj.get_mysql_datetime();
+    if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
+      LOG_WARN("check zero scale fail.", K(ret), K(value), K(scale));
+    } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+      ObTimeConverter::round_mdatetime(scale, value);
+      if (ObTimeConverter::is_valid_mdatetime(value)) {
+        buf_obj.set_mysql_datetime(value);
       } else {
         buf_obj.set_null();
       }
@@ -13978,6 +16381,28 @@ int datetime_scale_check_only(const ObAccuracy &accuracy, const ObObj &obj)
       LOG_WARN("check usec scale fail.", K(ret), K(value), K(accuracy));
     } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
       if (!ObTimeConverter::is_valid_datetime(value)) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("invalid datetime value", K(ret), K(value));
+      }
+    }
+  }
+  return ret;
+}
+
+int mdatetime_scale_check_only(const ObAccuracy &accuracy, const ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  ObScale scale = accuracy.get_scale();
+  if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
+    ret = OB_ERR_TOO_BIG_PRECISION;
+    LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST", static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
+  } else {
+    ObMySQLDateTime value = obj.get_mysql_datetime();
+    ObCastMode cast_mode = CM_ERROR_ON_SCALE_OVER;
+    if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
+      LOG_WARN("check usec scale fail.", K(ret), K(value), K(accuracy));
+    } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+      if (!ObTimeConverter::is_valid_mdatetime(value)) {
         ret = OB_INVALID_DATA;
         LOG_WARN("invalid datetime value", K(ret), K(value));
       }
@@ -14183,15 +16608,22 @@ int string_length_check_only(const ObAccuracy &accuracy, const ObCollationType c
   const ObLength max_len_char = accuracy.get_length();
   const char *str = obj.get_string_ptr();
   const int32_t str_len_byte = obj.get_string_len();
-  const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
   if (OB_UNLIKELY(max_len_char <= 0)) {
     if (OB_UNLIKELY(0 == max_len_char && str_len_byte > 0)) {
+      const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
       ret = OB_ERR_DATA_TOO_LONG;
       OB_LOG(WARN, "char type length is too long", K(obj), K(max_len_char), K(str_len_char));
     }
-  } else if (OB_UNLIKELY(str_len_char > max_len_char)) {
-    ret = OB_ERR_DATA_TOO_LONG;
-    LOG_WARN("string length is too long", K(max_len_char), K(str_len_char), K(obj));
+  } else {
+    if (str_len_byte <= max_len_char) {
+      // do nonthing
+    } else {
+      const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
+      if (OB_UNLIKELY(str_len_char > max_len_char)) {
+        ret = OB_ERR_DATA_TOO_LONG;
+        LOG_WARN("string length is too long", K(max_len_char), K(str_len_char), K(obj));
+      }
+    }
   }
   return ret;
 }
@@ -14295,13 +16727,8 @@ int obj_collation_check(const bool is_strict_mode, const ObCollationType cs_type
         if (OB_FAIL(obj.get_string(str))) {
           LOG_WARN("Failed to get payload from string", K(ret), K(obj));
         }
-      } else {
-        ObTextStringIter instr_iter(obj);
-        if (OB_FAIL(instr_iter.init(0, NULL, &allocator))) {
-          LOG_WARN("fail to init lob str iter", K(ret));
-        } else if (OB_FAIL(instr_iter.get_full_data(str))) {
-          LOG_WARN("fail to get full data", K(ret));
-        }
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, obj, str))) {
+        LOG_WARN("read_real_string_data fail", K(ret), K(obj));
       }
     }
 
@@ -14413,6 +16840,10 @@ int obj_accuracy_check(ObCastCtx &cast_ctx, const ObAccuracy &accuracy, const Ob
                                 obj, buf_obj, res_obj, cast_ctx.cast_mode_);
       break;
     }
+    case ObMySQLDateTimeTC: {
+      ret = mdatetime_scale_check(cast_ctx, accuracy, obj, buf_obj, res_obj, cast_ctx.cast_mode_);
+      break;
+    }
     case ObJsonTC: {
       // ToDo: json length check
       break;
@@ -14518,6 +16949,9 @@ int ob_obj_accuracy_check_only(const ObAccuracy &accuracy, const ObCollationType
         ret = uint_upper_check(obj.get_type(), value);
       }
       break;
+    case ObMySQLDateTimeTC:
+      ret = mdatetime_scale_check_only(accuracy, obj);
+      break;
     default:
       break;
   }
@@ -14549,6 +16983,14 @@ int ob_obj_to_ob_time_with_date(const ObObj& obj,
     }
     case ObDateTC: {
       ret = ObTimeConverter::date_to_ob_time(obj.get_date(), ob_time);
+      break;
+    }
+    case ObMySQLDateTimeTC: {
+      ret = ObTimeConverter::mdatetime_to_ob_time(obj.get_mysql_datetime(), ob_time);
+      break;
+    }
+    case ObMySQLDateTC: {
+      ret = ObTimeConverter::mdate_to_ob_time(obj.get_mysql_date(), ob_time);
       break;
     }
     case ObTimeTC: {
@@ -14651,6 +17093,16 @@ int ob_obj_to_ob_time_without_date(const ObObj &obj, const ObTimeZoneInfo *tz_in
     }
     case ObDateTC: {
       ret = ObTimeConverter::date_to_ob_time(obj.get_date(), ob_time);
+      break;
+    }
+    case ObMySQLDateTimeTC: {
+      ob_time.mode_ |= DT_TYPE_MYSQL_DATETIME;
+      ret = ObTimeConverter::mdatetime_to_ob_time(obj.get_mysql_datetime(), ob_time);
+      break;
+    }
+    case ObMySQLDateTC: {
+      ob_time.mode_ |= DT_TYPE_MYSQL_DATETIME;
+      ret = ObTimeConverter::mdate_to_ob_time(obj.get_mysql_date(), ob_time);
       break;
     }
     case ObTimeTC: {
@@ -15120,6 +17572,12 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
   } else if (ob_is_user_defined_sql_type(expect_type)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("default value of udt, should be it's default constructor");
+  } else if (ob_is_mysql_date_tc(expect_type)) {
+    ObMySQLDate md_value = 0;
+    SET_RES_MDATE(zero_obj);
+  } else if (ob_is_mysql_datetime_tc(expect_type)) {
+    ObMySQLDateTime mdt_value = 0;
+    SET_RES_MDATETIME(zero_obj);
   }
   if (OB_SUCC(ret)) {
     zero_obj.set_collation_type(expect_cs_type);
@@ -15308,12 +17766,15 @@ int ObObjCaster::is_order_consistent(const ObObjMeta &from,
     ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
     ObCollationType from_cs_type = from.get_collation_type();
     ObCollationType to_cs_type = to.get_collation_type();
-    if (OB_FAIL(ObCharset::aggregate_collation(from.get_collation_level(),
-                                               from_cs_type,
-                                               to.get_collation_level(),
-                                               to_cs_type,
-                                               res_cs_level,
-                                               res_cs_type))) {
+    uint32_t flags = OB_COLL_ALLOW_SUPERSET_CONV | OB_COLL_ALLOW_COERCIBLE_CONV |
+                     OB_COLL_ALLOW_NUMERIC_CONV | OB_COLL_ALLOW_NEW_CONV;
+    if (OB_FAIL(ObExprOperator::aggregate_two_collation(from.get_collation_level(),
+                                                        from_cs_type,
+                                                        to.get_collation_level(),
+                                                        to_cs_type,
+                                                        res_cs_level,
+                                                        res_cs_type,
+                                                        flags))) {
       LOG_WARN("fail to aggregate collation", K(ret), K(from), K(to));
     } else {
       int64_t idx_from = get_idx_of_collate(from_cs_type);
@@ -15450,6 +17911,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // int
   {
@@ -15479,6 +17943,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // uint
   {
@@ -15508,6 +17975,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // float
   {
@@ -15537,6 +18007,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // double
   {
@@ -15566,6 +18039,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // number
   {
@@ -15595,6 +18071,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // datetime
   {
@@ -15624,6 +18103,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
   },
   // date
   {
@@ -15653,6 +18135,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
   },
   // time
   {
@@ -15682,6 +18167,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    true,   // mysql datetime
   },
   // year
   {
@@ -15711,6 +18199,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
   },
   // string
   {
@@ -15740,6 +18231,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // extend
   {
@@ -15769,6 +18263,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // unknown
   {
@@ -15798,6 +18295,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // text
   {
@@ -15827,6 +18327,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
    // bit
   {
@@ -15856,6 +18359,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   //enumset
   {
@@ -15885,6 +18391,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   //enumsetinner
   {
@@ -15914,6 +18423,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // OTimestamp
   {
@@ -15943,6 +18455,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
   },
   // raw
   {
@@ -15972,6 +18487,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // interval
   {
@@ -16001,6 +18519,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // rowid
   {
@@ -16030,6 +18551,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // lob
   {
@@ -16059,6 +18583,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // json
   {
@@ -16088,6 +18615,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // geometry
   {
@@ -16117,6 +18647,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // udt
   {
@@ -16146,6 +18679,9 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // decimal int
   {
@@ -16175,6 +18711,105 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // gis
     false,  // udt
     true,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
+  },
+  // collation
+  {
+    false,  // null
+    false,  // int
+    false,  // uint
+    false,  // float
+    false,  // double
+    false,  // number
+    false,  // datetime
+    false,  // date
+    false,  // time
+    false,  // year
+    false,  // string
+    false,  // extend
+    false,  // unknown
+    false,  // text
+    false,  // bit
+    false,  // enumset
+    false,  // enumsetInner
+    false,  // OTimestamp
+    false,  // raw
+    false,  // interval
+    false,  // rowid
+    false,  // lob
+    true,   // json
+    false,  // gis
+    false,  // udt
+    true,  // decimal int
+    true,   // collation
+    false,  // mysql date
+    false,  // mysql datetime
+  },
+  // mysql date
+  {
+    false,  // null
+    true,   // int
+    true,   // uint
+    true,   // float
+    true,   // double
+    true,   // number
+    true,   // datetime
+    true,   // date
+    false,  // time
+    true,   // year
+    true,   // string
+    false,  // extend
+    false,  // unknown
+    true,   // text
+    true,   // bit
+    false,  // enumset
+    false,  // enumsetInner
+    true,   // OTimestamp
+    false,  // raw
+    false,  // interval
+    false,  // rowid
+    true,   // lob
+    true,   // json
+    false,  // gis
+    false,  // udt
+    true,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
+  },
+  // mysql datetime
+  {
+    false,  // null
+    true,   // int
+    true,   // uint
+    true,   // float
+    true,   // double
+    true,   // number
+    true,   // datetime
+    true,   // date
+    false,  // time
+    true,   // year
+    true,   // string
+    false,  // extend
+    false,  // unknown
+    true,   // text
+    true,   // bit
+    false,  // enumset
+    false,  // enumsetInner
+    true,   // OTimestamp
+    false,  // raw
+    false,  // interval
+    false,  // rowid
+    true,   //lob
+    true,   // json
+    false,  // gis
+    false,  // udt
+    true,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
   },
 };
 
@@ -16208,6 +18843,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // int
   {
@@ -16237,6 +18875,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     true,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // uint
   {
@@ -16266,6 +18907,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // float
   {
@@ -16295,6 +18939,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // double
   {
@@ -16324,6 +18971,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // number
   {
@@ -16353,6 +19003,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // datetime
   {
@@ -16382,6 +19035,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
   },
   // date
   {
@@ -16411,6 +19067,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
   },
   // time
   {
@@ -16440,6 +19099,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
   },
   // year //0000-9999
   {
@@ -16469,6 +19131,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // string
   {
@@ -16498,6 +19163,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // extend
   {
@@ -16527,6 +19195,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // unknown
   {
@@ -16556,6 +19227,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // lob
   {
@@ -16585,6 +19259,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
     // bit
   {
@@ -16614,6 +19291,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   //enumset
   {
@@ -16643,6 +19323,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   //enumsetInner
   {
@@ -16672,6 +19355,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // OTimestamp
   {
@@ -16701,6 +19387,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
   },
   // raw
   {
@@ -16730,6 +19419,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // interval
   {
@@ -16759,6 +19451,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // rowid
   {
@@ -16788,6 +19483,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // lob
   {
@@ -16817,6 +19515,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // json
   {
@@ -16846,6 +19547,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // geometry
   {
@@ -16875,6 +19579,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,   // udt
     false,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // udt
   {
@@ -16904,6 +19611,9 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
   },
   // decimal int
   {
@@ -16933,6 +19643,105 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
     false,  // geometry
     false,  // udt
     true,   // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
+  },
+  // collation
+  {
+    false,  // null
+    false,  // int
+    false,  // uint
+    false,  // float
+    false,  // double
+    false,  // number
+    false,  // datetime
+    false,  // date
+    false,  // time
+    false,  // year
+    false,  // string
+    false,  // extend
+    false,  // unknown
+    false,  // lob
+    false,  // bit
+    false,  // enumset
+    false,  // enumsetInner
+    false,  // OTimestamp
+    false,  // raw
+    false,  // interval
+    false,  // rowid
+    false,  // lob
+    false,  // json
+    false,  // geometry
+    false,  // udt
+    false,  // decimal int
+    false,  // collation
+    false,  // mysql date
+    false,  // mysql datetime
+  },
+  // mysql date
+  {
+    false,  // null
+    false,   // int
+    false,   // uint
+    false,   // float
+    false,   // double
+    false,   // number
+    true,   // datetime
+    true,   // date
+    true,  // time
+    true,   // year
+    false,   // string
+    false,  // extend
+    false,  // unknown
+    false,   // lob
+    false,   // bit
+    false,  // enumset
+    false,  // enumsetInner
+    true,  // OTimestamp
+    false,  // raw
+    false,  // interval
+    false,  // rowid
+    false,  // lob
+    false,  // json
+    false,  // geometry
+    false,  // udt
+    false,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
+  },
+  // mysql datetime
+  {
+    false,  // null
+    false,   // int
+    false,   // uint
+    false,   // float
+    false,   // double
+    false,   // number
+    true,   // datetime
+    true,   // date
+    true,  // time
+    true,   // year
+    false,   // string
+    false,  // extend
+    false,  // unknown
+    false,   // lob
+    false,   // bit
+    false,  // enumset
+    false,  // enumsetInner
+    true,  // OTimestamp
+    false,  // raw
+    false,  // interval
+    false,  // rowid
+    false,  // lob
+    false,  // json
+    false,  // geometry
+    false,  // udt
+    false,   // decimal int
+    false,  // collation
+    true,   // mysql date
+    true,   // mysql datetime
   },
 };
 

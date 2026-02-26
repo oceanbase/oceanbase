@@ -32,6 +32,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_date(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  static int eval_date_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private :
   //disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDate);
@@ -43,10 +44,12 @@ inline int ObExprDate::calc_result_type1(ObExprResType &type,
 {
   UNUSED(type_ctx);
   UNUSED(type1);
-  type.set_date();
+  const ObObjType res_type = type_ctx.enable_mysql_compatible_dates() ?
+      common::ObMySQLDateType : common::ObDateType;
+  type.set_type(res_type);
   type.set_scale(common::DEFAULT_SCALE_FOR_DATE);
   //set calc type
-  type1.set_calc_type(common::ObDateType);
+  type1.set_calc_type(res_type);
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
   return common::OB_SUCCESS;
 }

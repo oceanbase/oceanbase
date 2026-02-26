@@ -13,15 +13,6 @@
 #define USING_LOG_PREFIX SQL_DTL
 
 #include "observer/virtual_table/ob_all_virtual_dtl_memory.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
-#include "share/rc/ob_context.h"
-#include "sql/dtl/ob_dtl.h"
-#include "sql/dtl/ob_dtl_basic_channel.h"
-#include "sql/dtl/ob_dtl_tenant_mem_manager.h"
-#include "sql/dtl/ob_op_metric.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "share/rc/ob_tenant_base.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

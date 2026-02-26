@@ -12,13 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "sql/plan_cache/ob_pcv_set.h"
-#include "sql/ob_sql_context.h"
-#include "sql/plan_cache/ob_pc_ref_handle.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/ob_cluster_version.h"
-#include "share/config/ob_server_config.h"
-#include "lib/container/ob_bit_set.h"
-#include "lib/charset/ob_charset.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -32,9 +25,6 @@ int ObPCVSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *obj)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo* sess;
-#ifdef OB_BUILD_SPM
-  bool is_spm_on = false;
-#endif
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
   const ObPlanCacheObject *cache_obj = static_cast<const ObPlanCacheObject*>(obj);
   if (is_inited_) {
@@ -46,12 +36,6 @@ int ObPCVSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *obj)
   } else if (NULL == (sess = pc_ctx.sql_ctx_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(WARN, "session info is null", K(ret));
-#ifdef OB_BUILD_SPM
-  } else if (OB_FAIL(sess->get_use_plan_baseline(is_spm_on))) {
-    LOG_WARN("fail to get spm config");
-  } else if (FALSE_IT(is_spm_closed_ = (!is_spm_on))) {
-    // do nothing
-#endif
   } else if (NULL == (pc_alloc_ = lib_cache_->get_pc_allocator())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid plan cache allocator", K_(pc_alloc), K(ret));
@@ -107,6 +91,7 @@ void ObPCVSet::destroy()
     plan_num_ = 0;
     need_check_gen_tbl_col_ = false;
     is_inited_ = false;
+    expired_time_ = 0;
   }
 }
 
@@ -119,9 +104,6 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
 {
   UNUSED(key);
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_SPM
-  bool is_spm_on = false;
-#endif
   ObPlanCacheObject *plan = NULL;
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
   if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
@@ -162,13 +144,6 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected null schema guard",
              K(ret), K(pc_ctx.sql_ctx_.schema_guard_), K(pc_ctx.sql_ctx_.session_info_));
-#ifdef OB_BUILD_SPM
-  } else if (OB_FAIL(pc_ctx.sql_ctx_.session_info_->get_use_plan_baseline(is_spm_on))) {
-    LOG_WARN("failed to get spm status", K(ret));
-  } else if (is_spm_closed_ != (!is_spm_on)) {
-    // spm param is altered
-    ret = OB_OLD_SCHEMA_VERSION;
-#endif
   } else {
     ObSEArray<PCVSchemaObj, 4> schema_array;
     //plan cache匹配临时表应该始终使用用户创建的session才能保证语义的正确性
@@ -212,8 +187,10 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     if (OB_SUCC(ret) && NULL != matched_pcv && NULL != plan) {
       if (OB_FAIL(matched_pcv->lift_tenant_schema_version(new_tenant_schema_version))) {
         LOG_WARN("failed to lift pcv's tenant schema version", K(ret));
-      } else if (!need_check_schema && OB_NOT_NULL(pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
-        pc_ctx.exec_ctx_.get_physical_plan_ctx()->set_tenant_schema_version(new_tenant_schema_version);
+      } else if (new_tenant_schema_version != OB_INVALID_VERSION
+                 && OB_NOT_NULL(pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
+        pc_ctx.exec_ctx_.get_physical_plan_ctx()->set_tenant_schema_version(
+          new_tenant_schema_version);
       }
     }
   }
@@ -251,7 +228,8 @@ int ObPCVSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
     if (REACH_TIME_INTERVAL(PRINT_PLAN_EXCEEDS_LOG_INTERVAL)) {
       LOG_INFO("number of plans in a single pcv_set reach limit", K(ret), K(get_plan_num()), K(pc_ctx));
     }
-  } else if (OB_FAIL(ObPlanCacheValue::get_all_dep_schema(*pc_ctx.sql_ctx_.schema_guard_,
+  } else if (!ObPlanCache::is_contains_external_object(plan->get_dependency_table()) &&
+             OB_FAIL(ObPlanCacheValue::get_all_dep_schema(*pc_ctx.sql_ctx_.schema_guard_,
                                                           plan->get_dependency_table(),
                                                           schema_array))) {
     LOG_WARN("failed to get all dep schema", K(ret));
@@ -555,6 +533,18 @@ int ObPCVSet::get_evolving_evolution_task(EvolutionPlanList &evo_task_list)
   return ret;
 }
 #endif
+
+bool ObPCVSet::set_expired_time()
+{
+  bool ret = false;
+  int64_t expired_time = ATOMIC_LOAD(&expired_time_);
+  int64_t cur_time = ObTimeUtility::current_time();
+  const static int64_t REGENERATE_EXPIRED_PLAN_INTERVAL = 10 * 1000 * 1000L; // 10 second
+  if (expired_time + REGENERATE_EXPIRED_PLAN_INTERVAL < cur_time) {
+    ret = expired_time == ATOMIC_VCAS(&expired_time_, expired_time, cur_time);
+  }
+  return ret;
+}
 
 }
 }

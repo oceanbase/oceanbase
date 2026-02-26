@@ -137,7 +137,12 @@ public:
     return proj_idx;
   }
 
-  TO_YSON_KV(OB_ID(row), to_cstring(*this));
+  int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    ObCStringHelper helper;
+    return oceanbase::yson::databuff_encode_elements(buf, buf_len, pos,
+        ::oceanbase::name::row, helper.convert(*this));
+  }
   int64_t to_string(char* buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
@@ -184,8 +189,9 @@ int ob_write_row(AllocatorT &allocator, const ObNewRow &src, ObNewRow &dst)
     ObObj *objs = new(ptr1) ObObj[src.count_]();
     for (int64_t i = 0; OB_SUCC(ret) && i < src.count_; ++i) {
       if (OB_FAIL(ob_write_obj(allocator, src.cells_[i], objs[i]))) {
+        ObCStringHelper helper;
         _OB_LOG(WARN, "copy ObObj error, row=%s, i=%ld, ret=%d",
-            to_cstring(src.cells_[i]), i, ret);
+            helper.convert(src.cells_[i]), i, ret);
       }
     }
     if (OB_SUCC(ret)) {

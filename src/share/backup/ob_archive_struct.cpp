@@ -11,13 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/backup/ob_archive_struct.h"
+#include "ob_archive_struct.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/hash_func/murmur_hash.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -279,6 +274,7 @@ int ObTenantArchiveRoundAttr::generate_next_round(const int64_t incarnation,
   next_round.used_piece_id_ = used_piece_id_ + 1;
   next_round.piece_switch_interval_ = piece_switch_interval;
   next_round.path_ = path;
+  next_round.comment_.reset();
 
   next_round.frozen_input_bytes_ = 0;
   next_round.frozen_output_bytes_ = 0;

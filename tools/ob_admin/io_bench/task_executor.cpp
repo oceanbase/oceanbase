@@ -12,6 +12,7 @@
 
 #include "share/backup/ob_backup_io_adapter.h"
 #include "task_executor.h"
+#include "ob_admin_io_adapter_bench.h"
 #include "../dumpsst/ob_admin_dumpsst_print_helper.h"
 
 using namespace oceanbase::share;
@@ -26,9 +27,31 @@ namespace tools
 TaskConfig::TaskConfig()
     : thread_num_(-1), max_task_runs_(-1), time_limit_s_(-1),
       obj_size_(-1), obj_num_(-1), fragment_size_(-1), is_adaptive_(false),
-      type_(BenchmarkTaskType::BENCHMARK_TASK_MAX_TYPE)
+      type_(BenchmarkTaskType::BENCHMARK_TASK_MAX_TYPE),
+      type_str_(nullptr)
 {
 }
+
+TaskConfig::TaskConfig(
+    const int64_t thread_num,
+    const int64_t max_task_runs,
+    const int64_t time_limit_s,
+    const int64_t obj_size,
+    const int64_t obj_num,
+    const int64_t fragment_size,
+    const bool is_adaptive,
+    BenchmarkTaskType type,
+    const char *type_str)
+  : thread_num_(thread_num),
+    max_task_runs_(max_task_runs),
+    time_limit_s_(time_limit_s),
+    obj_size_(obj_size),
+    obj_num_(obj_num),
+    fragment_size_(fragment_size),
+    is_adaptive_(is_adaptive),
+    type_(type),
+    type_str_(type_str)
+{}
 
 int TaskConfig::assign(const TaskConfig &other)
 {
@@ -41,6 +64,7 @@ int TaskConfig::assign(const TaskConfig &other)
   fragment_size_ = other.fragment_size_;
   is_adaptive_ = other.is_adaptive_;
   type_ = other.type_;
+  type_str_ = other.type_str_;
   return ret;
 }
 
@@ -143,6 +167,22 @@ Metrics::Metrics()
     : status_(OB_SUCCESS), throughput_bytes_(0), operation_num_(0),
       total_op_time_ms_map_(), open_time_ms_map_(), close_time_ms_map_()
 {
+  end_real_time_.tv_sec = 0;
+  end_real_time_.tv_usec = 0;
+  memset(&end_usage_, 0, sizeof(end_usage_));
+}
+
+void Metrics::reset()
+{
+  status_ = OB_SUCCESS;
+  throughput_bytes_ = 0;
+  operation_num_ = 0;
+  total_op_time_ms_map_ = TimeMap();
+  open_time_ms_map_ = TimeMap();
+  close_time_ms_map_ = TimeMap();
+  end_real_time_.tv_sec = 0;
+  end_real_time_.tv_usec = 0;
+  memset(&end_usage_, 0, sizeof(end_usage_));
 }
 
 int Metrics::assign(const Metrics &other)
@@ -158,6 +198,8 @@ int Metrics::assign(const Metrics &other)
     status_ = other.status_;
     throughput_bytes_ = other.throughput_bytes_;
     operation_num_ = other.operation_num_;
+    end_real_time_ = other.end_real_time_;
+    end_usage_ = other.end_usage_;
   }
   return ret;
 }
@@ -176,6 +218,10 @@ int Metrics::add(const Metrics &other)
       } else {
         throughput_bytes_ += other.throughput_bytes_;
         operation_num_ += other.operation_num_;
+        if (other.end_real_time_.tv_sec > 0) {
+          end_real_time_ = other.end_real_time_;
+          end_usage_ = other.end_usage_;
+        }
       }
    } else {
      status_ = other.status_;
@@ -199,14 +245,20 @@ void Metrics::summary(
     if (OB_UNLIKELY(operation_num_ <= 0)) {
       PrintHelper::print_dump_line("Operation num is unexpected", operation_num_);
     } else {
-      struct rusage end_usage;
-      struct timeval end_real_time;
-      getrusage(RUSAGE_SELF, &end_usage);
-      gettimeofday(&end_real_time, nullptr);
+      struct rusage actual_end_usage;
+      struct timeval actual_end_real_time;
 
-      const double cost_time_s = cal_time_diff(start_real_time, end_real_time);
-      const double user_cpu_time_s = cal_time_diff(start_usage.ru_utime, end_usage.ru_utime);
-      const double sys_cpu_time_s = cal_time_diff(start_usage.ru_stime, end_usage.ru_stime);
+      if (end_real_time_.tv_sec > 0) {
+        actual_end_real_time = end_real_time_;
+        actual_end_usage = end_usage_;
+      } else {
+        getrusage(RUSAGE_SELF, &actual_end_usage);
+        gettimeofday(&actual_end_real_time, nullptr);
+      }
+
+      const double cost_time_s = cal_time_diff(start_real_time, actual_end_real_time);
+      const double user_cpu_time_s = cal_time_diff(start_usage.ru_utime, actual_end_usage.ru_utime);
+      const double sys_cpu_time_s = cal_time_diff(start_usage.ru_stime, actual_end_usage.ru_stime);
       const double cpu_usage = (user_cpu_time_s + sys_cpu_time_s) / (cost_time_s) * 100.0;
       const double QPS = ((double)operation_num_) / cost_time_s;
       const double BW = ( ((double)throughput_bytes_) / 1024.0 / 1024.0 ) / cost_time_s;
@@ -337,6 +389,14 @@ int init_task_executor(const char *base_uri,
     if (OB_FAIL(alloc_executor<IsExistTaskExecutor>(executor, attr))) {
       OB_LOG(WARN, "fail to alloc and construct executor", K(ret), K(config));
     }
+  } else if (config.type_ == BenchmarkTaskType::BENCHMARK_TASK_READ_USER_PROVIDED) {
+    if (OB_FAIL(alloc_executor<ReadUsedProvidedTaskExecutor>(executor, attr))) {
+      OB_LOG(WARN, "fail to alloc and construct executor", K(ret), K(config));
+    }
+  } else if (config.type_ == BenchmarkTaskType::BENCHMARK_TASK_NOHEAD_READ) {
+    if (OB_FAIL(alloc_executor<NoHeadReadTaskExecutor>(executor, attr))) {
+      OB_LOG(WARN, "fail to alloc and construct executor", K(ret), K(config));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unknown benchmark task type", K(ret), K(config));
@@ -397,6 +457,7 @@ int WriteTaskExecutor::init(const char *base_uri,
   } else if (OB_UNLIKELY(config.obj_size_ <= 0 || config.obj_size_ >= MAX_RANDOM_CONTENT_LEN)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(config));
+    std::cerr << LIGHT_RED << "[ERROR] when type is write, the scope of obj_size is [1, " << MAX_RANDOM_CONTENT_LEN << "]" << NONE_COLOR << std::endl;
   } else if (FALSE_IT(obj_size_ = config.obj_size_)) {
   } else if (OB_ISNULL(write_buf_ = (char *)allocator_.alloc(obj_size_ + 1))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -429,7 +490,8 @@ int WriteTaskExecutor::execute()
            obj_size_);
     write_buf_[obj_size_] = '\0';
 
-    if (OB_FAIL(adapter.write_single_file(base_uri_, storage_info_, write_buf_, obj_size_))) {
+    if (OB_FAIL(adapter.write_single_file(base_uri_, storage_info_, write_buf_, obj_size_,
+                                          ObStorageIdMod::get_default_id_mod()))) {
       OB_LOG(WARN, "fail to write file",
           K(ret), K_(base_uri), KPC_(storage_info), K_(obj_size), K(object_id));
     } else {
@@ -444,14 +506,14 @@ int WriteTaskExecutor::execute()
 }
 
 AppendWriteTaskExecutor::AppendWriteTaskExecutor()
-    : ITaskExecutor(), obj_size_(-1), fragment_size_(-1), write_buf_(nullptr), allocator_()
+    : ITaskExecutor(), obj_size_(-1), fragment_size_(0), write_buf_(nullptr), allocator_()
 {
 }
 
 void AppendWriteTaskExecutor::reset()
 {
   obj_size_ = -1;
-  fragment_size_ = -1;
+  fragment_size_ = 0;
   write_buf_ = nullptr;
   allocator_.clear();
   ITaskExecutor::reset();
@@ -463,15 +525,21 @@ int AppendWriteTaskExecutor::init(const char *base_uri,
   int ret = OB_SUCCESS;
   if (OB_FAIL(ITaskExecutor::init(base_uri, storage_info, config))) {
     OB_LOG(WARN, "fail to init ITaskExecutor", K(ret), K(base_uri), KPC(storage_info), K(config));
-  } else if (OB_UNLIKELY(config.fragment_size_ <= 0 || config.fragment_size_ > config.obj_size_
-      || config.fragment_size_ >= MAX_RANDOM_CONTENT_LEN)) {
+  } else if (OB_UNLIKELY(config.obj_size_ <= 0
+                         || config.fragment_size_ < 0
+                         || (config.fragment_size_ != DEFAULT_APPEND_FRAGMENT_SIZE && config.fragment_size_ > config.obj_size_)
+                         || config.fragment_size_ >= MAX_RANDOM_CONTENT_LEN)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(config));
+    std::cerr << LIGHT_RED
+              << "[ERROR] when type is append, the scope of fragment_size is [0, " << MAX_RANDOM_CONTENT_LEN << "]"
+              << ", and the obj_size should be greate than 0 and greater than fragment_size"
+              << NONE_COLOR << std::endl;
   } else if (FALSE_IT(obj_size_ = config.obj_size_)) {
   } else if (FALSE_IT(fragment_size_ = config.fragment_size_)) {
-  } else if (OB_ISNULL(write_buf_ = (char *)allocator_.alloc(fragment_size_ + 1))) {
+  } else if (OB_ISNULL(write_buf_ = (char *)allocator_.alloc(obj_size_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    OB_LOG(WARN, "fail to alloc memory for write buf", K(ret), K_(fragment_size));
+    OB_LOG(WARN, "fail to alloc memory for write buf", K(ret), K(obj_size_));
   } else {
     is_inited_ = true;
   }
@@ -497,11 +565,12 @@ int AppendWriteTaskExecutor::execute()
     ObBackupIoAdapter adapter;
     ObIOFd fd;
     ObIODevice *device_handle = nullptr;
-    ObStorageAccessType access_type = OB_STORAGE_ACCESS_RANDOMWRITER;
+    ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
 
     const int64_t open_start_time_us = ObTimeUtility::current_time();
     if (OB_FAIL(adapter.open_with_access_type(
-        device_handle, fd, storage_info_, base_uri_, access_type))) {
+        device_handle, fd, storage_info_, base_uri_, access_type,
+        ObStorageIdMod::get_default_id_mod()))) {
       OB_LOG(WARN, "failed to open device with access type",
           K(ret), K_(base_uri), KPC_(storage_info), K(access_type));
     } else if (OB_ISNULL(device_handle)) {
@@ -515,7 +584,11 @@ int AppendWriteTaskExecutor::execute()
     int64_t actual_write_size = -1;
     int64_t cur_append_size = -1;
     while (OB_SUCC(ret) && cur_offset < obj_size_) {
-      cur_append_size = MIN(obj_size_ - cur_offset, fragment_size_);
+      if (fragment_size_ == DEFAULT_APPEND_FRAGMENT_SIZE) {
+        cur_append_size = ObRandom::rand(1, min(obj_size_ - cur_offset, MAX_RANDOM_CONTENT_LEN));
+      } else {
+        cur_append_size = MIN(obj_size_ - cur_offset, fragment_size_);
+      }
       MEMCPY(write_buf_,
              RANDOM_CONTENT + ObRandom::rand(0, MAX_RANDOM_CONTENT_LEN - cur_append_size),
              cur_append_size);
@@ -574,6 +647,10 @@ int MultipartWriteTaskExecutor::init(const char *base_uri,
       || config.fragment_size_ >= MAX_RANDOM_CONTENT_LEN)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(config));
+    std::cerr << LIGHT_RED
+              << "[ERROR] when type is multi, the scope of fragment_size is [1, " << MAX_RANDOM_CONTENT_LEN << "]"
+              << ", and the obj_size should be greater than 0 and greater than fragment_size"
+              << NONE_COLOR << std::endl;
   } else if (FALSE_IT(obj_size_ = config.obj_size_)) {
   } else if (FALSE_IT(part_size_ = config.fragment_size_)) {
   } else if (OB_ISNULL(write_buf_ = (char *)allocator_.alloc(part_size_ + 1))) {
@@ -608,7 +685,8 @@ int MultipartWriteTaskExecutor::execute()
 
     const int64_t open_start_time_us = ObTimeUtility::current_time();
     if (OB_FAIL(adapter.open_with_access_type(
-        device_handle, fd, storage_info_, base_uri_, access_type))) {
+        device_handle, fd, storage_info_, base_uri_, access_type,
+        ObStorageIdMod::get_default_id_mod()))) {
       OB_LOG(WARN, "failed to open device with access type",
           K(ret), K_(base_uri), KPC_(storage_info), K(access_type));
     } else if (OB_ISNULL(device_handle)) {
@@ -686,6 +764,10 @@ int ReadTaskExecutor::init(const char *base_uri,
       || config.obj_num_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(config));
+    std::cerr << LIGHT_RED
+              << "[ERROR] when type is read, the scope of fragment_size is [0, " << obj_size_ << "]"
+              << ", and the obj_num should be greater than 0"
+              << NONE_COLOR << std::endl;
   } else if (FALSE_IT(obj_size_ = config.obj_size_)) {
   } else if (FALSE_IT(expected_read_size_ = config.fragment_size_)) {
   } else if (OB_ISNULL(read_buf_ = (char *)allocator_.alloc(expected_read_size_ + 1))) {
@@ -719,11 +801,13 @@ int ReadTaskExecutor::execute()
     int64_t read_size = -1;
 
     if (is_adaptive_ && OB_FAIL(adapter.adaptively_read_part_file(base_uri_,
-        storage_info_, read_buf_, expected_read_size_, offset, read_size))) {
+        storage_info_, read_buf_, expected_read_size_, offset, read_size,
+        ObStorageIdMod::get_default_id_mod()))) {
       OB_LOG(WARN, "fail to read adaptive file", K(ret), K_(base_uri),
           KPC_(storage_info), K_(expected_read_size), K_(obj_size), K(offset), K(object_id));
     } else if (!is_adaptive_ && OB_FAIL(adapter.read_part_file(base_uri_,
-        storage_info_, read_buf_, expected_read_size_, offset, read_size))) {
+        storage_info_, read_buf_, expected_read_size_, offset, read_size,
+        ObStorageIdMod::get_default_id_mod()))) {
       OB_LOG(WARN, "fail to read file", K(ret), K_(base_uri),
           KPC_(storage_info), K_(expected_read_size), K_(obj_size), K(offset), K(object_id));
     } else {
@@ -768,6 +852,13 @@ int DelTaskExecutor::execute()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "DelTaskExecutor not init", K(ret), K_(base_uri));
+  } else if (OB_ISNULL(storage_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "storage_info_ is null", K(ret), KP(storage_info_));
+  } else if (OB_UNLIKELY(storage_info_->is_enable_worm()
+                && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info_->get_delete_mode())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(ERROR, "worm bucket can not do deleting opeartion", K(ret), KPC(storage_info_));
   } else if (OB_FAIL(prepare_(object_id))) {
     OB_LOG(WARN, "fail to prepare", K(ret), K_(base_uri), K(object_id));
   } else {
@@ -803,6 +894,9 @@ int IsExistTaskExecutor::init(const char *base_uri,
   } else if (OB_UNLIKELY(config.obj_num_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(config));
+    std::cerr << LIGHT_RED
+              << "[ERROR] when type is is_exist, the scope of obj_num should be greater than 0"
+              << NONE_COLOR << std::endl;
   } else {
     obj_num_ = config.obj_num_;
     is_inited_ = true;
@@ -821,7 +915,7 @@ int IsExistTaskExecutor::execute()
   const int64_t start_time_us = ObTimeUtility::current_time();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "ReadTaskExecutor not init", K(ret), K_(base_uri));
+    OB_LOG(WARN, "IsExistTaskExecutor not init", K(ret), K_(base_uri));
   } else if (OB_FAIL(prepare_(object_id))) {
     OB_LOG(WARN, "fail to prepare", K(ret), K_(base_uri), K(object_id));
   } else {
@@ -832,6 +926,84 @@ int IsExistTaskExecutor::execute()
           K(ret), K_(base_uri), KPC_(storage_info), K(object_id));
     } else {
       metrics_.operation_num_++;
+      metrics_.total_op_time_ms_map_.log_entry(start_time_us);
+    }
+  }
+
+  finish_(ret);
+  return ret;
+}
+
+/*--------------------------------Read Used Provided Task Executor--------------------------------*/
+ReadUsedProvidedTaskExecutor::ReadUsedProvidedTaskExecutor()
+    : ReadTaskExecutor()
+{
+}
+
+int ReadUsedProvidedTaskExecutor::init(const char *base_uri,
+    share::ObBackupStorageInfo *storage_info, const TaskConfig &config)
+{
+  int ret = OB_SUCCESS;
+  TaskConfig new_config;
+  if (OB_FAIL(new_config.assign(config))) {
+    OB_LOG(WARN, "fail to construct new config",
+        KR(ret), K(base_uri), KPC(storage_info), K(config));
+  } else if (FALSE_IT(new_config.obj_num_ = 1)) {
+  } else if (OB_FAIL(ReadTaskExecutor::init(base_uri, storage_info, config))) {
+    OB_LOG(WARN, "fail to init base task executor",
+        KR(ret), K(base_uri), KPC(storage_info), K(config));
+  }
+  return ret;
+}
+
+int ReadUsedProvidedTaskExecutor::prepare_(const int64_t object_id)
+{
+  UNUSED(object_id);
+  return OB_SUCCESS;
+}
+
+/*--------------------------------No Head Read Task Executor--------------------------------*/
+NoHeadReadTaskExecutor::NoHeadReadTaskExecutor()
+    : ReadTaskExecutor()
+{
+}
+
+int NoHeadReadTaskExecutor::execute()
+{
+  int ret = OB_SUCCESS;
+  const int64_t object_id = ObRandom::rand(0, obj_num_ - 1);
+  const int64_t start_time_us = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "NoReadTaskExecutor not init", K(ret), K_(base_uri));
+  } else if (OB_FAIL(prepare_(object_id))) {
+    OB_LOG(WARN, "fail to prepare", K(ret), K_(base_uri), K(object_id));
+  } else {
+    ObBackupIoAdapter adapter;
+    const int64_t offset = (ObRandom::rand(0, obj_size_ - expected_read_size_) / ALIGNMENT) * ALIGNMENT;
+
+    ObStorageAccessType access_type = OB_STORAGE_ACCESS_NOHEAD_READER;
+    ObIODevice *device_handle = nullptr;
+    ObIOFd fd;
+    ObIOHandle io_handle;
+    if (OB_FAIL(adapter.open_with_access_type(
+        device_handle, fd, storage_info_, base_uri_, access_type,
+        ObStorageIdMod::get_default_id_mod()))) {
+      OB_LOG(WARN, "failed to open device with access type",
+          K(ret), K_(base_uri), KPC_(storage_info), K(access_type));
+    } else if (OB_ISNULL(device_handle)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "device handle is NULL", K(ret), KP(device_handle), K_(base_uri));
+    } else if (OB_FAIL(adapter.async_pread(*device_handle, fd, read_buf_,
+        offset, expected_read_size_, io_handle))) {
+      OB_LOG(WARN, "failed to async pread", K(ret), K_(base_uri), KPC_(storage_info), K(offset), K(expected_read_size_));
+    } else if (OB_FAIL(io_handle.wait())) {
+      OB_LOG(WARN, "failed to wait async pread", K(ret), K_(base_uri), KPC_(storage_info), K(offset), K(expected_read_size_));
+    } else if (OB_FAIL(adapter.close_device_and_fd(device_handle, fd))) {
+      OB_LOG(WARN, "failed to close device and fd", K(ret), K_(base_uri));
+    } else {
+      metrics_.operation_num_++;
+      metrics_.throughput_bytes_ += io_handle.get_data_size();
       metrics_.total_op_time_ms_map_.log_entry(start_time_us);
     }
   }

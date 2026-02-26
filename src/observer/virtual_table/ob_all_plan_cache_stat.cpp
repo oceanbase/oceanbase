@@ -15,15 +15,10 @@
 #include "observer/virtual_table/ob_all_plan_cache_stat.h"
 
 
-#include "common/object/ob_object.h"
 
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_plan_cache_callback.h"
-#include "sql/plan_cache/ob_plan_cache_value.h"
-#include "sql/plan_cache/ob_plan_cache_util.h"
+#include "src/sql/plan_cache/ob_pcv_set.h"
 
 #include "observer/ob_server_utils.h"
-#include "observer/ob_server_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

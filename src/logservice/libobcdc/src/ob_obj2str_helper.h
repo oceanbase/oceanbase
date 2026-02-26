@@ -57,6 +57,7 @@ public:
        common::ObIAllocator &allocator,
        const bool string_deep_copy,
        const common::ObIArray<common::ObString> &extended_type_info,
+       const common::ObSqlCollectionInfo *collection_info,
        const common::ObAccuracy &accuracy,
        const common::ObCollationType &collation_type,
        const ObTimeZoneInfoWrap *tz_info_wrap) const;
@@ -124,6 +125,13 @@ private:
       const common::ObObj &obj,
       common::ObString &str,
       common::ObIAllocator &allocator) const;
+
+  int convert_collection_to_text_(
+    const common::ObObj &obj,
+    common::ObString &str,
+    const common::ObIArray<common::ObString> &extended_type_info,
+    const common::ObSqlCollectionInfo *collection_info,
+    common::ObIAllocator &allocator) const;
 
 private:
   bool                          inited_;

@@ -11,9 +11,7 @@
  */
 
 #include "ob_ls_switch_checker.h"
-#include "lib/ob_errno.h"
 #include "ob_ls.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {

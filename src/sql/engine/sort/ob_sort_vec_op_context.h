@@ -18,17 +18,18 @@
 
 namespace oceanbase {
 namespace sql {
+struct ObPushDownTopNFilterInfo;
 struct ObSortVecOpContext
 {
   ObSortVecOpContext() :
     tenant_id_(UINT64_MAX), sk_exprs_(nullptr), addon_exprs_(nullptr), sk_collations_(nullptr),
     base_sk_collations_(nullptr), addon_collations_(nullptr), eval_ctx_(nullptr),
     exec_ctx_(nullptr), op_(nullptr), prefix_pos_(0), part_cnt_(0), topn_cnt_(INT64_MAX),
-    sort_row_cnt_(nullptr), flag_(0), compress_type_(NONE_COMPRESSOR)
+    sort_row_cnt_(nullptr), flag_(0), compress_type_(NONE_COMPRESSOR), est_rows_(0)
   {}
   TO_STRING_KV(K_(tenant_id), KP_(sk_exprs), KP_(addon_exprs), KP_(sk_collations),
                KP_(base_sk_collations), KP_(addon_collations), K_(prefix_pos), K_(part_cnt),
-               K_(topn_cnt), KP_(sort_row_cnt), K_(flag), K_(compress_type));
+               K_(topn_cnt), KP_(sort_row_cnt), K_(flag), K_(compress_type), K_(est_rows));
 
   uint64_t tenant_id_;
   const ObIArray<ObExpr *> *sk_exprs_;
@@ -45,18 +46,23 @@ struct ObSortVecOpContext
   int64_t *sort_row_cnt_;
   union
   {
-    struct
+    struct //FARM COMPAT WHITELIST
     {
       uint32_t enable_encode_sortkey_ : 1;
       uint32_t in_local_order_ : 1;
       uint32_t need_rewind_ : 1;
       uint32_t is_fetch_with_ties_ : 1;
       uint32_t has_addon_ : 1;
-      uint32_t reserved_ : 27;
+      uint32_t enable_pd_topn_filter_ : 1;
+      uint32_t enable_single_col_compare_ : 1;
+      uint32_t is_aggregate_keep_ : 1;
+      uint32_t reserved_ : 24;
     };
     uint32_t flag_;
   };
   ObCompressorType compress_type_;
+  int64_t est_rows_;
+  const ObPushDownTopNFilterInfo *pd_topn_filter_info_;
 };
 
 } // end namespace sql

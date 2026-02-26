@@ -13,15 +13,9 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "lib/xml/ob_multi_mode_interface.h"
-#include "lib/xml/ob_tree_base.h"
-#include "lib/xml/ob_mul_mode_reader.h"
-#include "lib/xml/ob_xml_tree.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/timezone/ob_timezone_info.h"
 #undef private
 
-#include <sys/time.h>
 using namespace std;
 namespace oceanbase {
 namespace common {

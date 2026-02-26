@@ -24,8 +24,10 @@
 
 #define CUTOFF  (UINT64_MAX / 10)
 #define CUTLIM  (UINT64_MAX % 10)
-#define SPACE_INT 0x20202020
 #define DIGITS_IN_ULONGLONG 20
+#define PLANE_SIZE 0x100
+#define PLANE_NUM 0x100
+#define PLANE_NUMBER(x) (((x) >> 8) % PLANE_NUM)
 
 static ulonglong d10[DIGITS_IN_ULONGLONG]=
 {
@@ -686,7 +688,8 @@ bool ob_like_range_simple(const ObCharsetInfo *cs,
                           pbool escape_char, pbool w_one, pbool w_many,
                           size_t res_len,
                           char *min_str,char *max_str,
-                          size_t *min_len, size_t *max_len)
+                          size_t *min_len, size_t *max_len,
+                          size_t *prefix_len)
 {
   const char *end= ptr + ptr_len;
   char *min_org=min_str;
@@ -703,6 +706,7 @@ bool ob_like_range_simple(const ObCharsetInfo *cs,
       *max_str++= (char) cs->max_sort_char;
       continue;
     } else if (*ptr == w_many) {
+      *prefix_len = min_str - min_org;
       *min_len= ((cs->state & OB_CS_BINSORT) ?
                     (size_t) (min_str - min_org) :
                     res_len);
@@ -716,7 +720,7 @@ bool ob_like_range_simple(const ObCharsetInfo *cs,
     *min_str++= *max_str++ = *ptr;
   }
 
-  *min_len= *max_len = (size_t) (min_str - min_org);
+  *min_len= *max_len= *prefix_len = (size_t) (min_str - min_org);
   while (min_str != min_end) {
     *min_str++= *max_str++ = ' ';        
   }
@@ -762,7 +766,7 @@ void ob_hash_sort_simple(const ObCharsetInfo *cs,
   const unsigned char *end;
   unsigned char data[HASH_BUFFER_LENGTH];
   int length = 0;
-  end= calc_end_space ? key + len : skip_trailing_space(key, len, 0);
+  end= calc_end_space ? key + len : cs->cset->skip_trailing_space(cs, key, len); // used in gbk sjis tis620
 
   if (NULL == hash_algo) {
     for (; key < (unsigned char*) end ; key++) {
@@ -782,12 +786,11 @@ void ob_hash_sort_simple(const ObCharsetInfo *cs,
   }
 }
 
-#define SPACE_INT 0x20202020
-
-const unsigned char *skip_trailing_space(const unsigned char *ptr,size_t len, bool is_utf16 /*false*/)
+const unsigned char *skip_trailing_space(const struct ObCharsetInfo *cs __attribute__((unused)),const unsigned char *ptr,size_t len)
 {
+  const static unsigned SPACE_INT = 0x20202020;
   const unsigned char *end= ptr + len;
-  if (len > 20 && !is_utf16) {
+  if (len > 20) {
     const unsigned char *end_words= (const unsigned char *)(int_ptr)
       (((ulonglong)(int_ptr)end) / SIZEOF_INT * SIZEOF_INT);
     const unsigned char *start_words= (const unsigned char *)(int_ptr)
@@ -804,15 +807,11 @@ const unsigned char *skip_trailing_space(const unsigned char *ptr,size_t len, bo
       }
     }
   }
-  if (is_utf16) {
-      while (end - 1 > ptr && end[-2] == 0x00 && end[-1] == 0x20)
-        end-=2;
-  } else {
-    while (end > ptr && end[-1] == 0x20)
-      end--;
-  }
+  while (end > ptr && end[-1] == 0x20)
+    end--;
   return (end);
 }
+
 
 size_t ob_strxfrm_pad(const ObCharsetInfo *cs, unsigned char *str, unsigned char *frm_end,
                       unsigned char *str_end, unsigned int nweights, unsigned int flags) {
@@ -848,6 +847,13 @@ size_t ob_casedn_8bit(const ObCharsetInfo *cs __attribute__((unused)),
   return srclen;
 }
 
+int ob_strcasecmp_8bit(const ObCharsetInfo *cs, const char *s, const char *t) {
+  const uchar *map = cs->to_upper;
+  while (map[(uchar)*s] == map[(uchar)*t++])
+    if (!*s++) return 0;
+  return ((int)map[(uchar)s[0]] - (int)map[(uchar)t[-1]]);
+}
+
 int ob_strnncoll_simple(const ObCharsetInfo *cs __attribute__((unused)),
                         const unsigned char *s, size_t slen,
                         const unsigned char *t, size_t tlen,
@@ -865,7 +871,7 @@ int ob_strnncoll_simple(const ObCharsetInfo *cs __attribute__((unused)),
   return slen > tlen ? 1 : slen < tlen ? -1 : 0;
 }
 
-static int ob_strnncollsp_simple(const ObCharsetInfo *cs
+int ob_strnncollsp_simple(const ObCharsetInfo *cs
                           __attribute__((unused)),
                           const unsigned char *s, size_t slen,
                           const unsigned char *t, size_t tlen,
@@ -1073,8 +1079,176 @@ uint32_t ob_instr_simple(const ObCharsetInfo* cs , const char* b, size_t b_lengt
   return 0;
 }
 
+static int pcmp(const void *f, const void *s) {
+  const uni_idx *F = (const uni_idx *)f;
+  const uni_idx *S = (const uni_idx *)s;
+  int res;
+
+  if (!(res = ((S->nchars) - (F->nchars))))
+    res = ((F->uidx.from) - (S->uidx.to));
+  return res;
+}
+
+static bool create_fromuni(ObCharsetInfo *cs, ObCharsetLoader *loader)
+{
+  uni_idx idx[PLANE_NUM];
+  int i, n;
+  OB_UNI_IDX *tab_from_uni;
+
+  /*
+    Check that Unicode map is loaded.
+    It can be not loaded when the collation is
+    listed in Index.xml but not specified
+    in the character set specific XML file.
+  */
+  if (!cs->tab_to_uni) return true;
+
+  /* Clear plane statistics */
+  memset(idx, 0, sizeof(idx));
+
+  /* Count number of characters in each plane */
+  for (i = 0; i < 0x100; i++) {
+    uint16 wc = cs->tab_to_uni[i];
+    int pl = PLANE_NUMBER(wc);
+
+    if (wc || !i) {
+      if (!idx[pl].nchars) {
+        idx[pl].uidx.from = wc;
+        idx[pl].uidx.to = wc;
+      } else {
+        idx[pl].uidx.from = wc < idx[pl].uidx.from ? wc : idx[pl].uidx.from;
+        idx[pl].uidx.to = wc > idx[pl].uidx.to ? wc : idx[pl].uidx.to;
+      }
+      idx[pl].nchars++;
+    }
+  }
+
+  /* Sort planes in descending order */
+  qsort(&idx, PLANE_NUM, sizeof(uni_idx), &pcmp);
+
+  for (i = 0; i < PLANE_NUM; i++) {
+    int ch, numchars;
+    uchar *tab;
+
+    /* Skip empty plane */
+    if (!idx[i].nchars) break;
+
+    numchars = idx[i].uidx.to - idx[i].uidx.from + 1;
+    if (!(idx[i].uidx.tab = tab = (uchar *)(loader->once_alloc)(
+              numchars * sizeof(*idx[i].uidx.tab))))
+      return true;
+
+    memset(tab, 0, numchars * sizeof(*idx[i].uidx.tab));
+
+    for (ch = 1; ch < PLANE_SIZE; ch++) {
+      uint16 wc = cs->tab_to_uni[ch];
+      if (wc >= idx[i].uidx.from && wc <= idx[i].uidx.to && wc) {
+        int ofs = wc - idx[i].uidx.from;
+        /*
+          Character sets like armscii8 may have two code points for
+          one character. When converting from UNICODE back to
+          armscii8, select the lowest one, which is in the ASCII
+          range.
+        */
+        if (tab[ofs] == '\0') tab[ofs] = ch;
+      }
+    }
+  }
+
+  /* Allocate and fill reverse table for each plane */
+  n = i;
+  if (!(cs->tab_from_uni = tab_from_uni =
+            (OB_UNI_IDX *)(loader->once_alloc)(sizeof(OB_UNI_IDX) * (n + 1))))
+    return true;
+
+  for (i = 0; i < n; i++) tab_from_uni[i] = idx[i].uidx;
+
+  /* Set end-of-list marker */
+  memset(&tab_from_uni[i], 0, sizeof(OB_UNI_IDX));
+  return false;
+}
+
+bool ob_cset_init_8bit(ObCharsetInfo *cs, ObCharsetLoader *loader)
+{
+  cs->caseup_multiply = 1;
+  cs->casedn_multiply = 1;
+  cs->pad_char = ' ';
+  return create_fromuni(cs, loader);
+}
+
+static void set_max_sort_char(ObCharsetInfo *cs) {
+  uchar max_char;
+  uint i;
+
+  if (!cs->sort_order) return;
+
+  max_char = cs->sort_order[(uchar)cs->max_sort_char];
+  for (i = 0; i < 256; i++) {
+    if ((uchar)cs->sort_order[i] > max_char) {
+      max_char = (uchar)cs->sort_order[i];
+      cs->max_sort_char = i;
+    }
+  }
+}
+
+bool ob_coll_init_simple(ObCharsetInfo *cs, ObCharsetLoader *loader) {
+  set_max_sort_char(cs);
+  return false;
+}
+
+size_t ob_well_formed_len_ascii(const ObCharsetInfo *cs,
+                                const char *start, const char *end,
+                                size_t nchars,
+                                int *error)
+{
+  const char *oldstart = start;
+  *error = 0;
+  while (start < end) {
+    if ((*start & 0x80) != 0) {
+      *error = 1;
+      break;
+    }
+    start++;
+  }
+  return start - oldstart;
+}
+
+int ob_mb_wc_8bit(const ObCharsetInfo *cs, ob_wc_t *wc, const uchar *str,
+                  const uchar *end) {
+  if (str >= end) return OB_CS_TOOSMALL;
+
+  *wc = cs->tab_to_uni[*str];
+  return (!wc[0] && str[0]) ? -1 : 1;
+}
+
+int ob_wc_mb_8bit(const ObCharsetInfo *cs, ob_wc_t wc, uchar *str, uchar *end) {
+  const OB_UNI_IDX *idx;
+
+  if (str >= end) return OB_CS_TOOSMALL;
+
+  for (idx = cs->tab_from_uni; idx->tab; idx++) {
+    if (idx->from <= wc && idx->to >= wc) {
+      str[0] = idx->tab[wc - idx->from];
+      return (!str[0] && wc) ? OB_CS_ILUNI : 1;
+    }
+  }
+  return OB_CS_ILUNI;
+}
+
+unsigned int ob_ismbchar_8bit(const ObCharsetInfo *cs __attribute__((unused)), const char *p, const char *e)
+{
+  ob_charset_assert(e > p);
+  /*ob_ismbchar_8bit
+  *this is a mock interface, in mysql there is not is_mbchar for single byte charset
+  */
+  if (0x00 <= (unsigned char)(*p) && (unsigned char)(*p) <= 0xFF) {
+    return 1;
+  }
+  return 0;
+}
+
 ObCollationHandler ob_collation_8bit_simple_ci_handler = {
-    NULL, /* init */
+    ob_coll_init_simple, /* init */
     NULL,
     ob_strnncoll_simple,
     ob_strnncollsp_simple,

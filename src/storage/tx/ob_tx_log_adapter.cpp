@@ -10,9 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_tx_log_adapter.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
+#include "ob_tx_log_adapter.h"
+#include "src/storage/ls/ob_ls.h"
 
 namespace oceanbase
 {
@@ -116,6 +115,7 @@ int ObLSTxLogAdapter::init(ObITxLogParam *param, ObTxTable *tx_table)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_TX_NONBLOCK_SUBMIT_LOG);
 int ObLSTxLogAdapter::submit_log(const char *buf,
                                  const int64_t size,
                                  const SCN &base_scn,
@@ -131,28 +131,49 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
   const bool is_big_log = (size > palf::MAX_NORMAL_LOG_BODY_SIZE);
   const bool allow_compression = true;
 
+  if (base_scn.convert_to_ts() > cur_ts + 86400000000L) {
+    // only print error log
+    if (REACH_TIME_INTERVAL(1000000)) {
+      TRANS_LOG(ERROR, "base scn is too large", K(base_scn));
+    }
+  }
   if (NULL == buf || 0 >= size || OB_ISNULL(cb) || !base_scn.is_valid()
-      || retry_timeout_us < 0 || size > palf::MAX_LOG_BODY_SIZE ||
-      base_scn.convert_to_ts() > cur_ts + 86400000000L) {
+      || retry_timeout_us < 0 || size > palf::MAX_LOG_BODY_SIZE) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size), K(base_scn), KP(cb));
   } else if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
+  } else if (OB_UNLIKELY(OB_EAGAIN == ERRSIM_TX_NONBLOCK_SUBMIT_LOG)) {
+    if (REACH_TIME_INTERVAL(1_s)) {
+      TRANS_LOG(WARN, "errsim OB_EGAGAIN to nonblock submit log", K(ret));
+    }
+    ret = OB_EAGAIN;
+  } else if (OB_UNLIKELY(OB_NEED_RETRY == ERRSIM_TX_NONBLOCK_SUBMIT_LOG
+                      && !REACH_TIME_INTERVAL(10_ms))) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(WARN, "errsim nonblock submit 100 log in 1s", K(ret));
   } else {
     static const int64_t MAX_SLEEP_US = 100;
     int64_t retry_cnt = 0;
     int64_t sleep_us = 0;
-    const int64_t expire_us = cur_ts + retry_timeout_us;
+    int64_t expire_us = INT64_MAX;
+    bool block_flag = need_nonblock;
+    if (retry_timeout_us < INT64_MAX - cur_ts) {
+      expire_us = cur_ts + retry_timeout_us;
+    }
+    if (expire_us == INT64_MAX) {
+      block_flag = false;
+    }
     do {
-      if (is_big_log && OB_FAIL(log_handler_->append_big_log(buf, size, base_scn, need_nonblock,
+      if (is_big_log && OB_FAIL(log_handler_->append_big_log(buf, size, base_scn, block_flag,
                                                               allow_compression, cb, lsn, scn))) {
         TRANS_LOG(WARN, "append big log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
-              K(need_nonblock), K(is_big_log));
-      } else if (!is_big_log && OB_FAIL(log_handler_->append(buf, size, base_scn, need_nonblock,
+              K(need_nonblock), K(block_flag), K(expire_us), K(is_big_log));
+      } else if (!is_big_log && OB_FAIL(log_handler_->append(buf, size, base_scn, block_flag,
                                                          allow_compression, cb, lsn, scn))) {
         TRANS_LOG(WARN, "append log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
-              K(need_nonblock));
+              K(need_nonblock), K(block_flag), K(expire_us));
       } else {
         cb->set_base_ts(base_scn);
         cb->set_lsn(lsn);

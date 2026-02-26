@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <stdlib.h>
-#include <sys/time.h>
 #include <gtest/gtest.h>
-#include <map>
 #include <queue>
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
@@ -826,9 +823,15 @@ TEST(ObFIFOAllocator, dump_using_when_dctor)
 // use gettimeofday() before, but the precise is not enough(there is some 0).
 int64_t get_current_time()
 {
+#ifdef __aarch64__
+  uint64_t cntvct;
+  asm volatile("mrs %0, cntvct_el0" : "=r" (cntvct));
+  return cntvct;
+#else
   uint32_t low, high;
   __asm__ __volatile__("rdtsc":"=a"(low), "=d"(high));
   return ((uint64_t)high << 32) | low;
+#endif
 }
 
 // [15] Comprehensive test. May allocate normal or special, and record the alloc/free time.

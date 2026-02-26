@@ -43,9 +43,10 @@ public:
   void reset();
   void reuse();
   int init(const ObDirectLoadMultipleHeapTableCompactParam &param);
-  int add_table(ObIDirectLoadPartitionTable *table) override;
+  int add_table(const ObDirectLoadTableHandle &table_handle) override;
   int compact() override;
-  int get_table(ObIDirectLoadPartitionTable *&table, common::ObIAllocator &allocator) override;
+  int get_table(ObDirectLoadTableHandle &table,
+                ObDirectLoadTableManager *table_mgr) override;
   void stop() override;
 private:
   int check_table_compactable(ObDirectLoadMultipleHeapTable *heap_table);

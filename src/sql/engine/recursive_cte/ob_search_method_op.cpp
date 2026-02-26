@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/ob_operator.h"
 #include "ob_search_method_op.h"
 
 using namespace oceanbase::sql;
@@ -102,7 +101,7 @@ int ObSearchMethodOp::sort_input_rows()
   if (input_rows_.count() > 0) {
     ObChunkDatumStore::StoredRow **first_row = &input_rows_.at(0);
     ObNodeComparer comparer(sort_collations_, left_output_, &ret);
-    std::sort(first_row, first_row + input_rows_.count(), comparer);
+    lib::ob_sort(first_row, first_row + input_rows_.count(), comparer);
   }
   return ret;
 }
@@ -114,7 +113,7 @@ int ObSearchMethodOp::sort_rownodes(ObArray<ObTreeNode>& sort_array)
     LOG_DEBUG("Sort row nodes", K(sort_array.count()));
     ObTreeNode *first_row = &sort_array.at(0);
     ObNodeComparer comparer(sort_collations_, left_output_, &ret);
-    std::sort(first_row, first_row + sort_array.count(), comparer);
+    lib::ob_sort(first_row, first_row + sort_array.count(), comparer);
     if (OB_SUCCESS != ret) {
       LOG_WARN("Failed to do sort", K(ret));
     }
@@ -754,7 +753,7 @@ int ObBreadthFirstSearchBulkOp::sort_result_output_nodes(int64_t rows_cnt)
   if (OB_LIKELY(rows_cnt > 0)) {
     ObTreeNode *first_row = result_output_buffer_[0];
     ObNodeComparer comparer(sort_collations_, left_output_, &ret);
-    std::sort(first_row, first_row + rows_cnt, comparer);
+    lib::ob_sort(first_row, first_row + rows_cnt, comparer);
     if (OB_SUCCESS != ret) {
       LOG_WARN("Failed to do sort", K(ret));
     }

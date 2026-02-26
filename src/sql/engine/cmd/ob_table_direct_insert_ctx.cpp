@@ -12,14 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
-#include "observer/omt/ob_tenant.h"
-#include "observer/table_load/ob_table_load_exec_ctx.h"
+#include "ob_table_direct_insert_ctx.h"
 #include "observer/table_load/ob_table_load_instance.h"
-#include "observer/table_load/ob_table_load_schema.h"
-#include "observer/table_load/ob_table_load_service.h"
-#include "observer/table_load/ob_table_load_struct.h"
-#include "sql/engine/ob_exec_context.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
+#include "sql/engine/ob_physical_plan.h"
 
 namespace oceanbase
 {
@@ -27,6 +23,7 @@ using namespace common;
 using namespace observer;
 using namespace storage;
 using namespace share;
+using namespace share::schema;
 
 namespace sql
 {
@@ -37,11 +34,14 @@ ObTableDirectInsertCtx::~ObTableDirectInsertCtx()
 
 int ObTableDirectInsertCtx::init(
     ObExecContext *exec_ctx,
+    ObPhysicalPlan &phy_plan,
     const uint64_t table_id,
     const int64_t parallel,
     const bool is_incremental,
     const bool enable_inc_replace,
-    const bool is_insert_overwrite)
+    const bool is_insert_overwrite,
+    const double online_sample_percent,
+    const bool is_online_gather_statistics)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -65,19 +65,23 @@ int ObTableDirectInsertCtx::init(
   } else if (OB_UNLIKELY(session_info->get_ddl_info().is_mview_complete_refresh() && enable_inc_replace)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected mview complete refresh enable inc replace", KR(ret));
+  } else if (OB_UNLIKELY(phy_plan.is_vectorized() &&
+                         phy_plan.get_batch_size() > ObTableLoadParam::MAX_BATCH_SIZE)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "batch size exceeds 65536 in direct load is");
   } else {
     is_direct_ = true;
-    if (OB_ISNULL(load_exec_ctx_ = OB_NEWx(ObTableLoadSqlExecCtx, &exec_ctx->get_allocator()))) {
+    if (OB_ISNULL(load_exec_ctx_ = OB_NEWx(ObTableLoadExecCtx, &exec_ctx->get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObTableLoadSqlExecCtx", KR(ret));
+      LOG_WARN("fail to new ObTableLoadExecCtx", KR(ret));
     } else if (OB_ISNULL(table_load_instance_ =
                            OB_NEWx(ObTableLoadInstance, &exec_ctx->get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadInstance", KR(ret));
     } else {
       load_exec_ctx_->exec_ctx_ = exec_ctx;
+      const ObTableSchema *table_schema = nullptr;
       ObArray<uint64_t> column_ids;
-      omt::ObTenant *tenant = nullptr;
       ObCompressorType compressor_type = ObCompressorType::NONE_COMPRESSOR;
       ObDirectLoadMethod::Type method = (is_incremental ? ObDirectLoadMethod::INCREMENTAL : ObDirectLoadMethod::FULL);
       ObDirectLoadInsertMode::Type insert_mode = ObDirectLoadInsertMode::INVALID_INSERT_MODE;
@@ -89,43 +93,43 @@ int ObTableDirectInsertCtx::init(
         insert_mode = ObDirectLoadInsertMode::NORMAL;
       }
       ObDirectLoadMode::Type load_mode = is_insert_overwrite ? ObDirectLoadMode::INSERT_OVERWRITE : ObDirectLoadMode::INSERT_INTO;
-      if (OB_FAIL(GCTX.omt_->get_tenant(MTL_ID(), tenant))) {
-        LOG_WARN("fail to get tenant handle", KR(ret), K(MTL_ID()));
-      } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(*schema_guard,
-                                                                       table_id,
-                                                                       method,
-                                                                       insert_mode,
-                                                                       load_mode))) {
-        LOG_WARN("fail to check support direct load", KR(ret));
-      } else if (OB_FAIL(get_compressor_type(MTL_ID(), table_id, parallel, compressor_type))) {
-        LOG_WARN("fail to get compressor type", KR(ret));
-      } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(*schema_guard,
-                                                           tenant_id,
-                                                           table_id,
-                                                           column_ids))) {
+      ObArray<ObTabletID> tablet_ids;
+      if (OB_FAIL(ObTableLoadSchema::get_table_schema(*schema_guard, tenant_id, table_id, table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret));
+      } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema,
+                                                                 parallel,
+                                                                 compressor_type))) {
+        LOG_WARN("fail to get tmp store compressor type", KR(ret));
+      } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, column_ids))) {
         LOG_WARN("failed to init store column idxs", KR(ret));
+      } else if (OB_FAIL(get_partition_level_tablet_ids(phy_plan, table_schema, tablet_ids))) {
+        LOG_WARN("failed to get partition level tablet ids", KR(ret), K(phy_plan), KPC(table_schema));
       } else {
         ObTableLoadParam param;
         param.tenant_id_ = MTL_ID();
         param.table_id_ = table_id;
-        param.batch_size_ = 100;
         param.parallel_ = parallel;
         param.session_count_ = parallel;
-        param.column_count_ = column_ids.count();
-        param.px_mode_ = true;
-        param.online_opt_stat_gather_ = true;
-        param.need_sort_ = true;
+        param.batch_size_ = phy_plan.is_vectorized() ? phy_plan.get_batch_size()
+                                                     : ObTableLoadParam::DEFAULT_BATCH_SIZE;
         param.max_error_row_count_ = 0;
+        param.column_count_ = column_ids.count();
+        param.need_sort_ = table_schema->is_table_without_pk() ? phy_plan.get_direct_load_need_sort() : true;
+        param.px_mode_ = true;
+        param.online_opt_stat_gather_ = is_online_gather_statistics;
         param.dup_action_ = (enable_inc_replace ? sql::ObLoadDupActionType::LOAD_REPLACE
                                                 : sql::ObLoadDupActionType::LOAD_STOP_ON_DUP);
-        param.online_opt_stat_gather_ = is_online_gather_statistics_;
         param.method_ = method;
         param.insert_mode_ = insert_mode;
         param.load_mode_ = load_mode;
         param.compressor_type_ = compressor_type;
-        if (OB_FAIL(table_load_instance_->init(param, column_ids, load_exec_ctx_))) {
-          LOG_WARN("failed to init direct loader", KR(ret));
+        param.online_sample_percent_ = online_sample_percent;
+        param.load_level_ = tablet_ids.empty() ? ObDirectLoadLevel::TABLE : ObDirectLoadLevel::PARTITION;
+        param.enable_inc_major_ = phy_plan.get_enable_inc_major();
+        if (OB_FAIL(table_load_instance_->init(param, column_ids, tablet_ids, load_exec_ctx_))) {
+          LOG_WARN("failed to init direct loader", KR(ret), K(param), K(column_ids), K(tablet_ids));
         } else {
+          phy_plan.set_ddl_task_id(table_load_instance_->get_table_ctx()->ddl_param_.task_id_);
           is_inited_ = true;
           LOG_DEBUG("succeeded to init direct loader", K(param));
         }
@@ -170,33 +174,36 @@ void ObTableDirectInsertCtx::destroy()
     table_load_instance_ = nullptr;
   }
   if (OB_NOT_NULL(load_exec_ctx_)) {
-    load_exec_ctx_->~ObTableLoadSqlExecCtx();
+    load_exec_ctx_->~ObTableLoadExecCtx();
     load_exec_ctx_ = nullptr;
   }
   is_inited_ = false;
   is_direct_ = false;
-  is_online_gather_statistics_ = false;
 }
 
-int ObTableDirectInsertCtx::get_compressor_type(const uint64_t tenant_id,
-                                                const uint64_t table_id,
-                                                const int64_t parallel,
-                                                ObCompressorType &compressor_type)
+int ObTableDirectInsertCtx::get_partition_level_tablet_ids(
+    const ObPhysicalPlan &phy_plan,
+    const ObTableSchema *table_schema,
+    ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
-                                                                                  schema_guard))) {
-    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id));
-  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema->get_compressor_type(),
-                                                             parallel, compressor_type))) {
-    LOG_WARN("fail to get tmp store compressor type", KR(ret));
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null table schema", KR(ret), KP(table_schema));
+  } else {
+    const ObIArray<ObTableLocation> &table_locs = phy_plan.get_table_locations();
+    tablet_ids.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && (i < table_locs.count()); ++i) {
+      const ObTableLocation &table_loc = table_locs.at(i);
+      if (table_loc.get_ref_table_id() == table_schema->get_table_id()) {
+        const ObIArray<ObObjectID> &part_ids = table_loc.get_part_hint_ids();
+        if (!part_ids.empty()
+            && OB_FAIL(ObTableLoadSchema::get_tablet_ids_by_part_ids(table_schema, part_ids, tablet_ids))) {
+          LOG_WARN("failed to get tablet ids by part ids", KR(ret), K(part_ids));
+        }
+        break;
+      }
+    }
   }
   return ret;
 }

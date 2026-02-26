@@ -78,6 +78,9 @@ enum ObJBVerType:uint8_t {
   J_OYEARMONTH_V0 = 29,
   J_DOC_HEADER_V0 = 30,
   J_FORWARD_V0 = 31,
+  J_MYSQL_DATE_V0 = 32,
+  J_MYSQL_DATETIME_V0 = 33,
+  J_SEMI_HETE_COL_V0 = 34,
 
   J_ERROR_V0 = 200
 };
@@ -122,16 +125,19 @@ public:
 struct ObJsonBinDocHeader
 {
   uint64_t type_ : 8;
-  uint64_t reserved_ : 14;
+  uint64_t use_lexicographical_order_ : 1;
+  uint64_t reserved_ : 13;
   uint64_t extend_seg_offset_ : 42;
 
   TO_STRING_KV(
     K(type_),
+    K(use_lexicographical_order_),
     K(reserved_),
     K(extend_seg_offset_));
 
   ObJsonBinDocHeader() :
       type_(J_DOC_HEADER_V0),
+      use_lexicographical_order_(0),
       reserved_(0),
       extend_seg_offset_(0)
   {}
@@ -152,6 +158,7 @@ public:
   static bool is_opaque_or_string(ObJsonNodeType type);
   static ObJBVerType get_json_vertype(ObJsonNodeType type);
   static bool is_array(ObJBVerType type);
+  static bool is_semi_hete_col(ObJBVerType type);
   static bool is_object(ObJBVerType type);
   static bool is_custom(ObJBVerType type);
   static bool is_scalar(ObJBVerType type);
@@ -168,17 +175,27 @@ public:
   ObJsonBinCtx():
     extend_seg_offset_(0),
     update_ctx_(nullptr),
-    is_update_ctx_alloc_(false)
+    is_update_ctx_alloc_(false),
+    use_lexicographical_order_(false)
   {}
 
   ~ObJsonBinCtx();
 
+  void reset()
+  {
+    extend_seg_offset_ = 0;
+    update_ctx_ = nullptr;
+    is_update_ctx_alloc_ = false;
+    use_lexicographical_order_ = false;
+  }
+
   TO_STRING_KV(
-    K(extend_seg_offset_), K(is_update_ctx_alloc_));
+    K(extend_seg_offset_), K(is_update_ctx_alloc_), K(use_lexicographical_order_));
 
   int64_t extend_seg_offset_;
   ObJsonBinUpdateCtx *update_ctx_;
   bool is_update_ctx_alloc_;
+  bool use_lexicographical_order_;
 };
 
 struct ObJsonBinMeta
@@ -595,6 +612,13 @@ public:
   int array_append(ObIJsonBase *value) override;
   int array_insert(uint64_t index, ObIJsonBase *value) override;
   int object_add(const common::ObString &key, ObIJsonBase *value) override;
+  int set_key_entry(int index, uint64_t key_offset, uint64_t key_len, bool check=true);
+  int set_value_entry(int index, uint64_t value_offset, uint8_t value_type, bool check=true);
+  int set_current(const ObString &data, int64_t offset);
+  int set_obj_size(uint64_t obj_size);
+  static int add_doc_header_v0(ObJsonBuffer &buffer);
+  static int set_doc_header_v0(ObJsonBuffer &buffer, const int64_t extend_seg_offset, const bool use_lexicographical_order);
+  static int set_doc_header_v0(ObString &buffer, const int64_t extend_seg_offset, const bool use_lexicographical_order);
 public:
   static OB_INLINE ObJBVerType get_null_vertype() { return J_NULL_V0; }
   static OB_INLINE ObJBVerType get_decimal_vertype() { return J_DECIMAL_V0; } 
@@ -604,10 +628,13 @@ public:
   static OB_INLINE ObJBVerType get_string_vertype() { return J_STRING_V0; }
   static OB_INLINE ObJBVerType get_object_vertype() { return J_OBJECT_V0; }
   static OB_INLINE ObJBVerType get_array_vertype() { return J_ARRAY_V0; }
+  static OB_INLINE ObJBVerType get_semi_hete_vertype() { return J_SEMI_HETE_COL_V0; }
   static OB_INLINE ObJBVerType get_boolean_vertype() { return J_BOOLEAN_V0; }
   static OB_INLINE ObJBVerType get_date_vertype() { return J_DATE_V0; }
+  static OB_INLINE ObJBVerType get_mdate_vertype() { return J_MYSQL_DATE_V0; }
   static OB_INLINE ObJBVerType get_time_vertype() { return J_TIME_V0; }
   static OB_INLINE ObJBVerType get_datetime_vertype() { return J_DATETIME_V0; }
+  static OB_INLINE ObJBVerType get_mdatetime_vertype() { return J_MYSQL_DATETIME_V0; }
   static OB_INLINE ObJBVerType get_timestamp_vertype() { return J_TIMESTAMP_V0; }
   static OB_INLINE ObJBVerType get_opaque_vertype() { return J_OPAQUE_V0; }
 
@@ -630,9 +657,6 @@ public:
 private:
   static OB_INLINE bool is_forward_v0(uint8_t type) { return J_FORWARD_V0 == type; }
   static OB_INLINE bool is_doc_header_v0(uint8_t type) { return J_DOC_HEADER_V0 == type; }
-  static int add_doc_header_v0(ObJsonBuffer &buffer);
-  static int set_doc_header_v0(ObJsonBuffer &buffer,int64_t extend_seg_offset);
-  static int set_doc_header_v0(ObString &buffer, int64_t extend_seg_offset);
 public:
   TO_STRING_KV(
     K(meta_),
@@ -836,6 +860,7 @@ public:
   // release resource
   void destroy();
   void set_is_schema(bool is_schema) {is_schema_ = is_schema;}
+  OB_INLINE uint32_t depth() const override;
   virtual int reset();
   OB_INLINE const ObILobCursor* get_cursor() const { return cursor_; }
   OB_INLINE ObILobCursor* get_cursor() { return cursor_; }
@@ -849,6 +874,12 @@ public:
   // set flag for json doc
   OB_INLINE void set_seek_flag(bool is_seek_only) { is_seek_only_ = is_seek_only; }
   int clone_new_node(ObJsonBin*& res, common::ObIAllocator *allocator) const;
+  int try_update_inline(
+      const int index,
+      const ObJsonNode *value,
+      bool &is_update_inline);
+  bool use_lexicographical_order() const { return OB_ISNULL(ctx_) ? false : ctx_->use_lexicographical_order_; }
+
 private:
   // used as stack
   struct ObJBNodeMeta {
@@ -938,10 +969,6 @@ private:
 
   int try_update_inline(
       const int index,
-      const ObJsonNode *value,
-      bool &is_update_inline);
-  int try_update_inline(
-      const int index,
       const ObJsonBin *value,
       bool &is_update_inline);
   int try_update_inplace(
@@ -984,15 +1011,12 @@ private:
   int get_value_entry(int index, uint64_t &value_offset, uint8_t &value_type) const;
   int64_t get_value_entry_size() const;
   int get_value(int index, ObJsonBin &value) const;
-  int set_key_entry(int index, uint64_t key_offset, uint64_t key_len, bool check=true);
-  int set_value_entry(int index, uint64_t value_offset, uint8_t value_type, bool check=true);
   OB_INLINE uint64_t get_value_entry_offset(int index) const { return meta_.get_value_entry_offset(index); }
   OB_INLINE uint64_t get_key_entry_offset(int index) const { return meta_.get_key_entry_offset(index); }
   OB_INLINE uint8_t entry_var_type() const { return meta_.entry_var_type(); }
   OB_INLINE uint64_t entry_var_size() const { return meta_.entry_var_size(); }
 
   OB_INLINE uint64_t obj_size() const { return meta_.obj_size(); }
-  int set_obj_size(uint64_t obj_size);
   OB_INLINE uint64_t obj_size_var_size() const { return meta_.obj_size_var_size(); }
   OB_INLINE uint64_t get_obj_size_offset() const { return meta_.get_obj_size_offset(); }
   OB_INLINE uint8_t obj_size_var_type() const { return meta_.obj_size_var_type(); }
@@ -1007,6 +1031,7 @@ private:
   {
     return value_type == ObJBVerType::J_ARRAY_V0 ||
         value_type == ObJBVerType::J_OBJECT_V0 ||
+        value_type == ObJBVerType::J_SEMI_HETE_COL_V0 ||
         ObJsonVerType::is_opaque_or_string(static_cast<ObJBVerType>(value_type));
   }
 
@@ -1020,8 +1045,6 @@ private:
   int record_remove_offset(int index);
   int record_insert_offset(int index, int64_t value_offset, int64_t value_len, uint8_t value_type);
   int get_json_path_at_iter(int index, ObString &path) const;
-
-  int set_current(const ObString &data, int64_t offset);
 
   int parse_type_();
   int skip_type_byte_();
@@ -1118,13 +1141,29 @@ public:
     bin_ctx_()
   {}
   int serialize(ObJsonNode *json_tree, ObString &result);
-  int serialize_json_object(ObJsonObject* object, ObJsonBuffer &result, uint32_t depth = 0);
-  int serialize_json_array(ObJsonArray *array, ObJsonBuffer &result, uint32_t depth = 0);
-  int serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result);
+  static int serialize_json_object(ObJsonNode* object, ObJsonBuffer &result, const bool enable_reserialize = true, uint32_t depth = 0);
+  static int serialize_json_container(ObJsonNode* object, ObJsonBuffer &result, const bool enable_reserialize, uint32_t depth = 0);
+  static int serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result, const bool enable_reserialize = true);
+  static int set_key_entry(
+      const ObJsonBinMeta &meta, char* buf_ptr,
+      int index, uint64_t key_offset, uint64_t key_len, const bool check=true);
+  static int set_value_entry(
+    const ObJsonBinMeta &meta, char* buf_ptr,
+    int index, uint64_t value_offset, uint8_t value_type, const bool check=true);
+  static int set_obj_size(ObJsonBinMeta &meta, char* buf_ptr, uint64_t obj_size);
+  static int set_element_count(ObJsonBinMeta &meta, char* buf_ptr, uint64_t count);
+  static int try_update_inline(
+      ObJsonBinMeta &meta, char* buf_ptr,
+      const int index,
+      const ObIJsonBase *value,
+      bool &is_update_inline);
 
 public:
+  static int serialize_json_integer(ObIJsonBase *j_base, ObJsonBuffer &result);
   static int serialize_json_integer(int64_t value, ObJsonBuffer &result);
   static int serialize_json_decimal(ObJsonDecimal *json_dec, ObJsonBuffer &result);
+  static int serialize_json_double(double value, ObJsonBuffer &result);
+  static int serialize_json_string(ObJBVerType vertype, const ObString &value, ObJsonBuffer &result);
 
 private:
   ObIAllocator *allocator_;

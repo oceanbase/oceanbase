@@ -12,10 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_compare.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/direct_load/ob_direct_load_datum.h"
 #include "storage/direct_load/ob_direct_load_external_multi_partition_row.h"
-#include "storage/direct_load/ob_direct_load_external_row.h"
 
 namespace oceanbase
 {
@@ -51,6 +48,39 @@ int ObDirectLoadDatumRowkeyCompare::compare(const ObDatumRowkey *lhs, const ObDa
   return ret;
 }
 
+int ObDirectLoadDatumRowkeyCompare::compare(const ObDatumRowkey &lhs, const ObDatumRowkey &rhs,
+                                            int &cmp_ret)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(datum_utils_) || OB_UNLIKELY(!lhs.is_valid() || !rhs.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(datum_utils_), K(lhs), K(rhs));
+  } else {
+    if (OB_FAIL(lhs.compare(rhs, *datum_utils_, cmp_ret))) {
+      LOG_WARN("fail to compare rowkey", KR(ret), K(lhs), K(rhs), K(datum_utils_));
+    }
+  }
+  return ret;
+}
+
+bool ObDirectLoadDatumRowkeyCompare::operator()(const ObDatumRowkey &lhs, const ObDatumRowkey &rhs)
+{
+  int ret = OB_SUCCESS;
+  int cmp_ret = 0;
+  if (OB_ISNULL(datum_utils_)|| OB_UNLIKELY(!lhs.is_valid() || !rhs.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(datum_utils_), K(lhs), K(rhs));
+  } else {
+    if (OB_FAIL(lhs.compare(rhs, *datum_utils_, cmp_ret))) {
+      LOG_WARN("fail to compare rowkey", KR(ret), K(lhs), K(rhs), K(datum_utils_));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    result_code_ = ret;
+  }
+  return cmp_ret < 0;
+}
+
 bool ObDirectLoadDatumRowkeyCompare::operator()(const ObDatumRowkey *lhs, const ObDatumRowkey *rhs)
 {
   int ret = OB_SUCCESS;
@@ -68,6 +98,76 @@ bool ObDirectLoadDatumRowkeyCompare::operator()(const ObDatumRowkey *lhs, const 
     result_code_ = ret;
   }
   return cmp_ret < 0;
+}
+
+/**
+ * ObDirectLoadSingleDatumCompare
+ */
+
+int ObDirectLoadSingleDatumCompare::init(const ObStorageDatumUtils &datum_utils)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObDirectLoadSingleDatumCompare init twice", KR(ret), KP(this));
+  } else {
+    if (OB_FAIL(rowkey_compare_.init(datum_utils))) {
+      LOG_WARN("fail to init rowkey compare", KR(ret));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadSingleDatumCompare::compare(const ObStorageDatum *lhs, const ObStorageDatum *rhs,
+                                            int &cmp_ret)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadSingleDatumCompare not init", KR(ret), KP(this));
+  } else if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(lhs), KPC(rhs));
+  } else {
+    if (OB_FAIL(lhs_rowkey_.assign(const_cast<ObStorageDatum *>(lhs), 1))) {
+      LOG_WARN("Failed to assign datum rowkey", KR(ret), KPC(lhs));
+    } else if (OB_FAIL(rhs_rowkey_.assign(const_cast<ObStorageDatum *>(rhs), 1))) {
+      LOG_WARN("Failed to assign datum rowkey", KR(ret), KPC(rhs));
+    } else if (OB_FAIL(rowkey_compare_.compare(&lhs_rowkey_, &rhs_rowkey_, cmp_ret))) {
+      LOG_WARN("fail to compare rowkey", KR(ret), KP(lhs), K(rhs), K(cmp_ret));
+    }
+  }
+  return ret;
+}
+
+bool ObDirectLoadSingleDatumCompare::operator()(const ObStorageDatum *lhs,
+                                                const ObStorageDatum *rhs)
+{
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadSingleDatumCompare not init", KR(ret), KP(this));
+  } else if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(lhs), KPC(rhs));
+  } else {
+    if (OB_FAIL(lhs_rowkey_.assign(const_cast<ObStorageDatum *>(lhs), 1))) {
+      LOG_WARN("Failed to assign datum rowkey", KR(ret), KPC(lhs));
+    } else if (OB_FAIL(rhs_rowkey_.assign(const_cast<ObStorageDatum *>(rhs), 1))) {
+      LOG_WARN("Failed to assign datum rowkey", KR(ret), KPC(rhs));
+    } else {
+      bret = rowkey_compare_.operator()(&lhs_rowkey_, &rhs_rowkey_);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    result_code_ = ret;
+  } else if (OB_FAIL(rowkey_compare_.get_error_code())) {
+    result_code_ = rowkey_compare_.get_error_code();
+  }
+  return bret;
 }
 
 /**

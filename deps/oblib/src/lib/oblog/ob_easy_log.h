@@ -12,6 +12,7 @@
 
 #ifndef OCEANBASE_COMMON_OB_EASY_LOG_H
 #define OCEANBASE_COMMON_OB_EASY_LOG_H
+#include <cstdint>
 namespace oceanbase
 {
 namespace common

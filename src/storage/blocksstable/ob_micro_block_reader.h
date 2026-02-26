@@ -17,6 +17,7 @@
 #include "ob_micro_block_hash_index.h"
 #include "ob_row_reader.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
+#include "sql/engine/basic/ob_truncate_filter_struct.h"
 
 namespace oceanbase
 {
@@ -28,6 +29,21 @@ struct PushdownFilterInfo;
 namespace blocksstable
 {
 
+class ObIMicroBlockFlatReaderBase : public ObIMicroBlockReader
+{
+public:
+    ObIMicroBlockFlatReaderBase() = default;
+    virtual ~ObIMicroBlockFlatReaderBase() = default;
+
+    virtual bool single_version_rows() = 0;
+    virtual bool committed_single_version_rows() = 0;
+
+    virtual int get_logical_row_cnt(const int64_t last,
+                                    int64_t &row_idx,
+                                    int64_t &row_cnt) const = 0;
+};
+
+template<bool EnableNewFlatFormat>
 class ObIMicroBlockFlatReader
 {
 public:
@@ -36,12 +52,12 @@ public:
   void reset();
 protected:
   int find_bound_(const ObDatumRowkey &key,
-                         const bool lower_bound,
-                         const int64_t begin_idx,
-                         const int64_t end_idx,
-                         const ObStorageDatumUtils &datum_utils,
-                         int64_t &row_idx,
-                         bool &equal);
+                  const bool lower_bound,
+                  const int64_t begin_idx,
+                  const int64_t end_idx,
+                  const ObStorageDatumUtils &datum_utils,
+                  int64_t &row_idx,
+                  bool &equal);
   OB_INLINE int init(const ObMicroBlockData &block_data);
 protected:
   const ObMicroBlockHeader *header_;
@@ -50,19 +66,28 @@ protected:
   const int32_t *index_data_;
   // TODO: remove allocator
   ObBlockReaderAllocator allocator_;
-  ObRowReader flat_row_reader_;
+  typename std::conditional<EnableNewFlatFormat, ObRowReaderV1, ObRowReaderV0>::type flat_row_reader_;
 };
 
-class ObMicroBlockReader : public ObIMicroBlockFlatReader, public ObIMicroBlockReader
+template<bool EnableNewFlatFormat = true>
+class ObMicroBlockReader : public ObIMicroBlockFlatReader<EnableNewFlatFormat>, public ObIMicroBlockFlatReaderBase
 {
 public:
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::header_;
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::data_begin_;
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::data_end_;
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::index_data_;
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::allocator_;
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::flat_row_reader_;
+
   ObMicroBlockReader()
-    : ObIMicroBlockFlatReader(),
-      ObIMicroBlockReader()
-  {}
+    : ObIMicroBlockFlatReader<EnableNewFlatFormat>()
+  {
+    reader_type_ = EnableNewFlatFormat ? NewFlatReader : Reader;
+  }
   virtual ~ObMicroBlockReader()
   { reset(); }
-  virtual ObReaderType get_type() override { return Reader; }
+  // virtual ObReaderType get_type() override { return Reader; }
   virtual void reset();
   virtual int init(
       const ObMicroBlockData &block_data,
@@ -76,8 +101,12 @@ public:
   virtual int get_row_header(
       const int64_t row_idx,
       const ObRowHeader *&row_header) override;
+  int get_logical_row_cnt(
+      const int64_t last,
+      int64_t &row_idx,
+      int64_t &row_cnt) const override;
   virtual int get_row_count(int64_t &row_count) override;
-  int get_multi_version_info(
+  virtual int get_multi_version_info(
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
       const ObRowHeader *&row_header,
@@ -88,21 +117,27 @@ public:
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor &filter,
       const sql::PushdownFilterInfo &pd_filter_info,
-      common::ObBitmap &result_bitmap);
+      common::ObBitmap &result_bitmap) override;
+  int filter_pushdown_truncate_filter(
+      const sql::ObPushdownFilterExecutor *parent,
+      sql::ObPushdownFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      common::ObBitmap &result_bitmap) override;
   int get_rows(
       const common::ObIArray<int32_t> &cols_projector,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const blocksstable::ObDatumRow *default_row,
-      const int64_t *row_ids,
+      const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+      const bool is_padding_mode,
+      const int32_t *row_ids,
       const int64_t row_cap,
       ObDatumRow &row_buf,
       common::ObIArray<ObSqlDatumInfo> &datum_infos,
       const int64_t datum_offset,
       sql::ObExprPtrIArray &exprs,
-      sql::ObEvalCtx &eval_ctx);
+      sql::ObEvalCtx &eval_ctx) override;
   virtual int get_row_count(
       int32_t col,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const bool contains_null,
       const share::schema::ObColumnParam *col_param,
@@ -117,24 +152,21 @@ public:
       const ObTableAccessContext &context,
       const int32_t col_offset,
       const share::schema::ObColumnParam &col_param,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObAggDatumBuf &agg_datum_buf,
       storage::ObAggCell &agg_cell) override;
-  int get_aggregate_result(
+  virtual int get_aggregate_result(
       const ObTableIterParam &iter_param,
       const ObTableAccessContext &context,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       ObDatumRow &row_buf,
-      common::ObIArray<storage::ObAggCell*> &agg_cells);
-  virtual int get_column_datum(
-      const ObTableIterParam &iter_param,
-      const ObTableAccessContext &context,
-      const share::schema::ObColumnParam &col_param,
+      common::ObIArray<storage::ObAggCell*> &agg_cells) override;
+  virtual int get_raw_column_datum(
       const int32_t col_offset,
       const int64_t row_index,
-      ObStorageDatum &datum) override;
+      ObStorageDatum &datum) override final;
   virtual int compare_rowkey(
       const ObDatumRowkey &rowkey,
       const int64_t index,
@@ -149,7 +181,8 @@ public:
       const ObDatumRowkey &rowkey,
       const int64_t begin_idx,
       int64_t &row_idx) override;
-  OB_INLINE bool single_version_rows() { return nullptr != header_ && header_->single_version_rows_; }
+  OB_INLINE bool single_version_rows() override { return nullptr != header_ && header_->single_version_rows_; }
+  OB_INLINE bool committed_single_version_rows() override { return single_version_rows() && !header_->contain_uncommitted_rows(); }
 
   // For column store
   virtual int find_bound(
@@ -164,13 +197,15 @@ public:
   int get_rows(
       const common::ObIArray<int32_t> &cols_projector,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const blocksstable::ObDatumRow *default_row,
-      const int64_t *row_ids,
+      const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+      const bool is_padding_mode,
+      const int32_t *row_ids,
       const int64_t vector_offset,
       const int64_t row_cap,
       ObDatumRow &row_buf,
       sql::ObExprPtrIArray &exprs,
-      sql::ObEvalCtx &eval_ctx);
+      sql::ObEvalCtx &eval_ctx,
+      const bool need_init_vector) override;
   virtual bool has_lob_out_row() const override final
   { return nullptr != header_ && header_->has_lob_out_row(); }
 
@@ -184,20 +219,37 @@ protected:
       int64_t &end_key_end_idx) override;
 };
 
-class ObMicroBlockGetReader : public ObIMicroBlockFlatReader, public ObIMicroBlockGetReader
+template<bool EnableNewFlatFormat = true>
+class ObMicroBlockGetReader : public ObIMicroBlockFlatReader<EnableNewFlatFormat>, public ObIMicroBlockGetReader
 {
 public:
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::header_;
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::data_begin_;
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::data_end_;
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::index_data_;
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::allocator_;
+  using ObIMicroBlockFlatReader<EnableNewFlatFormat>::flat_row_reader_;
+
   ObMicroBlockGetReader()
-      : ObIMicroBlockFlatReader(),
+      : ObIMicroBlockFlatReader<EnableNewFlatFormat>(),
         ObIMicroBlockGetReader(),
         hash_index_()
   {}
   virtual ~ObMicroBlockGetReader() {}
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const storage::ObITableReadInfo &read_info,
       ObDatumRow &row) final;
+  // Only used in micro block row getter scenarios, where there are no uncommitted rows.
+  virtual int get_row_and_trans_version(
+      const ObMicroBlockAddr &block_addr,
+      const ObMicroBlockData &block_data,
+      const ObDatumRowkey &rowkey,
+      const storage::ObITableReadInfo &read_info,
+      ObDatumRow &row,
+      int64_t &trans_version) final;
   virtual int exist_row(
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
@@ -206,11 +258,13 @@ public:
       bool &found) final;
   int locate_rowkey(const ObDatumRowkey &rowkey, int64_t &row_idx);
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObITableReadInfo &read_info,
       const uint32_t row_idx,
       ObDatumRow &row) final;
-  int get_row_id(
+  virtual int get_row_id(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const ObITableReadInfo &read_info,

@@ -40,6 +40,7 @@ enum class BackupJobType : int64_t
 };
 
 class ObBackupScheduleTask;
+class ObBackupTaskSchedulerQueue;
 
 class ObIBackupJobScheduler 
 {
@@ -51,8 +52,8 @@ public:
   virtual int force_cancel(const uint64_t &tenant_id) = 0;    
   // if can_remove return true, scheudler can remove task from scheduler  
   virtual int handle_execute_over(const ObBackupScheduleTask *task, const share::ObHAResultInfo &result_info, bool &can_remove) = 0;
-  virtual int get_need_reload_task(common::ObIAllocator &allocator, 
-                                   common::ObIArray<ObBackupScheduleTask *> &tasks) = 0; // reload tasks after switch master happend
+  virtual int reload_task(common::ObIAllocator &allocator,
+                          ObBackupTaskSchedulerQueue &queue) = 0; // reload tasks after switch master happend
 public:
   BackupJobType get_job_type() const { return job_type_; }
   TO_STRING_KV(K_(job_type));

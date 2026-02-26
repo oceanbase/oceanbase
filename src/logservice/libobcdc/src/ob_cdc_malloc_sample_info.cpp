@@ -14,7 +14,6 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include <algorithm>
 
 #include "ob_cdc_malloc_sample_info.h"
 #include "ob_log_utils.h"
@@ -37,7 +36,7 @@ int ObCDCMallocSampleInfo::init(const ObMallocSampleMap &sample_map)
   }
 
   if (OB_SUCC(ret)) {
-    std::sort(samples_.begin(), samples_.end(), ObCDCMallocSamplePairCompartor());
+    lib::ob_sort(samples_.begin(), samples_.end(), ObCDCMallocSamplePairCompartor());
   }
 
   return ret;

@@ -136,8 +136,9 @@ int ObLogGenerator::write_log(const LogCommand cmd, T &data)
     _OB_LOG(ERROR, "check_state()=>%d", ret);
   } else if (is_frozen_) {
     ret = OB_STATE_NOT_MATCH;
-    _OB_LOG(ERROR, "log_generator is frozen, cursor=[%s,%s]", to_cstring(start_cursor_),
-            to_cstring(end_cursor_));
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "log_generator is frozen, cursor=[%s,%s]", helper.convert(start_cursor_),
+            helper.convert(end_cursor_));
   } else if (OB_FAIL(generate_log(log_buf_, log_buf_len_ - ObLogConstants::LOG_BUF_RESERVED_SIZE, 
                                   pos_, end_cursor_, cmd, data))
              && OB_BUF_NOT_ENOUGH != ret) {

@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_transfer_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "observer/ob_server_struct.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -130,8 +128,9 @@ void ObTransferService::run1()
 #endif
 
   while (!has_set_stop()) {
+    DEBUG_SYNC(BEFORE_TRANSFER_SERVICE_RUNNING);
     ls_id_array_.reset();
-    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (!SERVER_STORAGE_META_SERVICE.is_started()) {
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
     } else if (OB_FAIL(get_ls_id_array_())) {
@@ -149,6 +148,7 @@ void ObTransferService::run1()
       if (tenant_config.is_valid()) {
         wait_time_ms = tenant_config->_transfer_service_wakeup_interval / 1000;
       }
+      ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.wait(wait_time_ms);
     }
   }
@@ -213,6 +213,7 @@ int ObTransferService::scheduler_transfer_handler_()
 int ObTransferService::do_transfer_handler_(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard di_action_guard(ObDIActionGuard::NS_ACTION, "TransferLSID:%ld", ls_id.id());
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
 

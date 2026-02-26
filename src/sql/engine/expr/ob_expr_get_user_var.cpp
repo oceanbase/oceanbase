@@ -13,13 +13,8 @@
 #define USING_LOG_PREFIX  SQL_ENG
 
 #include "sql/engine/expr/ob_expr_get_user_var.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "lib/ob_name_def.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 using namespace common;

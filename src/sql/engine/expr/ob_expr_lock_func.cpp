@@ -13,13 +13,9 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_lock_func.h"
 
-#include "lib/ob_name_def.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
-#include "share/system_variable/ob_system_variable.h"
 #include "storage/tablelock/ob_lock_func_executor.h"
+#include "share/ob_table_lock_compat_versions.h"
 
 namespace oceanbase
 {
@@ -44,7 +40,9 @@ int ObExprLockFunc::calc_result_type0(ObExprResType &type,
                                       ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
+  const ObAccuracy &res_acc =  ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType];
   type.set_type(ObIntType);
+  type.set_accuracy(res_acc);
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
   return ret;
 }
@@ -54,7 +52,9 @@ int ObExprLockFunc::calc_result_type1(ObExprResType &type,
                                       ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
+  const ObAccuracy &res_acc =  ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType];
   type.set_type(ObIntType);
+  type.set_accuracy(res_acc);
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
 
   // lock name
@@ -69,7 +69,9 @@ int ObExprLockFunc::calc_result_type2(ObExprResType &type,
                                       ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
+  const ObAccuracy &res_acc =  ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType];
   type.set_type(ObIntType);
+  type.set_accuracy(res_acc);
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
 
   // lock name
@@ -87,9 +89,9 @@ int ObExprLockFunc::support_check_() const
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
     LOG_WARN("fail to get min data version", KR(ret));
-  } else if (data_version < DATA_VERSION_4_3_1_0) {
+  } else if (!is_mysql_lock_func_data_version(data_version)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("only support after data version greater than", K(DATA_VERSION_4_3_1_0));
+    LOG_WARN("does not support this data version", K(data_version));
   } else if (!lib::is_mysql_mode()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("this is only support in MySQL", K(ret));
@@ -106,11 +108,11 @@ bool ObExprLockFunc::proxy_is_support(const ObExecContext &exec_ctx)
   } else {
     is_support = ((session->is_feedback_proxy_info_support() && session->is_client_sessid_support())
                   || !session->is_obproxy_mode())
-                 && session->get_client_sessid() != INVALID_SESSID;
+                 && session->get_client_sid() != INVALID_SESSID;
     if (!is_support) {
       LOG_WARN_RET(OB_NOT_SUPPORTED,
                    "proxy is not support this feature",
-                   K(session->get_sessid()),
+                   K(session->get_server_sid()),
                    K(session->is_feedback_proxy_info_support()),
                    K(session->is_client_sessid_support()));
     }
@@ -408,7 +410,7 @@ int ObExprReleaseLock::release_lock(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
   int ret = OB_SUCCESS;
 
   ObDatum *lock_name = NULL;
-  int64_t release_cnt = ObLockFuncExecutor::INVALID_RELEASE_CNT;
+  int64_t release_cnt = ObLockExecutor::INVALID_RELEASE_CNT;
 
   if (!proxy_is_support(ctx.exec_ctx_)) {
     ret = OB_NOT_SUPPORTED;

@@ -44,6 +44,11 @@ namespace sql
  ((type) == PHY_INSERT_ON_DUP) || \
  ((type) == PHY_INSERT_RETURNING))
 
+#define IS_COORD_RECEIVE(type) \
+(((type) == PHY_PX_FIFO_COORD) || \
+ ((type) == PHY_PX_ORDERED_COORD) || \
+ ((type) == PHY_PX_MERGE_SORT_COORD) || \
+ ((type) == PHY_VEC_PX_MERGE_SORT_COORD))
 
 
 class ObReceiveOpInput : public ObOpInput

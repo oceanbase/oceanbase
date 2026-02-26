@@ -34,7 +34,7 @@ public:
     const xmlChar *system_id);
   static void entity_reference(void *ctx, const xmlChar *name);
   // for error msg
-  static void structured_error(void *ctx, xmlErrorPtr error);
+  static void structured_error(void *ctx, const xmlError *error);
   // libxml2 sax callback end
   // helper method
   static int get_parser(void* ctx, ObLibXml2SaxParser*& parser);

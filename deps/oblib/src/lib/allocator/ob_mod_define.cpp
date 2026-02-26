@@ -10,13 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/allocator/ob_mod_define.h"
 
-#include <malloc.h>
-#include "lib/allocator/ob_malloc.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/thread_local/ob_tsi_factory.h"
+#include "deps/oblib/src/lib/allocator/ob_slice_alloc.h"
 
 namespace oceanbase
 {

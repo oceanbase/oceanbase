@@ -34,6 +34,25 @@ class ObStorageLogger;
 class ObServerCheckpointSlogHandler : public ObIRedoModule
 {
 public:
+  ObServerCheckpointSlogHandler();
+  ~ObServerCheckpointSlogHandler() = default;
+  ObServerCheckpointSlogHandler(const ObServerCheckpointSlogHandler &) = delete;
+  ObServerCheckpointSlogHandler &operator=(const ObServerCheckpointSlogHandler &) = delete;
+
+  int init(ObStorageLogger *server_slogger);
+  int start();
+  void stop();
+  void wait();
+  void destroy();
+
+  virtual int replay(const ObRedoModuleReplayParam &param) override;
+  virtual int replay_over() override;
+
+  int write_checkpoint(bool is_force);
+
+  int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &block_list) const;
+
+private:
   class ObWriteCheckpointTask : public common::ObTimerTask
   {
   public:
@@ -50,35 +69,14 @@ public:
     ObServerCheckpointSlogHandler *handler_;
   };
 
-  typedef common::hash::ObHashMap<uint64_t, omt::ObTenantMeta> TENANT_META_MAP;
-
-  ObServerCheckpointSlogHandler();
-  ~ObServerCheckpointSlogHandler() = default;
-  ObServerCheckpointSlogHandler(const ObServerCheckpointSlogHandler &) = delete;
-  ObServerCheckpointSlogHandler &operator=(const ObServerCheckpointSlogHandler &) = delete;
-
-  int init();
-  int start();
-  void stop();
-  void wait();
-  void destroy();
-  bool is_started() const { return ATOMIC_LOAD(&is_started_); }
-  int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &block_list);
-  virtual int replay(const ObRedoModuleReplayParam &param) override;
-  virtual int replay_over() override;
-
-  static ObServerCheckpointSlogHandler &get_instance();
-
-  int write_checkpoint(bool is_force);
-
-  int load_all_tenant_metas(); // for obadmin
-  int write_tenant_super_block_slog(const ObTenantSuperBlock &super_block);
-  const TENANT_META_MAP &get_tenant_meta_map() const { return tenant_meta_map_for_replay_; } // for obadmin
-
 private:
+  typedef common::hash::ObHashMap<uint64_t, omt::ObTenantMeta> TENANT_META_MAP;
   virtual int parse(const int32_t cmd, const char *buf, const int64_t len, FILE *stream) override;
 
-  int try_write_checkpoint_for_compat();
+  int inner_write_checkpoint(bool is_force);
+  int gc_checkpoint_file();
+  int gc_min_checkpoint_file(const int64_t min_file_id);
+  int gc_max_checkpoint_file(const int64_t max_file_id);
   int read_checkpoint(const ObServerSuperBlock &super_block);
   int replay_and_apply_server_slog(const common::ObLogCursor &replay_start_point);
   int replay_server_slog(const common::ObLogCursor &replay_start_point, common::ObLogCursor &replay_finish_point);
@@ -93,26 +91,23 @@ private:
   int replay_update_tenant_unit(const char *buf, const int64_t buf_len);
   int replay_update_tenant_super_block(const char *buf, const int64_t buf_len);
 
-  int set_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &meta_block_list);
-  int apply_replay_result();
-  int handle_tenant_creating(const uint64_t tenant_id);
-  int handle_tenant_create_commit(const omt::ObTenantMeta &tenant_meta);
+  int apply_replay_result(const TENANT_META_MAP &tenant_meta_map);
 
-  int handle_tenant_deleting(const uint64_t tenant_id);
-  int finish_slog_replay();
-  static int online_ls();
-  int mock_start(); // for test;
+  int handle_tenant_creating(const uint64_t tenant_id, const omt::ObTenantMeta &tenant_meta);
+  int handle_tenant_create_commit(const omt::ObTenantMeta &tenant_meta);
+  int handle_tenant_deleting(const uint64_t tenant_id, const omt::ObTenantMeta &tenant_meta);
+
+  int set_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &meta_block_list);
 
 private:
   bool is_inited_;
-  bool is_started_;
   bool is_writing_checkpoint_;
   ObStorageLogger *server_slogger_;
   common::TCRWLock lock_;  // protect block_handle
   ObMetaBlockListHandle server_meta_block_handle_;
-  common::ObTimer task_timer_;
   ObWriteCheckpointTask write_ckpt_task_;
-  TENANT_META_MAP tenant_meta_map_for_replay_; // only used when replay
+  common::ObTimer task_timer_;
+  TENANT_META_MAP *tenant_meta_map_for_replay_; // only used when replay
 };
 
 }  // end namespace storage

@@ -35,6 +35,8 @@
 #include "lib/thread/ob_thread_name.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_thread_pool.h"
+#include "lib/ash/ob_active_session_guard.h"
+
 
 namespace oceanbase
 {
@@ -85,6 +87,16 @@ public:
   }
   template <typename T>
   int init_and_start(T &&func, bool need_set_tenant_ctx = true) {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(init(func, need_set_tenant_ctx))) {
+      OCCAM_LOG(WARN, "init failed", K(this), K_(id), K(ret));
+    } else if (OB_FAIL(start())) {
+      OCCAM_LOG(WARN, "start failed", K(this), K_(id), K(ret));
+    }
+    return ret;
+  }
+  template <typename T>
+  int init(T &&func, bool need_set_tenant_ctx = true) {
     if (need_set_tenant_ctx) {
       share::ObThreadPool::set_run_wrapper(MTL_CTX());
     }
@@ -93,14 +105,20 @@ public:
       ret = OB_INIT_TWICE;
       OCCAM_LOG(WARN, "init twice", K(this), K_(id), K(ret));
     } else if (OB_FAIL(func_.assign(std::forward<T>(func)))) {
-      OCCAM_LOG(WARN, "assign function failed", K(this), K_(id), K(ret));
     } else if (OB_FAIL(share::ObThreadPool::init())) {
       OCCAM_LOG(WARN, "ObThreadPool::init failed", K(this), K_(id), K(ret));
-    } else if (OB_FAIL(share::ObThreadPool::start())) {
-      OCCAM_LOG(WARN, "start function failed", K(this), K_(id), K(ret));
     } else {
       OCCAM_LOG(INFO, "init thread success", K(this), K_(id), K(ret));
       is_inited_ = true;
+    }
+    return ret;
+  }
+  int start() {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(share::ObThreadPool::start())) {
+      OCCAM_LOG(WARN, "start function failed", K(this), K_(id), K(ret));
+    } else {
+      OCCAM_LOG(INFO, "start thread success", K(this), K_(id), K(ret));
     }
     return ret;
   }
@@ -395,6 +413,7 @@ private:
         } else if (ret == OB_EAGAIN) { // all queue empty, waiting for someone commit task
           // OCCAM_LOG(DEBUG, "no task in queue, waiting...", K(thread_id));
           ObThreadCondGuard guard(cv_);
+          common::ObBKGDSessInActiveGuard inactive_guard;
           while (total_task_count_ == 0 && !is_stopped_) {
             if (OB_FAIL(cv_.wait())) {
               OCCAM_LOG(ERROR, "cv_ wait return err code", K(ret));
@@ -558,6 +577,12 @@ public:
     }
     return ret;
   }
+
+  void stop() { thread_pool_->stop(); }
+
+  void wait() { thread_pool_->wait(); }
+
+  void destroy() { thread_pool_->destroy(); }
 
 public:
   ObSharedGuard<occam::ObOccamThreadPool> thread_pool_;

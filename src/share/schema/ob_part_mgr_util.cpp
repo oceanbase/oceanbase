@@ -13,15 +13,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_part_mgr_util.h"
 
-#include "lib/container/ob_iarray.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/ob_cluster_version.h"
 
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {
@@ -157,6 +149,86 @@ int ObPartGetter::get_subpart_ids_in_partition(const common::ObString &part_name
   }
   if (!find && OB_ITER_END == ret) {
     ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObPartGetter::get_part_id(const common::ObString &part_name, ObObjectID &part_id)
+{
+  int ret = OB_SUCCESS;
+  part_id = OB_INVALID_ID;
+  const ObPartitionLevel &part_level = table_.get_part_level();
+  bool find = false;
+  if (OB_UNLIKELY(part_name.empty()
+      || (PARTITION_LEVEL_ONE != part_level && PARTITION_LEVEL_TWO != part_level))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(part_name), K(part_level));
+  } else {
+    const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+    ObPartIterator iter(table_, mode);
+    const ObPartition *part = NULL;
+    while (OB_SUCC(ret) && !find && OB_SUCC(iter.next(part))) {
+      if (OB_ISNULL(part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null partition", KR(ret));
+      } else if (ObPartitionNameHashWrapper(part_name) == ObPartitionNameHashWrapper(part->get_part_name())) {
+        // case sensitive in oracle mode and insensitive in mysql mode
+        find = true;
+        part_id = part->get_part_id();
+      }
+    }
+    if (!find && OB_ITER_END == ret) {
+      ret = OB_UNKNOWN_PARTITION;
+      LOG_WARN("unknow partition", KR(ret), K(part_name), K(part_level));
+    }
+  }
+  return ret;
+}
+
+int ObPartGetter::get_part_id_and_subpart_id(
+    const common::ObString &part_name,
+    const common::ObString &subpart_name,
+    ObObjectID &part_id,
+    ObObjectID &subpart_id)
+{
+  int ret = OB_SUCCESS;
+  part_id = OB_INVALID_ID;
+  subpart_id = OB_INVALID_ID;
+  const ObPartitionLevel &part_level = table_.get_part_level();
+  bool find = false;
+  if (OB_UNLIKELY(part_name.empty()
+      || subpart_name.empty()
+      || PARTITION_LEVEL_TWO != part_level)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(part_name), K(subpart_name), K(part_level));
+  } else {
+    const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+    ObPartIterator iter(table_, mode);
+    const ObPartition *part = NULL;
+    while (OB_SUCC(ret) && !find && OB_SUCC(iter.next(part))) {
+      if (OB_ISNULL(part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null partition", KR(ret));
+      } else if (ObPartitionNameHashWrapper(part_name) == ObPartitionNameHashWrapper(part->get_part_name())) {
+        // case sensitive in oracle mode and insensitive in mysql mode
+        ObSubPartIterator sub_iter(table_, *part, mode);
+        const ObSubPartition *subpart = NULL;
+        while (OB_SUCC(ret) && !find && OB_SUCC(sub_iter.next(subpart))) {
+          if (OB_ISNULL(subpart)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null subpartition", K(ret));
+          } else if (ObPartitionNameHashWrapper(subpart_name) == ObPartitionNameHashWrapper(subpart->get_part_name())) {
+            find = true;
+            part_id = part->get_part_id();
+            subpart_id = subpart->get_sub_part_id();
+          }
+        } // end sub_iter
+      }
+    } // end iter
+    if (!find && OB_ITER_END == ret) {
+      ret = OB_UNKNOWN_SUBPARTITION;
+      LOG_WARN("unknow subpartition", KR(ret), K(part_name), K(subpart_name), K(part_level));
+    }
   }
   return ret;
 }

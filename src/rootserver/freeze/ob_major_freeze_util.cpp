@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX RS_COMPACTION
 
-#include "rootserver/freeze/ob_major_freeze_util.h"
 
-#include "lib/time/ob_time_utility.h"
-#include "share/ob_define.h"
+#include "ob_major_freeze_util.h"
 #include "share/ob_service_epoch_proxy.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 
@@ -105,9 +103,31 @@ ObFreezeTimeGuard::~ObFreezeTimeGuard()
       snprintf(&strbuffer[buffer_size - 6], 6, "..., ");
     }
     int ret = OB_ERR_TOO_MUCH_TIME;
-    common::OB_PRINT(log_mod_, OB_LOG_LEVEL_DIRECT(WARN), strbuffer,
-      LOG_KVS(K_(warn_threshold_us), K(total_cost_us), K_(start_time_us), K(now_us)));
+    OB_MOD_LOG_RET(log_mod_, WARN, ret, strbuffer, K_(warn_threshold_us), K(total_cost_us), K_(start_time_us), K(now_us));
   }
+}
+
+const char * ObMajorFreezeReasonStr[] = {
+  "DAILY_MERGE",
+  "USER_REQUEST",
+  "MAJOR_COMPACT_TRIGGER"
+};
+const char *major_freeze_reason_to_str(const int64_t freeze_reason)
+{
+  STATIC_ASSERT(static_cast<int64_t>(MF_REASON_MAX) == ARRAYSIZEOF(ObMajorFreezeReasonStr),
+                "major freeze reason str len is mismatch");
+  const char *str = "";
+  if (OB_UNLIKELY(!is_valid_major_freeze_reason((ObMajorFreezeReason)freeze_reason))) {
+    str = "invalid_freeze_reason";
+  } else {
+    str = ObMajorFreezeReasonStr[freeze_reason];
+  }
+  return str;
+}
+bool is_valid_major_freeze_reason(const ObMajorFreezeReason &freeze_reason)
+{
+  return freeze_reason >= ObMajorFreezeReason::MF_DAILY_MERGE
+    && freeze_reason < ObMajorFreezeReason::MF_REASON_MAX;
 }
 
 } // end namespace rootserver

@@ -152,14 +152,12 @@ public:  // ObTxDataMemtableMgr
                        ObIMemtableMgr,
                        K_(is_freezing),
                        K_(ls_id),
-                       K_(mini_merge_recycle_commit_versions_ts),
                        KP_(tx_data_table),
                        KP_(ls_tablet_svr));
 
 public: // getter and setter
   ObLSTabletService *get_ls_tablet_svr() { return ls_tablet_svr_; }
   ObTxDataTable *get_tx_data_table() { return tx_data_table_; }
-  int64_t get_mini_merge_recycle_commit_versions_ts() { return mini_merge_recycle_commit_versions_ts_; }
 
 protected:
   virtual int release_head_memtable_(ObIMemtable *imemtable,
@@ -185,7 +183,6 @@ private:  // ObTxDataMemtableMgr
 private:  // ObTxDataMemtableMgr
   bool is_freezing_;
   share::ObLSID ls_id_;
-  int64_t mini_merge_recycle_commit_versions_ts_;
   ObTxDataTable *tx_data_table_;
   ObLSTabletService *ls_tablet_svr_;
   common::SpinRWLock lock_def_;

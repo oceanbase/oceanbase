@@ -11,13 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include <stdio.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdlib.h>
 #include "sql/engine/expr/ob_expr_utl_inaddr.h"
 #include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::common;

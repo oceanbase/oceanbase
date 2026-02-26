@@ -16,7 +16,9 @@
 #include "lib/ob_define.h"
 #include "lib/guard/ob_unique_guard.h"
 #include "lib/string/ob_string_holder.h"
-
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#endif
 namespace oceanbase
 {
 namespace palf
@@ -46,6 +48,9 @@ public:
   virtual void placement_new_impl(void *ptr) const = 0;
   // 跳过RCS直接切主
   virtual bool has_fatal_failure() const = 0;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  virtual int fill_libpalf_priority(libpalf::LibPalfElectionPriority *lib_priority) = 0;
+#endif
 };
 
 }

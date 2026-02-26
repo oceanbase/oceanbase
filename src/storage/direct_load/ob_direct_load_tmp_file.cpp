@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_tmp_file.h"
+#include "share/io/ob_io_manager.h"
 
 namespace oceanbase
 {
@@ -181,9 +182,9 @@ ObDirectLoadTmpFileIOHandle::~ObDirectLoadTmpFileIOHandle()
 void ObDirectLoadTmpFileIOHandle::reset()
 {
   tmp_file_ = nullptr;
+  file_io_handle_.reset();
   file_handle_.reset();
   io_info_.reset();
-  file_io_handle_.reset();
   is_cancel_ = false;
 }
 
@@ -195,8 +196,8 @@ int ObDirectLoadTmpFileIOHandle::open(const ObDirectLoadTmpFileHandle &file_hand
   if (OB_UNLIKELY(!file_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(file_handle));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(tmp_file->get_file_id().fd_,
-                                                                file_size))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.get_tmp_file_size(
+                     MTL_ID(), tmp_file->get_file_id().fd_, file_size))) {
     LOG_WARN("fail to get tmp file size", KR(ret), KPC(tmp_file));
   } else if (OB_UNLIKELY(file_size != tmp_file->get_file_size())) {
     ret = OB_ERR_UNEXPECTED;
@@ -207,12 +208,9 @@ int ObDirectLoadTmpFileIOHandle::open(const ObDirectLoadTmpFileHandle &file_hand
       LOG_WARN("fail to assign file handle", KR(ret));
     } else {
       tmp_file_ = tmp_file;
-      io_info_.tenant_id_ = MTL_ID();
-      io_info_.dir_id_ = tmp_file_->get_file_id().dir_id_;
       io_info_.fd_ = tmp_file_->get_file_id().fd_;
-      io_info_.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       io_info_.io_desc_.set_sys_module_id(ObIOModule::DIRECT_LOAD_IO);
-      io_info_.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+      io_info_.io_timeout_ms_ = OB_IO_MANAGER.get_object_storage_io_timeout_ms(MTL_ID());
     }
   }
   return ret;
@@ -248,11 +246,15 @@ int ObDirectLoadTmpFileIOHandle::pread(char *buf, int64_t size, int64_t offset)
     io_info_.size_ = size;
     io_info_.buf_ = buf;
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    io_info_.disable_page_cache_ = true;
+    if (GCTX.is_shared_storage_mode()) {
+      io_info_.io_desc_.set_preread();
+    } else {
+      io_info_.disable_page_cache_ = false;
+    }
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io_info_, offset, file_io_handle_))) {
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.pread(MTL_ID(), io_info_, offset, file_io_handle_))) {
         LOG_WARN("fail to do pread from tmp file", KR(ret), K_(io_info), K(offset));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
@@ -286,19 +288,20 @@ int ObDirectLoadTmpFileIOHandle::write(char *buf, int64_t size)
     io_info_.size_ = size;
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
     io_info_.disable_page_cache_ = false;
+    io_info_.io_timeout_ms_ = OB_IO_MANAGER.get_object_storage_io_timeout_ms(MTL_ID());
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret));
       }
       // TODO(suzhi.yt): 先保留原来的调用, aio_write提交成功就相当于写成功了
-      else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_write(io_info_, file_io_handle_))) {
+      else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(MTL_ID(), io_info_))) {
         LOG_WARN("fail to do aio write to tmp file", KR(ret), K_(io_info));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
             ret = OB_SUCCESS;
             int64_t new_file_size = 0;
-            if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(tmp_file_->get_file_id().fd_,
-                                                                   new_file_size))) {
+            if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.get_tmp_file_size(
+                        MTL_ID(), tmp_file_->get_file_id().fd_, new_file_size))) {
               LOG_WARN("fail to get tmp file size", KR(ret), KPC_(tmp_file));
             } else {
               const int64_t write_size = new_file_size - tmp_file_->get_file_size();
@@ -339,11 +342,15 @@ int ObDirectLoadTmpFileIOHandle::aio_pread(char *buf, int64_t size, int64_t offs
     io_info_.size_ = size;
     io_info_.buf_ = buf;
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    io_info_.disable_page_cache_ = true;
+    if (GCTX.is_shared_storage_mode()) {
+      io_info_.io_desc_.set_preread();
+    } else {
+      io_info_.disable_page_cache_ = false;
+    }
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(io_info_, offset, file_io_handle_))) {
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_pread(MTL_ID(), io_info_, offset, file_io_handle_))) {
         LOG_WARN("fail to do aio pread from tmp file", KR(ret), K_(io_info), K(offset));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
@@ -377,19 +384,19 @@ int ObDirectLoadTmpFileIOHandle::aio_write(char *buf, int64_t size)
     io_info_.buf_ = buf;
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
     io_info_.disable_page_cache_ = false;
+    io_info_.io_timeout_ms_ = OB_IO_MANAGER.get_object_storage_io_timeout_ms(MTL_ID());
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret));
       }
-      // aio_write提交成功就相当于写成功了
-      else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_write(io_info_, file_io_handle_))) {
+      else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(MTL_ID(), io_info_))) {
         LOG_WARN("fail to do aio write to tmp file", KR(ret), K_(io_info));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
             ret = OB_SUCCESS;
             int64_t new_file_size = 0;
-            if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(tmp_file_->get_file_id().fd_,
-                                                                   new_file_size))) {
+            if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.get_tmp_file_size(
+                        MTL_ID(), tmp_file_->get_file_id().fd_, new_file_size))) {
               LOG_WARN("fail to get tmp file size", KR(ret), KPC_(tmp_file));
             } else {
               const int64_t write_size = new_file_size - tmp_file_->get_file_size();
@@ -424,7 +431,7 @@ int ObDirectLoadTmpFileIOHandle::wait()
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret));
-      } else if (OB_FAIL(file_io_handle_.wait())) {
+      } else if (file_io_handle_.is_valid() && OB_FAIL(file_io_handle_.wait())) {
         LOG_WARN("fail to wait io finish", KR(ret));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
@@ -441,30 +448,14 @@ int ObDirectLoadTmpFileIOHandle::wait()
   return ret;
 }
 
-int ObDirectLoadTmpFileIOHandle::seek(const ObDirectLoadTmpFileHandle &file_handle, int64_t offset,
-                                      int whence)
+int ObDirectLoadTmpFileIOHandle::seal()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!file_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(file_handle));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.seek(file_handle.get_file()->get_file_id().fd_,
-                                                   offset, whence))) {
-    LOG_WARN("fail to seek tmp file", KR(ret), K(file_handle), K(offset), K(whence));
-  }
-  return ret;
-}
-
-int ObDirectLoadTmpFileIOHandle::sync(const ObDirectLoadTmpFileHandle &file_handle,
-                                      int64_t timeout_ms)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!file_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(file_handle));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.sync(file_handle.get_file()->get_file_id().fd_,
-                                                   timeout_ms))) {
-    LOG_WARN("fail to sync tmp file", KR(ret), K(file_handle));
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_FILE_NOT_EXIST;
+    LOG_WARN("tmp file not set", KR(ret));
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.seal(MTL_ID(), io_info_.fd_))) {
+    LOG_WARN("failed to seal tmp file", KR(ret), K_(io_info));
   }
   return ret;
 }
@@ -507,7 +498,7 @@ int ObDirectLoadTmpFileManager::alloc_dir(int64_t &dir_id)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadTmpFileManager not init", KR(ret), KP(this));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(MTL_ID(), dir_id))) {
     LOG_WARN("fail to alloc dir", KR(ret));
   }
   return ret;
@@ -527,7 +518,7 @@ int ObDirectLoadTmpFileManager::alloc_file(int64_t dir_id,
     ObDirectLoadTmpFile *tmp_file = nullptr;
     ObDirectLoadTmpFileId file_id;
     file_id.dir_id_ = dir_id;
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.open(file_id.fd_, file_id.dir_id_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.open(MTL_ID(), file_id.fd_, file_id.dir_id_))) {
       LOG_WARN("fail to open file", KR(ret));
     } else if (OB_ISNULL(tmp_file = file_allocator_.alloc(this, file_id))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -541,7 +532,7 @@ int ObDirectLoadTmpFileManager::alloc_file(int64_t dir_id,
         tmp_file = nullptr;
       }
       if (file_id.is_valid()) {
-        FILE_MANAGER_INSTANCE_V2.remove(file_id.fd_);
+        FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(MTL_ID(), file_id.fd_);
       }
     }
   }
@@ -560,7 +551,7 @@ void ObDirectLoadTmpFileManager::put_file(ObDirectLoadTmpFile *tmp_file)
   } else {
     const int64_t ref_count = tmp_file->get_ref_count();
     if (0 == ref_count) {
-      FILE_MANAGER_INSTANCE_V2.remove(tmp_file->get_file_id().fd_);
+      FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(MTL_ID(), tmp_file->get_file_id().fd_);
       file_allocator_.free(tmp_file);
     } else {
       LOG_ERROR("tmp file ref count must be zero", K(ref_count));

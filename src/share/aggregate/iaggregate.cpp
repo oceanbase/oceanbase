@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "iaggregate.h"
 #include "share/datum/ob_datum_util.h"
-#include "share/aggregate/count.h"
-#include "share/aggregate/min_max.h"
-#include "share/aggregate/sum.h"
 #include "share/aggregate/first_row.h"
 
 namespace oceanbase
@@ -40,9 +37,47 @@ extern int init_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                               ObIAllocator &allocator, IAggregate *&agg, int32 *tmp_res_size = NULL);
 extern int init_count_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                     ObIAllocator &allocator, IAggregate *&agg);
-#define INIT_AGGREGATE_CASE(OP_TYPE, func_name)                                                    \
+extern int init_approx_count_distinct_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                                ObIAllocator &allocator, IAggregate *&agg);
+extern int init_approx_count_distinct_synopsis_aggregate(RuntimeContext &agg_ctx,
+                                                         const int64_t agg_col_id,
+                                                         ObIAllocator &allocator, IAggregate *&agg);
+extern int init_approx_count_distinct_synopsis_merge_aggregate(RuntimeContext &agg_ctx,
+                                                               const int64_t agg_col_id,
+                                                               ObIAllocator &allocator,
+                                                               IAggregate *&agg);
+extern int init_sysbit_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                 ObIAllocator &allocator, IAggregate *&agg);
+
+extern int init_grouping_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                   ObIAllocator &allocator, IAggregate *&agg);
+extern int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                  ObIAllocator &allocator, IAggregate *&agg);
+extern int init_rb_and_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                 ObIAllocator &allocator, IAggregate *&agg);
+extern int init_rb_or_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                ObIAllocator &allocator, IAggregate *&agg);
+extern int init_sum_opnsize_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                      ObIAllocator &allocator, IAggregate *&agg);
+
+extern int init_group_concat_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                       ObIAllocator &allocator, IAggregate *&agg);
+
+extern int init_top_fre_hist_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                       ObIAllocator &allocator, IAggregate *&agg);
+extern int init_hybrid_hist_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                      ObIAllocator &allocator, IAggregate *&agg);
+extern int init_arg_min_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                       ObIAllocator &allocator, IAggregate *&agg);
+extern int init_arg_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                       ObIAllocator &allocator, IAggregate *&agg);
+extern int init_wm_concat_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                    ObIAllocator &allocator, IAggregate *&agg);
+extern int init_string_prefix_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                            ObIAllocator &allocator, IAggregate *&agg);
+#define INIT_AGGREGATE_CASE(OP_TYPE, func_name, col_id)                                            \
   case (OP_TYPE): {                                                                                \
-    ret = init_##func_name##_aggregate(agg_ctx, i, allocator, agg);                                \
+    ret = init_##func_name##_aggregate(agg_ctx, col_id, allocator, aggregate);                     \
   } break
 int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
                     ObIArray<IAggregate *> &aggregates)
@@ -54,18 +89,45 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
   }
   for (int i = 0; OB_SUCC(ret) && i < agg_ctx.aggr_infos_.count(); i++) {
     ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(i);
-    IAggregate *agg = nullptr;
+    IAggregate *aggregate = nullptr;
+    if (aggr_info.has_distinct_) {
+      ++agg_ctx.distinct_count_;
+    }
     if (aggr_info.is_implicit_first_aggr()) {
-      if (OB_FAIL(init_first_row_aggregate(agg_ctx, i, allocator, agg))) {
+      if (OB_FAIL(init_first_row_aggregate(agg_ctx, i, allocator, aggregate))) {
         SQL_LOG(WARN, "init first row aggregate failed", K(ret));
       }
     } else {
-      switch (aggr_info.expr_->type_) {
-        INIT_AGGREGATE_CASE(T_FUN_MIN, min);
-        INIT_AGGREGATE_CASE(T_FUN_MAX, max);
-        INIT_AGGREGATE_CASE(T_FUN_COUNT, count);
-        INIT_AGGREGATE_CASE(T_FUN_SUM, sum);
-        INIT_AGGREGATE_CASE(T_FUN_COUNT_SUM, count_sum);
+      ObExprOperatorType fun_type =
+        (aggr_info.expr_->type_ == T_WINDOW_FUNCTION ? aggr_info.real_aggr_type_ :
+                                                       aggr_info.expr_->type_);
+      switch (fun_type) {
+        INIT_AGGREGATE_CASE(T_FUN_MIN, min, i);
+        INIT_AGGREGATE_CASE(T_FUN_MAX, max, i);
+        INIT_AGGREGATE_CASE(T_FUN_COUNT, count, i);
+        INIT_AGGREGATE_CASE(T_FUN_SUM, sum, i);
+        INIT_AGGREGATE_CASE(T_FUN_COUNT_SUM, count_sum, i);
+        INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT, approx_count_distinct, i);
+        INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, approx_count_distinct_synopsis, i);
+        INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE, approx_count_distinct_synopsis_merge, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_OR, sysbit, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_AND, sysbit, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_XOR, sysbit, i);
+        INIT_AGGREGATE_CASE(T_FUN_GROUPING, grouping, i);
+        INIT_AGGREGATE_CASE(T_FUN_GROUPING_ID, grouping, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_RB_BUILD_AGG, rb_build, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_RB_AND_AGG, rb_and, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_RB_OR_AGG, rb_or, i);
+        INIT_AGGREGATE_CASE(T_FUN_SUM_OPNSIZE, sum_opnsize, i);
+        INIT_AGGREGATE_CASE(T_FUN_GROUP_CONCAT, group_concat, i);
+        INIT_AGGREGATE_CASE(T_FUN_TOP_FRE_HIST, top_fre_hist, i);
+        INIT_AGGREGATE_CASE(T_FUN_HYBRID_HIST, hybrid_hist, i);
+        INIT_AGGREGATE_CASE(T_FUN_ARG_MIN, arg_min, i);
+        INIT_AGGREGATE_CASE(T_FUN_ARG_MAX, arg_max, i);
+        INIT_AGGREGATE_CASE(T_FUN_GROUP_ID, grouping, i);
+        INIT_AGGREGATE_CASE(T_FUN_WM_CONCAT, wm_concat, i);
+        INIT_AGGREGATE_CASE(T_FUN_KEEP_WM_CONCAT, wm_concat, i);
+        INIT_AGGREGATE_CASE(T_FUN_INNER_PREFIX_MAX, string_prefix_max, i);
       default: {
         ret = OB_NOT_SUPPORTED;
         SQL_LOG(WARN, "not supported aggregate function", K(ret), K(aggr_info.expr_->type_));
@@ -73,18 +135,94 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
       }
       if (OB_FAIL(ret)) {
         SQL_LOG(WARN, "init aggregate failed", K(ret));
-      } else if (OB_ISNULL(agg)) {
+      } else if (OB_ISNULL(aggregate)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_LOG(WARN, "unexpected null aggregate", K(ret));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(aggregates.push_back(agg))) {
+    if (OB_SUCC(ret) && OB_FAIL(aggregates.push_back(aggregate))) {
       SQL_LOG(WARN, "push back element failed", K(ret));
     }
   } // end for
   return ret;
 }
+
 #undef INIT_AGGREGATE_CASE
+
+
+#define RTSIZE(vec_tc) sizeof(RTCType<vec_tc>)
+const int64_t constexpr string_reserved_size = sizeof(char *) + sizeof(int32_t); // <char *, len>
+static const int32_t reserved_sizes[] = {
+  0,                                    // NULL
+  RTSIZE(VEC_TC_INTEGER),               // integer
+  RTSIZE(VEC_TC_UINTEGER),              // uinteger
+  RTSIZE(VEC_TC_FLOAT),                 // float
+  RTSIZE(VEC_TC_DOUBLE),                // double
+  RTSIZE(VEC_TC_FIXED_DOUBLE),          // fixed_double
+  number::ObNumber::MAX_CALC_BYTE_LEN,  // number
+  RTSIZE(VEC_TC_DATETIME),              // datetime
+  RTSIZE(VEC_TC_DATE),                  // date
+  RTSIZE(VEC_TC_TIME),                  // time
+  RTSIZE(VEC_TC_YEAR),                  // year
+  string_reserved_size,                 // extend
+  0,                                    // unknown
+  string_reserved_size,                 // string
+  RTSIZE(VEC_TC_BIT),                   // bit
+  RTSIZE(VEC_TC_ENUM_SET),              // enum set
+  0,                                    // enum set inner
+  RTSIZE(VEC_TC_TIMESTAMP_TZ),          // timestamp tz
+  RTSIZE(VEC_TC_TIMESTAMP_TINY),        // timestamp tiny
+  string_reserved_size,                 // raw
+  RTSIZE(VEC_TC_INTERVAL_YM),           // interval ym
+  RTSIZE(VEC_TC_INTERVAL_DS),           // interval ds
+  string_reserved_size,                 // rowid
+  string_reserved_size,                 // lob
+  string_reserved_size,                 // json
+  string_reserved_size,                 // geo
+  string_reserved_size,                 // udt
+  RTSIZE(VEC_TC_DEC_INT32),             // dec_int32
+  RTSIZE(VEC_TC_DEC_INT64),             // dec_int64
+  RTSIZE(VEC_TC_DEC_INT128),            // dec_int128
+  RTSIZE(VEC_TC_DEC_INT256),            // dec_int256
+  RTSIZE(VEC_TC_DEC_INT512),            // dec_int512
+  string_reserved_size,                 // collection
+  string_reserved_size,                 // roaringbitmap
+  RTSIZE(VEC_TC_MYSQL_DATE),            // mysql date
+  RTSIZE(VEC_TC_MYSQL_DATETIME),        // mysql datetime
+};
+static_assert(sizeof(reserved_sizes) / sizeof(reserved_sizes[0]) == MAX_VEC_TC, "");
+
+static int32_t arg_minmax_agg_col_size(const ObAggrInfo &aggr_info)
+{
+  const int32_t CMP_PARAM_IDX = 1;
+  int32_t ret_size = 0;
+  const ObExpr *cmp_expr = aggr_info.param_exprs_.at(CMP_PARAM_IDX);
+  VecValueTypeClass vec_tc =
+                    get_vec_value_tc(cmp_expr->datum_meta_.type_, cmp_expr->datum_meta_.scale_,
+                                      cmp_expr->datum_meta_.precision_);
+  if (is_var_len_agg_cell(vec_tc)) {
+    ret_size = 3 * sizeof(char *) + 4 * sizeof(int32_t);
+  } else {
+    ret_size = reserved_sizes[vec_tc] + 2 * sizeof(int32_t) + sizeof(char *);
+  }
+  return ret_size;
+}
+
+static int32_t arg_minmax_agg_tmp_size(const ObAggrInfo &aggr_info)
+{
+  const int32_t CMP_PARAM_IDX = 1;
+  int32_t ret_size = 0;
+  const ObExpr *cmp_expr = aggr_info.param_exprs_.at(CMP_PARAM_IDX);
+  VecValueTypeClass vec_tc =
+                    get_vec_value_tc(cmp_expr->datum_meta_.type_, cmp_expr->datum_meta_.scale_,
+                                      cmp_expr->datum_meta_.precision_);
+  if (is_var_len_agg_cell(vec_tc)) {
+    ret_size = 2 * sizeof(char *) + 3 * sizeof(int32_t);
+  } else {
+    ret_size = 2 * sizeof(int32_t) + sizeof(char *);
+  }
+  return ret_size;
+}
 
 static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id)
 {
@@ -95,20 +233,51 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
   IAggregate *agg = nullptr;
   ObDataBuffer local_allocator(buffer, 1);
   ObAggrInfo &info = agg_ctx.aggr_infos_.at(agg_col_id);
+
   if (info.is_implicit_first_aggr()) {
     // do nothing
-  } else if (info.get_expr_type() == T_FUN_MIN || info.get_expr_type() == T_FUN_MAX) {
-    VecValueTypeClass vec_tc = info.expr_->get_vec_value_tc();
-    if (is_var_len_agg_cell(vec_tc)) {
-      ret_size = sizeof(char *) + sizeof(int32_t); // <char *, int32_t>
+  } else {
+    switch (info.get_expr_type()) {
+    case T_FUN_INNER_PREFIX_MIN:
+    case T_FUN_INNER_PREFIX_MAX:
+    case T_FUN_MIN:
+    case T_FUN_MAX: {
+      VecValueTypeClass vec_tc = info.expr_->get_vec_value_tc();
+      if (is_var_len_agg_cell(vec_tc)) {
+        ret_size = sizeof(char *) + sizeof(int32_t); // <char *, int32_t>
+      }
+      break;
     }
-  } else if (info.get_expr_type() == T_FUN_SUM) {
-    if (OB_FAIL( // ugly code, works just fine
-          init_sum_aggregate(agg_ctx, agg_col_id, local_allocator, agg, &tmp_res_size))) {
-      SQL_LOG(ERROR, "get sum tmp res size failed", K(ret));
-      ob_abort();
-    } else {
-      ret_size = tmp_res_size;
+    case T_FUN_SUM: {
+      if (OB_FAIL(init_sum_aggregate(agg_ctx, agg_col_id, local_allocator, agg, &tmp_res_size))) {
+        SQL_LOG(ERROR, "get sum tmp res size failed", K(ret));
+        ob_abort();
+      } else {
+        ret_size = tmp_res_size;
+      }
+      break;
+    }
+    case T_FUN_APPROX_COUNT_DISTINCT: {
+      ret_size = sizeof(char *);
+      break;
+    }
+    case T_FUN_WM_CONCAT:
+    case T_FUN_KEEP_WM_CONCAT: {
+      // Assign an int32_t for the string length
+      ret_size = sizeof(int32_t);
+      break;
+    }
+    case T_FUN_GROUP_CONCAT: {
+      // Assign an int32_t for the string length, another int64_t to record how many rows have
+      // already been processed.
+      ret_size = sizeof(int32_t) + sizeof(int64_t) + sizeof(bool);
+      break;
+    }
+    case T_FUN_ARG_MAX:
+    case T_FUN_ARG_MIN: {
+      ret_size = arg_minmax_agg_tmp_size(info);
+    }
+    default: break;
     }
   }
   return ret_size;
@@ -118,101 +287,30 @@ static int32_t reserved_agg_col_size(RuntimeContext &agg_ctx, int64_t agg_col_id
 {
   int ret_size = 0;
   ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(agg_col_id);
-  const int64_t constexpr string_reserved_size = sizeof(char *) + sizeof(int32_t); // <char *, len>
-#define RTSIZE(vec_tc) sizeof(RTCType<vec_tc>)
-  static const int32_t reserved_sizes[] = {
-    0,                                    // NULL
-    RTSIZE(VEC_TC_INTEGER),               // integer
-    RTSIZE(VEC_TC_UINTEGER),              // uinteger
-    RTSIZE(VEC_TC_FLOAT),                 // float
-    RTSIZE(VEC_TC_DOUBLE),                // double
-    RTSIZE(VEC_TC_FIXED_DOUBLE),          // fixed_double
-    number::ObNumber::MAX_CALC_BYTE_LEN,  // number
-    RTSIZE(VEC_TC_DATETIME),              // datetime
-    RTSIZE(VEC_TC_DATE),                  // date
-    RTSIZE(VEC_TC_TIME),                  // time
-    RTSIZE(VEC_TC_YEAR),                  // year
-    0,                                    // extend
-    0,                                    // unknown
-    string_reserved_size,                 // string
-    RTSIZE(VEC_TC_BIT),                   // bit
-    RTSIZE(VEC_TC_ENUM_SET),              // enum set
-    0,                                    // enum set inner
-    RTSIZE(VEC_TC_TIMESTAMP_TZ),          // timestamp tz
-    RTSIZE(VEC_TC_TIMESTAMP_TINY),        // timestamp tiny
-    string_reserved_size,                 // raw
-    RTSIZE(VEC_TC_INTERVAL_YM),           // interval ym
-    RTSIZE(VEC_TC_INTERVAL_DS),           // interval ds
-    string_reserved_size,                 // rowid
-    string_reserved_size,                 // lob
-    string_reserved_size,                 // json
-    string_reserved_size,                 // geo
-    string_reserved_size,                 // udt
-    RTSIZE(VEC_TC_DEC_INT32),             // dec_int32
-    RTSIZE(VEC_TC_DEC_INT64),             // dec_int64
-    RTSIZE(VEC_TC_DEC_INT128),            // dec_int128
-    RTSIZE(VEC_TC_DEC_INT256),            // dec_int256
-    RTSIZE(VEC_TC_DEC_INT512),            // dec_int512
-    string_reserved_size,                 // collection
-  };
-  static_assert(sizeof(reserved_sizes) / sizeof(reserved_sizes[0]) == MAX_VEC_TC, "");
-  OB_ASSERT(aggr_info.expr_ != NULL);
-  VecValueTypeClass res_tc = get_vec_value_tc(aggr_info.expr_->datum_meta_.type_,
-                                              aggr_info.expr_->datum_meta_.scale_,
-                                              aggr_info.expr_->datum_meta_.precision_);
-  if (aggr_info.is_implicit_first_aggr()) {
-    ret_size += string_reserved_size; // <char *, len>;
-  } else if (aggr_info.get_expr_type() == T_FUN_COUNT) {
-    // count returns ObNumberType in oracle mode,
-    // we use int64_t as row counts recording type, and cast int64_t to ObNumberType in
-    // `collect_group_result`
-    ret_size += sizeof(int64_t);
-  } else if (is_var_len_agg_cell(res_tc)) {
-    ret_size += string_reserved_size;
+    OB_ASSERT(aggr_info.expr_ != NULL);
+  if (aggr_info.get_expr_type() == T_FUN_ARG_MAX || aggr_info.get_expr_type() == T_FUN_ARG_MIN) {
+    ret_size = arg_minmax_agg_col_size(aggr_info);
   } else {
-    ret_size += reserved_sizes[res_tc];
+    VecValueTypeClass res_tc = get_vec_value_tc(aggr_info.expr_->datum_meta_.type_,
+                                                aggr_info.expr_->datum_meta_.scale_,
+                                                aggr_info.expr_->datum_meta_.precision_);
+    if (aggr_info.is_implicit_first_aggr()) {
+      ret_size += string_reserved_size; // <char *, len>;
+    } else if (aggr_info.get_expr_type() == T_FUN_COUNT || aggr_info.get_expr_type() == T_FUN_GROUPING) {
+      // count returns ObNumberType in oracle mode,
+      // we use int64_t as row counts recording type, and cast int64_t to ObNumberType in
+      // `collect_group_result`
+      ret_size += sizeof(int64_t);
+    } else if (is_var_len_agg_cell(res_tc)) {
+      ret_size += string_reserved_size;
+    } else {
+      ret_size += reserved_sizes[res_tc];
+    }
+    ret_size += agg_cell_tmp_res_size(agg_ctx, agg_col_id);
   }
-  ret_size += agg_cell_tmp_res_size(agg_ctx, agg_col_id);
   return ret_size;
 }
-
-inline bool has_extra_info(ObAggrInfo &info)
-{
-  bool has = false;
-  switch (info.get_expr_type()) {
-  case T_FUN_GROUP_CONCAT:
-  case T_FUN_GROUP_RANK:
-  case T_FUN_GROUP_DENSE_RANK:
-  case T_FUN_GROUP_PERCENT_RANK:
-  case T_FUN_GROUP_CUME_DIST:
-  case T_FUN_MEDIAN:
-  case T_FUN_GROUP_PERCENTILE_CONT:
-  case T_FUN_GROUP_PERCENTILE_DISC:
-  case T_FUN_KEEP_MAX:
-  case T_FUN_KEEP_MIN:
-  case T_FUN_KEEP_SUM:
-  case T_FUN_KEEP_COUNT:
-  case T_FUN_KEEP_WM_CONCAT:
-  case T_FUN_WM_CONCAT:
-  case T_FUN_PL_AGG_UDF:
-  case T_FUN_JSON_ARRAYAGG:
-  case T_FUN_ORA_JSON_ARRAYAGG:
-  case T_FUN_JSON_OBJECTAGG:
-  case T_FUN_ORA_JSON_OBJECTAGG:
-  case T_FUN_ORA_XMLAGG:
-  case T_FUN_HYBRID_HIST:
-  case T_FUN_TOP_FRE_HIST:
-  case T_FUN_AGG_UDF: {
-    has = true;
-    break;
-  }
-  default: {
-    break;
-  }
-  }
-  has = has || info.has_distinct_;
-  return has;
-}
+#undef RTSIZE
 } // end namespace helper
 
 int RuntimeContext::init_row_meta(ObIArray<ObAggrInfo> &aggr_infos, ObIAllocator &alloc)
@@ -222,7 +320,7 @@ int RuntimeContext::init_row_meta(ObIArray<ObAggrInfo> &aggr_infos, ObIAllocator
   agg_row_meta_.col_cnt_ = aggr_infos.count();
   agg_row_meta_.extra_cnt_ = 0;
   int32_t offset = 0;
-  bool has_extra = false;
+  has_extra_ = false;
   int64_t bit_vec_size =
     ((aggr_infos.count() + AggBitVector::word_bits() - 1) / AggBitVector::word_bits())
     * AggBitVector::word_size();
@@ -264,21 +362,23 @@ int RuntimeContext::init_row_meta(ObIArray<ObAggrInfo> &aggr_infos, ObIAllocator
       agg_row_meta_.use_var_len_->set(i);
     }
     if (helper::has_extra_info(info)) {
-      has_extra = true;
+      has_extra_ = true;
       agg_row_meta_.extra_idxes_[i] = agg_extra_id++;
     }
   }
-  agg_row_meta_.extra_cnt_ = agg_extra_id;
-  agg_row_meta_.col_offsets_[aggr_infos.count()] = agg_row_meta_.row_size_;
-  if (has_extra) {
-    agg_row_meta_.row_size_ += sizeof(int32_t);
-    agg_row_meta_.extra_idx_offset_ = offset;
-    offset = agg_row_meta_.row_size_;
-  } else {
-    agg_row_meta_.extra_idx_offset_ = -1;
+  if (OB_SUCC(ret)) {
+    agg_row_meta_.extra_cnt_ = agg_extra_id;
+    agg_row_meta_.col_offsets_[aggr_infos.count()] = agg_row_meta_.row_size_;
+    if (has_extra_) {
+      agg_row_meta_.row_size_ += sizeof(int32_t);
+      agg_row_meta_.extra_idx_offset_ = offset;
+      offset = agg_row_meta_.row_size_;
+    } else {
+      agg_row_meta_.extra_idx_offset_ = -1;
+    }
+    agg_row_meta_.row_size_ += bit_vec_size;
+    agg_row_meta_.nullbits_offset_ = offset;
   }
-  agg_row_meta_.row_size_ += bit_vec_size;
-  agg_row_meta_.nullbits_offset_ = offset;
   return ret;
 }
 

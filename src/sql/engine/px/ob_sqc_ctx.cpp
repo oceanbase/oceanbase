@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/ob_sqc_ctx.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 
 using namespace oceanbase::sql;
 
@@ -36,13 +34,26 @@ ObSqcCtx::ObSqcCtx(ObPxRpcInitSqcArgs &sqc_arg) : msg_loop_(),
       interrupted_(false),
       bf_ch_provider_(sqc_proxy_.get_msg_ready_cond()),
       px_bloom_filter_msg_proc_(msg_proc_),
-      opt_stats_gather_whole_msg_proc_(msg_proc_){}
+      opt_stats_gather_whole_msg_proc_(msg_proc_),
+      sp_winfunc_whole_msg_proc_(msg_proc_),
+      rd_winfunc_whole_msg_proc_(msg_proc_),
+      join_filter_count_row_whole_msg_proc_(msg_proc_),
+      arena_allocator_(),
+      direct_load_mgr_handles_(nullptr),
+      lob_direct_load_mgr_handles_(nullptr)
+{
+  arena_allocator_.set_attr(ObMemAttr(MTL_ID(),"DDL_DLM"));
+}
 
 int ObSqcCtx::add_whole_msg_provider(uint64_t op_id, dtl::ObDtlMsgType msg_type, ObPxDatahubDataProvider &provider)
 {
-  provider.op_id_ = op_id;
-  provider.msg_type_ = msg_type;
-  return whole_msg_provider_list_.push_back(&provider);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(provider.init(op_id, msg_type))) {
+    LOG_WARN("failed to init provider");
+  } else if (OB_FAIL(whole_msg_provider_list_.push_back(&provider))) {
+    LOG_WARN("failed to push_back provider");
+  }
+  return ret;
 }
 
 int ObSqcCtx::get_whole_msg_provider(uint64_t op_id, dtl::ObDtlMsgType msg_type, ObPxDatahubDataProvider *&provider)

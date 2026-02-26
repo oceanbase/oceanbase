@@ -31,6 +31,7 @@ public:
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
+  virtual int check_rule_bypass(const ObDMLStmt &stmt, bool &reject) override;
 private:
   int transform_subquery_as_expr(ObDMLStmt *stmt, bool &trans_happened);
   int try_trans_subquery_in_expr(ObDMLStmt *stmt,
@@ -54,10 +55,8 @@ private:
                                      JoinedTable *join_table,
                                      bool &trans_happened);
 
-  ObItemType get_opposite_expr_type(ObItemType item_type);
-
   int add_limit_for_exists_subquery(ObDMLStmt *stmt,bool &trans_happened);
-
+  static bool is_add_limit_for_exists_subquery_enabled(const uint64_t compat_version);
   int recursive_add_limit_for_exists_expr(ObRawExpr *expr, bool &trans_happened);
 
   /**
@@ -165,7 +164,7 @@ private:
    * 4. 无聚集函数（select item中）
    * 5. 非常量select item列，全部包含在group exprs中
    */
-  int groupby_can_be_eliminated_in_any_all(const ObSelectStmt *stmt, bool &can_be_eliminated) const;
+  int eliminate_groupby_in_any_all(ObSelectStmt *stmt, bool &trans_happened);
 
   int eliminate_subquery_in_exists(ObDMLStmt *stmt,
                                    ObRawExpr *&expr,
@@ -181,15 +180,13 @@ private:
                                   ObSelectStmt *&subquery,
                                   bool &trans_happened);
   int eliminate_groupby_distinct_in_any_all(ObRawExpr *expr, bool &trans_happened);
-  int eliminate_groupby_in_any_all(ObSelectStmt *&stmt, bool &trans_happened);
   int eliminate_distinct_in_any_all(ObSelectStmt *subquery,bool &trans_happened);
   int check_need_add_limit(ObSelectStmt *subquery, bool &need_add_limit);
   int check_limit(const ObItemType op_type,
                   const ObSelectStmt *subquery,
                   bool &has_limit) const;
-  int need_add_limit_constraint(const ObItemType op_type,
-                const ObSelectStmt *subquery,
-                bool &add_limit_constraint) const;
+  int check_has_limit_1(const ObSelectStmt *stmt,
+                        bool &has_limit_1) const;
   int check_const_select(const ObSelectStmt &stmt, bool &is_const_select) const;
   int get_push_down_conditions(ObDMLStmt *stmt,
                                JoinedTable *join_table,
@@ -198,19 +195,9 @@ private:
   int try_trans_any_all_as_exists(ObDMLStmt *stmt,
                                   ObRawExpr *&expr,
                                   ObNotNullContext *not_null_ctx,
-                                  bool is_bool_expr,
+                                  bool used_as_condition,
                                   bool &trans_happened);
-  int do_trans_any_all_as_exists(ObRawExpr *&expr,
-                                 ObNotNullContext *not_null_ctx,
-                                 bool &trans_happened);
-  int check_can_trans_as_exists(ObRawExpr* expr, bool is_bool_expr, bool &is_valid);
-  int check_stmt_can_trans_as_exists(ObSelectStmt *stmt,
-                                     bool is_correlated,
-                                     bool &match_index,
-                                     bool &is_valid);
-  int query_cmp_to_exists_value_cmp(ObItemType type, bool is_with_all, ObItemType& new_type);
   int add_limit_for_any_all_subquery(ObRawExpr *stmt,bool &trans_happened);
-  int prepare_trans_any_all_as_exists(ObQueryRefRawExpr* expr, ObSelectStmt *&trans_stmt);
   int transform_any_all_as_exists(ObDMLStmt *stmt, bool &trans_happened);
   int transform_any_all_as_exists_joined_table(ObDMLStmt* stmt,
                                                TableItem *table,
@@ -218,7 +205,7 @@ private:
   int try_trans_any_all_as_exists(ObDMLStmt *stmt,
                                   ObIArray<ObRawExpr* > &exprs,
                                   ObNotNullContext *not_null_cxt,
-                                  bool is_bool_expr,
+                                  bool used_as_condition,
                                   bool &trans_happened);
   int empty_table_subquery_can_be_eliminated_in_exists(ObRawExpr *expr,
                                                        bool &is_valid);

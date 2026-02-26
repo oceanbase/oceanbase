@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_time_to_usec.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/ob_name_def.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -23,7 +20,7 @@ namespace sql
 {
 
 ObExprTimeToUsec::ObExprTimeToUsec(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_TO_USEC, N_TIME_TO_USEC, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_TO_USEC, N_TIME_TO_USEC, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {}
 
 ObExprTimeToUsec::~ObExprTimeToUsec()

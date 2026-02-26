@@ -13,6 +13,7 @@
 
 #include "ob_direct_load_tmp_file.h"
 #include "storage/access/ob_store_row_iterator.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_external_row.h"
 #include "storage/direct_load/ob_direct_load_rowkey_iterator.h"
 #include "storage/direct_load/ob_direct_load_sstable_builder.h"
@@ -41,7 +42,7 @@ public:
   int init(ObDirectLoadSSTable *sstable, const ObDirectLoadTableDataDesc &table_data_desc,
            const blocksstable::ObDatumRange &range,
            const blocksstable::ObStorageDatumUtils *datum_utils);
-  int get_next_row(const blocksstable::ObDatumRow *&datum_row);
+  int get_next_row(const ObDirectLoadDatumRow *&datum_row);
   int get_next_row(const ObDirectLoadExternalRow *&external_row);
   TO_STRING_KV(KP(buf_), K(buf_pos_), K(buf_size_), K(curr_idx_), K(start_idx_), K(end_idx_),
                K(offset_));
@@ -79,7 +80,7 @@ private:
   bool found_start_;
   bool found_end_;
   uint64_t offset_;
-  blocksstable::ObDatumRow datum_row_;
+  ObDirectLoadDatumRow datum_row_;
   ObDirectLoadTmpFileIOHandle file_io_handle_;
   ObDirectLoadSSTable *sstable_;
   const blocksstable::ObDatumRange *query_range_;

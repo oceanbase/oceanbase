@@ -12,7 +12,6 @@
 
 #include "rpc/obmysql/ob_poc_sql_request_operator.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
-#include "rpc/obrpc/ob_rpc_opts.h"
 #include "rpc/obmysql/ob_sql_sock_processor.h"
 
 namespace oceanbase
@@ -104,6 +103,7 @@ int ObPocSqlRequestOperator::release_packet(ObRequest* req, void* read_handle, O
 
 int ObPocSqlRequestOperator::write_response(ObRequest* req, const char* buf, int64_t sz)
 {
+  ObWaitEventGuard guard(ObWaitEventIds::MYSQL_RESPONSE_WAIT_CLIENT, 0);
   ObSqlSockSession* sess = (ObSqlSockSession*)req->get_server_handle_context();
   return sess->write_data(buf, sz);
 }

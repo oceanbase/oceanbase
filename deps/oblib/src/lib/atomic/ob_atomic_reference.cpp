@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/atomic/ob_atomic.h"
 #include "lib/atomic/ob_atomic_reference.h"
-#include "lib/ob_define.h"
 #include "lib/oblog/ob_log.h"
 
 using namespace oceanbase;

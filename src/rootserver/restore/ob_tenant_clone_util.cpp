@@ -14,10 +14,8 @@
 
 #include "ob_tenant_clone_util.h"
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
-#include "share/restore/ob_tenant_clone_table_operator.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_global_stat_proxy.h" // for ObGlobalStatProxy
-#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::share;
@@ -264,9 +262,10 @@ int ObTenantCloneUtil::update_restore_scn_for_fork_job(common::ObISQLClient &sql
   return ret;
 }
 
-int ObTenantCloneUtil::insert_user_tenant_clone_job(common::ObISQLClient &sql_client,
+int ObTenantCloneUtil::insert_user_tenant_clone_job(common::ObMySQLProxy &sql_client,
                                                     const ObString &clone_tenant_name,
-                                                    const uint64_t user_tenant_id)
+                                                    const uint64_t user_tenant_id,
+                                                    ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(clone_tenant_name.empty() || !is_user_tenant(user_tenant_id))) {
@@ -288,7 +287,7 @@ int ObTenantCloneUtil::insert_user_tenant_clone_job(common::ObISQLClient &sql_cl
       user_clone_job.set_clone_tenant_id(user_tenant_id);
       user_clone_job.set_status(ObTenantCloneStatus::Status::CLONE_USER_PREPARE);
       ObTenantCloneTableOperator user_clone_op;
-      if (OB_FAIL(user_clone_op.init(user_tenant_id, &sql_client))) {
+      if (OB_FAIL(user_clone_op.init(user_tenant_id, &trans))) {
         LOG_WARN("fail init clone op", KR(ret), K(user_tenant_id));
       } else if (OB_FAIL(user_clone_op.insert_clone_job(user_clone_job))) {
         LOG_WARN("fail to insert clone job", KR(ret), K(user_clone_job));
@@ -564,7 +563,7 @@ int ObTenantCloneUtil::get_clone_job_failed_message(common::ObISQLClient &sql_cl
 int ObTenantCloneUtil::inner_cancel_clone_job_(
     ObTenantCloneTableOperator &clone_op,
     const ObCloneJob &clone_job,
-    const ObCancelCloneJobReason &reason,
+    const share::ObCancelCloneJobReason &reason,
     bool &clone_already_finish)
 {
   int ret = OB_SUCCESS;
@@ -602,7 +601,7 @@ void ObTenantCloneUtil::try_to_record_clone_status_change_rs_event(
      const share::ObTenantCloneStatus &prev_clone_status,
      const share::ObTenantCloneStatus &cur_clone_status,
      const int ret_code,
-     const ObCancelCloneJobReason &reason)
+     const share::ObCancelCloneJobReason &reason)
 {
   int ret = OB_SUCCESS;
   ObSqlString execute_result;
@@ -627,7 +626,7 @@ void ObTenantCloneUtil::try_to_record_clone_status_change_rs_event(
 int ObTenantCloneUtil::cancel_clone_job_by_source_tenant_id(
     common::ObISQLClient &sql_client,
     const uint64_t source_tenant_id,
-    const ObCancelCloneJobReason &reason,
+    const share::ObCancelCloneJobReason &reason,
     bool &clone_already_finish)
 {
   int ret = OB_SUCCESS;
@@ -679,7 +678,7 @@ int ObTenantCloneUtil::cancel_clone_job_by_name(
     common::ObISQLClient &sql_client,
     const ObString &clone_tenant_name,
     bool &clone_already_finish,
-    const ObCancelCloneJobReason &reason)
+    const share::ObCancelCloneJobReason &reason)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;

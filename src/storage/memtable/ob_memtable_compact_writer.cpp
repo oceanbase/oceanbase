@@ -11,7 +11,6 @@
  */
 
 #include "storage/memtable/ob_memtable_compact_writer.h"
-#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {

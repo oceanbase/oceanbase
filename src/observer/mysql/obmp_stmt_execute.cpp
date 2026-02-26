@@ -12,45 +12,25 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/mysql/obmp_stmt_execute.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/profile/ob_perf_event.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/encode/ob_base64_encode.h"
+#include "obmp_stmt_execute.h"
 #include "observer/mysql/obsm_utils.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/packet/ompk_eof.h"
 #include "rpc/obmysql/packet/ompk_resheader.h"
 #include "rpc/obmysql/packet/ompk_field.h"
 #include "rpc/obmysql/packet/ompk_row.h"
-#include "rpc/obmysql/obsm_struct.h"
 #include "observer/mysql/obsm_row.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "share/ob_time_utility2.h"
 #include "sql/ob_sql.h"
-#include "sql/ob_sql_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/plan_cache/ob_prepare_stmt_struct.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/mysql/ob_sync_plan_driver.h"
 #include "observer/mysql/ob_sync_cmd_driver.h"
 #include "observer/mysql/ob_async_cmd_driver.h"
 #include "observer/mysql/ob_async_plan_driver.h"
-#include "observer/ob_req_time_service.h"
-#include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_resolver.h"
-#include "pl/ob_pl_exception_handling.h"
-#include "sql/plan_cache/ob_prepare_stmt_struct.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
-#include "observer/mysql/obmp_utils.h"
-#include "share/ob_lob_access_utils.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "sql/ob_sql_mock_schema_utils.h"
 
 namespace oceanbase
 {
@@ -76,11 +56,26 @@ inline int ObPSAnalysisChecker::detection(const int64_t len)
   return ret;
 }
 
+void ObPsSessionInfoParamsAssignment::operator()(
+    common::hash::HashMapPair<uint64_t, ObPsSessionInfo *> &entry) {
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(entry.second)) {
+    ObPsSessionInfo *ps_session_info =
+        static_cast<ObPsSessionInfo *>(entry.second);
+    ps_session_info->get_param_types().assign(param_types_);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "ps session info pointer is NULL", K(ret));
+  }
+  ret_ = ret;
+}
+
 ObMPStmtExecute::ObMPStmtExecute(const ObGlobalContext &gctx)
     : ObMPBase(gctx),
       retry_ctrl_(/*ctx_.retry_info_*/),
       ctx_(),
       stmt_id_(),
+      new_param_bound_flag_(0),
       stmt_type_(stmt::T_NONE),
       params_(NULL),
       arraybinding_params_(NULL),
@@ -98,7 +93,10 @@ ObMPStmtExecute::ObMPStmtExecute(const ObGlobalContext &gctx)
       params_num_(0),
       params_value_len_(0),
       params_value_(NULL),
-      curr_sql_idx_(0)
+      curr_sql_idx_(0),
+      ps_cursor_has_destroy_(false),
+      retry_mem_context_(NULL),
+      inited_(false)
 {
   ctx_.exec_type_ = MpQuery;
 }
@@ -178,53 +176,6 @@ int ObMPStmtExecute::init_arraybinding_paramstore(ObIAllocator &alloc)
   return ret;
 }
 
-
-// only used for pre_execute
-int ObMPStmtExecute::init_arraybinding_fields_and_row(ObMySQLResultSet &result)
-{
-  int ret = OB_SUCCESS;
-  int64_t returning_field_num = 0;
-
-  if (!is_prexecute()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not support execute protocol", K(ret));
-  } else if (OB_ISNULL(result.get_field_columns())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not support execute protocol", K(ret));
-  } else {
-    ObIAllocator *alloc = static_cast<ObMPStmtPrexecute*>(this)->get_alloc();
-    if (OB_ISNULL(alloc)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("allocator is null", K(ret));
-    } else if (OB_ISNULL(result.get_field_columns())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("returning param field is null", K(ret));
-    } else {
-      returning_field_num = result.get_field_columns()->count();
-    }
-
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_ISNULL(arraybinding_columns_
-        = static_cast<ColumnsFieldArray*>(alloc->alloc(sizeof(ColumnsFieldArray))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret));
-    } else if (OB_ISNULL(arraybinding_row_
-        = static_cast<ObNewRow*>(alloc->alloc(sizeof(ObNewRow))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret));
-    } else {
-      arraybinding_columns_
-        = new(arraybinding_columns_)ColumnsFieldArray(*alloc, 3 + returning_field_num);
-      arraybinding_row_ = new(arraybinding_row_)ObNewRow();
-    }
-    OZ (init_arraybinding_field(returning_field_num + 3, result.get_field_columns()));
-    OZ (init_row_for_arraybinding(*alloc, returning_field_num + 3));
-  }
-
-  return ret;
-}
-
 int ObMPStmtExecute::init_for_arraybinding(ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
@@ -253,9 +204,7 @@ int ObMPStmtExecute::init_for_arraybinding(ObIAllocator &alloc)
   return ret;
 }
 
-int ObMPStmtExecute::check_param_type_for_arraybinding(
-    ObSQLSessionInfo *session_info,
-    ParamTypeInfoArray &param_type_infos)
+int ObMPStmtExecute::check_precondition_for_arraybinding(const ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
   if (!ObStmt::is_dml_write_stmt(stmt_type_)
@@ -264,11 +213,18 @@ int ObMPStmtExecute::check_param_type_for_arraybinding(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("arraybinding only support write dml", K(ret), K(stmt_type_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "arraybinding got no write dml");
-  } else if (session_info->get_local_autocommit()) {
+  } else if (session_info.get_local_autocommit()) {  // read system variable after session info synchronized
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("arraybinding must in autocommit off", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "arraybinding has autocommit = on");
-  } else if (OB_UNLIKELY(param_type_infos.count() <= 0)) {
+  }
+  return ret;
+}
+
+int ObMPStmtExecute::check_param_type_for_arraybinding(ParamTypeInfoArray &param_type_infos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(param_type_infos.count() <= 0)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("arraybinding must has parameters", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "arraybinding has no parameter");
@@ -278,8 +234,7 @@ int ObMPStmtExecute::check_param_type_for_arraybinding(
       if (type_info.is_basic_type_ || !type_info.is_elem_type_) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("arraybinding parameter must be anonymous array", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                       "arraybinding parameter is not anonymous array");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "arraybinding parameter is not anonymous array");
       }
     }
   }
@@ -316,7 +271,12 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
     CK (coll->get_count() > pos);
     CK (1 == coll->get_column_count());
     CK (OB_NOT_NULL(data = reinterpret_cast<ObObj*>(coll->get_data())));
-    OX (params_->at(i) = *(data + pos));
+    if (stmt::T_ANONYMOUS_BLOCK == stmt_type_) {
+      // for anonymous block, no need to convert int type to number
+      OX (params_->at(i) = *(data + pos));
+    } else {
+      OZ (param_assign_after_convert_int2number(params_->at(i), *(data + pos)));
+    }
     if (data[pos].is_numeric_type()) {
       ObAccuracy default_acc =
         ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][data[pos].get_type()];
@@ -327,6 +287,52 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
         params_->at(i).set_precision(default_acc.get_precision());
       }
     }
+    params_->at(i).set_param_meta();
+  }
+  return ret;
+}
+
+// Convert int to number before passing params to Oracle SQL, because Oracle SQL does not support
+// int type. The reason for doing the conversion here is that `parse_integer_value()` cannot
+// distinguish whether the current anonymous array is of arraybinding structure when deserializing
+// an integer in the anonymous array.
+int ObMPStmtExecute::param_assign_after_convert_int2number(ObObj& dst, const ObObj& src)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
+  number::ObNumber ob_num;
+  switch (src.get_type()) {
+    // do the cast which we should have done in parse_integer_value()
+    // EMySQLFieldType::MYSQL_TYPE_SHORT
+    case ObSmallIntType:
+      OZ (ob_num.from(static_cast<int64_t>(src.get_smallint()), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    case ObUSmallIntType:
+      OZ (ob_num.from(static_cast<uint64_t>(src.get_usmallint()), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    // EMySQLFieldType::MYSQL_TYPE_LONG
+    case ObInt32Type:
+      OZ (ob_num.from(static_cast<int64_t>(src.get_int32()), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    case ObUInt32Type:
+      OZ (ob_num.from(static_cast<uint64_t>(src.get_uint32()), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    // EMySQLFieldType::MYSQL_TYPE_LONGLONG
+    case ObIntType:
+      OZ (ob_num.from(src.get_int(), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    case ObUInt64Type:
+      OZ (ob_num.from(src.get_uint64(), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    default:
+      OX (dst = src);
+      break;
   }
   return ret;
 }
@@ -411,6 +417,7 @@ int ObMPStmtExecute::response_result_for_arraybinding(
         ObSMRow sm_row(BINARY,
                 *arraybinding_row_,
                 dtc_params,
+                session_info,
                 arraybinding_columns_,
                 ctx_.schema_guard_,
                 session_info.get_effective_tenant_id());
@@ -422,8 +429,9 @@ int ObMPStmtExecute::response_result_for_arraybinding(
   }
 
   if (OB_SUCC(ret)) {
-    bool ps_out = ((stmt::T_ANONYMOUS_BLOCK == stmt_type_ || stmt::T_CALL_PROCEDURE == stmt_type_)
-                    && arraybinding_columns_->count() > 3) ? true : false;
+    bool ps_out = is_prexecute()
+                  && (stmt::T_ANONYMOUS_BLOCK == stmt_type_ || stmt::T_CALL_PROCEDURE == stmt_type_)
+                  && (OB_NOT_NULL(arraybinding_columns_) && arraybinding_columns_->count() > 3);
     ObOKPParam ok_param;
     ok_param.affected_rows_ = arraybinding_rowcnt_;
     ok_param.is_partition_hit_ = session_info.partition_hit().get_bool();
@@ -454,7 +462,7 @@ int ObMPStmtExecute::save_exception_for_arraybinding(
   } else {
     errm_result = ob_errpkt_strerror(error_code, true);
     if (NULL == errm_result) {
-      errm_result = "ORA%ld: Message error_code not found; product=RDBMS; facility=ORA";
+      errm_result = "OBE%ld: Message error_code not found; product=RDBMS; facility=ORA";
     }
     errm_length = strlen(errm_result);
   }
@@ -467,7 +475,7 @@ int ObMPStmtExecute::save_exception_for_arraybinding(
 int ObMPStmtExecute::after_do_process_for_arraybinding(ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(result.get_physical_plan())) {
+  if (ObStmt::is_dml_write_stmt(stmt_type_) && OB_ISNULL(result.get_physical_plan())) {
     ret = OB_NOT_INIT;
     LOG_WARN("should have set plan to result set", K(ret));
   } else if (OB_FAIL(result.open())) {
@@ -526,7 +534,8 @@ int ObMPStmtExecute::before_process()
     }
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     const char* pos = pkt.get_cdata();
-    analysis_checker_.init(pos, pkt.get_clen());
+    // pkt.get_cdata() do not include 1 byte for `request command code`
+    analysis_checker_.init(pos, pkt.get_clen() - 1);
     int32_t stmt_id = -1; //INVALID_STMT_ID
     uint32_t ps_stmt_checksum = 0;
     ObSQLSessionInfo *session = NULL;
@@ -560,11 +569,29 @@ int ObMPStmtExecute::before_process()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is NULL or invalid", K(ret), K(session));
     } else {
-      const bool enable_sql_audit =
-      GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
-      OZ (request_params(session, pos, ps_stmt_checksum, alloc, -1));
-      if (!is_pl_stmt(stmt_type_) && enable_sql_audit) {
-        OZ (store_params_value_to_str(alloc, *session));
+      ObPsSessionInfo *ps_session_info = nullptr;
+      ParamTypeArray param_types;
+      ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
+      if (FAILEDx(session->get_ps_session_info(stmt_id_, ps_session_info))) {
+        LOG_WARN("get ps_session_info failed", K(stmt_id_));
+      } else if (OB_ISNULL(ps_session_info)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("ps_session_info is null");
+      } else if (OB_FAIL(verify_ps_stmt_checksum(*session, *ps_session_info, ps_stmt_checksum))) {
+        LOG_WARN("verify ps_stmt_checksum failed", K(ps_stmt_checksum), KPC(ps_session_info));
+      } else if (FALSE_IT(configure_by_stmt_type(ps_session_info->get_stmt_type()))) {
+      } else if (OB_FAIL(param_types.assign(ps_session_info->get_param_types()))) {
+        LOG_WARN("fail to assign param types", K(stmt_id_), KPC(ps_session_info));
+      } else if (OB_FAIL(request_params(
+                     session, alloc, pos, -1, ps_session_info->get_param_count(), param_types))) {
+        LOG_WARN("request params failed", K(stmt_id_), KPC(ps_session_info));
+      } else if (1 == new_param_bound_flag_) {
+        ObPsSessionInfoParamsAssignment assignment(param_types);
+        if (OB_FAIL(session->update_ps_session_info_safety(stmt_id_, assignment))) {
+          LOG_WARN("fail to update params type of PsSessionInfo");
+        } else if (OB_FAIL(assignment.ret_)) {
+          LOG_WARN("fail to execute assignment", K(assignment.ret_));
+        }
       }
     }
     if (session != NULL) {
@@ -707,9 +734,21 @@ int ObMPStmtExecute::parse_request_type(const char* &pos,
               case MYSQL_TYPE_OB_NVARCHAR2:
               case MYSQL_TYPE_OB_NCHAR: {
                 type_name_info.elem_type_.set_collation_type(ncs_type);
+                type_name_info.elem_type_.set_length_semantics(LS_CHAR);
               } break;
               case MYSQL_TYPE_ORA_BLOB: {
                 type_name_info.elem_type_.set_collation_type(CS_TYPE_BINARY);
+              } break;
+              case MYSQL_TYPE_VARCHAR:
+              case MYSQL_TYPE_STRING:
+              case MYSQL_TYPE_VAR_STRING: {
+                type_name_info.elem_type_.set_collation_type(ncs_type);
+                ObLengthSemantics ls = ctx_.session_info_->get_actual_nls_length_semantics();
+                if (LS_INVALIED == ls) {
+                  type_name_info.elem_type_.set_length_semantics(lib::is_oracle_mode() ? LS_BYTE : LS_CHAR);
+                } else {
+                  type_name_info.elem_type_.set_length_semantics(ls);
+                }
               } break;
               default: {
                 type_name_info.elem_type_.set_collation_type(cs_type);
@@ -761,7 +800,7 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
               K(ob_type), K(param_type), K(ret));
   } else {
     param.set_type(ob_type);
-    param.set_param_meta();
+    param.set_param_meta(param.get_meta());
     if (OB_FAIL(parse_param_value(alloc,
                                          param_type,
                                          charset,
@@ -795,104 +834,94 @@ bool ObMPStmtExecute::is_contain_complex_element(const sql::ParamTypeArray &para
   return b_ret;
 }
 
-int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
-                                    const char* &pos,
-                                    uint32_t ps_stmt_checksum,
-                                    ObIAllocator &alloc,
-                                    int32_t all_param_num)
+int ObMPStmtExecute::verify_ps_stmt_checksum(ObSQLSessionInfo &session,
+                                            ObPsSessionInfo &ps_session_info,
+                                            uint32_t ps_stmt_checksum)
 {
   int ret = OB_SUCCESS;
-  ObPsSessionInfo *ps_session_info = NULL;
-  ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-  ObCharsetType charset = CHARSET_INVALID;
+  if (DEFAULT_ITERATION_COUNT == ps_stmt_checksum) {
+    LOG_DEBUG("no ps stmt checksum sent, skip verification",
+              "session_id", session.get_server_sid(),
+              K(ps_stmt_checksum),
+              K(ps_session_info));
+  } else if (ps_stmt_checksum != ps_session_info.get_ps_stmt_checksum()) {
+    ret = OB_ERR_PREPARE_STMT_CHECKSUM;
+    LOG_ERROR("ps stmt checksum fail",
+              "session_id", session.get_server_sid(),
+              K(ps_stmt_checksum),
+              K(ps_session_info));
+    LOG_DBA_ERROR_V2(OB_SERVER_PS_STMT_CHECKSUM_MISMATCH, ret,
+                     "ps stmt checksum fail. ",
+                     "the ps stmt checksum is ", ps_stmt_checksum,
+                     ", but current session stmt checksum is ", ps_session_info.get_ps_stmt_checksum(),
+                     ". current session id is ", session.get_server_sid(), ". ");
+  }
+  return ret;
+}
+
+void ObMPStmtExecute::configure_by_stmt_type(const stmt::StmtType stmt_type)
+{
+  stmt_type_ = stmt_type;
+  if (is_pl_stmt(stmt_type)) {
+    is_save_exception_ = false;  // pl not support save exception
+    ctx_.is_execute_call_stmt_ = true;
+  }
+}
+
+int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
+                                    ObIAllocator &alloc,
+                                    const char *&pos,
+                                    const int64_t all_param_num,
+                                    const int64_t input_param_num,
+                                    ParamTypeArray &param_types)
+{
+  int ret = OB_SUCCESS;
   ObCollationType cs_conn = CS_TYPE_INVALID;
   ObCollationType cs_server = CS_TYPE_INVALID;
   share::schema::ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = session->get_effective_tenant_id();
+  session->set_proxy_version(get_proxy_version());
 
-  if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("get schema guard failed", K(ret));
-  } else if (OB_FAIL(session->get_character_set_connection(charset))) {
-    LOG_WARN("get charset for client failed", K(ret));
+  if (FAILEDx(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard failed");
   } else if (OB_FAIL(session->get_collation_connection(cs_conn))) {
-    LOG_WARN("get charset for client failed", K(ret));
+    LOG_WARN("get collation for connection failed");
   } else if (OB_FAIL(session->get_collation_server(cs_server))) {
-    LOG_WARN("get charset for client failed", K(ret));
-  } else if (OB_FAIL(session->get_ps_session_info(stmt_id_, ps_session_info))) {
-      LOG_WARN("get_ps_session_info failed", K(ret), K_(stmt_id));
-  } else if (OB_ISNULL(ps_session_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ps_session_info is null", K(ret));
-  } else if (DEFAULT_ITERATION_COUNT == ps_stmt_checksum) {
-    // do nothing
-    // 新协议不在这里做
-  } else if (ps_stmt_checksum != ps_session_info->get_ps_stmt_checksum()) {
-    ret = OB_ERR_PREPARE_STMT_CHECKSUM;
-    LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_sessid(),
-                                        K(ps_stmt_checksum), K(*ps_session_info));
-    LOG_DBA_ERROR_V2(OB_SERVER_PS_STMT_CHECKSUM_MISMATCH, ret,
-                     "ps stmt checksum fail. ",
-                     "the ps stmt checksum is ", ps_stmt_checksum,
-                     ", but current session stmt checksum is ", ps_session_info->get_ps_stmt_checksum(),
-                     ". current session id is ", session->get_sessid(), ". ");
-  }
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("ps session info",
-              K(ret), "session_id", session->get_sessid(), K(*ps_session_info));
+    LOG_WARN("get collation for server failed");
+  } else {
     share::schema::ObSchemaGetterGuard *old_guard = ctx_.schema_guard_;
     ObSQLSessionInfo *old_sess_info = ctx_.session_info_;
+
+    params_num_ = MAX(all_param_num, input_param_num);
     ctx_.schema_guard_ = &schema_guard;
     ctx_.session_info_ = session;
-    const int64_t input_param_num = ps_session_info->get_param_count();
-    stmt_type_ = ps_session_info->get_stmt_type();
-    int8_t new_param_bound_flag = 0;
-    if (is_pl_stmt(stmt_type_)) {
-      // pl not support save exception
-      is_save_exception_ = 0;
-    }
-    // for returning into,
-    // all_param_num  = input_param_num + returning_param_num
-    params_num_ = (all_param_num > input_param_num) ? all_param_num : input_param_num;
-    int64_t returning_params_num = all_param_num - input_param_num;
-    if (is_prexecute() && 0 != params_num_) {
-      if (ps_session_info->get_num_of_returning_into() > 0) {
-        // check param_cnt for returning into
-        if (returning_params_num != ps_session_info->get_num_of_returning_into()
-            || input_param_num != ps_session_info->get_param_count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("param num is not match ps stmt prama count.", K(is_prexecute()), K(params_num_),
-                    K(ps_session_info->get_param_count()));
-        }
-      } else if (params_num_ != ps_session_info->get_param_count()) {
-        // check param_cnt
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("param num is not match ps stmt prama count.", K(is_prexecute()), K(params_num_),
-                 K(ps_session_info->get_param_count()));
-      }
-    }
+    DEFER(ctx_.schema_guard_ = old_guard);
+    DEFER(ctx_.session_info_ = old_sess_info);
     if (OB_SUCC(ret) && params_num_ > 0) {
-      // Step1: 处理空值位图
-      int64_t bitmap_types = (params_num_ + 7) / 8;
-      const char *bitmap = pos;
-      pos += bitmap_types;
-      ParamTypeArray &param_types = ps_session_info->get_param_types();
       ParamTypeInfoArray param_type_infos;
       ParamCastArray param_cast_infos;
-
       ParamTypeArray returning_param_types;
       ParamTypeInfoArray returning_param_type_infos;
-      int64_t len = bitmap_types + 1/*new_param_bound_flag*/;
-      PS_DEFENSE_CHECK(len) // bitmap_types
+      int8_t new_param_bound_flag = 0;
+      // for returning into, all_param_num  = input_param_num + returning_param_num
+      int64_t returning_params_num = all_param_num - input_param_num;
+
+      // Step1: 处理空值位图
+      const char *bitmap = pos;
+      int64_t bitmap_types = (params_num_ + 7) / 8;
+      PS_DEFENSE_CHECK(bitmap_types + 1)  // null value bitmap + new param bound flag
       {
-        // Step2: 获取new_param_bound_flag字段
+        pos += bitmap_types;
+        // Step2: 获取 new_param_bound_flag 字段, represent if parameters must be re-bound
         ObMySQLUtil::get_int1(pos, new_param_bound_flag);
-        if (new_param_bound_flag == 1) {
+        new_param_bound_flag_ = new_param_bound_flag;
+        if (1 == new_param_bound_flag) {
+          // if there is no need to re-bind param types, param_types in the ps_session_info will
+          // be reused.
           param_types.reuse();
         }
       }
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_FAIL(param_type_infos.prepare_allocate(input_param_num))) {
+      if (FAILEDx(param_type_infos.prepare_allocate(input_param_num))) {
         LOG_WARN("array prepare allocate failed", K(ret), K(input_param_num));
       } else if (OB_FAIL(params_->prepare_allocate(input_param_num))) {
         LOG_WARN("array prepare allocate failed", K(ret));
@@ -908,29 +937,28 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       }
 
       if (OB_FAIL(ret)) {
-
       } else if (params_num_ <= input_param_num) {
         // not need init returning_param_types and returning_param_type_infos
       } else if (OB_FAIL(returning_param_type_infos.prepare_allocate(params_num_ - input_param_num))) {
         LOG_WARN("array prepare allocate failed", K(ret));
       }
 
-      // Step3: 获取type信息
-      if (OB_SUCC(ret) && OB_FAIL(parse_request_type(pos,
-                                                     input_param_num,
-                                                     new_param_bound_flag,
-                                                     cs_conn,
-                                                     cs_server,
-                                                     param_types,
-                                                     param_type_infos))) {
-        LOG_WARN("fail to parse input params type", K(ret));
+      // Step3-1: 获取type信息
+      if (FAILEDx(parse_request_type(pos,
+                                     input_param_num,
+                                     new_param_bound_flag,
+                                     cs_conn,
+                                     cs_server,
+                                     param_types,
+                                     param_type_infos))) {
+        LOG_WARN("fail to parse input params type");
       } else if (is_contain_complex_element(param_types)) {
         analysis_checker_.need_check_ = false;
       }
 
       // Step3-2: 获取returning into params type信息
       if (OB_SUCC(ret) && returning_params_num > 0) {
-        if (new_param_bound_flag != 1) {
+        if (1 != new_param_bound_flag) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("returning into parm must define type", K(ret));
         } else if (OB_FAIL(parse_request_type(pos,
@@ -945,13 +973,10 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       }
 
       if (OB_SUCC(ret) && is_arraybinding_) {
-        OZ (check_param_type_for_arraybinding(session, param_type_infos));
-      }
-      if (OB_SUCC(ret) && stmt::T_CALL_PROCEDURE == ps_session_info->get_stmt_type()) {
-        ctx_.is_execute_call_stmt_ = true;
+        OZ (check_param_type_for_arraybinding(param_type_infos));
       }
 
-      // Step5: decode value
+      // Step4-1: decode value
       for (int64_t i = 0; OB_SUCC(ret) && i < input_param_num; ++i) {
         ObObjParam &param = is_arraybinding_ ? arraybinding_params_->at(i) : params_->at(i);
         param.reset();
@@ -969,10 +994,11 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
         }
         if (OB_SUCC(ret) && is_arraybinding_) {
           OZ (check_param_value_for_arraybinding(param));
+          OX (param.get_param_flag().is_batch_parameter_ = true);
         }
       }
 
-      // Step5-2: decode returning into value
+      // Step4-2: decode returning into value
       // need parse returning into params
       if (OB_SUCC(ret) && returning_params_num > 0) {
         CK(returning_param_types.count() == returning_params_num);
@@ -990,12 +1016,22 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
             LOG_WARN("fail to parse request returning into param values", K(ret), K(i));
           } else {
             LOG_DEBUG("after parser resolve returning into", K(param), K(i));
+            if (param.is_pl_extend()) {
+              int ret = ObUserDefinedType::destruct_obj(param, nullptr);
+              if (OB_SUCCESS != ret) {
+                LOG_WARN("fail to destruct obj", K(ret), K(i));
+              }
+            }
           }
         }
       }
     }
-    ctx_.schema_guard_ = old_guard;
-    ctx_.session_info_ = old_sess_info;
+  }
+  if (OB_SUCC(ret)
+      && GCONF.enable_sql_audit
+      && session->get_local_ob_enable_sql_audit()
+      && OB_FAIL(store_params_value_to_str(alloc, *session))) {
+    LOG_WARN("failed to store params value to str");
   }
   return ret;
 }
@@ -1092,64 +1128,29 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
   if OB_FAIL(ret) {
     // do nothing
   } else if (is_execute_ps_cursor()) {
-    ObDbmsCursorInfo *cursor = NULL;
-    bool use_stream = false;
-    // 1.创建cursor
-    if (OB_NOT_NULL(session.get_cursor(stmt_id_))) {
-      if (OB_FAIL(session.close_cursor(stmt_id_))) {
-        LOG_WARN("fail to close result set", K(ret), K(stmt_id_), K(session.get_sessid()));
-      }
+    ObPsCursorInfo *cursor = NULL;
+    if (OB_FAIL(gctx_.sql_engine_->init_result_set(ctx_, result))) {
+      LOG_WARN("init result set failed", K(ret));
+    } else if (OB_FAIL(ps_cursor_open(session, ctx_, result, *params_, cursor,
+                                      stmt_id_, need_response_error, enable_perf_event))) {
+      LOG_WARN("ps cursor open failed", K(ret), K(stmt_id_));
+    } else if (OB_ISNULL(cursor)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cursor is null", K(ret));
+    } else if (OB_FAIL(response_query_header(session, *cursor))) {
+      /*
+      * PS模式exec-cursor协议中，
+      * 不返回 result_set 结果集，只返回包头信息
+      * 并在EOF包中设置 OB_SERVER_STATUS_CURSOR_EXISTS 状态
+      * 提示驱动发送fetch协议
+      */
+      LOG_WARN("failed to response query header", K(ret), K(stmt_id_));
     }
-    OZ (session.make_dbms_cursor(cursor, stmt_id_));
-    CK (OB_NOT_NULL(cursor));
-    OX (cursor->set_stmt_type(stmt::T_SELECT));
-    OX (cursor->set_ps_sql(ctx_.cur_sql_));
-    OZ (session.ps_use_stream_result_set(use_stream));
-    if (use_stream) {
-      OX (cursor->set_streaming());
-    }
-    OZ (cursor->prepare_entity(session));
-    CK (OB_NOT_NULL(cursor->get_allocator()));
-    OZ (cursor->init_params(params_->count()));
-    OZ (cursor->get_exec_params().assign(*params_));
-    OZ (gctx_.sql_engine_->init_result_set(ctx_, result));
-    if (OB_SUCCESS != ret || enable_perf_event) {
-      exec_start_timestamp_ = ObTimeUtility::current_time();
-      session.reset_plsql_exec_time();
-    }
-    if (OB_SUCC(ret)) {
-      ObPLExecCtx pl_ctx(cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
-                        NULL/*result*/, &ret, NULL/*func*/, true);
-      if (OB_FAIL(ObSPIService::dbms_dynamic_open(&pl_ctx, *cursor))) {
-        LOG_WARN("open cursor fail. ", K(ret), K(stmt_id_));
-        if (!THIS_WORKER.need_retry()) {
-          int cli_ret = OB_SUCCESS;
-          retry_ctrl_.test_and_save_retry_state(
-            gctx_, ctx_, result, ret, cli_ret, is_arraybinding_ /*ararybinding only local retry*/);
-          if (OB_ERR_PROXY_REROUTE == ret) {
-            LOG_DEBUG("run stmt_query failed, check if need retry",
-                      K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
-          } else {
-            LOG_WARN("run stmt_query failed, check if need retry",
-                      K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
-          }
-          ret = cli_ret;
-        }
-        if (OB_ERR_PROXY_REROUTE == ret && !is_arraybinding_) {
-          need_response_error = true;
-        }
-      }
-    }
-    /*
-    * PS模式exec-cursor协议中，
-    * 不返回 result_set 结果集，只返回包头信息
-    * 并在EOF包中设置 OB_SERVER_STATUS_CURSOR_EXISTS 状态
-    * 提示驱动发送fetch协议
-    */
-    OZ (response_query_header(session, *cursor));
+
     if (OB_SUCCESS != ret && OB_NOT_NULL(cursor)) {
       int tmp_ret = ret;
-      if (OB_FAIL(session.close_cursor(cursor->get_id()))) {
+      ps_cursor_has_destroy_ = true;
+      if (OB_FAIL(session.close_cursor(cursor->get_id(), true))) {
         LOG_WARN("close cursor failed.", K(ret), K(stmt_id_));
       }
       ret = tmp_ret;
@@ -1161,6 +1162,9 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
                                                       ctx_, result,
                                                       false /* is_inner_sql */))) {
     exec_start_timestamp_ = ObTimeUtility::current_time();
+    if (OB_NOT_NULL(result.get_physical_plan())) {
+      result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp_);
+    }
     if (!THIS_WORKER.need_retry()) {
       int cli_ret = OB_SUCCESS;
       retry_ctrl_.test_and_save_retry_state(
@@ -1180,6 +1184,9 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
   } else {
     //监控项统计开始
     exec_start_timestamp_ = ObTimeUtility::current_time();
+    if (OB_NOT_NULL(result.get_physical_plan())) {
+      result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp_);
+    }
     result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
     session.reset_plsql_exec_time();
     // 本分支内如果出错，全部会在response_result内部处理妥当
@@ -1219,6 +1226,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  ObExecutingSqlStatRecord sqlstat_record;
   audit_record.try_cnt_++;
   bool is_diagnostics_stmt = false;
   ObPsStmtId inner_stmt_id = OB_INVALID_ID;
@@ -1226,6 +1234,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit =
     GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat = session.is_sqlstat_enabled();
 
   single_process_timestamp_ = ObTimeUtility::current_time();
 
@@ -1238,14 +1247,19 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
     ObWaitEventStat total_wait_desc;
     int64_t execution_id = 0;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     {
-      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
-      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
+      ObSQLMockSchemaGuard mock_schema_guard;
       if (enable_perf_event) {
-        audit_record.exec_record_.record_start(di);
+        audit_record.exec_record_.record_start();
       }
 
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_start_value();
+        sqlstat_record.set_is_in_retry(session.get_is_in_retry());
+        session.sql_sess_record_sql_stat_start_value(sqlstat_record);
+      }
       result.set_has_more_result(has_more_result);
       result.set_ps_protocol();
       ObTaskExecutorCtx *task_ctx = result.get_exec_context().get_task_executor_ctx();
@@ -1260,6 +1274,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
         ctx_.retry_times_ = retry_ctrl_.get_retry_times();
         session.reset_plsql_exec_time();
+        session.reset_plsql_compile_time();
         if (OB_ISNULL(ctx_.schema_guard_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("newest schema is NULL", K(ret));
@@ -1309,19 +1324,14 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       }
       //监控项统计结束
       exec_end_timestamp_ = ObTimeUtility::current_time();
+      if (OB_NOT_NULL(result.get_physical_plan())) {
+        result.get_physical_plan()->stat_.erase_executing_record(exec_start_timestamp_);
+      }
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
       bool first_record = (1 == audit_record.try_cnt_);
       ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
       audit_record.exec_timestamp_.update_stage_time();
-
-      if (enable_perf_event) {
-        audit_record.exec_record_.record_end(di);
-        record_stat(result.get_stmt_type(), exec_end_timestamp_);
-        audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-        audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-        audit_record.update_event_stage_state();
-      }
 
       if (enable_perf_event && !THIS_THWORKER.need_retry()
         && OB_NOT_NULL(result.get_physical_plan())) {
@@ -1348,6 +1358,32 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       }
     }
 
+    if (enable_perf_event) {
+      audit_record.exec_record_.record_end();
+      record_stat(result.get_stmt_type(), exec_end_timestamp_, session, ret, result);
+      audit_record.stmt_type_ = result.get_stmt_type();
+      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.update_event_stage_state();
+    }
+    if (enable_sqlstat) {
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
+      sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+      sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
+      sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
+      ObString sql_id = ObString::make_string(ctx_.sql_id_);
+      sqlstat_record.set_is_muti_query(session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+      sqlstat_record.set_is_muti_query_batch(ctx_.multi_stmt_item_.is_batched_multi_stmt());
+      if (OB_NOT_NULL(result.get_physical_plan())) {
+        sqlstat_record.set_is_full_table_scan(result.get_physical_plan()->contain_table_scan());
+      }
+      sqlstat_record.set_is_failed(0 != ret && OB_ITER_END != ret);
+      sqlstat_record.move_to_sqlstat_cache(result.get_session(),
+                                                 ctx_.cur_sql_,
+                                                 result.get_physical_plan());
+    }
+
     audit_record.status_ =
       (0 == ret || OB_ITER_END == ret) ? REQUEST_SUCC : (ret);
     if (enable_sql_audit && !is_ps_cursor()) {
@@ -1358,6 +1394,10 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.user_client_addr_ = session.get_user_client_addr();
       audit_record.user_group_ = THIS_WORKER.get_group_id();
       MEMCPY(audit_record.sql_id_, ctx_.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+      MEMCPY(audit_record.format_sql_id_, ctx_.format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
+      audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+      audit_record.ccl_rule_id_ = ctx_.ccl_rule_id_;
+      audit_record.ccl_match_time_ = ctx_.ccl_match_time_;
       if (NULL != plan) {
         audit_record.plan_type_ = plan->get_plan_type();
         audit_record.table_scan_ = plan->contain_table_scan();
@@ -1365,6 +1405,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         audit_record.plan_hash_ = plan->get_plan_hash_value();
         audit_record.rule_name_ = const_cast<char *>(plan->get_rule_name().ptr());
         audit_record.rule_name_len_ = plan->get_rule_name().length();
+      }
+      if (NULL != plan || result.is_pl_stmt(result.get_stmt_type())) {
         audit_record.partition_hit_ = session.partition_hit().get_bool();
       }
       audit_record.affected_rows_ = result.get_affected_rows();
@@ -1375,12 +1417,13 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         result.get_exec_context().get_task_exec_ctx().get_expected_worker_cnt();
       audit_record.used_worker_cnt_ =
         result.get_exec_context().get_task_exec_ctx().get_admited_worker_cnt();
+      audit_record.is_batched_multi_stmt_ = ctx_.multi_stmt_item_.is_batched_multi_stmt();
 
       audit_record.is_executor_rpc_ = false;
       audit_record.is_inner_sql_ = false;
-      audit_record.is_hit_plan_cache_ = result.get_is_from_plan_cache();
-      audit_record.sql_ = const_cast<char *>(ctx_.cur_sql_.ptr());
-      audit_record.sql_len_ = min(ctx_.cur_sql_.length(), OB_MAX_SQL_LENGTH);
+      audit_record.is_hit_plan_cache_ = result.get_is_from_plan_cache() && !ctx_.self_add_plan_;
+      audit_record.sql_ = const_cast<char *>(ctx_.raw_sql_.ptr());
+      audit_record.sql_len_ = min(ctx_.raw_sql_.length(), OB_MAX_SQL_LENGTH);
       audit_record.sql_cs_type_ = session.get_local_collation_connection();
       audit_record.ps_stmt_id_ = stmt_id_;
       audit_record.ps_inner_stmt_id_ = inner_stmt_id;
@@ -1388,6 +1431,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.params_value_len_ = params_value_len_;
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
       audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+      audit_record.plsql_compile_time_ = session.get_plsql_compile_time();
       if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
         audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
       }
@@ -1413,21 +1457,29 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         audit_record.table_scan_stat_ = plan_ctx->get_table_scan_stat();
       }
       if (NULL != plan) {
+        AdaptivePCConf adpt_pc_conf;
+        bool enable_adaptive_pc = plan_ctx->enable_adaptive_pc();
+        if (enable_adaptive_pc) {
+          adpt_pc_conf = session.get_adaptive_pc_conf();
+        }
         if (!(ctx_.self_add_plan_) && ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
               false, // false mean not first update plan stat
-              table_row_count_list);
+              table_row_count_list,
+              enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && !ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
               true,
-              table_row_count_list);
+              table_row_count_list,
+              enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && ctx_.plan_cache_hit_) {
           // spm evolution plan first execute
           plan->update_plan_stat(audit_record,
               true,
-              table_row_count_list);
+              table_row_count_list,
+              enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         }
       }
@@ -1441,11 +1493,6 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
     bool need_retry = (THIS_THWORKER.need_retry()
                        || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());
     if (!is_ps_cursor()) {
-#ifdef OB_BUILD_SPM
-      if (!need_retry) {
-        (void)ObSQLUtils::handle_plan_baseline(audit_record, result.get_physical_plan(), ret, ctx_);
-      }
-#endif
       // ps cursor has already record after inner_open in spi
       ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_EXECUTE, session, ctx_.is_sensitive_);
     }
@@ -1461,13 +1508,7 @@ int ObMPStmtExecute::response_result(
     bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
-#ifndef OB_BUILD_SPM
-  bool need_trans_cb  = result.need_end_trans_callback() && (!force_sync_resp);
-#else
-  bool need_trans_cb  = result.need_end_trans_callback() &&
-                        (!force_sync_resp) &&
-                        (!ctx_.spm_ctx_.check_execute_status_);
-#endif
+  bool need_trans_cb  = result.need_end_trans_callback(force_sync_resp);
 
   // NG_TRACE_EXT(exec_begin, ID(arg1), force_sync_resp, ID(end_trans_cb), need_trans_cb);
 
@@ -1486,23 +1527,25 @@ int ObMPStmtExecute::response_result(
       async_resp_used = result.is_async_end_trans_submitted();
     } else {
       // 试点ObQuerySyncDriver
-      int32_t iteration_count = OB_INVALID_COUNT;
-      if (is_prexecute()) {
-        iteration_count = static_cast<ObMPStmtPrexecute*>(this)->get_iteration_count();
-      }
       ObSyncPlanDriver drv(gctx_,
                            ctx_,
                            session,
                            retry_ctrl_,
                            *this,
                            is_prexecute(),
-                           iteration_count);
+                           get_iteration_count());
       ret = drv.response_result(result);
     }
   } else {
+    if (session.is_pl_async_commit()) {
+      ObPLEndTransCb &pl_end_trans_cb = session.get_pl_end_trans_cb();
+      pl_end_trans_cb.init(packet_sender_, &session, stmt_id_,
+        params_num_, is_prexecute() ? packet_sender_.get_comp_seq() : 0);
+    }
     if (need_trans_cb) {
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
       ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this, is_prexecute());
+      session.set_pl_query_sender(&drv);
       if (OB_FAIL(sql_end_cb.init(packet_sender_, &session,
                                     stmt_id_, params_num_,
                                     is_prexecute() ? packet_sender_.get_comp_seq() : 0))) {
@@ -1514,6 +1557,7 @@ int ObMPStmtExecute::response_result(
                   K(result.get_stmt_type()), K(session.get_local_autocommit()));
       }
       async_resp_used = result.is_async_end_trans_submitted();
+      session.set_pl_query_sender(NULL);
     } else {
       ObSyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this, is_prexecute());
       session.set_pl_query_sender(&drv);
@@ -1546,13 +1590,23 @@ OB_NOINLINE int ObMPStmtExecute::process_retry(ObSQLSessionInfo &session,
     .set_page_size(!lib::is_mini_mode() ? OB_MALLOC_BIG_BLOCK_SIZE
         : OB_MALLOC_MIDDLE_BLOCK_SIZE)
     .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-  CREATE_WITH_TEMP_CONTEXT(param) {
-    ret = do_process(session,
+
+  if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(retry_mem_context_, param))) {
+    LOG_WARN("create memory context failed", K(ret));
+  } else {
+    inited_ = true;
+    WITH_CONTEXT(retry_mem_context_) {
+      ret = do_process(session,
                      param_store,
                      has_more_result,
                      force_sync_resp,
                      async_resp_used);
-    ctx_.clear();
+      ctx_.clear();
+    }
+    if (OB_FAIL(ret) || !is_ps_cursor()) {
+      DESTROY_CONTEXT(retry_mem_context_);
+      inited_ = false;
+    }
   }
   return ret;
 }
@@ -1564,6 +1618,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
                                        bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
+  ObReqTimeGuard req_timeinfo_guard;
   // 每次执行不同sql都需要更新
   ctx_.self_add_plan_ = false;
   oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
@@ -1608,6 +1663,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
     LOG_TRACE("sql retry",
               K(ret), "retry_times", retry_ctrl_.get_retry_times(), "sql", ctx_.cur_sql_);
   }
+  ctx_.spm_ctx_.reset();
   return ret;
 }
 
@@ -1667,7 +1723,7 @@ int ObMPStmtExecute::try_batch_multi_stmt_optimization(ObSQLSessionInfo &session
     LOG_TRACE("is pl execution, can't do the batch optimization");
   } else if (1 == arraybinding_size_) {
     LOG_TRACE("arraybinding size is 1, not need d batch");
-  } else if (get_save_exception()) {
+  } else if (is_save_exception_) {
     LOG_TRACE("is save exception mode, not supported batch optimization");
   } else if (OB_FAIL(is_arraybinding_returning(session, is_ab_returning))) {
     LOG_WARN("failed to check is arraybinding returning", K(ret));
@@ -1713,7 +1769,6 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
   setup_wb(session);
   //============================ 注意这些变量的生命周期 ================================
   ObSMConnection *conn = get_conn();
-  ObSessionStatEstGuard stat_est_guard(conn->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
@@ -1727,7 +1782,6 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
     } else if (OB_FAIL(session.update_timezone_info())) {
       LOG_WARN("fail to update time zone info", K(ret));
     } else if (is_arraybinding_) {
-      need_response_error = false;
       bool optimization_done = false;
       if (ctx_.can_reroute_sql_) {
         ctx_.can_reroute_sql_ = false;
@@ -1744,6 +1798,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
                                                            async_resp_used, optimization_done))) {
         LOG_WARN("fail to try_batch_multi_stmt_optimization", K(ret));
       } else if (!optimization_done) {
+        need_response_error = false;
         ctx_.multi_stmt_item_.set_ps_mode(true);
         ctx_.multi_stmt_item_.set_ab_cnt(0);
         for (int64_t i = 0; OB_SUCC(ret) && i < arraybinding_size_; ++i) {
@@ -1775,24 +1830,19 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
       if (OB_FAIL(do_process_single(session, params_, has_more_result, force_sync_resp, async_resp_used))) {
         LOG_WARN("fail to do process", K(ret), K(ctx_.cur_sql_));
       }
-      if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && is_conn_valid()) {
-        int bak_ret = ret;
-        ObSQLSessionInfo *sess = NULL;
-        if (OB_FAIL(get_session(sess))) {
-          LOG_WARN("get session fail", K(ret));
-        } else if (OB_ISNULL(sess)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("session is NULL or invalid", K(ret));
-        } else {
-          // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
-          if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
-            LOG_WARN("fail setup user resource group", K(ret));
-          }
-        }
-        if (sess != NULL) {
-          revert_session(sess);
-        }
-        ret = OB_SUCC(bak_ret) ? ret : bak_ret;
+
+      /* Function setup_user_resource_group cause performance regression.
+          No need to setup group_id here,
+          Only setup group_id in MPConnect
+      */
+      if (is_conn_valid()) {
+        // int bak_ret = ret;
+        // // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
+        // if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
+        //   LOG_WARN("fail setup user resource group", K(ret));
+        // }
+        set_request_expect_group_id(&session);
+        // ret = OB_SUCC(bak_ret) ? ret : bak_ret;
       }
     }
     ObThreadLogLevelUtils::clear();
@@ -1808,7 +1858,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
   }
 
   //对于tracelog的处理, 不影响正常逻辑, 错误码无须赋值给ret, 清空WARNING BUFFER
-  do_after_process(session, ctx_, async_resp_used);
+  do_after_process(session, async_resp_used);
 
   if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
     send_error_packet(ret, NULL, (void *)(ctx_.get_reroute_info()));
@@ -1828,6 +1878,7 @@ int ObMPStmtExecute::process()
   bool need_disconnect = true;
   bool async_resp_used = false; // 由事务提交线程异步回复客户端
   int64_t query_timeout = 0;
+  bool is_async_cursor = false;
 
   ObCurTraceId::TraceId *cur_trace_id = ObCurTraceId::get_trace_id();
   ObSMConnection *conn = get_conn();
@@ -1847,6 +1898,8 @@ int ObMPStmtExecute::process()
     LOG_WARN("session is NULL or invalid", K_(stmt_id), K(sess), K(ret));
   } else if (OB_FAIL(update_transmission_checksum_flag(*sess))) {
     LOG_WARN("update transmisson checksum flag failed", K(ret));
+  } else if (OB_FAIL(sess->get_query_lock().lock())) {
+    LOG_WARN("lock session failed", K(ret));
   } else {
     ObSQLSessionInfo &session = *sess;
     int64_t tenant_version = 0;
@@ -1854,7 +1907,6 @@ int ObMPStmtExecute::process()
     THIS_WORKER.set_session(sess);
     lib::CompatModeGuard g(sess->get_compatibility_mode() == ORACLE_MODE ?
                              lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
-    ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     SQL_INFO_GUARD(ctx_.cur_sql_, ObString(ctx_.sql_id_));
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.init_use_rich_format();
@@ -1863,8 +1915,10 @@ int ObMPStmtExecute::process()
           session.get_raw_audit_record().request_memory_used_);
     lib::ObMallocCallbackGuard guard(pmcb);
     session.set_thread_id(GETTID());
+    session.set_proxy_version(get_proxy_version());
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     int64_t packet_len = pkt.get_clen();
+    const bool enable_flt = session.get_control_info().is_valid();
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(stmt_id), K(ret));
@@ -1874,7 +1928,7 @@ int ObMPStmtExecute::process()
       //session has been killed some moment ago
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(stmt_id),
-               K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+               K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
     } else if (OB_FAIL(session.check_and_init_retry_info(*cur_trace_id, ctx_.cur_sql_))) {
       LOG_WARN("fail to check and init retry info", K(ret), K(*cur_trace_id), K(ctx_.cur_sql_));
     } else if (OB_FAIL(session.get_query_timeout(query_timeout))) {
@@ -1885,31 +1939,43 @@ int ObMPStmtExecute::process()
     } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
                 OB_SYS_TENANT_ID, sys_version))) {
       LOG_WARN("fail get tenant broadcast version", K(ret));
-    } else if (pkt.exist_trace_info()
+    } else if (!is_prexecute()
+               && pkt.exist_trace_info()
                && OB_FAIL(session.update_sys_variable(SYS_VAR_OB_TRACE_INFO,
                                                       pkt.get_trace_info()))) {
       LOG_WARN("fail to update trace info", K(ret));
-    } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
-    } else if (OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
+    } else if (!is_prexecute() && FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
+    } else if (!is_prexecute() && OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
       LOG_WARN("fail get process extra info", K(ret));
-    } else if (FALSE_IT(session.post_sync_session_info())) {
+    } else if (!is_prexecute() && FALSE_IT(session.post_sync_session_info())) {
     } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
       //packet size check with session variable max_allowd_packet or net_buffer_length
       ret = OB_ERR_NET_PACKET_TOO_LARGE;
       LOG_WARN("packet too large than allowed for the session", K_(stmt_id), K(ret));
-    } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
-                            conn->proxy_cap_flags_.is_full_link_trace_support()))) {
+    } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(),
+                            session,
+                            conn->proxy_cap_flags_.is_full_link_trace_support(),
+                            enable_flt))) {
       LOG_WARN("failed to init flt extra info", K(ret));
+    } else if (OB_FAIL(session.check_tenant_status())) {
+      need_disconnect = false;
+      LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()));
     } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
       LOG_WARN("fail to generate configuration string that can influence execution plan", K(ret));
+    } else if (is_arraybinding_ && OB_FAIL(check_precondition_for_arraybinding(session))) {
+      need_disconnect = false;
+      LOG_WARN("precondition for arraybinding is not satisfied", K(ret));
     } else {
-      FLTSpanGuard(ps_execute);
-      FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(),
-                    receive_ts, get_receive_timestamp(),
-                    client_info, session.get_client_info(),
-                    module_name, session.get_module_name(),
-                    action_name, session.get_action_name(),
-                    sess_id, session.get_sessid());
+      FLTSpanGuardIfEnable(ps_execute, enable_flt);
+      if (enable_flt) {
+        char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+        FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
+                      receive_ts, get_receive_timestamp(),
+                      client_info, session.get_client_info(),
+                      module_name, session.get_module_name(),
+                      action_name, session.get_action_name(),
+                      sess_id, session.get_server_sid());
+      }
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       retry_ctrl_.set_tenant_global_schema_version(tenant_version);
       retry_ctrl_.set_sys_global_schema_version(sys_version);
@@ -1937,6 +2003,7 @@ int ObMPStmtExecute::process()
     }
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
+    ObQueryRetryAshGuard::reset_info();
 
     if (!retry_ctrl_.need_retry()) {
       // if no retry would be performed any more, clear the piece cache
@@ -1964,6 +2031,23 @@ int ObMPStmtExecute::process()
     }
 
     record_flt_trace(session);
+    if (OB_SUCC(ret)
+        && (is_execute_ps_cursor() || is_prexecute_ps_cursor())
+        && !ps_cursor_has_destroy_) {
+      if (OB_FAIL(this->is_async_cursor(*sess, is_async_cursor))) {
+        LOG_WARN("check is async cursor failed", K(ret), K(stmt_id_));
+      } else if (is_async_cursor) {
+        if (OB_FAIL(sess->get_query_lock().wr2rdlock())) {
+          LOG_WARN("downgrade lock failed", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret) || !is_async_cursor) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = sess->get_query_lock().unlock())) {
+        LOG_WARN("unlock session failed", K(ret), K(tmp_ret));
+      }
+    }
   }
 
   if (OB_NOT_NULL(sess) && !sess->get_in_transaction()) {
@@ -1982,15 +2066,34 @@ int ObMPStmtExecute::process()
   }
 
   // 如果已经异步回包，则这部分逻辑在cb中执行，这里跳过flush_buffer()
+  bool need_close_result_set = is_async_cursor;
   if (!THIS_WORKER.need_retry()) {
     if (async_resp_used) {
       async_resp_used_ = true;
       packet_sender_.disable_response();
     } else {
       flush_ret = flush_buffer(true);
+      if (OB_SUCC(ret) && (OB_SUCCESS == flush_ret) && is_async_cursor) {
+        need_close_result_set = false;
+        if (OB_FAIL(ps_cursor_store_data(*sess, 0))) {
+          LOG_WARN("async ps cursor store data failed", K(ret));
+        }
+      }
     }
   } else {
     need_retry_ = true;
+  }
+  if (is_async_cursor) {
+    int tmp_ret = OB_SUCCESS;
+    if (need_close_result_set) {
+      if (OB_SUCCESS != (tmp_ret = ObSPIService::close_ps_cursor_result_set(*sess, stmt_id_))) {
+        LOG_WARN("close ps cursor result set failed", K(ret), K(stmt_id_));
+      }
+      tmp_ret = OB_SUCCESS;
+    }
+    if (OB_SUCCESS != (tmp_ret = sess->get_query_lock().unlock())) {
+      LOG_WARN("unlock session failed", K(ret), K(tmp_ret));
+    }
   }
 
   THIS_WORKER.set_session(NULL);
@@ -2066,7 +2169,7 @@ int ObMPStmtExecute::get_package_type_by_name(ObIAllocator &allocator,
   CK (OB_NOT_NULL(ctx_.session_info_));
   CK (OB_NOT_NULL(ctx_.session_info_->get_pl_engine()));
   if (OB_SUCC(ret) && OB_ISNULL(pl_type ))
-  OZ (schema_checker.init(*ctx_.schema_guard_, ctx_.session_info_->get_sessid()));
+  OZ (schema_checker.init(*ctx_.schema_guard_, ctx_.session_info_->get_server_sid()));
   OZ (schema_checker.get_package_info(ctx_.session_info_->get_effective_tenant_id(),
                                       type_info->relation_name_,
                                       type_info->package_name_,
@@ -2103,13 +2206,13 @@ int ObMPStmtExecute::get_pl_type_by_type_info(ObIAllocator &allocator,
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "Get PL type by type info is not supported in CE version");
 #else
   const share::schema::ObUDTTypeInfo *udt_info = NULL;
-  if (OB_ISNULL(type_info)) {
+  if (OB_ISNULL(type_info) || OB_ISNULL(ctx_.schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("type info is null", K(ret), K(type_info));
+    LOG_WARN("type info or schema_guard is null", K(ret), K(type_info), K(ctx_.schema_guard_));
   } else if (!type_info->is_elem_type_) {
     if (type_info->package_name_.empty()) {
       OZ (get_udt_by_name(type_info->relation_name_, type_info->type_name_, udt_info));
-      OZ (udt_info->transform_to_pl_type(allocator, pl_type));
+      OZ (udt_info->transform_to_pl_type(allocator, *ctx_.schema_guard_, pl_type));
     } else {
       OZ (get_package_type_by_name(allocator, type_info, pl_type));
     }
@@ -2122,7 +2225,7 @@ int ObMPStmtExecute::get_pl_type_by_type_info(ObIAllocator &allocator,
       elem_type.set_data_type(type_info->elem_type_);
     } else if (OB_FAIL(get_udt_by_name(type_info->relation_name_, type_info->type_name_, udt_info))) {
       LOG_WARN("failed to get udt info", K(ret), K(type_info->relation_name_), K(type_info->type_name_));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, elem_type_ptr))) {
+    } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *ctx_.schema_guard_, elem_type_ptr))) {
       LOG_WARN("failed to transform udt to pl type", K(ret));
     } else if (OB_ISNULL(elem_type_ptr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2158,12 +2261,14 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   const pl::ObUserDefinedType *pl_type = NULL;
   int64_t param_size = 0, param_pos = 0;
+  ObSQLSessionInfo *session = ctx_.session_info_;
   CK (OB_NOT_NULL(type_info));
   OZ (get_pl_type_by_type_info(allocator, type_info, pl_type));
   CK (OB_NOT_NULL(pl_type));
   OZ (pl_type->init_obj(*(ctx_.schema_guard_), allocator, param, param_size));
   OX (param.set_udt_id(pl_type->get_user_type_id()));
-  OZ (pl_type->deserialize(*(ctx_.schema_guard_), allocator, charset, cs_type, ncs_type,
+  CK (OB_NOT_NULL(session));
+  OZ (pl_type->deserialize(*(ctx_.schema_guard_), allocator, session, charset, cs_type, ncs_type,
         tz_info, data, reinterpret_cast<char *>(param.get_ext()), param_size, param_pos));
   OX (param.set_need_to_check_extend_type(true));
   return ret;
@@ -2171,6 +2276,7 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
 
 int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                                              const uint32_t type,
+                                             sql::ObSQLSessionInfo *session,
                                              const ObCharsetType charset,
                                              const ObCharsetType ncharset,
                                              const ObCollationType cs_type,
@@ -2220,23 +2326,32 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
       {
         MEMCPY(&value, data, sizeof(value));
         data += sizeof(value);
-        if (lib::is_mysql_mode()) {
+        if (lib::is_mysql_mode() || is_complex_element) {
           param.set_double(value);
         } else {
-          char *buf = NULL;
-          int64_t buf_len = 0;
-          number::ObNumber nb;
-          const int64_t alloc_size = OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH;
-          if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to allocate memory", K(ret));
-          } else if (FALSE_IT(buf_len = ob_gcvt_strict(value, OB_GCVT_ARG_DOUBLE, alloc_size,
-                                                      buf, NULL, TRUE/*is_oracle_mode*/,
-                                                      FALSE/*is_binary_double*/, FALSE))) {
-          } else if (OB_FAIL(nb.from_sci_opt(buf, buf_len, allocator))) {
-            LOG_WARN("decode double param to number failed", K(ret));
+          if (OB_ISNULL(session)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("null conn ptr", K(ret));
+          } else if (session->is_support_jdbc_binary_double()) {
+            // for setBinaryDouble
+            param.set_double(value);
           } else {
-            param.set_number(nb);
+            // for setDouble in old jdbc, need convert to number type
+            char *buf = NULL;
+            int64_t buf_len = 0;
+            number::ObNumber nb;
+            const int64_t alloc_size = OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH;
+            if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to allocate memory", K(ret));
+            } else if (FALSE_IT(buf_len = ob_gcvt_strict(value, OB_GCVT_ARG_DOUBLE, alloc_size,
+                                                        buf, NULL, TRUE/*is_oracle_mode*/,
+                                                        FALSE/*is_binary_double*/, FALSE))) {
+            } else if (OB_FAIL(nb.from_sci_opt(buf, buf_len, allocator))) {
+              LOG_WARN("decode double param to number failed", K(ret));
+            } else {
+              param.set_number(nb);
+            }
           }
         }
       }
@@ -2337,7 +2452,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
           param.set_collation_type(ncs_type);
         }
         LOG_DEBUG("recieve Nchar param", K(ret), K(str), K(dst));
-      } else if (ObURowIDType == type) {
+      } else if (MYSQL_TYPE_OB_UROWID == type) {
         // decode bae64 str and get urowid content
         ObURowIDData urowid_data;
         if (OB_FAIL(ObURowIDData::decode2urowid(str.ptr(), str.length(),
@@ -2358,6 +2473,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
             || MYSQL_TYPE_JSON == type
             || MYSQL_TYPE_GEOMETRY == type) {
           int64_t extra_len = 0;
+          bool has_inrow_data = false;
           if (MYSQL_TYPE_ORA_CLOB == type) {
             ObLobLocatorV2 lob(str);
             if (lob.is_lob_locator_v1()) {
@@ -2375,10 +2491,18 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
               if (!lob.is_valid()) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("got invalid ps lob param", K(length), K(lob), K(type), K(cs_type));
-              } // if INROW, does it need to do copy_or_convert_str?
+              } else if (lob.has_inrow_data()) {
+                has_inrow_data = true;
+                int64_t data_len = 0;
+                if (OB_FAIL(lob.get_lob_data_byte_len(data_len))) {
+                  LOG_WARN("fail to get inrow data len", K(ret), K(lob));
+                } else {
+                  extra_len = str.length() - data_len;
+                }
+              }
             }
           }
-          if (is_lob_v1 || MYSQL_TYPE_ORA_CLOB != type) {
+          if (is_lob_v1 || MYSQL_TYPE_ORA_CLOB != type || has_inrow_data) {
             OZ(copy_or_convert_str(allocator,
                                 cur_cs_type,
                                 cs_type,
@@ -2387,11 +2511,13 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                                 extra_len));
           }
           if (OB_SUCC(ret) && MYSQL_TYPE_ORA_CLOB == type) {
-            if (is_lob_v1) {
+            if (is_lob_v1 || has_inrow_data) {
               // copy lob header
               dst.assign_ptr(dst.ptr() - extra_len, dst.length() + extra_len);
               MEMCPY(dst.ptr(), str.ptr(), extra_len);
-              reinterpret_cast<ObLobLocator *>(dst.ptr())->payload_size_ = dst.length() - extra_len;
+              if (OB_FAIL(ObLobLocatorV2::update_payload_size(dst, extra_len, is_lob_v1))) {
+                LOG_WARN("fail to update payload size", K(ret), K(dst), K(extra_len));
+              }
             } else {
               if (OB_FAIL(ob_write_string(allocator, str, dst))) {
                 LOG_WARN("Failed to write str", K(ret));
@@ -2483,16 +2609,22 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                 LOG_WARN("Fail to convert plain lob data to templob",K(ret));
               }
             }
-          } else {
+          } else if (MYSQL_TYPE_STRING == type
+                     || MYSQL_TYPE_VARCHAR == type
+                     || MYSQL_TYPE_VAR_STRING == type) {
             param.set_collation_type(cs_type);
-            if (is_oracle_mode() && !is_complex_element) {
-              param.set_char(dst);
-            } else {
-              if (is_complex_element && dst.length()== 0) {
+            if (is_complex_element) {
+              if (dst.length()== 0) {
                 param.set_null();
+              } else if (MYSQL_TYPE_STRING == type) {  // ObCharType
+                param.set_char(dst);
               } else {
                 param.set_varchar(dst);
               }
+            } else if (is_oracle_mode()) {
+              param.set_char(dst);
+            } else {
+              param.set_varchar(dst);
             }
           }
         }
@@ -2545,7 +2677,11 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
   ObPieceCache *piece_cache =
       NULL == ctx_.session_info_ ? NULL : ctx_.session_info_->get_piece_cache();
   ObPiece *piece = NULL;
-  if (OB_NOT_NULL(piece_cache) && OB_FAIL(piece_cache->get_piece(stmt_id_, param_id, piece))) {
+  sql::ObSQLSessionInfo *session = ctx_.session_info_;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_NOT_NULL(piece_cache) && OB_FAIL(piece_cache->get_piece(stmt_id_, param_id, piece))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get piece fail.", K(ret));
   } else if (OB_ISNULL(piece_cache) || OB_ISNULL(piece)) {
@@ -2554,6 +2690,15 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
     bool is_null = ObSMUtils::update_from_bitmap(param, bitmap, param_id);
     if (is_null) {
       LOG_DEBUG("param is null", K(param_id), K(param), K(type));
+      if (ob_is_accuracy_length_valid_tc(param.get_param_meta().get_type())) {
+        if (MYSQL_TYPE_OB_NVARCHAR2 == type ||
+            MYSQL_TYPE_OB_NCHAR == type) {
+          const_cast<ObObjMeta &>(param.get_param_meta()).set_collation_type(ncs_type);
+        } else {
+          const_cast<ObObjMeta &>(param.get_param_meta()).set_collation_type(cs_type);
+        }
+        const_cast<ObObjMeta &>(param.get_param_meta()).set_collation_level(CS_LEVEL_COERCIBLE);
+      }
     } else if (OB_UNLIKELY(MYSQL_TYPE_COMPLEX == type)) {
       if (OB_FAIL(parse_complex_param_value(allocator, charset, cs_type, ncs_type,
                                             data, tz_info, type_info,
@@ -2566,18 +2711,19 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         ObPLCursorInfo *cursor = NULL;
         // OZ (ctx_.session_info_->make_cursor(cursor));
         OX (param.set_extend(reinterpret_cast<int64_t>(cursor), PL_CURSOR_TYPE));
-        OX (param.set_param_meta());
+        OX (param.set_param_meta(param.get_meta()));
       }
     } else {
       bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true;
-      if (OB_FAIL(parse_basic_param_value(allocator, type, charset, ncharset, cs_type, ncs_type,
+      if (OB_FAIL(parse_basic_param_value(allocator, type, session, charset, ncharset, cs_type, ncs_type,
                                           data, tz_info, param, false, &analysis_checker_, is_unsigned))) {
         LOG_WARN("failed to parse basic param value", K(ret));
       } else {
-        param.set_param_meta();
-        param.set_length(param.get_val_len());
+        OX (param.set_length(param.get_val_len()));
+        OX (param.set_param_meta(param.get_meta()));
       }
     }
+    OX (param.set_param_meta(param.get_meta()));
   } else if (!support_send_long_data(type)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("this type is not support send long data.", K(type), K(ret));
@@ -2652,7 +2798,11 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         }
       }
     } else {
-      if (OB_FAIL(str_buf.prepare_allocate(count))) {
+      sql::ObSQLSessionInfo *session = ctx_.session_info_;
+      if (OB_ISNULL(session)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session is null", K(ret));
+      } else if (OB_FAIL(str_buf.prepare_allocate(count))) {
         LOG_WARN("prepare fail.");
       } else if (OB_FAIL(piece_cache->get_buffer(stmt_id_,
                                                   param_id,
@@ -2673,7 +2823,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         } else {
           const char* src = tmp;
           bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true;
-          if (OB_FAIL(parse_basic_param_value(allocator, type, charset, ncharset, cs_type, ncs_type,
+          if (OB_FAIL(parse_basic_param_value(allocator, type, session, charset, ncharset, cs_type, ncs_type,
                                               src, tz_info, param, false, NULL ,is_unsigned))) {
             LOG_WARN("failed to parse basic param value", K(ret));
           } else {
@@ -2683,6 +2833,35 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         }
         piece->get_allocator()->free(tmp);
       }
+    }
+  }
+  // set length semantics
+  if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+    const ObLengthSemantics default_length_semantics = ctx_.session_info_->get_actual_nls_length_semantics();
+    if (MYSQL_TYPE_OB_NVARCHAR2 == type || MYSQL_TYPE_VAR_STRING == type ||
+                MYSQL_TYPE_OB_NCHAR == type || MYSQL_TYPE_VARCHAR == type ||
+                MYSQL_TYPE_STRING == type) {
+      if (length == 0) {
+        param.set_length_semantics(default_length_semantics);
+      } else {
+        ObLengthSemantics length_semantics = LS_DEFAULT;
+        if ((MYSQL_TYPE_OB_NVARCHAR2 == type || MYSQL_TYPE_VAR_STRING == type || MYSQL_TYPE_OB_NCHAR == type)) {
+          length_semantics = LS_CHAR;
+        } else {
+          length_semantics = default_length_semantics;
+        }
+        if (is_oracle_byte_length(true, length_semantics)
+            && MYSQL_TYPE_OB_NVARCHAR2 != type
+            && MYSQL_TYPE_VAR_STRING != type
+            && MYSQL_TYPE_OB_NCHAR != type) {
+          param.set_length_semantics(LS_BYTE);
+        } else {
+          param.set_length_semantics(LS_CHAR);
+        }
+      }
+    } else if (type == MYSQL_TYPE_NEWDECIMAL && param.get_scale() == -1) {
+      // is number, and scale is -1 (-1 is the result after reset)
+      param.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
     }
   }
   return ret;
@@ -3061,6 +3240,7 @@ int ObMPStmtExecute::parse_oracle_interval_ds_value(const char *&data, ObObj &pa
     if (OB_FAIL(ObTimeConverter::decode_interval_ds(data, length, value, scale))) {
       LOG_WARN("fail to decode interval day to second", K(ret), K(length));
     } else {
+      data += length;
       param.set_interval_ds(value);
       param.set_scale(scale);
     }
@@ -3082,6 +3262,7 @@ int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &pa
     if (OB_FAIL(ObTimeConverter::decode_interval_ym(data, length, value, scale))) {
       LOG_WARN("fail to decode interval year to month", K(ret), K(length));
     } else {
+      data += length;
       param.set_interval_ym(value);
       param.set_scale(scale);
     }
@@ -3090,12 +3271,20 @@ int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &pa
   return ret;
 }
 
-void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_time) const
+void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_time,
+                                  const sql::ObSQLSessionInfo& session,
+                                  const int64_t ret,
+                                  const ObMySQLResultSet &result) const
 {
 #define ADD_STMT_STAT(type)                     \
   case stmt::T_##type:                          \
-    EVENT_INC(SQL_##type##_COUNT);              \
-    EVENT_ADD(SQL_##type##_TIME, time_cost);    \
+    if (!session.get_is_in_retry()) {           \
+      EVENT_INC(SQL_##type##_COUNT);            \
+      if (OB_SUCCESS != ret) {                  \
+        EVENT_INC(SQL_FAIL_COUNT);              \
+      }                                         \
+      EVENT_ADD(SQL_##type##_TIME, time_cost);  \
+    }                                           \
     break
   if (lib::is_diagnose_info_enabled()) {
     const int64_t time_cost = end_time - get_receive_timestamp();
@@ -3107,9 +3296,34 @@ void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_t
         ADD_STMT_STAT(REPLACE);
         ADD_STMT_STAT(UPDATE);
         ADD_STMT_STAT(DELETE);
+        case stmt::T_END_TRANS:
+        if (result.is_commit_cmd()) {
+          EVENT_ADD(SQL_COMMIT_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_COMMIT_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
+        } else if (result.is_rollback_cmd()) {
+          EVENT_ADD(SQL_ROLLBACK_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_ROLLBACK_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
+        }
+        break;
+
         default: {
-          EVENT_INC(SQL_OTHER_COUNT);
           EVENT_ADD(SQL_OTHER_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_OTHER_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
         }
       }
     }
@@ -3117,7 +3331,7 @@ void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_t
 #undef ADD_STMT_STAT
 }
 
-int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbmsCursorInfo &cursor)
+int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObPsCursorInfo &cursor)
 {
   int ret = OB_SUCCESS;
   ObSyncPlanDriver drv(gctx_,
@@ -3127,7 +3341,13 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbms
                            *this,
                            false,
                            OB_INVALID_COUNT);
-  if (0 == cursor.get_field_columns().count()) {
+  const common::ColumnsFieldArray *fields = NULL;
+  if (OB_FAIL(cursor.get_field_columns(fields))) {
+    LOG_WARN("fail to get field columns", K(ret));
+  } else if (OB_ISNULL(fields)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fields is null", K(ret));
+  } else if (0 == fields->count()) {
     // SELECT * INTO OUTFILE return null field, and only response ok packet
     ObOKPParam ok_param;
     ok_param.affected_rows_ = 0;
@@ -3136,13 +3356,125 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbms
     if (OB_FAIL(send_ok_packet(session, ok_param))) {
       LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
     }
-  } else {
-    if (OB_FAIL(drv.response_query_header(cursor.get_field_columns(),
-                                          false,
-                                          false,
-                                          true))) {
-      LOG_WARN("fail to get autocommit", K(ret));
+  } else if (OB_FAIL(drv.response_query_header(*fields,
+                                               false,
+                                               false,
+                                               true))) {
+    LOG_WARN("fail to get autocommit", K(ret));
+  }
+  return ret;
+}
+
+int ObMPStmtExecute::ps_cursor_open(ObSQLSessionInfo &session,
+                                    sql::ObSqlCtx &ctx,
+                                    ObMySQLResultSet &result,
+                                    ParamStore &params,
+                                    ObPsCursorInfo *&cursor,
+                                    int64_t stmt_id,
+                                    bool &need_response_error,
+                                    bool enable_perf_event)
+{
+  int ret = OB_SUCCESS;
+  ps_cursor_has_destroy_ = false;
+  if (OB_FAIL(session.make_ps_cursor(cursor, params, ctx.cur_sql_, stmt_id))) {
+    LOG_WARN("make ps cursor failed", K(ret));
+  } else if (OB_ISNULL(cursor)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor is null", K(ret), K(stmt_id));
+  } else if (OB_ISNULL(cursor->get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor allocator is null", K(ret), K(stmt_id));
+  } else if (is_execute_ps_cursor()) {
+    if (OB_SUCCESS != ret || enable_perf_event) {
+      set_exec_start_timestamp(ObTimeUtility::current_time());
+      if (OB_NOT_NULL(result.get_physical_plan())) {
+        result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp_);
+      }
+      session.reset_plsql_exec_time();
     }
+  }
+  if (is_prexecute_ps_cursor()) {
+    set_exec_start_timestamp(ObTimeUtility::current_time());
+    if (OB_NOT_NULL(result.get_physical_plan())) {
+      result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp_);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObPLExecCtx *pl_ctx = NULL;
+    if (OB_ISNULL(pl_ctx = static_cast<ObPLExecCtx *>(cursor->get_allocator()->alloc(sizeof(ObPLExecCtx))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc pl_ctx", K(ret));
+    } else {
+      new(pl_ctx) ObPLExecCtx(cursor->get_allocator(), cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
+                              NULL/*result*/, &ret, NULL/*func*/, true);
+      cursor->set_exec_ctx(pl_ctx);
+      if (
+#ifdef ERRSIM
+        OB_FAIL(common::EventTable::COM_STMT_PREXECUTE_PS_CURSOR_OPEN_ERROR) ||
+#endif
+        OB_FAIL(ObSPIService::ps_cursor_open(pl_ctx, *cursor))) {
+        LOG_WARN("prexecute cursor open fail.", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+        if (!THIS_WORKER.need_retry()) {
+          int cli_ret = OB_SUCCESS;
+          retry_ctrl_.test_and_save_retry_state(
+            gctx_, ctx, result, ret, cli_ret, is_arraybinding_ /*ararybinding only local retry*/);
+          if (OB_ERR_PROXY_REROUTE == ret) {
+            LOG_DEBUG("run stmt_query failed, check if need retry",
+                      K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
+          } else {
+            LOG_WARN("run stmt_query failed, check if need retry",
+                      K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
+          }
+          ret = cli_ret;
+        }
+        if (OB_ERR_PROXY_REROUTE == ret && !is_arraybinding_) {
+          need_response_error = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMPStmtExecute::ps_cursor_store_data(ObSQLSessionInfo &session, int64_t pre_store_size)
+{
+  int ret = OB_SUCCESS;
+  ObPLCursorInfo *pl_cursor = NULL;
+  ObPsCursorInfo *ps_cursor = NULL;
+  if (OB_ISNULL(pl_cursor = session.get_cursor(stmt_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pl_cursor is NULL", K(ret), K(stmt_id_));
+  } else if (OB_ISNULL(ps_cursor = dynamic_cast<ObPsCursorInfo *>(pl_cursor))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ps_cursor is NULL", K(ret), K(stmt_id_), KPC(pl_cursor));
+  } else if (ps_cursor->is_for_update()
+             || !ps_cursor->is_async()) {
+    // do nothing
+    // ps cursor has fill data when open cursor
+  } else if (is_prexecute_ps_cursor()
+             && !ps_cursor->is_async()
+             && pre_store_size == 0) {
+    // do nothing
+    // if `pre_store_size == 0`, sync cursor has fill data when open cursor
+  } else if (OB_FAIL(ObSPIService::fill_ps_cursor(session, *ps_cursor, pre_store_size))) {
+    LOG_WARN("fill ps cursor failed", K(ret), K(ps_cursor));
+  }
+  // Don't log cursor info, cursor may have been destroyed reached here
+  LOG_INFO("ps cursor store data end", K(ret), K(session.get_server_sid()), K(session.get_effective_tenant_id()));
+  return ret;
+}
+
+int ObMPStmtExecute::is_async_cursor(ObSQLSessionInfo &session, bool &is_async)
+{
+  int ret = OB_SUCCESS;
+  ObPLCursorInfo *pl_cursor = NULL;
+  if (OB_ISNULL(pl_cursor = session.get_cursor(stmt_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pl_cursor is NULL", K(ret), K(stmt_id_));
+  } else {
+    is_async = (static_cast<ObPsCursorInfo *>(pl_cursor))->is_async();
   }
   return ret;
 }

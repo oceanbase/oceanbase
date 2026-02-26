@@ -93,7 +93,7 @@ namespace observer
                     "where partition_id = -1 or partition_id = table_id) ts " \
                     "on a.table_id = ts.table_id " \
                     "and a.tenant_id = ts.tenant_id " \
-                    "and a.table_type in (0, 1, 2, 3, 4, 14) " \
+                    "where a.table_type in (0, 1, 2, 3, 4, 14) " \
                     "and b.database_name != '__recyclebin' " \
                     "and b.in_recyclebin = 0 " \
                     "and 0 = sys_privilege_check('table_acc', effective_tenant_id(), b.database_name, a.table_name) "
@@ -150,9 +150,10 @@ namespace observer
                     "where partition_id = -1 or partition_id = table_id) ts " \
                     "on a.table_id = ts.table_id " \
                     "and a.tenant_id = ts.tenant_id " \
-                    "and a.table_type in (0, 1, 2, 3, 4, 14) " \
+                    "where a.table_type in (0, 1, 2, 3, 4, 14) " \
                     "and b.database_name != '__recyclebin' " \
-                    "and b.in_recyclebin = 0 "
+                    "and b.in_recyclebin = 0 " \
+                    "and (a.database_id = USERENV('SCHEMAID') or USER_CAN_ACCESS_OBJ(1, a.table_id, a.database_id)=1)"
 
 
 class ObTenantAllTables : public common::ObVirtualTableIterator

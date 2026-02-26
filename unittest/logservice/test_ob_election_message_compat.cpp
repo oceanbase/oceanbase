@@ -9,25 +9,12 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
 #define private public
 #define protected public
-#include "lib/list/ob_dlist.h"
-#include "logservice/palf/election/interface/election_msg_handler.h"
 #include <algorithm>
-#include <chrono>
-#include "logservice/palf/election/interface/election.h"
-#include "logservice/palf/log_meta_info.h"
 #define UNITTEST
-#include "logservice/palf/election/utils/election_common_define.h"
-#include "logservice/palf/election/algorithm/election_impl.h"
 #include "logservice/leader_coordinator/election_priority_impl/election_priority_impl.h"
-#include "share/ob_occam_timer.h"
-#include "share/rc/ob_tenant_base.h"
 #include "mock_logservice_container/mock_election_user.h"
-#include <iostream>
-#include <vector>
 
 using namespace oceanbase::obrpc;
 using namespace std;

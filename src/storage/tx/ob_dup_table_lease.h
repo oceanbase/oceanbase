@@ -277,7 +277,7 @@ private:
   };
 
 private:
-  SpinRWLock lease_lock_;
+  TCRWLock lease_lock_;
 
   share::ObLSID ls_id_;
   bool is_master_;

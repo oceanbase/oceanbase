@@ -39,12 +39,6 @@ struct ObOptSystemStatHandle
 
   ObOptSystemStatHandle()
     : stat_(nullptr), cache_(nullptr), handle_() {}
-  ObOptSystemStatHandle(const ObOptSystemStatHandle &other)
-  {
-    if (this != &other) {
-      *this = other;
-    }
-  }
   ~ObOptSystemStatHandle()
   {
     stat_ = nullptr;

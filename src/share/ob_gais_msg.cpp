@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_define.h"
-#include "share/ob_gais_msg.h"
+#include "ob_gais_msg.h"
 #include "share/ob_gais_rpc.h"
 
 namespace oceanbase

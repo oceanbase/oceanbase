@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tx_storage/ob_ls_map.h"
 
-#include "lib/ob_errno.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_handle.h"
+#include "ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::share;

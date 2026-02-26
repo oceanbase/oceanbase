@@ -54,7 +54,7 @@ public:
   const char* buffer_ptr() const { return inner_buffer_.ptr(); }
   int64_t buffer_size() const { return inner_buffer_.size(); }
 
-  int align_write_postion(char *data_ptr, int64_t data_byte_len, int64_t &byte_len, int64_t &char_len);
+  int align_write_postion(const char *data_ptr, const int64_t data_byte_len, const int64_t max_byte_can_write, int64_t &byte_len, int64_t &char_len);
 
   int to_lob_meta_info(ObLobMetaInfo &meta_info) const;
 

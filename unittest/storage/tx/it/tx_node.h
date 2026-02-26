@@ -12,6 +12,7 @@
 
 #ifndef OCEANBASE_TRANSACTION_TEST_TX_NODE_DEFINE_
 #define OCEANBASE_TRANSACTION_TEST_TX_NODE_DEFINE_
+#include <sstream>
 #define private public
 #define protected public
 #include "lib/objectpool/ob_server_object_pool.h"
@@ -29,7 +30,7 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/lock/ob_scond.h"
-#include "storage/tx_storage/ob_ls_map.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 #include "../mock_utils/msg_bus.h"
 #include "../mock_utils/basic_fake_define.h"
@@ -142,7 +143,7 @@ public:
 
 public:
   TO_STRING_KV(KP(this), K(addr_), K_(ls_id), K(msg_queue_.size()));
-  ObString get_identifer_str() const;
+  ObString get_identifer_str();
   ObTxDescGuard get_tx_guard();
   // the simple r/w interface
   int read(ObTxDesc &tx, const int64_t key, int64_t &value, const ObTxIsolationLevel iso = ObTxIsolationLevel::RC);
@@ -280,7 +281,7 @@ public:
   void wait_all_msg_consumed();
   void wait_tx_log_synced();
 public:
-  ObString name_; char name_buf_[32];
+  ObString name_; char name_buf_[MAX_IP_PORT_LENGTH];
   ObAddr addr_;
   ObLSID ls_id_;
   int64_t tenant_id_;
@@ -313,10 +314,10 @@ public:
   ObTabletMemtableMgr fake_memtable_mgr_;
   ObOptStatMonitorManager fake_opt_stat_mgr_;
   ObLockWaitMgr fake_lock_wait_mgr_;
-  storage::ObLS mock_ls_; // TODO mock required member on LS
+  ObLSService ls_service_;
   common::hash::ObHashSet<int16_t> drop_msg_type_set_;
-  ObLSMap fake_ls_map_;
   std::function<int(int,void *)> extra_msg_handler_;
+  char buf_[256];
 };
 
 } // transaction

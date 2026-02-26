@@ -34,6 +34,8 @@ public:
   const common::ObString &get_role_name() const { return role_name_; }
   void set_password(const common::ObString &password) { password_ = password; }
   const common::ObString &get_password() const { return password_; }
+  void set_plugin(const common::ObString &plugin) { plugin_ = plugin; }
+  const common::ObString &get_plugin() const { return plugin_; }
   void set_need_enc(bool need_enc) { need_enc_ = need_enc; }
   bool get_need_enc() const { return need_enc_; }
   void set_masked_sql(const common::ObString &masked_sql) { masked_sql_ = masked_sql; }
@@ -50,6 +52,7 @@ private:
   uint64_t tenant_id_;
   common::ObString role_name_; 
   common::ObString password_;
+  common::ObString plugin_;
   bool need_enc_;
   common::ObString masked_sql_;
   obrpc::ObCreateRoleArg create_role_arg_;

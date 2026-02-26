@@ -13,19 +13,7 @@
 #define USING_LOG_PREFIX TRANS
 
 #include "ob_trans_define.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
-#include "ob_trans_part_ctx.h"
-#include "storage/memtable/ob_memtable_interface.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
-#include "ob_trans_service.h"
 #include "observer/ob_server.h"
-#include "lib/profile/ob_trace_id.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "share/ob_define.h"
-#include "ob_tx_log.h"
 
 namespace oceanbase
 {
@@ -361,7 +349,7 @@ bool ObTransTask::ready_to_handle()
       ob_usleep(RETRY_SLEEP_TIME_US);
       boot_ret = false;
     } else {
-      ob_usleep(left_time);
+      ob_usleep(static_cast<uint32_t>(left_time));
       boot_ret = true;
       next_handle_ts_ += retry_interval_us_;
     }
@@ -939,6 +927,20 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     dli_batch_set_  // FARM COMPAT WHITELIST
                     );
 
+void ObMulSourceDataNotifyArg::reset()
+{
+  tx_id_.reset();
+  scn_.reset();
+  trans_version_.reset();
+  for_replay_ = false;
+  notify_type_ = NotifyType::ON_ABORT;
+  redo_submitted_ = false;
+  redo_synced_ = false;
+  willing_to_commit_ = false;
+  is_force_kill_ = false;
+  is_incomplete_replay_ = false;
+}
+
 bool ObMulSourceDataNotifyArg::is_redo_submitted() const { return redo_submitted_; }
 
 bool ObMulSourceDataNotifyArg::is_redo_confirmed() const
@@ -994,7 +996,9 @@ int RollbackMaskSet::merge_part(const share::ObLSID add_ls_id, const int64_t exe
         break;
       }
     }
-    if (!is_exist && OB_FAIL(rollback_parts_->push_back(ObTxExecPart(add_ls_id, exec_epoch, transfer_epoch)))) {
+    if (!is_exist && OB_FAIL(rollback_parts_->push_back(ObTxExecPart(add_ls_id,
+                                                                     exec_epoch,
+                                                                     transfer_epoch)))) {
       TRANS_LOG(WARN, "push part to array failed", KR(ret), K(add_ls_id));
     }
   }
@@ -1003,6 +1007,7 @@ int RollbackMaskSet::merge_part(const share::ObLSID add_ls_id, const int64_t exe
 
 int RollbackMaskSet::find_part(const share::ObLSID ls_id,
                                const int64_t orig_epoch,
+                               const int64_t transfer_epoch,
                                ObTxExecPart &part)
 {
   int ret = OB_SUCCESS;
@@ -1018,6 +1023,8 @@ int RollbackMaskSet::find_part(const share::ObLSID ls_id,
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "check rollback part failed", K(ret), K(rollback_parts_), K(orig_epoch));
         } else {
+          rollback_parts_->at(idx).transfer_epoch_ =
+            MAX(transfer_epoch, rollback_parts_->at(idx).transfer_epoch_);
           part = rollback_parts_->at(idx);
           is_exist = true;
         }
@@ -1029,7 +1036,7 @@ int RollbackMaskSet::find_part(const share::ObLSID ls_id,
     ret = OB_ENTRY_NOT_EXIST;
   }
   if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "find part", K(ret), K(ls_id), K(orig_epoch), K(rollback_parts_));
+    TRANS_LOG(WARN, "find part", K(ret), K(ls_id), K(orig_epoch), K(rollback_parts_), K(transfer_epoch));
   }
   return ret;
 }

@@ -11,8 +11,6 @@
  */
 
 #include "log_meta_entry_header.h"
-#include "lib/oblog/ob_log_module.h"      // LOG*
-#include "lib/checksum/ob_crc64.h"        // ob_crc64
 #include "lib/utility/utility.h"          // FALSE_IT
 
 namespace oceanbase
@@ -55,8 +53,7 @@ bool LogMetaEntryHeader::is_valid() const
 {
   return MAGIC == magic_
          && LOG_META_ENTRY_HEADER_VERSION == version_
-         && 0 != data_len_
-         && 0 != header_checksum_;
+         && 0 != data_len_;
 }
 
 void LogMetaEntryHeader::reset()

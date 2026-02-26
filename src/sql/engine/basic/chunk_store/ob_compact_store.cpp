@@ -11,11 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/basic/chunk_store/ob_compact_store.h"
-#include "sql/engine/basic/chunk_store/ob_block_ireader.h"
-#include "sql/engine/basic/chunk_store/ob_default_block_writer.h"
-#include "sql/engine/basic/chunk_store/ob_default_block_reader.h"
-#include "sql/engine/basic/chunk_store/ob_compact_block_reader.h"
+#include "ob_compact_store.h"
 #include "sql/engine/basic/chunk_store/ob_compact_block_writer.h"
 #include "storage/ddl/ob_direct_load_struct.h"
 
@@ -382,6 +378,7 @@ int ObCompactStore::init(const int64_t mem_limit,
 {
   int ret = OB_SUCCESS;
   inited_ = true;
+  ObTempBlockStore::set_inner_allocator_attr(ObMemAttr(tenant_id, "CompactStore"));
   OZ(row_meta_.init(col_array, row_extra_size));
   OZ(ObTempBlockStore::init(mem_limit, enable_dump, tenant_id, mem_ctx_id, label, compress_type, enable_trunc));
   OZ(block_reader_.init(this));

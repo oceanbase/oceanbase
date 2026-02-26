@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "lib/xml/ob_xml_util.h"
-#include "lib/xml/ob_multi_mode_interface.h"
 #include "lib/xml/ob_xml_parser.h"
-#include "lib/xml/ob_xml_tree.h"
-#include "lib/xml/ob_xml_bin.h"
-#include "lib/alloc/malloc_hook.h"
 
 namespace oceanbase {
 namespace common {
@@ -1544,5 +1540,25 @@ int ObXmlUtil::restore_ns_vec(ObNsSortedVector* element_ns_vec, ObVector<ObNsPai
   return ret;
 }
 
+template <typename T, typename... Args>
+ObXmlNode* ObXmlUtil::clone_new_node(ObIAllocator* allocator, Args &&... args)
+{
+  void *buf = allocator->alloc(sizeof(T));
+  T *new_node = NULL;
+
+  if (OB_ISNULL(buf)) {
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for ObXmlNode");
+  } else {
+    new_node = new(buf)T(std::forward<Args>(args)...);
+  }
+
+  return static_cast<ObXmlNode *>(new_node);
+
+}
+
+template ObXmlNode* ObXmlUtil::clone_new_node<ObXmlText, ObMulModeNodeType, ObMulModeMemCtx*&>(ObIAllocator*, ObMulModeNodeType&&, ObMulModeMemCtx*&);
+template ObXmlNode* ObXmlUtil::clone_new_node<ObXmlAttribute, ObMulModeNodeType, ObMulModeMemCtx*&>(ObIAllocator*, ObMulModeNodeType&&, ObMulModeMemCtx*&);
+template ObXmlNode* ObXmlUtil::clone_new_node<ObXmlElement, ObMulModeNodeType, ObMulModeMemCtx*&>(ObIAllocator*, ObMulModeNodeType&&, ObMulModeMemCtx*&);
+template ObXmlNode* ObXmlUtil::clone_new_node<ObXmlDocument, ObMulModeNodeType, ObMulModeMemCtx*&>(ObIAllocator*, ObMulModeNodeType&&, ObMulModeMemCtx*&);
 } // namespace common
 } // namespace oceanbase

@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "lib/oblog/ob_log_module.h"
 #include "ob_schema_store.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 

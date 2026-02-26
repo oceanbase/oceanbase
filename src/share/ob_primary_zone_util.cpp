@@ -13,14 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_primary_zone_util.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_part_mgr_util.h"
 #include "rootserver/ob_root_utils.h"
-#include "rootserver/ob_zone_manager.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -46,9 +39,9 @@ int ObPrimaryZoneUtil::init(
              "zone list count", zone_list.count(), KP(zone_region_list_));
   } else {
     int64_t len = strlen(primary_zone_.ptr());
-    if (common::MAX_ZONE_LENGTH < len) {
+    if (common::MAX_ZONE_LIST_LENGTH < len) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
+      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_list_length", MAX_ZONE_LIST_LENGTH);
     } else {
       MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
       primary_zone_str_[len] = '\0';
@@ -85,9 +78,9 @@ int ObPrimaryZoneUtil::init(
              "zone list count", zone_list.count(), KP(zone_region_list_));
   } else {
     int64_t len = strlen(primary_zone_.ptr());
-    if (common::MAX_ZONE_LENGTH < len) {
+    if (common::MAX_ZONE_LIST_LENGTH < len) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
+      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_list_length", MAX_ZONE_LIST_LENGTH);
     } else {
       MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
       primary_zone_str_[len] = '\0';
@@ -117,9 +110,9 @@ int ObPrimaryZoneUtil::init()
     LOG_WARN("invalid argument", K(ret), K(primary_zone_), KP(zone_region_list_));
   } else {
     int64_t len = strlen(primary_zone_.ptr());
-    if (common::MAX_ZONE_LENGTH < len) {
+    if (common::MAX_ZONE_LIST_LENGTH < len) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
+      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_list_length", MAX_ZONE_LIST_LENGTH);
     } else {
       MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
       primary_zone_str_[len] = '\0';
@@ -179,7 +172,7 @@ int ObPrimaryZoneUtil::construct_zone_array()
         LOG_WARN("fail to push back", K(ret));
       } else {} // no more
     }
-    std::sort(tmp_zone_array.begin(), tmp_zone_array.end());
+    lib::ob_sort(tmp_zone_array.begin(), tmp_zone_array.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_zone_array.count() - 1; ++i) {
       if (tmp_zone_array.at(i) == tmp_zone_array.at(i + 1)) {
         ret = OB_INVALID_ARGUMENT;
@@ -445,7 +438,7 @@ int ObPrimaryZoneUtil::update_region_score()
     LOG_WARN("zone region list null", K(ret), KP(zone_region_list_));
   } else {
     RegionScoreCmp region_score_cmp;
-    std::sort(normalized_zone_array_.begin(), normalized_zone_array_.end(), region_score_cmp);
+    lib::ob_sort(normalized_zone_array_.begin(), normalized_zone_array_.end(), region_score_cmp);
     ObRegion last_region;
     int64_t last_region_score = INT64_MAX;
     for (int64_t i = 0; i < normalized_zone_array_.count() && OB_SUCC(ret); ++i) {
@@ -465,7 +458,7 @@ int ObPrimaryZoneUtil::construct_full_zone_array()
   int ret = OB_SUCCESS;
   // sorted by region_score,zone_score,zone, the zone priority is determined by now
   FinalCmp final_cmp;
-  std::sort(normalized_zone_array_.begin(), normalized_zone_array_.end(), final_cmp);
+  lib::ob_sort(normalized_zone_array_.begin(), normalized_zone_array_.end(), final_cmp);
   if (OB_UNLIKELY(normalized_zone_array_.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cannot construct full zone array", K(ret),
@@ -629,6 +622,48 @@ int ObPrimaryZoneUtil::get_tenant_primary_zone_array(
   return ret;
 }
 
+// Divide tenant primary zone into multi level primary zone array.
+// eg. primary_zone string is 'z1,z2;z3,z4', then output multi_level_primary_zone_array is {{z1,z2}, {z3,z4}}
+int ObPrimaryZoneUtil::get_tenant_multi_level_primary_zone_array(
+      const share::schema::ObTenantSchema &tenant_schema,
+      common::ObIArray<common::ObArray<common::ObZone>> &multi_level_primary_zone_array)
+{
+  int ret = OB_SUCCESS;
+  common::ObSEArray<share::schema::ObZoneScore, DEFAULT_ZONE_COUNT> zone_score_list;
+  ObArenaAllocator allocator("PrimaryZone");
+  ObPrimaryZone primary_zone_schema(allocator);
+  ObArray<share::ObZoneReplicaAttrSet> zone_locality;
+  if (OB_UNLIKELY(!tenant_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant schema is invalid", KR(ret), K(tenant_schema));
+  } else if (OB_FAIL(get_tenant_primary_zone_score(tenant_schema,
+          primary_zone_schema, zone_locality, zone_score_list))) {
+    LOG_WARN("failed to get tenant primary zone score", KR(ret), K(tenant_schema));
+  } else {
+    int64_t last_score = -1;
+    common::ObArray<common::ObZone> tmp_zone_array;
+    ARRAY_FOREACH(zone_score_list, i) {
+      const share::schema::ObZoneScore &zone_score = zone_score_list.at(i);
+      if (0 == i) {
+        last_score = zone_score.score_;
+      } else if (zone_score.score_ != last_score) {
+        if (OB_FAIL(multi_level_primary_zone_array.push_back(tmp_zone_array))) {
+          LOG_WARN("failed to push back", KR(ret), K(tmp_zone_array));
+        }
+        tmp_zone_array.reuse();
+        last_score = zone_score.score_;
+      }
+      if (FAILEDx(tmp_zone_array.push_back(zone_score.zone_))) {
+        LOG_WARN("failed to push back", KR(ret), K(zone_score));
+      }
+    }
+    if (FAILEDx(multi_level_primary_zone_array.push_back(tmp_zone_array))) {
+      LOG_WARN("failed to push back", KR(ret), K(tmp_zone_array));
+    }
+  }
+  return ret;
+}
+
 int ObPrimaryZoneUtil::get_tenant_primary_zone_score(
       const share::schema::ObTenantSchema &tenant_schema,
       share::schema::ObPrimaryZone &primary_zone_schema,
@@ -640,7 +675,7 @@ int ObPrimaryZoneUtil::get_tenant_primary_zone_score(
   share::schema::ObSchemaGetterGuard guard;
   ObArray<share::schema::ObZoneRegion> zone_region_list;
   common::ObSEArray<common::ObZone, DEFAULT_ZONE_COUNT> zone_list;
-  ObZone primary_zone_str;
+  SMART_VAR(ObPriZone, primary_zone_str) {
   if (OB_UNLIKELY(!tenant_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant schema is invalid", KR(ret), K(tenant_schema));
@@ -661,6 +696,7 @@ int ObPrimaryZoneUtil::get_tenant_primary_zone_score(
                  primary_zone_str))) {
     LOG_WARN("fail to generate integrated primary zone str", K(ret));
   }
+  } // end smart var
   return ret;
 }
 
@@ -723,7 +759,7 @@ int ObPrimaryZoneUtil::get_tenant_zone_priority(
 {
   int ret = OB_SUCCESS;
   common::ObSEArray<share::schema::ObZoneScore, DEFAULT_ZONE_COUNT> zone_score_array;
-  ObZone primary_zone_str;
+  SMART_VAR(ObPriZone, primary_zone_str) {
   ObArenaAllocator allocator("PrimaryZone");
   ObPrimaryZone primary_zone_schema(allocator);
   ObArray<share::ObZoneReplicaAttrSet> zone_locality;
@@ -738,6 +774,7 @@ int ObPrimaryZoneUtil::get_tenant_zone_priority(
   } else if (OB_FAIL(zone_priority.assign(primary_zone_str.str()))) {
     LOG_WARN("failed to assign zone priority", KR(ret), K(primary_zone_str));
   }
+  } // end smart var
   return ret;
 
 }
@@ -746,7 +783,7 @@ int ObPrimaryZoneUtil::convert_random_primary_zone_into_integrated(
     const common::ObIArray<common::ObZone> &zone_list,
     const common::ObIArray<share::ObZoneReplicaAttrSet> &zone_locality,
     common::ObIArray<share::schema::ObZoneScore> &zone_score_list,
-    common::ObZone &primary_zone_str)
+    common::ObPriZone &primary_zone_str)
 {
   int ret = OB_SUCCESS;
   primary_zone_str.reset();
@@ -776,11 +813,11 @@ int ObPrimaryZoneUtil::convert_random_primary_zone_into_integrated(
 
 int ObPrimaryZoneUtil::do_generate_integrated_primary_zone_str(
     const common::ObIArray<share::schema::ObZoneScore> &zone_score_array,
-    common::ObZone &primary_zone_str)
+    common::ObPriZone &primary_zone_str)
 {
   int ret = OB_SUCCESS;
-  char zone_str[MAX_ZONE_LENGTH];
-  MEMSET(zone_str, 0, MAX_ZONE_LENGTH);
+  SMART_VAR(char[MAX_ZONE_LIST_LENGTH], zone_str) {
+  MEMSET(zone_str, 0, MAX_ZONE_LIST_LENGTH);
   if (zone_score_array.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), "array num", zone_score_array.count());
@@ -793,10 +830,10 @@ int ObPrimaryZoneUtil::do_generate_integrated_primary_zone_str(
       const ObZoneScore &cur_zone_score = zone_score_array.at(i);
       const bool same_p = (cur_zone_score.score_ == prev_zone_score);
       separator_token = (same_p ? "," : ";");
-      if (OB_FAIL(databuff_printf(zone_str, MAX_ZONE_LENGTH, pos,
+      if (OB_FAIL(databuff_printf(zone_str, MAX_ZONE_LIST_LENGTH, pos,
               "%s", (!start_format ? "" : separator_token)))) {
         LOG_WARN("fail to format separator", K(ret));
-      } else if (OB_FAIL(databuff_printf(zone_str, MAX_ZONE_LENGTH, pos, "%.*s",
+      } else if (OB_FAIL(databuff_printf(zone_str, MAX_ZONE_LIST_LENGTH, pos, "%.*s",
               static_cast<int32_t>(cur_zone_score.zone_.length()),
               cur_zone_score.zone_.ptr()))) {
         LOG_WARN("fail to format zone", K(ret));
@@ -811,6 +848,7 @@ int ObPrimaryZoneUtil::do_generate_integrated_primary_zone_str(
       }
     }
   }
+  } // end smart var
   return ret;
 }
 
@@ -819,7 +857,7 @@ int ObPrimaryZoneUtil::convert_normal_primary_zone_into_integrated(
     const common::ObIArray<common::ObZone> &zone_list,
     const common::ObIArray<share::ObZoneReplicaAttrSet> &zone_locality,
     common::ObIArray<share::schema::ObZoneScore> &zone_score_list,
-    common::ObZone &primary_zone_str)
+    common::ObPriZone &primary_zone_str)
 {
   int ret = OB_SUCCESS;
   primary_zone_str.reset();
@@ -860,7 +898,7 @@ int ObPrimaryZoneUtil::generate_integrated_primary_zone_str(
     const common::ObIArray<common::ObZone> &zone_list,
     const common::ObIArray<share::ObZoneReplicaNumSet> &zone_locality,
     common::ObIArray<share::schema::ObZoneScore> &zone_score_list,
-    common::ObZone &primary_zone_str)
+    common::ObPriZone &primary_zone_str)
 {
   int ret = OB_SUCCESS;
   primary_zone_str.reset();

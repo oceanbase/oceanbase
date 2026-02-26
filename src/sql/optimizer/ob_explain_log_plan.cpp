@@ -11,13 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "lib/json/ob_json.h"
 #include "sql/optimizer/ob_explain_log_plan.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
 #include "sql/optimizer/ob_log_values.h"
 #include "sql/code_generator/ob_code_generator.h"
-#include "sql/monitor/ob_sql_plan.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -54,6 +50,8 @@ int ObExplainLogPlan::generate_normal_raw_plan()
       LOG_ERROR("failed to create log plan for explain stmt");
     } else if (OB_FAIL(child_plan->generate_plan())) {
       LOG_WARN("failed to generate plan tree for explain", K(ret));
+    } else if (OB_FAIL(remove_duplicate_constraints())) {
+      LOG_WARN("failed to remove duplicate constraints for explain", K(ret));
     } else if (OB_FAIL(check_explain_generate_plan_with_outline(child_plan))) {
       LOG_WARN("failed to check generate plan with outline for explain", K(ret));
     } else if (OB_FAIL(ObCodeGenerator::detect_batch_size(*child_plan, batch_size))) {
@@ -125,10 +123,11 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
   ObSqlCtx *sql_ctx = NULL;
   ObSQLSessionInfo *session_info = NULL;
   const ObExplainStmt *explain_stmt = static_cast<const ObExplainStmt*>(get_stmt());
+  ObQueryCtx *query_ctx = get_optimizer_context().get_query_ctx();
   if (OB_ISNULL(real_plan) || OB_ISNULL(explain_stmt)
       || OB_ISNULL(exec_ctx = get_optimizer_context().get_exec_ctx())
       || OB_ISNULL(session_info = get_optimizer_context().get_session_info())
-      || OB_ISNULL(sql_ctx = exec_ctx->get_sql_ctx())) {
+      || OB_ISNULL(sql_ctx = exec_ctx->get_sql_ctx()) || OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(real_plan), K(explain_stmt), K(session_info), K(exec_ctx), K(sql_ctx));
   } else if (session_info->is_inner() || sql_ctx->is_prepare_protocol_) {
@@ -164,6 +163,9 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
       } else {
         sql_ctx->first_outline_data_.assign_ptr(plan_text.buf_, static_cast<ObString::obstr_size_t>(plan_text.pos_));
         sql_ctx->first_plan_hash_ = real_plan->get_signature();
+        sql_ctx->first_equal_param_cons_cnt_ = query_ctx->all_equal_param_constraints_.count();
+        sql_ctx->first_const_param_cons_cnt_ = query_ctx->all_plan_const_param_constraints_.count();
+        sql_ctx->first_expr_cons_cnt_ = query_ctx->all_expr_constraints_.count();
         ret = OB_SQL_RETRY_SPM;
         LOG_WARN("generate plan again for explain use outline", K(ret));
       }
@@ -187,12 +189,26 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
           ret = OB_OUTLINE_NOT_REPRODUCIBLE;
           LOG_WARN("failed to generate plan use outline", K(sql_ctx->first_outline_data_));
         }
+        if (query_ctx->all_equal_param_constraints_.count() != sql_ctx->first_equal_param_cons_cnt_ ||
+            query_ctx->all_plan_const_param_constraints_.count() != sql_ctx->first_const_param_cons_cnt_ ||
+            query_ctx->all_expr_constraints_.count() != sql_ctx->first_expr_cons_cnt_) {
+          ret = OB_OUTLINE_NOT_REPRODUCIBLE;
+          LOG_WARN("failed to generate plan use outline", K(sql_ctx->first_equal_param_cons_cnt_),
+                                                          K(sql_ctx->first_const_param_cons_cnt_),
+                                                          K(sql_ctx->first_expr_cons_cnt_),
+                                                          K(query_ctx->all_equal_param_constraints_.count()),
+                                                          K(query_ctx->all_plan_const_param_constraints_.count()),
+                                                          K(query_ctx->all_expr_constraints_.count()));
+        }
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to generate plan use outline", K(cur_plan_hash), K(cur_outline_data));
         }
       }
       sql_ctx->first_plan_hash_ = 0;
       sql_ctx->first_outline_data_.reset();
+      sql_ctx->first_equal_param_cons_cnt_ = 0;
+      sql_ctx->first_const_param_cons_cnt_ = 0;
+      sql_ctx->first_expr_cons_cnt_ = 0;
     }
   }
   return ret;

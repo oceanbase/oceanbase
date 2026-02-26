@@ -10,15 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include "ob_log_ls_fetch_mgr.h"
 
-#include "share/ob_errno.h"                     // OB_SUCCESS, ..
 #include "lib/oblog/ob_log_module.h"            // LOG_*
 #include "lib/container/ob_array_iterator.h"
-#include "lib/allocator/ob_mod_define.h"        // ObModIds
 
 #include "ob_log_part_progress_controller.h"    // PartProgressController
 #include "ob_log_fetcher_ls_ctx_factory.h"      // ObILogFetcherLSCtxFactory
@@ -116,7 +113,8 @@ int ObLogLSFetchMgr::add_ls(
     const bool is_loading_data_dict_baseline_data,
     const ClientFetchingMode fetching_mode,
     const ObBackupPathString &archive_dest_str,
-    IObLogErrHandler &err_handler)
+    IObLogErrHandler &err_handler,
+    logservice::ObLogserviceModelInfo &logservice_model_info)
 {
   int ret = OB_SUCCESS;
   LSFetchCtx *ctx = NULL;
@@ -172,7 +170,7 @@ int ObLogLSFetchMgr::add_ls(
     LOG_ERROR("acquire_progress fail", KR(ret), K(start_tstamp_ns));
   // init LSFetchCtx
   } else if (OB_FAIL(ctx->init(tls_id, start_parameters, is_loading_data_dict_baseline_data,
-          progress_id, fetching_mode, archive_dest_str, *ls_ctx_add_info, err_handler))) {
+          progress_id, fetching_mode, archive_dest_str, *ls_ctx_add_info, err_handler, logservice_model_info))) {
     LOG_ERROR("ctx init fail", KR(ret), K(tls_id), K(start_tstamp_ns), K(start_lsn), K(progress_id));
   } else {
     ctx->set_host(*this);
@@ -184,10 +182,12 @@ int ObLogLSFetchMgr::add_ls(
         LOG_ERROR("insert into map fail", KR(ret), K(tls_id), K(ctx));
       }
     } else {
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [LSFetchMgr] [ADD_LS] tls_id=%s start_lsn=%s start_tstamp_ns=%ld(%s) "
           "progress_id=%ld fetch_task=%p ls_ctx_add_info=%p start_parameters=%s",
-          to_cstring(tls_id), to_cstring(start_lsn), start_tstamp_ns, NTS_TO_STR(start_tstamp_ns),
-          progress_id, ctx, ls_ctx_add_info, to_cstring(start_parameters));
+          helper.convert(tls_id), helper.convert(start_lsn), start_tstamp_ns,
+          NTS_TO_STR(start_tstamp_ns), progress_id, ctx, ls_ctx_add_info,
+          helper.convert(start_parameters));
     }
   }
 
@@ -255,9 +255,10 @@ bool ObLogLSFetchMgr::CtxRecycleCond::operator() (const logservice::TenantLSID &
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid part fetch ctx", K(ctx), K(tls_id));
     bool_ret = false;
   } else {
+    ObCStringHelper helper;
     _LOG_INFO("[STAT] [LSFetchMgr] [RECYCLE_LS] tls_id=%s "
         "fetch_task=%p fetch_task=%s",
-        to_cstring(tls_id), ctx, to_cstring(*ctx));
+        helper.convert(tls_id), ctx, helper.convert(*ctx));
 
     // modify partitin status to DISCARDED
     ctx->set_discarded();
@@ -319,9 +320,10 @@ int ObLogLSFetchMgr::remove_ls(const logservice::TenantLSID &tls_id)
       ObILogFetcherLSCtxAddInfo *ptr = fetch_ctx->get_ls_ctx_add_info();
       int64_t progress_id = fetch_ctx->get_progress_id();
 
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [PartFetchMgr] [REMOVE_LS] tls_id=%s progress_id=%ld "
           "fetch_task=%p ls_ctx_add_info=%p fetch_task=%s",
-          to_cstring(tls_id), progress_id, fetch_ctx, ptr, to_cstring(*fetch_ctx));
+          helper.convert(tls_id), progress_id, fetch_ctx, ptr, helper.convert(*fetch_ctx));
 
       // recycle progress id, delete from global progress_controller
       int release_ret = progress_controller_->release_progress(progress_id);

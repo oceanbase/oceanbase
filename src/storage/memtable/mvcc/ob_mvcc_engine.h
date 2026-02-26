@@ -15,6 +15,7 @@
 
 #include "share/ob_define.h"
 #include "storage/memtable/ob_concurrent_control.h"
+#include "storage/memtable/mvcc/ob_mvcc_ctx.h"
 // #include "storage/memtable/ob_memtable_context.h"
 
 namespace oceanbase
@@ -22,6 +23,7 @@ namespace oceanbase
 namespace storage
 {
 struct ObPartitionEst;
+struct ObStoreCtx;
 }
 
 namespace memtable
@@ -44,6 +46,8 @@ class ObMvccScanRange;
 class ObMvccRowIterator;
 class ObMvccTransNode;
 class ObMultiVersionRowIterator;
+class ObMemtableSetArg;
+class ObMemtableKeyGenerator;
 
 // class for concurrent control
 class ObMvccEngine
@@ -56,40 +60,6 @@ public:
                    ObQueryEngine *query_engine,
                    ObMemtable *memtable);
   virtual void destroy();
-public:
-  // Mvcc engine write interface
-
-  // Return the ObMvccRow according to the memtable key or create
-  // the new one if the memtable key is not exist.
-  int create_kv(const ObMemtableKey *key,
-                const bool is_insert,
-                ObMemtableKey *stored_key,
-                ObMvccRow *&value,
-                bool &is_new_add);
-
-  // mvcc_write builds the ObMvccTransNode according to the arg and write
-  // into the head of the value. It will return OB_SUCCESS if successfully written,
-  // OB_TRY_LOCK_ROW_CONFLICT if encountering write-write conflict or
-  // OB_TRANSACTION_SET_VIOLATION if encountering lost update. The interesting
-  // implementation about mvcc_write is located in ob_mvcc_row.cpp/.h
-  int mvcc_write(storage::ObStoreCtx &ctx,
-                 const transaction::ObTxSnapshot &snapshot,
-                 ObMvccRow &value,
-                 const ObTxNodeArg &arg,
-                 ObMvccWriteResult &res);
-
-  // mvcc_undo removes the newly written tx node. It never returns error
-  // and always succeed.
-  void mvcc_undo(ObMvccRow *value);
-
-  // mvcc_replay builds the ObMvccTransNode according to the arg
-  int mvcc_replay(const ObTxNodeArg &arg,
-                  ObMvccReplayResult &res);
-
-  // ensure_kv is used to make sure b-tree is no longer broken by the deleted
-  // row.
-  int ensure_kv(const ObMemtableKey *stored_key,
-                ObMvccRow *value);
 
   // Mvcc engine read interface
   int get(ObMvccAccessCtx &ctx,
@@ -113,19 +83,81 @@ public:
   // also returns tx_id for same txn write and max_trans_version for TSC check
   int check_row_locked(ObMvccAccessCtx &ctx,
                        const ObMemtableKey *key,
-                       storage::ObStoreRowLockState &lock_state,
-                       storage::ObRowState &row_state);
+                       storage::ObStoreRowLockState &lock_state);
   // estimate_scan_row_count estimate the row count for the range
   int estimate_scan_row_count(const transaction::ObTransID &tx_id,
                               const ObMvccScanRange &range,
                               storage::ObPartitionEst &part_est) const;
-private:
-  int try_compact_row_when_mvcc_read_(const share::SCN &snapshot_version,
-                                      ObMvccRow &row);
 
-  int build_tx_node_(const ObTxNodeArg &arg,
-                     ObMvccTransNode *&node);
-private:
+  // Mvcc engine write interface
+
+  // mvcc_undo removes the newly written tx node. It never returns error
+  // and always succeed.
+  void mvcc_undo(ObMvccRow *value);
+  // finish_kv is used to make tx_node visible to outer read
+  void finish_kv(ObMvccWriteResult& res);
+  void finish_kvs(ObMvccWriteResults& results);
+
+
+  // Return the ObMvccRow according to the memtable key or create the new one if
+  // the memtable key is not exist.
+  virtual int create_kv(const ObMemtableKey *key,
+                        const bool no_get_before_set,
+                        ObMemtableKey *stored_key,
+                        ObMvccRow *&value);
+
+  // Return the ObStoreRowkey and ObMvccRow pair according to the memtable key
+  // or create all unexisted ones if some of the memtable key are not exist.
+  virtual int create_kvs(const ObMemtableSetArg &memtable_set_arg,
+                         ObMemtableKeyGenerator &memtable_key_generator,
+                         const bool no_get_before_set,
+                         ObStoredKVs &kvs);
+
+  // ensure_kv is used to make sure b-tree is no longer broken by the deleted
+  // row.
+  virtual int ensure_kv(const ObMemtableKey *stored_key, ObMvccRow *value);
+
+  // mvcc_write builds the ObMvccTransNode according to the arg and write
+  // into the head of the value. It will return OB_SUCCESS if successfully written,
+  // OB_TRY_LOCK_ROW_CONFLICT if encountering write-write conflict or
+  // OB_TRANSACTION_SET_VIOLATION if encountering lost update. The interesting
+  // implementation about mvcc_write is located in ob_mvcc_row.cpp/.h
+  int mvcc_write(storage::ObStoreCtx &ctx,
+                  ObMvccRow &value,
+                  const ObTxNodeArg &arg,
+                  const bool check_exist,
+                  ObMvccWriteResult &res);
+  int mvcc_write(storage::ObStoreCtx &ctx,
+                  ObMvccRow &value,
+                  const ObTxNodeArg &arg,
+                  const bool check_exist,
+                  // preallocated memory for optimization
+                  void *buf,
+                  ObMvccWriteResult &res);
+
+
+  // mvcc_replay builds the ObMvccTransNode according to the arg
+  int mvcc_replay(const ObTxNodeArg &arg, ObMvccReplayResult &res);
+
+
+protected:
+
+  int try_compact_row_when_mvcc_read_(const share::SCN &snapshot_version, ObMvccRow &row);
+
+  int build_tx_node_(const ObTxNodeArg &arg, ObMvccTransNode *&node);
+
+  int init_tx_node_(const ObTxNodeArg &arg, ObMvccTransNode *node);
+
+  // create_kv_ will create the ObMvccRow if it does not exist, otherwise it will return the existing ObMvccRow
+  int create_kv_(const ObMemtableKey *key,
+                 const bool no_get_before_set,
+                 ObMemtableKey *stored_key,
+                 ObMvccRow *&value);
+  virtual int query_engine_get_(const ObMemtableKey *parameter_key,
+                                ObMvccRow *&row,
+                                ObMemtableKey *returned_key);
+
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObMvccEngine);
   bool is_inited_;
   ObMTKVBuilder *kv_builder_;
@@ -133,6 +165,34 @@ private:
   common::ObIAllocator *engine_allocator_;
   ObMemtable *memtable_;
 };
+
+//========================== ObMvccEngineWithoutHashIndex ==========================//
+class ObMvccEngineWithoutHashIndex : public ObMvccEngine
+{
+public:
+  ObMvccEngineWithoutHashIndex();
+  virtual ~ObMvccEngineWithoutHashIndex();
+
+  virtual int create_kv(const ObMemtableKey *key,
+                                 const bool no_get_before_set,
+                                 ObMemtableKey *stored_key,
+                                 ObMvccRow *&value) override;
+  virtual int create_kvs(const ObMemtableSetArg &memtable_set_arg,
+                                  ObMemtableKeyGenerator &memtable_key_generator,
+                                  const bool no_get_before_set,
+                                  ObStoredKVs &kvs) override;
+  virtual int ensure_kv(const ObMemtableKey *stored_key, ObMvccRow *value) override;
+ protected:
+  // create_btree_kv_ will create the ObMvccRow if it does not exist, otherwise it will return the existing ObMvccRow
+  int create_btree_kv_(const ObMemtableKey *key,
+                       ObMemtableKey *stored_key,
+                       ObMvccRow *&value);
+  virtual int query_engine_get_(const ObMemtableKey *parameter_key,
+                                ObMvccRow *&row,
+                                ObMemtableKey *returned_key) override;
+
+};
+
 }
 }
 

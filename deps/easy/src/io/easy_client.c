@@ -1,8 +1,5 @@
+#include "easy_client.h"
 #include "io/easy_io.h"
-#include "io/easy_client.h"
-#include "io/easy_connection.h"
-#include "io/easy_message.h"
-#include "io/easy_ssl.h"
 
 static int easy_client_uthread_wakeup_conn(easy_connection_t *c);
 static int easy_client_uthread_wakeup_session(easy_request_t *r);

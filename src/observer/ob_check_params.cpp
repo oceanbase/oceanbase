@@ -41,23 +41,6 @@ int CheckAllParams::check_all_params(bool strict_check = true)
   return ret;
 }
 
-int CheckAllParams::read_one_int(const char *file_name, int64_t &value)
-{
-  int ret = OB_SUCCESS;
-  FILE *fp = fopen(file_name, "r");
-  if (fp != nullptr) {
-    if (1 != fscanf(fp, "%ld", &value)) {
-      ret = OB_IO_ERROR;
-      LOG_ERROR("Failed to read integer from file", K(ret));
-    }
-    fclose(fp);
-  } else {
-    ret = OB_FILE_NOT_EXIST;
-    LOG_WARN("File does not exist", K(ret));
-  }
-  return ret;
-}
-
 bool CheckAllParams::is_path_valid(const char *file_name)
 {
   return (access(file_name, F_OK) != -1);

@@ -15,13 +15,8 @@
 #define private public
 #define protected public
 
-#include "lib/ob_errno.h"
-#include "lib/allocator/page_arena.h"
-#include "share/config/ob_server_config.h"
 #include "unittest/storage/init_basic_struct.h"
-#include "storage/compaction/ob_medium_compaction_info.h"
 #include "storage/tablet/ob_tablet_mds_data.h"
-#include "storage/tablet/ob_tablet_dumped_medium_info.h"
 #include "src/storage/compaction/ob_medium_list_checker.h"
 
 using namespace oceanbase::common;

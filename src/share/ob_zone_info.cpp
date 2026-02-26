@@ -12,12 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_zone_info.h"
-#include "share/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/ob_storage_format.h"
 #include "share/ob_zone_table_operation.h"
 #include "share/config/ob_server_config.h"
-#include "common/ob_zone_type.h"
 
 namespace oceanbase
 {
@@ -325,6 +322,32 @@ void ObZoneInfo::reset()
   new(this) ObZoneInfo();
 }
 
+int ObZoneInfo::init(
+    const common::ObZone &zone,
+    const common::ObRegion &region,
+    const ObZoneStatus::Status &zone_status,
+    const share::ObZoneInfo::StorageType &storage_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(zone.is_empty()
+               || region.is_empty()
+               || ObZoneStatus::UNKNOWN == zone_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(zone), K(region), K(zone_status));
+  } else if (OB_FAIL(region_.info_.assign(region.ptr()))) {
+    LOG_WARN("fail assign default region info", KR(ret), K(region));
+  } else if (OB_FAIL(status_.info_.assign(ObString(ObZoneStatus::get_status_str(zone_status))))) {
+    LOG_WARN("fail to assign zone status str", KR(ret), K(zone_status));
+  } else if (OB_FAIL(storage_type_.info_.assign(ObString(share::ObZoneInfo::get_storage_type_str(storage_type))))) {
+    LOG_WARN("fail to assign zone storage_type str", KR(ret));
+  } else {
+    zone_ = zone;
+    status_.value_ = zone_status;
+    storage_type_.value_ = storage_type;
+  }
+  return ret;
+}
+
 DEF_TO_STRING(ObZoneInfo)
 {
   int64_t pos = 0;
@@ -354,6 +377,16 @@ int ObZoneInfo::get_region(common::ObRegion &region) const
   return ret;
 }
 
+int ObZoneInfo::get_idc(common::ObIDC &idc) const
+{
+  int ret = OB_SUCCESS;
+  idc.reset();
+  if (OB_FAIL(idc.assign(idc_.info_.ptr()))) {
+    LOG_WARN("get_idc assign failed", K(ret));
+  }
+  return ret;
+}
+
 bool ObGlobalInfo::is_valid() const
 {
   bool is_valid = true;
@@ -368,15 +401,15 @@ const char *ObZoneInfo::get_status_str() const
   return ObZoneStatus::get_status_str(static_cast<ObZoneStatus::Status>(status_.value_));
 }
 
+const char *recovery_status_str_array[] = {"NORMAL", "SUSPEND"};
 const char *ObZoneInfo::get_recovery_status_str(const RecoveryStatus status)
 {
   const char *str = nullptr;
-  const char *str_array[] = {"NORMAL", "SUSPEND"};
-  STATIC_ASSERT(RECOVERY_STATUS_MAX == ARRAYSIZEOF(str_array), "status count mismatch");
+  STATIC_ASSERT(RECOVERY_STATUS_MAX == ARRAYSIZEOF(recovery_status_str_array), "status count mismatch");
   if (status < RECOVERY_STATUS_NORMAL || status >= RECOVERY_STATUS_MAX) {
     str = nullptr;
   } else {
-    str = str_array[status];
+    str = recovery_status_str_array[status];
   }
   return str;
 }
@@ -384,25 +417,24 @@ const char *ObZoneInfo::get_recovery_status_str(const RecoveryStatus status)
 ObZoneInfo::RecoveryStatus ObZoneInfo::get_recovery_status(const char* status_str)
 {
   ObZoneInfo::RecoveryStatus status = RECOVERY_STATUS_MAX;
-  const char *str_array[] = {"NORMAL", "SUSPEND"};
-  STATIC_ASSERT(RECOVERY_STATUS_MAX == ARRAYSIZEOF(str_array), "status count mismatch");
-  for (int64_t i = 0; i < ARRAYSIZEOF(str_array); i++) {
-    if (0 == STRCMP(str_array[i], status_str)) {
+  STATIC_ASSERT(RECOVERY_STATUS_MAX == ARRAYSIZEOF(recovery_status_str_array), "status count mismatch");
+  for (int64_t i = 0; i < ARRAYSIZEOF(recovery_status_str_array); i++) {
+    if (0 == STRCMP(recovery_status_str_array[i], status_str)) {
       status = static_cast<RecoveryStatus>(i);
     }
   }
   return status;
 }
 
+const char *storage_type_str_array[] = {"LOCAL", "SHARED_STORAGE"};
 const char *ObZoneInfo::get_storage_type_str(const ObZoneInfo::StorageType storage_type)
 {
   const char *str = nullptr;
-  const char *str_array[] = {"LOCAL"};
-  STATIC_ASSERT(STORAGE_TYPE_MAX == ARRAYSIZEOF(str_array), "storage type count mismatch");
+  STATIC_ASSERT(STORAGE_TYPE_MAX == ARRAYSIZEOF(storage_type_str_array), "storage type count mismatch");
   if (storage_type < STORAGE_TYPE_LOCAL || storage_type >= STORAGE_TYPE_MAX) {
     str = nullptr;
   } else {
-    str = str_array[storage_type];
+    str = storage_type_str_array[storage_type];
   }
   return str;
 }
@@ -410,10 +442,9 @@ const char *ObZoneInfo::get_storage_type_str(const ObZoneInfo::StorageType stora
 ObZoneInfo::StorageType ObZoneInfo::get_storage_type(const char* storage_type_str)
 {
   ObZoneInfo::StorageType storage_type = STORAGE_TYPE_MAX;
-  const char *str_array[] = {"LOCAL"};
-  STATIC_ASSERT(STORAGE_TYPE_MAX == ARRAYSIZEOF(str_array), "storage type count mismatch");
-  for (int64_t i = 0; i < ARRAYSIZEOF(str_array); i++) {
-    if (0 == STRCMP(str_array[i], storage_type_str)) {
+  STATIC_ASSERT(STORAGE_TYPE_MAX == ARRAYSIZEOF(storage_type_str_array), "storage type count mismatch");
+  for (int64_t i = 0; i < ARRAYSIZEOF(storage_type_str_array); i++) {
+    if (0 == STRCMP(storage_type_str_array[i], storage_type_str)) {
       storage_type = static_cast<StorageType>(i);
     }
   }

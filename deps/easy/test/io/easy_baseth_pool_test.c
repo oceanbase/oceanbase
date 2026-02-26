@@ -1,5 +1,3 @@
-#include "io/easy_baseth_pool.h"
-#include "io/easy_io.h"
 #include "packet/easy_simple_handler.h"
 #include <easy_test.h>
 

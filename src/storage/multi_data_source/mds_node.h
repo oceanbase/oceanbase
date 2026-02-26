@@ -33,6 +33,7 @@
 #include "meta_programming/ob_meta_copy.h"
 #include "mds_table_base.h"
 #include "runtime_utility/mds_factory.h"
+#include "storage/tx/ob_tx_seq.h"
 
 namespace oceanbase
 {
@@ -55,7 +56,7 @@ class MdsCtx;
 struct MdsNodeInfoForVirtualTable
 {
   MdsNodeInfoForVirtualTable()
-  : ls_id_(), tablet_id_(), unit_id_(UINT8_MAX), user_key_(), version_idx_(-1), writer_(), seq_no_(-1), redo_scn_(),
+  : ls_id_(), tablet_id_(), unit_id_(UINT8_MAX), user_key_(), version_idx_(-1), writer_(), seq_no_(), redo_scn_(),
   end_scn_(), trans_version_(), node_type_(MdsNodeType::TYPE_END), state_(TwoPhaseCommitState::STATE_END),
   position_(NodePosition::POSITION_END), user_data_() {}
   share::ObLSID ls_id_;
@@ -64,7 +65,7 @@ struct MdsNodeInfoForVirtualTable
   common::ObStringHolder user_key_;
   int64_t version_idx_;
   MdsWriter writer_;
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
   share::SCN redo_scn_;
   share::SCN end_scn_;
   share::SCN trans_version_;
@@ -109,6 +110,7 @@ public:
   void advance(TwoPhaseCommitState new_stat);
   void set_dumped();
   bool is_dumped() const;
+  WriterType get_writer_type() const;
   TwoPhaseCommitState get_state() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   union Union {
@@ -140,7 +142,8 @@ class MdsNode : public ListNode<MdsNode>
 public:
   MdsNode(MdsNodeType node_type,
           WriterType writer_type,
-          const int64_t writer_id);
+          const int64_t writer_id,
+          const transaction::ObTxSEQ seq_no);
   virtual ~MdsNode() override;
 public:// log sync and two-phase-commit related
   virtual bool try_on_redo(const share::SCN &redo_scn) = 0;
@@ -165,7 +168,7 @@ public:// node states related
 public:
   MdsNodeStatus status_;// include lock state, type state, persisted state and two-phase-commit state
   int64_t writer_id_; // mostly is tx id, and maybe not tx id, depends on writer_type_ in status_;
-  int64_t seq_no_;// not used for now
+  transaction::ObTxSEQ seq_no_;// for order mds nodes in same transaction
   share::SCN redo_scn_; // log scn of redo
   share::SCN end_scn_; // log scn of commit/abort
   share::SCN trans_version_; // read as prepare version if phase is not COMMIT, or read as commit version
@@ -207,7 +210,8 @@ public:
   UserMdsNode(MdsRowBase<K, V> *p_mds_row,
               MdsNodeType node_type,
               WriterType writer_type,
-              const int64_t writer_id);
+              const int64_t writer_id,
+              const transaction::ObTxSEQ seq_no);
   ~UserMdsNode();
   bool operator<(const UserMdsNode<K, V> &rhs) const;
   bool operator==(const UserMdsNode<K, V> &rhs) const;
@@ -221,6 +225,7 @@ public:
   template <int N>
   int fill_event_(observer::MdsEvent &mds_event, const char (&event)[N], char *buffer, const int64_t len) const;
   MdsNodeType get_node_type() const;
+  int assign(const UserMdsNode<K, V> &rhs);
 public:// do user action if there has define, in transaction phase point
   bool try_on_redo(const share::SCN &redo_scn) override;
   void on_redo_(const share::SCN &redo_scn);
@@ -250,6 +255,7 @@ public:// conditional compile
   template <typename DATA_TYPE = V, ENABLE_IF_HAS_ON_ABORT(DATA_TYPE)>
   void on_user_data_abort_(const share::SCN abort_scn) { user_data_.on_abort(abort_scn); }
 public:
+  void advance_mds_table_max_aborted_scn_(const share::SCN &scn);
   bool is_valid_scn_(const share::SCN &scn) const;
   bool has_valid_link_back_ptr_() const;
   MdsRowBase<K, V> *p_mds_row_;

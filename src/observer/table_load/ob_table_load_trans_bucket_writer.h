@@ -37,23 +37,21 @@ public:
   int advance_sequence_no(int32_t session_id, uint64_t sequence_no, ObTableLoadMutexGuard &guard);
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, table::ObTableLoadObjRowArray &obj_rows);
-  int flush(int32_t session_id);
-public:
-  void set_is_flush() { is_flush_ = true; }
-  bool is_flush() const { return is_flush_; }
-  int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
-  int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
-  int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
+  int flush(int32_t session_id, bool &is_finished);
 private:
   class SessionContext;
   int init_session_ctx_array();
   int handle_partition_with_autoinc_identity(SessionContext &session_ctx,
                                              table::ObTableLoadObjRowArray &obj_rows,
                                              const uint64_t &sql_mode, int32_t session_id);
-  int handle_autoinc_column(blocksstable::ObStorageDatum &datum, const ObObjTypeClass &tc,
-                            int32_t session_id, const uint64_t &sql_mode);
+  int handle_autoinc_column(const share::schema::ObColumnSchemaV2 *column_schema,
+                            const common::ObObj &obj,
+                            common::ObObj &out_obj,
+                            int32_t session_id,
+                            const uint64_t &sql_mode);
   int handle_identity_column(const share::schema::ObColumnSchemaV2 *column_schema,
-                             blocksstable::ObStorageDatum &datum,
+                             const common::ObObj &obj,
+                             common::ObObj &out_obj,
                              common::ObArenaAllocator &cast_allocator);
   // 非分区表
   int write_for_non_partitioned(SessionContext &session_ctx,
@@ -65,11 +63,14 @@ private:
                       ObTableLoadBucket *&load_bucket);
   int write_load_bucket(SessionContext &session_ctx, ObTableLoadBucket *load_bucket);
 private:
+  static const int64_t WRITE_ROW_SIZE = 2LL * 1024 * 1024;
   ObTableLoadTransCtx *const trans_ctx_;
   ObTableLoadCoordinatorCtx *const coordinator_ctx_;
   const ObTableLoadParam &param_;
   common::ObArenaAllocator allocator_;
   bool is_partitioned_;
+  int64_t column_count_;
+  common::ObCastMode cast_mode_;
   struct SessionContext
   {
     SessionContext();
@@ -89,8 +90,8 @@ private:
     uint64_t last_receive_sequence_no_;
   };
   SessionContext *session_ctx_array_;
-  int64_t ref_count_ CACHE_ALIGNED;
-  bool is_flush_;
+  int64_t session_count_;
+  int64_t flush_count_ CACHE_ALIGNED;
   bool is_inited_;
 };
 

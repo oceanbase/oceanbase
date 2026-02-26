@@ -11,7 +11,6 @@
  */
 
 #include "ob_log_rpc_req.h"
-#include "logservice/palf/log_define.h"
 
 namespace oceanbase
 {
@@ -33,7 +32,8 @@ LogConfigChangeCmd::LogConfigChangeCmd()
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
     config_version_(),
     added_list_(),
-    removed_list_() { }
+    removed_list_(),
+    new_member_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -55,7 +55,8 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
     config_version_(),
     added_list_(),
-    removed_list_() { }
+    removed_list_(),
+    new_member_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -77,7 +78,8 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
     config_version_(),
     added_list_(),
-    removed_list_() { }
+    removed_list_(),
+    new_member_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(const common::ObAddr &src,
                                        const int64_t palf_id,
@@ -96,7 +98,8 @@ LogConfigChangeCmd::LogConfigChangeCmd(const common::ObAddr &src,
       lock_owner_(lock_owner),
       config_version_(),
       added_list_(),
-      removed_list_() { }
+      removed_list_(),
+      new_member_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -117,7 +120,29 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
     config_version_(),
     added_list_(added_list),
-    removed_list_(removed_list) { }
+    removed_list_(removed_list),
+    new_member_list_() { }
+
+LogConfigChangeCmd::LogConfigChangeCmd(const common::ObAddr &src,
+                                       const int64_t palf_id,
+                                       const common::ObMemberList &new_member_list,
+                                       const int64_t new_replica_num,
+                                       const LogConfigChangeCmdType cmd_type,
+                                       const int64_t timeout_us)
+  : src_(src),
+    palf_id_(palf_id),
+    added_member_(),
+    removed_member_(),
+    curr_member_list_(),
+    curr_replica_num_(0),
+    new_replica_num_(new_replica_num),
+    cmd_type_(cmd_type),
+    timeout_us_(timeout_us),
+    lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+    config_version_(),
+    added_list_(),
+    removed_list_(),
+    new_member_list_(new_member_list) { }
 
 LogConfigChangeCmd::~LogConfigChangeCmd()
 {
@@ -145,6 +170,8 @@ bool LogConfigChangeCmd::is_valid() const
       (palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER != lock_owner_) : true);
   bool_ret = bool_ret && ((REPLACE_LEARNERS_CMD == cmd_type_)? (added_list_.is_valid()    \
       && removed_list_.is_valid()): true);
+  bool_ret = bool_ret && ((FORCE_SET_MEMBER_LIST_CMD == cmd_type_) ? (new_member_list_.is_valid()  \
+      && new_replica_num_ == new_member_list_.get_member_number()) : true);
   return bool_ret;
 }
 
@@ -175,7 +202,8 @@ bool LogConfigChangeCmd::is_set_new_replica_num() const
   return ADD_MEMBER_CMD == cmd_type_
         || REMOVE_MEMBER_CMD == cmd_type_
         || SWITCH_TO_LEARNER_CMD == cmd_type_
-        || SWITCH_TO_ACCEPTOR_CMD == cmd_type_;
+        || SWITCH_TO_ACCEPTOR_CMD == cmd_type_
+        || FORCE_SET_MEMBER_LIST_CMD == cmd_type_;
 }
 
 void LogConfigChangeCmd::reset()
@@ -193,6 +221,7 @@ void LogConfigChangeCmd::reset()
   config_version_.reset();
   added_list_.reset();
   removed_list_.reset();
+  new_member_list_.reset();
 }
 
 OB_SERIALIZE_MEMBER(LogConfigChangeCmd, src_, palf_id_, added_member_, removed_member_,
@@ -407,6 +436,125 @@ void LogFlashbackMsg::reset()
 OB_SERIALIZE_MEMBER(LogFlashbackMsg, src_tenant_id_, src_, ls_id_,
     mode_version_, flashback_scn_, is_flashback_req_);
 // ============= LogFlashbackMsg end =============
+// ============= LogProbeRsReq start =============
+LogProbeRsReq::LogProbeRsReq() : src_() {}
 
+LogProbeRsReq::LogProbeRsReq(const common::ObAddr src) : src_(src) {}
+
+bool LogProbeRsReq::is_valid() const
+{
+  return src_.is_valid();
+}
+
+void LogProbeRsReq::reset()
+{
+  src_.reset();
+}
+
+OB_SERIALIZE_MEMBER(LogProbeRsReq, src_);
+// ============= LogProbeRsReq end =============
+// ============= LogProbeRsResp start =============
+LogProbeRsResp::LogProbeRsResp() : ret_(OB_MAX_ERROR_CODE) {}
+
+bool LogProbeRsResp::is_valid() const
+{
+  return OB_MAX_ERROR_CODE != ret_;
+}
+
+void LogProbeRsResp::reset()
+{
+  ret_ = OB_MAX_ERROR_CODE;
+}
+
+OB_SERIALIZE_MEMBER(LogProbeRsResp, ret_);
+// ============= LogProbeRsResp end =============
+
+// ============= LogGetCkptReq begin ===========
+LogGetCkptReq::LogGetCkptReq(
+    const common::ObAddr &src,
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id)
+  : src_(src),
+    tenant_id_(tenant_id),
+    ls_id_(ls_id) { }
+
+LogGetCkptReq::~LogGetCkptReq()
+{
+  reset();
+}
+
+bool LogGetCkptReq::is_valid() const
+{
+  return src_.is_valid() && OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid();
+}
+
+void LogGetCkptReq::reset()
+{
+  src_.reset();
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+}
+OB_SERIALIZE_MEMBER(LogGetCkptReq, src_, tenant_id_, ls_id_);
+// ============= LogGetCkptReq end =============
+
+// ============= LogGetCkptResp begin ===========
+LogGetCkptResp::LogGetCkptResp(
+    const share::SCN &scn,
+    const palf::LSN &lsn)
+  : ckpt_scn_(scn),
+    ckpt_lsn_(lsn) { }
+
+LogGetCkptResp::~LogGetCkptResp()
+{
+  reset();
+}
+
+bool LogGetCkptResp::is_valid() const
+{
+  return ckpt_scn_.is_valid() && ckpt_lsn_.is_valid();
+}
+
+void LogGetCkptResp::reset()
+{
+  ckpt_scn_.reset();
+  ckpt_lsn_.reset();
+}
+
+OB_SERIALIZE_MEMBER(LogGetCkptResp, ckpt_scn_, ckpt_lsn_);
+// ============= LogGetCkptResp end =============
+
+// ================= LogSyncBaseLSNReq start ================
+LogSyncBaseLSNReq::LogSyncBaseLSNReq()
+{
+  reset();
+}
+
+LogSyncBaseLSNReq::~LogSyncBaseLSNReq()
+{
+  reset();
+}
+
+LogSyncBaseLSNReq::LogSyncBaseLSNReq(const common::ObAddr &src,
+                                     const share::ObLSID &id,
+                                     const palf::LSN &base_lsn)
+  : src_(src), ls_id_(id), base_lsn_(base_lsn)
+{
+}
+
+bool LogSyncBaseLSNReq::is_valid() const
+{
+  return (src_.is_valid() &&ls_id_.is_valid() && base_lsn_.is_valid());
+}
+
+void LogSyncBaseLSNReq::reset()
+{
+  src_.reset();
+  ls_id_.reset();
+  base_lsn_.reset();
+}
+
+OB_SERIALIZE_MEMBER(LogSyncBaseLSNReq, src_, ls_id_, base_lsn_);
+
+// ================= LogSyncBaseLSNReq end ================
 } // end namespace logservice
 }// end namespace oceanbase

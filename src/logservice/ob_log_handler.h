@@ -18,8 +18,11 @@
 #include "common/ob_role.h"
 #include "common/ob_member_list.h"
 #include "share/ob_delegate.h"
+#include "ipalf/ipalf_handle.h"
+#include "ipalf/ipalf_iterator.h"
 #include "palf/palf_handle.h"
 #include "palf/palf_base_info.h"
+#include "palf/palf_iterator.h"
 #include "logrpc/ob_log_rpc_proxy.h"
 #include "logrpc/ob_log_request_handler.h"
 #include "ob_log_handler_base.h"
@@ -28,6 +31,9 @@
 #include "logservice/ob_log_compression.h"
 #endif
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "close_modules/shared_log_service/logservice/libpalf/libpalf_proposer_config_mgr.h"
+#endif
 
 namespace oceanbase
 {
@@ -100,7 +106,6 @@ public:
   virtual int get_append_mode_initial_scn(SCN &ref_scn) const = 0;
   virtual int seek(const palf::LSN &lsn, palf::PalfBufferIterator &iter) = 0;
   virtual int seek(const palf::LSN &lsn, palf::PalfGroupBufferIterator &iter) = 0;
-  virtual int seek(const share::SCN &scn, palf::PalfGroupBufferIterator &iter) = 0;
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
                                       const int64_t paxos_replica_num,
                                       const common::GlobalLearnerList &learner_list) = 0;
@@ -123,12 +128,18 @@ public:
 
   virtual int get_max_scn(share::SCN &scn) const = 0;
   virtual int get_end_scn(share::SCN &scn) const = 0;
-  virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
+  virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_replica = false) const = 0;
   virtual int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                      int64_t &paxos_replica_num,
-                                                     common::GlobalLearnerList &learner_list) const = 0;
+                                                     common::GlobalLearnerList &learner_list,
+                                                     const bool &filter_logonly_replica = false) const = 0;
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_leader_config_version(palf::LogConfigVersion &config_version) const = 0;
+  virtual int get_stable_membership(palf::LogConfigVersion &config_version,
+                                    common::ObMemberList &member_list,
+                                    int64_t &paxos_replica_num,
+                                    common::GlobalLearnerList &learner_list,
+                                    const bool &filter_logonly_replica = false) const = 0;
   //  get leader from election, used only for non_palf_leader rebuilding.
   virtual int get_election_leader(common::ObAddr &addr) const = 0;
   virtual int get_parent(common::ObAddr &parent) const = 0;
@@ -137,6 +148,9 @@ public:
                                  const int64_t new_replica_num,
                                  const int64_t timeout_us) = 0;
   virtual int force_set_as_single_replica() = 0;
+  virtual int force_set_as_single_replica(const palf::LogConfigVersion &config_version, const int64_t timeout_us) = 0;
+  virtual int force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num) = 0;
+  virtual int inc_config_version(int64_t timeout_us) = 0;
   virtual int add_member(const common::ObMember &member,
                          const int64_t paxos_replica_num,
                          const palf::LogConfigVersion &config_version,
@@ -188,6 +202,7 @@ public:
   virtual int enable_replay(const palf::LSN &initial_lsn, const share::SCN &initial_scn) = 0;
   virtual int disable_replay() = 0;
   virtual int get_max_decided_scn(share::SCN &scn) = 0;
+  virtual int get_max_decided_scn_snapshot(share::SCN &scn, const bool is_force_refresh) = 0;
   virtual int pend_submit_replay_log() = 0;
   virtual int restore_submit_replay_log() = 0;
   virtual bool is_replay_enabled() const = 0;
@@ -196,8 +211,9 @@ public:
   virtual int register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb) = 0;
   virtual int unregister_rebuild_cb() = 0;
   virtual int offline() = 0;
-  virtual int online(const palf::LSN &lsn, const share::SCN &scn) = 0;
+  virtual int online(const palf::LSN &lsn, const share::SCN &scn, const bool is_logonly_replica = false) = 0;
   virtual bool is_offline() const = 0;
+  virtual int is_replay_fatal_error(bool &has_fatal_error) = 0;
 };
 
 class ObLogHandler : public ObILogHandler, public ObLogHandlerBase
@@ -211,7 +227,7 @@ public:
            ObLogApplyService *apply_service,
            ObLogReplayService *replay_service,
            ObRoleChangeService *rc_service,
-           palf::PalfEnv *palf_env,
+           ipalf::IPalfEnv *palf_env,
            palf::PalfLocationCacheCb *lc_cb,
            obrpc::ObLogServiceRpcProxy *rpc_proxy,
            common::ObILogAllocator *alloc_mgr);
@@ -313,21 +329,73 @@ public:
                          const palf::AccessMode &access_mode,
                          const share::SCN &ref_scn) override final;
 
-  // @brief alloc PalfBufferIterator, this iterator will get something append by caller.
-  // @param[in] const LSN &, the start lsn of iterator.
-  // @param[out] PalfBufferIterator &.
+  // @desc: seek a log buffer iterator by lsn, the first log A in iterator must meet
+  //        the start lsn of log A must equal to 'start_lsn'.
+  // @params [in] start_lsn:
+  // @params [out] iter: buffer iterator in which all logs's lsn are higher to 'start_lsn'
+  //                    (include 'start_lsn').
+  // @return
+  // - OB_SUCCESS
+  // - OB_INVALID_ARGUMENT
+  // - OB_ALLOCATE_MEMORY_FAILED
+  // - OB_ENTRY_NOT_EXIST: there is no log's lsn is higher than lsn
+  // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
+  // - others: bug
   int seek(const palf::LSN &lsn,
            palf::PalfBufferIterator &iter) override final;
-  // @brief alloc PalfGroupBufferIterator, this iterator will get get group entry generated by palf.
-  // @param[in] const LSN &, the start lsn of iterator.
-  // @param[out] PalfGroupBufferIterator &.
+
+  // @desc: seek a log group buffer iterator by lsn, the first log A in iterator must meet
+  //        the start lsn of log A must equal to 'start_lsn'.
+  // @params [in] start_lsn:
+  // @params [out] iter: buffer iterator in which all logs's lsn are higher to 'start_lsn'
+  //                    (include 'start_lsn').
+  // @return
+  // - OB_SUCCESS
+  // - OB_INVALID_ARGUMENT
+  // - OB_ALLOCATE_MEMORY_FAILED
+  // - OB_ENTRY_NOT_EXIST: there is no log's lsn is higher than lsn
+  // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
+  // - others: bug
   int seek(const palf::LSN &lsn,
            palf::PalfGroupBufferIterator &iter) override final;
-  // @brief alloc PalfBufferIterator, this iterator will get something append by caller.
-  // @param[in] const int64_t, the start ts of iterator.
-  // @param[out] PalfBufferIterator &, scn of first log in this iterator must be higher than/equal to start_scn.
-  int seek(const share::SCN &scn,
-           palf::PalfGroupBufferIterator &iter) override final;
+
+  // @desc: seek a log group buffer iterator by scn, the first A in iterator must meet
+  // one of the following conditions:
+  // 1. scn of log A equals to scn
+  // 2. scn of log A is higher than scn and A is the first log which scn is higher
+  // than scn in all committed logs
+  // Note that this function may be time-consuming
+  // @params [in] scn:
+  // @params [out] group_iterator: log group buffer iterator in which all logs's scn are higher than/equal to
+  //                     scn
+  // @return
+  // - OB_SUCCESS
+  // - OB_INVALID_ARGUMENT
+  // - OB_ALLOCATE_MEMORY_FAILED
+  // - OB_ENTRY_NOT_EXIST: there is no log's scn is higher than scn
+  // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
+  // - others: bug
+  int seek(const SCN &scn,
+           palf::PalfGroupBufferIterator &buff_iterator);
+  // @desc: seek a log buffer iterator by scn, the first A in iterator must meet
+  // one of the following conditions:
+  // 1. scn of log A equals to scn
+  // 2. scn of log A is higher than scn and A is the first log which scn is higher
+  // than scn in all committed logs
+  // Note that this function may be time-consuming
+  // @params [in] scn:
+  // @params [out] buff_iterator: log buffer iterator in which all logs's scn are higher than/equal to
+  //                     scn
+  // @return
+  // - OB_SUCCESS
+  // - OB_INVALID_ARGUMENT
+  // - OB_ALLOCATE_MEMORY_FAILED
+  // - OB_ENTRY_NOT_EXIST: there is no log's scn is higher than scn
+  // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
+  // - others: bug
+  int seek(const SCN &scn,
+           palf::PalfBufferIterator &buff_iterator);
+
   // @brief set the initial member list of paxos group
   // @param[in] ObMemberList, the initial member list
   // @param[in] int64_t, the paxos relica num
@@ -412,17 +480,33 @@ public:
   // @brief, get paxos member list of this paxos group
   // @param[out] common::ObMemberList&
   // @param[out] int64_t&
-  int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const override final;
+  int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_replica = false) const override final;
   // @brief, get paxos member list and global list of this paxos group atomically
   // @param[out] common::ObMemberList&
   // @param[out] int64_t&
   // @param[out] common::GlobalLearnerList&
   int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                              int64_t &paxos_replica_num,
-                                             common::GlobalLearnerList &learner_list) const override final;
+                                             common::GlobalLearnerList &learner_list,
+                                             const bool &filter_logonly_replica = false) const override final;
   // @brief, get global learner list of this paxos group
   // @param[out] common::GlobalLearnerList&
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
+  // @brief, get stable membership info from the leader
+  // @param[out] palf::LogConfigVersion&
+  // @param[out] common::ObMemberList&
+  // @param[out] int64_t&
+  // @param[out] common::GlobalLearnerList&
+  // retval:
+  //   OB_SUCCESS
+  //   OB_NOT_INIT
+  //   OB_EAGAIN: the leader is changing memberlist, try again
+  //   OB_NOT_RUNNING: the replica is offlined
+  int get_stable_membership(palf::LogConfigVersion &config_version,
+                            common::ObMemberList &member_list,
+                            int64_t &paxos_replica_num,
+                            common::GlobalLearnerList &learner_list,
+                            const bool &filter_logonly_replica = false) const override final;
   // @brief, get leader from election, used only for non_palf_leader rebuilding
   // @param[out] addr: address of leader
   // retval:
@@ -450,6 +534,8 @@ public:
   // So if advance_base_info returns OB_SUCCESS, that means log sync and replay_status have been disabled.
   int advance_base_info(const palf::PalfBaseInfo &palf_base_info, const bool is_rebuild) override final;
   // check if palf is in sync state or need rebuild
+  // in SN, we compare follower's log_sync_scn with leader's log_sync_scn.
+  // in SS, we compare follower's replayed_scn with leader's log_sync_scn, because follower has no log_sync_scn.
   // @param [out] is_log_sync: if the log of this replica is sync with leader's,
   //    - false: leader's max_scn  - local max_scn > 3s + keepalive_interval
   //    - true:  leader's max_scn  - local max_scn < 3s + keepalive_interval
@@ -494,6 +580,20 @@ public:
   // - OB_TIMEOUT: change_replica_num timeout
   // - other: bug
   virtual int force_set_as_single_replica() override final;
+  virtual int force_set_as_single_replica(const palf::LogConfigVersion &config_version, const int64_t timeout_us) override final;
+  // @brief: force set member list.
+  // @param[in] const common::ObMemberList &new_member_list: members which will be set forcely
+  // @param[in] const int64_t new_replica_num: replica number of paxos group after forcing to set member list
+  // @return
+  // - OB_SUCCESS: force_set_member_list successfully
+  // - OB_TIMEOUT: force_set_member_list timeout
+  // - OB_NOT_RUNNING: log stream is stopped
+  // - OB_INVALID_ARGUMENT: invalid argument
+  // - other: bug
+  virtual int force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num) override final;
+  // increment member info config version
+  // update porposer_id if proposal_id in member info is not latest, otherwise inc config_seq in member_info
+  virtual int inc_config_version(int64_t timeout_us) override final;
   // @brief, add a member to paxos group, can be called in any member
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t paxos_replica_num: replica number of paxos group after adding 'member'
@@ -729,6 +829,14 @@ public:
   // OB_STATE_NOT_MATCH: ls is offline or stopped
   // OB_SUCCESS
   int get_max_decided_scn(share::SCN &scn) override final;
+  // @brief, just for check dup tablet readable, get max decided scn considering both apply and replay, priority use snapshot.
+  // @param[out] int64_t&, max decided scn.
+  // @param[in] const bool is_force_refresh: whether to force refresh the snapshot.
+  // @return
+  // OB_NOT_INIT: not inited
+  // OB_STATE_NOT_MATCH: ls is offline or stopped
+  // OB_SUCCESS
+  int get_max_decided_scn_snapshot(share::SCN &scn, const bool is_force_refresh) override final;
   // @brief: store a persistent flag which means this paxos replica  can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.
   // @param[in] need_check_log_missing: for rebuildinng caused by log missing, need check whether log
@@ -747,12 +855,38 @@ public:
   int unregister_rebuild_cb() override final;
   int diagnose(LogHandlerDiagnoseInfo &diagnose_info) const;
   int diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const;
-
-  TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_env_), K(is_in_stop_state_), K(is_inited_), K(id_));
+  TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_handle_), KP(palf_env_), K(is_in_stop_state_), K(is_inited_), K(id_));
   int offline() override final;
-  int online(const palf::LSN &lsn, const share::SCN &scn) override final;
+  int online(const palf::LSN &lsn, const share::SCN &scn, const bool is_logonly_replica = false) override final;
   bool is_offline() const override final;
-private:
+  // @brief: check there's a fatal error in replay service.
+  // @param[out] has_fatal_error.
+  // @return:
+  // OB_NOT_INIT: not inited
+  // OB_NOT_RUNNING: in stop state
+  // OB_EAGAIN: try lock failed, need retry.
+  int is_replay_fatal_error(bool &has_fatal_error);
+  int handle_config_change_cmd_rpc(
+      const LogConfigChangeCmd &req,
+      LogConfigChangeCmdResp &resp);
+  int stat(palf::PalfStat &palf_stat) const;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  void refresh_proposer_member_info() const;
+  // @brief: whether election is allowed with ignoring proposer list.
+  // @return:
+  // OB_NOT_INIT: not inited
+  // OB_NOT_RUNNING: in stop state
+  // OB_ERR_UNEXPECTED: ffi is null
+  // OB_INVALID_ARGUMENT: ffi is invalid
+  int set_allow_election_without_memlist(const bool allow_election_without_memlist);
+#endif
+  template<typename StartPoint, typename IteratorType>
+  friend int init_log_iterator(
+    ObLogHandler *log_handler,
+    const StartPoint &start_point,
+    const int64_t suggested_max_read_buf_size,
+    IteratorType &iterator);
+
   static constexpr int64_t MIN_CONN_TIMEOUT_US = 5 * 1000 * 1000;     // 5s
   const int64_t MAX_APPEND_RETRY_INTERNAL = 500 * 1000L;
   typedef common::TCRWLock::RLockGuardWithTimeout RLockGuardWithTimeout;
@@ -762,6 +896,9 @@ private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
   int submit_config_change_cmd_(const LogConfigChangeCmd &req,
                                 LogConfigChangeCmdResp &resp);
+  int handle_config_change_cmd_(
+      const LogConfigChangeCmd &req,
+      LogConfigChangeCmdResp &resp);
 
   int append_(const void *buffer,
               const int64_t nbytes,
@@ -776,6 +913,15 @@ private:
   int create_arb_member_(const common::ObMember &arb_member, const int64_t timeout_us);
   int delete_arb_member_(const common::ObMember &arb_member, const int64_t timeout_us);
 #endif
+  template<typename StartPoint, typename IteratorType>
+  int seek_log_iterator_dispatch_(const StartPoint &start_point,
+                                  const int64_t suggested_max_read_buf_size,
+                                  IteratorType &iterator);
+  template <class StartPoint>
+  int seek_log_iterator_dispatch_(const StartPoint &start_point,
+                                  const int64_t suggested_read_buf_size,
+                                  ipalf::IPalfIterator<ipalf::ILogEntry> &iterator);
+  int advance_base_lsn_impl_(const palf::LSN &lsn);
   DISALLOW_COPY_AND_ASSIGN(ObLogHandler);
 private:
   common::ObAddr self_;
@@ -794,7 +940,11 @@ private:
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
   ObLogCompressorWrapper compressor_wrapper_;
 #endif
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  libpalf::LibPalfProposerConfigMgr libpalf_proposer_config_mgr_;
+#endif
   mutable int64_t get_max_decided_scn_debug_time_;
+  mutable SCN max_decided_scn_snapshot_;
 };
 
 struct ObLogStat
@@ -812,6 +962,169 @@ public:
   bool in_sync_;
   TO_STRING_KV(K_(palf_stat), K_(in_sync))
 };
+
+
+// =============================== Iterator begin ===========================
+struct LogDestroyIteratorStorageFunctor {
+  LogDestroyIteratorStorageFunctor(ipalf::IPalfEnv *palf_env,
+                                   ipalf::IPalfHandle *palf_handle)
+  : palf_env_(palf_env), palf_handle_(palf_handle) {}
+  ~LogDestroyIteratorStorageFunctor() {}
+  LogDestroyIteratorStorageFunctor(const LogDestroyIteratorStorageFunctor &rhs)
+  {
+    operator=(rhs);
+  }
+  LogDestroyIteratorStorageFunctor(LogDestroyIteratorStorageFunctor &&rhs) = delete;
+  LogDestroyIteratorStorageFunctor& operator=(const LogDestroyIteratorStorageFunctor &rhs)
+  {
+    if (*this == rhs) {
+      return *this;
+    }
+    palf_env_ = rhs.palf_env_;
+    palf_handle_ = rhs.palf_handle_;
+    return *this;
+  }
+  LogDestroyIteratorStorageFunctor& operator=(LogDestroyIteratorStorageFunctor &&rhs) = delete;
+  bool operator==(const LogDestroyIteratorStorageFunctor &rhs) const
+  {
+    return this->palf_env_ == rhs.palf_env_ && this->palf_handle_ == rhs.palf_handle_;
+  }
+  void operator()()
+  {
+    if (OB_NOT_NULL(palf_env_) && OB_NOT_NULL(palf_handle_)) {
+      palf_env_->close(palf_handle_);
+      CLOG_LOG(TRACE, "close palf handle success", KP(palf_env_), K(palf_handle_));
+    } else if (OB_ISNULL(palf_env_) && OB_NOT_NULL(palf_handle_)) {
+      int ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(WARN, "palf env is null, but palf handle is not null", KP(palf_env_), K(palf_handle_));
+    }
+    palf_env_ = NULL;
+  }
+  ipalf::IPalfEnv *palf_env_;
+  ipalf::IPalfHandle *palf_handle_;
+};
+
+template <typename StartPoint, typename IteratorType>
+int seek_log_iterator_from_ipalf(ipalf::IPalfEnv *palf_env,
+                                 const int64_t palf_id,
+                                 const StartPoint &start_point,
+                                 IteratorType &iterator)
+{
+  int ret = OB_SUCCESS;
+  ipalf::IPalfHandle *palf_handle = NULL;
+  const bool first_inited = !iterator.is_inited();
+  bool need_release_palf_handle = true;
+  if (OB_ISNULL(palf_env) || !palf::is_valid_palf_id(palf_id) || !start_point.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", KP(palf_env), K(palf_id), K(start_point));
+  } else if (OB_FAIL(palf_env->open(palf_id, palf_handle))) {
+    CLOG_LOG(WARN, "failed to open palf_handle", K(ret), K(palf_id));
+  } else if (OB_ISNULL(palf_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "ipalf env open returns unexpected nullptr", KR(ret), K(palf_id), K(start_point));
+  } else if (OB_FAIL(palf_handle->seek(start_point, iterator))) {
+    CLOG_LOG(WARN, "seek iterator from palf_handle failed", KR(ret), K(palf_id), K(start_point));
+    // only set destroy functor when iterator is initialized for the first time.
+  } else if (first_inited) {
+    // NB: the ownership of palf_handle has transfered to iterator after set_destroy_iterator_storage_functor successfully,
+    //     set_destroy_iterator_storage_functor is atomic(i.e. return OB_SUCCESS means transfer ownership successfully,
+    //     otherwise, the ownership hasn't transfered.).
+    // To make code readable, add 'need_release_palf_handle' instead of using std::move and move constructor
+    LogDestroyIteratorStorageFunctor functor(palf_env, palf_handle);
+    if (OB_FAIL(iterator.set_destroy_iterator_storage_functor(functor))) {
+      CLOG_LOG(WARN, "set_destroy_iterator_storage_functor failed", KR(ret), KP(palf_env), K(palf_id),
+               K(start_point));
+      iterator.destroy();
+    } else {
+      need_release_palf_handle = false;
+    }
+  } else {
+  }
+  if (need_release_palf_handle && OB_NOT_NULL(palf_handle) && palf_handle->is_valid()) {
+    palf_env->close(palf_handle);
+  }
+  return ret;
+}
+
+template <class StartPoint, class IteratorType>
+int ObLogHandler::seek_log_iterator_dispatch_(const StartPoint &start_point,
+                                              const int64_t suggested_read_buf_size,
+                                              IteratorType &iterator)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  ret = seek_log_iterator_from_ipalf(palf_env_, id_, start_point, iterator);
+  return ret;
+}
+
+template <class StartPoint>
+int ObLogHandler::seek_log_iterator_dispatch_(const StartPoint &start_point,
+                                              const int64_t suggested_read_buf_size,
+                                              ipalf::IPalfIterator<ipalf::ILogEntry> &iterator)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  ret = seek_log_iterator_from_ipalf(palf_env_, id_, start_point, iterator);
+  return ret;
+}
+
+template<typename StartPoint, typename IteratorType>
+int init_log_iterator(
+  ObLogHandler *log_handler,
+  const StartPoint &start_point,
+  const int64_t suggested_read_buf_size,
+  IteratorType &iterator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(log_handler) || palf::MAX_LOG_BUFFER_SIZE > suggested_read_buf_size || !start_point.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", KP(log_handler), K(start_point));
+  } else if (OB_FAIL(log_handler->seek_log_iterator_dispatch_(start_point, suggested_read_buf_size, iterator))) {
+    CLOG_LOG(WARN, "seek iterator from log_handler failed", K(start_point));
+  } else {}
+  return ret;
+}
+
+int __get_log_handler(const ObLSID &ls_id,
+                      ObLogHandler *&log_handler,
+                      ObLSHandle &ls_handle);
+
+template<typename StartPoint, typename IteratorType>
+int init_log_iterator_(
+  const ObLSID &ls_id,
+  const StartPoint &start_point,
+  const int64_t suggested_read_buf_size,
+  IteratorType &iterator)
+{
+  int ret = OB_SUCCESS;
+  ObLogHandler *log_handler = NULL;
+  ObLSHandle ls_handle;
+  if (OB_FAIL(__get_log_handler(ls_id, log_handler, ls_handle))) {
+    CLOG_LOG(WARN, "__get_log_handler failed", K(ls_id));
+  } else if (OB_FAIL(init_log_iterator(log_handler, start_point, suggested_read_buf_size, iterator))) {
+    CLOG_LOG(WARN, "seek iterator from log_handler failed", K(ls_id), K(start_point));
+  } else {}
+  return ret;
+}
+
+template<typename StartPoint, typename IteratorType>
+int seek_log_iterator(const share::ObLSID &ls_id,
+                      const StartPoint &start_point,
+                      IteratorType &iterator)
+{
+  constexpr int64_t suggested_read_buf_size = palf::PALF_BLOCK_SIZE;
+  return init_log_iterator_(ls_id, start_point, suggested_read_buf_size, iterator);
+}
+
+template<typename StartPoint, typename IteratorType>
+int seek_log_iterator_for_cdc(const share::ObLSID &ls_id,
+                              const StartPoint &start_point,
+                              const int64_t suggested_read_buf_size,
+                              ipalf::IPalfIterator<IteratorType> &iterator)
+{
+  return init_log_iterator_(ls_id, start_point, suggested_read_buf_size, iterator);
+}
+// =============================== Iterator end===========================
 } // end namespace logservice
 } // end namespace oceanbase
 #endif

@@ -29,7 +29,7 @@ void ObTraceInfo::init(const int64_t trace_id,
   reset_without_lock_();
   trace_id_ = trace_id;
   ls_id_ = ls_id;
-  strncpy(thread_name_, ob_get_tname(), oceanbase::OB_THREAD_NAME_BUF_LEN);
+  strncpy(thread_name_, ob_get_tname(), oceanbase::OB_THREAD_NAME_BUF_LEN - 1);
   checkpoint_start_time_ = checkpoint_start_time;
 }
 
@@ -340,7 +340,7 @@ void UpdateMergeInfoForMemtable::operator()(ObMemtableDiagnoseInfo &info) const
   info.merge_finish_time_ = merge_finish_time_;
   info.occupy_size_ = occupy_size_;
   info.concurrent_cnt_ = concurrent_cnt_;
-  TRANS_LOG(INFO, "update_merge_info", K(info), K(param_));
+  TRANS_LOG(DEBUG, "update_merge_info", K(info), K(param_));
 }
 int ObCheckpointDiagnoseMgr::update_merge_info_for_memtable(const ObCheckpointDiagnoseParam &param,
     int64_t merge_start_time,

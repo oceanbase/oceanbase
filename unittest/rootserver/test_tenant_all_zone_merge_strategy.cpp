@@ -12,21 +12,12 @@
 
 #define USING_LOG_PREFIX RS
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #include "ob_rs_test_utils.h"
 #include "fake_zone_merge_manager.h"
 #include "rootserver/freeze/ob_tenant_all_zone_merge_strategy.h"
-#include "rootserver/freeze/ob_zone_merge_manager.h"
 #include "share/partition_table/fake_part_property_getter.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "lib/string/ob_string.h"
-#include "common/ob_zone_type.h"
 
 namespace oceanbase
 {

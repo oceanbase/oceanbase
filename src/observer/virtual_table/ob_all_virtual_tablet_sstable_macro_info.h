@@ -18,6 +18,7 @@
 #include "share/ob_scanner.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "share/rc/ob_tenant_base.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "storage/ob_i_table.h"
@@ -65,12 +66,41 @@ class ObAllVirtualTabletSSTableMacroInfo : public common::ObVirtualTableScannerI
     ROW_STORE_TYPE,
     CG_IDX
   };
+  // primary index
+  enum PRI_IDX_KEY
+  {
+    PRI_IDX_KEY_SVR_IP_IDX = 0,
+    PRI_IDX_KEY_SVR_PORT_IDX = 1,
+    PRI_IDX_KEY_TENANT_ID_IDX = 2,
+    PRI_IDX_KEY_LS_ID_IDX = 3,
+    PRI_IDX_KEY_TABLET_ID_IDX = 4,
+    PRI_IDX_KEY_END_LOG_SCN_IDX = 5,
+    PRI_IDX_KEY_MACRO_IDX_IN_SSTABLE_IDX = 6,
+    PRI_IDX_KEY_MAX,
+  };
+  // secondary index
+  enum SEC_IDX_KEY
+  {
+    SEC_IDX_KEY_TENANT_ID_IDX = 0,
+    SEC_IDX_KEY_LS_ID_IDX = 1,
+    SEC_IDX_KEY_TABLET_ID_IDX = 2,
+    SEC_IDX_KEY_END_LOG_SCN_IDX = 3,
+    SEC_IDX_KEY_MAX,
+  };
+public:
+  enum INDEX_TYPE
+  {
+    INDEX_TYPE_PRIMARY = 0, // primary index: svr_ip, svr_port, tenant_id, ls_id, tablet_id, end_log_scn, macro_idx_in_sstable
+    INDEX_TYPE_I1 = 1,      // secondary index: tenant_id, ls_id, tablet_id, end_log_scn
+    INDEX_TYPE_MAX,         // without index
+  };
 public:
   ObAllVirtualTabletSSTableMacroInfo();
   virtual ~ObAllVirtualTabletSSTableMacroInfo();
   int init(common::ObIAllocator *allocator, common::ObAddr &addr);
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
+  void use_index_scan(INDEX_TYPE index_type);
 private:
   class MacroInfo final
   {
@@ -85,9 +115,12 @@ private:
               && compressor_type_ < ObCompressorType::MAX_COMPRESSOR)
           && row_store_type_ < ObRowStoreType::MAX_ROW_STORE;
     }
-    TO_STRING_KV(K(data_seq_), K(macro_logic_version_), K(macro_block_index_), K(micro_block_count_),
-                 K(data_checksum_), K(occupy_size_), K(original_size_), K_(data_size), K(data_zsize_),
-                 K(store_range_), K(row_count_), K(compressor_type_), K(row_store_type_));
+    TO_STRING_KV(K(data_seq_), K(macro_logic_version_), K(macro_block_index_),
+                 K(micro_block_count_), K(data_checksum_), K(occupy_size_),
+                 K(original_size_), K_(data_size), K(data_zsize_),
+                 K(macro_block_id_), K(store_range_), K(row_count_),
+                 K(compressor_type_), K(row_store_type_));
+
   public:
     int64_t data_seq_;
     uint64_t macro_logic_version_;
@@ -98,6 +131,7 @@ private:
     int64_t original_size_;
     int64_t data_size_;
     int64_t data_zsize_;
+    blocksstable::MacroBlockId macro_block_id_;
     ObStoreRange store_range_;
     int32_t row_count_;
     ObCompressorType compressor_type_;
@@ -121,6 +155,7 @@ private:
   int gen_sstable_range(common::ObNewRange &range);
   int get_macro_info(const blocksstable::MacroBlockId &macro_id, MacroInfo &info);
   int get_macro_info(const blocksstable::ObMacroBlockDesc &macro_desc, MacroInfo &info);
+  int match_in_range(const int key_idx, const common::ObObj &obj, bool &is_match);
 private:
   common::ObAddr addr_;
   ObTenantTabletIterator *tablet_iter_;
@@ -139,10 +174,11 @@ private:
   ObArenaAllocator iter_allocator_;
   ObArenaAllocator rowkey_allocator_;
   blocksstable::ObDatumRange curr_range_;
-  common::ObObj objs_[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
+  common::ObObj objs_[PRI_IDX_KEY_MAX];
   int64_t block_idx_;
   void *iter_buf_;
   char *io_buf_;
+  int64_t index_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTabletSSTableMacroInfo);
 };

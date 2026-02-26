@@ -10,10 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_integer_stream_vector_decoder.h"
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 #include "ob_cs_decoding_util.h"
 #include "storage/blocksstable/encoding/ob_icolumn_decoder.h"
 
@@ -138,13 +138,13 @@ struct ConvertUintToVec_T<ObUniformFormat<false>, ValueType,
       const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
       ObDatum &datum = vector.get_datum(curr_vec_offset);
 
-      if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL) {
+      if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP) {
         GET_SRC_VALUE(value);
         HANDLE_VALUE_ASSIGN(datum.ptr_, datum.pack_, ctx.meta_.precision_width_tag(), value);
 
-      } else if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_BITMAP) {
+      } else if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_OR_NOP_BITMAP) {
         OB_ASSERT(ref_width_V == ObVecDecodeRefWidth::VDRW_NOT_REF);
-        if (ObCSDecodingUtil::test_bit(base_col_ctx.null_bitmap_, vector_ctx.row_ids_[i])) {
+        if (ObCSDecodingUtil::test_bit(base_col_ctx.null_or_nop_bitmap_, vector_ctx.row_ids_[i])) {
           datum.set_null();
         } else {
           value = store_uint_arr[vector_ctx.row_ids_[i]] + base;
@@ -202,12 +202,12 @@ struct ConvertUintToVec_T<ObDiscreteFormat, ValueType,
       char *vec_ptr = vector.get_ptrs()[curr_vec_offset];
       ObLength &vec_len =vector.get_lens()[curr_vec_offset];
 
-      if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL) {
+      if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP) {
         GET_SRC_VALUE(value);
         HANDLE_VALUE_ASSIGN(vec_ptr, vec_len, ctx.meta_.precision_width_tag(), value);
 
-      } else if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_BITMAP) {
-        if (ObCSDecodingUtil::test_bit(base_col_ctx.null_bitmap_, vector_ctx.row_ids_[i])) {
+      } else if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_OR_NOP_BITMAP) {
+        if (ObCSDecodingUtil::test_bit(base_col_ctx.null_or_nop_bitmap_, vector_ctx.row_ids_[i])) {
           vector.set_null(curr_vec_offset);
         } else {
           OB_ASSERT(ref_width_V == ObVecDecodeRefWidth::VDRW_NOT_REF);
@@ -273,12 +273,12 @@ struct ConvertUintToVec_T<ObContinuousFormat, ValueType,
       const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
       const char *vec_ptr = vector.get_data() + curr_offset;
 
-      if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL) {
+      if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP) {
         GET_SRC_VALUE(value);
         HANDLE_VALUE_ASSIGN(vec_ptr, vec_len, ctx.meta_.precision_width_tag(), value);
 
-      } else if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_BITMAP) {
-        if (ObCSDecodingUtil::test_bit(base_col_ctx.null_bitmap_, vector_ctx.row_ids_[i])) {
+      } else if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_OR_NOP_BITMAP) {
+        if (ObCSDecodingUtil::test_bit(base_col_ctx.null_or_nop_bitmap_, vector_ctx.row_ids_[i])) {
           vector.set_null(curr_vec_offset);
         } else {
           OB_ASSERT(ref_width_V == ObVecDecodeRefWidth::VDRW_NOT_REF);
@@ -339,12 +339,12 @@ struct ConvertUintToVec_T<ObFixedLengthFormat<ValueType>, ValueType,
     for (int64_t i = 0; i < vector_ctx.row_cap_; i++) {
       const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
       ValueType &vec_value = vec_value_arr[curr_vec_offset];
-      if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL) {
+      if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP) {
         GET_SRC_VALUE(value);
         HANDLE_FIXED_VALUE_ASSIGN(vec_value, value);
 
-      } else if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_BITMAP) {
-        if (ObCSDecodingUtil::test_bit(base_col_ctx.null_bitmap_, vector_ctx.row_ids_[i])) {
+      } else if (null_flag_V == ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_OR_NOP_BITMAP) {
+        if (ObCSDecodingUtil::test_bit(base_col_ctx.null_or_nop_bitmap_, vector_ctx.row_ids_[i])) {
           vector.set_null(curr_vec_offset);
         } else {
           OB_ASSERT(ref_width_V == ObVecDecodeRefWidth::VDRW_NOT_REF);
@@ -532,6 +532,7 @@ int ObIntegerStreamVecDecoder::decode_vector(
       break;
     }
     case VEC_TC_DATE:
+    case VEC_TC_MYSQL_DATE:
     case VEC_TC_DEC_INT32:
     case VEC_TC_FLOAT: {
       ret = DECODE_VECTOR_(uint32_t);
@@ -539,6 +540,7 @@ int ObIntegerStreamVecDecoder::decode_vector(
     }
     case VEC_TC_INTEGER:
     case VEC_TC_DATETIME:
+    case VEC_TC_MYSQL_DATETIME:
     case VEC_TC_TIME:
     case VEC_TC_UNKNOWN:
     case VEC_TC_INTERVAL_YM:
@@ -548,7 +550,8 @@ int ObIntegerStreamVecDecoder::decode_vector(
     case VEC_TC_BIT:
     case VEC_TC_ENUM_SET:
 
-    case VEC_TC_DOUBLE: {
+    case VEC_TC_DOUBLE:
+    case VEC_TC_FIXED_DOUBLE: {
       ret = DECODE_VECTOR_(uint64_t);
       break;
     }

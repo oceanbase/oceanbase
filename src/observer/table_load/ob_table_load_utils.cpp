@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_utils.h"
-#include "common/object/ob_object.h"
 #include "observer/ob_server.h"
-#include "observer/table/ob_table_rpc_processor.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "storage/blocksstable/ob_datum_range.h"
-#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {
@@ -164,27 +159,15 @@ int ObTableLoadUtils::deep_copy(const ObStorageDatum &src, ObStorageDatum &dest,
   return ret;
 }
 
-int ObTableLoadUtils::deep_copy(const ObDatumRowkey &src, ObDatumRowkey &dest, ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(src.deep_copy(dest, allocator))) {
-    LOG_WARN("fail to deep copy datum rowkey", KR(ret), K(src));
-  } else if (OB_FAIL(deep_copy(src.store_rowkey_, dest.store_rowkey_, allocator))) {
-    LOG_WARN("fail to deep copy store rowkey", KR(ret), K(src));
-  }
-  return ret;
-}
-
 int ObTableLoadUtils::deep_copy(const ObDatumRange &src, ObDatumRange &dest, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(deep_copy(src.start_key_, dest.start_key_, allocator))) {
-    LOG_WARN("fail to deep copy rowkey", KR(ret), K(src));
-  } else if (OB_FAIL(deep_copy(src.end_key_, dest.end_key_, allocator))) {
-    LOG_WARN("fail to deep copy rowkey", KR(ret), K(src));
-  } else {
-    dest.group_idx_ = src.group_idx_;
-    dest.border_flag_ = src.border_flag_;
+  if (OB_FAIL(dest.partial_copy(src, allocator))) {
+    LOG_WARN("fail to deep copy range", KR(ret), K(src));
+  } else if (OB_FAIL(deep_copy(src.start_key_.store_rowkey_, dest.start_key_.store_rowkey_, allocator))) {
+    LOG_WARN("fail to deep copy store rowkey", KR(ret), K(src));
+  } else if (OB_FAIL(deep_copy(src.end_key_.store_rowkey_, dest.end_key_.store_rowkey_, allocator))) {
+    LOG_WARN("fail to deep copy store rowkey", KR(ret), K(src));
   }
   return ret;
 }

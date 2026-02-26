@@ -11,26 +11,11 @@
  */
 
 #include "ob_mvcc_row.h"
-#include "common/ob_tablet_id.h"
-#include "lib/ob_errno.h"
-#include "ob_mvcc_ctx.h"
-#include "storage/ob_i_store.h"
-#include "storage/memtable/ob_memtable_data.h"
 #include "storage/memtable/ob_row_compactor.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/time/ob_tsc_timestamp.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "observer/ob_server.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/memtable/ob_memtable_context.h"
-#include "storage/memtable/ob_concurrent_control.h"
-#include "storage/tx/ob_trans_ctx.h"
-#include "storage/tx/ob_trans_event.h"
-#include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
-#include "storage/blocksstable/ob_datum_row.h"
 #include "storage/access/ob_rows_info.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 
 namespace oceanbase
 {
@@ -49,7 +34,7 @@ const uint8_t ObMvccTransNode::F_COMMITTED = 0x4;
 const uint8_t ObMvccTransNode::F_ELR = 0x8;
 const uint8_t ObMvccTransNode::F_ABORTED = 0x10;
 const uint8_t ObMvccTransNode::F_DELAYED_CLEANOUT = 0x40;
-const uint8_t ObMvccTransNode::F_MUTEX = 0x80;
+const uint8_t ObMvccTransNode::F_INCOMPLETE_STATE = 0x80;
 
 void ObMvccTransNode::checksum(ObBatchChecksum &bc) const
 {
@@ -100,7 +85,7 @@ blocksstable::ObDmlFlag ObMvccTransNode::get_dml_flag() const
 
 int64_t ObMvccTransNode::get_data_size() const
 {
-  return reinterpret_cast<const ObMemtableDataHeader *>(buf_)->buf_len_;
+  return reinterpret_cast<const ObMemtableDataHeader *>(buf_)->dup_size();
 }
 
 void ObMvccTransNode::set_safe_read_barrier(const bool is_weak_consistent_read)
@@ -208,12 +193,14 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   const ObMemtableDataHeader *mtd = reinterpret_cast<const ObMemtableDataHeader *>(buf_);
+  common::databuff_printf(buf, buf_len, pos, "this=%p trans_version=", this);
+  common::databuff_printf(buf, buf_len, pos, trans_version_);
+  common::databuff_printf(buf, buf_len, pos, " scn=");
+  common::databuff_printf(buf, buf_len, pos, scn_);
+  common::databuff_printf(buf, buf_len, pos, " tx_id=");
+  common::databuff_printf(buf, buf_len, pos, tx_id_);
   common::databuff_printf(buf, buf_len, pos,
-                          "this=%p "
-                          "trans_version=%s "
-                          "scn=%s "
-                          "tx_id=%s "
-                          "prev=%p "
+                          " prev=%p "
                           "next=%p "
                           "modify_count=%u "
                           "acc_checksum=%u "
@@ -221,13 +208,7 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           "type=%d "
                           "flag=%d "
                           "snapshot_barrier=%ld "
-                          "snapshot_barrier_flag=%ld "
-                          "mtd=%s "
-                          "seq_no=%s",
-                          this,
-                          to_cstring(trans_version_),
-                          to_cstring(scn_),
-                          to_cstring(tx_id_),
+                          "snapshot_barrier_flag=%ld ",
                           prev_,
                           next_,
                           modify_count_,
@@ -237,10 +218,136 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           flag_,
                           snapshot_version_barrier_
                           & (~SNAPSHOT_VERSION_BARRIER_BIT),
-                          snapshot_version_barrier_ >> 62,
-                          to_cstring(*mtd),
-                          to_cstring(seq_no_));
+                          snapshot_version_barrier_ >> 62);
+  common::databuff_print_multi_objs(buf, buf_len, pos, " mtd=", *mtd,
+      " seq_no=", seq_no_, " write_epoch=", write_epoch_);
   return pos;
+}
+
+/*
+ * ObMvccRowFilter
+*/
+struct ObMvccRowFilter final {
+public:
+  ObMvccRowFilter(ObMvccMdsFilter &mds_filter)
+      : mds_filter_(mds_filter),
+        datum_row_(),
+        bitmap_(),
+        datum_row_empty_(true),
+        is_inited_(false)
+  {}
+  int init();
+  bool is_inited() const { return is_inited_; }
+  int read_row_and_check(const ObMvccTransNode &node,
+                         bool &complete,
+                         bool &filtered);
+
+private:
+  int read_row_(const ObMvccTransNode &node,
+               bool &final_result);
+  ObMvccMdsFilter &mds_filter_;
+  blocksstable::ObDatumRow datum_row_;
+  ObNopBitMap bitmap_;
+  bool datum_row_empty_;
+  bool is_inited_;
+};
+
+int ObMvccRowFilter::init()
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    TRANS_LOG(WARN, "init twice", KR(ret));
+  } else if (OB_UNLIKELY(!mds_filter_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "input mds filter is invalid", KR(ret), K_(mds_filter));
+  } else {
+    const int64_t column_cnt = mds_filter_.read_info_->get_schema_column_count() + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    if (OB_FAIL(bitmap_.init(column_cnt, mds_filter_.read_info_->get_rowkey_count()))) {
+      TRANS_LOG(WARN, "failed to init bitmap", KR(ret), K(column_cnt));
+    } else if (OB_FAIL(datum_row_.init(column_cnt))) {
+      TRANS_LOG(WARN, "Failed to init datum row", K(ret), K(column_cnt));
+    } else {
+      is_inited_ = true;
+      datum_row_empty_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObMvccRowFilter::read_row_and_check(
+  const ObMvccTransNode &node,
+  bool &complete,
+  bool &filtered)
+{
+  complete = false;
+  filtered = false;
+
+  int ret = OB_SUCCESS;
+  bool final_result = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(mds_filter), K(node));
+  } else if (DF_DELETE == node.get_dml_flag()) {
+    if (OB_UNLIKELY(!datum_row_empty_)) {
+      ret = OB_INVALID_DATA;
+      TRANS_LOG(WARN, "datum row is not empty when met DELETE node", KR(ret), K_(mds_filter), K(node), K_(datum_row));
+    } else {
+      complete = true;
+      filtered = false;
+    }
+  } else {
+    if (OB_UNLIKELY(!mds_filter_.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid argument", KR(ret), K_(mds_filter));
+    } else if (OB_FAIL(read_row_(node, final_result))) {
+      TRANS_LOG(WARN, "failed to read datum row", K(ret), K(node), K_(mds_filter));
+    } else if (final_result) {
+      complete = true;
+    } else if (OB_FAIL(mds_filter_.truncate_part_filter_->check_filter_row_complete(datum_row_, complete))) {
+      TRANS_LOG(WARN, "failed to check filter row complete", KR(ret), K_(datum_row), K(complete));
+    }
+    if (OB_FAIL(ret) || !complete) {
+      ObTaskController::get().allow_next_syslog();
+      TRANS_LOG(TRACE, "not complete", KR(ret), K_(datum_row), K(filtered), K(complete)); // DEBUG log, remove later
+    } else if (OB_FAIL(mds_filter_.truncate_part_filter_->filter(datum_row_, filtered, true/*check_filter*/, true/*check_version*/))) {
+      TRANS_LOG(WARN, "failed to check filtered by truncate_filter", KR(ret), K_(datum_row), K_(mds_filter));
+    } else {
+      ObTaskController::get().allow_next_syslog();
+      TRANS_LOG(INFO, "success to check trans node filtered", KR(ret), K_(datum_row), K(filtered)); // DEBUG log, remove later
+    }
+  }
+  return ret;
+}
+
+int ObMvccRowFilter::read_row_(
+  const ObMvccTransNode &node,
+  bool &final_result)
+{
+  int ret = OB_SUCCESS;
+  final_result = false;
+  const ObRowHeader *row_header = nullptr;
+  const ObMemtableDataHeader *mtd = reinterpret_cast<const ObMemtableDataHeader *>(node.buf_);
+  blocksstable::ObCompatRowReader row_reader;
+  if (OB_ISNULL(mtd)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K_(mds_filter), K(node), KP(mtd));
+  } else {
+    bool read_finished = false;
+    if (OB_FAIL(row_reader.read_memtable_row(mtd->buf_, mtd->buf_len_, *mds_filter_.read_info_, datum_row_, bitmap_, read_finished, row_header))) {
+      TRANS_LOG(WARN, "failed to read datum row", K(ret), K(node), K_(mds_filter));
+    } else if (!datum_row_empty_) {
+      // no need to set trans version
+    } else if (OB_UNLIKELY(datum_row_.get_column_count() <= mds_filter_.read_info_->get_schema_column_count())) {
+      ret = OB_INVALID_DATA;
+      TRANS_LOG(WARN, "datum row cnt is invalid", K(ret), K(node), K(datum_row_), K(node));
+    } else {
+      datum_row_empty_ = false;
+      datum_row_.storage_datums_[mds_filter_.read_info_->get_schema_rowkey_count()].reuse();
+      datum_row_.storage_datums_[mds_filter_.read_info_->get_schema_rowkey_count()].set_int(-node.trans_version_.get_val_for_tx());
+    }
+  }
+  return ret;
 }
 
 void ObMvccRow::ObMvccRowIndex::reset()
@@ -302,16 +409,7 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
                           "last_dml=%s "
                           "update_since_compact=%d "
                           "list_head=%p "
-                          "latest_compact_node=%p "
-                          "max_trans_version=%s "
-                          "max_trans_id=%ld "
-                          "max_elr_trans_version=%s "
-                          "max_elr_trans_id=%ld "
-                          "latest_compact_ts=%ld "
-                          "last_compact_cnt=%ld "
-                          "total_trans_node_cnt=%ld "
-                          "max_modify_scn=%s "
-                          "min_modify_scn=%s}",
+                          "latest_compact_node=%p max_trans_version=",
                           this,
                           (latch_.is_locked() ? "locked" : "unlocked"),
                           flag_,
@@ -319,16 +417,25 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
                           get_dml_str(last_dml_flag_),
                           update_since_compact_,
                           list_head_,
-                          latest_compact_node_,
-                          to_cstring(max_trans_version_),
-                          max_trans_id_.get_id(),
-                          to_cstring(max_elr_trans_version_),
+                          latest_compact_node_);
+  common::databuff_printf(buf, buf_len, pos, max_trans_version_);
+  common::databuff_printf(buf, buf_len, pos, " max_trans_id=%ld max_elr_trans_version=",
+                          max_trans_id_.get_id());
+  common::databuff_printf(buf, buf_len, pos, max_elr_trans_version_);
+  common::databuff_printf(buf, buf_len, pos,
+                          " max_elr_trans_id=%ld "
+                          "latest_compact_ts=%ld "
+                          "last_compact_cnt=%ld "
+                          "total_trans_node_cnt=%ld max_modify_scn=",
                           max_elr_trans_id_.get_id(),
                           latest_compact_ts_,
                           last_compact_cnt_,
-                          total_trans_node_cnt_,
-                          to_cstring(max_modify_scn_),
-                          to_cstring(min_modify_scn_));
+                          total_trans_node_cnt_);
+  common::databuff_printf(buf, buf_len, pos, max_modify_scn_);
+  common::databuff_printf(buf, buf_len, pos, " min_modify_scn=");
+  common::databuff_printf(buf, buf_len, pos, min_modify_scn_);
+
+  common::databuff_printf(buf, buf_len, pos, "}");
   return pos;
 }
 
@@ -340,7 +447,9 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len, const bool verbos
     common::databuff_printf(buf, buf_len, pos, " list=[");
     ObMvccTransNode *iter = list_head_;
     while (NULL != iter) {
-      common::databuff_printf(buf, buf_len, pos, "%p:[%s],", iter, common::to_cstring(*iter));
+      common::databuff_printf(buf, buf_len, pos, "%p:[", iter);
+      common::databuff_printf(buf, buf_len, pos, *iter);
+      common::databuff_printf(buf, buf_len, pos, "],");
       iter = iter->prev_;
     }
     common::databuff_printf(buf, buf_len, pos, "]");
@@ -421,8 +530,13 @@ int ObMvccRow::unlink_trans_node(const ObMvccTransNode &node)
   return ret;
 }
 
-bool ObMvccRow::need_compact(const bool for_read, const bool for_replay)
+bool ObMvccRow::need_compact(const bool for_read, const bool for_replay, const bool is_delete_insert)
 {
+  if (is_delete_insert) {
+    // return false directly when this is a delete-insert table
+    return false;
+  }
+
   bool bool_ret = false;
   const int32_t updates = ATOMIC_LOAD(&update_since_compact_);
   const int32_t compact_trigger = (for_read || for_replay)
@@ -514,10 +628,14 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "meet unexpected index_node", KR(ret), K(*prev), K(node), K(*index_node), K(*this));
             abort_unless(0);
-          } else if (prev->tx_id_ == node.tx_id_ && OB_UNLIKELY(prev->seq_no_ > node.seq_no_)) {
+          } else if (prev->tx_id_ == node.tx_id_
+                     && prev->seq_no_.support_branch()
+                     && OB_UNLIKELY(prev->seq_no_ > node.seq_no_)
+                     // exclude the concurrently update uk case, which always in branch 0
+                     && !(prev->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), KPC(prev), K(node), KPC(this));
-            usleep(1000);
+            ob_usleep(1000);
             ob_abort();
           } else {
             next_node = next;
@@ -556,10 +674,13 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
         }
       }
       if (OB_SUCC(ret) && OB_NOT_NULL(tmp) && tmp->tx_id_ == node.tx_id_) {
-        if (OB_UNLIKELY(tmp->seq_no_ > node.seq_no_)) {
+        if (tmp->seq_no_.support_branch()
+            && OB_UNLIKELY(tmp->seq_no_ > node.seq_no_)
+            // exclude the concurrently update uk case, which always in branch 0
+            && !(tmp->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), "prev", PC(tmp), K(node), KPC(this));
-          usleep(1000);
+          ob_usleep(1000);
           ob_abort();
         }
       }
@@ -636,14 +757,9 @@ int ObMvccRow::elr(const ObTransID &tx_id,
     // TODO shanyan.g
     if (NULL != key) {
       wakeup_waiter(tablet_id, *key);
+      MTL(ObLockWaitMgr*)->reset_hash_holder(tablet_id, *key, tx_id);
     } else {
-      ObLockWaitMgr *lwm = NULL;
-      if (OB_ISNULL(lwm = MTL(ObLockWaitMgr*))) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", K(ret), KPC(this));
-      } else {
-        lwm->wakeup(tx_id);
-      }
+      MTL(ObLockWaitMgr*)->wakeup(tx_id);
     }
   }
   return ret;
@@ -768,9 +884,17 @@ int ObMvccRow::wakeup_waiter(const ObTabletID &tablet_id,
   return ret;
 }
 
+void ObMvccRow::mvcc_write_end_(const int ret) const
+{
+  if (is_mvcc_lock_related_error_(ret)) {
+    EVENT_INC(MEMSTORE_WRITE_LOCK_FAIL_COUNT);
+  } else if (OB_SUCCESS == ret) {
+    EVENT_INC(MEMSTORE_WRITE_LOCK_SUCC_COUNT);
+  }
+}
+
 int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
                            ObMvccTransNode &writer_node,
-                           const transaction::ObTxSnapshot &snapshot,
                            ObMvccWriteResult &res)
 {
   int ret = OB_SUCCESS;
@@ -778,22 +902,27 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
   ObRowLatchGuard guard(latch_);
   ObMvccTransNode *iter = ATOMIC_LOAD(&list_head_);
   ObTransID writer_tx_id = ctx.mvcc_acc_ctx_.get_tx_id();
+  transaction::ObTxSnapshot &snapshot = ctx.mvcc_acc_ctx_.snapshot_;
   const SCN snapshot_version = snapshot.version_;
+  const int64_t base_version = ctx.mvcc_acc_ctx_.major_snapshot_;
   const ObTxSEQ reader_seq_no = snapshot.scn_;
   bool &can_insert = res.can_insert_;
   bool &need_insert = res.need_insert_;
   bool &is_new_locked = res.is_new_locked_;
   ObStoreRowLockState &lock_state = res.lock_state_;
-  ObExistFlag &exist_flag = lock_state.exist_flag_;
+  blocksstable::ObDmlFlag &lock_dml_flag = res.lock_state_.lock_dml_flag_;
   bool need_retry = true;
-
+  ObMvccRowFilter row_filter(ctx.get_mds_filter());
+  if (ctx.get_mds_filter().is_valid() && OB_FAIL(row_filter.init())) {
+    TRANS_LOG(WARN, "failed to init row filter", KR(ret), K(ctx.get_mds_filter()));
+  }
   while (OB_SUCC(ret) && need_retry) {
     if (OB_ISNULL(iter)) {
       // Case 1: head is empty, so we set node to be the new head
       can_insert = true;
       need_insert = true;
       is_new_locked = true;
-      exist_flag = ObExistFlag::UNKNOWN;
+      lock_dml_flag = blocksstable::ObDmlFlag::DF_NOT_EXIST;
       need_retry = false;
     } else {
       // Tip 1: The newest node is either delayed cleanout or not depending on
@@ -817,22 +946,43 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
                      .cleanout_tx_node(data_tx_id, *this, *iter, false /*need_row_latch*/))) {
         TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*this));
       } else if (iter->is_committed() || iter->is_elr()) {
-        // Case 2: the newest node is decided, so we can insert into it
-        can_insert = true;
-        need_insert = true;
-        is_new_locked = true;
-        exist_flag =
-          extract_exist_flag_from_dml_flag(iter->get_dml_flag());
-        need_retry = false;
+        bool complete = true;
+        bool filtered = false;
+        if (iter->is_committed()
+            && row_filter.is_inited()
+            && OB_FAIL(row_filter.read_row_and_check(*iter, complete, filtered))) {
+          TRANS_LOG(WARN, "failed to check trans node filtered", KR(ret), K(ctx.mvcc_acc_ctx_.mds_filter_), KPC(iter));
+        } else if (!complete) {
+          iter = iter->prev_;
+          need_retry = true;
+        } else {
+          /* mvcc write check exist should skip rows with tx_version <= base_version,
+          *  rows in memtable which have tx_version <= base_version may overwrite rows in inc major sstables with greater version
+          *  MAJOR      EMPTY    (version 100)
+          *  INC_MAJOR  INSERT 1 (version 110)
+          *  MEMTABLE   DELETE 1 (version 90)
+          */
+          if (OB_UNLIKELY(iter->is_committed() &&
+                          base_version > 0 &&
+                          iter->get_tx_version().get_val_for_tx() <= base_version)) {
+            filtered = true;
+          }
+          can_insert = true;
+          need_insert = true;
+          is_new_locked = true;
+          lock_dml_flag = filtered ? blocksstable::ObDmlFlag::DF_NOT_EXIST : iter->get_dml_flag();
+          need_retry = false;
+          iter = filtered ? nullptr : iter;
+        }
       } else if (iter->is_aborted()) {
         // Case 3: the newest node is aborted and the node must be unlinked,
         //         so we need look for the next one
         iter = iter->prev_;
         need_retry = true;
       } else if (data_tx_id == writer_tx_id) {
+        bool is_lock_node = false;
         // Case 4: the newest node is not decided and locked by itself, so we
         //         can insert into it
-        bool is_lock_node = false;
         if (OB_FAIL(writer_node.is_lock_node(is_lock_node))) {
           TRANS_LOG(ERROR, "get is lock node failed", K(ret), K(writer_node));
         } else if (is_lock_node) {
@@ -841,16 +991,14 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
           can_insert = true;
           need_insert = false;
           is_new_locked = false;
-          exist_flag =
-            extract_exist_flag_from_dml_flag(iter->get_dml_flag());
+          lock_dml_flag = iter->get_dml_flag();
           need_retry = false;
         } else {
           // Case 4.2: the writer node is not lock node, so we do not insert into it
           can_insert = true;
           need_insert = true;
           is_new_locked = false;
-          exist_flag =
-            extract_exist_flag_from_dml_flag(iter->get_dml_flag());
+          lock_dml_flag = iter->get_dml_flag();
           need_retry = false;
         }
       } else {
@@ -867,28 +1015,31 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
         lock_state.is_delayed_cleanout_ = iter->is_delayed_cleanout();
         lock_state.mvcc_row_ = this;
         lock_state.trans_scn_ = iter->get_scn();
-        exist_flag =
-          extract_exist_flag_from_dml_flag(iter->get_dml_flag());
       }
     }
   }
 
   if (OB_SUCC(ret)) {
     if (can_insert && need_insert) {
-      if (nullptr != list_head_ &&
+      if (nullptr != iter &&
           OB_FAIL(concurrent_control::check_sequence_set_violation(ctx.mvcc_acc_ctx_.write_flag_,
                                                                    reader_seq_no,
                                                                    writer_tx_id,
                                                                    writer_node.get_dml_flag(),
                                                                    writer_node.get_seq_no(),
-                                                                   list_head_->get_tx_id(),
-                                                                   list_head_->get_dml_flag(),
-                                                                   list_head_->get_seq_no()))) {
+                                                                   iter->get_tx_id(),
+                                                                   iter->get_dml_flag(),
+                                                                   iter->get_seq_no()))) {
+        res.is_mvcc_undo_ = true;
         TRANS_LOG(WARN, "check sequence set violation failed", K(ret), KPC(this));
-      } else if (nullptr != list_head_ && FALSE_IT(res.is_checked_ = true)) {
-      } else if (OB_SUCC(check_double_insert_(snapshot_version,
-                                              writer_node,
-                                              list_head_))) {
+      } else if (nullptr != iter && FALSE_IT(res.is_checked_ = true)) {
+      } else if (OB_FAIL(mvcc_sanity_check_(snapshot_version,
+                                            ctx.mvcc_acc_ctx_.write_flag_,
+                                            writer_node,
+                                            iter))) {
+        res.is_mvcc_undo_ = true;
+        TRANS_LOG(WARN, "check double insert failed", K(ret), KPC(this));
+      } else {
         ATOMIC_STORE(&(writer_node.prev_), list_head_);
         ATOMIC_STORE(&(writer_node.next_), NULL);
         if (NULL != list_head_) {
@@ -903,8 +1054,10 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
         }
 
         res.tx_node_ = &writer_node;
+
         total_trans_node_cnt_++;
       }
+
       if (NULL != writer_node.prev_
           && writer_node.prev_->is_elr()) {
         if (NULL != ctx.mvcc_acc_ctx_.tx_ctx_) {
@@ -918,19 +1071,43 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
 }
 
 __attribute__((noinline))
-int ObMvccRow::check_double_insert_(const SCN snapshot_version,
-                                    ObMvccTransNode &node,
-                                    ObMvccTransNode *prev)
+int ObMvccRow::mvcc_sanity_check_(const SCN snapshot_version,
+                                  const concurrent_control::ObWriteFlag write_flag,
+                                  ObMvccTransNode &node,
+                                  ObMvccTransNode *prev)
 {
   int ret = OB_SUCCESS;
+
+  const bool compliant_with_sql_semantic = !write_flag.is_table_api();
 
   if (NULL != prev) {
     if (blocksstable::ObDmlFlag::DF_INSERT == node.get_dml_flag()
         && blocksstable::ObDmlFlag::DF_DELETE != prev->get_dml_flag()
         && prev->is_committed()
         && snapshot_version >= prev->trans_version_) {
+      // Case 1: Check double insert case
       ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
       TRANS_LOG(WARN, "find double insert node", K(ret), K(node), KPC(prev), K(snapshot_version), K(*this));
+    } else if (prev->get_tx_id() == node.get_tx_id()
+               && prev->is_incomplete()
+               && compliant_with_sql_semantic) {
+      // TODO(handora.qc): remove after kaizhan.dkz finish the concureent
+      // insert/delete feature
+      //
+      // Case 2: The current implementation allows the same rowkey to perform
+      // insert and delete within the same statement concurrently. So to prevent
+      // disorder between insert and callback registeration, we return an error
+      // in this scenario, hoping that the sql layer will retry later.
+      // Otherwise, it may lead to an out-of-order actions from logs between
+      // leader and follower.
+      ret = OB_SEQ_NO_REORDER_UNDER_PDML;
+      TRANS_LOG(INFO, "mvcc_write meet current write by self", K(ret), KPC(prev), K(node));
+    } else if (prev->get_tx_id() == node.get_tx_id()
+               && prev->get_write_epoch() == node.get_write_epoch()
+               && prev->get_seq_no().get_branch() != node.get_seq_no().get_branch()) {
+      // Case 3: Check concurrent modify to the same row
+      ret = OB_SEQ_NO_REORDER_UNDER_PDML;
+      TRANS_LOG(WARN, "concurrent modify to the same row", K(ret), KPC(prev), K(node));
     }
   }
 
@@ -955,11 +1132,12 @@ void ObMvccRow::mvcc_undo()
 }
 
 int ObMvccRow::mvcc_write(ObStoreCtx &ctx,
-                          const transaction::ObTxSnapshot &snapshot,
                           ObMvccTransNode &node,
+                          const bool check_exist,
                           ObMvccWriteResult &res)
 {
   int ret = OB_SUCCESS;
+  transaction::ObTxSnapshot &snapshot = ctx.mvcc_acc_ctx_.snapshot_;
   const SCN snapshot_version = snapshot.version_;
   if (max_trans_version_.atomic_load() > snapshot_version
       || max_elr_trans_version_.atomic_load() > snapshot_version) {
@@ -970,7 +1148,6 @@ int ObMvccRow::mvcc_write(ObStoreCtx &ctx,
               "memtableCtx", ctx, "mvccRow", PC(this));
   } else if (OB_FAIL(mvcc_write_(ctx,
                                  node,
-                                 snapshot,
                                  res))) {
     TRANS_LOG(WARN, "mvcc write failed", K(ret), K(node), K(ctx));
   } else if (!res.can_insert_) {
@@ -981,15 +1158,15 @@ int ObMvccRow::mvcc_write(ObStoreCtx &ctx,
              || max_elr_trans_version_.atomic_load() > snapshot_version) {
     // Case 3. successfully locked while tsc
     ret = OB_TRANSACTION_SET_VIOLATION;
-    TRANS_LOG(WARN, "transaction set violation", K(ret), K(ctx), K(node), K(*this));
+    TRANS_LOG(WARN, "transaction set violation", K(ret), K(ctx), K(node), KPC(this));
     if (!res.has_insert()) {
       TRANS_LOG(ERROR, "TSC will occurred when already inserted", K(ctx), K(node), KPC(this));
     } else {
       // Tip1: mvcc_write guarantee the tnode will not be inserted if error is reported
       (void)mvcc_undo();
+      res.is_mvcc_undo_ = true;
     }
-  } else if (node.get_dml_flag() == blocksstable::ObDmlFlag::DF_INSERT &&
-             res.lock_state_.row_exist()) {
+  } else if (check_exist && res.lock_state_.row_exist()) {
     // Case 4. successfully locked while insert into exist row
     ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
     TRANS_LOG(WARN, "duplicated primary key found", K(ret), K(ctx), K(node),
@@ -999,8 +1176,13 @@ int ObMvccRow::mvcc_write(ObStoreCtx &ctx,
     } else {
       // Tip1: mvcc_write guarantee the tnode will not be inserted if error is reported
       (void)mvcc_undo();
+      res.is_mvcc_undo_ = true;
     }
   }
+
+  (void)mvcc_write_end_(ret);
+  TRANS_LOG(DEBUG, "mvcc_write end", KPC(this), K(res), K(snapshot), K(node), K(ctx), K(check_exist));
+
   return ret;
 }
 
@@ -1020,27 +1202,30 @@ int ObMvccRow::mvcc_write(ObStoreCtx &ctx,
  * - OB_SUCCESS
  */
 int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
-                                ObStoreRowLockState &lock_state,
-                                ObRowState &row_state)
+                                ObStoreRowLockState &lock_state)
 {
   int ret = OB_SUCCESS;
   ObRowLatchGuard guard(latch_);
   transaction::ObTxSnapshot &snapshot = ctx.snapshot_;
   const SCN snapshot_version = snapshot.version_;
+  const int64_t base_version = ctx.major_snapshot_;
   const ObTransID checker_tx_id = ctx.get_tx_id();
   ObMvccTransNode *iter = ATOMIC_LOAD(&list_head_);
   bool need_retry = true;
-
+  ObMvccRowFilter row_filter(ctx.mds_filter_);
+  if (ctx.mds_filter_.is_valid() && OB_FAIL(row_filter.init())) {
+    TRANS_LOG(WARN, "failed to init row filter", KR(ret), K(ctx.mds_filter_));
+  }
   while (OB_SUCC(ret) && need_retry) {
     if (OB_ISNULL(iter)) {
       // Case 1: head is empty, so node currently is not be locked
       lock_state.is_locked_ = false;
       lock_state.trans_version_.set_min();
       lock_state.lock_trans_id_.reset();
-      lock_state.exist_flag_ = ObExistFlag::UNKNOWN;
+      lock_state.lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
       need_retry = false;
     } else {
-      auto data_tx_id = iter->tx_id_;
+      const ObTransID data_tx_id = iter->tx_id_;
       if (!(iter->is_committed() || iter->is_aborted())
           && iter->is_delayed_cleanout()
           && OB_FAIL(ctx.get_tx_table_guards().cleanout_tx_node(data_tx_id,
@@ -1050,12 +1235,39 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
         TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*this));
       } else if (iter->is_committed() || iter->is_elr()) {
         // Case 2: the newest node is decided, so node currently is not be locked
-        lock_state.is_locked_ = false;
-        lock_state.trans_version_ = get_max_trans_version();
-        lock_state.lock_trans_id_.reset();
-        lock_state.exist_flag_ =
-          extract_exist_flag_from_dml_flag(iter->get_dml_flag());
-        need_retry = false;
+        bool complete = true;
+        bool filtered = false;
+        if (iter->is_committed()
+            && row_filter.is_inited()
+            && OB_FAIL(row_filter.read_row_and_check(*iter, complete, filtered))) {
+          TRANS_LOG(WARN, "failed to check trans node filtered", KR(ret), K(ctx.mds_filter_), KPC(iter));
+        } else if (!complete) {
+          iter = iter->prev_;
+          need_retry = true;
+        } else {
+          /* check lock should skip rows with tx_version <= base_version,
+          *  rows in memtable which have tx_version <= base_version may overwrite rows in inc major sstables with greater version
+          *  MAJOR      EMPTY    (version 100)
+          *  INC_MAJOR  INSERT 1 (version 110)
+          *  MEMTABLE   DELETE 1 (version 90)
+          */
+          if (OB_UNLIKELY(iter->is_committed() &&
+                          base_version > 0 &&
+                          iter->get_tx_version().get_val_for_tx() <= base_version)) {
+            filtered = true;
+          }
+          lock_state.is_locked_ = false;
+          lock_state.lock_trans_id_.reset();
+          need_retry = false;
+          if (filtered) {
+            lock_state.trans_version_.set_min();
+            lock_state.lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
+            iter = nullptr;
+          } else {
+            lock_state.trans_version_ = get_max_trans_version();
+            lock_state.lock_dml_flag_ = iter->get_dml_flag();
+          }
+        }
       } else if (iter->is_aborted()) {
         iter = iter->prev_;
         need_retry = true;
@@ -1067,27 +1279,12 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
         lock_state.lock_dml_flag_ = iter->get_dml_flag();
         lock_state.is_delayed_cleanout_ = iter->is_delayed_cleanout();
         lock_state.trans_scn_ = iter->get_scn();
-        lock_state.exist_flag_ =
-          extract_exist_flag_from_dml_flag(iter->get_dml_flag());
         need_retry = false;
       }
     }
   }
   if (OB_SUCC(ret)) {
     lock_state.mvcc_row_ = this;
-
-    // just for temporary enable the batch insert, so the following code will be
-    // optimized in the future
-    if (!lock_state.is_lock_decided()) {
-      // row is not exist
-    } else if (lock_state.is_locked(checker_tx_id) ||
-               lock_state.trans_version_ > snapshot_version) {
-      // row is locked or tsc
-    } else {
-      if (OB_NOT_NULL(iter)) {
-        row_state.row_dml_flag_ = iter->get_dml_flag();
-      }
-    }
   }
   return ret;
 }
@@ -1096,7 +1293,7 @@ void ObMvccRow::print_row()
 {
   int ret = OB_SUCCESS;
   blocksstable::ObDatumRow datum_row;
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   ObMvccRow *row = this;
   TRANS_LOG(INFO, "qianchen print row", K(*row));
   for (ObMvccTransNode *node = row->get_list_head(); OB_SUCC(ret) && OB_NOT_NULL(node); node = node->prev_) {

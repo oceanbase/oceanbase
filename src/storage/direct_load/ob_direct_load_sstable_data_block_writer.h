@@ -27,6 +27,8 @@ public:
   ObDirectLoadSSTableDataBlockWriter();
   virtual ~ObDirectLoadSSTableDataBlockWriter();
   int append_row(const T &row);
+  // 在flush buffer的时候读最后一行
+  int get_flush_last_row(T &row);
 private:
   int pre_write_item() override;
   int pre_flush_buffer() override;
@@ -55,6 +57,23 @@ int ObDirectLoadSSTableDataBlockWriter<T>::append_row(const T &row)
     STORAGE_LOG(WARN, "fail to write item", KR(ret));
   } else {
     last_row_pos_ = cur_row_pos_;
+  }
+  return ret;
+}
+
+template <typename T>
+int ObDirectLoadSSTableDataBlockWriter<T>::get_flush_last_row(T &row)
+{
+  int ret = common::OB_SUCCESS;
+  ObDirectLoadSSTableDataBlock::Header &header = this->data_block_writer_.get_header();
+  if (OB_UNLIKELY(header.last_row_pos_ == 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected get flush last row", KR(ret), K(header));
+  } else {
+    int64_t pos = header.last_row_pos_;
+    if (OB_FAIL(this->data_block_writer_.read_item(pos, row))) {
+      STORAGE_LOG(WARN, "fail to read item", KR(ret), K(pos));
+    }
   }
   return ret;
 }

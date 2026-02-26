@@ -61,6 +61,7 @@ public:
   uint64_t get_db_id() { return db_id_; }
   const char *get_sql_id() const { return sql_id_; };
   ObSQLSessionInfo *get_my_session() { return my_session_; }
+  void reset_my_session() { my_session_ = nullptr; }
   bool get_disable_auto_mem_mgr() { return disable_auto_mem_mgr_; }
 
   TO_STRING_KV(K_(dop), K_(plan_id), K_(exec_id), K_(session_id), K_(db_id), K_(sql_id), K_(disable_auto_mem_mgr));
@@ -84,14 +85,13 @@ public:
     random_id_(0), type_(type), op_type_(PHY_INVALID), op_id_(UINT64_MAX), exec_info_(),
     min_size_(0), row_count_(0), input_size_(0), bucket_size_(0),
     chunk_size_(0), cache_size_(-1), one_pass_size_(0), expect_size_(OB_INVALID_ID),
-    global_bound_size_(INT64_MAX), max_bound_(INT64_MAX), delta_size_(0), data_size_(0),
+    global_bound_size_(INT64_MAX), delta_size_(0), data_size_(0),
     max_mem_used_(0), mem_used_(0),
     pre_mem_used_(0), dumped_size_(0), max_dumped_size_(0), data_ratio_(0.5),
     active_time_(0), number_pass_(0),
     calc_count_(0), disable_auto_mem_mgr_(false)
   {
-    ObRandom rand;
-    random_id_ = rand.get();
+    random_id_ = (int64_t)rdtsc();
   }
 
   OB_INLINE int64_t get_row_count() const { return row_count_; }
@@ -149,8 +149,6 @@ public:
   OB_INLINE int64_t get_global_bound_size() const { return global_bound_size_; }
   OB_INLINE void set_global_bound_size(int64_t global_bound_size)
             { global_bound_size_ = global_bound_size; }
-  OB_INLINE int64_t get_max_bound() const { return max_bound_; }
-  OB_INLINE void set_max_bound(int64_t max_bound) { max_bound_ = max_bound; }
 
   OB_INLINE bool is_hash_join_wa() const { return ObSqlWorkAreaType::HASH_WORK_AREA == type_; }
   OB_INLINE bool is_sort_wa() const { return ObSqlWorkAreaType::SORT_WORK_AREA == type_; }
@@ -222,11 +220,6 @@ private:
   int64_t one_pass_size_;
   int64_t expect_size_;
   int64_t global_bound_size_;
-  // 取 min(cache_size, global_bound_size)
-  // sort场景，在global_bound_size比较大情况下，sort理论上有data和extra内存，data应该是one-pass size
-  // 也就是expect_size
-  // 但总体内存应该是global_bound_size和cache size更小值，其实也可以用expect_size和global_bound_size取最大值
-  int64_t max_bound_;
 public:
   int64_t delta_size_;
   int64_t data_size_;
@@ -468,6 +461,7 @@ public:
   void reset() { total_alloc_size_ = 0; total_dump_size_ = 0; }
   int64_t get_total_alloc_size() const { return total_alloc_size_; }
   int64_t get_total_dump_size() const { return total_dump_size_; }
+  void reset_total_alloc_size_if_negative();
 private:
   int64_t total_alloc_size_;
   int64_t total_dump_size_;
@@ -835,6 +829,15 @@ OB_INLINE void ObTenantSqlMemoryCallback::free(int64_t size)
 OB_INLINE void ObTenantSqlMemoryCallback::dumped(int64_t size)
 {
   (ATOMIC_AAF(&total_dump_size_, size));
+}
+
+OB_INLINE void ObTenantSqlMemoryCallback::reset_total_alloc_size_if_negative()
+{
+  // try to reset total_alloc_size_ if it is negative, only once
+  int64_t old_val = ATOMIC_LOAD(&total_alloc_size_);
+  if (old_val < 0) {
+    ATOMIC_CAS(&total_alloc_size_, old_val, 0);
+  }
 }
 
 } // sql

@@ -14,20 +14,6 @@
 
 #include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/dml/ob_trigger_handler.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/basic/ob_expr_values_op.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/partition_table/ob_partition_location.h"
-#include "share/ob_autoincrement_service.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/profile/ob_perf_event.h"
-#include "share/schema/ob_table_dml_param.h"
-#include "share/ob_tablet_autoincrement_service.h"
-#include "sql/engine/cmd/ob_table_direct_insert_service.h"
-#include "sql/engine/dml/ob_fk_checker.h"
 
 
 namespace oceanbase
@@ -174,8 +160,7 @@ OB_INLINE int ObTableInsertOp::open_table_for_each()
         //but single value insert in oracle allow the nested sql modify its insert table
         //clear the writing flag in table location before the trigger execution
         //see it:
-        primary_ins_rtdef.das_rtdef_.table_loc_->is_writing_ =
-            !(primary_ins_ctdef.is_single_value_ && lib::is_oracle_mode());
+        primary_ins_rtdef.das_rtdef_.table_loc_->is_writing_ = !(primary_ins_ctdef.is_single_value_);
       }
     }
   }
@@ -233,7 +218,6 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
 {
   int ret = OB_SUCCESS;
   transaction::ObTxSEQ savepoint_no;
-  NG_TRACE(insert_start);
   // first get next row from child operator
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   bool is_skipped = false;
@@ -303,9 +287,13 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
   }
 
   if (OB_SUCC(ret)) {
-    plan_ctx->record_last_insert_id_cur_stmt();
+    bool is_ins_val_opt = ctx_.get_sql_ctx()->is_do_insert_batch_opt();
+    if (MY_SPEC.ab_stmt_id_ != nullptr && !is_ins_val_opt) {
+      plan_ctx->record_last_insert_id_cur_stmt_for_batch();
+    } else {
+      plan_ctx->record_last_insert_id_cur_stmt();
+    }
   }
-  NG_TRACE(insert_end);
   return ret;
 }
 
@@ -328,6 +316,10 @@ int ObTableInsertOp::write_rows_post_proc(int last_errno)
       // sync last user specified value after iter ends(compatible with MySQL)
       if (OB_FAIL(plan_ctx->sync_last_value_local())) {
         LOG_WARN("failed to sync last value", K(ret));
+      } else if (changed_rows == 0) {
+        // for insert ignore a single row
+        // if the row is ignored, there is no need to update last insert id in session
+        plan_ctx->set_last_insert_id_cur_stmt(0);
       }
     }
     int sync_ret = OB_SUCCESS;

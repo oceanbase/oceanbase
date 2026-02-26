@@ -316,6 +316,7 @@ public:
     virtual ~BlurredIterator() {}
     int next(Key &key, Value &value);
     void rewind();
+    void rewind_randomly();
   private:
     ObLinearHashMap *map_;
     uint64_t bkt_idx_;
@@ -440,7 +441,13 @@ public:
   // fn: bool operator()(const Key &key, Value &value);
   // If operator() returns false, operate() return OB_EAGAIN.
   template <typename Function> int operate(const Key &key, Function &fn);
-
+  // insert_or_operate.
+  // If the specialized value exists, Call fn on the specified Value
+  // Otherwise insert the specialized value to hashmap
+  // All this operation is under lock protection.
+  // fn: bool operator()(const Key &key, Value &value);
+  // If operator() returns false, insert_or_operate() return OB_EAGAIN.
+  template <typename Function> int insert_or_operate(const Key &key, const Value &value, Function &fn);
   bool is_inited() const { return init_; }
 
 private:
@@ -520,6 +527,7 @@ private:
       uint64_t bkt_L, Function &fn, DoOp &op);
   template <typename Function> int do_erase_if_(const Key &key, Function &fn);
   template <typename Function> int do_operate_(const Key &key, Function &fn);
+  template <typename Function> int do_insert_or_operate_(const Key &key, const Value &value, Function &fn);
 
 private:
   bool init_;
@@ -865,6 +873,20 @@ void ObLinearHashMap<Key, Value, MemMgrTag>::BlurredIterator::rewind()
 {
   bkt_idx_ = 0;
   key_idx_ = 0;
+}
+
+template <typename Key, typename Value, typename MemMgrTag>
+void ObLinearHashMap<Key, Value, MemMgrTag>::BlurredIterator::rewind_randomly()
+{
+  bkt_idx_ = 0;
+  key_idx_ = 0;
+  int64_t seed = (ObTimeUtility::current_time() & 0xFFFFFFFF);
+  if (NULL != map_) {
+    const uint64_t bkt_cnt = map_->get_bkt_cnt();
+    if (bkt_cnt > 1) {
+      bkt_idx_ = seed % bkt_cnt;
+    }
+  }
 }
 
 // Public functions.
@@ -1793,6 +1815,7 @@ template <typename Key, typename Value, typename MemMgrTag>
 int ObLinearHashMap<Key, Value, MemMgrTag>::do_clear_()
 {
   int ret = OB_SUCCESS;
+  es_lock_();
   if (dir_ != NULL) {
     uint64_t seg_idx = 0;
     while (seg_idx < dir_seg_n_lmt_ && dir_[seg_idx] != NULL) {
@@ -1802,6 +1825,8 @@ int ObLinearHashMap<Key, Value, MemMgrTag>::do_clear_()
       seg_idx += 1;
     }
   } else { /*Fatal err.*/}
+  es_unlock_();
+
   while (ES_SUCCESS == shrink_()) { }
   return ret;
 }
@@ -1815,24 +1840,28 @@ uint64_t ObLinearHashMap<Key, Value, MemMgrTag>::do_clear_seg_(Bucket *seg, uint
   } else {
     for (uint64_t idx = 0; idx < bkt_n; ++idx) {
       Bucket *bkt = &seg[idx];
-      if (is_bkt_active_(bkt)) {
-        if (is_bkt_nonempty_(bkt)) {
-          Node *iter = bkt->next_;
-          while (iter != NULL) {
-            Node *cur = iter;
-            iter = iter->next_;
-            cur->key_.~Key();
-            cur->value_.~Value();
-            mem_mgr_.get_node_alloc().free(cur);
-            cur = NULL;
+      if (NULL != bkt) {
+        set_bkt_lock_(bkt, true);
+        if (is_bkt_active_(bkt)) {
+          if (is_bkt_nonempty_(bkt)) {
+            Node *iter = bkt->next_;
+            while (iter != NULL) {
+              Node *cur = iter;
+              iter = iter->next_;
+              cur->key_.~Key();
+              cur->value_.~Value();
+              mem_mgr_.get_node_alloc().free(cur);
+              cur = NULL;
+              cnt += 1;
+            }
+            bkt->next_ = NULL;
+            bkt->key_.~Key();
+            bkt->value_.~Value();
+            set_bkt_nonempty_(bkt, false);
             cnt += 1;
           }
-          bkt->next_ = NULL;
-          bkt->key_.~Key();
-          bkt->value_.~Value();
-          set_bkt_nonempty_(bkt, false);
-          cnt += 1;
         }
+        set_bkt_lock_(bkt, false);
       }
     }
   }
@@ -1882,6 +1911,71 @@ int ObLinearHashMap<Key, Value, MemMgrTag>::do_insert_(const Key &key, const Val
   }
   if (OB_SUCC(ret)) {
     add_cnt_(1);
+    load_factor_ctrl_(hash_v);
+  }
+  return ret;
+}
+
+
+template <typename Key, typename Value, typename MemMgrTag>
+template <typename Function>
+int ObLinearHashMap<Key, Value, MemMgrTag>::do_insert_or_operate_(const Key &key, const Value &value, Function &fn)
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_v = 0;
+  bool operate = false;
+  if (!init_) {
+    ret = OB_NOT_INIT;
+  } else {
+    Bucket* bkt_seg = NULL;
+    Bucket *bkt = load_access_bkt_(key, hash_v, bkt_seg);
+    if (!is_bkt_nonempty_(bkt)) {
+      new (&bkt->key_) Key(key);
+      new (&bkt->value_) Value(value);
+      set_bkt_nonempty_(bkt, true);
+    } else {
+      if (equal_func_(bkt->key_, key)) {
+        operate = true;
+        if (fn(bkt->key_, bkt->value_)) {
+          ret = OB_SUCCESS;
+        } else {
+          ret = OB_EAGAIN;
+        }
+      } else {
+        Node *iter = bkt->next_;
+        while ((iter != NULL) && !operate) {
+          if (equal_func_(iter->key_, key)) {
+            operate = true;
+            if (fn(iter->key_, iter->value_)) {
+              ret = OB_SUCCESS;
+            } else {
+              ret = OB_EAGAIN;
+            }
+            break;
+          }
+          iter = iter->next_;
+        }
+      }
+
+      if (!operate && OB_SUCC(ret)) {
+        Node *node = static_cast<Node*>(mem_mgr_.get_node_alloc().alloc());
+        if (node == NULL) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          new (&node->key_) Key(key);
+          new (&node->value_) Value(value);
+          node->next_ = bkt->next_;
+          bkt->next_ = node;
+        }
+      }
+    }
+    unload_access_bkt_(bkt, bkt_seg);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!operate) {
+      add_cnt_(1);
+    }
     load_factor_ctrl_(hash_v);
   }
   return ret;
@@ -2408,6 +2502,13 @@ template <typename Key, typename Value, typename MemMgrTag>
 ConstructGuard<Key, Value, MemMgrTag>::ConstructGuard()
 {
   auto& t = ObLinearHashMap<Key, Value, MemMgrTag>::HashMapMemMgrCore::get_instance();
+}
+
+template <typename Key, typename Value, typename MemMgrTag>
+template <typename Function>
+int ObLinearHashMap<Key, Value, MemMgrTag>::insert_or_operate(const Key& key, const Value &value, Function& fn)
+{
+  return do_insert_or_operate_(key, value, fn);
 }
 
 }

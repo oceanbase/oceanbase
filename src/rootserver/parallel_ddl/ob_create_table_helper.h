@@ -61,16 +61,27 @@ public:
     share::schema::ObMultiVersionSchemaService *schema_service,
     const uint64_t tenant_id,
     const obrpc::ObCreateTableArg &arg,
-    obrpc::ObCreateTableRes &res);
+    obrpc::ObCreateTableRes &res,
+    ObDDLSQLTransaction *external_trans = nullptr);
   virtual ~ObCreateTableHelper();
-
-  virtual int execute() override;
+  TO_STRING_KV(K_(arg),
+               K_(res),
+               K_(replace_mock_fk_parent_table_id),
+               K_(new_tables),
+               K_(new_mock_fk_parent_tables),
+               K_(new_audits),
+               K_(new_sequences),
+               K_(has_index));
 private:
-  int init_();
+  virtual int init_() override;
 
-  int lock_objects_();
-  int generate_schemas_();
-  int calc_schema_version_cnt_();
+  virtual int lock_objects_() override;
+  virtual int generate_schemas_() override;
+  virtual int operate_schemas_() override;
+  virtual int calc_schema_version_cnt_() override;
+  virtual int operation_before_commit_() override;
+  virtual int clean_on_fail_commit_() override;
+  virtual int construct_and_adjust_result_(int &return_ret) override;
   int create_schemas_();
   int create_tablets_();
   int add_index_name_to_cache_();
@@ -83,6 +94,10 @@ private:
 
   int prefetch_schemas_();
   int check_and_set_database_id_();
+  int check_sslog_table_exist_(
+      const uint64_t tenant_id,
+      const uint64_t database_id,
+      const ObString &table_name);
   int check_table_name_();
   int set_tablegroup_id_();
   int check_and_set_parent_table_id_();

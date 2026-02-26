@@ -11,7 +11,6 @@
  */
 
 #include "ob_zlib_compressor.h"
-#include "lib/ob_errno.h"
 
 namespace oceanbase
 {

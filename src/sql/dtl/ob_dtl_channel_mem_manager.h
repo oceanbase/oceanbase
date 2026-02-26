@@ -128,6 +128,7 @@ OB_INLINE bool ObDtlChannelMemManager::out_of_memory()
 
 OB_INLINE void ObDtlChannelMemManager::update_max_memory_percent()
 {
+  size_per_buffer_ = GCONF.dtl_buffer_size;
   get_memstore_limit_percentage_();
   get_max_mem_percent();
 }

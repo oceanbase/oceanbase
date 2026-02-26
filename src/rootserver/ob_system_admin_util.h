@@ -80,6 +80,7 @@ class ObUpgradeStorageFormatVersionExecutor;
 class ObCreateInnerSchemaExecutor;
 class ObRsStatus;
 class ObRsGtsManager;
+class ObDDLSQLTransaction;
 namespace config_error
 {
 const static char * const INVALID_DISK_WATERLEVEL = "cannot specify disk waterlevel to zero when tenant groups matrix is specified";
@@ -133,29 +134,6 @@ protected:
     const ObSystemAdminCtx &ctx_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSystemAdminUtil);
-};
-
-class ObAdminSwitchReplicaRole : public ObSystemAdminUtil
-{
-public:
-  explicit ObAdminSwitchReplicaRole(const ObSystemAdminCtx &ctx) : ObSystemAdminUtil(ctx) {}
-  virtual ~ObAdminSwitchReplicaRole() {}
-
-  int execute(const obrpc::ObAdminSwitchReplicaRoleArg &arg);
-
-private:
-  static const int64_t TENANT_BUCKET_NUM = 1000;
-
-  static int alloc_tenant_id_set(common::hash::ObHashSet<uint64_t> &tenant_id_set);
-  template<typename T>
-  static int convert_set_to_array(const common::hash::ObHashSet<T> &set,
-      ObArray<T> &array);
-  int get_tenants_of_zone(const common::ObZone &zone,
-      common::hash::ObHashSet<uint64_t> &tenant_id_set);
-  int get_switch_replica_tenants(const common::ObZone &zone, const common::ObAddr &server,
-      const uint64_t &tenant_id, common::ObArray<uint64_t> &tenant_ids);
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObAdminSwitchReplicaRole);
 };
 
 class ObAdminCallServer : public ObSystemAdminUtil
@@ -338,6 +316,8 @@ public:
 
   int execute(obrpc::ObAdminSetConfigArg &arg);
 
+  static int construct_arg_and_broadcast_tenant_config_map();
+
 private:
   class ObServerConfigChecker : public common::ObServerConfig
   {
@@ -349,6 +329,59 @@ private:
 private:
   int verify_config(obrpc::ObAdminSetConfigArg &arg);
   int update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new_version);
+  int update_tenant_config_(
+      const obrpc::ObAdminSetConfigItem &item,
+      const char *svr_ip,
+      const int64_t svr_port,
+      const int64_t new_version);
+  int inner_update_tenant_config_(
+      const obrpc::ObAdminSetConfigItem &item,
+      const uint64_t tenant_id,
+      const char *table_name,
+      const char *svr_ip,
+      const int64_t svr_port,
+      const int64_t new_version);
+  int inner_update_tenant_config_for_compatible_(
+      const uint64_t tenant_id,
+      const obrpc::ObAdminSetConfigItem *item,
+      const char *svr_ip, const int64_t svr_port,
+      const char *table_name,
+      share::ObDMLSqlSplicer &dml,
+      const int64_t new_version);
+  int inner_update_tenant_config_for_others_(
+      const uint64_t tenant_id,
+      const char *svr_ip,
+      const uint64_t svr_port,
+      const obrpc::ObAdminSetConfigItem &item,
+      const char *table_name,
+      share::ObDMLSqlSplicer &dml,
+      const uint64_t new_version);
+  int update_sys_config_(
+      const obrpc::ObAdminSetConfigItem &item,
+      const char *svr_ip,
+      const int64_t svr_port,
+      const int64_t new_version);
+  int build_dml_before_update_(
+      const uint64_t tenant_id,
+      const obrpc::ObAdminSetConfigItem &item,
+      const ObConfigItem &config_item,
+      const char *svr_ip,
+      const int64_t svr_port,
+      const char *table_name,
+      const int64_t new_version,
+      share::ObDMLSqlSplicer &dml);
+  int check_with_lock_before_update_(
+      ObMySQLTransaction &trans,
+      const char *svr_ip,
+      const int64_t svr_port,
+      const uint64_t tenant_id,
+      const uint64_t exec_tenant_id,
+      const obrpc::ObAdminSetConfigItem &item,
+      const char *table_name,
+      const int64_t new_version);
+  static int broadcast_config_version_(const obrpc::ObBroadcastConfigVersionArg &broadcast_arg);
+  int construct_arg_and_broadcast_global_config_version_(const int64_t new_version);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminSetConfig);
 };
@@ -373,7 +406,32 @@ public:
   int execute();
   int execute(const uint64_t tenant_id, int64_t &upgrade_cnt);
 private:
-  int upgrade_(const uint64_t tenant_id, share::schema::ObTableSchema &table);
+  // in drop inner table, we need to generate_origin_index_name for oracle virtual table index
+  // which is not a const method, so the ObTableSchema in the following method should not use const
+  int batch_upgrade_(const uint64_t tenant_id,
+      ObIArray<share::schema::ObTableSchema> &hard_code_tables,
+      int64_t &upgrade_cnt);
+  // drop inner table and ignore table not exist error
+  int check_and_drop_inner_table_(rootserver::ObDDLSQLTransaction &trans,
+      const uint64_t &tenant_id,
+      share::schema::ObTableSchema &table,
+      common::hash::ObHashSet<uint64_t> &dropped_table_ids);
+  bool check_table_dropped(const share::schema::ObSimpleTableSchemaV2 &table,
+      const common::hash::ObHashSet<uint64_t> &dropped_table_ids);
+  // drop and create all inner table in upgrade_idxs
+  int batch_upgrade_inner_tables_(ObDDLSQLTransaction &trans, const uint64_t &tenant_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObIArray<share::schema::ObTableSchema> &hard_code_tables,
+      const ObIArray<int64_t> &upgrade_idxs);
+  int generate_hard_code_schemas_(
+      const int64_t &tenant_id,
+      ObArrayArray<ObTableSchema> &hard_code_tables);
+  int generate_table_id_set_(
+      const ObArrayArray<ObTableSchema> &hard_code_tables,
+      common::hash::ObHashSet<uint64_t> &table_ids);
+  int drop_not_exist_tables_(
+      const uint64_t &tenant_id,
+      const ObArrayArray<ObTableSchema> &hard_code_tables);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminUpgradeVirtualSchema);
 };
@@ -493,8 +551,8 @@ public:
             : ObSystemAdminUtil(ctx)
   {}
 
-  int get_all_servers(common::ObIArray<ObAddr> &servers);
-  int get_tenant_servers(const uint64_t tenant_id, common::ObIArray<ObAddr> &servers);
+  static int get_all_servers(common::ObIArray<ObAddr> &servers);
+  static int get_tenant_servers(const uint64_t tenant_id, common::ObIArray<ObAddr> &servers);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantServerAdminUtil);

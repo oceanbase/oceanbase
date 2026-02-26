@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_store_row_iterator.h"
-#include "ob_dml_param.h"
 #include "storage/access/ob_table_access_context.h"
 
 namespace oceanbase

@@ -15,13 +15,12 @@
 
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
-#include "ob_log_fetcher_dispatcher.h"      // ObLogFetcherDispatcher
 
+#include "ob_log_fetcher_dispatcher.h"
 #include "lib/oblog/ob_log_module.h"        // LOG_ERROR
 #include "lib/atomic/ob_atomic.h"           // ATOMIC_FAA
 #include "lib/utility/ob_macro_utils.h"     // RETRY_FUNC
 
-#include "ob_log_dml_parser.h"              // IObLogDmlParser
 #include "ob_log_sys_ls_task_handler.h"     // IObLogSysLsTaskHandler
 #include "ob_log_sequencer1.h"              // IObLogSequencer
 #include "ob_log_committer.h"               // IObLogCommitter

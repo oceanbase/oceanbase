@@ -23,6 +23,7 @@
 #include "storage/multi_data_source/runtime_utility/common_define.h"
 #include "util/easy_time.h"
 #include "share/ob_task_define.h"
+#include "storage/tx/ob_tx_seq.h"
 
 namespace oceanbase
 {
@@ -80,12 +81,13 @@ struct MdsEvent {
   friend class ObMdsEventBuffer;
   MdsEvent()
   : timestamp_(0),
+  obj_ptr_(nullptr),
   event_(nullptr),
   info_str_(),
   unit_id_(UINT8_MAX),
   writer_type_(storage::mds::WriterType::UNKNOWN_WRITER),
   writer_id_(0),
-  seq_no_(0),
+  seq_no_(),
   redo_scn_(),
   end_scn_(),
   trans_version_(),
@@ -109,9 +111,9 @@ struct MdsEvent {
     if (!rhs.is_valid_()) {
       ret = OB_INVALID_ARGUMENT;
       MDS_LOG(WARN, "invalid argument", KR(ret), K(rhs));
-    } else if (OB_FAIL(set_(alloc, rhs.timestamp_, rhs.event_, rhs.info_str_, rhs.unit_id_, rhs.writer_type_,
-                            rhs.writer_id_, rhs.seq_no_, rhs.redo_scn_, rhs.end_scn_, rhs.trans_version_,
-                            rhs.node_type_, rhs.state_, rhs.key_str_))) {
+    } else if (OB_FAIL(set_(alloc, rhs.timestamp_, rhs.obj_ptr_, rhs.event_, rhs.info_str_, rhs.unit_id_,
+                            rhs.writer_type_, rhs.writer_id_, rhs.seq_no_, rhs.redo_scn_, rhs.end_scn_,
+                            rhs.trans_version_, rhs.node_type_, rhs.state_, rhs.key_str_))) {
       // don't report 4013, cause alloc use ring buffer, 4013 is expected
     } else {
       tid_ = rhs.tid_;
@@ -120,26 +122,28 @@ struct MdsEvent {
     }
     return ret;
   }
-  TO_STRING_KV(KP_(alloc), KTIME_(timestamp), K_(event), K_(info_str), K_(unit_id), K_(key_str), K_(writer_type), \
-               K_(writer_id), K_(seq_no), K_(redo_scn), K_(end_scn), K_(trans_version), K_(node_type), K_(state));
+  TO_STRING_KV(KP_(alloc), KTIME_(timestamp), K_(obj_ptr), K_(event), K_(info_str), K_(unit_id), K_(key_str), \
+               K_(writer_type), K_(writer_id), K_(seq_no), K_(redo_scn), K_(end_scn), K_(trans_version), K_(node_type),\
+               K_(state));
 private:
   bool is_valid_() const { return OB_NOT_NULL(event_); }
   int set_(ObIAllocator &alloc,
            int64_t timestamp,
+           void *obj_ptr,
            const char *event_str,
            const ObString &info_str,
            uint8_t unit_id,
            storage::mds::WriterType writer_type,
            int64_t writer_id,
-           int64_t seq_no,
+           transaction::ObTxSEQ seq_no,
            share::SCN redo_scn,
            share::SCN end_scn,
            share::SCN trans_version,
            storage::mds::MdsNodeType node_type,
            storage::mds::TwoPhaseCommitState state,
            const ObString &key_str) {
-    #define PRINT_WRAPPER K(ret), K(event_str), K(unit_id), K(writer_type), K(writer_id), K(seq_no), K(redo_scn),\
-                          K(trans_version), K(node_type), K(state), K(key_str)
+    #define PRINT_WRAPPER K(ret), K(obj_ptr), K(event_str), K(unit_id), K(writer_type), K(writer_id), K(seq_no), \
+                          K(redo_scn), K(trans_version), K(node_type), K(state), K(key_str)
     int ret = OB_SUCCESS;
     if (is_valid_()) {
       ret = OB_INIT_TWICE;
@@ -174,6 +178,7 @@ private:
       }
     } else {
       timestamp_ = timestamp;
+      obj_ptr_ = obj_ptr;
       event_ = event_str;
       unit_id_ = unit_id;
       writer_type_ = writer_type;
@@ -208,12 +213,13 @@ private:
   char tname_[16] = {0};
   int64_t timestamp_;
   // need fill
+  void *obj_ptr_;
   const char *event_;
   ObString info_str_;
   uint8_t unit_id_;
   storage::mds::WriterType writer_type_;
   int64_t writer_id_;
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
   share::SCN redo_scn_;
   share::SCN end_scn_;
   share::SCN trans_version_;
@@ -253,11 +259,18 @@ struct ObMdsEventBuffer {
     void destroy() {
       mds_event_cache_.~ObVtableEventRecycleBuffer();
     }
-    void append(const MdsEventKey &key, const MdsEvent &event, const char *file, const uint32_t line, const char *func) {
+    void append(const MdsEventKey &key,
+                const MdsEvent &event,
+                const storage::mds::MdsTableBase *mds_table,
+                const char *file,
+                const uint32_t line,
+                const char *func) {
       if (OB_NOT_NULL(file) && OB_UNLIKELY(line != 0) && OB_NOT_NULL(func) && OB_NOT_NULL(event.event_)) {
-        //share::ObTaskController::get().allow_next_syslog();
-        //::oceanbase::common::OB_PRINT("[MDS.EVENT]", OB_LOG_LEVEL_INFO, file, line, func, OB_LOG_LOCATION_HASH_VAL, OB_SUCCESS,
-                                      //event.event_, LOG_KVS(K(key), K(event)));
+        share::ObTaskController::get().allow_next_syslog();
+        if (OB_UNLIKELY(OB_LOGGER.need_to_print(::oceanbase::common::OB_LOG_ROOT::M_MDS, OB_LOG_LEVEL_INFO))) {
+          ::oceanbase::common::OB_PRINT("[MDS.EVENT]", OB_LOG_LEVEL_INFO, file, line, func, OB_LOG_LOCATION_HASH_VAL, OB_SUCCESS,
+                                        event.event_, LOG_KVS(K(key), K(event), KPC(mds_table)));
+        }
       }
       if (is_inited_) {
         (void) mds_event_cache_.append(key, event, file, line, func);
@@ -294,8 +307,13 @@ struct ObMdsEventBuffer {
   };
   static int init() { return Singleton::get_instance().init(); }
   static void destroy() { return Singleton::get_instance().destroy(); }
-  static void append(const MdsEventKey &key, const MdsEvent &event, const char *file, const uint32_t line, const char *func) {
-    return Singleton::get_instance().append(key, event, file, line, func);
+  static void append(const MdsEventKey &key,
+                     const MdsEvent &event,
+                     const storage::mds::MdsTableBase *mds_table,
+                     const char *file,
+                     const uint32_t line,
+                     const char *func) {
+    return Singleton::get_instance().append(key, event, mds_table, file, line, func);
   }
   template <typename OP>
   static int for_each(const MdsEventKey &key, OP &&op) {

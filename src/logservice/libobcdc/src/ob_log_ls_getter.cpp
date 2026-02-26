@@ -88,19 +88,12 @@ int ObLogLsGetter::init(const common::ObIArray<uint64_t> &tenant_ids, const int6
   } else if (OB_FAIL(tenant_ls_ids_cache_.init("TenantLSIDs"))) {
     LOG_ERROR("tenant_ls_ids_cache_ init failed", KR(ret));
   } else {
-    ARRAY_FOREACH_N(tenant_ids, idx, count) {
-      const uint64_t tenant_id = tenant_ids.at(idx);
-
-      if (OB_SYS_TENANT_ID == tenant_id || is_meta_tenant(tenant_id)) {
-        // do nothing
-      } else if (OB_FAIL(query_and_set_tenant_ls_info_(tenant_id, start_tstamp_ns))) {
-        LOG_ERROR("query_and_set_tenant_ls_info_ failed", KR(ret), K(tenant_id), K(start_tstamp_ns));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      is_inited_ = true;
-    }
+    // Should not query_ls_info during init process because obcdc may get wrong ls list while
+    // syncing data from standby tenant if tenant readable_scn is less than start_tstamp_ns;
+    // Will query and get ls_ids while starting tenant service,
+    // that obcdc already wait tenant readable_scn >= start_tstamp_ns
+    is_inited_ = true;
+    LOG_INFO("init ObLogLsGetter succ", K(tenant_ids), K(start_tstamp_ns));
   }
 
   return ret;

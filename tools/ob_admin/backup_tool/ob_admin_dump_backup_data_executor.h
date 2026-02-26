@@ -59,11 +59,15 @@ public:
       const std::function<int(const common::ObIArray<IndexType> &)> &print_func3,
       const std::function<int(const common::ObIArray<IndexIndexType> &)> &print_func4);
   template <class IndexType>
-  static int parse_from_index_blocks(
+  static int parse_from_data_file_index_blocks(
       blocksstable::ObBufferReader &buffer_reader, common::ObIArray<IndexType> &index_list);
   template <typename BackupSmallFileType> 
   static int read_backup_info_file(const common::ObString &backup_path, const common::ObString &storage_info_str, 
       BackupSmallFileType &file_info);
+  template <class IndexType>
+  static int uncompress_and_decode_block(
+      const ObCompressorType &compressor_type, const int64_t data_zlength, const int64_t original_size,
+      blocksstable::ObBufferReader &buffer_reader, ObIArray<IndexType> &index_list);
 };
 
 class ObAdminDumpBackupDataExecutor : public ObAdminExecutor {
@@ -89,11 +93,14 @@ private:
       const share::ObPieceKey &first_piece, 
       const common::ObIArray<share::ObTenantArchivePieceAttr> &pieces,
       common::ObIArray<share::ObTenantArchiveRoundAttr> &rounds);
+  int do_restore_preview_();
+  int do_show_piece_files_();
 
 private:
   int print_backup_data_file_();
   int print_macro_range_index_file();
   int print_meta_index_file();
+  int print_macro_block_index_file();
 
 private:
   int print_backup_file_header_();
@@ -107,9 +114,11 @@ private:
   int print_macro_range_index_index_list_();
   int print_meta_index_index_list_();
   int print_ls_attr_info_();
+  int print_ls_id_list_info_();
   int print_tablet_to_ls_info_();
   int print_deleted_tablet_info_();
   int print_tenant_locality_info_();
+  int print_parameters_info_();
   int print_tenant_diagnose_info_();
   int print_backup_set_info_();
   int print_place_holder_info_();
@@ -149,6 +158,8 @@ private:
   int dump_multi_level_index_header_(const backup::ObBackupMultiLevelIndexHeader &header);
   int dump_macro_block_index_(const backup::ObBackupMacroBlockIndex &index);
   int dump_macro_block_index_list_(const common::ObIArray<backup::ObBackupMacroBlockIndex> &index_list);
+  int dump_macro_block_index_index_(const backup::ObBackupMacroBlockIndexIndex &index);
+  int dump_macro_block_index_index_list_(const common::ObIArray<backup::ObBackupMacroBlockIndexIndex> &index_list);
   int dump_macro_range_index_(const backup::ObBackupMacroRangeIndex &index);
   int dump_macro_range_index_list_(const common::ObIArray<backup::ObBackupMacroRangeIndex> &index_list);
   int dump_macro_range_index_index_(const backup::ObBackupMacroRangeIndexIndex &index);
@@ -163,9 +174,12 @@ private:
   int dump_ls_attr_info_(const share::ObLSAttr &ls_attr);
   int dump_tablet_to_ls_info_(const storage::ObBackupDataTabletToLSInfo &tablet_to_ls_info);
   int dump_tenant_locality_info_(const storage::ObExternTenantLocalityInfoDesc &locality_info);
+  int dump_parameters_info_(const storage::ObExternParamInfoDesc &param_info);
+  int dump_locality_resource_pool_infos_(const ObSArray<ObBackupResourcePool> &resource_pool_infos);
   int dump_tenant_diagnose_info_(const storage::ObExternTenantDiagnoseInfoDesc &diagnose_info);
   int dump_backup_set_info(const share::ObBackupSetFileDesc &backup_set_info);
   int dump_tenant_backup_set_infos_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos);
+  int dump_tenant_backup_set_infos_file_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos);
   int dump_backup_ls_meta_infos_file_(const storage::ObBackupLSMetaInfosDesc &ls_meta_infos);
   int dump_archive_round_start_file_(const share::ObRoundStartDesc &round_start_file);
   int dump_archive_round_end_file_(const share::ObRoundEndDesc round_end_file);
@@ -203,7 +217,16 @@ private:
   int read_locality_info_file(const char *tenant_backup_path,
       share::ObBackupSetDesc latest_backup_set_desc,
       storage::ObExternTenantLocalityInfoDesc &locality_info);
+  int do_tenant_level_restore_preview_(
+      const ObIArray<ObString> &backup_path_array,
+      ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
+      ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list);
+  int do_print_restore_preview_(
+      ObIAllocator &allocator,
+      ObArray<ObRestoreBackupSetBriefInfo> backup_set_list,
+      ObArray<ObRestoreLogPieceBriefInfo> backup_piece_list);
 private:
+  static const int64_t MAX_RESTORE_TIME_LENGTH = MAX(OB_MAX_TIME_STR_LENGTH, OB_MAX_INTEGER_DISPLAY_WIDTH);
   char backup_path_[common::OB_MAX_URI_LENGTH];
   char storage_info_[common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
   int64_t offset_;
@@ -211,6 +234,11 @@ private:
   int64_t file_type_;
   bool is_quiet_;
   bool check_exist_;
+  bool is_restore_preview_;
+  bool show_piece_files_;
+  int64_t round_id_;
+  int64_t piece_id_;
+  char restore_time_[MAX_RESTORE_TIME_LENGTH];
   common::ObArenaAllocator allocator_;
 };
 

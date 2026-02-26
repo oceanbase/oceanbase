@@ -16,7 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #define private public
 #define protected public
-#include "sql/executor/ob_slice_calc.h"
+#include "sql/engine/px/ob_slice_calc.h"
 #undef private
 #undef protected
 #include "lib/ob_define.h"

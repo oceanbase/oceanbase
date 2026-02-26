@@ -14,12 +14,12 @@
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_INFORMATION_GLOBAL_STATUS_TABLE_
 
 #include "share/ob_virtual_table_scanner_iterator.h"
+#include "src/share/ob_server_struct.h"
 
 namespace oceanbase
 {
 namespace observer
 {
-struct ObGlobalContext;
 class ObInfoSchemaGlobalStatusTable : public common::ObVirtualTableScannerIterator
 {
   #define GLOBAL_STATUS_MAP_BUCKET_NUM 10
@@ -47,7 +47,7 @@ public:
   {
     cur_session_ = session;
   }
-  inline void set_global_ctx(const ObGlobalContext *global_ctx)
+  inline void set_global_ctx(const share::ObGlobalContext *global_ctx)
   {
     global_ctx_ = global_ctx;
   }
@@ -56,7 +56,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaGlobalStatusTable);
 private:
   sql::ObSQLSessionInfo *cur_session_;
-  const observer::ObGlobalContext *global_ctx_;
+  const share::ObGlobalContext *global_ctx_;
   static const char *const variables_name[];
 };
 }

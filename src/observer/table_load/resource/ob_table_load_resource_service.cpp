@@ -15,9 +15,6 @@
 #include "observer/table_load/resource/ob_table_load_resource_service.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/location_cache/ob_location_struct.h"
 
 namespace oceanbase
 {
@@ -36,7 +33,7 @@ using namespace common::hash;
 
 ObTableLoadResourceService::~ObTableLoadResourceService()
 {
-  obsys::ObWLockGuard w_guard(rw_lock_);
+  obsys::ObWLockGuard<> w_guard(rw_lock_);
   ob_delete(resource_manager_);
 }
 
@@ -70,7 +67,7 @@ int ObTableLoadResourceService::mtl_init(ObTableLoadResourceService *&service)
 
 void ObTableLoadResourceService::stop()
 {
-  obsys::ObRLockGuard r_guard(rw_lock_);
+  obsys::ObRLockGuard<> r_guard(rw_lock_);
   if (OB_NOT_NULL(resource_manager_)) {
     LOG_INFO("resource_manager_ start to stop", K_(tenant_id));
     resource_manager_->stop();
@@ -80,7 +77,7 @@ void ObTableLoadResourceService::stop()
 
 void ObTableLoadResourceService::wait()
 {
-  obsys::ObRLockGuard r_guard(rw_lock_);
+  obsys::ObRLockGuard<> r_guard(rw_lock_);
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(resource_manager_)) {
     LOG_INFO("resource_manager_ start to wait", K_(tenant_id));
@@ -93,7 +90,7 @@ void ObTableLoadResourceService::wait()
 
 void ObTableLoadResourceService::destroy()
 {
-  obsys::ObRLockGuard r_guard(rw_lock_);
+  obsys::ObRLockGuard<> r_guard(rw_lock_);
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(resource_manager_)) {
     LOG_INFO("resource_manager_ start to destroy", K_(tenant_id));
@@ -111,12 +108,12 @@ int ObTableLoadResourceService::switch_to_leader()
     LOG_WARN("fail to check_inner_stat", KR(ret), K_(tenant_id));
   } else {
     if (OB_ISNULL(resource_manager_)) {
-      obsys::ObWLockGuard w_guard(rw_lock_);
+      obsys::ObWLockGuard<> w_guard(rw_lock_);
       if (OB_FAIL(alloc_resource_manager())) {
         LOG_WARN("fail to alloc resource_manager", KR(ret), K_(tenant_id));
       }
     } else {
-      obsys::ObRLockGuard r_guard(rw_lock_);
+      obsys::ObRLockGuard<> r_guard(rw_lock_);
       ret = resource_manager_->resume();
       LOG_INFO("resource_service finish to resume",KR(ret), K_(tenant_id));
     }
@@ -210,7 +207,7 @@ int ObTableLoadResourceService::inner_switch_to_follower()
 {
   int ret = OB_SUCCESS;
   ObMutexGuard switch_guard(switch_lock_);
-  obsys::ObRLockGuard r_guard(rw_lock_);
+  obsys::ObRLockGuard<> r_guard(rw_lock_);
   const int64_t start_time_us = ObTimeUtility::current_time();
   if (OB_NOT_NULL(resource_manager_)) {
     resource_manager_->pause();
@@ -227,22 +224,6 @@ int ObTableLoadResourceService::check_inner_stat()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
-  }
-
-  return ret;
-}
-
-int ObTableLoadResourceService::check_tenant()
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  ObTenant *tenant = nullptr;
-  if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
-    LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
-                         tenant->get_unit_status())) {
-    ret = OB_ERR_UNEXPECTED_UNIT_STATUS;
-    LOG_WARN("unit status not normal", KR(ret), K(tenant->get_unit_status()));
   }
 
   return ret;
@@ -273,7 +254,7 @@ int ObTableLoadResourceService::local_apply_resource(ObDirectLoadResourceApplyAr
     ret = OB_ERR_SYS;
     LOG_WARN("null table load resource service", KR(ret));
   } else if(OB_ISNULL(service->resource_manager_)) {
-    ret = OB_ERR_SYS;
+    ret = OB_EAGAIN;
     LOG_WARN("resource_manager_ is null", KR(ret));
   } else {
     ret = service->resource_manager_->apply_resource(arg, res);
@@ -290,7 +271,7 @@ int ObTableLoadResourceService::local_release_resource(ObDirectLoadResourceRelea
     ret = OB_ERR_SYS;
     LOG_WARN("null table load resource service", KR(ret));
   } else if(OB_ISNULL(service->resource_manager_)) {
-    ret = OB_ERR_SYS;
+    ret = OB_EAGAIN;
     LOG_WARN("resource_manager_ is null", KR(ret));
   } else {
     ret = service->resource_manager_->release_resource(arg);
@@ -307,7 +288,7 @@ int ObTableLoadResourceService::local_update_resource(ObDirectLoadResourceUpdate
     ret = OB_ERR_SYS;
     LOG_WARN("null table load resource service", KR(ret));
   } else if(OB_ISNULL(service->resource_manager_)) {
-    ret = OB_ERR_SYS;
+    ret = OB_EAGAIN;
     LOG_WARN("resource_manager_ is null", KR(ret));
   } else {
     ret = service->resource_manager_->update_resource(arg);

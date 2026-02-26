@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_agent_virtual_table.h"
-#include "share/ob_i_tablet_scan.h"
-#include "share/schema/ob_schema_struct.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_inner_sql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -150,11 +145,19 @@ int ObAgentVirtualTable::do_open()
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  ObSessionParam session_param;
+  ObTimeZoneInfoWrap tz_wrap;
+  if (OB_NOT_NULL(session_)) {
+    tz_wrap.deep_copy(session_->get_tz_info_wrap());
+    session_param.tz_info_wrap_ = &tz_wrap;
+  } else {
+    session_param.tz_info_wrap_ = nullptr;
+  }
   if (OB_FAIL(ObAgentTableBase::do_open())) {
     LOG_WARN("base agent table open failed", KR(ret));
   } else if (OB_FAIL(construct_sql(base_tenant_id_, sql))) {
     LOG_WARN("construct sql failed", KR(ret), K(base_tenant_id_));
-  } else if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, base_tenant_id_, sql.ptr()))) {
+  } else if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, base_tenant_id_, sql.ptr(), &session_param))) {
     LOG_WARN("execute sql failed", KR(ret), K(base_tenant_id_), K(sql));
   } else if (OB_ISNULL(sql_res_->get_result())) {
     ret = OB_ERR_UNEXPECTED;
@@ -267,7 +270,7 @@ int ObAgentVirtualTable::inner_get_next_row(common::ObNewRow *&row)
         cur_row_.cells_[i].set_null();
       } else if (lib::Worker::CompatMode::MYSQL == mode_) {
         cur_row_.cells_[i] = input;
-        LOG_INFO("mysql compat mode agent do not do convert", KR(ret), K(input));
+        LOG_TRACE("mysql compat mode agent do not do convert", KR(ret), K(input));
       } else if (OB_FAIL(mapping_[scan_param_->column_ids_.at(i)].convert_func_(
           input, cur_row_.cells_[i], convert_alloc_))) {
         LOG_WARN("convert obj failed", K(ret), K(input),

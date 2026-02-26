@@ -41,7 +41,7 @@ public:
      const uint64_t id, const common::ObAddr &peer, const int64_t hash_val, DtlChannelType type);
   virtual ~ObDtlLocalChannel();
 
-  virtual int init() override;
+  virtual int init(ObDtlFlowControl *dfc = nullptr) override;
   virtual void destroy();
   
   virtual int feedup(ObDtlLinkedBuffer *&buffer) override;

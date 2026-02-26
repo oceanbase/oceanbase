@@ -16,6 +16,7 @@
 #include "lib/objectpool/ob_pool.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/container/ob_array.h"
+#include "lib/container/ob_se_array.h"
 #include "lib/list/ob_list.h"
 #include "lib/hash/ob_hashmap.h"
 namespace oceanbase
@@ -363,43 +364,58 @@ int ObLruConnectionAllocator<T>::free_session_conn_array(uint32_t sessid, int64_
 {
   int ret = OB_SUCCESS;
   _OB_LOG(DEBUG, "free session conn array sessid=%u, ret=%d", sessid, ret);
-  ObSpinLockGuard guard(ObIConnectionAllocator<T>::lock_);
-  ObArray<T *> *conn_array = NULL;
+  const int64_t local_array_size = 16;
+  ObSEArray<T *, local_array_size> local_array;
   fail_recycled_conn_count = 0;
   succ_recycled_conn_count = 0;
-  if (OB_FAIL(get_session_conn_array(sessid, conn_array))) {
-    _OB_LOG(WARN, "failed to get conn_array, sessid=%u, ret=%d", sessid, ret);
-  } else {
-    T *conn = NULL;
-    int64_t array_size = conn_array->size();
-    int64_t succ_count = 0;
-    _OB_LOG(DEBUG, "try to free conn_array, conn_array=%p, count=%ld", conn_array, array_size);
-    while (OB_SUCC(ret) && OB_SUCCESS == conn_array->pop_back(conn)) {
-      conn->close(); //close immedately
-      _OB_LOG(TRACE, "close connection, conn=%p", conn);
-      if (OB_FAIL(free_conn_array_.push_back(conn))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        _OB_LOG(WARN, "push_back conn to free_conn_array_ failed, sessid=%u, ret=%d", sessid, ret);
-        ObLruConnectionAllocator<T>::free(conn);
+  while (OB_SUCC(ret)) {
+    local_array.reuse();
+    ObArray<T *> *conn_array = NULL;
+    {
+      ObSpinLockGuard guard(ObIConnectionAllocator<T>::lock_);
+      if (OB_FAIL(get_session_conn_array(sessid, conn_array))) {
+        _OB_LOG(WARN, "failed to get conn_array, sessid=%u, ret=%d", sessid, ret);
       } else {
-        ++succ_count;
+        T *conn = NULL;
+        while (local_array.count() < local_array_size && OB_SUCCESS == conn_array->pop_back(conn)) {
+          if (OB_SUCCESS != lru_list_erase(conn, sessid)){  // delete respective node from lru list.
+            ObLruConnectionAllocator<T>::free(conn);
+            _OB_LOG(ERROR, "lru_list failed to erase, sessid=%u, ret=%d", sessid, ret);
+          } else if (OB_SUCCESS != local_array.push_back(conn)) {
+            ObLruConnectionAllocator<T>::free(conn);
+            _OB_LOG(ERROR, "push back failed, ret=%d", ret);
+          }
+        }
       }
     }
-    _OB_LOG(DEBUG, "free session conn array succ_count=%ld, ret=%d", succ_count, ret);
-    succ_recycled_conn_count = succ_count;
-    if (OB_FAIL(ret)) {
-      fail_recycled_conn_count = array_size - succ_count;
-      while (OB_SUCCESS == conn_array->pop_back(conn)) {
+    if (local_array.count() > 0) {
+      for (int64_t i = 0; i < local_array.count() && OB_SUCC(ret); i++) {
+        T *conn = local_array.at(i);
         conn->close(); //close immedately
         _OB_LOG(TRACE, "close connection, conn=%p", conn);
-        ObLruConnectionAllocator<T>::free(conn);
       }
-      if (OB_SUCCESS != sessionid_to_conns_map_.erase_refactored(sessid)) {
-        _OB_LOG(WARN, "failed to erase refactored, sessid=%u, ret=%d", sessid, ret);
+      {
+        ObSpinLockGuard guard(ObIConnectionAllocator<T>::lock_);
+        for (int64_t i = 0; i < local_array.count() && OB_SUCC(ret); i++) {
+          T *conn = local_array.at(i);
+          // ignore error if fail to cache.
+          if (OB_SUCCESS != free_conn_array_.push_back(conn)) {
+            _OB_LOG(WARN, "push_back conn to free_conn_array_ failed, sessid=%u, ret=%d", sessid, ret);
+            ObLruConnectionAllocator<T>::free(conn);
+            fail_recycled_conn_count++;
+          } else {
+            succ_recycled_conn_count++;
+          }
+        }
       }
-    } else if (OB_FAIL(sessionid_to_conns_map_.erase_refactored(sessid))) {
-      _OB_LOG(WARN, "failed to erase refactored, sessid=%u, ret=%d", sessid, ret);
+    } else {
+      break;
     }
+  }
+  int tmp_ret = sessionid_to_conns_map_.erase_refactored(sessid);
+  if (OB_SUCC(ret) && OB_SUCCESS != tmp_ret) {
+    ret = tmp_ret;
+    _OB_LOG(WARN, "erase failed, ret=%d", ret);
   }
   return ret;
 }
@@ -454,9 +470,6 @@ int ObLruConnectionAllocator<T>::get_cached(T *&conn, uint32_t sessid)
       if (NULL == conn) {
         ret = OB_ERR_UNEXPECTED;
         _OB_LOG(WARN, "connection ptr is NULL, sessid=%u, ret=%d", sessid, ret);
-      } else if (OB_FAIL(lru_list_erase(conn, sessid))){  // delete respective node from lru list.
-        ObLruConnectionAllocator<T>::free(conn);
-        _OB_LOG(WARN, "lru_list failed to erase, sessid=%u, ret=%d", sessid, ret);
       }
     } else if (OB_FAIL(lru_list_pop_front(conn, other_sessid))) {
       // do nothing

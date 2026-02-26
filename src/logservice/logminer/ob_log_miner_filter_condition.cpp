@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX LOGMNR
 
 #include "ob_log_miner_filter_condition.h"
+#include "src/logservice/logminer/ob_log_miner_logger.h"
 
 namespace oceanbase
 {

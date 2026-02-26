@@ -12,14 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_remove_member_dag.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
+#include "rootserver/ob_disaster_recovery_task_utils.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "logservice/ob_log_service.h"
-#include "lib/hash/ob_hashset.h"
-#include "storage/high_availability/ob_storage_ha_utils.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -114,7 +109,7 @@ bool ObLSRemoveMemberDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObLSRemoveMemberDag::hash() const
+uint64_t ObLSRemoveMemberDag::hash() const
 {
   int64_t hash_value = 0;
   if (!is_inited_) {
@@ -132,10 +127,13 @@ int ObLSRemoveMemberDag::fill_info_param(compaction::ObIBasicInfoParam *&out_par
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls remove member dag do not init", K(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
-                                  ctx_.arg_.ls_id_.id(),
-                                  "remove_member", to_cstring(ctx_.arg_.remove_member_.get_server())))) {
-    LOG_WARN("failed to fill info param", K(ret));
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+        ctx_.arg_.ls_id_.id(),
+        "remove_member", helper.convert(ctx_.arg_.remove_member_.get_server())))) {
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -146,9 +144,13 @@ int ObLSRemoveMemberDag::fill_dag_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls remove member dag do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObLSRemoveMemberDag: ls_id = %s", to_cstring(ctx_.arg_.ls_id_)))) {
-    LOG_WARN("failed to fill dag key", K(ret), K(ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObLSRemoveMemberDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.arg_.ls_id_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill dag key", K(ret), K(ctx_));
+    }
   }
   return ret;
 }
@@ -243,7 +245,7 @@ int ObLSRemoveMemberTask::process()
       LOG_WARN("failed to change member", K(ret), KPC(ctx_));
     }
 
-    if (OB_SUCCESS != (tmp_ret = report_to_rs_())) {
+    if (OB_SUCCESS != (tmp_ret = report_to_disaster_recovery_())) {
       LOG_WARN("failed to report to rs", K(ret), KPC(ctx_));
     }
 
@@ -361,6 +363,8 @@ int ObLSRemoveMemberTask::transform_member_(ObLS *ls)
   if (!ctx_->arg_.type_.is_transform_member()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transform member get invalid argument", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(verify_addr_for_transform_member_())) {
+    LOG_WARN("failed to verify addr for transform member", K(ret), KPC(ctx_));
   } else {
     if (ObReplicaTypeCheck::is_full_replica(src_type) && ObReplicaTypeCheck::is_readonly_replica(dest_type)) {
       //F -> R
@@ -394,49 +398,57 @@ int ObLSRemoveMemberTask::switch_learner_to_acceptor_(ObLS *ls)
   return ret;
 }
 
-int ObLSRemoveMemberTask::report_to_rs_()
+int ObLSRemoveMemberTask::verify_addr_for_transform_member_()
 {
   int ret = OB_SUCCESS;
-  obrpc::ObDRTaskReplyResult res;
-  ObRsMgr *rs_mgr = GCTX.rs_mgr_;
-  int64_t retry_count = 0;
-  const int64_t MAX_RETRY_TIMES = 3;
-  ObAddr rs_addr;
-  const int64_t REPORT_RETRY_INTERVAL_MS = 100 * 1000; //100ms
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls remove member handler do not init", K(ret));
-  } else if (OB_ISNULL(rs_mgr)) {
+  if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rs mgr should not be NULL", K(ret), KP(rs_mgr));
+    LOG_WARN("ctx_ should not be null", K(ret));
+  } else if (!ctx_->arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (!ctx_->arg_.type_.is_transform_member()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transform member get invalid argument", K(ret), KPC(ctx_));
   } else {
-    res.task_id_ = ctx_->arg_.task_id_;
-    res.tenant_id_ = ctx_->arg_.tenant_id_;
-    res.ls_id_ = ctx_->arg_.ls_id_;
-    res.result_ = ctx_->result_;
-    while (retry_count++ < MAX_RETRY_TIMES) {
-      if (OB_FAIL(rs_mgr->get_master_root_server(rs_addr))) {
-        STORAGE_LOG(WARN, "get master root service failed", K(ret));
-      } else if (OB_FAIL(ctx_->storage_rpc_->post_ls_disaster_recovery_res(rs_addr, res))) {
-        LOG_WARN("failed to post ls diaster recovery res", K(ret), K(rs_addr), K(res));
-      }
-      if (OB_RS_NOT_MASTER != ret) {
-        if (OB_SUCC(ret)) {
-          STORAGE_LOG(INFO, "post ls remove member result success",
-              K(rs_addr), KPC(ctx_));
-        }
-        break;
-      } else if (OB_FAIL(rs_mgr->renew_master_rootserver())) {
-        STORAGE_LOG(WARN, "renew master root service failed", K(ret));
-      }
-
-      if (OB_FAIL(ret)) {
-        ob_usleep(REPORT_RETRY_INTERVAL_MS);
-      }
+    const common::ObAddr current_addr = GCONF.self_addr_;
+    if (common::is_tenant_sslog_ls(ctx_->arg_.tenant_id_, ctx_->arg_.ls_id_)) {
+      // skip verify for sslog ls
+    } else if (current_addr != ctx_->arg_.src_.get_server()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("type transform target address is not current server address", K(ret), K(current_addr), KPC(ctx_));
     }
   }
   return ret;
 }
 
-
+int ObLSRemoveMemberTask::report_to_disaster_recovery_()
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObDRTaskReplyResult res;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls remove member handler do not init", KR(ret));
+  } else if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx_ should not be null", KR(ret), KP(ctx_));
+  } else {
+    obrpc::ObDRTaskType dr_type = obrpc::ObDRTaskType::MAX_TYPE;
+    const ObLSRemoveMemberArg &arg = ctx_->arg_;
+    uint64_t sys_data_version = 0;
+    if (OB_FAIL(arg.type_.convert_to_dr_type(arg.is_paxos_member_, dr_type))) {
+      LOG_WARN("fail to convert dr task type", KR(ret), K(arg));
+    } else if (OB_FAIL(res.init(arg.task_id_, arg.tenant_id_, arg.ls_id_, ctx_->result_, dr_type))) {
+      // for dr_type, no compatibility processing required
+      LOG_WARN("failed to init res", KR(ret), K(arg), KPC(ctx_), K(dr_type));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+      LOG_WARN("fail to get min data version", KR(ret));
+    } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
+      if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_disaster_recovery(res))) {
+        LOG_WARN("failed to report to meta tenant", KR(ret), K(res));
+      }
+    } else if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_rs(res))) {
+      LOG_WARN("failed to report to rs", KR(ret), K(res));
+    }
+  }
+  return ret;
+}

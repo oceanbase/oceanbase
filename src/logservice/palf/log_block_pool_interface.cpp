@@ -11,14 +11,6 @@
  */
 
 #include "log_block_pool_interface.h"
-#include <cstdlib>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include "lib/file/file_directory_utils.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_utility.h"
-#include "log_define.h"
-#include "log_block_header.h"
 
 namespace oceanbase
 {

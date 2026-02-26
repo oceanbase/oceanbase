@@ -167,7 +167,8 @@ public:
     INVALID_GC_REASON = 0,          //不需要GC
     NOT_IN_LEADER_MEMBER_LIST = 1,  //不在成员列表中
     LS_STATUS_ENTRY_NOT_EXIST = 2,  //日志流状态表已删除该日志流
-    MAX_GC_REASON = 3,
+    MIGRATION_FAILED = 3,           //迁移复制相关场景失败的日志流
+    MAX_GC_REASON = 4,
   };
 
   struct GCCandidate
@@ -199,6 +200,12 @@ private:
   bool is_need_gc_ls_status_(const LSStatus &status);
   bool is_normal_ls_status_(const LSStatus &status);
   bool is_need_delete_entry_ls_status_(const LSStatus &status);
+  int check_can_remove_sslog_ls_(bool &can_remove_sslog);
+  int get_ls_leader_(const share::ObLSID &ls_id, common::ObAddr &addr);
+  int remove_from_member_list_(const share::ObLSID &ls_id);
+  int fix_sslog_memberlist_();
+  // migration failed相关
+  int gc_check_ls_migration_failed_(ObGCCandidateArray &gc_candidates);
   //member list相关
   int gc_check_member_list_(ObGCCandidateArray &gc_candidates);
   int construct_server_ls_map_for_member_list_(ServerLSMap &server_ls_map) const;
@@ -213,8 +220,15 @@ private:
                           ObGCCandidateArray &gc_candidates);
   int check_if_tenant_has_been_dropped_(const uint64_t tenant_id,
                                         bool &has_dropped);
+  int check_if_tenant_is_creating_(const uint64_t tenant_id,
+                                        bool &is_creating);
   int delete_ls_status_(const share::ObLSID &id);
   void execute_gc_(ObGCCandidateArray &gc_candidates);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int check_tablet_gc_(
+      ObLS &ls,
+      bool &wait_tablet_gc);
+#endif
 
 private:
   class InsertLSFunctor;
@@ -268,6 +282,8 @@ public:
     }
     inline bool is_succeed() const { return CbState::STATE_SUCCESS == ATOMIC_LOAD(&state_); }
     inline bool is_failed() const { return CbState::STATE_FAILED == ATOMIC_LOAD(&state_); }
+    const char *get_cb_name() const override { return "GCLSLogCb"; }
+
     TO_STRING_KV(K(state_), K(scn_), KP(handler_));
   public:
     CbState state_;
@@ -312,6 +328,14 @@ public:
                K(block_log_debug_time_),
                K(log_sync_stopped_),
                K(rec_scn_));
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  // for share storage
+private:
+  int update_ss_ls_meta_(const share::ObLSID &ls_id,
+                         const logservice::LSGCState &gc_state,
+                         const share::SCN &offline_scn);
+#endif
 
 private:
   typedef common::SpinRWLock RWLock;

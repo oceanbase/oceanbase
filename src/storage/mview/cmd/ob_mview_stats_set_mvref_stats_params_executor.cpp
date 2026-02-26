@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/cmd/ob_mview_stats_set_mvref_stats_params_executor.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 
@@ -39,7 +38,7 @@ int ObMViewStatsSetMVRefStatsParamsExecutor::execute(ObExecContext &ctx,
   CK(OB_NOT_NULL(session_info_ = ctx.get_my_session()));
   CK(OB_NOT_NULL(ctx.get_sql_proxy()));
   OV(OB_LIKELY(arg.is_valid()), OB_INVALID_ARGUMENT, arg);
-  OZ(schema_checker_.init(*ctx.get_sql_ctx()->schema_guard_, session_info_->get_sessid()));
+  OZ(schema_checker_.init(*ctx.get_sql_ctx()->schema_guard_, session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
   OZ(ObMViewExecutorUtil::check_min_data_version(
     tenant_id_, DATA_VERSION_4_3_0_0,

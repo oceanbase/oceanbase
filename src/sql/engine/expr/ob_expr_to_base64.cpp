@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_to_base64.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "lib/encode/ob_base64_encode.h"
-#include "lib/oblog/ob_log.h"
-#include "objit/common/ob_item_type.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -74,7 +69,7 @@ int ObExprToBase64::calc_result_type1(ObExprResType &type,
 
   str.set_calc_type(ObVarcharType);
   str.set_calc_collation_type(
-    str.is_string_type() ? str.get_collation_type() : CS_TYPE_UTF8MB4_BIN);
+    (str.is_string_type() || str.is_enum_or_set()) ? str.get_collation_type() : CS_TYPE_UTF8MB4_BIN);
 
   int64_t mbmaxlen = 0;
   int64_t max_result_length = 0;
@@ -82,9 +77,7 @@ int ObExprToBase64::calc_result_type1(ObExprResType &type,
     LOG_WARN("fail to get mbmaxlen", K(str.get_collation_type()), K(ret));
   } else {
     max_result_length = (base64_needed_encoded_length(str.get_length()) - 1) * mbmaxlen;
-    if (max_result_length > OB_MAX_BLOB_WIDTH) {
-      max_result_length = OB_MAX_BLOB_WIDTH;
-    }
+    max_result_length = MIN(MAX(0, max_result_length), OB_MAX_BLOB_WIDTH);
     int64_t max_l = max_result_length / mbmaxlen;
     int64_t max_deduce_length = max_l * mbmaxlen;
     if (max_deduce_length < OB_MAX_MYSQL_VARCHAR_LENGTH) {
@@ -123,6 +116,10 @@ int ObExprToBase64::eval_to_base64(const ObExpr &expr,
       int64_t buf_len = base64_needed_encoded_length(in_raw_len);
       if (OB_UNLIKELY(buf_len == 0)) {
         res.set_string(nullptr, 0);
+        if (ob_is_text_tc(expr.datum_meta_.type_) && OB_FAIL(ObExprUtil::set_expr_ascii_result(
+            expr, ctx, res, ObString()))) {
+          LOG_WARN("set ASCII result for text failed", K(ret));
+        }
       } else {
         int64_t pos = 0;
         ObEvalCtx::TempAllocGuard alloc_guard(ctx);
@@ -177,6 +174,10 @@ int ObExprToBase64::eval_to_base64_batch(const ObExpr &expr,
         res[j].set_null();
       } else if (OB_UNLIKELY((buf_len = base64_needed_encoded_length(in_raw_len)) == 0)) {
         res[j].set_string(nullptr, 0);
+        if (ob_is_text_tc(expr.datum_meta_.type_) && OB_FAIL(ObExprUtil::set_expr_ascii_result(
+            expr, ctx, res[j], ObString()))) {
+          LOG_WARN("set ASCII result for text failed", K(ret), K(j));
+        }
       } else {
         int64_t pos = 0;
         output_buf = static_cast<char *>(alloc_guard.get_allocator().alloc(buf_len));

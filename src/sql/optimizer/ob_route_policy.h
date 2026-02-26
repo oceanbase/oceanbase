@@ -38,6 +38,8 @@ enum ObRoutePolicyType
   // 即使客户端将请求路由到partition主上, 也在本地执行，
   // 区别在于返回给OCJ && ObProxy的反馈不同;
   UNMERGE_FOLLOWER_FIRST = 4,
+  COLUMN_STORE_ONLY = 5,
+  FORCE_READONLY_ZONE = 6,
   POLICY_TYPE_MAX
 };
 
@@ -176,7 +178,8 @@ public:
   int calculate_replica_priority(const ObAddr &local_server,
                                  const share::ObLSID &ls_id,
                                  common::ObIArray<CandidateReplica>& candi_replicas,
-                                 ObRoutePolicyCtx &ctx);
+                                 ObRoutePolicyCtx &ctx,
+                                 bool is_inner_table = false);
   int init_candidate_replicas(common::ObIArray<CandidateReplica> &candi_replicas);
   int select_replica_with_priority(const ObRoutePolicyCtx &route_policy_ctx,
                                    const common::ObIArray<CandidateReplica> &replica_array,
@@ -228,7 +231,11 @@ protected:
     // 集群为读写zone时, 且ob_route_policy为UNMERGE_FOLLOWER_FIRST时，同样按照READONLY_ZONE_FIRST处理, 但会增加反馈内容
     // 集群为有只读zone时，且ob_route_policy为UNMERGE_FOLLOWER_FIRST时, 同样按照READONLY_ZONE_FIRST处理，此时不会增加反馈内容
     ObRoutePolicyType type = INVALID_POLICY;
-    if (has_readonly_zone_) {
+    if (COLUMN_STORE_ONLY == ctx.policy_type_) {
+      type = ctx.policy_type_;
+    } else if (FORCE_READONLY_ZONE == ctx.policy_type_) {
+      type = FORCE_READONLY_ZONE;
+    } else if (has_readonly_zone_) {
       if (UNMERGE_FOLLOWER_FIRST == ctx.policy_type_) {
         type = READONLY_ZONE_FIRST;
       } else {

@@ -16,6 +16,7 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "lib/stat/ob_session_stat.h"
 #include "observer/virtual_table/ob_all_virtual_diag_index_scan.h"
+#include "observer/omt/ob_multi_tenant_operator.h"
 
 namespace oceanbase
 {
@@ -27,20 +28,42 @@ class ObObj;
 namespace observer
 {
 
-class ObAllVirtualSessionStat : public common::ObVirtualTableScannerIterator
+class ObAllVirtualSessionStat : public common::ObVirtualTableScannerIterator,
+                                public omt::ObMultiTenantOperator
 {
 public:
-  ObAllVirtualSessionStat();
-  virtual ~ObAllVirtualSessionStat();
+  ObAllVirtualSessionStat() : ObVirtualTableScannerIterator(),
+    alloc_(ObMemAttr(MTL_ID(), "VT_SessStatus")),
+    alloc_wrapper_(),
+    session_status_(OB_MALLOC_NORMAL_BLOCK_SIZE, alloc_wrapper_),
+    addr_(NULL),
+    ipstr_(),
+    port_(0),
+    session_iter_(0),
+    stat_iter_(0),
+    collect_(NULL) {}
+  virtual ~ObAllVirtualSessionStat() {reset();}
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
   inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
   virtual int set_ip(common::ObAddr *addr);
-
+  inline void set_session_mgr(sql::ObSQLSessionMgr *session_mgr) { session_mgr_ = session_mgr; }
+  virtual void release_last_tenant() override;
 protected:
+  virtual int process_curr_tenant(common::ObNewRow *&row) override;
+  virtual bool is_need_process(uint64_t tenant_id) override {
+    if (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_) {
+      return true;
+    }
+    return false;
+  }
   virtual int get_all_diag_info();
-  common::ObSEArray<std::pair<uint64_t, common::ObDISessionCollect*>,
-  common::OB_MAX_SERVER_SESSION_CNT+1> session_status_;
+  inline sql::ObSQLSessionMgr* get_session_mgr() const { return session_mgr_; }
+  common::ObArenaAllocator alloc_;
+  ObWrapperAllocator alloc_wrapper_;
+  common::ObSEArray<std::pair<uint64_t, common::ObDISessionCollect>, 8, ObWrapperAllocator &>
+      session_status_;
+
 private:
   enum SESSION_COLUMN
   {
@@ -57,6 +80,7 @@ private:
   int32_t port_;
   uint32_t session_iter_;
   int32_t stat_iter_;
+  sql::ObSQLSessionMgr *session_mgr_;
   common::ObDISessionCollect *collect_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSessionStat);
 };

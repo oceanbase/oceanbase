@@ -17,6 +17,7 @@
 #include "lib/container/ob_iarray.h"
 #include "sql/parser/parse_node.h"
 #include "sql/resolver/ob_stmt_type.h"
+#include "src/share/schema/ob_routine_info.h"
 
 #define DEF_SIMPLE_EXECUTOR(name)                          \
   class name##Executor                                     \
@@ -54,10 +55,28 @@ class ObCallProcedureStmt;
 class ObAnonymousBlockStmt;
 class ObRawExpr;
 
+class ObCreateRoutineExecutor
+{
+public:
+  ObCreateRoutineExecutor() {}
+  virtual ~ObCreateRoutineExecutor() {}
+  int execute(ObExecContext &ctx, ObCreateRoutineStmt &stmt);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCreateRoutineExecutor);
+};
+
+class ObAlterRoutineExecutor
+{
+public:
+  ObAlterRoutineExecutor() {}
+  virtual ~ObAlterRoutineExecutor() {}
+  int execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAlterRoutineExecutor);
+};
+
 //参考alter system定义
-DEF_SIMPLE_EXECUTOR(ObCreateRoutine);
 DEF_SIMPLE_EXECUTOR(ObDropRoutine);
-DEF_SIMPLE_EXECUTOR(ObAlterRoutine);
 
 class ObCallProcedureExecutor
 {

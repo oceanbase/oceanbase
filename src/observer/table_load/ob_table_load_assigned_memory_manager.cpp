@@ -12,11 +12,9 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "share/rc/ob_tenant_base.h"
 #include "observer/table_load/ob_table_load_assigned_memory_manager.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/omt/ob_tenant.h"
 #include "storage/direct_load/ob_direct_load_mem_define.h"
+#include "src/observer/table_load/ob_table_load_assigned_memory_manager.h"
 
 namespace oceanbase
 {
@@ -113,8 +111,6 @@ int ObTableLoadAssignedMemoryManager::refresh_avail_memory(int64_t avail_memory)
     ObMutexGuard guard(mutex_);
     avail_sort_memory_ += avail_memory - avail_memory_;
     avail_memory_ = avail_memory;
-    LOG_INFO("ObTableLoadAssignedMemoryManager::refresh_avail_memory",
-        K(MTL_ID()), K(avail_memory), K(chunk_count_), K(avail_sort_memory_), K(avail_memory_));
   }
 
   return ret;
@@ -135,7 +131,7 @@ int ObTableLoadAssignedMemoryManager::get_sort_memory(int64_t &sort_memory)
       ret = OB_EAGAIN;
       LOG_WARN("avail_memory_ equal to zero, resource has been migrated", KR(ret));
     } else {
-      sort_memory = avail_sort_memory_ / chunk_count_;
+      sort_memory = MAX(avail_sort_memory_ / chunk_count_, ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT);
     }
   }
 

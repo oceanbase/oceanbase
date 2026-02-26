@@ -11,19 +11,12 @@
  */
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <iostream>
 #define protected public
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_tx_data_functor.h"
-#include "storage/tablet/ob_tablet.h"
 
 enum EnumTestMode : uint32_t
 {
@@ -168,8 +161,8 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
   } else {
     for (int32_t i = 0; OB_ERR_SHARED_LOCK_CONFLICT == ret; i++) {
       if (OB_FAIL(inner_lock_for_read(tx_data, tx_cc_ctx))) {
-        if (OB_UNLIKELY(observer::SS_STOPPING == GCTX.status_) ||
-            OB_UNLIKELY(observer::SS_STOPPED == GCTX.status_)) {
+        if (OB_UNLIKELY(ObServiceStatus::SS_STOPPING == GCTX.status_) ||
+            OB_UNLIKELY(ObServiceStatus::SS_STOPPED == GCTX.status_)) {
           // rewrite ret
           ret = OB_SERVER_IS_STOPPING;
           TRANS_LOG(WARN, "observer is stopped", K(ret));

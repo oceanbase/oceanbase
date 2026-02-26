@@ -14,8 +14,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_spatial_mbr.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "lib/geo/ob_s2adapter.h"
-#include "observer/omt/ob_tenant_srs.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

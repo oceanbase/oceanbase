@@ -98,6 +98,8 @@ struct ModulePageAllocator: public ObIAllocator
   void set_tenant_id(uint64_t tenant_id) {attr_.tenant_id_ = tenant_id;};
   void set_ctx_id(int64_t ctx_id) { attr_.ctx_id_ = ctx_id; }
   void set_attr(const lib::ObMemAttr &attr) { attr_ = attr; }
+  const lib::ObMemAttr &get_attr() const { return attr_; }
+  uint64_t get_tenant_id() { return attr_.tenant_id_; }
   lib::ObLabel get_label() const { return attr_.label_; }
   void *alloc(const int64_t sz)
   {
@@ -525,9 +527,11 @@ public: // API
 
   void set_label(const lib::ObLabel &label) { page_allocator_.set_label(label); }
   lib::ObLabel get_label() const { return page_allocator_.get_label(); }
+  uint64_t get_tenant_id() { return page_allocator_.get_tenant_id(); }
   void set_tenant_id(uint64_t tenant_id) { page_allocator_.set_tenant_id(tenant_id); }
   void set_ctx_id(int64_t ctx_id) { page_allocator_.set_ctx_id(ctx_id); }
   void set_attr(const lib::ObMemAttr &attr) { page_allocator_.set_attr(attr); }
+  const PageAllocatorT &get_page_allocator() { return page_allocator_; }
   /** allocate sz bytes */
   CharT *_alloc(const int64_t sz)
   {
@@ -570,7 +574,7 @@ public: // API
       ret = _alloc(lib::align_up2(sz, 8) + 8);
       if (ret != NULL) {
         SANITY_UNPOISON(ret, sz);
-        SANITY_POISON((void*)lib::align_up2((uint64_t)ret + sz, 8), 8);
+        SANITY_POISON((void*)((uint64_t)ret + sz), 8);
       }
     }
     return ret;
@@ -645,7 +649,7 @@ public: // API
       ret = _alloc_aligned(lib::align_up2(sz, 8) + 8, alignment);
       if (ret != NULL) {
         SANITY_UNPOISON(ret, sz);
-        SANITY_POISON((void*)lib::align_up2((uint64_t)ret + sz, 8), 8);
+        SANITY_POISON((void*)((uint64_t)ret + sz), 8);
       }
     }
     return ret;

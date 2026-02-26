@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX OBLOG
 #include "ob_all_server_info.h"
-#include "logservice/common_util/ob_log_time_utils.h"
 
 namespace oceanbase
 {

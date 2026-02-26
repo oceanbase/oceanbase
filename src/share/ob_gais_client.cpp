@@ -10,12 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/rc/ob_tenant_base.h"
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_define.h"
-#include "share/ob_gais_msg.h"
-#include "share/ob_gais_rpc.h"
 #include "share/ob_gais_client.h"
 
 namespace oceanbase

@@ -96,12 +96,43 @@ enum TriggerAlterOptions
   TRIGGER_ALTER_IF_EDITIONABLE
 };
 
+enum TypeCompileUnit
+{
+  TYPE_UNIT_TYPE = 0,
+  TYPE_UNIT_SPECIFICATION = 1,
+  TYPE_UNIT_BODY = 2
+};
+
+enum TypeAlterDependentHanding
+{
+  TYPE_DEPENDENT_HANDLING_NON = 0,
+  TYPE_DEPENDENT_HANDLING_CASCADE = 1
+};
+enum TypeAlterOptions
+{
+  TYPE_ALTER_COMPILE = 0,
+  TYPE_ALTER_ATTRRIBUTE_DEFINITION = 1
+};
+
+enum TypeAlterAttrOptions
+{
+  TYPE_ALTER_ADD_ATTRIBUTE = 0,
+  TYPE_ALTER_MODIFY_ATTRIBUTE = 1,
+  TYPE_ALTER_DROP_ATTRIBUTE = 2
+};
+
 enum SpDataAccess
 {
   SP_CONTAINS_SQL = 0,
   SP_NO_SQL = 1,
   SP_READS_SQL_DATA = 2,
   SP_MODIFIES_SQL_DATA = 3
+};
+
+enum SystemTriggerEvent
+{
+  SYS_TRIGGER_LOGON = 0,
+  SYS_TRIGGER_LOGOFF = 1,
 };
 
 #ifdef __cplusplus

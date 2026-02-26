@@ -17,6 +17,8 @@
 #include "rpc/frame/ob_req_translator.h"
 #include "rpc/obrpc/ob_rpc_translator.h"
 #include "rpc/obmysql/ob_mysql_translator.h"
+#include "share/ob_global_context_operator.h"
+#include "observer/ob_server_struct.h"
 
 #define RPCP_BUF_SIZE 1280
 union EP_RPCP_BUF;
@@ -60,7 +62,6 @@ using obrpc::ObRpcTranslator;
 using obrpc::ObRpcSessionHandler;
 using obmysql::ObMySQLTranslator;
 using common::ObIAllocator;
-struct ObGlobalContext;
 
 
 ObIAllocator &get_sql_arena_allocator();
@@ -157,6 +158,7 @@ protected:
   int get_mp_connect_processor(ObReqProcessor *&ret_proc);
 
 private:
+  int check_service_name_(rpc::ObRequest &req);
   const ObGlobalContext &gctx_;
   DISALLOW_COPY_AND_ASSIGN(ObSrvMySQLXlator);
 }; // end of class ObSrvMySQLXlator

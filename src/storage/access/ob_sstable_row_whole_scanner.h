@@ -13,6 +13,7 @@
 #ifndef OB_STORAGE_OB_SSTABLE_ROW_WHOLE_SCANNER_H_
 #define OB_STORAGE_OB_SSTABLE_ROW_WHOLE_SCANNER_H_
 
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "storage/blocksstable/ob_macro_block_bare_iterator.h"
@@ -40,7 +41,7 @@ private:
     ~MacroScanHandle() {}
     void reset();
 
-    blocksstable::ObMacroBlockHandle macro_io_handle_;
+    blocksstable::ObStorageObjectHandle macro_io_handle_;
     blocksstable::ObMacroBlockDesc macro_block_desc_;
     int64_t start_row_offset_;
     bool is_left_border_;

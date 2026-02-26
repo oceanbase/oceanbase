@@ -17,6 +17,11 @@
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 
 namespace oceanbase {
+
+namespace storage {
+class ObSSTableReadHandle;
+}
+
 namespace blocksstable {
 
 class ObMicroBlockRowLockChecker : public ObMicroBlockRowScanner {
@@ -28,10 +33,6 @@ public:
   {
     lock_state_ = lock_state;
   }
-  inline void set_row_state(ObRowState *row_state)
-  {
-    row_state_ = row_state;
-  }
   inline void set_snapshot_version(const share::SCN &snapshot_version)
   {
     snapshot_version_ = snapshot_version;
@@ -40,24 +41,29 @@ public:
   {
     check_exist_ = check_eixst;
   }
+  inline void set_base_version(const int64_t base_version)
+  {
+    base_version_ = base_version;
+  }
+  void inc_empty_read(ObSSTableReadHandle &read_handle);
 protected:
   virtual int inner_get_next_row(
-      bool &row_lock_checked,
       int64_t &current,
       ObStoreRowLockState *&lock_state);
   virtual int check_row(
-      const bool row_lock_checked,
       const transaction::ObTransID &trans_id,
       const ObRowHeader *row_header,
-      const ObStoreRowLockState &lock_state,
+      ObStoreRowLockState &lock_state,
       bool &need_stop);
   virtual void check_row_in_major_sstable(bool &need_stop);
+  int check_truncate_part_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered);
+  inline void check_base_version(const int64_t trans_version, bool &is_filtered);
 protected:
   bool check_exist_;
   share::SCN snapshot_version_;
   ObStoreRowLockState *lock_state_;
-  ObRowState* row_state_;
   ObStoreRowLockState tmp_lock_state_;
+  int64_t base_version_;
 };
 
 class ObMicroBlockRowLockMultiChecker : public ObMicroBlockRowLockChecker {
@@ -70,17 +76,15 @@ public:
       const int64_t rowkey_begin_idx,
       const int64_t rowkey_end_idx,
       ObRowsInfo &rows_info);
-   void inc_empty_read();
+   void inc_empty_read(ObSSTableReadHandle &read_handle);
 protected:
   virtual int inner_get_next_row(
-      bool &row_lock_checked,
       int64_t &current,
       ObStoreRowLockState *&lock_state);
   virtual int check_row(
-      const bool row_lock_checked,
       const transaction::ObTransID &trans_id,
       const ObRowHeader *row_header,
-      const ObStoreRowLockState &lock_state,
+      ObStoreRowLockState &lock_state,
       bool &need_stop);
   virtual void check_row_in_major_sstable(bool &need_stop);
   int seek_forward();

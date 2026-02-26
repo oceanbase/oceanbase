@@ -12,15 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_execute_executor.h"
-#include "sql/resolver/prepare/ob_execute_stmt.h"
 #include "sql/ob_sql.h"
-#include "sql/engine/ob_exec_context.h"
-#include "observer/ob_server_struct.h"
-#include "observer/virtual_table/ob_virtual_table_iterator_factory.h"
-#include "sql/resolver/ob_schema_checker.h"
-#include "observer/mysql/ob_sync_cmd_driver.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
+#include "observer/mysql/obmp_stmt_execute.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
 {
@@ -38,6 +34,7 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("it must be call procedure stmt", K(ret), K(stmt));
   } else {
+    ObAuditRecordData &audit_record = ctx.get_my_session()->get_raw_audit_record();
     ObObjParam result;
     ParamStore params_array( (ObWrapperAllocator(ctx.get_allocator())) );
     if (OB_FAIL(params_array.reserve(stmt.get_params().count()))) {
@@ -107,12 +104,31 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
                 LOG_WARN("result set open failed", K(result_set.get_statement_id()), K(ret));
               }
               if (OB_SUCC(ret)) {
+                ObPsStmtInfoGuard guard;
+                ObPsStmtInfo *ps_info = NULL;
+                ObPsStmtId inner_stmt_id = stmt.get_prepare_id();
                 ObCallProcedureInfo *call_proc_info = NULL;
                 ObCallProcedureStmt *call_stmt = static_cast<ObCallProcedureStmt*>(result_set.get_cmd());
                 if (OB_ISNULL(call_proc_info = call_stmt->get_call_proc_info())) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("call procedure info is null", K(ret));
+                } else if (OB_ISNULL(ctx.get_my_session()->get_ps_cache())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("ps cache is null", K(ret));
+                } else if (OB_FAIL(ctx.get_my_session()->get_inner_ps_stmt_id(stmt.get_prepare_id(), inner_stmt_id))) {
+                  LOG_WARN("get_inner_ps_stmt_id failed", K(ret), K(stmt.get_prepare_id()), K(inner_stmt_id));
+                } else if (OB_FAIL(ctx.get_my_session()->get_ps_cache()->get_stmt_info_guard(inner_stmt_id, guard))) {
+                  LOG_WARN("get stmt info guard failed", K(ret), K(inner_stmt_id));
+                } else if (OB_ISNULL(ps_info = guard.get_stmt_info())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("get stmt info is null", K(ret));
                 } else {
+                  const ObIArray<int64_t> &fixed_params_idx = ps_info->get_raw_params_idx();
+                  ObString exec_sql;
+                  OZ (ob_write_string(ctx.get_allocator(), ps_info->get_ps_sql(), exec_sql));
+                  OX (audit_record.sql_ = const_cast<char *>(exec_sql.ptr()));
+                  OX (audit_record.sql_len_ = exec_sql.length());
+                  OX (audit_record.sql_cs_type_ = ctx.get_my_session()->get_local_collation_connection());
                   for (int64_t i = 0; OB_SUCC(ret) && i < call_proc_info->get_expressions().count(); ++i) {
                     if (call_proc_info->is_out_param(i)) {
                       const ObSqlExpression *call_param_expr = call_proc_info->get_expressions().at(i);
@@ -121,9 +137,18 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
                         if (T_QUESTIONMARK == expr_type) {
                           const ObObj &value = call_param_expr->get_expr_items().at(0).get_obj();
                           int64_t idx = value.get_unknown();
-                          CK (idx < params_array.count());
-                          if (OB_SUCC(ret)) {
-                            const ObRawExpr *expr = stmt.get_params().at(idx);
+                          int64_t origin_param_cnt = 0;
+                          for (int64_t n = 0; n < idx; ++n) {
+                            if (ObSql::is_exist_in_fixed_param_idx(n, fixed_params_idx)) {
+                              origin_param_cnt++;
+                            }
+                          }
+                          int64_t using_idx = idx - origin_param_cnt;
+                          if (using_idx >= stmt.get_params().count()) {
+                            ret = OB_ERR_UNEXPECTED;
+                            LOG_WARN("unexpected idx", K(ret), K(using_idx), K(stmt.get_params().count()));
+                          } else {
+                            const ObRawExpr *expr = stmt.get_params().at(using_idx);
                             if (OB_ISNULL(expr)) {
                               ret = OB_ERR_UNEXPECTED;
                               LOG_WARN("expr is null", K(ret), K(stmt));
@@ -176,6 +201,15 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
         }
       }
     }
+    char *tmp_ptr = NULL;
+    int64_t tmp_len = 0;
+    OZ (observer::ObMPStmtExecute::store_params_value_to_str(ctx.get_allocator(),
+                                                             *ctx.get_my_session(),
+                                                             &params_array,
+                                                             tmp_ptr,
+                                                             tmp_len));
+    OX (audit_record.params_value_ = tmp_ptr);
+    OX (audit_record.params_value_len_ = tmp_len);
   }
   return ret;
 }

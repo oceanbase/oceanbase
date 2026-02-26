@@ -1,0 +1,353 @@
+#!/usr/bin/env python
+# coding=utf8
+# author huaixin.lmy
+
+import os
+import sys
+import json
+import time
+import datetime
+import getopt
+import fnmatch
+from collections import OrderedDict
+
+# 统计开始时间
+GLOBAL_START_TIME = datetime.datetime.now()
+
+def get_cost_time():
+    '''
+    获取当前运行时间
+    '''
+    cost_time_sec = (datetime.datetime.now() - GLOBAL_START_TIME).seconds
+    return "%dm%.2ds" % (cost_time_sec / 60, cost_time_sec % 60)
+
+def print_log(log_str):
+    '''
+    打印日志函数
+    '''
+    print("[%s %s] %s" % (time.strftime("%H:%M:%S", time.localtime()), get_cost_time(), log_str))
+    sys.stdout.flush()
+
+def print_help():
+    '''
+    打印帮助信息
+    '''
+    print("使用说明:")
+    print("./merge_extra --inputpa=/path/to/paramter --inputva=/path/to/varsiable")
+
+class ERROR_CODE():
+    '''
+    错误码
+    '''
+    # 通用成功和失败
+    COMMON_SUCCESS = 0
+    COMMON_ERROR = 1
+
+class GlobalConf():
+    '''
+    编译配置类
+    '''
+    def __init__(self):
+        # 输入参数文件路径
+        self.origin_parameter_path = ""
+        # 输入变量文件路径
+        self.origin_variable_path = ""
+        self.param_flag = True
+        self.varia_flag = True
+
+GLOBAL_CONF = GlobalConf()
+
+def parse_arg():
+    '''
+    解析命令行参数
+    '''
+    global GLOBAL_CONF
+
+    try:
+        # sys.argv[1:] 过滤掉第一个参数(它是脚本名称，不是参数的一部分)
+        opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "inputpa=", "inputva="])
+
+        if args:
+            print_log("[merge_extra][ERROR] 不符合预期输入，请重试\n")
+            print_help()
+            exit(ERROR_CODE.COMMON_ERROR)
+
+        for cmd, arg in opts:
+            if cmd in ("-h", "--help"):
+                print_help()
+                exit(ERROR_CODE.COMMON_SUCCESS)
+            if cmd in ("--inputpa",):
+                if not arg.startswith("/") or not os.path.exists(arg):
+                    print("[merge_extra][ERROR] 输入路径[%s]不是绝对路径或者不存在" % arg)
+                    exit(ERROR_CODE.COMMON_ERROR)
+                GLOBAL_CONF.origin_parameter_path = arg
+            elif cmd in ("--inputva",):
+                if not arg.startswith("/") or not os.path.exists(arg):
+                    print("[merge_extra][ERROR] 输入路径[%s]不是绝对路径或者不存在" % arg)
+                    exit(ERROR_CODE.COMMON_ERROR)
+                GLOBAL_CONF.origin_variable_path = arg
+
+    except getopt.GetoptError as ex:
+        print("[merge_extra][ERROR] getopt.GetoptError 解析参数失败，请合法输入, %s" % ex)
+        exit(ERROR_CODE.COMMON_ERROR)
+    except ValueError as ex:
+        print("[merge_extra][ERROR] ValueError 解析参数失败，请合法输入, %s" % ex)
+        exit(ERROR_CODE.COMMON_ERROR)
+
+def find_extra_files(file_path):
+    '''
+    根据输入路径查找 *.extra 文件
+    '''
+    # 存储找到的 .extra 文件的列表
+    extra_files = []
+
+    # 遍历指定路径
+    for name in os.listdir(file_path):
+        # 只检查文件，不包括子目录
+        full_path = os.path.join(file_path, name)
+        if os.path.isfile(full_path) and fnmatch.fnmatch(name, '*.extra'):
+            extra_files.append(full_path)
+
+    return extra_files
+
+def check_data_and_format(data, var):
+    '''
+    检查获取到的数据格式, 并调整顺序
+    '''
+    formatted_list = []
+    for item in data:
+        for key in item:
+            if key not in ['scenario','comment','parameters','variables']:
+                print("[merge_extra][ERROR] extra 文件字段数据不合预期, 请检查输入文件")
+                exit(ERROR_CODE.COMMON_ERROR)
+        outer_ordered_dict = OrderedDict()
+        outer_ordered_dict['scenario'] = item['scenario']
+        outer_ordered_dict['comment'] = item['comment']
+        common_item = {}
+        if var:
+            common_item = item.get('variables', {})
+        else:
+            common_item = item.get('parameters', {})
+
+        common_ordered_dict = OrderedDict()
+        for key in common_item:
+            if key not in ['cluster','tenant']:
+                print("[merge_extra][ERROR] extra 文件字段数据不合预期, 请检查输入文件")
+                exit(ERROR_CODE.COMMON_ERROR)
+            next_common_data = common_item[key]
+            next_common_list = []
+            for next_common in next_common_data:
+                for next_common_key in next_common:
+                    if next_common_key not in ['name','value','comment']:
+                        print("[merge_extra][ERROR] extra 文件字段数据不合预期, 请检查输入文件")
+                        exit(ERROR_CODE.COMMON_ERROR)
+                next_common_ordered_dict = OrderedDict()
+                next_common_ordered_dict['name'] = next_common['name']
+                next_common_ordered_dict['value'] = next_common['value']
+                next_common_ordered_dict['comment'] = next_common['comment']
+                next_common_list.append(next_common_ordered_dict)
+            common_ordered_dict[key] = next_common_list
+        if var:
+            outer_ordered_dict['variables'] = common_ordered_dict
+        else:
+            outer_ordered_dict['parameters'] = common_ordered_dict
+
+        formatted_list.append(outer_ordered_dict)
+
+    return formatted_list
+
+def load_json(file_name, var):
+    '''
+    加载JSON数据并检查
+    '''
+    try:
+        with open(file_name, 'r') as f:
+            data = json.load(f)
+            format_data = check_data_and_format(data, var)
+            return format_data
+    except Exception as ex:
+        print("[merge_extra][ERROR] JSON数据加载失败, 请检查文件数据格式")
+        exit(ERROR_CODE.COMMON_ERROR)
+
+def format_json(data, indent=2):
+    """
+    将 JSON 数据格式化为字符串，并替换空列表的格式。
+    """
+    # 使用 json.dumps 生成 JSON 字符串
+    json_str = json.dumps(data, indent=indent, separators=(',', ': '), ensure_ascii=False)
+    # 动态生成缩进
+    indent_str = " " * (indent + 4)  # 缩进 = 父级缩进 + 4 个空格
+    # 替换 "tenant": [] 为 "tenant": [\n]
+    json_str = json_str.replace('"tenant": []', '"tenant": [\n{}]'.format(indent_str))
+    json_str = json_str.replace('"cluster": []', '"cluster": [\n{}]'.format(indent_str))
+    return json_str
+
+def merge_parameter_list(default_list, extra_list):
+    '''
+    以 name 对应 value 为 key, 合并字段
+    '''
+    default_dict = OrderedDict()
+    extra_dict = OrderedDict()
+    merged_dict = OrderedDict()
+    for item in default_list:
+        default_dict[item['name']] = item
+    for item in extra_list:
+        extra_dict[item['name']] = item
+    merged_dict.update(default_dict)
+    merged_dict.update(extra_dict)
+
+    return list(merged_dict.values())
+
+def merge_scenario(default_scenario, extra_scenario, var):
+    '''
+    以 scenario 对应 value 为 key, 合并顶层字段
+    并遍历 variables/parameters 字段合并更新
+    '''
+    merged = default_scenario.copy()
+    # 用 extra_dict 更新 merged_dict
+    merged.update(extra_scenario)
+    # 合并variables/parameters字段
+    if var:
+        default_params = default_scenario.get('variables', {})
+        extra_params = extra_scenario.get('variables', {})
+    else:
+        default_params = default_scenario.get('parameters', {})
+        extra_params = extra_scenario.get('parameters', {})
+    merged_params = {}
+
+    # 处理cluster和tenant的合并
+    for param_type in default_params:
+        default_list = default_params.get(param_type, [])
+        extra_list = extra_params.get(param_type, [])
+        merged_list = merge_parameter_list(default_list, extra_list)
+        merged_params[param_type] = merged_list
+    if var:
+        merged['variables'] = merged_params
+    else:
+        merged['parameters'] = merged_params
+    return merged
+
+def merge_configs(default_data, extra_data, var):
+    """
+    合并两份 JSON 数据，相同配置项以后者为准，并合并子字典中的数组字典。
+    :param default_data: 默认 JSON 数据（列表或字典）
+    :param extra_data: 增量 JSON 数据（列表或字典）
+    :return: 合并后的 JSON 数据
+    """
+    # 记录原始顺序：default.json中的顺序
+    default_order = [item['scenario'] for item in default_data]
+    # 记录extra中新增的场景顺序（不在default中的）
+    extra_order = [item['scenario'] for item in extra_data if item['scenario'] not in default_order]
+    # 构建合并后的顺序：先保留default顺序，再追加extra中的新场景
+    merged_order = default_order + extra_order
+
+    # 生成场景字典加速查询
+    default_dict = {item['scenario']: item for item in default_data}
+    extra_dict = {item['scenario']: item for item in extra_data}
+
+    # 按顺序合并场景
+    merged_data = []
+    for scenario in merged_order:
+        default_scene = default_dict.get(scenario, {})
+        extra_scene = extra_dict.get(scenario, {})
+        merged_scene = merge_scenario(default_scene, extra_scene, var)
+        merged_data.append(merged_scene)
+
+    return merged_data
+
+def merge_parameter_file(var):
+    """
+    合并 parameter 目录下的 parameter 文件
+    """
+    parameter_extra_files = find_extra_files(GLOBAL_CONF.origin_parameter_path)
+    parameter_default_file = os.path.join(GLOBAL_CONF.origin_parameter_path, "default_parameter.json")
+    if parameter_extra_files and not os.path.exists(parameter_default_file):
+        return False
+    default_params = load_json(parameter_default_file, var)
+    standalone_extra_params = []
+    storage_extra_params = []
+    standalone_output_file = ''
+    storage_output_file = ''
+    for parameter_extra_file in parameter_extra_files:
+        if 'standalone' in parameter_extra_file:
+            standalone_extra_params = load_json(parameter_extra_file, var)
+            standalone_output_file = os.path.join(GLOBAL_CONF.origin_parameter_path, 'standalone_default_parameter.json')
+        elif 'storage' in parameter_extra_file:
+            storage_extra_params = load_json(parameter_extra_file, var)
+            storage_output_file = os.path.join(GLOBAL_CONF.origin_parameter_path, 'shared_storage_default_parameter.json')
+
+    # 使用 default_params 的拷贝来创建最终的合并结果
+    if standalone_extra_params:
+        standalone_merged_params = merge_configs(default_params, standalone_extra_params, var)
+        # 写入到输出文件
+        standalone_merged_params = format_json(standalone_merged_params)
+        with open(standalone_output_file, 'w') as f:
+            f.write(standalone_merged_params)
+    if storage_extra_params:
+        storage_merged_params = merge_configs(default_params, storage_extra_params, var)
+        # 写入到输出文件
+        storage_merged_params = format_json(storage_merged_params)
+        with open(storage_output_file, 'w') as f:
+            f.write(storage_merged_params)
+
+    return True
+
+def merge_variable_file(var):
+    """
+    合并 variable 目录下的 variable 文件
+    """
+    variable_extra_files = find_extra_files(GLOBAL_CONF.origin_variable_path)
+    variable_default_file = os.path.join(GLOBAL_CONF.origin_variable_path, "default_system_variable.json")
+    if variable_extra_files and not os.path.exists(variable_default_file):
+        return False
+    default_variable = load_json(variable_default_file, var)
+    standalone_extra_variable = []
+    storage_extra_variable = []
+    standalone_output_file = ''
+    storage_output_file = ''
+    for variable_extra_file in variable_extra_files:
+        if 'standalone' in variable_extra_file:
+            standalone_extra_variable = load_json(variable_extra_file, var)
+            standalone_output_file = os.path.join(GLOBAL_CONF.origin_variable_path, 'standalone_default_system_variable.json')
+        elif 'storage' in variable_extra_file:
+            storage_extra_variable = load_json(variable_extra_file, var)
+            storage_output_file = os.path.join(GLOBAL_CONF.origin_variable_path, 'shared_storage_default_system_variable.json')
+
+    # 使用 default_variable 的拷贝来创建最终的合并结果
+    if standalone_extra_variable:
+        standalone_merged_variable = merge_configs(default_variable, standalone_extra_variable, var)
+        # 写入到输出文件
+        standalone_merged_variable = format_json(standalone_merged_variable)
+        with open(standalone_output_file, 'w') as f:
+            f.write(standalone_merged_variable)
+    if storage_extra_variable:
+        storage_merged_variable = merge_configs(default_variable, storage_extra_variable, var)
+        # 写入到输出文件
+        storage_merged_variable = format_json(storage_merged_variable)
+        with open(storage_output_file, 'w') as f:
+            f.write(storage_merged_variable)
+
+    return True
+
+def main():
+    '''
+    main函数入口
+    '''
+    # 解析参数
+    parse_arg()
+
+    if GLOBAL_CONF.origin_parameter_path != "":
+        GLOBAL_CONF.param_flag = merge_parameter_file(0)
+    if GLOBAL_CONF.origin_variable_path != "":
+        GLOBAL_CONF.varia_flag = merge_variable_file(1)
+
+    if not GLOBAL_CONF.param_flag or not GLOBAL_CONF.varia_flag:
+        print("[merge_extra][ERROR] 缺少必要的合并文件, 请检查合并文件是否存在")
+        exit(ERROR_CODE.COMMON_ERROR)
+
+
+if __name__ == '__main__':
+    '''
+    __main__入口
+    '''
+    main()

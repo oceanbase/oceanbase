@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/restore/ob_physical_restore_info.h"
-#include "share/backup/ob_backup_struct.h"
-#include <algorithm>
+#include "ob_physical_restore_info.h"
 #include "share/ob_rpc_struct.h"
 using namespace oceanbase;
 using namespace common;
@@ -241,6 +239,7 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
     K_(status),
     K_(comment),
     K_(restore_start_ts),
+    K_(restoring_start_ts),
     K_(restore_scn),
     K_(consistent_scn),
     K_(post_data_version),
@@ -261,7 +260,10 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
     K_(passwd_array),
     K_(multi_restore_path_list),
     K_(white_list),
-    K_(recover_table)
+    K_(recover_table),
+    K_(using_complement_log),
+    K_(backup_compatible),
+    K_(progress_display_mode)
   );
   J_OBJ_END();
   return pos;
@@ -280,6 +282,7 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
     restore_type_ = other.restore_type_;
     status_ = other.status_;
     restore_start_ts_ = other.restore_start_ts_;
+    restoring_start_ts_ = other.restoring_start_ts_;
     restore_scn_ = other.restore_scn_;
     consistent_scn_ = other.consistent_scn_;
     post_data_version_ = other.post_data_version_;
@@ -290,6 +293,9 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
     kms_encrypt_ = other.kms_encrypt_;
     concurrency_ = other.concurrency_;
     recover_table_ = other.recover_table_;
+    using_complement_log_ = other.using_complement_log_;
+    backup_compatible_ = other.backup_compatible_;
+    progress_display_mode_ = other.progress_display_mode_;
 
     if (FAILEDx(deep_copy_ob_string(allocator_, other.comment_, comment_))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
@@ -325,6 +331,8 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
       LOG_WARN("failed to assign path list", KR(ret), K(other));
     } else if (OB_FAIL(white_list_.assign(other.white_list_))) {
       LOG_WARN("failed to assign white list", KR(ret), K(other));
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.sts_credential_, sts_credential_))) {
+      LOG_WARN("failed to copy string", KR(ret), K(other));
     }
 
   }
@@ -343,6 +351,7 @@ void ObPhysicalRestoreJob::reset()
   status_ = PhysicalRestoreStatus::PHYSICAL_RESTORE_MAX_STATUS;
   comment_.reset();
   restore_start_ts_ = 0;
+  restoring_start_ts_ = 0;
   restore_scn_ = SCN::min_scn();
   consistent_scn_ = SCN::min_scn();
   post_data_version_ = 0;
@@ -365,12 +374,15 @@ void ObPhysicalRestoreJob::reset()
   kms_encrypt_key_.reset();
   concurrency_ = 0;
   recover_table_ = false;
+  using_complement_log_ = false;
 
+  sts_credential_.reset();
 
   passwd_array_.reset();
   multi_restore_path_list_.reset();
   white_list_.reset();
   allocator_.reset();
+  progress_display_mode_ = TABLET_CNT_DISPLAY_MODE;
 }
 
 int ObPhysicalRestoreJob::copy_to(ObSimplePhysicalRestoreJob &simple_job_info) const

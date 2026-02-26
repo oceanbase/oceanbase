@@ -12,8 +12,11 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_unit_getter.h"
-#include "share/ob_get_compat_mode.h"
+#include "ob_unit_getter.h"
+#include "share/ob_server_struct.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_disk_space_manager.h"
+#endif
 
 namespace oceanbase
 {
@@ -30,7 +33,10 @@ OB_SERIALIZE_MEMBER(ObUnitInfoGetter::ObTenantConfig,
                     mode_,
                     create_timestamp_,
                     has_memstore_,
-                    is_removed_);
+                    is_removed_,
+                    hidden_sys_data_disk_config_size_,
+                    actual_data_disk_size_,
+                    replica_type_);
 
 const char* ObUnitInfoGetter::unit_status_strs_[] = {
     "NORMAL",
@@ -50,7 +56,10 @@ ObUnitInfoGetter::ObTenantConfig::ObTenantConfig()
     mode_(lib::Worker::CompatMode::INVALID),
     create_timestamp_(0),
     has_memstore_(true),
-    is_removed_(false)
+    is_removed_(false),
+    hidden_sys_data_disk_config_size_(0),
+    actual_data_disk_size_(0),
+    replica_type_(REPLICA_TYPE_FULL)
 {}
 
 int ObUnitInfoGetter::ObTenantConfig::init(
@@ -61,7 +70,10 @@ int ObUnitInfoGetter::ObTenantConfig::init(
     lib::Worker::CompatMode compat_mode,
     const int64_t create_timestamp,
     const bool has_memstore,
-    const bool is_remove)
+    const bool is_remove,
+    const int64_t hidden_sys_data_disk_config_size,
+    const int64_t actual_data_disk_size,
+    const common::ObReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(config_.assign(config))) {
@@ -74,6 +86,9 @@ int ObUnitInfoGetter::ObTenantConfig::init(
     create_timestamp_ = create_timestamp;
     has_memstore_ = has_memstore;
     is_removed_ = is_remove;
+    hidden_sys_data_disk_config_size_ = hidden_sys_data_disk_config_size;
+    actual_data_disk_size_ = actual_data_disk_size;
+    replica_type_ = replica_type;
   }
   return ret;
 }
@@ -114,12 +129,17 @@ int ObUnitInfoGetter::ObTenantConfig::divide_meta_tenant(ObTenantConfig& meta_te
       lib::Worker::CompatMode::MYSQL,       // always MYSQL mode
       create_timestamp_,
       has_memstore_,
-      is_removed_))) {
+      is_removed_,
+      hidden_sys_data_disk_config_size_,
+      ObUnitResource::gen_meta_tenant_data_disk_size(actual_data_disk_size_),
+      replica_type_))) {
     LOG_WARN("init meta tenant config fail", KR(ret), KPC(this), K(meta_config));
   }
   // update self unit resource
   else if (OB_FAIL(config_.update_unit_resource(self_resource))) {
     LOG_WARN("update unit resource fail", KR(ret), K(self_resource), K(config_));
+  } else {
+    actual_data_disk_size_ = actual_data_disk_size_ - meta_tenant_config.actual_data_disk_size_;
   }
 
   LOG_INFO("divide meta tenant finish", KR(ret), K(meta_tenant_config), "user_config", *this);
@@ -134,6 +154,9 @@ void ObUnitInfoGetter::ObTenantConfig::reset()
   mode_ = lib::Worker::CompatMode::INVALID;
   create_timestamp_ = 0;
   is_removed_ = false;
+  hidden_sys_data_disk_config_size_ = 0;
+  actual_data_disk_size_ = 0;
+  replica_type_ = REPLICA_TYPE_FULL;
 }
 
 bool ObUnitInfoGetter::ObTenantConfig::operator==(const ObTenantConfig &other) const
@@ -145,7 +168,10 @@ bool ObUnitInfoGetter::ObTenantConfig::operator==(const ObTenantConfig &other) c
           mode_ == other.mode_ &&
           create_timestamp_ == other.create_timestamp_ &&
           has_memstore_ == other.has_memstore_ &&
-          is_removed_ == other.is_removed_);
+          is_removed_ == other.is_removed_ &&
+          hidden_sys_data_disk_config_size_ == other.hidden_sys_data_disk_config_size_ &&
+          actual_data_disk_size_ == other.actual_data_disk_size_ &&
+          replica_type_ == other.replica_type_);
 }
 
 int ObUnitInfoGetter::ObTenantConfig::assign(const ObUnitInfoGetter::ObTenantConfig &other)
@@ -163,8 +189,24 @@ int ObUnitInfoGetter::ObTenantConfig::assign(const ObUnitInfoGetter::ObTenantCon
     create_timestamp_ = other.create_timestamp_;
     has_memstore_ = other.has_memstore_;
     is_removed_ = other.is_removed_;
+    hidden_sys_data_disk_config_size_ = other.hidden_sys_data_disk_config_size_;
+    actual_data_disk_size_ = other.actual_data_disk_size_;
+    replica_type_ = other.replica_type_;
   }
   return ret;
+}
+
+// this function is for calculating default init value for actual_data_disk_size_ of USER tenant
+int64_t ObUnitInfoGetter::ObTenantConfig::gen_init_actual_data_disk_size(
+    const share::ObUnitConfig &config) const
+{
+  int64_t init_data_disk_size = 0;
+  if (!GCTX.is_shared_storage_mode() || config.data_disk_size() != 0) {
+    init_data_disk_size = 0;
+  } else {
+    init_data_disk_size = static_cast<int64_t>(config.min_cpu()) * (2LL * ObUnitResource::GB);
+  }
+  return init_data_disk_size;
 }
 
 ObUnitInfoGetter::ObUnitInfoGetter()
@@ -238,21 +280,34 @@ int ObUnitInfoGetter::get_server_tenant_configs(const common::ObAddr &server,
 
       const uint64_t tenant_id = unit_infos.at(i).pool_.tenant_id_;
       const uint64_t unit_id = unit_infos.at(i).unit_.unit_id_;
+      ObUnitInfoGetter::ObUnitStatus unit_status;
+      lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+      const int64_t create_timestamp = 0;   // will be set in ObTenantNodeBalancer::fetch_effective_tenants
+      const bool has_memstore = (unit_infos.at(i).unit_.replica_type_ != REPLICA_TYPE_LOGONLY);
+      int64_t hidden_sys_data_disk_config_size = 0;
 
       tenant_config.reset();
-      tenant_config.tenant_id_ = tenant_id;
-      tenant_config.unit_id_ = unit_id;
-      if (common::REPLICA_TYPE_LOGONLY == unit_infos.at(i).unit_.replica_type_) {
-        // Logonly unit can hold logonly replicas only,
-        // no need to reserve memory for memstore
-        tenant_config.has_memstore_ = false;
-      } else {
-        tenant_config.has_memstore_ = true;
+#ifdef OB_BUILD_SHARED_STORAGE
+      if ((OB_SYS_TENANT_ID == tenant_id) &&
+          GCTX.is_shared_storage_mode()) {  // only sys_tenant_unit_meta record hidden_sys_data_disk_config_size value
+        hidden_sys_data_disk_config_size = OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
       }
-      build_unit_stat(server, unit_infos.at(i).unit_, tenant_config.unit_status_);
-      tenant_config.config_ = unit_infos.at(i).config_;
-      if (OB_FAIL(get_compat_mode(tenant_id, tenant_config.mode_))) {
+#endif
+      build_unit_stat(server, unit_infos.at(i).unit_, unit_status);
+      if (OB_FAIL(get_compat_mode(tenant_id, compat_mode))) {
         LOG_WARN("failed to get compat mode", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(tenant_config.init(tenant_id,
+                                     unit_id,
+                                     ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL,
+                                     unit_infos.at(i).config_,
+                                     compat_mode,
+                                     0 /*create_timestamp*/,
+                                     has_memstore,
+                                     false /*is_removed*/,
+                                     hidden_sys_data_disk_config_size,
+                                     tenant_config.gen_init_actual_data_disk_size(unit_infos.at(i).config_),
+                                     unit_infos.at(i).unit_.replica_type_))) {
+        LOG_WARN("tenant_config init failed", KR(ret), K(tenant_id), K(unit_infos.at(i)));
       } else if (is_user_tenant(tenant_id)) {
         meta_tenant_config.reset();
         if (OB_FAIL(tenant_config.divide_meta_tenant(meta_tenant_config))) {

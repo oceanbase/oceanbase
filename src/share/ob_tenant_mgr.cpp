@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/utility/ob_print_utils.h"
-#include "lib/resource/ob_resource_mgr.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "rpc/obrpc/ob_rpc_stat.h"             // RpcStatService
-#include "observer/omt/ob_multi_tenant.h"      // ObMultiTenant
 #include "observer/omt/ob_tenant.h"            // ObTenant
-#include "share/config/ob_server_config.h"     // GCONF
-#include "observer/ob_server_struct.h"         // GCTX
+#include "src/share/ob_server_struct.h"
 #include "share/ob_tenant_mgr.h"
 
 namespace oceanbase

@@ -72,7 +72,8 @@ TEST_F(TestScanner, basic_test)
   for (int i = 0; i < 1024; ++i) {
     OK(it.get_next_row(row2));
     ASSERT_EQ(3, row2.count_);
-    _OB_LOG(INFO, "row=%s", S(row2));
+    ObCStringHelper helper;
+    _OB_LOG(INFO, "row=%s", helper.convert(row2));
   }
 }
 
@@ -138,7 +139,8 @@ TEST_F(TestScanner, serialization)
   for (int i = 0; i < 10; ++i) {
     OK(it.get_next_row(row2));
     ASSERT_EQ(3, row2.count_);
-    _OB_LOG(INFO, "row=%s", S(row2));
+    ObCStringHelper helper;
+    _OB_LOG(INFO, "row=%s", helper.convert(row2));
   }
 }
 

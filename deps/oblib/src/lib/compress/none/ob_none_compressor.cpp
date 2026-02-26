@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <new>
 #include "lib/compress/none/ob_none_compressor.h"
-#include "lib/ob_errno.h"
 
 namespace oceanbase
 {

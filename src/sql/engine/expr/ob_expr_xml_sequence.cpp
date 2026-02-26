@@ -12,11 +12,9 @@
  */
 
 #include "ob_expr_xml_sequence.h"
-#include "ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_package.h"
-#include "lib/utility/utility.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 #define USING_LOG_PREFIX SQL_ENG
 
 using namespace oceanbase::common;
@@ -107,7 +105,7 @@ int ObExprXmlSequence::eval_xml_sequence(const ObExpr &expr, ObEvalCtx &ctx, ObD
     coll = new(coll)pl::ObPLVArray(info->udt_id_);
     static_cast<pl::ObPLVArray*>(coll)->set_capacity(info->capacity_);
   }
-
+  OZ (coll->init_allocator(allocator, true));
   OZ(expr.eval_param_value(ctx));
 
   if (OB_SUCC(ret)) {
@@ -144,7 +142,6 @@ int ObExprXmlSequence::eval_xml_sequence(const ObExpr &expr, ObEvalCtx &ctx, ObD
 
     OZ (ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
                                          ns,
-                                         allocator,
                                          *coll,
                                          xml_tree->size()));
 

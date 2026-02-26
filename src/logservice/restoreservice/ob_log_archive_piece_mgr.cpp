@@ -11,31 +11,11 @@
  */
 
 #include "ob_log_archive_piece_mgr.h"
-#include "lib/container/ob_se_array.h"            // ObSEArray
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string.h"                 // ObString
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
 #include "logservice/archiveservice/ob_archive_define.h"
 #include "logservice/archiveservice/ob_archive_file_utils.h"      // ObArchiveFileUtils
 #include "logservice/archiveservice/ob_archive_util.h"
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/log_group_entry.h"
-#include "logservice/palf/log_iterator_storage.h"
-#include "logservice/palf/lsn.h"
-#include "logservice/palf/palf_iterator.h"
 #include "rootserver/restore/ob_restore_util.h"  // ObRestoreUtil
-#include "share/backup/ob_backup_path.h"         // ObBackupPath
-#include "share/backup/ob_backup_store.h"        // ObBackupStore
-#include "share/backup/ob_archive_store.h"
-#include "share/backup/ob_archive_piece.h"        // ObArchivePiece
-#include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_archive_path.h"   // ObArchivePathUtil
-#include "share/rc/ob_tenant_base.h"
-#include "share/backup/ob_archive_struct.h"       // ObArchiveLSMetaType
-#include "share/ob_errno.h"
-#include <cstdint>
 
 namespace oceanbase
 {
@@ -57,8 +37,9 @@ void ObLogArchivePieceContext::RoundContext::reset()
 
 bool ObLogArchivePieceContext::RoundContext::is_valid() const
 {
-  return ((RoundContext::State::ACTIVE == state_ && min_piece_id_ > 0 && start_scn_ != SCN::max_scn())
-      || (RoundContext::State::STOP == state_ && end_scn_ != SCN::max_scn() && end_scn_ > start_scn_))
+  return (((RoundContext::State::ACTIVE == state_ || RoundContext::State::FORCE_STOP == state_)
+    && min_piece_id_ > 0 && start_scn_ != SCN::max_scn())
+    || (RoundContext::State::STOP == state_ && end_scn_ != SCN::max_scn() && end_scn_ > start_scn_))
     && round_id_ > 0
     && start_scn_.is_valid()
     && base_piece_id_ > 0
@@ -81,6 +62,11 @@ bool ObLogArchivePieceContext::RoundContext::is_in_active_state() const
   return RoundContext::State::ACTIVE == state_;
 }
 
+bool ObLogArchivePieceContext::RoundContext::is_in_force_stop_state() const
+{
+  return RoundContext::State::FORCE_STOP == state_;
+}
+
 ObLogArchivePieceContext::RoundContext &ObLogArchivePieceContext::RoundContext::operator=(const RoundContext &other)
 {
   state_ = other.state_;
@@ -100,6 +86,9 @@ bool ObLogArchivePieceContext::RoundContext::check_round_continuous_(const Round
   bool bret = false;
   if (!pre_round.is_valid() || !is_valid()) {
     bret = false;
+  } else if (pre_round.is_in_force_stop_state()) {
+    bret = false;
+    CLOG_LOG(INFO, "check_round_continuous_ meet force stop round");
   } else if (pre_round.end_scn_ >= start_scn_) {
     bret = true;
   }
@@ -434,7 +423,7 @@ int ObLogArchivePieceContext::get_round_range_()
   int64_t max_round_id = 0;
   share::ObArchiveStore archive_store;
   if (OB_FAIL(load_archive_meta_())) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       ret = OB_INVALID_BACKUP_DEST;
       CLOG_LOG(WARN, "archive meta file not exist, invalid archive dest", K(id_), K(archive_dest_));
     } else {
@@ -477,7 +466,7 @@ int ObLogArchivePieceContext::load_archive_meta_()
   return ret;
 }
 
-// 此处假设stop状态的round, 一定都包含round end file
+// 此处假设stop状态的round, 一定都包含round end file, force stop round不会包含round end file
 // 反之仅round end file持久化成功的轮次, 才可以确认是stop状态, 与归档集群状态无关
 int ObLogArchivePieceContext::load_round_(const int64_t round_id, RoundContext &round_context, bool &exist)
 {
@@ -516,6 +505,11 @@ int ObLogArchivePieceContext::load_round_(const int64_t round_id, RoundContext &
       round_context.state_ = RoundContext::State::STOP;
       round_context.end_scn_ = end_desc.checkpoint_scn_;
       round_context.max_piece_id_ = cal_piece_id_(round_context.end_scn_);
+    } else if (round_id < max_round_id_) {
+      // if round_id < max_round_id and round end file doesn't exist, should be force stop round
+      round_context.state_ = RoundContext::State::FORCE_STOP;
+      round_context.end_scn_.set_max();
+      CLOG_LOG(INFO, "load_round_ force stop", K(round_id), K(round_context));
     } else {
       round_context.state_ = RoundContext::State::ACTIVE;
       round_context.end_scn_.set_max();
@@ -607,7 +601,7 @@ void ObLogArchivePieceContext::check_if_switch_round_(const share::SCN &scn, con
     op = RoundOp::LOCATE;
   } else if (need_backward_round_(lsn)/*确定当前round日志全部大于需要消费日志, 并且当前round大于最小round id*/) {
     op = RoundOp::BACKWARD;
-  } else if (need_forward_round_(lsn)/*确定当前round日志全部小于需要消费日志, 并且当前round小于最大round id*/) {
+  } else if (need_forward_round_(scn, lsn)/*确定当前round日志全部小于需要消费日志, 并且当前round小于最大round id*/) {
     op = RoundOp::FORWARD;
   } else if (need_load_round_info_(scn, lsn)/*当前round能访问到的最大piece已经STOP, 并且当前round还是ACTIVE的*/) {
     op = RoundOp::LOAD;
@@ -660,7 +654,7 @@ bool ObLogArchivePieceContext::need_backward_round_(const palf::LSN &lsn) const
 // Note: 对于空round, 默认一定是与下一个round是不连续的; 因此遇到空round, 默认只能前向查询, 不支持后向查找
 //  bad case round 1、2、3, 当前为3，需要切到round 1, 中间round 2为空, 只依赖round 2信息无法判断需要切到round 1
 //  遇到前向切round, 由调用者处理
-bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
+bool ObLogArchivePieceContext::need_forward_round_(const share::SCN &scn, const palf::LSN &lsn) const
 {
   bool bret = false;
   if (max_round_id_ <= 0) {
@@ -668,6 +662,25 @@ bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
   } else if (round_context_.is_in_empty_state()) {
     bret = true;
     CLOG_LOG(INFO, "empty round, only forward round supported", K(round_context_));
+  } else if (round_context_.is_valid()
+      && round_context_.is_in_force_stop_state()
+      && inner_piece_context_.round_id_ == round_context_.round_id_
+      && inner_piece_context_.round_id_ < max_round_id_
+      && inner_piece_context_.is_valid()) {
+    if (cal_piece_id_(scn) > round_context_.max_piece_id_) {
+      bret = true;
+    } else {
+      if (inner_piece_context_.is_low_bound_()) {
+        // 当前piece状态为LOW_BOUND, 在当前piece内日志流仍未产生
+        bret = true;
+      } else if ((inner_piece_context_.is_frozen_() || inner_piece_context_.is_empty_())
+          && inner_piece_context_.max_lsn_in_piece_ <= lsn) {
+        // 同时当前piece状态为FROZEN/EMPTY
+        // 并且需要日志LSN大于当前piece下最大值
+        bret = true;
+      }
+    }
+    CLOG_LOG(INFO, "this piece may be force stop", K_(inner_piece_context), K(lsn), K(scn));
   } else if (round_context_.is_valid()
       && round_context_.is_in_stop_state()
       && round_context_.round_id_ < max_round_id_
@@ -685,6 +698,7 @@ bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
       bret = true;
     }
   }
+  CLOG_LOG(TRACE, "need_forward_round_", K(inner_piece_context_), K(lsn), K(scn), KPC(this), K(bret));
   return bret;
 }
 
@@ -694,7 +708,7 @@ bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
 bool ObLogArchivePieceContext::need_load_round_info_(const share::SCN &scn, const palf::LSN &lsn) const
 {
   bool bret = false;
-  if (round_context_.is_in_stop_state()) {
+  if (round_context_.is_in_stop_state() || round_context_.is_in_force_stop_state()) {
     bret = false;
   } else if (round_context_.round_id_ > max_round_id_ || round_context_.round_id_ < min_round_id_ || round_context_.round_id_ <= 0) {
     bret = false;
@@ -895,7 +909,7 @@ void ObLogArchivePieceContext::check_if_switch_piece_(const int64_t file_id,
       op = PieceOp::NONE;
     }
   }
-  // 当前piece仍然为ACTIVE
+  // 当前piece仍然为ACTIVE/FORCE_STOP
   else {
     // 1. min_lsn > lsn --> backward
     // 2. max_file_id not bigger than file_id --> advance
@@ -905,7 +919,10 @@ void ObLogArchivePieceContext::check_if_switch_piece_(const int64_t file_id,
     } else if (inner_piece_context_.max_file_id_ <= file_id) {
       // if piece context is stale, load piece meta fully
       // else just advance piece simply
-      if (inner_piece_context_.max_file_id_ + 1 < file_id) {
+      if (round_context_.is_in_force_stop_state()) {
+        CLOG_LOG(INFO, "round_context is in force stop state, no need to load or advance", K(file_id), K(lsn), KPC(this), K(op));
+        op = PieceOp::NONE;
+      } else if (inner_piece_context_.max_file_id_ + 1 < file_id) {
         op = PieceOp::LOAD;
       } else {
         op = PieceOp::ADVANCE;
@@ -1047,9 +1064,9 @@ int ObLogArchivePieceContext::get_ls_inner_piece_info_(const share::ObLSID &id,
   if (OB_FAIL(archive_store.init(archive_dest_))) {
     CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
   } else if (OB_FAIL(archive_store.read_single_ls_info(dest_id, round_id, piece_id, id, desc))
-      && OB_BACKUP_FILE_NOT_EXIST != ret) {
+      && OB_OBJECT_NOT_EXIST != ret) {
     CLOG_LOG(WARN, "get single piece file failed", K(ret), K(dest_id), K(round_id), K(piece_id), K(id));
-  } else if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+  } else if (OB_OBJECT_NOT_EXIST == ret) {
     exist = false;
     ret = OB_SUCCESS;
     CLOG_LOG(INFO, "ls not exist in cur piece", K(dest_id), K(round_id), K(piece_id), K(id));
@@ -1239,7 +1256,22 @@ int ObLogArchivePieceContext::get_(const palf::LSN &lsn,
       done = true;
     }
   } else {
-    if (inner_piece_context_.min_lsn_in_piece_ <= lsn && file_id <= inner_piece_context_.max_file_id_) {
+    // force stop piece in not max round
+    if (round_context_.is_in_force_stop_state()
+        && round_context_.round_id_ < max_round_id_
+        && inner_piece_context_.round_id_ == round_context_.round_id_
+        && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
+        && lsn >= inner_piece_context_.min_lsn_in_piece_
+        && file_id <= inner_piece_context_.max_file_id_) {
+      CLOG_LOG(WARN, "force stop piece when get_", K(lsn), K(file_id), KPC(this));
+      done = true;
+    }
+    // active piece
+    else if (round_context_.round_id_ == max_round_id_
+             && inner_piece_context_.round_id_ == round_context_.round_id_
+             && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
+             && inner_piece_context_.min_lsn_in_piece_ <= lsn
+             && file_id <= inner_piece_context_.max_file_id_) {
       done = true;
     }
   }
@@ -1255,8 +1287,32 @@ int ObLogArchivePieceContext::get_(const palf::LSN &lsn,
       offset = 0;
     }
 
+    // check if force stop round's max_lsn < lsn
+    if (round_context_.is_in_force_stop_state()
+        && round_context_.round_id_ < max_round_id_
+        && inner_piece_context_.round_id_ == round_context_.round_id_
+        && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
+        && inner_piece_context_.is_active()
+        && inner_piece_context_.max_file_id_ == file_id) {
+      ObLogArchivePieceContext origin_ctx;
+      palf::LSN max_lsn_in_file;
+      SCN max_scn_in_file;
+      bool exist;
+      if (OB_FAIL(deep_copy_to(origin_ctx))) {
+        CLOG_LOG(WARN, "piece context deep copy failed", KPC(this));
+      } else if (OB_FAIL(get_max_log_in_file_(origin_ctx, round_id, piece_id, file_id,
+                                                max_lsn_in_file, max_scn_in_file, exist))) {
+        CLOG_LOG(WARN, "fail to get_max_log_in_file_", K(ret), K(lsn));
+      } else if (max_lsn_in_file <= lsn) {
+        ret = OB_ARCHIVE_ROUND_NOT_CONTINUOUS;
+        CLOG_LOG(WARN, "lsn is bigger than max_lsn in force stop round", K(ret), K(lsn), K(max_lsn_in_file), K(max_scn_in_file), K(exist));
+      }
+      CLOG_LOG(INFO, "meet force stop round", K(ret), K(file_id), K(lsn), K(max_lsn_in_file), KPC(this), K(origin_ctx));
+    }
+
     // check if to the newest file, if file_id is temporary the max file, advance piece and check
-    if (round_context_.round_id_ == max_round_id_
+    if (round_context_.is_in_active_state()
+        && round_context_.round_id_ == max_round_id_
         && inner_piece_context_.round_id_ == round_context_.round_id_
         && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
         && inner_piece_context_.is_active()
@@ -1267,6 +1323,18 @@ int ObLogArchivePieceContext::get_(const palf::LSN &lsn,
     }
     if (inner_piece_context_.is_active() && inner_piece_context_.max_file_id_ == file_id) {
       to_newest = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && ! done) {
+    if (round_context_.is_in_force_stop_state()
+      && round_context_.round_id_ < max_round_id_
+      && inner_piece_context_.round_id_ == round_context_.round_id_
+      && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
+      && inner_piece_context_.is_active()
+      && inner_piece_context_.max_file_id_ < file_id) {
+      ret = OB_ARCHIVE_ROUND_NOT_CONTINUOUS;
+      CLOG_LOG(INFO, "file id is bigger than max file id in force stop round", K(ret), K(lsn), KPC(this));
     }
   }
 
@@ -1432,13 +1500,15 @@ int ObLogArchivePieceContext::get_max_log_in_file_(const ObLogArchivePieceContex
     guard.click("read_data");
     const char *log_buf = context_match ? buf : buf + header_size;
     const int64_t log_buf_size = context_match ? read_size : read_size - header_size;
-    if (OB_FAIL(mem_storage.init(base_lsn))) {
+    if (OB_FAIL(mem_storage.init(base_lsn, GCONF.enable_logservice))) {
       CLOG_LOG(WARN, "MemoryStorage init failed", K(ret), K(base_lsn), KPC(this));
     } else if (OB_FAIL(mem_storage.append(log_buf, log_buf_size))) {
       CLOG_LOG(WARN, "MemoryStorage append failed", K(log_buf), K(log_buf_size),
           K(context_match), K(file_id), K(file_offset), K(id_));
     } else if (OB_FAIL(iter.init(base_lsn, [](){ return palf::LSN(palf::LOG_MAX_LSN_VAL); }, &mem_storage))) {
       CLOG_LOG(WARN, "iter init failed", K(id_), K(base_lsn), K(log_buf), K(log_buf_size));
+    } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(MTL_ID(), id_.id(), palf::LogIOUser::ARCHIVE)))) {
+      CLOG_LOG(WARN, "iter set_io_context failed", K(id_), K(base_lsn));
     } else {
       palf::LogGroupEntry entry;
       while (OB_SUCC(ret)) {
@@ -1538,12 +1608,14 @@ int ObLogArchivePieceContext::seek_in_file_(const int64_t file_id, const SCN &sc
     CLOG_LOG(WARN, "read part file failed", K(ret), K(file_id), KPC(this));
   } else if (OB_FAIL(extract_file_base_lsn_(buf, buf_size, base_lsn))) {
     CLOG_LOG(WARN, "extract base_lsn failed", KPC(this));
-  } else if (OB_FAIL(mem_storage.init(base_lsn))) {
+  } else if (OB_FAIL(mem_storage.init(base_lsn, GCONF.enable_logservice))) {
     CLOG_LOG(WARN, "MemoryStorage init failed", K(ret), K_(id), K(base_lsn), KPC(this));
   } else if (OB_FAIL(mem_storage.append(buf + header_size, read_size - header_size))) {
     CLOG_LOG(WARN, "MemoryStorage append failed", K(ret));
   } else if (OB_FAIL(iter.init(base_lsn, [](){ return palf::LSN(palf::LOG_MAX_LSN_VAL); }, &mem_storage))) {
     CLOG_LOG(WARN, "iter init failed", K(ret));
+  } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(MTL_ID(), id_.id(), palf::LogIOUser::ARCHIVE)))) {
+    CLOG_LOG(WARN, "iter set_io_context failed", K(ret));
   } else {
     palf::LogGroupEntry entry;
     palf::LSN lsn;
@@ -1600,7 +1672,9 @@ int ObLogArchivePieceContext::read_part_file_(const int64_t round_id,
           round_id, piece_id, id_, file_id, path))) {
     CLOG_LOG(WARN, "get ls archive file path failed", K(ret), KPC(this));
   } else if (OB_FAIL(archive::ObArchiveFileUtils::range_read(path.get_ptr(),
-          archive_dest_.get_storage_info(), buf, buf_size, file_offset, read_size))) {
+          archive_dest_.get_storage_info(),
+          common::ObStorageIdMod(dest_id_, ObStorageUsedMod::STORAGE_USED_ARCHIVE),
+          buf, buf_size, file_offset, read_size))) {
     CLOG_LOG(WARN, "range read failed", K(ret), K(path));
   }
   return ret;
@@ -1700,7 +1774,9 @@ int ObLogArchivePieceContext::get_ls_meta_in_piece_(
             round_context_.round_id_, piece_id, id_, meta_type, file_id, path))) {
       CLOG_LOG(WARN, "ger ls meta record prefix failed", K(ret), KPC(this));
     } else if (OB_FAIL(archive::ObArchiveFileUtils::read_file(path.get_obstr(),
-            archive_dest_.get_storage_info(), buf, buf_size, read_size))) {
+            archive_dest_.get_storage_info(),
+            common::ObStorageIdMod(dest_id_, ObStorageUsedMod::STORAGE_USED_ARCHIVE),
+            buf, buf_size, read_size))) {
       CLOG_LOG(WARN, "read_file failed", K(ret), K(path), KPC(this));
     }
   }
@@ -1958,9 +2034,9 @@ int ObLogRawPathPieceContext::get_ls_piece_info(const int64_t curr_index, bool &
   } else if (OB_FAIL(archive_store.init(dest))) {
     CLOG_LOG(WARN, "archive store init failed", K(ret), K_(id));
   } else if (OB_FAIL(archive_store.read_single_ls_info(ls_id, desc))
-      && OB_BACKUP_FILE_NOT_EXIST != ret) {
+      && OB_OBJECT_NOT_EXIST != ret) {
     CLOG_LOG(WARN, "get single piece file failed", K(ret), K_(id));
-  } else if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+  } else if (OB_OBJECT_NOT_EXIST == ret) {
     exist = false;
     ret = OB_SUCCESS;
     CLOG_LOG(INFO, "ls not exist in cur piece", K_(id));
@@ -2066,9 +2142,9 @@ int ObLogRawPathPieceContext::get_max_archive_log_(const ObLogRawPathPieceContex
   } else if (OB_FAIL(archive_store.init(dest))) {
     CLOG_LOG(WARN, "fail to init archive store", K(ret), K_(id));
   } else if (OB_FAIL(archive_store.read_single_ls_info(id_, ls_info_desc))
-      && OB_BACKUP_FILE_NOT_EXIST != ret) {
+      && OB_OBJECT_NOT_EXIST != ret) {
     CLOG_LOG(WARN, "get single ls info failed", K(ret), K_(id));
-  } else if (OB_BACKUP_FILE_NOT_EXIST == ret) {  // active piece
+  } else if (OB_OBJECT_NOT_EXIST == ret) {  // active piece
     CLOG_LOG(WARN, "ls not exist in cur piece", K_(id));
     ret = get_max_log_in_file_(origin, max_file_id_, archive_lsn, archive_scn);
   } else if (OB_UNLIKELY(!ls_info_desc.is_valid())) {
@@ -2110,13 +2186,15 @@ int ObLogRawPathPieceContext::get_max_log_in_file_(const ObLogRawPathPieceContex
     guard.click("read_data");
     const char *log_buf = buf + header_size;
     const int64_t log_buf_size = read_size - header_size;
-    if (OB_FAIL(mem_storage.init(base_lsn))) {
+    if (OB_FAIL(mem_storage.init(base_lsn, GCONF.enable_logservice))) {
       CLOG_LOG(WARN, "MemoryStorage init failed", K(ret), K(base_lsn), KPC(this));
     } else if (OB_FAIL(mem_storage.append(log_buf, log_buf_size))) {
       CLOG_LOG(WARN, "MemoryStorage append failed", K(log_buf), K(log_buf_size),
          K(file_id), K(file_offset), K(id_));
     } else if (OB_FAIL(iter.init(base_lsn, GetFileEndLSN(), &mem_storage))) {
       CLOG_LOG(WARN, "iter init failed", K(id_), K(base_lsn), K(log_buf), K(log_buf_size));
+    } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(palf::LogIOUser::ARCHIVE)))) {
+      CLOG_LOG(WARN, "iter set_io_context failed", K_(id), K(base_lsn));
     } else {
       palf::LogGroupEntry entry;
       while (OB_SUCC(ret)) {
@@ -2165,6 +2243,9 @@ int ObLogRawPathPieceContext::read_part_file_(const int64_t file_id,
   char uri_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
   char storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
   share::ObBackupStorageInfo storage_info;
+  // get dest_id from __all_log_restore_source is difficult,
+  // so set dest_id of restore as OB_INVALID_ID
+  const uint64_t dest_id = OB_INVALID_ID;
   if (OB_FAIL((get_cur_uri(uri_str, sizeof(uri_str))))) {
     CLOG_LOG(WARN, "fail to get current uri ptr", KPC(this));
   } else if (OB_FAIL(get_cur_storage_info(storage_info_str, sizeof(storage_info_str)))) {
@@ -2174,7 +2255,9 @@ int ObLogRawPathPieceContext::read_part_file_(const int64_t file_id,
   } else if (OB_FAIL(storage_info.set(uri_str, storage_info_str))) {
     CLOG_LOG(WARN, "fail to set storage info", K(ret));
   } else if (OB_FAIL(archive::ObArchiveFileUtils::range_read(path.get_ptr(),
-          &storage_info, buf, buf_size, file_offset, read_size))) {
+     &storage_info,
+     common::ObStorageIdMod(dest_id, ObStorageUsedMod::STORAGE_USED_ARCHIVE),
+     buf, buf_size, file_offset, read_size))) {
     CLOG_LOG(WARN, "range read failed", K(ret), K(path));
   }
   return ret;

@@ -25,11 +25,13 @@ int ObTableApiCacheKey::deep_copy(common::ObIAllocator &allocator, const ObILibC
   table_id_ = table_key.table_id_;
   index_table_id_ = table_key.index_table_id_;
   schema_version_ = table_key.schema_version_;
-  is_ttl_table_ = table_key.is_ttl_table_;
+  flags_ = table_key.flags_;
   operation_type_ = table_key.operation_type_;
   namespace_ = table_key.namespace_;
+  io_read_batch_size_ = table_key.io_read_batch_size_;
+  io_read_gap_size_ = table_key.io_read_gap_size_;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_key.op_column_ids_.count(); i++) {
-    if(OB_FAIL(op_column_ids_.push_back(table_key.op_column_ids_.at(i)))) {
+    if (OB_FAIL(op_column_ids_.push_back(table_key.op_column_ids_.at(i)))) {
       LOG_WARN("fail to push back column id ", K(ret));
     }
   }
@@ -42,11 +44,13 @@ uint64_t ObTableApiCacheKey::hash() const
   hash_val = murmurhash(&table_id_, sizeof(table_id_), hash_val);
   hash_val = murmurhash(&index_table_id_, sizeof(index_table_id_), hash_val);
   hash_val = murmurhash(&schema_version_, sizeof(schema_version_), hash_val);
-  hash_val = murmurhash(&is_ttl_table_, sizeof(is_ttl_table_), hash_val);
+  hash_val = murmurhash(&flags_, sizeof(flags_), hash_val);
   hash_val = murmurhash(&operation_type_, sizeof(operation_type_), hash_val);
   for (int64_t i = 0; i < op_column_ids_.count(); i++) {
     hash_val = murmurhash(&(op_column_ids_.at(i)), sizeof(uint64_t), hash_val);
   }
+  hash_val = murmurhash(&io_read_batch_size_, sizeof(io_read_batch_size_), hash_val);
+  hash_val = murmurhash(&io_read_gap_size_, sizeof(io_read_gap_size_), hash_val);
   return hash_val;
 }
 
@@ -56,10 +60,12 @@ bool ObTableApiCacheKey::is_equal(const ObILibCacheKey &other) const
   bool cmp_ret = table_id_ == table_key.table_id_ &&
                  index_table_id_ == table_key.index_table_id_ &&
                  schema_version_ == table_key.schema_version_ &&
-                 is_ttl_table_ == table_key.is_ttl_table_ &&
+                 flags_ == table_key.flags_ &&
                  operation_type_ == table_key.operation_type_ &&
                  namespace_ == table_key.namespace_ &&
-                 op_column_ids_.count() == table_key.op_column_ids_.count();
+                 op_column_ids_.count() == table_key.op_column_ids_.count() &&
+                 io_read_batch_size_ == table_key.io_read_batch_size_ &&
+                 io_read_gap_size_ == table_key.io_read_gap_size_;
   for (int64_t i = 0; (cmp_ret == true) && i < op_column_ids_.count(); i++) {
     if (op_column_ids_.at(i) != table_key.op_column_ids_.at(i)) {
       cmp_ret = false;
@@ -73,10 +79,10 @@ void ObTableApiCacheKey::reset()
   table_id_ = common::OB_INVALID_ID;
   index_table_id_ = common::OB_INVALID_ID;
   schema_version_ = -1;
-  is_ttl_table_ = false;
-  operation_type_ = ObTableOperationType::Type::INVALID;
+  flags_ = 0;
   namespace_ = ObLibCacheNameSpace::NS_TABLEAPI;
-  op_column_ids_.reset();
+  io_read_batch_size_ = 0;
+  io_read_gap_size_ = 0;
 }
 
 int ObTableApiCacheNode::inner_get_cache_obj(ObILibCacheCtx &ctx,
@@ -134,21 +140,23 @@ int ObTableApiCacheGuard::create_cache_key(ObTableCtx *tb_ctx)
   int ret = OB_SUCCESS;
   cache_key_.table_id_ = tb_ctx->get_table_id();
   cache_key_.index_table_id_ = tb_ctx->get_index_table_id();
-  cache_key_.schema_version_ = tb_ctx->get_table_schema()->get_schema_version();
+  cache_key_.schema_version_ = tb_ctx->get_simple_table_schema()->get_schema_version();
   cache_key_.is_ttl_table_ = tb_ctx->is_ttl_table();
+  cache_key_.need_dist_das_ = tb_ctx->need_dist_das();
+  cache_key_.is_count_all_ = tb_ctx->is_count_all();
+  cache_key_.is_total_quantity_log_ = tb_ctx->is_total_quantity_log();
   ObTableOperationType::Type operation_type = tb_ctx->get_opertion_type();
   cache_key_.operation_type_ = operation_type;
   if (operation_type == ObTableOperationType::Type::UPDATE
       || operation_type == ObTableOperationType::Type::INSERT_OR_UPDATE
-      || operation_type == ObTableOperationType::Type::INCREMENT
-      || operation_type == ObTableOperationType::Type::APPEND) {
+      || tb_ctx->is_inc_append_update()) {
     const ObIArray<ObTableAssignment> &assigns = tb_ctx->get_assignments();
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
       const ObTableAssignment &tmp_assign = assigns.at(i);
-      if (OB_ISNULL(tmp_assign.column_item_)) {
+      if (OB_ISNULL(tmp_assign.column_info_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("assign column item is null", K(ret), K(tmp_assign));
-      } else if (OB_FAIL(cache_key_.op_column_ids_.push_back(tmp_assign.column_item_->column_id_))) {
+        LOG_WARN("assign column info is null", K(ret), K(tmp_assign));
+      } else if (OB_FAIL(cache_key_.op_column_ids_.push_back(tmp_assign.column_info_->column_id_))) {
         LOG_WARN("fail to add assign column id", K(ret), K(i));
       }
     }
@@ -159,6 +167,8 @@ int ObTableApiCacheGuard::create_cache_key(ObTableCtx *tb_ctx)
         LOG_WARN("fail to add select column id", K(ret), K(i));
       }
     }
+    cache_key_.io_read_batch_size_ = tb_ctx->get_io_read_batch_size();
+    cache_key_.io_read_gap_size_ = tb_ctx->get_io_read_gap_size();
   }
   return ret;
 }
@@ -167,15 +177,13 @@ int ObTableApiCacheGuard::get_or_create_cache_obj()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(lib_cache_->get_cache_obj(cache_ctx_, &cache_key_, cache_guard_))) {
-    if (ret == OB_SQL_PC_NOT_EXIST) {
-      is_use_cache_ = false;
-      if (OB_FAIL(ObCacheObjectFactory::alloc(cache_guard_,
-                                              ObLibCacheNameSpace::NS_TABLEAPI,
-                                              lib_cache_->get_tenant_id()))) {
-        LOG_WARN("fail to alloc new cache obj", K(ret));
-      }
-    } else {
-      LOG_WARN("fail to get cache obj", K(ret), K(cache_key_));
+    LOG_TRACE("fail to get cache obj, try create cache obj", K(ret), K(cache_key_));
+    is_use_cache_ = false;
+    if (OB_FAIL(ObCacheObjectFactory::alloc(cache_guard_,
+                                            ObLibCacheNameSpace::NS_TABLEAPI,
+                                            lib_cache_->get_tenant_id()))) {
+      // overwrite ret
+      LOG_WARN("fail to alloc new cache obj", K(ret));
     }
   } else {
     is_use_cache_ = true;
@@ -193,9 +201,13 @@ int ObTableApiCacheGuard::get_expr_info(ObTableCtx *tb_ctx, ObExprFrameInfo *&ex
   } else {
     ObIAllocator &allocator = cache_obj->get_allocator();
     expr_frame_info = cache_obj->get_expr_frame_info();
-    if (!is_use_cache_ && OB_FAIL(ObTableExprCgService::generate_exprs(*tb_ctx,
-                                                                       allocator,
-                                                                       *expr_frame_info))) {
+    if (!is_use_cache_ && OB_FAIL(tb_ctx->cons_column_items_for_cg())) {
+      LOG_WARN("fail to init column items", K(ret));
+    } else if (!is_use_cache_ && OB_FAIL(tb_ctx->generate_table_schema_for_cg())) {
+      LOG_WARN("ctx table schema is null and failed to generate", K(ret));
+    } else if (!is_use_cache_ && OB_FAIL(ObTableExprCgService::generate_exprs(*tb_ctx,
+                                                                              allocator,
+                                                                              *expr_frame_info))) {
       LOG_WARN("fail to generate expr", K(ret));
     } else if (!is_use_cache_ && OB_FAIL(tb_ctx->classify_scan_exprs())) {
       LOG_WARN("fail to classify scan exprs", K(ret));

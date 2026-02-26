@@ -85,7 +85,6 @@ public:
   uint64_t last_;
 };
 
-
 /// Interrupt signal checker
 class ObInterruptChecker
 {
@@ -97,6 +96,8 @@ class ObInterruptChecker
 
   friend class ObGlobalInterruptManager;
 
+  friend class ObInterruptCheckerGuard;
+
 public:
   /// Only the interface is provided externally:
   /// is_interrupted(): Determine whether to receive interrupt information
@@ -104,11 +105,13 @@ public:
   /// get_interrupt_code(): Get interrupt error code
   /// clear_status() resets the state of the inspector to the initial state
   /// register_checker(tid) to register yourself on the interrupt manager
-  ObInterruptChecker() { ObInterruptChecker(false, static_cast<uint64_t>(GETTID())); };
-  ObInterruptChecker(bool mod, uint64_t rid) : interrupted_(false), array_pos_(0),
-                                               ref_count_(0), mod_(mod), rid_(rid)
+  ObInterruptChecker() : ObInterruptChecker(false, static_cast<uint64_t>(GETTID()))
+  {}
+  ObInterruptChecker(bool mod, uint64_t rid) : interrupted_(false),
+                                          ref_count_(0), mod_(mod), rid_(rid),
+                                          next_(nullptr), level_(0)
   {
-    MEMSET(interrupt_code_array_, 0, T_ARRAY_SIZE);
+    MEMSET(&interrupt_code_array_, 0, 1);
   };
 
   // Automatically log yourself out during destruction
@@ -121,24 +124,21 @@ public:
   void unregister_checker(const ObInterruptibleTaskID &tid);
 
   bool is_interrupted();
-
   ObInterruptCode &get_interrupt_code();
 
   void clear_status();
   void clear_interrupt_status();
   void interrupt(ObInterruptCode &interrupt_code);
+  ObInterruptChecker *next() { return next_; }
+  void set_next(ObInterruptChecker *next) { next_ = next; }
+  uint64_t get_level() const { return level_; }
+  void set_level(uint64_t v) { level_ = v; }
 
 private:
-  /*
-   * T_ARRAY_SIZE代表一个执行单元在执行过程中所能收到的最多的中断个数.
-   * 这些中断信息存放在固定大小为T_ARRAY_SIZE的数组中.
-   */
-  static const uint64_t T_ARRAY_SIZE = 16;
   DISALLOW_COPY_AND_ASSIGN(ObInterruptChecker);
 private:
   bool interrupted_;
-  ObInterruptCode interrupt_code_array_[T_ARRAY_SIZE];
-  int64_t array_pos_;
+  ObInterruptCode interrupt_code_array_;
   /*
   * ref_count_为checker的引用计数, 当引用计数为1时, unregister_interrupt会将interrupted_置false.
   */
@@ -150,6 +150,17 @@ private:
   // rid_ = coro_id in coro mod / thread_id in thread mod
   bool mod_;
   uint64_t rid_;
+  ObInterruptChecker *next_;
+  uint64_t level_;
+};
+
+class ObInterruptCheckerGuard
+{
+public:
+  ObInterruptCheckerGuard(ObInterruptChecker &new_checker);
+  ~ObInterruptCheckerGuard();
+private:
+  ObInterruptChecker *bakup_checker_;
 };
 
 struct ObInterruptCheckerNode
@@ -229,7 +240,6 @@ private:
   bool checker_exist_;
 };
 
-
 /// Remote interrupt manager
 /// Exist in singleton mode to provide
 /// Interface for remote interrupt signal transmission
@@ -287,11 +297,17 @@ private:
   bool is_inited_;
 };
 
-/// The method of obtaining the interrupter, the execution on the coroutine will return a coroutine interrupter, and the execution on the thread will return a thread-private interrupter
-OB_INLINE ObInterruptChecker *get_checker()
+OB_INLINE ObInterruptChecker &get_local_checker()
 {
   RLOCAL_INLINE(ObInterruptChecker, th_checker_);
-  return &th_checker_;
+  return th_checker_;
+}
+
+/// The method of obtaining the interrupter, the execution on the coroutine will return a coroutine interrupter, and the execution on the thread will return a thread-private interrupter
+OB_INLINE ObInterruptChecker *&get_checker()
+{
+  RLOCAL_INLINE(ObInterruptChecker *, th_checker_ptr_(&get_local_checker()));
+  return th_checker_ptr_;
 }
 
 /// Global method, set an interrupter for the current execution unit
@@ -311,7 +327,34 @@ OB_INLINE bool IS_INTERRUPTED()
     LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "interrupt checker may not be set correctly");
     return false;
   }
-  return get_checker()->is_interrupted();
+  bool res = false;
+  ObInterruptChecker *checker = get_checker();
+  while (checker != NULL) {
+    if (checker->is_interrupted()) {
+      res = true;
+      break;
+    }
+    checker = checker->next();
+  }
+  return res;
+}
+
+OB_INLINE bool IS_INTERRUPTED_BY_OUTER_QUERY()
+{
+  if (OB_ISNULL(get_checker())) {
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "interrupt checker may not be set correctly");
+    return false;
+  }
+  bool res = false;
+  ObInterruptChecker *checker = get_checker()->next();
+  while (checker != NULL) {
+    if (checker->is_interrupted()) {
+      res = true;
+      break;
+    }
+    checker = checker->next();
+  }
+  return res;
 }
 
 /// Global method to get the interrupt value of the current executor

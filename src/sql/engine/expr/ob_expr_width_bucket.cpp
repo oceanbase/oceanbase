@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/ob_sql_utils.h"
-#include "lib/utility/utility.h"
 #include "sql/engine/expr/ob_expr_width_bucket.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "lib/charset/ob_dtoa.h"
 
 using namespace oceanbase::common;
 

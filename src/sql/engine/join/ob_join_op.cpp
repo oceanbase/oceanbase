@@ -56,7 +56,7 @@ void ObJoinOp::blank_row_batch(const ExprFixedArray &exprs, int64_t batch_size)
       }
     }
     e->set_evaluated_projected(eval_ctx_);
-    e->get_eval_info(eval_ctx_).notnull_ = false;
+    e->get_eval_info(eval_ctx_).set_notnull(false);
   }
 }
 
@@ -68,7 +68,7 @@ void ObJoinOp::blank_row_batch_one(const ExprFixedArray &exprs)
     expr->locate_expr_datum(eval_ctx_).set_null();
     expr->set_evaluated_flag(eval_ctx_);
     if (expr->is_batch_result()) {
-      expr->get_eval_info(eval_ctx_).notnull_ = false;
+      expr->get_eval_info(eval_ctx_).set_notnull(false);
     }
   }
 }

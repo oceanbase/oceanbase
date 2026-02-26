@@ -42,7 +42,7 @@ namespace libobcdc
 {
 
 using logservice::ObRemoteLogParent;
-using logservice::ObRemoteLogGroupEntryIterator;
+using logservice::ObRemoteIGroupEntryIterator;
 /////////////////////////////// LSFetchCtx /////////////////////////////////
 
 class ObLogConfig;
@@ -97,19 +97,20 @@ public:
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest_str,
       IObCDCPartTransResolver &part_trans_resolver,
-      IObLogLSFetchMgr &ls_fetch_mgr);
+      IObLogLSFetchMgr &ls_fetch_mgr,
+      logservice::ObLogserviceModelInfo &logservice_model_info);
 
   int append_log(const char *buf, const int64_t buf_len);
   void reset_memory_storage();
-  int get_next_group_entry(palf::LogGroupEntry &group_entry, palf::LSN &lsn);
+  int get_next_group_entry(ipalf::IGroupEntry &group_entry, palf::LSN &lsn);
   int get_next_remote_group_entry(
-      palf::LogGroupEntry &group_entry,
+      ipalf::IGroupEntry &group_entry,
       palf::LSN &lsn,
       const char *&buf,
       int64_t &buf_size);
-  int get_log_entry_iterator(palf::LogGroupEntry &group_entry,
+  int get_log_entry_iterator(ipalf::IGroupEntry &group_entry,
       palf::LSN &start_lsn,
-      palf::MemPalfBufferIterator &entry_iter);
+      ipalf::IPalfIterator<ipalf::ILogEntry> &entry_iter);
 
   /// Synchronising data to downstream
   ///
@@ -134,7 +135,7 @@ public:
   /// @retval OB_IN_STOP_STATE    Entered stop state
   /// @retval Other error codes   Failed
   int read_log(
-      const palf::LogEntry &log_entry,
+      const ipalf::ILogEntry &log_entry,
       const palf::LSN &lsn,
       IObCDCPartTransResolver::MissingLogInfo &missing,
       logfetcher::TransStatInfo &tsi,
@@ -151,14 +152,18 @@ public:
   /// @retval Other error codes     fail
   /// @note won't throw OB_ITEM_NOT_SETTED if found missing_log, invoker should check missing_info is_empty or not
   int read_miss_tx_log(
-      const palf::LogEntry &log_entry,
+      const ipalf::ILogEntry &log_entry,
       const palf::LSN &lsn,
       logfetcher::TransStatInfo &tsi,
       IObCDCPartTransResolver::MissingLogInfo &missing);
 
   int update_progress(
-      const palf::LogGroupEntry &group_entry,
+      const ipalf::IGroupEntry &group_entry,
       const palf::LSN &group_entry_lsn);
+
+  bool get_logservice_model() {
+    return enable_logservice_;
+  }
 
   /// Offline LS, clear all unexported tasks and issue OFFLINE type tasks
   ///
@@ -208,6 +213,8 @@ public:
   /// @retval OB_ITER_END         Server list iterations complete one round
   /// @retval Other error codes   Failed
   int next_server(common::ObAddr &request_svr);
+
+  int get_server_count(int64_t &server_count);
 
   void mark_svr_list_update_flag(const bool need_update);
 
@@ -272,6 +279,7 @@ public:
 
   bool is_in_fetching_log() const { return FETCHING_LOG == ATOMIC_LOAD(&state_); }
   void set_not_in_fetching_log() { ATOMIC_SET(&state_, NOT_FETCHING_LOG); }
+  bool is_loading_data_dict_baseline_data() const { return is_loading_data_dict_baseline_data_; }
 
   void dispatch_out(const char *reason)
   {
@@ -322,7 +330,7 @@ private:
   // Periodic deletion of history
   int init_locate_req_svr_list_(StartLSNLocateReq &req, LocateSvrList &svr_list);
   int dispatch_(volatile bool &stop_flag, int64_t &pending_trans_count);
-  int handle_offline_ls_log_(const palf::LogEntry &log_entry, volatile bool &stop_flag);
+  int handle_offline_ls_log_(const ipalf::ILogEntry &log_entry, volatile bool &stop_flag);
   int deserialize_log_entry_base_header_(const char *buf, const int64_t buf_len, int64_t &pos,
                                          logservice::ObLogBaseHeader &log_base_header);
 
@@ -483,7 +491,7 @@ private:
   }
 
 public:
-  TO_STRING_KV("type", "FETCH_TASK",
+  TO_STRING_KV_WITH_HELPER("type", "FETCH_TASK",
       "stype", print_fetch_stream_type(stype_),
       K_(state),
       "state_str", print_state(state_),
@@ -500,7 +508,7 @@ public:
       K_(fetch_info),
       K_(svr_list_need_update),
       "start_log_id_locate_req",
-      start_lsn_locate_req_.is_state_idle() ? "IDLE" : to_cstring(start_lsn_locate_req_),
+      start_lsn_locate_req_.is_state_idle() ? "IDLE" : helper.convert(start_lsn_locate_req_),
       KP_(next),
       KP_(prev));
 
@@ -533,7 +541,7 @@ private:
   IObCDCPartTransResolver *part_trans_resolver_;    // Partitioned transaction resolvers, one for each partition exclusively
 
   ObRemoteLogParent             *source_;
-  ObRemoteLogGroupEntryIterator remote_iter_;
+  ObRemoteIGroupEntryIterator remote_iter_;
 
   // Last synced progress
   int64_t                 last_sync_progress_ CACHE_ALIGNED;
@@ -555,7 +563,9 @@ private:
   StartLSNLocateReq       end_lsn_locate_req_;
 
   palf::MemoryStorage     mem_storage_;
-  palf::MemPalfGroupBufferIterator group_iterator_;
+  // palf::MemPalfGroupBufferIterator group_iterator_;
+  ipalf::IPalfIterator<ipalf::IGroupEntry> group_iterator_;
+  bool enable_logservice_;
 
   datadict::ObDataDictIterator data_dict_iterator_;
 

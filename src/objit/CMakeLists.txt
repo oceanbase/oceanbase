@@ -9,6 +9,8 @@ project(objit
     message(FATAL_ERROR "DEP_3RD_DIR not set")
   endif()
 
+list(APPEND CMAKE_LIBRARY_PATH "${DEP_3RD_DIR}/usr/local/oceanbase/deps/devel/lib")
+list(APPEND CMAKE_INCLUDE_PATH "${DEP_3RD_DIR}/usr/local/oceanbase/deps/devel/include")
 set(LLVM_DIR "${DEP_3RD_DIR}/usr/local/oceanbase/devtools/lib/cmake/llvm")
 find_package(LLVM REQUIRED CONFIG)
 
@@ -20,8 +22,7 @@ message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
-add_definitions(-Wno-deprecated)
-add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0 -g -O2 -frtti)
+add_definitions(-g -O2 -frtti)
 
 # Find the libraries that correspond to the LLVM components
 # that we wish to use

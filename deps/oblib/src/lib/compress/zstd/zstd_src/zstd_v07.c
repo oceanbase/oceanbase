@@ -9,7 +9,6 @@
 
 
 /*- Dependencies -*/
-#include <stddef.h>     /* size_t, ptrdiff_t */
 #include <string.h>     /* memcpy */
 #include <stdlib.h>     /* malloc, free, qsort */
 

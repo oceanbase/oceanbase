@@ -120,12 +120,14 @@ TEST(ObTenantManager, multithread)
   int64_t major_freeze_trigger = 0;
   int64_t memstore_limit = 0;
   int64_t freeze_cnt = 0;
+  int64_t unused_throttle_trigger = 0;
   ObTenantManager::get_instance().get_tenant_memstore_cond(OB_SYS_TENANT_ID,
                                                            active_memstore_used,
                                                            total_memstore_used,
                                                            major_freeze_trigger,
                                                            memstore_limit,
-                                                           freeze_cnt);
+                                                           freeze_cnt,
+                                                           unused_throttle_trigger);
   //EXPECT_TRUE(active_memstore_used, 65560*32*1000LL);
 }
 

@@ -32,15 +32,12 @@ int ObLineIntersectionAnalyzer::segment_intersection_query(ObGeometry *geo)
 {
   int ret = OB_SUCCESS;
   is_intersect_ = false;
-  if (OB_ISNULL(rtree_index_)) {
-    ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("rtree index is null", K(ret));
-  } else if (!rtree_index_->is_built()) {
+  if (!rtree_index_.is_built()) {
     ObLineSegments* line_segs = cache_geo_->get_line_segments();
     if (OB_ISNULL(line_segs)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("should not be null", K(ret));
-    } else if (OB_FAIL(rtree_index_->construct_rtree_index(line_segs->segs_))) {
+    } else if (OB_FAIL(rtree_index_.construct_rtree_index(line_segs->segs_))) {
       LOG_WARN("construct rtree index failed", K(ret));
     }
   }
@@ -58,7 +55,7 @@ int ObLineIntersectionAnalyzer::segment_intersection_query(ObGeometry *geo)
         inter_res = LineIntersect::NO_INTERSCT;
         if (OB_FAIL(input_segments.segs_[i].get_box(box))) {
           LOG_WARN("failed to get segment box", K(ret));
-        } else if (OB_FAIL(rtree_index_->query(QueryRelation::INTERSECTS, box, res))) {
+        } else if (OB_FAIL(rtree_index_.query(QueryRelation::INTERSECTS, box, res))) {
           LOG_WARN("failed to query rtree", K(ret));
         } else {
           for (uint32_t j = 0; j < res.size() && OB_SUCC(ret) && !is_check_done(inter_res); j++) {

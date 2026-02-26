@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
 #include "lib/encrypt/ob_encrypted_helper.h"
+#include "share/ob_cluster_version.h"
 
-#include <stdio.h>
-#include <stdint.h>
-#include <string.h>
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -777,4 +773,26 @@ int ObEncryptedHelper::char_to_hex(char input, int64_t &out)
   return ret;
 }
 
+int ObEncryptedHelper::check_data_version_for_auth_plugin(const ObString &plugin,
+                                                          uint64_t tenant_id,
+                                                          bool &is_supported)
+{
+  int ret = OB_SUCCESS;
+  is_supported = true;
+  uint64_t data_version = 0;
+  if (OB_UNLIKELY(!is_valid_auth_plugin(plugin))) {
+    ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+    LOG_WARN("invalid auth plugin", K(plugin), K(tenant_id), K(ret));
+  } else if (0 != plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD)) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
+  } else if ((data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+             || data_version >= DATA_VERSION_4_5_1_0) {
+    // do nothing
+  } else {
+    is_supported = false;
+  }
+  return ret;
+}
 

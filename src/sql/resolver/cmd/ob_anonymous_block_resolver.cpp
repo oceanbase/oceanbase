@@ -14,10 +14,8 @@
 
 #include "ob_anonymous_block_resolver.h"
 #include "ob_anonymous_block_stmt.h"
-#include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_compile.h"
-#include "sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {
@@ -85,6 +83,7 @@ int ObAnonymousBlockResolver::resolve(const ParseNode &parse_tree)
       CK (OB_NOT_NULL(block_node = parse_tree.children_[0]));
       CK (OB_LIKELY(T_SP_BLOCK_CONTENT == block_node->type_
                     || T_SP_LABELED_BLOCK == block_node->type_));
+      OX (block_node->is_forbid_anony_parameter_ |= params_.query_ctx_->question_marks_count_ > 0);
       OX (stmt->set_prepare_protocol(false));
       OX (stmt->set_body(block_node));
       OZ (add_param());
@@ -113,9 +112,24 @@ int ObAnonymousBlockResolver::resolve_anonymous_block(
                               false,
                               false,
                               p_param_list);
+    if (params_.param_list_ != NULL && params_.param_list_->count() > 0) {
+      if (params_.param_list_->count() != params_.query_ctx_->question_marks_count_) {
+        if (params_.param_list_->count() < params_.query_ctx_->question_marks_count_) {
+          ret = OB_ERR_NOT_ALL_VARIABLE_BIND;
+          LOG_WARN("ORA-01008: not all variables bound",
+                    K(ret), K(params_.param_list_->count()),
+                    K(params_.query_ctx_->question_marks_count_));
+        } else {
+          ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
+          LOG_WARN("ORA-01006: bind variable does not exist",
+                    K(ret), K(params_.param_list_->count()),
+                    K(params_.query_ctx_->question_marks_count_));
+        }
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < params_.query_ctx_->question_marks_count_; ++i) {
       ObObjParam param = ObObjParam(ObObj(ObNullType));
-      const_cast<ObObjMeta&>(param.get_null_meta()).reset();
+      const_cast<ObObjMeta&>(param.get_param_meta()).reset();
       OZ (param_list.push_back(param));
     }
     OZ (package_guard.init());

@@ -12,23 +12,9 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 
-#include "sql/engine/cmd/ob_load_data_rpc.h"
 
-#include "observer/ob_server_struct.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/utility/serialization.h"
-#include "share/ob_tenant_mgr.h"
-#include "storage/access/ob_dml_param.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/resolver/ob_resolver.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/plan_cache/ob_sql_parameterization.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/code_generator/ob_code_generator.h"
-#include "sql/engine/ob_exec_context.h"
+#include "ob_load_data_rpc.h"
 #include "sql/engine/cmd/ob_load_data_impl.h"
-#include "lib/string/ob_string.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 
 using namespace oceanbase::sql;
@@ -143,12 +129,7 @@ int ObRpcLoadDataShuffleTaskExecuteP::process()
     } else if (OB_ISNULL(handle)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("handle is null", K(ret));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard_))) {
-      //Confirmed with the load data owner that the inability to calculate the correct tablet_id here will not affect the execution,
-      //so we use the latest schema version to obtain the guard
-      LOG_WARN("get tenant schema guard failed", KR(ret));
-    } else  {
-      handle->exec_ctx.get_sql_ctx()->schema_guard_ = &schema_guard_;
+    } else {
       if (OB_UNLIKELY(THIS_WORKER.is_timeout())) {
         ret = OB_TIMEOUT;
         LOG_WARN("LOAD DATA shuffle task timeout", K(ret), K(task));
@@ -361,12 +342,14 @@ int ObRpcLoadDataTaskExecuteP::process()
     int64_t major_freeze_trigger = 0;
     int64_t memstore_limit = 0;
     int64_t freeze_cnt = 0;
+    int64_t unused_throttle_trigger = 0;
     if (OB_UNLIKELY(OB_SUCCESS != (memory_check_ret =
                                    freezer->get_tenant_memstore_cond(active_memstore_used,
                                                                      total_memstore_used,
                                                                      major_freeze_trigger,
                                                                      memstore_limit,
-                                                                     freeze_cnt)))) {
+                                                                     freeze_cnt,
+                                                                     unused_throttle_trigger)))) {
       LOG_WARN("fail to get memstore used", K(memory_check_ret));
     } else {
       if (static_cast<double>(total_memstore_used)
@@ -501,7 +484,7 @@ int ObParallelTaskController::init(int64_t max_parallelism)
 {
   int ret = OB_SUCCESS;
   max_parallelism_ = max_parallelism;
-  if (OB_FAIL(vacant_cond_.init(common::ObWaitEventIds::ASYNC_RPC_PROXY_COND_WAIT))) {
+  if (OB_FAIL(vacant_cond_.init(common::ObWaitEventIds::PARALLEL_TASK_CONTROLLER_COND_WAIT))) {
     LOG_WARN("init vacant cond failed", K(ret));
   }
   return ret;

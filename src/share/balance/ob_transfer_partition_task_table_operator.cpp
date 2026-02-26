@@ -13,13 +13,8 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_transfer_partition_task_table_operator.h"
-#include "lib/mysqlclient/ob_isql_client.h"//ObISQLClient
-#include "lib/mysqlclient/ob_mysql_result.h"//MySQLResult
-#include "lib/mysqlclient/ob_mysql_proxy.h"//MySQLResult
 #include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
-#include "share/inner_table/ob_inner_table_schema.h"//ALL_TRANSFER_PARTITION_TASK_TNAME
-#include "share/ob_dml_sql_splicer.h"//ObDMLSqlSplicer
-#include "share/ls/ob_ls_operator.h"//get_tenant_gts
+#include "src/share/ls/ob_ls_i_life_manager.h"
 #include "storage/tablelock/ob_lock_utils.h"//lock table
 
 namespace oceanbase

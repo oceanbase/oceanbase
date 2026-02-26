@@ -1,3 +1,6 @@
+// owner: zjf225077
+// owner group: log
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,22 +13,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include <stdexcept>
 #define private public
 #define protected public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
 #undef protected
-#include "logservice/palf/log_reader_utils.h"
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/log_group_entry_header.h"
-#include "logservice/palf/log_io_worker.h"
-#include "logservice/palf/lsn.h"
 
 const std::string TEST_NAME = "log_disk_mgr";
 
@@ -63,6 +55,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
 
 TEST_F(TestObSimpleLogDiskMgr, out_of_disk_space)

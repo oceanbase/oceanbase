@@ -36,7 +36,7 @@ public:
                                   const int32_t agg_col_id, const char *agg_cell,
                                   const int32_t agg_cell_len)
   {
-  int ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;
     const NotNullBitVector &notnulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
     int64_t output_idx = agg_ctx.eval_ctx_.get_batch_idx();
     ResultFmt *res_vec = static_cast<ResultFmt *>(agg_expr.get_vector(agg_ctx.eval_ctx_));
@@ -118,7 +118,7 @@ public:
     return ret;
   }
   template <typename ColumnFmt>
-  inline int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     UNUSEDx(agg_cell, tmp_res, calc_info);
@@ -140,7 +140,7 @@ public:
     return OB_SUCCESS;
   }
   template <typename ColumnFmt>
-  inline int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                               const int32_t agg_col_id, char *agg_cell, void *tmp_res,
                               int64_t &calc_info)
   {
@@ -178,7 +178,7 @@ public:
           agg_row = agg_ctx.agg_rows_.at(i);
           NotNullBitVector &notnulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
           if (!pvt_skip.at(i)) {
-            notnulls.set(i);
+            notnulls.set(agg_col_id);
           }
         }
       } else {
@@ -186,15 +186,41 @@ public:
           agg_row = agg_ctx.agg_rows_.at(row_sel.index(i));
           NotNullBitVector &notnulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
           if (!pvt_skip.at(row_sel.index(i))) {
-            notnulls.set(row_sel.index(i));
+            notnulls.set(agg_col_id);
           }
         }
       }
     }
     return ret;
   }
+
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    const char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    int32_t curr_agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, group_row);
+    const NotNullBitVector &curr_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (OB_LIKELY(curr_not_nulls.at(agg_col_idx))) {
+      rollup_not_nulls.set(agg_col_idx);
+      if (helper::is_var_len_agg_cell(in_tc)) {
+        *reinterpret_cast<int64_t *>(rollup_agg_cell) =
+          *reinterpret_cast<const int64_t *>(curr_agg_cell);
+        *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = curr_agg_cell_len;
+      } else {
+        MEMCPY(rollup_agg_cell, curr_agg_cell, curr_agg_cell_len);
+      }
+    }
+    return ret;
+  }
+
   void set_first_row(bool is_first_row) { is_first_row_ = is_first_row; }
-  TO_STRING_KV("aggregate", "single_row", K(in_tc), K(out_tc), K(is_first_row_));
+  TO_STRING_KV("aggregate", "single_row", K(in_tc), K(out_tc), K(is_first_row_), K(agg_func));
 private:
   bool is_first_row_;
 };

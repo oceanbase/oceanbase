@@ -176,7 +176,8 @@ int TestMicroBlockRowScanner::build_macro_and_scan(
       ret = m_scanner.get_next_row(row);
       if (OB_SUCCESS == ret) {
         scanner_iter.add_row(const_cast<ObStoreRow *>(row));
-        STORAGE_LOG(WARN, "test", "this row", to_cstring(*row));
+        ObCStringHelper helper;
+        STORAGE_LOG(WARN, "test", "this row", helper.convert(*row));
       } else if (OB_ITER_END == ret) {
         STORAGE_LOG(ERROR, "error", K(ret), KPC(row));
       }

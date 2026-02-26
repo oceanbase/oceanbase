@@ -58,22 +58,19 @@ private:
   bool is_inited_;
 };
 
-class FillCacheFsCb : public PalfFSCb
+class EnableFillCacheFunctor
 {
 public:
-  FillCacheFsCb();
-  ~FillCacheFsCb();
-  int init(IPalfEnvImpl *palf_env_impl, LogStateMgr *state_mgr, LogEngine *log_engine);
-  void destroy();
-  int update_end_lsn(int64_t id,
-                     const palf::LSN &end_lsn,
-                     const share::SCN &end_scn,
-                     const int64_t proposal_id) override final;
+  EnableFillCacheFunctor();
+  EnableFillCacheFunctor(IPalfEnvImpl *palf_env_impl, LogStateMgr *state_mgr);
+  ~EnableFillCacheFunctor();
+  EnableFillCacheFunctor& operator=(const EnableFillCacheFunctor &functor);
+  bool operator()() const;
+  bool is_valid() const;
+  TO_STRING_KV(KP_(palf_env_impl), KP_(state_mgr));
 private:
   IPalfEnvImpl *palf_env_impl_;
   LogStateMgr *state_mgr_;
-  LogEngine *log_engine_;
-  bool is_inited_;
 };
 
 class LogCacheUtils
@@ -186,7 +183,7 @@ class LogColdCache
 public:
   LogColdCache();
   ~LogColdCache();
-  int init(int64_t palf_id,
+  int init(const int64_t palf_id,
            IPalfEnvImpl *palf_env_impl,
            LogStorage *log_storage);
   void destroy();
@@ -196,7 +193,7 @@ public:
   // @param[in] const int64_t in_read_size: needed read size
   // @param[out] ReadBuf &read_buf: buf for read logs
   // @param[out] int64_t &out_read_size: actual read size
-  // @param[out] LogIteratorInfo *iterator_info: iterator info
+  // @param[out] LogIOContext &io_ctx: io ctx
   // @return
   // - OB_SUCCESS: read logs successfully
   // - OB_INVALID_ARGUEMENTS: invalid arguments
@@ -207,10 +204,10 @@ public:
            const int64_t in_read_size,
            ReadBuf &read_buf,
            int64_t &out_read_size,
-           LogIteratorInfo *iterator_info);
+           LogIOContext &io_ctx);
   int fill_cache_line(FillBuf &fill_buf);
   int alloc_kv_pair(const int64_t flashback_version, const LSN &aligned_lsn, FillBuf &fill_buf);
-  TO_STRING_KV(K(is_inited_), K(palf_id_), K(log_cache_stat_));
+  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(palf_id), K_(log_cache_stat));
 private:
   int allow_filling_cache_(LogIteratorInfo *iterator_info, bool &enable_fill_cache);
   /*
@@ -252,7 +249,7 @@ private:
                       const int64_t in_read_size,
                       ReadBuf &read_buf,
                       int64_t &out_read_size,
-                      LogIteratorInfo *iterator_info);
+                      LogIOContext &io_ctx);
   offset_t get_phy_offset_(const LSN &lsn) const;
 private:
   class LogCacheStat
@@ -280,6 +277,7 @@ private:
     int64_t last_record_cache_read_size_;
   };
 private:
+  int64_t tenant_id_;
   int64_t palf_id_;
   IPalfEnvImpl *palf_env_impl_;
   LogReader *log_reader_;
@@ -299,13 +297,13 @@ public:
            IPalfHandleImpl *palf_handle_impl,
            IPalfEnvImpl *palf_env_impl,
            LogStorage *log_storage);
-  bool is_inited();
+  bool is_inited() const;
   int read(const int64_t flashback_version,
            const LSN &lsn,
            const int64_t in_read_size,
            ReadBuf &read_buf,
            int64_t &out_read_size,
-           LogIteratorInfo *iterator_info);
+           LogIOContext &io_ctx);
   int fill_cache_when_slide(const LSN &lsn,
                             const int64_t size,
                             const int64_t flashback_version);
@@ -320,7 +318,7 @@ private:
                        const int64_t in_read_size,
                        ReadBuf &read_buf,
                        int64_t &out_read_size,
-                       LogIteratorInfo *iterator_info);
+                       LogIOContext &io_ctx);
   int try_update_fill_buf_(const int64_t flashback_version,
                            LSN &fill_lsn,
                            int64_t &fill_size);

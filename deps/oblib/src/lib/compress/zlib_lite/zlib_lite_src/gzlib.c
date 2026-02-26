@@ -4,7 +4,6 @@
  */
 
 #include "gzguts.h"
-#include <sys/types.h>
 #include <unistd.h>
 
 #if defined(_WIN32) && !defined(__BORLANDC__)

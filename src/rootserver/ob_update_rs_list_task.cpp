@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_update_rs_list_task.h"
 
-#include "lib/profile/ob_trace_id.h"
-#include "share/config/ob_server_config.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "share/ob_root_addr_agent.h"
-#include "share/ob_debug_sync.h"
-#include "share/ob_all_server_tracer.h"
-#include "rootserver/ob_root_utils.h"
+#include "ob_update_rs_list_task.h"
 #include "rootserver/ob_root_service.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -115,7 +107,7 @@ int ObUpdateRsListTask::process_without_lock()
     LOG_WARN("not init", K(ret));
   } else if (OB_ISNULL(lst_operator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lst_operator_ is null", KP(lst_operator_));
+    LOG_WARN("pointer is null", KP(lst_operator_), KP(GCTX.root_service_));
   } else if (OB_FAIL(get_rs_list(*lst_operator_, self_addr_,
                                  new_rs_list, new_readonly_rs_list, rs_list_diff_member_list))) {
     LOG_WARN("get_rs_list failed", K(ret));
@@ -248,7 +240,7 @@ int ObUpdateRsListTask::get_rs_list(
           (replica->get_server() == self_addr
            || (replica->is_in_service()
                && is_server_alive
-               && ObReplicaTypeCheck::is_paxos_replica_V2(replica->get_replica_type())))) {
+               && ObReplicaTypeCheck::is_paxos_replica(replica->get_replica_type())))) {
         if (OB_FAIL(rs.init(replica->get_server(), replica->get_role(), replica->get_sql_port()))) {
           LOG_WARN("failed to do init", KR(ret), K(replica));
         } else if (OB_FAIL(rs_list.push_back(rs))) {

@@ -11,11 +11,6 @@
  */
 
 #include "large_buffer_pool.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_macro_utils.h"
-#include <cstdint>
 
 namespace oceanbase
 {

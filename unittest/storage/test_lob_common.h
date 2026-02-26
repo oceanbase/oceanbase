@@ -118,6 +118,7 @@ void TestLobCommon::build_data_table_schema(
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(ObRowStoreType::ENCODING_ROW_STORE);
   table_schema.set_storage_format_version(ObStorageFormatVersion::OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema_.set_micro_index_clustered(false);
 
 #define ADD_COLUMN(column_id, column_name, data_type, collation_type, is_row_key) \
   { \
@@ -166,6 +167,7 @@ void TestLobCommon::build_lob_meta_table_schema(
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(ObRowStoreType::ENCODING_ROW_STORE);
   table_schema.set_storage_format_version(ObStorageFormatVersion::OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema_.set_micro_index_clustered(false);
 
   // add lob_id
   {
@@ -259,6 +261,7 @@ void TestLobCommon::build_lob_piece_table_schema(
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(ObRowStoreType::ENCODING_ROW_STORE);
   table_schema.set_storage_format_version(ObStorageFormatVersion::OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema_.set_micro_index_clustered(false);
 
   // add piece_id
   {
@@ -311,6 +314,7 @@ int TestLobCommon::build_lob_tablet_arg(
   ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> tablet_id_array;
   ObArray<int64_t> tablet_schema_index_array;
+  ObArray<int64_t> create_commit_versions;
   share::schema::ObTableSchema table_schema;
   build_data_table_schema(tenant_id, table_schema);
   share::schema::ObTableSchema lob_meta_schema;
@@ -332,7 +336,7 @@ int TestLobCommon::build_lob_tablet_arg(
   } else if (OB_FAIL(tablet_schema_index_array.push_back(2))) {
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
   } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array,
-      lib::get_compat_mode(), false/*is_create_bind_hidden_tablets*/))) {
+      lib::get_compat_mode(), false/*is_create_bind_hidden_tablets*/, create_commit_versions))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
   } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn(), false/*need_check_tablet_cnt*/))) {

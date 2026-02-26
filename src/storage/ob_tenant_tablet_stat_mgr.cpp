@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_thread_mgr.h"
-#include "share/schema/ob_multi_version_schema_service.h"
+#include "ob_tenant_tablet_stat_mgr.h"
 #include "share/schema/ob_tenant_schema_service.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
-#include "storage/access/ob_global_iterator_pool.h"
-#include "observer/ob_server_struct.h"
-#include "src/storage/tablet/ob_tablet.h"
 #include "observer/ob_server.h"
-#include <sys/sysinfo.h>
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -124,21 +116,18 @@ bool ObTabletStat::check_need_report() const
   if (tablet_id.is_ls_inner_tablet()) {
     // do nothing
   } else if (0 < merge_cnt_) { // report by compaction
-    bret = get_total_merge_row_count() >= MERGE_REPORT_MIN_ROW_CNT;
+    bret = get_total_merge_row_count() >= MERGE_MIN_ROW_CNT;
   } else if (0 < query_cnt_) { // only report the slow query
-    const int64_t boost_factor = tablet_id.is_inner_tablet() ? 2 : 1;
-    if (scan_physical_row_cnt_ > 0 &&
-        scan_physical_row_cnt_ >= scan_logical_row_cnt_ * QUERY_REPORT_INEFFICIENT_THRESHOLD * boost_factor) {
+    // if the physical row/micro block count is N times of the logical row/pushdown count, the query is slow
+    const int64_t N_times = tablet_id.is_inner_tablet() ? 6 : 3;
+
+    if (scan_physical_row_cnt_ > QUERY_MIN_SCAN_ROW_CNT &&
+        scan_physical_row_cnt_ >= scan_logical_row_cnt_ * N_times) {
       bret = true;
     }
 
-    if (!bret && scan_micro_block_cnt_ > 0 &&
-        scan_micro_block_cnt_ >= pushdown_micro_block_cnt_ * QUERY_REPORT_INEFFICIENT_THRESHOLD * boost_factor) {
-      bret = true;
-    }
-
-    if (!bret && exist_row_total_table_cnt_ > 0 &&
-        exist_row_total_table_cnt_ >= exist_row_read_table_cnt_ * QUERY_REPORT_INEFFICIENT_THRESHOLD * boost_factor) {
+    if (!bret && scan_micro_block_cnt_ > QUERY_MIN_BLOCK_SCAN_CNT &&
+        scan_micro_block_cnt_ >= pushdown_micro_block_cnt_ * N_times) {
       bret = true;
     }
   }
@@ -230,7 +219,12 @@ ObTabletStatAnalyzer::ObTabletStatAnalyzer()
 
 bool ObTabletStatAnalyzer::is_hot_tablet() const
 {
-  return tablet_stat_.query_cnt_ + tablet_stat_.merge_cnt_ >= ACCESS_FREQUENCY * boost_factor_;
+  // the mini merge count && query count during the past 10 mins
+  static constexpr int64_t MERGE_FREQUENCY = 5;
+  static constexpr int64_t QUERY_FREQUENCY = 20;
+
+  return tablet_stat_.merge_cnt_ >= MERGE_FREQUENCY * boost_factor_
+      || tablet_stat_.query_cnt_ >= QUERY_FREQUENCY * boost_factor_;
 }
 
 bool ObTabletStatAnalyzer::is_insert_mostly() const
@@ -266,13 +260,16 @@ bool ObTabletStatAnalyzer::is_update_or_delete_mostly() const
   return bret;
 }
 
-bool ObTabletStatAnalyzer::has_slow_query() const
+bool ObTabletStatAnalyzer::has_frequent_slow_query() const
 {
   bool bret = false;
-  // all tablet query stats are ineffecient, only check the basic threshold
-  if (tablet_stat_.scan_physical_row_cnt_ >= QUERY_BASIC_ROW_CNT * boost_factor_ ||
-      tablet_stat_.scan_micro_block_cnt_ >= QUERY_BASIC_MICRO_BLOCK_CNT * boost_factor_ ||
-      tablet_stat_.exist_row_total_table_cnt_ >= QUERY_BASIC_ITER_TABLE_CNT * boost_factor_) {
+  const int64_t query_cnt = tablet_stat_.query_cnt_;
+
+  // All tablet query stats collected over the past 10 mins
+  if (query_cnt <= 0) {
+  } else if (tablet_stat_.scan_physical_row_cnt_ >= ObTabletStat::QUERY_MIN_SCAN_ROW_CNT * query_cnt * boost_factor_
+          || tablet_stat_.scan_micro_block_cnt_ >= ObTabletStat::QUERY_MIN_BLOCK_SCAN_CNT * query_cnt * boost_factor_) {
+    // the average query stats over the past 10 mins has reached the threshold
     bret = true;
   }
   return bret;
@@ -283,7 +280,9 @@ bool ObTabletStatAnalyzer::has_accumnulated_delete() const
   bool bret = false;
   if (is_queuing_table_mode(mode_)) {
     const ObTableQueuingModeCfg &queuing_cfg = ObTableQueuingModeCfg::get_basic_config(mode_);
-    bret = total_tablet_stat_.delete_row_cnt_ >= queuing_cfg.total_delete_row_cnt_;
+    const int64_t adaptive_threshold = compaction::ObAdaptiveMergePolicy::TOMBSTONE_ROW_COUNT_THRESHOLD * queuing_cfg.queuing_factor_;
+    bret = total_tablet_stat_.delete_row_cnt_ >= queuing_cfg.total_delete_row_cnt_
+        || tablet_stat_.update_row_cnt_ + tablet_stat_.delete_row_cnt_ > adaptive_threshold;
   }
   return bret;
 }
@@ -316,11 +315,11 @@ bool ObTenantSysStat::is_small_tenant() const
   return bret;
 }
 
-int ObTenantSysStat::refresh(const uint64_t tenant_id)
+int ObTenantSysStat::refresh(const uint64_t tenant_id, const bool force_refresh /*=false*/)
 {
   int ret = OB_SUCCESS;
 
-  if (!REACH_TENANT_TIME_INTERVAL(300_s)) {
+  if (!REACH_THREAD_TIME_INTERVAL(300_s) && !force_refresh) {
   } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu_cnt_, max_cpu_cnt_))) {
     LOG_WARN("failed to get tenant cpu count", K(ret));
   } else {
@@ -571,7 +570,7 @@ void ObTenantSysLoadShedder::refresh_sys_load()
   if (load_shedding_factor_ > 1 &&
       ObTimeUtility::fast_current_time() < effect_time_ + SHEDDER_EXPIRE_TIME) {
     // do nothing
-  } else if (REACH_TENANT_TIME_INTERVAL(CPU_TIME_SAMPLING_INTERVAL)) {
+  } else if (REACH_THREAD_TIME_INTERVAL(CPU_TIME_SAMPLING_INTERVAL)) {
     load_shedding_factor_ = 1;
 
     int tmp_ret = OB_SUCCESS;
@@ -585,7 +584,7 @@ void ObTenantSysLoadShedder::refresh_sys_load()
       max_cpu_cnt_ = max_cpu_cnt;
     }
 
-    if (min_cpu_cnt_ > 0 && max_cpu_cnt_ > 0) {
+    if (min_cpu_cnt_ > 0 && max_cpu_cnt_ > SHEDDER_CPU_CNT_THRESHOLD) {
       (void) refresh_cpu_utility();
     }
   }
@@ -637,7 +636,8 @@ ObTenantTabletStatMgr::ObTenantTabletStatMgr()
     sys_stat_(),
     report_cursor_(0),
     pending_cursor_(0),
-    report_tg_id_(0),
+    report_tg_id_(-1),
+    extreme_tablet_cnt_(0),
     is_inited_(false)
 {
 }
@@ -719,12 +719,13 @@ void ObTenantTabletStatMgr::reset()
     stream_pool_.destroy();
     report_cursor_ = 0;
     pending_cursor_ = 0;
-    report_tg_id_ = 0;
+    report_tg_id_ = -1;
     is_inited_ = false;
   }
   bucket_lock_.destroy();
   load_shedder_.reset();
   sys_stat_.reset();
+  extreme_tablet_cnt_ = 0;
   FLOG_INFO("ObTenantTabletStatMgr destroyed!");
 }
 
@@ -745,12 +746,12 @@ int ObTenantTabletStatMgr::report_stat(
   } else {
     uint64_t pending_cur = pending_cursor_;
     if (pending_cur - report_cursor_ >= DEFAULT_MAX_PENDING_CNT) { // first check full queue with dirty read
-      if (REACH_TENANT_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
+      if (REACH_THREAD_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
         LOG_INFO("report_queue is full, wait to process", K(report_cursor_), K(pending_cur), K(stat));
       }
     } else if (FALSE_IT(pending_cur = ATOMIC_FAA(&pending_cursor_, 1))) {
     } else if (pending_cur - report_cursor_ >= DEFAULT_MAX_PENDING_CNT) { // double check
-        if (REACH_TENANT_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
+        if (REACH_THREAD_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
         LOG_INFO("report_queue is full, wait to process", K(report_cursor_), K(pending_cur), K(stat));
       }
     } else {
@@ -939,9 +940,9 @@ int ObTenantTabletStatMgr::batch_clear_tablet_stat(
         clear_cnt++;
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    FLOG_INFO("batch clear tablet stat in ls", K(ret), K(ls_id), K(tablet_cnt), K(clear_cnt));
+    if (OB_SUCC(ret)) {
+      FLOG_INFO("batch clear tablet stat in ls", K(ret), K(ls_id), K(tablet_cnt), K(clear_cnt));
+    }
   }
   return ret;
 }
@@ -1077,7 +1078,7 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (not_compat_for_queuing_mode(compat_version)) {
-    if (REACH_TENANT_TIME_INTERVAL(30 * 1000L * 1000L/*30s*/)) {
+    if (REACH_THREAD_TIME_INTERVAL(30 * 1000L * 1000L/*30s*/)) {
       LOG_INFO("compat_version not support buffer table mode, no need to refresh queuing mode", K(compat_version));
     }
   } else if (OB_ISNULL(schema_service)) {
@@ -1090,6 +1091,7 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
   } else {
     ObBucketWLockAllGuard lock_guard(bucket_lock_);
     stream_cnt = stream_map_.size();
+    int64_t cur_extreme_table_cnt = 0;
     if (stream_cnt > 0) {
       ObSEArray<ObTabletID, 64> tablet_ids;
       ObSEArray<uint64_t, 64> table_ids;
@@ -1115,11 +1117,11 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
         iter = stream_map_.begin();
         ObTabletStreamNode *stream_node = nullptr;
         const ObSimpleTableSchemaV2 *table_schema = nullptr;
-        ObTableModeFlag tmp_mode_flag = TABLE_MODE_MAX;
         for (int64_t idx = 0; idx < stream_cnt && iter != stream_map_.end() && OB_SUCC(ret); ++idx, ++iter) {
           const ObTabletStatKey &key = iter->first;
           stream_node = iter->second;
           int64_t table_id = table_ids.at(idx);
+          ObTableModeFlag tmp_mode_flag = TABLE_MODE_MAX;
           if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
             // TODO(chengkong): tablet id may be invalid in some cases like offline ddl or drop table.
             LOG_WARN("failed to fetch table id from inner table, may be recycled or never exists, skip it", "tablet_id", tablet_ids.at(idx));
@@ -1145,6 +1147,9 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
             stream_node->mode_ = tmp_mode_flag;
             update_schema_cnt++;
           }
+          if (ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME == tmp_mode_flag) {
+            cur_extreme_table_cnt++;
+          }
           // prevent hunging schema memory too long
           if (OB_SUCC(ret) && (idx+1) % MAX_SCHEMA_GUARD_REFRESH_CNT == 0) {
             schema_guard.reset();
@@ -1155,9 +1160,10 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
         }
       }
     }
+    extreme_tablet_cnt_ = cur_extreme_table_cnt; // replace udpate, prevent merge schedule thread see 0
   }
   cost_time = common::ObTimeUtility::current_time() - cost_time;
-  LOG_INFO("refresh queuing mode", K(ret), K(tenant_id), K(stream_cnt), K(update_schema_cnt), K(cost_time));
+  LOG_INFO("refresh queuing mode", K(ret), K(tenant_id), K(stream_cnt), K(update_schema_cnt), K_(extreme_tablet_cnt), K(cost_time));
 }
 
 int ObTenantTabletStatMgr::get_queuing_cfg(
@@ -1184,7 +1190,7 @@ int ObTenantTabletStatMgr::get_queuing_cfg(
       }
     } else {
       queuing_cfg = ObTableQueuingModeCfg::get_basic_config(stream_node->mode_);
-      LOG_DEBUG("chengkong debug: success get queuing cfg", K(ret), K(ls_id), K(tablet_id), K(queuing_cfg));
+      LOG_DEBUG("success get queuing cfg", K(ret), K(ls_id), K(tablet_id), K(queuing_cfg));
     }
   }
   return ret;

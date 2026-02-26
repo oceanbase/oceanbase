@@ -19,6 +19,8 @@ namespace oceanbase
 {
 namespace common
 {
+int64_t get_tenant_stack_size(const uint64_t tenant_id);
+
 extern const char *print_server_role(const common::ObServerRole server_role);
 
 //@brief recursive function call should use this function to check if recursion is too deep

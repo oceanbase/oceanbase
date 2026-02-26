@@ -93,7 +93,7 @@ private:
       REG_PKT(OB_SET_CONFIG);
       REG_PKT(OB_BOOTSTRAP);
       REG_PKT(OB_EXECUTE_BOOTSTRAP);
-      REG_PKT(OB_IS_EMPTY_SERVER);
+      REG_PKT(OB_CHECK_SERVER_EMPTY);
       REG_PKT(OB_FETCH_SCHEMA);
       default: { }
     }

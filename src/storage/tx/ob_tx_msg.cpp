@@ -105,7 +105,7 @@ OB_TX_MSG_SERDE(ObTxSubCommitRespMsg, ObTxMsg, ret_);
 OB_TX_MSG_SERDE(ObTxSubRollbackMsg, ObTxMsg, xid_);
 OB_TX_MSG_SERDE(ObTxSubRollbackRespMsg, ObTxMsg, ret_);
 OB_TX_MSG_SERDE(ObTxCommitMsg, ObTxMsg, expire_ts_, parts_, app_trace_info_, commit_start_scn_, commit_parts_);
-OB_TX_MSG_SERDE(ObTxCommitRespMsg, ObTxMsg, ret_, commit_version_);
+OB_TX_MSG_SERDE(ObTxCommitRespMsg, ObTxMsg, ret_, commit_version_, need_wait_interval_us_);
 OB_TX_MSG_SERDE(ObTxAbortMsg, ObTxMsg, reason_);
 OB_TX_MSG_SERDE(ObTxKeepaliveMsg, ObTxMsg, status_);
 OB_TX_MSG_SERDE(ObTxKeepaliveRespMsg, ObTxMsg, status_);
@@ -127,7 +127,7 @@ OB_TX_MSG_SERDE(ObAskStateMsg, ObTxMsg, snapshot_, ori_ls_id_, ori_addr_);
 OB_TX_MSG_SERDE(ObAskStateRespMsg, ObTxMsg, state_info_array_);
 OB_TX_MSG_SERDE(ObCollectStateMsg, ObTxMsg, snapshot_, check_info_);
 OB_TX_MSG_SERDE(ObCollectStateRespMsg, ObTxMsg, state_info_, transfer_parts_);
-OB_SERIALIZE_MEMBER((ObTxRollbackSPRespMsg, ObTxMsg), ret_, orig_epoch_, downstream_parts_);
+OB_SERIALIZE_MEMBER((ObTxRollbackSPRespMsg, ObTxMsg), ret_, orig_epoch_, downstream_parts_, output_transfer_epoch_);
 
 OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)
 {
@@ -142,6 +142,7 @@ OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)
   }
   OB_UNIS_ADD_LEN(flag_);
   OB_UNIS_ADD_LEN(specified_from_scn_);
+  OB_UNIS_ADD_LEN(input_transfer_epoch_);
   return len;
 }
 
@@ -158,6 +159,7 @@ OB_DEF_SERIALIZE(ObTxRollbackSPMsg)
     }
     OB_UNIS_ENCODE(flag_);
     OB_UNIS_ENCODE(specified_from_scn_);
+    OB_UNIS_ENCODE(input_transfer_epoch_);
   }
   return ret;
 }
@@ -181,6 +183,7 @@ OB_DEF_DESERIALIZE(ObTxRollbackSPMsg)
     }
     OB_UNIS_DECODE(flag_);
     OB_UNIS_DECODE(specified_from_scn_);
+    OB_UNIS_DECODE(input_transfer_epoch_);
   }
   return ret;
 }

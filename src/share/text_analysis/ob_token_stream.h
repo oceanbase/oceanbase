@@ -19,11 +19,10 @@ namespace oceanbase
 namespace share
 {
 
-class ObITokenStream
-{
+class ObIFTTokenStream {
 public:
-  ObITokenStream() {}
-  virtual ~ObITokenStream() {}
+  ObIFTTokenStream() { }
+  virtual ~ObIFTTokenStream() { }
   virtual void reset() = 0;
   virtual void reuse() = 0;
   virtual int get_next(ObDatum &next_token, int64_t &token_freq) = 0;
@@ -36,8 +35,7 @@ public:
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
-class ObTextTokenizer : public ObITokenStream
-{
+class ObTextTokenizer : public ObIFTTokenStream {
 public:
   enum TokenizerType : uint8_t
   {
@@ -79,8 +77,7 @@ private:
   int64_t trav_pos_;
 };
 
-class ObTokenNormalizer : public ObITokenStream
-{
+class ObTokenNormalizer : public ObIFTTokenStream {
 public:
   enum TokenNormalizerType : uint8_t
   {
@@ -93,12 +90,13 @@ public:
   virtual ~ObTokenNormalizer() {}
   virtual void reset();
   virtual void reuse() override;
-  virtual int init(const ObCharsetInfo *cs, ObITokenStream &in_stream);
+  virtual int init(const ObCharsetInfo *cs, ObIFTTokenStream &in_stream);
   VIRTUAL_TO_STRING_KV(KPC_(in_stream), KP_(cs), K_(is_inited));
 protected:
-  virtual int inner_init(const ObCharsetInfo *cs, ObITokenStream &in_stream) { return OB_SUCCESS; }
+  virtual int inner_init(const ObCharsetInfo *cs, ObIFTTokenStream &in_stream) { return OB_SUCCESS; }
+
 protected:
-  ObITokenStream *in_stream_;
+  ObIFTTokenStream *in_stream_;
   const ObCharsetInfo *cs_;
   bool is_inited_;
 };
@@ -141,7 +139,7 @@ public:
   // Do we need to keep the order of tokens after grouping?
   virtual int get_next(ObDatum &next_token, int64_t &token_freq) override;
 private:
-  virtual int inner_init(const ObCharsetInfo *cs, ObITokenStream &in_stream) override;
+  virtual int inner_init(const ObCharsetInfo *cs, ObIFTTokenStream &in_stream) override;
   int build_grouping_map();
 private:
   static const int64_t DEFAULT_HASH_MAP_BUCKET_CNT = 128;

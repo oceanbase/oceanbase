@@ -17,12 +17,15 @@
 #include <stdint.h>
 #include <string.h>
 #include "lib/string/ob_string.h"
+#include "lib/encrypt/ob_sha256_crypt.h"
 
-#define SCRAMBLE_LENGTH 20
 #define SHA1_HASH_SIZE 20 /* Hash size in bytes */
 #define ENC_STRING_BUF_LEN SCRAMBLE_LENGTH * 2 + 1 //strlen(hash str) + '*'
 #define ENC_BUF_LEN SCRAMBLE_LENGTH * 2 + 2 //strlen(hash str) + '*' + '\0'
 #define SHA1CircularShift(bits,word) (((word) << (bits)) | ((word) >> (32-(bits))))
+
+#define AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD "mysql_native_password"
+#define AUTH_PLUGIN_CACHING_SHA2_PASSWORD "caching_sha2_password"
 
 namespace oceanbase
 {
@@ -54,6 +57,16 @@ public:
                     const unsigned char *s2,
                     uint32_t len,
                     unsigned char *to);
+  static bool is_valid_auth_plugin(const ObString &plugin)
+  {
+    return plugin.empty() ||
+           plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) == 0 ||
+           plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD) == 0;
+  }
+
+  static int check_data_version_for_auth_plugin(const ObString &plugin,
+                                                uint64_t tenant_id,
+                                                bool &is_supported);
 
 private:
   /*

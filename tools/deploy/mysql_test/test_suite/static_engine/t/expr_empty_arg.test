@@ -6,12 +6,6 @@
 --result_format 4
 --explain_protocol 0
 
-connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
-
-connection conn_admin;
---sleep 2
-alter system set enable_async_syslog = false;
-
 connection default;
 
 --disable_warnings
@@ -67,7 +61,3 @@ create view v1 as select row_count() from dual limit 10;desc v1;drop view v1;
 create view v1 as select uuid() from dual limit 10;desc v1;drop view v1;
 create view v1 as select user() from dual limit 10;desc v1;drop view v1;
 create view v1 as select version() from dual limit 10;desc v1;drop view v1;
-
-
-connection conn_admin; 
---sleep 2

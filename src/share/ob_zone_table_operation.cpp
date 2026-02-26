@@ -13,12 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_zone_table_operation.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_zone_info.h"
-#include "common/ob_timeout_ctx.h"
 #include "rootserver/ob_root_utils.h"
 
 namespace oceanbase
@@ -132,6 +126,46 @@ int ObZoneTableOperation::load_zone_info(
     const bool check_zone_exists /* = false */)
 {
   return load_info(sql_client, info, check_zone_exists);
+}
+
+int ObZoneTableOperation::get_zone_region_list(
+    ObISQLClient &sql_client,
+    hash::ObHashMap<ObZone, ObRegion> &zone_info_map)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+    } else if (OB_FAIL(sql.assign_fmt("select zone, info as region"
+               " from %s where zone != '' and name = 'region' ", OB_ALL_ZONE_TNAME))) {
+      LOG_WARN("append sql failed", KR(ret));
+    } else if (OB_FAIL(sql_client.read(res, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (NULL == (result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get sql result", KR(ret));
+    } else {
+      int64_t tmp_real_str_len = 0;
+      while (OB_SUCCESS == ret && OB_SUCCESS == (ret = result->next())) {
+        ObZone zone;
+        ObRegion region;
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, "zone", zone.ptr(), MAX_ZONE_LENGTH, tmp_real_str_len);
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, "region", region.ptr(), MAX_REGION_LENGTH, tmp_real_str_len);
+        if (OB_FAIL(zone_info_map.set_refactored(zone, region))) {
+          LOG_WARN("failed to set map", KR(ret));
+        }
+      }
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get region list", K(sql), KR(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
 }
 
 template <typename T>
@@ -376,6 +410,47 @@ int ObZoneTableOperation::get_zone_item_count(int64_t &cnt)
   return ret;
 }
 
+int ObZoneTableOperation::get_idc_list(common::ObISQLClient &sql_client, common::ObIArray<common::ObIDC> &idc_list)
+{
+  int ret = OB_SUCCESS;
+  idc_list.reset();
+  ObIDC idc;
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    char sql[OB_SHORT_SQL_LENGTH] = { 0 };
+    int64_t pos = 0;
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(databuff_printf(sql, sizeof(sql), pos,
+                "select info as idc from %s where zone != '' and name = 'idc'",  OB_ALL_ZONE_TNAME))) {
+      LOG_WARN("fail to print sql", K(ret));
+    } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
+    } else if (OB_FAIL(sql_client.read(res, sql))) {
+      LOG_WARN("failed to do read", K(sql), K(ret));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get result", K(sql), K(ret));
+    } else {
+      int64_t tmp_real_str_len = 0;
+      while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, "idc", idc.ptr(), idc.capacity(), tmp_real_str_len);
+        UNUSED(tmp_real_str_len);
+        if (FAILEDx(idc_list.push_back(idc))) {
+          LOG_WARN("failed to add idc list", K(ret));
+        }
+      }
+
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get idc list", K(sql), K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+
+  return ret;
+}
 
 int ObZoneTableOperation::get_region_list(
     common::ObISQLClient &sql_client, common::ObIArray<common::ObRegion> &region_list)
@@ -386,7 +461,7 @@ int ObZoneTableOperation::get_region_list(
 
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = NULL;
-    char sql[OB_SHORT_SQL_LENGTH];
+    char sql[OB_SHORT_SQL_LENGTH] = { 0 };
     int n = snprintf(sql, sizeof(sql), "select info as region"
                      " from %s where zone != '' and name = 'region' ", OB_ALL_ZONE_TNAME);
     ObTimeoutCtx ctx;
@@ -405,7 +480,7 @@ int ObZoneTableOperation::get_region_list(
       while (OB_SUCCESS == ret && OB_SUCCESS == (ret = result->next())) {
         EXTRACT_STRBUF_FIELD_MYSQL(*result, "region", region.ptr(), MAX_REGION_LENGTH, tmp_real_str_len);
         (void) tmp_real_str_len; // make compiler happy
-        if (OB_FAIL(region_list.push_back(region))) {
+        if (FAILEDx(region_list.push_back(region))) {
           LOG_WARN("failed to add zone list", K(ret));
         }
       }
@@ -540,5 +615,118 @@ int ObZoneTableOperation::get_zone_info(
   } else {}
   return ret;
 }
+
+int ObZoneTableOperation::update_global_config_version_with_lease(
+    ObMySQLTransaction &trans,
+    const int64_t global_config_version)
+{
+  int ret = OB_SUCCESS;
+  int64_t current_config_version = 0;
+  int64_t current_lease_info_version = 0;
+  int64_t lease_info_version_to_update = 0;
+  int64_t start_time = ObTimeUtility::current_time();
+
+  LOG_INFO("begin to update global config version with lease version", K(global_config_version));
+  if (OB_UNLIKELY(0 >= global_config_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(global_config_version));
+  } else if (OB_FAIL(get_config_version_with_lease_(trans, current_config_version, current_lease_info_version))) {
+    LOG_WARN("fail to get config version with lease", KR(ret));
+  } else if (global_config_version <= current_config_version) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("current config version is bigger than version to update", KR(ret), K(global_config_version),
+             K(current_config_version), K(current_lease_info_version));
+  } else if (FALSE_IT(lease_info_version_to_update = std::max(current_lease_info_version + 1, ObTimeUtility::current_time()))) {
+    // shall never be here
+  } else if (OB_FAIL(inner_update_global_config_version_with_lease_(
+                         trans, global_config_version, lease_info_version_to_update))) {
+    LOG_WARN("fail to inner update global config version and lease info version", KR(ret),
+             K(global_config_version), K(lease_info_version_to_update));
+  }
+  int64_t cost_time = ObTimeUtility::current_time() - start_time;
+  LOG_INFO("finish update global config version with lease version", KR(ret),
+           K(current_config_version), K(current_lease_info_version),
+           K(global_config_version), K(lease_info_version_to_update), K(cost_time));
+  return ret;
+}
+
+int ObZoneTableOperation::get_config_version_with_lease_(
+    ObMySQLTransaction &trans,
+    int64_t &current_config_version,
+    int64_t &current_lease_info_version)
+{
+  int ret = OB_SUCCESS;
+  current_config_version = 0;
+  current_lease_info_version = 0;
+  ObSqlString sql;
+  SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+    ObMySQLResult *res = NULL;
+    if (OB_FAIL(sql.assign_fmt("SELECT name, value "
+                               "FROM %s "
+                               "WHERE zone = '' "
+                               "AND (name = 'config_version' OR name = 'lease_info_version') "
+                               "FOR UPDATE", OB_ALL_ZONE_TNAME))) {
+      LOG_WARN("fail to construct sql", KR(ret));
+    } else if (OB_FAIL(trans.read(result, GCONF.cluster_id, OB_SYS_TENANT_ID, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), "sql", sql.ptr());
+    } else if (OB_ISNULL(res = result.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get mysql result failed");
+    } else {
+      int64_t tmp_real_str_len = 0;
+      char name[OB_MAX_COLUMN_NAME_BUF_LENGTH] = "";
+      int64_t value = 0;
+      while (OB_SUCC(ret) && OB_SUCCESS == (ret = res->next())) {
+        EXTRACT_STRBUF_FIELD_MYSQL(*res, "name", name, static_cast<int64_t>(sizeof(name)), tmp_real_str_len);
+        EXTRACT_INT_FIELD_MYSQL(*res, "value", value, int64_t);
+        (void) tmp_real_str_len; // make compiler happy
+        if (OB_SUCC(ret)) {
+          if (0 == ObString(name).case_compare("config_version")) {
+            current_config_version = value;
+          } else if (0 == ObString(name).case_compare("lease_info_version")) {
+            current_lease_info_version = value;
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid name", KR(ret), K(name));
+          }
+        }
+      }
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObZoneTableOperation::inner_update_global_config_version_with_lease_(
+    ObMySQLTransaction &trans,
+    const int64_t global_config_version_to_update,
+    const int64_t lease_info_version_to_update)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  if (OB_UNLIKELY(0 >= global_config_version_to_update)
+      || OB_UNLIKELY(0 >= lease_info_version_to_update)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(global_config_version_to_update), K(lease_info_version_to_update));
+  } else if (OB_FAIL(sql.assign_fmt("UPDATE %s "
+                                    "SET value = "
+                                    "CASE WHEN name = 'config_version' then %ld "
+                                    "ELSE %ld "
+                                    "END WHERE zone = '' "
+                                    "AND (name = 'config_version' or name = 'lease_info_version')",
+                                    OB_ALL_ZONE_TNAME, global_config_version_to_update, lease_info_version_to_update))) {
+    LOG_WARN("fail to construct sql", KR(ret), K(global_config_version_to_update), K(lease_info_version_to_update));
+  } else if (OB_FAIL(trans.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows))) {
+    LOG_WARN("fail to update config_version and lease_info_version in __all_zone", KR(ret), K(sql));
+  } else if (2 != affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected rows", KR(ret), K(affected_rows));
+  }
+  return ret;
+}
+
 }//end namespace share
 }//end namespace oceanbase

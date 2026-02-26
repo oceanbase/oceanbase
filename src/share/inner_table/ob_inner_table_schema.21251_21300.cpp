@@ -60,7 +60,7 @@ int ObInnerTableSchema::cdb_ob_backup_storage_info_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP     FROM oceanbase.__all_virtual_backup_storage_info )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP,     MAX_IOPS,     MAX_BANDWIDTH,     CASE       WHEN MAX_BANDWIDTH = 0         THEN "UNLIMITED"       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024,2), 'GB/s')       WHEN MAX_BANDWIDTH >= 1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024,2), 'MB/s')       WHEN MAX_BANDWIDTH >= 1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')       ELSE         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')     END AS MAX_BANDWIDTH_DISPLAY,     STATUS     FROM oceanbase.__all_virtual_backup_storage_info )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -70,6 +70,7 @@ int ObInnerTableSchema::cdb_ob_backup_storage_info_schema(ObTableSchema &table_s
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -110,7 +111,7 @@ int ObInnerTableSchema::dba_tab_statistics_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(DB.DATABASE_NAME AS     CHAR(128)) AS OWNER,     CAST(V.TABLE_NAME       AS  CHAR(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  CHAR(128)) AS PARTITION_NAME,     CAST(V.PARTITION_POSITION AS    NUMBER) AS PARTITION_POSITION,     CAST(V.SUBPARTITION_NAME  AS    CHAR(128)) AS SUBPARTITION_NAME,     CAST(V.SUBPARTITION_POSITION AS NUMBER) AS SUBPARTITION_POSITION,     CAST(V.OBJECT_TYPE AS   CHAR(12)) AS OBJECT_TYPE,     CAST(STAT.ROW_CNT AS    NUMBER) AS NUM_ROWS,     CAST(NULL AS    NUMBER) AS BLOCKS,     CAST(NULL AS    NUMBER) AS EMPTY_BLOCKS,     CAST(NULL AS    NUMBER) AS AVG_SPACE,     CAST(NULL AS    NUMBER) AS CHAIN_CNT,     CAST(STAT.AVG_ROW_LEN AS    NUMBER) AS AVG_ROW_LEN,     CAST(NULL AS    NUMBER) AS AVG_SPACE_FREELIST_BLOCKS,     CAST(NULL AS    NUMBER) AS NUM_FREELIST_BLOCKS,     CAST(NULL AS    NUMBER) AS AVG_CACHED_BLOCKS,     CAST(NULL AS    NUMBER) AS AVG_CACHE_HIT_RATIO,     CAST(NULL AS    NUMBER) AS IM_IMCU_COUNT,     CAST(NULL AS    NUMBER) AS IM_BLOCK_COUNT,     CAST(NULL AS    DATETIME) AS IM_STAT_UPDATE_TIME,     CAST(NULL AS    NUMBER) AS SCAN_RATE,     CAST(NULL AS    NUMBER) AS SAMPLE_SIZE,     CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,     CAST((CASE STAT.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,     CAST((CASE STAT.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,     CAST((CASE WHEN STAT.STATTYPE_LOCKED & 15 IS NULL THEN NULL ELSE (CASE STAT.STATTYPE_LOCKED & 15 WHEN 0 THEN NULL WHEN 1 THEN 'DATA' WHEN 2 THEN 'CACHE' ELSE 'ALL' END) END) AS CHAR(5)) AS STATTYPE_LOCKED,     CAST((CASE STAT.STALE_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS STALE_STATS,     CAST(NULL AS    CHAR(7)) AS SCOPE     FROM     (       (SELECT CAST(0 AS SIGNED) AS TENANT_ID,               DATABASE_ID,               TABLE_ID,               -2 AS PARTITION_ID,               TABLE_NAME,               NULL AS PARTITION_NAME,               NULL AS SUBPARTITION_NAME,               NULL AS PARTITION_POSITION,               NULL AS SUBPARTITION_POSITION,               'TABLE' AS OBJECT_TYPE           FROM             OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE           WHERE TENANT_ID = EFFECTIVE_TENANT_ID()           AND TABLE_TYPE IN (0,2,3,6,14,15)         UNION ALL         SELECT TENANT_ID,                DATABASE_ID,                TABLE_ID,                CASE WHEN PART_LEVEL = 0 THEN -2 ELSE -1 END AS PARTITION_ID,                TABLE_NAME,                NULL AS PARTITION_NAME,                NULL AS SUBPARTITION_NAME,                NULL AS PARTITION_POSITION,                NULL AS SUBPARTITION_POSITION,                'TABLE' AS OBJECT_TYPE         FROM             oceanbase.__all_table T         WHERE T.TABLE_TYPE IN (0,2,3,6,14,15)         AND T.TABLE_MODE >> 12 & 15 in (0,1))     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 P.PART_ID,                 T.TABLE_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             oceanbase.__all_table T           JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         WHERE T.TABLE_TYPE IN (0,2,3,6,14,15)         AND T.TABLE_MODE >> 12 & 15 in (0,1)     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                T.TABLE_NAME,                  P.PART_NAME,                  SP.SUB_PART_NAME,                  P.PART_IDX + 1,                  SP.SUB_PART_IDX + 1,                  'SUBPARTITION'         FROM             oceanbase.__all_table T         JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         JOIN             oceanbase.__all_sub_part SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE IN (0,2,3,6,14,15)         AND T.TABLE_MODE >> 12 & 15 in (0,1)     ) V     JOIN         oceanbase.__all_database DB         ON DB.TENANT_ID = V.TENANT_ID         AND DB.DATABASE_ID = V.DATABASE_ID         AND V.TENANT_ID = 0     LEFT JOIN         oceanbase.__all_table_stat STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND (V.PARTITION_ID = STAT.PARTITION_ID OR V.PARTITION_ID = -2)         AND STAT.INDEX_TYPE = 0 )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(DB.DATABASE_NAME AS     CHAR(128)) AS OWNER,     CAST(V.TABLE_NAME       AS  CHAR(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  CHAR(128)) AS PARTITION_NAME,     CAST(V.PARTITION_POSITION AS    NUMBER) AS PARTITION_POSITION,     CAST(V.SUBPARTITION_NAME  AS    CHAR(128)) AS SUBPARTITION_NAME,     CAST(V.SUBPARTITION_POSITION AS NUMBER) AS SUBPARTITION_POSITION,     CAST(V.OBJECT_TYPE AS   CHAR(12)) AS OBJECT_TYPE,     CAST(STAT.ROW_CNT AS    DECIMAL(20, 0)) AS NUM_ROWS,     CAST(NULL AS    NUMBER) AS BLOCKS,     CAST(NULL AS    NUMBER) AS EMPTY_BLOCKS,     CAST(NULL AS    NUMBER) AS AVG_SPACE,     CAST(NULL AS    NUMBER) AS CHAIN_CNT,     CAST(STAT.AVG_ROW_LEN AS    NUMBER) AS AVG_ROW_LEN,     CAST(NULL AS    NUMBER) AS AVG_SPACE_FREELIST_BLOCKS,     CAST(NULL AS    NUMBER) AS NUM_FREELIST_BLOCKS,     CAST(NULL AS    NUMBER) AS AVG_CACHED_BLOCKS,     CAST(NULL AS    NUMBER) AS AVG_CACHE_HIT_RATIO,     CAST(NULL AS    NUMBER) AS IM_IMCU_COUNT,     CAST(NULL AS    NUMBER) AS IM_BLOCK_COUNT,     CAST(NULL AS    DATETIME) AS IM_STAT_UPDATE_TIME,     CAST(NULL AS    NUMBER) AS SCAN_RATE,     CAST(STAT.SPARE1 AS    DECIMAL(20, 0)) AS SAMPLE_SIZE,     CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,     CAST((CASE STAT.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,     CAST((CASE STAT.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,     CAST((CASE WHEN STAT.STATTYPE_LOCKED & 15 IS NULL THEN NULL ELSE (CASE STAT.STATTYPE_LOCKED & 15 WHEN 0 THEN NULL WHEN 1 THEN 'DATA' WHEN 2 THEN 'CACHE' ELSE 'ALL' END) END) AS CHAR(5)) AS STATTYPE_LOCKED,     CAST((CASE STAT.STALE_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS STALE_STATS,     CAST(NULL AS    CHAR(7)) AS SCOPE     FROM     (       (SELECT CAST(0 AS SIGNED) AS TENANT_ID,               DATABASE_ID,               TABLE_ID,               -2 AS PARTITION_ID,               TABLE_NAME,               NULL AS PARTITION_NAME,               NULL AS SUBPARTITION_NAME,               NULL AS PARTITION_POSITION,               NULL AS SUBPARTITION_POSITION,               'TABLE' AS OBJECT_TYPE           FROM             OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE           WHERE TENANT_ID = EFFECTIVE_TENANT_ID()           AND TABLE_TYPE IN (0,2,3,6,14,15)         UNION ALL         SELECT TENANT_ID,                DATABASE_ID,                TABLE_ID,                CASE WHEN PART_LEVEL = 0 THEN -2 ELSE -1 END AS PARTITION_ID,                TABLE_NAME,                NULL AS PARTITION_NAME,                NULL AS SUBPARTITION_NAME,                NULL AS PARTITION_POSITION,                NULL AS SUBPARTITION_POSITION,                'TABLE' AS OBJECT_TYPE         FROM             oceanbase.__all_table T         WHERE T.TABLE_TYPE IN (0,2,3,6,14,15)         AND T.TABLE_MODE >> 12 & 15 in (0,1)         AND T.INDEX_ATTRIBUTES_SET & 16 = 0)     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 P.PART_ID,                 T.TABLE_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             oceanbase.__all_table T           JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         WHERE T.TABLE_TYPE IN (0,2,3,6,14,15)               AND T.TABLE_MODE >> 12 & 15 in (0,1)               AND (P.PARTITION_TYPE = 0 OR P.PARTITION_TYPE IS NULL)               AND T.INDEX_ATTRIBUTES_SET & 16 = 0     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                T.TABLE_NAME,                  P.PART_NAME,                  SP.SUB_PART_NAME,                  P.PART_IDX + 1,                  SP.SUB_PART_IDX + 1,                  'SUBPARTITION'         FROM             oceanbase.__all_table T         JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         JOIN             oceanbase.__all_sub_part SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE IN (0,2,3,6,14,15)               AND T.TABLE_MODE >> 12 & 15 in (0,1)               AND (P.PARTITION_TYPE = 0 OR P.PARTITION_TYPE IS NULL)               AND (SP.PARTITION_TYPE = 0 OR SP.PARTITION_TYPE IS NULL)               AND T.INDEX_ATTRIBUTES_SET & 16 = 0     ) V     JOIN         oceanbase.__all_database DB         ON DB.TENANT_ID = V.TENANT_ID         AND DB.DATABASE_ID = V.DATABASE_ID         AND V.TENANT_ID = 0     LEFT JOIN         (           SELECT * FROM oceanbase.__all_table_stat           WHERE INTERNAL_STAT = 0 OR INTERNAL_STAT IS NULL         ) STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND (V.PARTITION_ID = STAT.PARTITION_ID OR V.PARTITION_ID = -2)         AND STAT.INDEX_TYPE = 0 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -120,6 +121,7 @@ int ObInnerTableSchema::dba_tab_statistics_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -160,7 +162,7 @@ int ObInnerTableSchema::dba_tab_col_statistics_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT   cast(db.database_name as CHAR(128)) as OWNER,   cast(tc.table_name as CHAR(128)) as  TABLE_NAME,   cast(tc.column_name as CHAR(128)) as  COLUMN_NAME,   cast(stat.distinct_cnt as NUMBER) as  NUM_DISTINCT,   cast(stat.min_value as CHAR(128)) as  LOW_VALUE,   cast(stat.max_value as CHAR(128)) as  HIGH_VALUE,   cast(stat.density as NUMBER) as  DENSITY,   cast(stat.null_cnt as NUMBER) as  NUM_NULLS,   cast(stat.bucket_cnt as NUMBER) as  NUM_BUCKETS,   cast(stat.last_analyzed as DATETIME(6)) as  LAST_ANALYZED,   cast(stat.sample_size as NUMBER) as  SAMPLE_SIZE,   CAST((CASE stat.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,   CAST((CASE stat.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,   cast(NULL as CHAR(80)) as  NOTES,   cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,   cast((case when stat.histogram_type = 1 then 'FREQUENCY'         when stat.histogram_type = 3 then 'TOP-FREQUENCY'         when stat.histogram_type = 4 then 'HYBRID'         else NULL end) as CHAR(15)) as HISTOGRAM,   cast(NULL as CHAR(7)) SCOPE     FROM     (SELECT CAST(0 AS SIGNED) AS TENANT_ID,             t.DATABASE_ID,             t.TABLE_ID,             t.TABLE_NAME,             c.COLUMN_ID,             c.COLUMN_NAME,             c.IS_HIDDEN           FROM             oceanbase.__all_virtual_core_all_table t,             oceanbase.__all_virtual_core_column_table c           WHERE t.TENANT_ID = EFFECTIVE_TENANT_ID()             and c.TENANT_ID = EFFECTIVE_TENANT_ID()             and c.tenant_id = t.tenant_id             AND c.table_id = t.table_id         UNION ALL      SELECT t.TENANT_ID,             t.database_id,             t.table_id,             t.table_name,             c.COLUMN_ID,             c.COLUMN_NAME,             c.IS_HIDDEN       FROM oceanbase.__all_table t,            oceanbase.__all_column c       where t.table_type in (0,2,3,6,14)         and t.table_mode >> 12 & 15 in (0,1)         and c.tenant_id = t.tenant_id         and c.table_id = t.table_id) tc   JOIN     oceanbase.__all_database db     ON db.tenant_id = tc.tenant_id     AND db.database_id = tc.database_id     and tc.tenant_id = 0   left join     oceanbase.__all_column_stat stat     ON tc.table_id = stat.table_id     AND tc.column_id = stat.column_id     AND stat.object_type = 1 WHERE   tc.is_hidden = 0 )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT   cast(db.database_name as CHAR(128)) as OWNER,   cast(tc.table_name as CHAR(128)) as  TABLE_NAME,   cast(tc.column_name as CHAR(128)) as  COLUMN_NAME,   cast(stat.distinct_cnt as DECIMAL(20, 0)) as  NUM_DISTINCT,   cast(stat.min_value as CHAR(128)) as  LOW_VALUE,   cast(stat.max_value as CHAR(128)) as  HIGH_VALUE,   cast(stat.density as DECIMAL(30, 10)) as  DENSITY,   cast(stat.null_cnt as DECIMAL(20, 0)) as  NUM_NULLS,   cast(stat.bucket_cnt as DECIMAL(20, 0)) as  NUM_BUCKETS,   cast(stat.last_analyzed as DATETIME(6)) as  LAST_ANALYZED,   cast(stat.sample_size as DECIMAL(20, 0)) as  SAMPLE_SIZE,   CAST((CASE stat.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,   CAST((CASE stat.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,   cast(NULL as CHAR(80)) as  NOTES,   cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,   cast((case when stat.histogram_type = 1 then 'FREQUENCY'         when stat.histogram_type = 3 then 'TOP-FREQUENCY'         when stat.histogram_type = 4 then 'HYBRID'         else NULL end) as CHAR(15)) as HISTOGRAM,   cast(NULL as CHAR(7)) SCOPE     FROM     (SELECT CAST(0 AS SIGNED) AS TENANT_ID,             t.DATABASE_ID,             t.TABLE_ID,             t.TABLE_NAME,             c.COLUMN_ID,             c.COLUMN_NAME,             c.IS_HIDDEN           FROM             oceanbase.__all_virtual_core_all_table t,             oceanbase.__all_virtual_core_column_table c           WHERE t.TENANT_ID = EFFECTIVE_TENANT_ID()             and c.TENANT_ID = EFFECTIVE_TENANT_ID()             and c.tenant_id = t.tenant_id             AND c.table_id = t.table_id      UNION ALL      SELECT t.TENANT_ID,             t.database_id,             t.table_id,             t.table_name,             c.COLUMN_ID,             c.COLUMN_NAME,             c.IS_HIDDEN       FROM oceanbase.__all_table t,            oceanbase.__all_column c       where t.table_type in (0,2,3,6,14)         and t.table_mode >> 12 & 15 in (0,1)         and t.index_attributes_set & 16 = 0         and c.tenant_id = t.tenant_id         and c.table_id = t.table_id) tc   JOIN     oceanbase.__all_database db     ON db.tenant_id = tc.tenant_id     AND db.database_id = tc.database_id     and tc.tenant_id = 0   left join     oceanbase.__all_column_stat stat     ON tc.table_id = stat.table_id     AND tc.column_id = stat.column_id     AND stat.object_type = 1     AND (stat.INTERNAL_STAT = 0 or stat.internal_stat is null) WHERE   tc.is_hidden = 0 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -170,6 +172,7 @@ int ObInnerTableSchema::dba_tab_col_statistics_schema(ObTableSchema &table_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -210,7 +213,7 @@ int ObInnerTableSchema::dba_part_col_statistics_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT   cast(db.database_name as CHAR(128)) as OWNER,   cast(t.table_name as CHAR(128)) as  TABLE_NAME,   cast (part.part_name as CHAR(128)) as PARTITION_NAME,   cast(c.column_name as CHAR(128)) as  COLUMN_NAME,   cast(stat.distinct_cnt as NUMBER) as  NUM_DISTINCT,   cast(stat.min_value as CHAR(128)) as  LOW_VALUE,   cast(stat.max_value as CHAR(128)) as  HIGH_VALUE,   cast(stat.density as NUMBER) as  DENSITY,   cast(stat.null_cnt as NUMBER) as  NUM_NULLS,   cast(stat.bucket_cnt as NUMBER) as  NUM_BUCKETS,   cast(stat.last_analyzed as DATETIME(6)) as  LAST_ANALYZED,   cast(stat.sample_size as NUMBER) as  SAMPLE_SIZE,   CAST((CASE stat.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,   CAST((CASE stat.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,   cast(NULL as CHAR(80)) as  NOTES,   cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,   cast((case when stat.histogram_type = 1 then 'FREQUENCY'         when stat.histogram_type = 3 then 'TOP-FREQUENCY'         when stat.histogram_type = 4 then 'HYBRID'         else NULL end) as CHAR(15)) as HISTOGRAM     FROM     oceanbase.__all_table t   JOIN     oceanbase.__all_database db     ON db.tenant_id = t.tenant_id     AND db.database_id = t.database_id     and t.tenant_id = 0   JOIN     oceanbase.__all_column c     ON c.tenant_id = t.tenant_id     AND c.table_id = t.table_id   JOIN     oceanbase.__all_part part     on t.tenant_id = part.tenant_id     and t.table_id = part.table_id   left join     oceanbase.__all_column_stat stat     ON c.table_id = stat.table_id     AND c.column_id = stat.column_id     AND part.part_id = stat.partition_id     AND stat.object_type = 2 WHERE   c.is_hidden = 0   AND t.table_type in (0,3,6,14)   AND t.table_mode >> 12 & 15 in (0,1) )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT   cast(db.database_name as CHAR(128)) as OWNER,   cast(t.table_name as CHAR(128)) as  TABLE_NAME,   cast (part.part_name as CHAR(128)) as PARTITION_NAME,   cast(c.column_name as CHAR(128)) as  COLUMN_NAME,   cast(stat.distinct_cnt as DECIMAL(20, 0)) as  NUM_DISTINCT,   cast(stat.min_value as CHAR(128)) as  LOW_VALUE,   cast(stat.max_value as CHAR(128)) as  HIGH_VALUE,   cast(stat.density as DECIMAL(30, 10)) as  DENSITY,   cast(stat.null_cnt as DECIMAL(20, 0)) as  NUM_NULLS,   cast(stat.bucket_cnt as DECIMAL(20, 0)) as  NUM_BUCKETS,   cast(stat.last_analyzed as DATETIME(6)) as  LAST_ANALYZED,   cast(stat.sample_size as NUMBER) as  SAMPLE_SIZE,   CAST((CASE stat.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,   CAST((CASE stat.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,   cast(NULL as CHAR(80)) as  NOTES,   cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,   cast((case when stat.histogram_type = 1 then 'FREQUENCY'         when stat.histogram_type = 3 then 'TOP-FREQUENCY'         when stat.histogram_type = 4 then 'HYBRID'         else NULL end) as CHAR(15)) as HISTOGRAM     FROM     oceanbase.__all_table t   JOIN     oceanbase.__all_database db     ON db.tenant_id = t.tenant_id     AND db.database_id = t.database_id     and t.tenant_id = 0   JOIN     oceanbase.__all_column c     ON c.tenant_id = t.tenant_id     AND c.table_id = t.table_id   JOIN     oceanbase.__all_part part     on t.tenant_id = part.tenant_id     and t.table_id = part.table_id   left join     oceanbase.__all_column_stat stat     ON c.table_id = stat.table_id     AND c.column_id = stat.column_id     AND part.part_id = stat.partition_id     AND stat.object_type = 2     AND (stat.INTERNAL_STAT = 0 or stat.internal_stat is null) WHERE   c.is_hidden = 0   AND t.table_type in (0,3,6,14)   AND t.table_mode >> 12 & 15 in (0,1)   AND part.partition_type = 0   AND t.index_attributes_set & 16 = 0 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -220,6 +223,7 @@ int ObInnerTableSchema::dba_part_col_statistics_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -260,7 +264,7 @@ int ObInnerTableSchema::dba_subpart_col_statistics_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT   cast(db.database_name as CHAR(128)) as OWNER,   cast(t.table_name as CHAR(128)) as  TABLE_NAME,   cast (subpart.sub_part_name as CHAR(128)) as SUBPARTITION_NAME,   cast(c.column_name as CHAR(128)) as  COLUMN_NAME,   cast(stat.distinct_cnt as NUMBER) as  NUM_DISTINCT,   cast(stat.min_value as CHAR(128)) as  LOW_VALUE,   cast(stat.max_value as CHAR(128)) as  HIGH_VALUE,   cast(stat.density as NUMBER) as  DENSITY,   cast(stat.null_cnt as NUMBER) as  NUM_NULLS,   cast(stat.bucket_cnt as NUMBER) as  NUM_BUCKETS,   cast(stat.last_analyzed as DATETIME(6)) as  LAST_ANALYZED,   cast(stat.sample_size as NUMBER) as  SAMPLE_SIZE,   CAST((CASE stat.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,   CAST((CASE stat.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,   cast(NULL as CHAR(80)) as  NOTES,   cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,   cast((case when stat.histogram_type = 1 then 'FREQUENCY'         when stat.histogram_type = 3 then 'TOP-FREQUENCY'         when stat.histogram_type = 4 then 'HYBRID'         else NULL end) as CHAR(15)) as HISTOGRAM     FROM     oceanbase.__all_table t   JOIN     oceanbase.__all_database db     ON db.tenant_id = t.tenant_id     AND db.database_id = t.database_id     and t.tenant_id = 0   JOIN     oceanbase.__all_column c     ON c.tenant_id = t.tenant_id     AND c.table_id = t.table_id   JOIN     oceanbase.__all_sub_part subpart     on t.tenant_id = subpart.tenant_id     and t.table_id = subpart.table_id   left join     oceanbase.__all_column_stat stat     ON c.table_id = stat.table_id     AND c.column_id = stat.column_id     AND stat.partition_id = subpart.sub_part_id     AND stat.object_type = 3 WHERE   c.is_hidden = 0   AND t.table_type in (0,3,6,14)   AND t.table_mode >> 12 & 15 in (0,1) )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT   cast(db.database_name as CHAR(128)) as OWNER,   cast(t.table_name as CHAR(128)) as  TABLE_NAME,   cast (subpart.sub_part_name as CHAR(128)) as SUBPARTITION_NAME,   cast(c.column_name as CHAR(128)) as  COLUMN_NAME,   cast(stat.distinct_cnt as DECIMAL(20, 0)) as  NUM_DISTINCT,   cast(stat.min_value as CHAR(128)) as  LOW_VALUE,   cast(stat.max_value as CHAR(128)) as  HIGH_VALUE,   cast(stat.density as DECIMAL(30, 10)) as  DENSITY,   cast(stat.null_cnt as DECIMAL(20, 0)) as  NUM_NULLS,   cast(stat.bucket_cnt as DECIMAL(20, 0)) as  NUM_BUCKETS,   cast(stat.last_analyzed as DATETIME(6)) as  LAST_ANALYZED,   cast(stat.sample_size as DECIMAL(20, 0)) as  SAMPLE_SIZE,   CAST((CASE stat.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,   CAST((CASE stat.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,   cast(NULL as CHAR(80)) as  NOTES,   cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,   cast((case when stat.histogram_type = 1 then 'FREQUENCY'         when stat.histogram_type = 3 then 'TOP-FREQUENCY'         when stat.histogram_type = 4 then 'HYBRID'         else NULL end) as CHAR(15)) as HISTOGRAM     FROM     oceanbase.__all_table t   JOIN     oceanbase.__all_database db     ON db.tenant_id = t.tenant_id     AND db.database_id = t.database_id     and t.tenant_id = 0   JOIN     oceanbase.__all_column c     ON c.tenant_id = t.tenant_id     AND c.table_id = t.table_id   JOIN     oceanbase.__all_sub_part subpart     on t.tenant_id = subpart.tenant_id     and t.table_id = subpart.table_id   left join     oceanbase.__all_column_stat stat     ON c.table_id = stat.table_id     AND c.column_id = stat.column_id     AND stat.partition_id = subpart.sub_part_id     AND stat.object_type = 3 WHERE   c.is_hidden = 0   AND t.table_type in (0,3,6,14)   AND t.table_mode >> 12 & 15 in (0,1)   AND subpart.partition_type = 0   AND t.index_attributes_set & 16 = 0 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -270,6 +274,7 @@ int ObInnerTableSchema::dba_subpart_col_statistics_schema(ObTableSchema &table_s
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -310,7 +315,7 @@ int ObInnerTableSchema::dba_tab_histograms_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(select   cast(db.database_name as CHAR(128)) as OWNER,   cast(t.table_name as CHAR(128)) as  TABLE_NAME,   cast(c.column_name as CHAR(128)) as  COLUMN_NAME,   cast(hist.endpoint_num as NUMBER) as  ENDPOINT_NUMBER,   cast(NULL as NUMBER) as  ENDPOINT_VALUE,   cast(hist.endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE,   cast(hist.b_endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE_RAW,   cast(hist.endpoint_repeat_cnt as NUMBER) as ENDPOINT_REPEAT_COUNT,   cast(NULL as CHAR(7)) as SCOPE     FROM     (SELECT CAST(0 AS SIGNED) AS TENANT_ID,             DATABASE_ID,             TABLE_ID,             TABLE_NAME           FROM             oceanbase.__all_virtual_core_all_table      UNION ALL      SELECT TENANT_ID,             database_id,             table_id,             table_name       FROM oceanbase.__all_table where table_type in (0,3,6,14)       and table_mode >> 12 & 15 in (0,1)) t   JOIN     oceanbase.__all_database db     ON db.tenant_id = t.tenant_id     AND db.database_id = t.database_id     and t.tenant_id = 0   JOIN     oceanbase.__all_column c     ON c.tenant_id = t.tenant_id     AND c.table_id = t.table_id   JOIN     oceanbase.__all_histogram_stat hist     ON c.table_id = hist.table_id     AND c.column_id = hist.column_id     AND hist.object_type = 1 WHERE   c.is_hidden = 0 )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(select   cast(db.database_name as CHAR(128)) as OWNER,   cast(t.table_name as CHAR(128)) as  TABLE_NAME,   cast(c.column_name as CHAR(128)) as  COLUMN_NAME,   cast(hist.endpoint_num as NUMBER) as  ENDPOINT_NUMBER,   cast(NULL as NUMBER) as  ENDPOINT_VALUE,   cast(hist.endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE,   cast(hist.b_endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE_RAW,   cast(hist.endpoint_repeat_cnt as NUMBER) as ENDPOINT_REPEAT_COUNT,   cast(NULL as CHAR(7)) as SCOPE     FROM     (SELECT CAST(0 AS SIGNED) AS TENANT_ID,             DATABASE_ID,             TABLE_ID,             TABLE_NAME           FROM             oceanbase.__all_virtual_core_all_table      UNION ALL      SELECT TENANT_ID,             database_id,             table_id,             table_name       FROM oceanbase.__all_table where table_type in (0,3,6,14)       and table_mode >> 12 & 15 in (0,1)       and index_attributes_set & 16 = 0) t   JOIN     oceanbase.__all_database db     ON db.tenant_id = t.tenant_id     AND db.database_id = t.database_id     and t.tenant_id = 0   JOIN     oceanbase.__all_column c     ON c.tenant_id = t.tenant_id     AND c.table_id = t.table_id   JOIN     oceanbase.__all_histogram_stat hist     ON c.table_id = hist.table_id     AND c.column_id = hist.column_id     AND hist.object_type = 1 WHERE   c.is_hidden = 0 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -320,6 +325,7 @@ int ObInnerTableSchema::dba_tab_histograms_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -360,7 +366,7 @@ int ObInnerTableSchema::dba_part_histograms_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(select     cast(db.database_name as CHAR(128)) as OWNER,     cast(t.table_name as CHAR(128)) as  TABLE_NAME,     cast(part.part_name as CHAR(128)) as PARTITION_NAME,     cast(c.column_name as CHAR(128)) as  COLUMN_NAME,     cast(hist.endpoint_num as NUMBER) as  ENDPOINT_NUMBER,     cast(NULL as NUMBER) as  ENDPOINT_VALUE,     cast(hist.endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE,     cast(hist.b_endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE_RAW,     cast(hist.endpoint_repeat_cnt as NUMBER) as ENDPOINT_REPEAT_COUNT     FROM       oceanbase.__all_table t     JOIN       oceanbase.__all_database db       ON db.tenant_id = t.tenant_id       AND db.database_id = t.database_id       and t.tenant_id = 0     JOIN       oceanbase.__all_column c       ON c.tenant_id = t.tenant_id       AND c.table_id = t.table_id     JOIN       oceanbase.__all_part part       on t.tenant_id = part.tenant_id       and t.table_id = part.table_id     JOIN       oceanbase.__all_histogram_stat hist       ON c.table_id = hist.table_id       AND c.column_id = hist.column_id       AND part.part_id = hist.partition_id       AND hist.object_type = 2   WHERE     c.is_hidden = 0     AND t.table_type in (0,3,6,14)     AND t.table_mode >> 12 & 15 in (0,1)   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(select     cast(db.database_name as CHAR(128)) as OWNER,     cast(t.table_name as CHAR(128)) as  TABLE_NAME,     cast(part.part_name as CHAR(128)) as PARTITION_NAME,     cast(c.column_name as CHAR(128)) as  COLUMN_NAME,     cast(hist.endpoint_num as NUMBER) as  ENDPOINT_NUMBER,     cast(NULL as NUMBER) as  ENDPOINT_VALUE,     cast(hist.endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE,     cast(hist.b_endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE_RAW,     cast(hist.endpoint_repeat_cnt as NUMBER) as ENDPOINT_REPEAT_COUNT     FROM       oceanbase.__all_table t     JOIN       oceanbase.__all_database db       ON db.tenant_id = t.tenant_id       AND db.database_id = t.database_id       and t.tenant_id = 0     JOIN       oceanbase.__all_column c       ON c.tenant_id = t.tenant_id       AND c.table_id = t.table_id     JOIN       oceanbase.__all_part part       on t.tenant_id = part.tenant_id       and t.table_id = part.table_id     JOIN       oceanbase.__all_histogram_stat hist       ON c.table_id = hist.table_id       AND c.column_id = hist.column_id       AND part.part_id = hist.partition_id       AND hist.object_type = 2   WHERE     c.is_hidden = 0     AND t.table_type in (0,3,6,14)     AND t.table_mode >> 12 & 15 in (0,1)     AND part.partition_type = 0     AND t.index_attributes_set & 16 = 0   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -370,6 +376,7 @@ int ObInnerTableSchema::dba_part_histograms_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -410,7 +417,7 @@ int ObInnerTableSchema::dba_subpart_histograms_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(select     cast(db.database_name as CHAR(128)) as OWNER,     cast(t.table_name as CHAR(128)) as  TABLE_NAME,     cast(subpart.sub_part_name as CHAR(128)) as SUBPARTITION_NAME,     cast(c.column_name as CHAR(128)) as  COLUMN_NAME,     cast(hist.endpoint_num as NUMBER) as  ENDPOINT_NUMBER,     cast(NULL as NUMBER) as  ENDPOINT_VALUE,     cast(hist.endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE,     cast(hist.b_endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE_RAW,     cast(hist.endpoint_repeat_cnt as NUMBER) as ENDPOINT_REPEAT_COUNT     FROM       oceanbase.__all_table t     JOIN       oceanbase.__all_database db       ON db.tenant_id = t.tenant_id       AND db.database_id = t.database_id       and t.tenant_id = 0     JOIN       oceanbase.__all_column c       ON c.tenant_id = t.tenant_id       AND c.table_id = t.table_id     JOIN       oceanbase.__all_sub_part subpart       on t.tenant_id = subpart.tenant_id       and t.table_id = subpart.table_id     JOIN       oceanbase.__all_histogram_stat hist       ON c.table_id = hist.table_id       AND c.column_id = hist.column_id       AND hist.partition_id = subpart.sub_part_id       AND hist.object_type = 3   WHERE     c.is_hidden = 0     AND t.table_type in (0,3,6,14)     AND t.table_mode >> 12 & 15 in (0,1)   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(select     cast(db.database_name as CHAR(128)) as OWNER,     cast(t.table_name as CHAR(128)) as  TABLE_NAME,     cast(subpart.sub_part_name as CHAR(128)) as SUBPARTITION_NAME,     cast(c.column_name as CHAR(128)) as  COLUMN_NAME,     cast(hist.endpoint_num as NUMBER) as  ENDPOINT_NUMBER,     cast(NULL as NUMBER) as  ENDPOINT_VALUE,     cast(hist.endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE,     cast(hist.b_endpoint_value as CHAR(4000)) as ENDPOINT_ACTUAL_VALUE_RAW,     cast(hist.endpoint_repeat_cnt as NUMBER) as ENDPOINT_REPEAT_COUNT     FROM       oceanbase.__all_table t     JOIN       oceanbase.__all_database db       ON db.tenant_id = t.tenant_id       AND db.database_id = t.database_id       and t.tenant_id = 0     JOIN       oceanbase.__all_column c       ON c.tenant_id = t.tenant_id       AND c.table_id = t.table_id     JOIN       oceanbase.__all_sub_part subpart       on t.tenant_id = subpart.tenant_id       and t.table_id = subpart.table_id     JOIN       oceanbase.__all_histogram_stat hist       ON c.table_id = hist.table_id       AND c.column_id = hist.column_id       AND hist.partition_id = subpart.sub_part_id       AND hist.object_type = 3   WHERE     c.is_hidden = 0     AND t.table_type in (0,3,6,14)     AND t.table_mode >> 12 & 15 in (0,1)     AND subpart.partition_type = 0     AND t.index_attributes_set & 16 = 0   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -420,6 +427,7 @@ int ObInnerTableSchema::dba_subpart_histograms_schema(ObTableSchema &table_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -460,7 +468,7 @@ int ObInnerTableSchema::dba_tab_stats_history_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     CAST(DB.DATABASE_NAME AS     CHAR(128)) AS OWNER,     CAST(V.TABLE_NAME       AS  CHAR(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  CHAR(128)) AS PARTITION_NAME,     CAST(V.SUBPARTITION_NAME  AS    CHAR(128)) AS SUBPARTITION_NAME,     CAST(STAT.SAVTIME AS DATETIME(6)) AS STATS_UPDATE_TIME     FROM     (       (SELECT CAST(0 AS SIGNED) AS TENANT_ID,               DATABASE_ID,               TABLE_ID,               -2 AS PARTITION_ID,               TABLE_NAME,               NULL AS PARTITION_NAME,               NULL AS SUBPARTITION_NAME,               NULL AS PARTITION_POSITION,               NULL AS SUBPARTITION_POSITION,               'TABLE' AS OBJECT_TYPE           FROM             OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE           WHERE TENANT_ID = EFFECTIVE_TENANT_ID()       UNION ALL         SELECT TENANT_ID,                DATABASE_ID,                TABLE_ID,                CASE WHEN PART_LEVEL = 0 THEN -2 ELSE -1 END AS PARTITION_ID,                TABLE_NAME,                NULL AS PARTITION_NAME,                NULL AS SUBPARTITION_NAME,                NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                'TABLE' AS OBJECT_TYPE         FROM             oceanbase.__all_table T         WHERE T.TABLE_TYPE IN (0,3,6,14)         AND T.TABLE_MODE >> 12 & 15 in (0,1))     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 P.PART_ID,                 T.TABLE_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             oceanbase.__all_table T           JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID             AND T.TABLE_MODE >> 12 & 15 in (0,1)         WHERE T.TABLE_TYPE IN (0,3,6,14)     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                T.TABLE_NAME,                  P.PART_NAME,                  SP.SUB_PART_NAME,                  P.PART_IDX + 1,                  SP.SUB_PART_IDX + 1,                  'SUBPARTITION'         FROM             oceanbase.__all_table T         JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID             AND T.TABLE_MODE >> 12 & 15 in (0,1)         JOIN             oceanbase.__all_sub_part SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE IN (0,3,6,14)     ) V     JOIN         oceanbase.__all_database DB         ON DB.TENANT_ID = V.TENANT_ID         AND DB.DATABASE_ID = V.DATABASE_ID         AND V.TENANT_ID = 0     LEFT JOIN         oceanbase.__all_table_stat_history STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND (V.PARTITION_ID = STAT.PARTITION_ID OR V.PARTITION_ID = -2)         AND STAT.INDEX_TYPE = 0 )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     CAST(DB.DATABASE_NAME AS     CHAR(128)) AS OWNER,     CAST(V.TABLE_NAME       AS  CHAR(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  CHAR(128)) AS PARTITION_NAME,     CAST(V.SUBPARTITION_NAME  AS    CHAR(128)) AS SUBPARTITION_NAME,     CAST(STAT.SAVTIME AS DATETIME(6)) AS STATS_UPDATE_TIME     FROM     (       (SELECT CAST(0 AS SIGNED) AS TENANT_ID,               DATABASE_ID,               TABLE_ID,               -2 AS PARTITION_ID,               TABLE_NAME,               NULL AS PARTITION_NAME,               NULL AS SUBPARTITION_NAME,               NULL AS PARTITION_POSITION,               NULL AS SUBPARTITION_POSITION,               'TABLE' AS OBJECT_TYPE           FROM             OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE           WHERE TENANT_ID = EFFECTIVE_TENANT_ID()       UNION ALL         SELECT TENANT_ID,                DATABASE_ID,                TABLE_ID,                CASE WHEN PART_LEVEL = 0 THEN -2 ELSE -1 END AS PARTITION_ID,                TABLE_NAME,                NULL AS PARTITION_NAME,                NULL AS SUBPARTITION_NAME,                NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                'TABLE' AS OBJECT_TYPE         FROM             oceanbase.__all_table T         WHERE T.TABLE_TYPE IN (0,3,6,14)         AND T.TABLE_MODE >> 12 & 15 in (0,1)         AND T.INDEX_ATTRIBUTES_SET & 16 = 0)     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 P.PART_ID,                 T.TABLE_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             oceanbase.__all_table T           JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID             AND T.TABLE_MODE >> 12 & 15 in (0,1)             AND T.INDEX_ATTRIBUTES_SET & 16 = 0         WHERE T.TABLE_TYPE IN (0,3,6,14)     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                T.TABLE_NAME,                  P.PART_NAME,                  SP.SUB_PART_NAME,                  P.PART_IDX + 1,                  SP.SUB_PART_IDX + 1,                  'SUBPARTITION'         FROM             oceanbase.__all_table T         JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID             AND T.TABLE_MODE >> 12 & 15 in (0,1)             AND T.INDEX_ATTRIBUTES_SET & 16 = 0         JOIN             oceanbase.__all_sub_part SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE IN (0,3,6,14)     ) V     JOIN         oceanbase.__all_database DB         ON DB.TENANT_ID = V.TENANT_ID         AND DB.DATABASE_ID = V.DATABASE_ID         AND V.TENANT_ID = 0     LEFT JOIN         oceanbase.__all_table_stat_history STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND (V.PARTITION_ID = STAT.PARTITION_ID OR V.PARTITION_ID = -2)         AND STAT.INDEX_TYPE = 0 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -470,6 +478,7 @@ int ObInnerTableSchema::dba_tab_stats_history_schema(ObTableSchema &table_schema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -510,7 +519,7 @@ int ObInnerTableSchema::dba_ind_statistics_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(DB.DATABASE_NAME AS     CHAR(128)) AS OWNER,     CAST(V.INDEX_NAME AS     CHAR(128)) AS INDEX_NAME,     CAST(DB.DATABASE_NAME AS     CHAR(128)) AS TABLE_OWNER,     CAST(T.TABLE_NAME       AS  CHAR(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  CHAR(128)) AS PARTITION_NAME,     CAST(V.PARTITION_POSITION AS    NUMBER) AS PARTITION_POSITION,     CAST(V.SUBPARTITION_NAME  AS    CHAR(128)) AS SUBPARTITION_NAME,     CAST(V.SUBPARTITION_POSITION AS NUMBER) AS SUBPARTITION_POSITION,     CAST(V.OBJECT_TYPE AS   CHAR(12)) AS OBJECT_TYPE,     CAST(NULL AS    NUMBER) AS BLEVEL,     CAST(NULL AS    NUMBER) AS LEAF_BLOCKS,     CAST(NULL AS    NUMBER) AS DISTINCT_KEYS,     CAST(NULL AS    NUMBER) AS AVG_LEAF_BLOCKS_PER_KEY,     CAST(NULL AS    NUMBER) AS AVG_DATA_BLOCKS_PER_KEY,     CAST(NULL AS    NUMBER) AS CLUSTERING_FACTOR,     CAST(STAT.ROW_CNT AS    NUMBER) AS NUM_ROWS,     CAST(NULL AS    NUMBER) AS AVG_CACHED_BLOCKS,     CAST(NULL AS    NUMBER) AS AVG_CACHE_HIT_RATIO,     CAST(NULL AS    NUMBER) AS SAMPLE_SIZE,     CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,     CAST((CASE STAT.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,     CAST((CASE STAT.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,     CAST((CASE WHEN STAT.STATTYPE_LOCKED & 15 IS NULL THEN NULL ELSE (CASE STAT.STATTYPE_LOCKED & 15 WHEN 0 THEN NULL WHEN 1 THEN 'DATA' WHEN 2 THEN 'CACHE' ELSE 'ALL' END) END) AS CHAR(5)) AS STATTYPE_LOCKED,     CAST((CASE STAT.STALE_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS STALE_STATS,     CAST(NULL AS    CHAR(7)) AS SCOPE     FROM     (         (SELECT CAST(0 AS SIGNED) AS TENANT_ID,                 DATABASE_ID,                 TABLE_ID,                 DATA_TABLE_ID,                 -2 AS PARTITION_ID,                 SUBSTR(TABLE_NAME, 7 + INSTR(SUBSTR(TABLE_NAME, 7), '_')) AS INDEX_NAME,                 NULL AS PARTITION_NAME,                 NULL AS SUBPARTITION_NAME,                 NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                 'INDEX' AS OBJECT_TYPE           FROM             OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE T           WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND T.TENANT_ID = EFFECTIVE_TENANT_ID()         UNION ALL          SELECT TENANT_ID,                 DATABASE_ID,                 TABLE_ID,                 DATA_TABLE_ID,                 CASE WHEN PART_LEVEL = 0 THEN -2 ELSE -1 END AS PARTITION_ID,                 SUBSTR(TABLE_NAME, 7 + INSTR(SUBSTR(TABLE_NAME, 7), '_')) AS INDEX_NAME,                 NULL AS PARTITION_NAME,                 NULL AS SUBPARTITION_NAME,                 NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                 'INDEX' AS OBJECT_TYPE         FROM             oceanbase.__all_table T         WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)         AND T.TABLE_MODE >> 12 & 15 in (0,1))     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 T.DATA_TABLE_ID,                 P.PART_ID,                 SUBSTR(T.TABLE_NAME, 7 + INSTR(SUBSTR(T.TABLE_NAME, 7), '_')) AS INDEX_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             oceanbase.__all_table T           JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                T.DATA_TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                SUBSTR(T.TABLE_NAME, 7 + INSTR(SUBSTR(T.TABLE_NAME, 7), '_')) AS INDEX_NAME,                P.PART_NAME,                SP.SUB_PART_NAME,                P.PART_IDX + 1,                SP.SUB_PART_IDX + 1,                'SUBPARTITION'         FROM             oceanbase.__all_table T         JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         JOIN             oceanbase.__all_sub_part SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)     ) V     JOIN oceanbase.__all_table T          ON T.TABLE_ID = V.DATA_TABLE_ID          AND T.TENANT_ID = V.TENANT_ID          AND T.DATABASE_ID = V.DATABASE_ID     JOIN         oceanbase.__all_database DB         ON DB.TENANT_ID = V.TENANT_ID         AND DB.DATABASE_ID = V.DATABASE_ID         AND V.TENANT_ID = 0     LEFT JOIN         oceanbase.__all_table_stat STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND (V.PARTITION_ID = STAT.PARTITION_ID OR V.PARTITION_ID = -2)         AND STAT.INDEX_TYPE = 1 )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(DB.DATABASE_NAME AS     CHAR(128)) AS OWNER,     CAST(V.INDEX_NAME AS     CHAR(128)) AS INDEX_NAME,     CAST(DB.DATABASE_NAME AS     CHAR(128)) AS TABLE_OWNER,     CAST(T.TABLE_NAME       AS  CHAR(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  CHAR(128)) AS PARTITION_NAME,     CAST(V.PARTITION_POSITION AS    NUMBER) AS PARTITION_POSITION,     CAST(V.SUBPARTITION_NAME  AS    CHAR(128)) AS SUBPARTITION_NAME,     CAST(V.SUBPARTITION_POSITION AS NUMBER) AS SUBPARTITION_POSITION,     CAST(V.OBJECT_TYPE AS   CHAR(12)) AS OBJECT_TYPE,     CAST(NULL AS    NUMBER) AS BLEVEL,     CAST(NULL AS    NUMBER) AS LEAF_BLOCKS,     CAST(NULL AS    NUMBER) AS DISTINCT_KEYS,     CAST(NULL AS    NUMBER) AS AVG_LEAF_BLOCKS_PER_KEY,     CAST(NULL AS    NUMBER) AS AVG_DATA_BLOCKS_PER_KEY,     CAST(NULL AS    NUMBER) AS CLUSTERING_FACTOR,     CAST(STAT.ROW_CNT AS    DECIMAL(20, 0)) AS NUM_ROWS,     CAST(NULL AS    NUMBER) AS AVG_CACHED_BLOCKS,     CAST(NULL AS    NUMBER) AS AVG_CACHE_HIT_RATIO,     CAST(NULL AS    DECIMAL(20, 0)) AS SAMPLE_SIZE,     CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,     CAST((CASE STAT.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,     CAST((CASE STAT.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,     CAST((CASE WHEN STAT.STATTYPE_LOCKED & 15 IS NULL THEN NULL ELSE (CASE STAT.STATTYPE_LOCKED & 15 WHEN 0 THEN NULL WHEN 1 THEN 'DATA' WHEN 2 THEN 'CACHE' ELSE 'ALL' END) END) AS CHAR(5)) AS STATTYPE_LOCKED,     CAST((CASE STAT.STALE_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS STALE_STATS,     CAST(NULL AS    CHAR(7)) AS SCOPE     FROM     (         (SELECT CAST(0 AS SIGNED) AS TENANT_ID,                 DATABASE_ID,                 TABLE_ID,                 DATA_TABLE_ID,                 -2 AS PARTITION_ID,                 SUBSTR(TABLE_NAME, 7 + INSTR(SUBSTR(TABLE_NAME, 7), '_')) AS INDEX_NAME,                 NULL AS PARTITION_NAME,                 NULL AS SUBPARTITION_NAME,                 NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                 'INDEX' AS OBJECT_TYPE           FROM             OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE T           WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND T.TENANT_ID = EFFECTIVE_TENANT_ID()         UNION ALL          SELECT TENANT_ID,                 DATABASE_ID,                 TABLE_ID,                 DATA_TABLE_ID,                 CASE WHEN PART_LEVEL = 0 THEN -2 ELSE -1 END AS PARTITION_ID,                 SUBSTR(TABLE_NAME, 7 + INSTR(SUBSTR(TABLE_NAME, 7), '_')) AS INDEX_NAME,                 NULL AS PARTITION_NAME,                 NULL AS SUBPARTITION_NAME,                 NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                 'INDEX' AS OBJECT_TYPE         FROM             oceanbase.__all_table T         WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)         AND T.TABLE_MODE >> 12 & 15 in (0,1)         AND T.INDEX_ATTRIBUTES_SET & 16 = 0)     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 T.DATA_TABLE_ID,                 P.PART_ID,                 SUBSTR(T.TABLE_NAME, 7 + INSTR(SUBSTR(T.TABLE_NAME, 7), '_')) AS INDEX_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             oceanbase.__all_table T           JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         WHERE T.TABLE_TYPE = 5               AND P.PARTITION_TYPE = 0               AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                T.DATA_TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                SUBSTR(T.TABLE_NAME, 7 + INSTR(SUBSTR(T.TABLE_NAME, 7), '_')) AS INDEX_NAME,                P.PART_NAME,                SP.SUB_PART_NAME,                P.PART_IDX + 1,                SP.SUB_PART_IDX + 1,                'SUBPARTITION'         FROM             oceanbase.__all_table T         JOIN             oceanbase.__all_part P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         JOIN             oceanbase.__all_sub_part SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE = 5               AND P.PARTITION_TYPE = 0               AND SP.PARTITION_TYPE = 0               AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)     ) V     JOIN oceanbase.__all_table T          ON T.TABLE_ID = V.DATA_TABLE_ID          AND T.TENANT_ID = V.TENANT_ID          AND T.DATABASE_ID = V.DATABASE_ID     JOIN         oceanbase.__all_database DB         ON DB.TENANT_ID = V.TENANT_ID         AND DB.DATABASE_ID = V.DATABASE_ID         AND V.TENANT_ID = 0     LEFT JOIN         oceanbase.__all_table_stat STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND (V.PARTITION_ID = STAT.PARTITION_ID OR V.PARTITION_ID = -2)         AND STAT.INDEX_TYPE = 1 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -520,6 +529,7 @@ int ObInnerTableSchema::dba_ind_statistics_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -570,6 +580,7 @@ int ObInnerTableSchema::dba_ob_backup_jobs_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -620,6 +631,7 @@ int ObInnerTableSchema::dba_ob_backup_job_history_schema(ObTableSchema &table_sc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -660,7 +672,7 @@ int ObInnerTableSchema::dba_ob_backup_tasks_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TASK_ID,     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         USEC_TO_TIME(END_TS)       END AS END_TIMESTAMP,     STATUS,     START_SCN,     END_SCN,     USER_LS_START_SCN,     ENCRYPTION_MODE,     PASSWD,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)       END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     COMMENT,     PATH,     MINOR_TURN_ID,     MAJOR_TURN_ID,     CASE          WHEN MACRO_BLOCK_COUNT = 0 THEN 0.00         WHEN FINISH_MACRO_BLOCK_COUNT > MACRO_BLOCK_COUNT THEN 99.99         ELSE ROUND((FINISH_MACRO_BLOCK_COUNT / MACRO_BLOCK_COUNT) * 100, 2)     END AS DATA_PROGRESS,     LOG_FILE_COUNT,     FINISH_LOG_FILE_COUNT,     CASE          WHEN LOG_FILE_COUNT = 0 THEN 0.00         WHEN FINISH_LOG_FILE_COUNT > LOG_FILE_COUNT THEN 99.99         ELSE ROUND((FINISH_LOG_FILE_COUNT / LOG_FILE_COUNT) * 100, 2)     END AS LOG_PROGRESS     FROM OCEANBASE.__all_virtual_backup_task     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TASK_ID,     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         USEC_TO_TIME(END_TS)       END AS END_TIMESTAMP,     STATUS,     START_SCN,     END_SCN,     USER_LS_START_SCN,     ENCRYPTION_MODE,     PASSWD,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)       END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     COMMENT,     PATH,     MINOR_TURN_ID,     MAJOR_TURN_ID,     CASE         WHEN MACRO_BLOCK_COUNT = 0 THEN 0.00         WHEN FINISH_MACRO_BLOCK_COUNT > MACRO_BLOCK_COUNT THEN 99.99         ELSE ROUND((FINISH_MACRO_BLOCK_COUNT / MACRO_BLOCK_COUNT) * 100, 2)     END AS DATA_PROGRESS,     LOG_FILE_COUNT,     FINISH_LOG_FILE_COUNT,     CASE         WHEN LOG_FILE_COUNT = 0 THEN 0.00         WHEN FINISH_LOG_FILE_COUNT > LOG_FILE_COUNT THEN 99.99         ELSE ROUND((FINISH_LOG_FILE_COUNT / LOG_FILE_COUNT) * 100, 2)     END AS LOG_PROGRESS     FROM OCEANBASE.__all_virtual_backup_task     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -670,6 +682,7 @@ int ObInnerTableSchema::dba_ob_backup_tasks_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -720,6 +733,7 @@ int ObInnerTableSchema::dba_ob_backup_task_history_schema(ObTableSchema &table_s
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -760,7 +774,7 @@ int ObInnerTableSchema::dba_ob_backup_set_files_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     BACKUP_SET_ID,     DEST_ID,     INCARNATION,     BACKUP_TYPE,     PREV_FULL_BACKUP_SET_ID,     PREV_INC_BACKUP_SET_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE       WHEN END_TS = 0           THEN NULL       ELSE           USEC_TO_TIME(END_TS)       END AS END_TIMESTAMP,     STATUS,     FILE_STATUS,     CASE       WHEN END_TS = 0         THEN 0       ELSE         ROUND((END_TS - START_TS)/1000/1000,0)       END AS ELAPSED_SECONDES,     PLUS_ARCHIVELOG,     START_REPLAY_SCN,     CASE       WHEN START_REPLAY_SCN = 0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(START_REPLAY_SCN)       END AS START_REPLAY_SCN_DISPLAY,     MIN_RESTORE_SCN,     CASE       WHEN MIN_RESTORE_SCN_DISPLAY != ''         THEN MIN_RESTORE_SCN_DISPLAY       WHEN MIN_RESTORE_SCN = 0          THEN NULL       ELSE         SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)       END AS MIN_RESTORE_SCN_DISPLAY,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)       END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     COMMENT,     ENCRYPTION_MODE,     PASSWD,     TENANT_COMPATIBLE,     BACKUP_COMPATIBLE,     PATH,     CLUSTER_VERSION,     CONSISTENT_SCN,     MINOR_TURN_ID,     MAJOR_TURN_ID     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_SET_FILES     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     BACKUP_SET_ID,     DEST_ID,     INCARNATION,     BACKUP_TYPE,     PREV_FULL_BACKUP_SET_ID,     PREV_INC_BACKUP_SET_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE       WHEN END_TS = 0           THEN NULL       ELSE           USEC_TO_TIME(END_TS)       END AS END_TIMESTAMP,     STATUS,     FILE_STATUS,     CASE       WHEN END_TS = 0         THEN 0       ELSE         ROUND((END_TS - START_TS)/1000/1000,0)       END AS ELAPSED_SECONDES,     PLUS_ARCHIVELOG,     START_REPLAY_SCN,     CASE       WHEN START_REPLAY_SCN = 0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(START_REPLAY_SCN)       END AS START_REPLAY_SCN_DISPLAY,     MIN_RESTORE_SCN,     CASE       WHEN MIN_RESTORE_SCN_DISPLAY != ''         THEN MIN_RESTORE_SCN_DISPLAY       WHEN MIN_RESTORE_SCN = 0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)       END AS MIN_RESTORE_SCN_DISPLAY,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)       END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     COMMENT,     ENCRYPTION_MODE,     PASSWD,     TENANT_COMPATIBLE,     BACKUP_COMPATIBLE,     PATH,     CLUSTER_VERSION,     CONSISTENT_SCN,     MINOR_TURN_ID,     MAJOR_TURN_ID     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_SET_FILES     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -770,6 +784,7 @@ int ObInnerTableSchema::dba_ob_backup_set_files_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -820,6 +835,7 @@ int ObInnerTableSchema::dba_sql_plan_baselines_schema(ObTableSchema &table_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -870,6 +886,7 @@ int ObInnerTableSchema::dba_sql_management_config_schema(ObTableSchema &table_sc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -910,7 +927,7 @@ int ObInnerTableSchema::gv_active_session_history_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT       CAST(SVR_IP AS CHAR(46)) AS SVR_IP,       CAST(SVR_PORT AS SIGNED) AS SVR_PORT,       CAST(SAMPLE_ID AS SIGNED) AS SAMPLE_ID,       CAST(SAMPLE_TIME AS DATETIME) AS SAMPLE_TIME,       CAST(TENANT_ID AS SIGNED) AS CON_ID,       CAST(USER_ID AS SIGNED) AS USER_ID,       CAST(SESSION_ID AS SIGNED) AS SESSION_ID,       CAST(IF (SESSION_TYPE = 0, 'FOREGROUND', 'BACKGROUND') AS CHAR(10)) AS SESSION_TYPE,       CAST(IF (EVENT_NO = 0, 'ON CPU', 'WAITING') AS CHAR(7)) AS SESSION_STATE,       CAST(SQL_ID AS CHAR(32)) AS SQL_ID,       CAST(PLAN_ID AS SIGNED) AS PLAN_ID,       CAST(TRACE_ID AS CHAR(64)) AS TRACE_ID,       CAST(NAME AS CHAR(64)) AS EVENT,       CAST(EVENT_NO AS SIGNED) AS EVENT_NO,       CAST(oceanbase.__all_virtual_ash.EVENT_ID AS SIGNED) AS EVENT_ID,       CAST(PARAMETER1 AS CHAR(64)) AS P1TEXT,       CAST(P1 AS SIGNED) AS P1,       CAST(PARAMETER2 AS CHAR(64)) AS P2TEXT,       CAST(P2 AS SIGNED) AS P2,       CAST(PARAMETER3 AS CHAR(64)) AS P3TEXT,       CAST(P3 AS SIGNED) AS P3,       CAST(WAIT_CLASS AS CHAR(64)) AS WAIT_CLASS,       CAST(WAIT_CLASS_ID AS SIGNED) AS WAIT_CLASS_ID,       CAST(TIME_WAITED AS SIGNED) AS TIME_WAITED,       CAST(SQL_PLAN_LINE_ID AS SIGNED) SQL_PLAN_LINE_ID,       CAST(GROUP_ID AS SIGNED) GROUP_ID,       CAST(TX_ID AS SIGNED) TX_ID,       CAST(BLOCKING_SESSION_ID AS SIGNED) BLOCKING_SESSION_ID,       CAST(IF (IN_PARSE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PARSE,       CAST(IF (IN_PL_PARSE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PL_PARSE,       CAST(IF (IN_PLAN_CACHE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PLAN_CACHE,       CAST(IF (IN_SQL_OPTIMIZE = 1, 'Y', 'N') AS CHAR(1)) AS IN_SQL_OPTIMIZE,       CAST(IF (IN_SQL_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_SQL_EXECUTION,       CAST(IF (IN_PX_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_PX_EXECUTION,       CAST(IF (IN_SEQUENCE_LOAD = 1, 'Y', 'N') AS CHAR(1)) AS IN_SEQUENCE_LOAD,       CAST(IF (IN_COMMITTING = 1, 'Y', 'N') AS CHAR(1)) AS IN_COMMITTING,       CAST(IF (IN_STORAGE_READ = 1, 'Y', 'N') AS CHAR(1)) AS IN_STORAGE_READ,       CAST(IF (IN_STORAGE_WRITE = 1, 'Y', 'N') AS CHAR(1)) AS IN_STORAGE_WRITE,       CAST(IF (IN_REMOTE_DAS_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_REMOTE_DAS_EXECUTION,       CAST(IF (IN_FILTER_ROWS = 1, 'Y', 'N') AS CHAR(1)) AS IN_FILTER_ROWS,       CAST(PROGRAM AS CHAR(64)) AS PROGRAM,       CAST(MODULE AS CHAR(64)) AS MODULE,       CAST(ACTION AS CHAR(64)) AS ACTION,       CAST(CLIENT_ID AS CHAR(64)) AS CLIENT_ID,       CAST(BACKTRACE AS CHAR(512)) AS BACKTRACE,       CAST(TM_DELTA_TIME AS SIGNED) AS TM_DELTA_TIME,       CAST(TM_DELTA_CPU_TIME AS SIGNED) AS TM_DELTA_CPU_TIME,       CAST(TM_DELTA_DB_TIME AS SIGNED) AS TM_DELTA_DB_TIME,       CAST(TOP_LEVEL_SQL_ID AS CHAR(32)) AS TOP_LEVEL_SQL_ID,       CAST(IF (IN_PLSQL_COMPILATION = 1, 'Y', 'N') AS CHAR(1)) AS IN_PLSQL_COMPILATION,       CAST(IF (IN_PLSQL_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_PLSQL_EXECUTION,       CAST(PLSQL_ENTRY_OBJECT_ID AS SIGNED) AS PLSQL_ENTRY_OBJECT_ID,       CAST(PLSQL_ENTRY_SUBPROGRAM_ID AS SIGNED) AS PLSQL_ENTRY_SUBPROGRAM_ID,       CAST(PLSQL_ENTRY_SUBPROGRAM_NAME AS CHAR(32)) AS PLSQL_ENTRY_SUBPROGRAM_NAME,       CAST(PLSQL_OBJECT_ID AS SIGNED) AS PLSQL_OBJECT_ID,       CAST(PLSQL_SUBPROGRAM_ID AS SIGNED) AS PLSQL_SUBPROGRAM_ID,       CAST(PLSQL_SUBPROGRAM_NAME AS CHAR(32)) AS PLSQL_SUBPROGRAM_NAME   FROM oceanbase.__all_virtual_ash LEFT JOIN oceanbase.v$event_name on EVENT_NO = `event#` )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SVR_IP, SVR_PORT, SAMPLE_ID, SAMPLE_TIME, CON_ID, USER_ID, SESSION_ID, SESSION_TYPE, SESSION_STATE, SQL_ID, PLAN_ID, TRACE_ID, EVENT, EVENT_NO, EVENT_ID, P1TEXT, P1, P2TEXT, P2, P3TEXT, P3, WAIT_CLASS, WAIT_CLASS_ID, TIME_WAITED, SQL_PLAN_LINE_ID, GROUP_ID, PLAN_HASH, THREAD_ID, STMT_TYPE, TIME_MODEL, IN_PARSE, IN_PL_PARSE, IN_PLAN_CACHE, IN_SQL_OPTIMIZE, IN_SQL_EXECUTION, IN_PX_EXECUTION, IN_SEQUENCE_LOAD, IN_COMMITTING, IN_STORAGE_READ, IN_STORAGE_WRITE, IN_REMOTE_DAS_EXECUTION, IN_FILTER_ROWS, IN_RPC_ENCODE, IN_RPC_DECODE, IN_CONNECTION_MGR, PROGRAM, MODULE, ACTION, CLIENT_ID, BACKTRACE, TM_DELTA_TIME, TM_DELTA_CPU_TIME, TM_DELTA_DB_TIME, TOP_LEVEL_SQL_ID, IN_PLSQL_COMPILATION, IN_PLSQL_EXECUTION, PLSQL_ENTRY_OBJECT_ID, PLSQL_ENTRY_SUBPROGRAM_ID, PLSQL_ENTRY_SUBPROGRAM_NAME, PLSQL_OBJECT_ID, PLSQL_SUBPROGRAM_ID, PLSQL_SUBPROGRAM_NAME, TX_ID, BLOCKING_SESSION_ID, TABLET_ID, PROXY_SID, DELTA_READ_IO_REQUESTS, DELTA_READ_IO_BYTES, DELTA_WRITE_IO_REQUESTS, DELTA_WRITE_IO_BYTES, WEIGHT, IS_WR_WEIGHT_SAMPLE FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -920,6 +937,7 @@ int ObInnerTableSchema::gv_active_session_history_schema(ObTableSchema &table_sc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -960,7 +978,7 @@ int ObInnerTableSchema::v_active_session_history_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SVR_IP, SVR_PORT, SAMPLE_ID, SAMPLE_TIME, CON_ID, USER_ID, SESSION_ID, SESSION_TYPE, SESSION_STATE, SQL_ID, PLAN_ID, TRACE_ID, EVENT, EVENT_NO, EVENT_ID, P1TEXT, P1, P2TEXT, P2, P3TEXT, P3, WAIT_CLASS, WAIT_CLASS_ID, TIME_WAITED, SQL_PLAN_LINE_ID, GROUP_ID, TX_ID, BLOCKING_SESSION_ID, IN_PARSE, IN_PL_PARSE, IN_PLAN_CACHE, IN_SQL_OPTIMIZE, IN_SQL_EXECUTION, IN_PX_EXECUTION, IN_SEQUENCE_LOAD, IN_COMMITTING, IN_STORAGE_READ, IN_STORAGE_WRITE, IN_REMOTE_DAS_EXECUTION, IN_FILTER_ROWS, PROGRAM, MODULE, ACTION, CLIENT_ID, BACKTRACE, TM_DELTA_TIME, TM_DELTA_CPU_TIME, TM_DELTA_DB_TIME, TOP_LEVEL_SQL_ID, IN_PLSQL_COMPILATION, IN_PLSQL_EXECUTION, PLSQL_ENTRY_OBJECT_ID, PLSQL_ENTRY_SUBPROGRAM_ID, PLSQL_ENTRY_SUBPROGRAM_NAME, PLSQL_OBJECT_ID, PLSQL_SUBPROGRAM_ID, PLSQL_SUBPROGRAM_NAME FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SVR_IP, SVR_PORT, SAMPLE_ID, SAMPLE_TIME, CON_ID, USER_ID, SESSION_ID, SESSION_TYPE, SESSION_STATE, SQL_ID, PLAN_ID, TRACE_ID, EVENT, EVENT_NO, EVENT_ID, P1TEXT, P1, P2TEXT, P2, P3TEXT, P3, WAIT_CLASS, WAIT_CLASS_ID, TIME_WAITED, SQL_PLAN_LINE_ID, GROUP_ID, PLAN_HASH, THREAD_ID, STMT_TYPE, TIME_MODEL, IN_PARSE, IN_PL_PARSE, IN_PLAN_CACHE, IN_SQL_OPTIMIZE, IN_SQL_EXECUTION, IN_PX_EXECUTION, IN_SEQUENCE_LOAD, IN_COMMITTING, IN_STORAGE_READ, IN_STORAGE_WRITE, IN_REMOTE_DAS_EXECUTION, IN_FILTER_ROWS, IN_RPC_ENCODE, IN_RPC_DECODE, IN_CONNECTION_MGR, PROGRAM, MODULE, ACTION, CLIENT_ID, BACKTRACE, TM_DELTA_TIME, TM_DELTA_CPU_TIME, TM_DELTA_DB_TIME, TOP_LEVEL_SQL_ID, IN_PLSQL_COMPILATION, IN_PLSQL_EXECUTION, PLSQL_ENTRY_OBJECT_ID, PLSQL_ENTRY_SUBPROGRAM_ID, PLSQL_ENTRY_SUBPROGRAM_NAME, PLSQL_OBJECT_ID, PLSQL_SUBPROGRAM_ID, PLSQL_SUBPROGRAM_NAME, TX_ID, BLOCKING_SESSION_ID, TABLET_ID, PROXY_SID, DELTA_READ_IO_REQUESTS, DELTA_READ_IO_BYTES, DELTA_WRITE_IO_REQUESTS, DELTA_WRITE_IO_BYTES, WEIGHT, IS_WR_WEIGHT_SAMPLE FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -970,6 +988,7 @@ int ObInnerTableSchema::v_active_session_history_schema(ObTableSchema &table_sch
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1020,6 +1039,7 @@ int ObInnerTableSchema::gv_dml_stats_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1070,6 +1090,7 @@ int ObInnerTableSchema::v_dml_stats_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1110,7 +1131,7 @@ int ObInnerTableSchema::dba_tab_modifications_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT   CAST(DB.DATABASE_NAME AS     CHAR(128)) AS TABLE_OWNER,   CAST(T.TABLE_NAME AS         CHAR(128)) AS TABLE_NAME,   CAST(P.PART_NAME AS     CHAR(128)) AS PARTITION_NAME,   CAST(SP.SUB_PART_NAME AS CHAR(128)) AS SUBPARTITION_NAME,   CAST(V.INSERTS AS     SIGNED) AS INSERTS,   CAST(V.UPDATES AS     SIGNED) AS UPDATES,   CAST(V.DELETES AS     SIGNED) AS DELETES,   CAST(V.MODIFIED_TIME AS DATE) AS TIMESTAMP,   CAST(NULL AS     CHAR(3)) AS TRUNCATED,   CAST(NULL AS     SIGNED) AS DROP_SEGMENTS   FROM     (SELECT      CASE WHEN T.TENANT_ID IS NOT NULL THEN T.TENANT_ID ELSE 0 END AS TENANT_ID,      CASE WHEN T.TABLE_ID IS NOT NULL THEN T.TABLE_ID ELSE VT.TABLE_ID END AS TABLE_ID,      CASE WHEN T.TABLET_ID IS NOT NULL THEN T.TABLET_ID ELSE VT.TABLET_ID END AS TABLET_ID,      CASE WHEN T.TABLET_ID IS NOT NULL AND VT.TABLET_ID IS NOT NULL THEN T.INSERTS + VT.INSERT_ROW_COUNT ELSE        (CASE WHEN T.TABLET_ID IS NOT NULL THEN T.INSERTS ELSE VT.INSERT_ROW_COUNT END) END AS INSERTS,      CASE WHEN T.TABLET_ID IS NOT NULL AND VT.TABLET_ID IS NOT NULL THEN T.UPDATES + VT.UPDATE_ROW_COUNT ELSE        (CASE WHEN T.TABLET_ID IS NOT NULL THEN T.UPDATES ELSE VT.UPDATE_ROW_COUNT END) END AS UPDATES,      CASE WHEN T.TABLET_ID IS NOT NULL AND VT.TABLET_ID IS NOT NULL THEN T.DELETES + VT.DELETE_ROW_COUNT ELSE        (CASE WHEN T.TABLET_ID IS NOT NULL THEN T.DELETES ELSE VT.DELETE_ROW_COUNT END) END AS DELETES,      CASE WHEN T.GMT_MODIFIED IS NOT NULL THEN T.GMT_MODIFIED ELSE NULL END AS MODIFIED_TIME      FROM      OCEANBASE.__ALL_MONITOR_MODIFIED T      FULL JOIN      OCEANBASE.__ALL_VIRTUAL_DML_STATS VT      ON T.TABLET_ID = VT.TABLET_ID AND VT.TENANT_ID = EFFECTIVE_TENANT_ID()     )V     JOIN OCEANBASE.__ALL_TABLE T          ON V.TENANT_ID = T.TENANT_ID          AND V.TABLE_ID = T.TABLE_ID          AND T.TABLE_TYPE in (0, 3, 6)          AND T.TABLE_MODE >> 12 & 15 in (0,1)     JOIN         OCEANBASE.__ALL_DATABASE DB         ON T.TENANT_ID = DB.TENANT_ID         AND DB.DATABASE_ID = T.DATABASE_ID     LEFT JOIN         OCEANBASE.__ALL_PART P         ON V.TENANT_ID = P.TENANT_ID         AND V.TABLE_ID = P.TABLE_ID         AND V.TABLET_ID = P.TABLET_ID     LEFT JOIN         OCEANBASE.__ALL_SUB_PART SP         ON V.TENANT_ID = SP.TENANT_ID         AND V.TABLE_ID = SP.TABLE_ID         AND V.TABLET_ID = SP.TABLET_ID   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT   CAST(DB.DATABASE_NAME AS     CHAR(128)) AS TABLE_OWNER,   CAST(T.TABLE_NAME AS         CHAR(128)) AS TABLE_NAME,   CAST(P.PART_NAME AS     CHAR(128)) AS PARTITION_NAME,   CAST(SP.SUB_PART_NAME AS CHAR(128)) AS SUBPARTITION_NAME,   CAST(V.INSERTS AS     SIGNED) AS INSERTS,   CAST(V.UPDATES AS     SIGNED) AS UPDATES,   CAST(V.DELETES AS     SIGNED) AS DELETES,   CAST(V.MODIFIED_TIME AS DATE) AS TIMESTAMP,   CAST(NULL AS     CHAR(3)) AS TRUNCATED,   CAST(NULL AS     SIGNED) AS DROP_SEGMENTS   FROM     (SELECT      CASE WHEN T.TENANT_ID IS NOT NULL THEN T.TENANT_ID ELSE 0 END AS TENANT_ID,      CASE WHEN T.TABLE_ID IS NOT NULL THEN T.TABLE_ID ELSE VT.TABLE_ID END AS TABLE_ID,      CASE WHEN T.TABLET_ID IS NOT NULL THEN T.TABLET_ID ELSE VT.TABLET_ID END AS TABLET_ID,       CASE WHEN T.TABLET_ID IS NOT NULL AND VT.TABLET_ID IS NOT NULL THEN T.INSERTS + VT.INSERT_ROW_COUNT - T.LAST_INSERTS ELSE        (CASE WHEN T.TABLET_ID IS NOT NULL THEN T.INSERTS - T.LAST_INSERTS ELSE VT.INSERT_ROW_COUNT END) END AS INSERTS,       CASE WHEN T.TABLET_ID IS NOT NULL AND VT.TABLET_ID IS NOT NULL THEN T.UPDATES + VT.UPDATE_ROW_COUNT - T.LAST_UPDATES  ELSE        (CASE WHEN T.TABLET_ID IS NOT NULL THEN T.UPDATES - T.LAST_UPDATES  ELSE VT.UPDATE_ROW_COUNT END) END AS UPDATES,       CASE WHEN T.TABLET_ID IS NOT NULL AND VT.TABLET_ID IS NOT NULL THEN T.DELETES + VT.DELETE_ROW_COUNT - T.LAST_DELETES ELSE        (CASE WHEN T.TABLET_ID IS NOT NULL THEN T.DELETES - T.LAST_DELETES ELSE VT.DELETE_ROW_COUNT END) END AS DELETES,       CASE WHEN T.GMT_MODIFIED IS NOT NULL THEN T.GMT_MODIFIED ELSE NULL END AS MODIFIED_TIME      FROM      OCEANBASE.__ALL_MONITOR_MODIFIED T      FULL JOIN      OCEANBASE.__ALL_VIRTUAL_DML_STATS VT      ON T.TABLET_ID = VT.TABLET_ID AND VT.TENANT_ID = EFFECTIVE_TENANT_ID()     )V     JOIN OCEANBASE.__ALL_TABLE T          ON V.TENANT_ID = T.TENANT_ID          AND V.TABLE_ID = T.TABLE_ID          AND T.TABLE_TYPE in (0, 3, 6)          AND T.TABLE_MODE >> 12 & 15 in (0,1)          AND T.INDEX_ATTRIBUTES_SET & 16 = 0     JOIN         OCEANBASE.__ALL_DATABASE DB         ON T.TENANT_ID = DB.TENANT_ID         AND DB.DATABASE_ID = T.DATABASE_ID     LEFT JOIN         OCEANBASE.__ALL_PART P         ON V.TENANT_ID = P.TENANT_ID         AND V.TABLE_ID = P.TABLE_ID         AND V.TABLET_ID = P.TABLET_ID     LEFT JOIN         OCEANBASE.__ALL_SUB_PART SP         ON V.TENANT_ID = SP.TENANT_ID         AND V.TABLE_ID = SP.TABLE_ID         AND V.TABLET_ID = SP.TABLET_ID   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1120,6 +1141,7 @@ int ObInnerTableSchema::dba_tab_modifications_schema(ObTableSchema &table_schema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1160,7 +1182,7 @@ int ObInnerTableSchema::dba_scheduler_jobs_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(T.POWNER AS CHAR(128)) AS OWNER,     CAST(T.JOB_NAME AS CHAR(128)) AS JOB_NAME,     CAST(NULL AS CHAR(128)) AS JOB_SUBNAME,     CAST(T.JOB_STYLE AS CHAR(17)) AS JOB_STYLE,     CAST(NULL AS CHAR(128)) AS JOB_CREATOR,     CAST(NULL AS CHAR(65)) AS CLIENT_ID,     CAST(NULL AS CHAR(33)) AS GLOBAL_UID,     CAST(T.POWNER AS CHAR(4000)) AS PROGRAM_OWNER,     CAST(T.PROGRAM_NAME AS CHAR(4000)) AS PROGRAM_NAME,     CAST(T.JOB_TYPE AS CHAR(16)) AS JOB_TYPE,     CAST(T.JOB_ACTION AS CHAR(4000)) AS JOB_ACTION,     CAST(T.NUMBER_OF_ARGUMENT AS SIGNED) AS NUMBER_OF_ARGUMENTS,     CAST(NULL AS CHAR(4000)) AS SCHEDULE_OWNER,     CAST(NULL AS CHAR(4000)) AS SCHEDULE_NAME,     CAST(NULL AS CHAR(12)) AS SCHEDULE_TYPE,     CAST(T.START_DATE AS DATETIME(6)) AS START_DATE,     CAST(T.REPEAT_INTERVAL AS CHAR(4000)) AS REPEAT_INTERVAL,     CAST(NULL AS CHAR(128)) AS EVENT_QUEUE_OWNER,     CAST(NULL AS CHAR(128)) AS EVENT_QUEUE_NAME,     CAST(NULL AS CHAR(523)) AS EVENT_QUEUE_AGENT,     CAST(NULL AS CHAR(4000)) AS EVENT_CONDITION,     CAST(NULL AS CHAR(261)) AS EVENT_RULE,     CAST(NULL AS CHAR(261)) AS FILE_WATCHER_OWNER,     CAST(NULL AS CHAR(261)) AS FILE_WATCHER_NAME,     CAST(T.END_DATE AS DATETIME(6)) AS END_DATE,     CAST(T.JOB_CLASS AS CHAR(128)) AS JOB_CLASS,     CAST(T.ENABLED AS CHAR(5)) AS ENABLED,     CAST(T.AUTO_DROP AS CHAR(5)) AS AUTO_DROP,     CAST(NULL AS CHAR(5)) AS RESTART_ON_RECOVERY,     CAST(NULL AS CHAR(5)) AS RESTART_ON_FAILURE,     CAST(T.STATE AS CHAR(15)) AS STATE,     CAST(NULL AS SIGNED) AS JOB_PRIORITY,     CAST(T.RUN_COUNT AS SIGNED) AS RUN_COUNT,     CAST(NULL AS SIGNED) AS MAX_RUNS,     CAST(T.FAILURES AS SIGNED) AS FAILURE_COUNT,     CAST(NULL AS SIGNED) AS MAX_FAILURES,     CAST(T.RETRY_COUNT AS SIGNED) AS RETRY_COUNT,     CAST(T.LAST_DATE AS DATETIME(6)) AS LAST_START_DATE,     CAST(T.LAST_RUN_DURATION AS SIGNED) AS LAST_RUN_DURATION,     CAST(T.NEXT_DATE AS DATETIME(6)) AS NEXT_RUN_DATE,     CAST(NULL AS SIGNED) AS SCHEDULE_LIMIT,     CAST(T.MAX_RUN_DURATION AS SIGNED) AS MAX_RUN_DURATION,     CAST(NULL AS CHAR(11)) AS LOGGING_LEVEL,     CAST(NULL AS CHAR(5)) AS STORE_OUTPUT,     CAST(NULL AS CHAR(5)) AS STOP_ON_WINDOW_CLOSE,     CAST(NULL AS CHAR(5)) AS INSTANCE_STICKINESS,     CAST(NULL AS CHAR(4000)) AS RAISE_EVENTS,     CAST(NULL AS CHAR(5)) AS SYSTEM,     CAST(NULL AS SIGNED) AS JOB_WEIGHT,     CAST(T.NLSENV AS CHAR(4000)) AS NLS_ENV,     CAST(NULL AS CHAR(128)) AS SOURCE,     CAST(NULL AS SIGNED) AS NUMBER_OF_DESTINATIONS,     CAST(NULL AS CHAR(261)) AS DESTINATION_OWNER,     CAST(NULL AS CHAR(261)) AS DESTINATION,     CAST(NULL AS CHAR(128)) AS CREDENTIAL_OWNER,     CAST(NULL AS CHAR(128)) AS CREDENTIAL_NAME,     CAST(T.FIELD1 AS SIGNED) AS INSTANCE_ID,     CAST(NULL AS CHAR(5)) AS DEFERRED_DROP,     CAST(NULL AS CHAR(5)) AS ALLOW_RUNS_IN_RESTRICTED_MODE,     CAST(T.COMMENTS AS CHAR(4000)) AS COMMENTS,     CAST(T.FLAG AS SIGNED) AS FLAGS,     CAST(NULL AS CHAR(5)) AS RESTARTABLE,     CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_OWNER,     CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_NAME   FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard' and T.JOB > 0 )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(T.POWNER AS CHAR(128)) AS OWNER,     CAST(T.JOB_NAME AS CHAR(128)) AS JOB_NAME,     CAST(NULL AS CHAR(128)) AS JOB_SUBNAME,     CAST(T.JOB_STYLE AS CHAR(17)) AS JOB_STYLE,     CAST(NULL AS CHAR(128)) AS JOB_CREATOR,     CAST(NULL AS CHAR(65)) AS CLIENT_ID,     CAST(NULL AS CHAR(33)) AS GLOBAL_UID,     CAST(T.POWNER AS CHAR(4000)) AS PROGRAM_OWNER,     CAST(T.PROGRAM_NAME AS CHAR(4000)) AS PROGRAM_NAME,     CAST(T.JOB_TYPE AS CHAR(16)) AS JOB_TYPE,     CAST(T.JOB_ACTION AS CHAR(4000)) AS JOB_ACTION,     CAST(T.NUMBER_OF_ARGUMENT AS SIGNED) AS NUMBER_OF_ARGUMENTS,     CAST(NULL AS CHAR(4000)) AS SCHEDULE_OWNER,     CAST(NULL AS CHAR(4000)) AS SCHEDULE_NAME,     CAST(T.SCHEDULE_TYPE AS CHAR(12)) AS SCHEDULE_TYPE,     CAST(T.START_DATE AS DATETIME(6)) AS START_DATE,     CAST(T.REPEAT_INTERVAL AS CHAR(4000)) AS REPEAT_INTERVAL,     CAST(NULL AS CHAR(128)) AS EVENT_QUEUE_OWNER,     CAST(NULL AS CHAR(128)) AS EVENT_QUEUE_NAME,     CAST(NULL AS CHAR(523)) AS EVENT_QUEUE_AGENT,     CAST(NULL AS CHAR(4000)) AS EVENT_CONDITION,     CAST(NULL AS CHAR(261)) AS EVENT_RULE,     CAST(NULL AS CHAR(261)) AS FILE_WATCHER_OWNER,     CAST(NULL AS CHAR(261)) AS FILE_WATCHER_NAME,     CAST(T.END_DATE AS DATETIME(6)) AS END_DATE,     CAST(T.JOB_CLASS AS CHAR(128)) AS JOB_CLASS,     CAST(T.ENABLED AS CHAR(5)) AS ENABLED,     CAST(T.AUTO_DROP AS CHAR(5)) AS AUTO_DROP,     CAST(NULL AS CHAR(5)) AS RESTART_ON_RECOVERY,     CAST(NULL AS CHAR(5)) AS RESTART_ON_FAILURE,     CAST(T.STATE AS CHAR(15)) AS STATE,     CAST(NULL AS SIGNED) AS JOB_PRIORITY,     CAST(T.RUN_COUNT AS SIGNED) AS RUN_COUNT,     CAST(NULL AS SIGNED) AS MAX_RUNS,     CAST(T.FAILURES AS SIGNED) AS FAILURE_COUNT,     CAST(T.MAX_FAILURES AS SIGNED) AS MAX_FAILURES,     CAST(T.RETRY_COUNT AS SIGNED) AS RETRY_COUNT,     CAST(T.LAST_DATE AS DATETIME(6)) AS LAST_START_DATE,     CAST(T.LAST_RUN_DURATION AS SIGNED) AS LAST_RUN_DURATION,     CAST(T.NEXT_DATE AS DATETIME(6)) AS NEXT_RUN_DATE,     CAST(NULL AS SIGNED) AS SCHEDULE_LIMIT,     CAST(T.MAX_RUN_DURATION AS SIGNED) AS MAX_RUN_DURATION,     CAST(NULL AS CHAR(11)) AS LOGGING_LEVEL,     CAST(NULL AS CHAR(5)) AS STORE_OUTPUT,     CAST(NULL AS CHAR(5)) AS STOP_ON_WINDOW_CLOSE,     CAST(NULL AS CHAR(5)) AS INSTANCE_STICKINESS,     CAST(NULL AS CHAR(4000)) AS RAISE_EVENTS,     CAST(NULL AS CHAR(5)) AS SYSTEM,     CAST(NULL AS SIGNED) AS JOB_WEIGHT,     CAST(T.NLSENV AS CHAR(4000)) AS NLS_ENV,     CAST(NULL AS CHAR(128)) AS SOURCE,     CAST(NULL AS SIGNED) AS NUMBER_OF_DESTINATIONS,     CAST(NULL AS CHAR(261)) AS DESTINATION_OWNER,     CAST(T.DESTINATION_NAME AS CHAR(261)) AS DESTINATION,     CAST(NULL AS CHAR(128)) AS CREDENTIAL_OWNER,     CAST(T.CREDENTIAL_NAME AS CHAR(128)) AS CREDENTIAL_NAME,     CAST(T.FIELD1 AS CHAR(128)) AS INSTANCE_ID,     CAST(NULL AS CHAR(5)) AS DEFERRED_DROP,     CAST(NULL AS CHAR(5)) AS ALLOW_RUNS_IN_RESTRICTED_MODE,     CAST(T.COMMENTS AS CHAR(4000)) AS COMMENTS,     CAST(T.FLAG AS SIGNED) AS FLAGS,     CAST(NULL AS CHAR(5)) AS RESTARTABLE,     CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_OWNER,     CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_NAME,     CAST(T.THIS_DATE AS DATETIME(6)) AS THIS_DATE,     CAST(T.USER_ID AS SIGNED) AS USER_ID,     CAST(T.DATABASE_ID AS SIGNED) AS DATABASE_ID,     CAST(T.THIS_EXEC_DATE AS DATETIME(6)) AS THIS_EXEC_DATE,     CAST(T.THIS_EXEC_ADDR AS CHAR(128)) AS THIS_EXEC_ADDR,     CAST(T.THIS_EXEC_TRACE_ID AS CHAR(128)) AS THIS_EXEC_TRACE_ID   FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard' and T.JOB > 0 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1170,6 +1192,7 @@ int ObInnerTableSchema::dba_scheduler_jobs_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1220,6 +1243,7 @@ int ObInnerTableSchema::dba_ob_outline_concurrent_history_schema(ObTableSchema &
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1260,7 +1284,7 @@ int ObInnerTableSchema::cdb_ob_backup_storage_info_history_schema(ObTableSchema 
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP     FROM oceanbase.__all_virtual_backup_storage_info_history )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP,     MAX_IOPS,     MAX_BANDWIDTH,     CASE       WHEN MAX_BANDWIDTH = 0         THEN "UNLIMITED"       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024,2), 'GB/s')       WHEN MAX_BANDWIDTH >= 1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024,2), 'MB/s')       WHEN MAX_BANDWIDTH >= 1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')       ELSE         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')     END AS MAX_BANDWIDTH_DISPLAY     FROM oceanbase.__all_virtual_backup_storage_info_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1270,6 +1294,7 @@ int ObInnerTableSchema::cdb_ob_backup_storage_info_history_schema(ObTableSchema 
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1310,7 +1335,7 @@ int ObInnerTableSchema::dba_ob_backup_storage_info_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_STORAGE_INFO     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP,     MAX_IOPS,     MAX_BANDWIDTH,     CASE       WHEN MAX_BANDWIDTH = 0         THEN "UNLIMITED"       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024,2), 'GB/s')       WHEN MAX_BANDWIDTH >= 1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024,2), 'MB/s')       WHEN MAX_BANDWIDTH >= 1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')       ELSE         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')     END AS MAX_BANDWIDTH_DISPLAY,     STATUS     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_STORAGE_INFO     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1320,6 +1345,7 @@ int ObInnerTableSchema::dba_ob_backup_storage_info_schema(ObTableSchema &table_s
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1360,7 +1386,7 @@ int ObInnerTableSchema::dba_ob_backup_storage_info_history_schema(ObTableSchema 
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_STORAGE_INFO_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP,     MAX_IOPS,     MAX_BANDWIDTH,     CASE       WHEN MAX_BANDWIDTH = 0         THEN "UNLIMITED"       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024,2), 'GB/s')       WHEN MAX_BANDWIDTH >= 1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024,2), 'MB/s')       WHEN MAX_BANDWIDTH >= 1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')       ELSE         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')     END AS MAX_BANDWIDTH_DISPLAY     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_STORAGE_INFO_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1370,6 +1396,7 @@ int ObInnerTableSchema::dba_ob_backup_storage_info_history_schema(ObTableSchema 
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1420,6 +1447,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_policy_schema(ObTableSchema &table_
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1460,7 +1488,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_jobs_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       INCARNATION,       INITIATOR_TENANT_ID,       INITIATOR_JOB_ID,       EXECUTOR_TENANT_ID,       TYPE,       USEC_TO_TIME(PARAMETER) AS PARAMETER,       JOB_LEVEL,       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           USEC_TO_TIME(END_TS)         END AS END_TIMESTAMP,       STATUS,       TASK_COUNT,       SUCCESS_TASK_COUNT,       RESULT,       COMMENT     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_DELETE_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       INCARNATION,       INITIATOR_TENANT_ID,       INITIATOR_JOB_ID,       EXECUTOR_TENANT_ID,       TYPE,       CASE         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN           CASE             WHEN TENANT_ID = 1 THEN ''             ELSE CONCAT('expired_time:', USEC_TO_TIME(PARAMETER))           END         WHEN TYPE = 'DELETE BACKUP ALL' THEN           CASE             WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)             ELSE CONCAT('log_archive_dest:', log_archive_path_list)           END         WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)         WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)         ELSE 'invalid_clean_type'       END AS PARAMETER,       JOB_LEVEL,       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           USEC_TO_TIME(END_TS)         END AS END_TIMESTAMP,       STATUS,       TASK_COUNT,       SUCCESS_TASK_COUNT,       RESULT,       COMMENT     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_DELETE_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1470,6 +1498,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_jobs_schema(ObTableSchema &table_sc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1510,7 +1539,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_job_history_schema(ObTableSchema &t
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       INCARNATION,       INITIATOR_TENANT_ID,       INITIATOR_JOB_ID,       EXECUTOR_TENANT_ID,       TYPE,       USEC_TO_TIME(PARAMETER) AS PARAMETER,       JOB_LEVEL,       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           USEC_TO_TIME(END_TS)         END AS END_TIMESTAMP,       STATUS,       TASK_COUNT,       SUCCESS_TASK_COUNT,       RESULT,       COMMENT     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_DELETE_JOB_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       INCARNATION,       INITIATOR_TENANT_ID,       INITIATOR_JOB_ID,       EXECUTOR_TENANT_ID,       TYPE,       CASE         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN           CASE             WHEN TENANT_ID = 1 THEN ''             ELSE CONCAT('expired_time:', USEC_TO_TIME(PARAMETER))           END         WHEN TYPE = 'DELETE BACKUP ALL' THEN           CASE             WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)             ELSE CONCAT('log_archive_dest:', log_archive_path_list)           END         WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)         WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)         ELSE 'invalid_clean_type'       END AS PARAMETER,       JOB_LEVEL,       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           USEC_TO_TIME(END_TS)         END AS END_TIMESTAMP,       STATUS,       TASK_COUNT,       SUCCESS_TASK_COUNT,       RESULT,       COMMENT     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_DELETE_JOB_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1520,6 +1549,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_job_history_schema(ObTableSchema &t
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1570,6 +1600,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_tasks_schema(ObTableSchema &table_s
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1620,6 +1651,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_task_history_schema(ObTableSchema &
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1660,7 +1692,7 @@ int ObInnerTableSchema::dba_ob_outlines_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       B.GMT_CREATE AS CREATE_TIME,       B.GMT_MODIFIED AS MODIFY_TIME,       A.TENANT_ID,       A.DATABASE_ID,       A.OUTLINE_ID,       A.DATABASE_NAME,       A.OUTLINE_NAME,       A.VISIBLE_SIGNATURE,       A.SQL_TEXT,       A.OUTLINE_TARGET,       A.OUTLINE_SQL,       A.SQL_ID,       A.OUTLINE_CONTENT     FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B     WHERE A.OUTLINE_ID = B.OUTLINE_ID )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       B.GMT_CREATE AS CREATE_TIME,       B.GMT_MODIFIED AS MODIFY_TIME,       A.TENANT_ID,       A.DATABASE_ID,       A.OUTLINE_ID,       A.DATABASE_NAME,       A.OUTLINE_NAME,       A.VISIBLE_SIGNATURE,       A.SQL_TEXT,       A.OUTLINE_TARGET,       A.OUTLINE_SQL,       A.SQL_ID,       A.OUTLINE_CONTENT     FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B     WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1670,6 +1702,7 @@ int ObInnerTableSchema::dba_ob_outlines_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1720,6 +1753,7 @@ int ObInnerTableSchema::dba_ob_concurrent_limit_sql_schema(ObTableSchema &table_
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1760,7 +1794,7 @@ int ObInnerTableSchema::dba_ob_restore_progress_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     P.JOB_ID AS JOB_ID,     RESTORE_TENANT_NAME,     RESTORE_TENANT_ID,     BACKUP_TENANT_NAME,     BACKUP_TENANT_ID,     BACKUP_CLUSTER_NAME,     BACKUP_DEST,     RESTORE_OPTION,     RESTORE_TYPE,     RESTORE_SCN,     CASE       WHEN RESTORE_SCN IS NULL         THEN NULL       WHEN RESTORE_SCN=0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RESTORE_SCN)       END AS RESTORE_SCN_DISPLAY,     CASE       WHEN STATUS = 'RESTORE_PRE'         THEN 'RESTORING'       WHEN STATUS = 'RESTORE_CREATE_INIT_LS'         THEN 'RESTORING'       WHEN STATUS = 'RESTORE_WAIT_LS'         THEN 'RESTORING'       WHEN STATUS = 'POST_CHECK'         THEN 'RESTORING'       ELSE STATUS       END AS STATUS,     CASE       WHEN START_TIMESTAMP IS NULL         THEN NULL       WHEN START_TIMESTAMP=''         THEN NULL       WHEN START_TIMESTAMP='0'         THEN NULL       ELSE         USEC_TO_TIME(START_TIMESTAMP)       END AS START_TIMESTAMP,     BACKUP_SET_LIST,     BACKUP_PIECE_LIST,     TOTAL_BYTES,     CASE       WHEN TOTAL_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN TOTAL_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN TOTAL_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(TOTAL_BYTES/1024/1024,2), 'MB')       END AS TOTAL_BYTES_DISPLAY,     FINISH_BYTES,     CASE       WHEN FINISH_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN FINISH_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN FINISH_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(FINISH_BYTES/1024/1024,2), 'MB')       END AS FINISH_BYTES_DISPLAY,     DESCRIPTION     FROM   (       SELECT       TENANT_ID,       JOB_ID,       MAX(CASE NAME WHEN 'tenant_name' THEN VALUE ELSE '' END) AS RESTORE_TENANT_NAME,       MAX(CASE NAME WHEN 'tenant_id' THEN VALUE ELSE '' END) AS RESTORE_TENANT_ID,       MAX(CASE NAME WHEN 'backup_tenant_name' THEN VALUE ELSE '' END) AS BACKUP_TENANT_NAME,       MAX(CASE NAME WHEN 'backup_tenant_id' THEN VALUE ELSE '' END) AS BACKUP_TENANT_ID,       MAX(CASE NAME WHEN 'backup_cluster_name' THEN VALUE ELSE '' END) AS BACKUP_CLUSTER_NAME,       MAX(CASE NAME WHEN 'target_tenant_role' THEN VALUE ELSE '' END) AS TENANT_ROLE,       MAX(CASE NAME WHEN 'backup_dest' THEN VALUE ELSE '' END) AS BACKUP_DEST,       MAX(CASE NAME WHEN 'restore_option' THEN VALUE ELSE '' END) AS RESTORE_OPTION,       MAX(CASE NAME WHEN 'status' THEN VALUE ELSE '' END) AS STATUS,       MAX(CASE NAME WHEN 'restore_scn' THEN VALUE ELSE '' END) AS RESTORE_SCN,       MAX(CASE NAME WHEN 'restore_start_ts' THEN VALUE ELSE '' END) AS START_TIMESTAMP,       MAX(CASE NAME WHEN 'backup_set_list' THEN VALUE ELSE '' END) AS BACKUP_SET_LIST,       MAX(CASE NAME WHEN 'backup_piece_list' THEN VALUE ELSE '' END) AS BACKUP_PIECE_LIST,       MAX(CASE NAME WHEN 'description' THEN VALUE ELSE '' END) AS DESCRIPTION,       MAX(CASE NAME WHEN 'restore_type' THEN VALUE ELSE '' END) AS RESTORE_TYPE       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID   ) P LEFT JOIN   (       SELECT       TENANT_ID,       JOB_ID,       TOTAL_BYTES,       FINISH_BYTES       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_PROGRESS   ) J     ON P.TENANT_ID=J.TENANT_ID AND P.JOB_ID=J.JOB_ID     WHERE P.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     P.JOB_ID AS JOB_ID,     RESTORE_TENANT_NAME,     RESTORE_TENANT_ID,     BACKUP_TENANT_NAME,     BACKUP_TENANT_ID,     BACKUP_CLUSTER_NAME,     BACKUP_DEST,     RESTORE_OPTION,     RESTORE_TYPE,     RESTORE_SCN,     CASE       WHEN RESTORE_SCN IS NULL         THEN NULL       WHEN RESTORE_SCN=0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RESTORE_SCN)       END AS RESTORE_SCN_DISPLAY,     CASE       WHEN STATUS = 'RESTORE_PRE'         THEN 'RESTORING'       WHEN STATUS = 'RESTORE_CREATE_INIT_LS'         THEN 'RESTORING'       WHEN STATUS = 'RESTORE_WAIT_LS'         THEN 'RESTORING'       WHEN STATUS = 'POST_CHECK'         THEN 'RESTORING'       ELSE STATUS       END AS STATUS,     CASE       WHEN START_TIMESTAMP IS NULL         THEN NULL       WHEN START_TIMESTAMP=''         THEN NULL       WHEN START_TIMESTAMP='0'         THEN NULL       ELSE         USEC_TO_TIME(START_TIMESTAMP)       END AS START_TIMESTAMP,     BACKUP_SET_LIST,     BACKUP_PIECE_LIST,     RECOVER_SCN,     CASE       WHEN RECOVER_SCN IS NULL         THEN NULL       WHEN RECOVER_SCN <= 1         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RECOVER_SCN)       END AS RECOVER_SCN_DISPLAY,     CASE       WHEN RECOVER_SCN IS NULL         THEN NULL       WHEN STATUS IN ('RESTORE_PRE', 'RESTORE_CREATE_INIT_LS', 'PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN')         THEN CAST(0 AS DECIMAL(6, 2))       WHEN RESTORE_SCN = RECOVER_START_SCN         THEN CAST(100 AS DECIMAL(6, 2))       ELSE CAST(TRUNCATE((RECOVER_SCN - RECOVER_START_SCN) / (RESTORE_SCN - RECOVER_START_SCN) * 100, 2) AS DECIMAL(6, 2))       END AS RECOVER_PROGRESS,     TABLET_COUNT,     FINISH_TABLET_COUNT,     CASE PROGRESS_DISPLAY_MODE       WHEN 'BYTES' THEN         CASE           WHEN FINISH_BYTES IS NULL THEN NULL           ELSE CAST(TRUNCATE((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS DECIMAL(6, 2))           END       WHEN 'TABLET_CNT' THEN         CASE           WHEN FINISH_TABLET_COUNT IS NULL THEN NULL           ELSE CAST(TRUNCATE((FINISH_TABLET_COUNT / TABLET_COUNT) * 100, 2) AS DECIMAL(6, 2))           END       END AS RESTORE_PROGRESS,     TOTAL_BYTES,     CASE       WHEN TOTAL_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN TOTAL_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN TOTAL_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(TOTAL_BYTES/1024/1024,2), 'MB')       END AS TOTAL_BYTES_DISPLAY,     FINISH_BYTES,     CASE       WHEN FINISH_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN FINISH_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN FINISH_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(FINISH_BYTES/1024/1024,2), 'MB')       END AS FINISH_BYTES_DISPLAY,     DESCRIPTION     FROM   (       SELECT       TENANT_ID,       JOB_ID,       MAX(CASE NAME WHEN 'tenant_name' THEN VALUE ELSE '' END) AS RESTORE_TENANT_NAME,       MAX(CASE NAME WHEN 'tenant_id' THEN VALUE ELSE '' END) AS RESTORE_TENANT_ID,       MAX(CASE NAME WHEN 'backup_tenant_name' THEN VALUE ELSE '' END) AS BACKUP_TENANT_NAME,       MAX(CASE NAME WHEN 'backup_tenant_id' THEN VALUE ELSE '' END) AS BACKUP_TENANT_ID,       MAX(CASE NAME WHEN 'backup_cluster_name' THEN VALUE ELSE '' END) AS BACKUP_CLUSTER_NAME,       MAX(CASE NAME WHEN 'target_tenant_role' THEN VALUE ELSE '' END) AS TENANT_ROLE,       MAX(CASE NAME WHEN 'backup_dest' THEN VALUE ELSE '' END) AS BACKUP_DEST,       MAX(CASE NAME WHEN 'restore_option' THEN VALUE ELSE '' END) AS RESTORE_OPTION,       MAX(CASE NAME WHEN 'status' THEN VALUE ELSE '' END) AS STATUS,       MAX(CASE NAME WHEN 'consistent_scn' THEN VALUE ELSE '' END) AS RECOVER_START_SCN,       MAX(CASE NAME WHEN 'restore_scn' THEN VALUE ELSE '' END) AS RESTORE_SCN,       MAX(CASE NAME WHEN 'restore_start_ts' THEN VALUE ELSE '' END) AS START_TIMESTAMP,       MAX(CASE NAME WHEN 'backup_set_list' THEN VALUE ELSE '' END) AS BACKUP_SET_LIST,       MAX(CASE NAME WHEN 'backup_piece_list' THEN VALUE ELSE '' END) AS BACKUP_PIECE_LIST,       MAX(CASE NAME WHEN 'description' THEN VALUE ELSE '' END) AS DESCRIPTION,       MAX(CASE NAME WHEN 'restore_type' THEN VALUE ELSE '' END) AS RESTORE_TYPE,       MAX(CASE NAME WHEN 'progress_display_mode' THEN VALUE ELSE '' END) AS PROGRESS_DISPLAY_MODE       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID   ) P LEFT JOIN   (       SELECT       TENANT_ID,       JOB_ID,       TABLET_COUNT,       FINISH_TABLET_COUNT,       TOTAL_BYTES,       FINISH_BYTES       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_PROGRESS   ) J     ON P.TENANT_ID=J.TENANT_ID AND P.JOB_ID=J.JOB_ID     LEFT JOIN   (       SELECT       TENANT_ID,       READABLE_SCN AS RECOVER_SCN       FROM OCEANBASE.__ALL_VIRTUAL_TENANT_INFO   ) Q     ON P.TENANT_ID=Q.TENANT_ID     WHERE P.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1770,6 +1804,7 @@ int ObInnerTableSchema::dba_ob_restore_progress_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1820,6 +1855,7 @@ int ObInnerTableSchema::dba_ob_restore_history_schema(ObTableSchema &table_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1870,6 +1906,7 @@ int ObInnerTableSchema::dba_ob_archive_dest_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1920,6 +1957,7 @@ int ObInnerTableSchema::dba_ob_archivelog_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -1970,6 +2008,7 @@ int ObInnerTableSchema::dba_ob_archivelog_summary_schema(ObTableSchema &table_sc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -2020,6 +2059,7 @@ int ObInnerTableSchema::dba_ob_archivelog_piece_files_schema(ObTableSchema &tabl
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -2070,6 +2110,7 @@ int ObInnerTableSchema::dba_ob_backup_parameter_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -2120,6 +2161,7 @@ int ObInnerTableSchema::cdb_ob_archive_dest_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -2170,6 +2212,7 @@ int ObInnerTableSchema::cdb_ob_archivelog_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -2220,6 +2263,7 @@ int ObInnerTableSchema::cdb_ob_archivelog_summary_schema(ObTableSchema &table_sc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -2270,6 +2314,7 @@ int ObInnerTableSchema::cdb_ob_backup_parameter_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -2320,6 +2365,7 @@ int ObInnerTableSchema::dba_ob_deadlock_event_history_schema(ObTableSchema &tabl
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -2370,6 +2416,7 @@ int ObInnerTableSchema::cdb_ob_deadlock_event_history_schema(ObTableSchema &tabl
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -2420,6 +2467,7 @@ int ObInnerTableSchema::cdb_ob_sys_variables_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;

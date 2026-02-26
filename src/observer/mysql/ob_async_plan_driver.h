@@ -29,7 +29,6 @@ namespace observer
 {
 
 class ObIMPPacketSender;
-struct ObGlobalContext;
 class ObMySQLResultSet;
 class ObQueryRetryCtrl;
 class ObSqlEndTransCb;

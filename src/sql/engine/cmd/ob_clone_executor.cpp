@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "share/ob_common_rpc_proxy.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_clone_executor.h"
 #include "sql/resolver/cmd/ob_tenant_clone_stmt.h"
-#include "share/restore/ob_tenant_clone_table_operator.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 
 namespace oceanbase
@@ -40,6 +38,12 @@ int ObCloneTenantExecutor::execute(ObExecContext &ctx, ObCloneTenantStmt &stmt)
   if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("clone tenant is not supported in shared storage mode", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "clone tenant is not supported in shared storage mode");
+#endif
   } else if (true == stmt.get_if_not_exists()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("if not exists is true", KR(ret));

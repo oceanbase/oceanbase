@@ -15,7 +15,7 @@
 #include "ob_expr_xml_attributes.h"
 #include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h" // may need json for kv pairs
-#include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#include "deps/oblib/src/lib/xml/ob_xml_parser.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -85,7 +85,9 @@ int ObExprXmlAttributes::eval_xml_attributes(const ObExpr &expr, ObEvalCtx &ctx,
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   int attributes_escape = 1;
   int has_schema_check = 0;
   ObDatum *datum = NULL;
@@ -136,6 +138,7 @@ int ObExprXmlAttributes::eval_xml_attributes(const ObExpr &expr, ObEvalCtx &ctx,
       } else {
         uint64_t length = raw_bin.length();
         char *buf = expr.get_str_res_mem(ctx, length);
+        OB_FALSE_IT(tmp_allocator.set_baseline_size(length));
         if (OB_ISNULL(buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed: alloc memory for json array result", K(ret), K(length));

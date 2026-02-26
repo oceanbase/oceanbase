@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_tenant_virtual_privilege.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h" // source of data
-#include "lib/charset/ob_charset.h"
 
 using namespace oceanbase::common;
 

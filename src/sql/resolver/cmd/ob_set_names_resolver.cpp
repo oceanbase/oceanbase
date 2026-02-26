@@ -55,7 +55,11 @@ int ObSetNamesResolver::resolve(const ParseNode &parse_tree)
           // 目前支持gbk，utf16和utf8mb4，只有set names utf16不支持
           // 如果后续支持更多的字符集，这里需要考虑怎么实现形式更好，
           // 最好使用函数，目前没有必要
-          if (0 == charset.case_compare("utf16")) {
+          ObCollationType col_type = ObCharset::get_default_collation(ObCharset::charset_type(charset));
+          if (!ObCharset::is_valid_collation(col_type)) {
+            ret = OB_ERR_UNKNOWN_CHARSET;
+            LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
+          } else if (ObCharset::get_charset(col_type)->mbminlen > 1) {
             ret = OB_ERR_WRONG_VALUE_FOR_VAR;
             LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
                 static_cast<int>(strlen("character_set_client")), "character_set_client",

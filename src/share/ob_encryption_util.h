@@ -23,6 +23,10 @@ namespace common
 {
 class ObString;
 }
+namespace sql
+{
+class ObSQLSessionInfo;
+}
 namespace share
 {
 struct ObEncryptMeta;
@@ -140,6 +144,8 @@ public:
   static int parse_encryption_id(const common::ObString &str, int64_t &encrypt_id);
   static bool is_aes_encryption(const ObCipherOpMode opmode);
   static bool is_sm4_encryption(const ObCipherOpMode opmode);
+  static bool is_ecb_mode(const ObCipherOpMode opmode);
+  static int get_cipher_op_mode(ObCipherOpMode &op_mode, const sql::ObSQLSessionInfo *session);
 
 #ifdef OB_BUILD_TDE_SECURITY
   static const ObCipherOpMode DEFAULT_TABLE_KEY_AES_ENCRYPT_ALGORITHM =
@@ -150,6 +156,7 @@ public:
                                                              share::ObCipherOpMode::ob_aes_256_ecb;
   static const ObCipherOpMode SYS_DATA_ENCRYPT_ALGORITHM = share::ObCipherOpMode::ob_aes_128_cbc;
   static int64_t sys_encrypted_length(int64_t data_len);
+  static int64_t sys_decrypted_length(int64_t data_len);
   // encrypt data with create a random iv and store iv in buf if needed.
   static int encrypt_data(const char *key, const int64_t key_len, enum ObCipherOpMode mode,
                           const char *data, const int64_t data_len,
@@ -256,8 +263,11 @@ enum ObHashAlgorithm {
   OB_HASH_SH256,
   OB_HASH_SH384,
   OB_HASH_SH512,
+  OB_HASH_SM3,
   OB_HASH_MAX
 };
+
+const int64_t OB_SM3_DIGEST_LENGTH = 32;  // 256 bits
 
 class ObHashUtil
 {

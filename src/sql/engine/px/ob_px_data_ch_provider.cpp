@@ -35,7 +35,7 @@ int ObPxTransmitChProvider::get_data_ch_nonblock(
   if (OB_FAIL(ObPxChProviderUtil::check_status(timeout_ts, qc_addr, query_start_time))) {
     // nop
   } else if (!msg_set_) {
-    ret = OB_EAGAIN;
+    ret = OB_DTL_WAIT_EAGAIN;
   } else {
     if (OB_FAIL(ObPxChProviderUtil::inner_get_data_ch(msg_.get_ch_sets(), 
         msg_.get_ch_total_info(), sqc_id, task_id, ch_set, true))) {
@@ -118,7 +118,7 @@ int ObPxTransmitChProvider::get_part_ch_map_nonblock(ObPxPartChInfo &map,
   if (OB_FAIL(ObPxChProviderUtil::check_status(timeout_ts, qc_addr, query_start_time))) {
     // nop
   } else if (!msg_set_) {
-    ret = OB_EAGAIN;
+    ret = OB_DTL_WAIT_EAGAIN;
   } else {
     if (OB_FAIL(inner_get_part_ch_map(map))) {
       LOG_WARN("failed to get part ch map", K(ret));
@@ -198,7 +198,7 @@ int ObPxTransmitChProvider::wait_msg(int64_t timeout_ts)
         LOG_WARN("transmit channel provider wait msg loop is interrupted", K(code), K(ret));
         break;
       } else if (!msg_set_) { // wake up by leader, retry
-        ret = OB_EAGAIN;
+        ret = OB_DTL_WAIT_EAGAIN;
         LOG_TRACE("wake up by leader, retry");
         break;
       }
@@ -288,7 +288,7 @@ int ObPxReceiveChProvider::get_data_ch_nonblock(
       }
     }
     if (OB_SUCC(ret) && !found) {
-      ret = OB_EAGAIN;
+      ret = OB_DTL_WAIT_EAGAIN;
     }
   }
   return ret;
@@ -395,7 +395,7 @@ int ObPxReceiveChProvider::wait_msg(int64_t child_dfo_id, int64_t timeout_ts)
                 K(child_dfo_id), K(wait_count), K(code), K(msg_set_[child_dfo_id]), K(ret));
           break;
         } else {
-          ret = OB_EAGAIN;
+          ret = OB_DTL_WAIT_EAGAIN;
           LOG_TRACE("follower is wake up by leader, retry");
           break;
         }
@@ -444,7 +444,7 @@ int ObPxBloomfilterChProvider::get_data_ch_nonblock(
   if (OB_FAIL(ObPxChProviderUtil::check_status(timeout_ts, qc_addr, query_start_time))) {
     // nop
   } else if (!msg_set_) {
-    ret = OB_EAGAIN;
+    ret = OB_DTL_WAIT_EAGAIN;
   } else {
     if (is_transmit) {
       if (OB_FAIL(ObDtlChannelUtil::get_transmit_bf_dtl_channel_set(msg_.sqc_id_, msg_.ch_set_info_, ch_set))) {

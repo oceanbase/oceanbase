@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_px_multi_part_update_op.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/tx_storage/ob_access_service.h"
 #include "sql/engine/dml/ob_dml_service.h"
 
 using namespace oceanbase::common;
@@ -36,7 +34,7 @@ int ObPxMultiPartUpdateOp::inner_open()
   } else if (!(MY_SPEC.row_desc_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table or row desc is invalid", K(ret), K(MY_SPEC.row_desc_));
-  } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), upd_rtdef_, this, this, false))) {
+  } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), upd_rtdef_, this, this, false, false))) {
     LOG_WARN("failed to init data driver", K(ret));
   } else if (OB_FAIL(ObDMLService::init_upd_rtdef(dml_rtctx_,
                                                   upd_rtdef_,
@@ -135,6 +133,7 @@ int ObPxMultiPartUpdateOp::read_row(ObExecContext &ctx,
       LOG_WARN("fail get next row from child", K(ret));
     }
   } else {
+    op_monitor_info_.otherstat_2_value_++;
     // 每一次从child节点获得新的数据都需要进行清除计算标记
     clear_evaluated_flag();
     ++upd_rtdef_.cur_row_num_;
@@ -160,6 +159,8 @@ int ObPxMultiPartUpdateOp::read_row(ObExecContext &ctx,
         tablet_id = expr_datum.get_int();
         LOG_DEBUG("get the part id", K(ret), K(expr_datum));
       }
+    } else {
+      op_monitor_info_.otherstat_4_value_++;
     }
   }
   return ret;
@@ -192,12 +193,23 @@ int ObPxMultiPartUpdateOp::write_rows(ObExecContext &ctx,
         LOG_WARN("update row to das failed", K(ret));
       } else if (OB_FAIL(discharge_das_write_buffer())) {
         LOG_WARN("failed to submit all dml task when the buffer of das op is full", K(ret));
+      } else {
+        op_monitor_info_.otherstat_3_value_++;
       }
     }
 
     if (OB_ITER_END == ret) {
       if (OB_FAIL(submit_all_dml_task())) {
         LOG_WARN("do insert rows post process failed", K(ret));
+      } else {
+        if (upd_rtdef_.ddel_rtdef_ != nullptr) {
+          //update rows across partitions, need to add das delete op's affected rows
+          op_monitor_info_.otherstat_5_value_ += upd_rtdef_.ddel_rtdef_->affected_rows_;
+        }
+        if (upd_rtdef_.dlock_rtdef_ != nullptr) {
+          op_monitor_info_.otherstat_5_value_ += upd_rtdef_.dlock_rtdef_->affected_rows_;
+        }
+        op_monitor_info_.otherstat_5_value_ += upd_rtdef_.dupd_rtdef_.affected_rows_;
       }
     }
     if (!(MY_SPEC.is_pdml_index_maintain_)) {
@@ -208,8 +220,19 @@ int ObPxMultiPartUpdateOp::write_rows(ObExecContext &ctx,
       plan_ctx->add_affected_rows(session->get_capability().cap_flags_.OB_CLIENT_FOUND_ROWS ?
                                   found_rows : changed_rows);
     }
+    LOG_TRACE("pdml update ok", K(MY_SPEC.is_pdml_index_maintain_),
+              K(op_monitor_info_.otherstat_1_value_), K(op_monitor_info_.otherstat_2_value_),
+              K(op_monitor_info_.otherstat_3_value_), K(op_monitor_info_.otherstat_4_value_),
+              K(op_monitor_info_.otherstat_5_value_));
     upd_rtdef_.found_rows_ = 0;
     upd_rtdef_.dupd_rtdef_.affected_rows_ = 0;
+    if (upd_rtdef_.ddel_rtdef_ != nullptr) {
+      //update rows across partitions, need to add das delete op's affected rows
+      upd_rtdef_.ddel_rtdef_->affected_rows_ = 0;
+    }
+    if (upd_rtdef_.dlock_rtdef_ != nullptr) {
+      upd_rtdef_.dlock_rtdef_->affected_rows_ = 0;
+    }
   }
   return ret;
 }

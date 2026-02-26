@@ -25,6 +25,7 @@
 #include "lib/utility/ob_backtrace.h"
 #include "lib/oblog/ob_trace_log.h"
 #include "lib/container/ob_iarray.h"
+#include "lib/allocator/ob_malloc.h"
 #include "common/ob_clock_generator.h"
 
 #define FALSE_IT(stmt) ({ (stmt); false; })
@@ -86,7 +87,8 @@ char *rtrim(char *str);
 const char *inet_ntoa_s(char *buffer, size_t n, const uint64_t ipport);
 const char *inet_ntoa_s(char *buffer, size_t n, const uint32_t ip);
 
-const char *time2str(const int64_t time_s, const char *format = DEFAULT_TIME_FORMAT);
+const char *time2str(const int64_t time_s, char *buf, const int64_t buf_len,
+                     const char *format = DEFAULT_TIME_FORMAT);
 int escape_range_string(char *buffer, const int64_t length, int64_t &pos, const ObString &in);
 int escape_enter_symbol(char *buffer, const int64_t length, int64_t &pos, const char *src);
 
@@ -176,13 +178,73 @@ inline double max(const double x, const double y)
 template <class T>
 void max(T, T) = delete;
 
-template<oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id = oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
-inline void ob_usleep(const useconds_t v)
+
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+inline void ob_usleep(const useconds_t v, int64_t call_bt=0)
 {
-  oceanbase::common::ObSleepEventGuard wait_guard(event_id, 0, (int64_t)v);
+  if (oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP == event_id && call_bt == 0) {
+    call_bt = static_cast<int64_t>(get_rel_offset(reinterpret_cast<int64_t>(__builtin_return_address(0))));
+  }
+  oceanbase::common::ObSleepEventGuard<event_id> wait_guard((int64_t)v, call_bt);
   ::usleep(v);
 }
 
+template void ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(const useconds_t v, int64_t call_bt);
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+inline void ob_usleep(const useconds_t v, const bool is_idle_sleep, int64_t call_bt=0)
+{
+  if (!is_idle_sleep && oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP == event_id && call_bt == 0) {
+    call_bt = static_cast<int64_t>(get_rel_offset(reinterpret_cast<int64_t>(__builtin_return_address(0))));
+  }
+  if (is_idle_sleep) {
+    ObBKGDSessInActiveGuard inactive_guard;
+    ob_usleep(v, call_bt);
+  } else {
+    ob_usleep(v, call_bt);
+  }
+}
+
+inline void ob_throttle_usleep(const useconds_t v, int errcode, int64_t p3 = 0)
+{
+  ObSleepEventGuard<ObWaitEventIds::TASK_THROTTLE_SLEEP> wait_guard((int64_t)v, (int64_t)v, (int64_t)errcode, p3);
+  ::usleep(v);
+}
+
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+inline void ob_usleep(const useconds_t v, const int64_t p1, int64_t p2, const int64_t p3)
+{
+  if (oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP == event_id && p2 == 0) {
+    p2 = static_cast<int64_t>(get_rel_offset(reinterpret_cast<int64_t>(__builtin_return_address(0))));
+  }
+  oceanbase::common::ObSleepEventGuard<event_id> wait_guard((int64_t)v, p1, p2, p3);
+  ::usleep(v);
+}
+
+inline void ob_usleep(const useconds_t v, const int64_t event_no, const int64_t p1, const int64_t p2, const int64_t p3)
+{
+  oceanbase::common::ObSleepEventGuard<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP> wait_guard(
+      event_no, (int64_t)v, p1, p2, p3);
+  ::usleep(v);
+}
+
+
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+inline void ob_usleep(const useconds_t v, const int64_t p1, int64_t p2, const int64_t p3, const bool is_idle_sleep)
+{
+  if (!is_idle_sleep && oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP == event_id && p2 == 0) {
+    p2 = static_cast<int64_t>(get_rel_offset(reinterpret_cast<int64_t>(__builtin_return_address(0))));
+  }
+  if (is_idle_sleep) {
+    ObBKGDSessInActiveGuard inactive_guard;
+    ob_usleep(v, p1, p2, p3);
+  } else {
+    ob_usleep(v, p1, p2, p3);
+  }
+}
 int get_double_expand_size(int64_t &new_size, const int64_t limit_size);
 /**
  * allocate new memory that twice larger to store %oldp
@@ -402,6 +464,8 @@ int deep_copy_ob_string(Allocator &allocator, const ObString &src, ObString &dst
 int deep_copy_obj(ObIAllocator &allocator, const ObObj &src, ObObj &dst);
 int deep_copy_objparam(ObIAllocator &allocator, const ObObjParam &src, ObObjParam &dst);
 
+const char *extract_demangled_class_name(const char *full_class_name, const char *prefix, char *buffer, int64_t &len);
+
 struct SeqLockGuard
 {
   explicit SeqLockGuard(volatile uint64_t &seq): seq_(seq)
@@ -498,12 +562,23 @@ inline int64_t get_cpu_id()
 // ethernet speed: byte / second.
 int get_ethernet_speed(const char *devname, int64_t &speed);
 int get_ethernet_speed(const ObString &devname, int64_t &speed);
+inline int64_t get_cgroup_memory_limit()
+{
+  int64_t cgroup_memory_limit = INT64_MAX;
+  FILE *file = fopen("/sys/fs/cgroup/memory/memory.limit_in_bytes", "r");
+  if (NULL != file) {
+    fscanf(file, "%ld", &cgroup_memory_limit);
+    fclose(file);
+  }
+  return cgroup_memory_limit;
+}
 
 inline int64_t get_phy_mem_size()
 {
   static int64_t page_size = sysconf(_SC_PAGE_SIZE);
   static int64_t phys_pages = sysconf(_SC_PHYS_PAGES);
-  return page_size * phys_pages;
+  static int64_t cgroup_memory_limit = get_cgroup_memory_limit();
+  return MIN(page_size * phys_pages, cgroup_memory_limit);
 }
 
 int64_t get_level1_dcache_size();
@@ -680,7 +755,21 @@ static const int64_t OB_LTOA10_CHAR_LEN = 22;
 char *ltoa10(int64_t val,char *dst,const bool is_signed);
 
 int long_to_str10(int64_t val,char *dst, const int64_t buf_len, const bool is_signed, int64_t &length);
-
+template <typename T>
+T gcd(T a, T b)
+{
+  while (b != 0) {
+    T temp = b;
+    b = a % b;
+    a = temp;
+  }
+  return a;
+}
+template <typename T>
+T lcm(T a, T b)
+{
+  return (a / gcd(a, b)) * b;
+}
 template <typename T>
 bool has_exist_in_array(const ObIArray<T> &array, const T &var, int64_t *idx = NULL)
 {
@@ -1273,9 +1362,8 @@ private:
 
 void get_addr_by_proxy_sessid(const uint64_t session_id, ObAddr &addr);
 
-const char *replica_type_to_str(const ObReplicaType &type);
-
 int ob_atoll(const char *str, int64_t &res);
+int ob_atoull(const char *str, uint64_t &res);
 int ob_strtoll(const char *str, char *&endptr, int64_t &res);
 int ob_strtoull(const char *str, char *&endptr, uint64_t &res);
 
@@ -1320,6 +1408,15 @@ void call_dtor(T *&ptr)
 int is_dir_empty(const char *dirname, bool &is_empty);
 
 int extract_cert_expired_time(const char* cert, const int64_t cert_len, int64_t &expired_time);
+
+int64_t parse_config_capacity(const char *str, bool &valid, bool check_unit = true, bool use_byte = false);
+
+void get_glibc_version(int &major, int &minor);
+
+bool glibc_prereq(int major, int minor);
+
+const char *get_transparent_hugepage_status();
+int read_one_int(const char *file_name, int64_t &value);
 } // end namespace common
 } // end namespace oceanbase
 

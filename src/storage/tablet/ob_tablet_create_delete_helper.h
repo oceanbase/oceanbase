@@ -28,13 +28,14 @@
 
 namespace oceanbase
 {
-namespace obrpc
-{
-struct ObBatchCreateTabletArg;
-}
 namespace blocksstable
 {
 class ObSSTable;
+}
+
+namespace transaction
+{
+class ObTransID;
 }
 
 namespace storage
@@ -48,10 +49,12 @@ class ObTabletCreateDeleteMdsUserData;
 class ObTabletCreateDeleteHelper
 {
 public:
+  static int replay_mds_get_tablet( const ObTabletMapKey &key, ObLS *ls, ObTabletHandle &handle);
   static int get_tablet(
       const ObTabletMapKey &key,
       ObTabletHandle &handle,
-      const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US);
+      const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+      const WashTabletPriority priority = WashTabletPriority::WTP_HIGH);
 
   // snapshot version is used for multi source data reading,
   // tablet's multi source data will infect its visibility.
@@ -65,54 +68,83 @@ public:
       const ObMDSGetTabletMode mode,
       const int64_t snapshot_version);
   static int check_status_for_new_mds(
-      ObTablet &tablet,
+      const ObTablet &tablet,
       const int64_t snapshot_version,
-      const int64_t timeout_us,
       ObTabletStatusCache &tablet_status_cache);
   static int check_read_snapshot_by_commit_version(
-      ObTablet &tablet,
+      const ObTablet &tablet,
       const int64_t create_commit_version,
       const int64_t delete_commit_version,
       const int64_t snapshot_version,
       const ObTabletStatus &tablet_status);
-  static int check_read_snapshot_for_normal(
-      ObTablet &tablet,
+  static int check_read_snapshot_for_normal_or_split_dst(
+      const ObTablet &tablet,
       const int64_t snapshot_version,
-      const int64_t timeout_us,
       const ObTabletCreateDeleteMdsUserData &user_data,
-      const bool is_committed);
+      const mds::MdsWriter &writer,
+      const mds::TwoPhaseCommitState &trans_state,
+      const share::SCN &trans_version);
   static int check_read_snapshot_for_deleted(
       ObTablet &tablet,
       const int64_t snapshot_version,
       const ObTabletCreateDeleteMdsUserData &user_data,
-      const bool is_committed);
+      const mds::MdsWriter &writer,
+      const mds::TwoPhaseCommitState &trans_state,
+      const share::SCN &trans_version);
   static int check_read_snapshot_for_transfer_in(
-      ObTablet &tablet,
+      const ObTablet &tablet,
       const int64_t snapshot_version,
       const ObTabletCreateDeleteMdsUserData &user_data,
-      const bool is_committed);
-  static int check_read_snapshot_for_transfer_out(
-      ObTablet &tablet,
+      const mds::MdsWriter &writer,
+      const mds::TwoPhaseCommitState &trans_state,
+      const share::SCN &trans_version);
+  static int check_read_snapshot_for_deleted_or_transfer_out(
+      const ObTablet &tablet,
       const int64_t snapshot_version,
       const ObTabletCreateDeleteMdsUserData &user_data,
-      const bool is_committed);
+      const mds::MdsWriter &writer,
+      const mds::TwoPhaseCommitState &trans_state,
+      const share::SCN &trans_version);
   static int check_read_snapshot_for_transfer_out_deleted(
-      ObTablet &tablet,
+      const ObTablet &tablet,
+      const int64_t snapshot_version,
+      const ObTabletCreateDeleteMdsUserData &user_data);
+  static int check_read_snapshot_for_split_src(
+      const ObTablet &tablet,
       const int64_t snapshot_version,
       const ObTabletCreateDeleteMdsUserData &user_data,
-      const bool is_committed);
+      const mds::TwoPhaseCommitState &trans_state);
+  static int check_read_snapshot_for_split_src_deleted(
+      const ObTablet &tablet,
+      const ObTabletCreateDeleteMdsUserData &user_data,
+      const mds::TwoPhaseCommitState &trans_state);
   static int check_read_snapshot_by_commit_version(
       const int64_t snapshot_version,
       const ObTabletCreateDeleteMdsUserData &user_data);
+  static int check_for_standby(
+      const share::ObLSID &ls_id,
+      const transaction::ObTransID &tx_id,
+      const share::SCN &snapshot,
+      ObTxCommitData::TxDataState &tx_data_state,
+      share::SCN &commit_version);
+  static int check_read_snapshot_for_finish_transfer_in_tx(
+      const ObTablet &tablet,
+      const int64_t snapshot_version,
+      const ObTabletCreateDeleteMdsUserData &user_data);
+  static int check_read_snapshot_for_create_tx(
+      const ObTablet &tablet,
+      const int64_t snapshot_version,
+      const ObTabletCreateDeleteMdsUserData &user_data,
+      const mds::MdsWriter &writer,
+      const mds::TwoPhaseCommitState &trans_state,
+      const share::SCN &trans_version);
+public:
   static int create_tmp_tablet(
       const ObTabletMapKey &key,
       common::ObArenaAllocator &allocator,
       ObTabletHandle &handle);
   static int prepare_create_msd_tablet();
   static int create_msd_tablet(
-      const ObTabletMapKey &key,
-      ObTabletHandle &handle);
-  static int acquire_msd_tablet(
       const ObTabletMapKey &key,
       ObTabletHandle &handle);
   static int acquire_tmp_tablet(
@@ -123,6 +155,10 @@ public:
       const ObTabletPoolType &type,
       const ObTabletMapKey &key,
       ObTabletHandle &handle);
+  static int acquire_tablet_from_pool_for_ss(
+    const ObTabletPoolType &type,
+    const ObTabletMapKey &key,
+    ObTabletHandle &handle);
   // Attention !!! only used when first creating tablet
   static int create_empty_sstable(
       common::ObArenaAllocator &allocator,
@@ -131,6 +167,18 @@ public:
       const int64_t snapshot_version,
       ObTableHandleV2 &table_handle);
   static int create_empty_co_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObStorageSchema &storage_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      ObTableHandleV2 &table_handle);
+  static int create_shared_empty_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObStorageSchema &storage_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      ObTableHandleV2 &table_handle);
+  static int create_shared_empty_co_sstable(
       common::ObArenaAllocator &allocator,
       const ObStorageSchema &storage_schema,
       const common::ObTabletID &tablet_id,
@@ -152,23 +200,35 @@ public:
   static bool is_pure_aux_tablets(const obrpc::ObCreateTabletInfo &info);
   static bool is_pure_hidden_tablets(const obrpc::ObCreateTabletInfo &info);
 
-  static int build_create_sstable_param(
-      const ObStorageSchema &storage_schema,
-      const common::ObTabletID &tablet_id,
-      const int64_t snapshot_version,
-      ObTabletCreateSSTableParam &param);
-  static int build_create_cs_sstable_param(
-      const ObStorageSchema &storage_schema,
-      const ObTabletID &tablet_id,
-      const int64_t snapshot_version,
-      const int64_t column_group_idx,
-      const bool has_all_column_group,
-      ObTabletCreateSSTableParam &cs_param);
   template<typename Arg, typename Helper>
   static int process_for_old_mds(
              const char *buf,
              const int64_t len,
              const transaction::ObMulSourceDataNotifyArg &notify_arg);
+
+  static int update_empty_mds_tablet_id_array_if_need(
+      const ObTablet &tablet,
+      common::ObIArray<common::ObTabletID> &empty_mds_tablet_id_array);
+  static int rollback_is_written(
+      const share::ObLSID &ls_id,
+      const common::ObIArray<common::ObTabletID> &empty_mds_tablet_id_array);
+
+private:
+  static int inner_create_empty_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObStorageSchema &storage_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      const bool is_shared,
+      ObTableHandleV2 &table_handle);
+  static int inner_create_empty_co_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObStorageSchema &storage_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      const bool is_shared,
+      ObTableHandleV2 &table_handle);
+
 private:
   class ReadMdsFunctor
   {
@@ -208,7 +268,7 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
         if (notify_arg.for_replay_) {
           ret = OB_EAGAIN;
         } else {
-          usleep(100 * 1000);
+          ob_usleep(100 * 1000);
         }
       }
     } while (OB_FAIL(ret) && !notify_arg.for_replay_);
@@ -221,9 +281,8 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "arg is not old mds, but buf is old mds", K(ret), K(arg));
     } else {
-      mds::MdsCtx mds_ctx;
+      mds::MdsCtx mds_ctx{mds::MdsWriter{notify_arg.tx_id_}};
       mds_ctx.set_binding_type_id(mds::TupleTypeIdx<mds::BufferCtxTupleHelper, mds::MdsCtx>::value);
-      mds_ctx.set_writer(mds::MdsWriter(notify_arg.tx_id_));
 
       if (notify_arg.for_replay_) {
         if (OB_FAIL(Helper::replay_process(arg, notify_arg.scn_, mds_ctx))) {
@@ -234,7 +293,7 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
         do {
           if (OB_FAIL(Helper::register_process(arg, mds_ctx))) {
             TRANS_LOG(ERROR, "fail to register_process, retry", K(ret), K(arg), K(notify_arg));
-            usleep(100 * 1000);
+            ob_usleep(100 * 1000);
           }
         } while (OB_FAIL(ret));
       }

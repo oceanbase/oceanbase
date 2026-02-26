@@ -12,10 +12,6 @@
 
 #include "observer/virtual_table/ob_mysql_db_table.h"
 
-#include "share/schema/ob_priv_type.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -114,18 +110,18 @@ int ObMySQLDBTable::inner_get_next_row(common::ObNewRow *&row)
                   EXIST_PRIV_CASE(CREATE);
                   EXIST_PRIV_CASE(DROP);
                   EXIST_PRIV_CASE(GRANT);
-                  NO_EXIST_PRIV_CASE(REFERENCES);
+                  EXIST_PRIV_CASE(REFERENCES);
                   EXIST_PRIV_CASE(INDEX);
                   EXIST_PRIV_CASE(ALTER);
                   NO_EXIST_PRIV_CASE(CREATE_TMP_TABLE);
-                  NO_EXIST_PRIV_CASE(LOCK_TABLES);
+                  EXIST_PRIV_CASE(LOCK_TABLE);
                   EXIST_PRIV_CASE(CREATE_VIEW);
                   EXIST_PRIV_CASE(SHOW_VIEW);
                   EXIST_PRIV_CASE(CREATE_ROUTINE);
                   EXIST_PRIV_CASE(ALTER_ROUTINE);
                   EXIST_PRIV_CASE(EXECUTE);
-                  NO_EXIST_PRIV_CASE(EVENT);
-                  NO_EXIST_PRIV_CASE(TRIGGER);
+                  EXIST_PRIV_CASE(EVENT);
+                  EXIST_PRIV_CASE(TRIGGER);
 
 #undef EXIST_PRIV_CASE
 #undef NO_EXIST_PRIV_CASE

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_timestamp_to_scn.h"
-#include "lib/ob_name_def.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/ob_exec_context.h"
 
 

@@ -35,7 +35,7 @@ public:
   {}
   bool is_valid() const
   {
-    return dst_.is_valid() && pkt_id_ >= 0 && pkt_id_ <= INT32_MAX && first_send_ts_ > 0;
+    return dst_.is_valid() && pkt_id_ >= 0 && pkt_id_ <= UINT32_MAX && first_send_ts_ > 0;
   }
   int assign(const ObRpcReverseKeepaliveArg &other);
   TO_STRING_KV(K_(dst), K_(pkt_id), K_(first_send_ts));

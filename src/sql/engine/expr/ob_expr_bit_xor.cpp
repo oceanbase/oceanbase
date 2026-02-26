@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_bit_xor.h"
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
 
 namespace oceanbase
 {

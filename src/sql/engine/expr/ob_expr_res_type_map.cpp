@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/expr/ob_expr_res_type_map.h"
+#include "ob_expr_res_type_map.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 
 namespace oceanbase {

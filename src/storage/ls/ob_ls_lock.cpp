@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "ob_ls_lock.h"
 
-#include "lib/stat/ob_latch_define.h"
-#include "lib/utility/utility.h"
+#include "ob_ls_lock.h"
 #include "storage/ls/ob_ls.h"
 
 namespace oceanbase

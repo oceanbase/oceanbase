@@ -54,6 +54,7 @@ public:
       int64_t cell_idx, char *bitmap,
       const ObDataTypeCastParams &dtc_params,
       const ObField *field,
+      const sql::ObSQLSessionInfo &session,
       share::schema::ObSchemaGetterGuard *schema_guard = NULL,
       uint64_t tenant_id = common::OB_INVALID_ID);
 
@@ -70,8 +71,9 @@ public:
                          const bool is_unsigned = false);
 
   static int extend_cell_str(char *buf, const int64_t len, char *src, obmysql::MYSQL_PROTOCOL_TYPE type, int64_t &pos,
-                              const ObDataTypeCastParams &dtc_params, const ObField *field,
+                              const ObDataTypeCastParams &dtc_params, const ObField *field, const sql::ObSQLSessionInfo &session,
                               share::schema::ObSchemaGetterGuard *schema_guard, uint64_t tenant_id);
+  static const char* get_extend_type_name(int type);
 };
 
 } // end of namespace common

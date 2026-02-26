@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "share/ob_virtual_table_projector.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 namespace oceanbase
 {
 namespace common

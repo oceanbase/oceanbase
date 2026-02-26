@@ -38,14 +38,16 @@ enum ObBoxPosition {
 class ObGeoBoxClipVisitor : public ObEmptyGeoVisitor
 {
 public:
-  explicit ObGeoBoxClipVisitor(const ObGeogBox &box, ObIAllocator &allocator)
+  explicit ObGeoBoxClipVisitor(const ObGeogBox &box, lib::MemoryContext &mem_ctx)
       : xmin_(box.xmin),
         ymin_(box.ymin),
         xmax_(box.xmax),
         ymax_(box.ymax),
         res_geo_(nullptr),
-        allocator_(&allocator)
-  {}
+        allocator_(&mem_ctx->get_arena_allocator()),
+        mem_ctx_(&mem_ctx)
+  {
+  }
   virtual ~ObGeoBoxClipVisitor()
   {}
 
@@ -141,6 +143,7 @@ private:
   ObCartesianGeometrycollection *res_geo_;
   ObIAllocator *allocator_;
   bool keep_polygon_;
+  lib::MemoryContext *mem_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObGeoBoxClipVisitor);
 };
 

@@ -17,7 +17,7 @@
 #include "lib/thread/threads.h"
 #include "lib/ssl/ob_ssl_config.h"
 
-#define MAX_THREAD_CNT 64
+#define MAX_THREAD_CNT 128
 
 namespace oceanbase
 {
@@ -71,7 +71,6 @@ private:
   uint64_t dispatch_idx_;
   uint64_t tenant_id_;
 };
-extern int sql_nio_add_cgroup(const uint64_t tenant_id);
 }; // end namespace obmysql
 }; // end namespace oceanbase
 

@@ -729,7 +729,7 @@ int ObTenantSnapshotTableOperator::update_special_tenant_snap_item(const ObTenan
     LOG_WARN("exec sql failed", KR(ret), K(sql), K(gen_meta_tenant_id(user_tenant_id_)));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected affected rows", KR(ret), K(affected_rows));
+    LOG_WARN("unexpected affected rows", KR(ret), K(affected_rows));
   }
   return ret;
 }
@@ -775,7 +775,7 @@ int ObTenantSnapshotTableOperator::update_tenant_snap_item(const ObTenantSnapsho
     LOG_WARN("exec sql failed", KR(ret), K(sql), K(gen_meta_tenant_id(user_tenant_id_)));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected affected rows", KR(ret), K(affected_rows), K(sql));
+    LOG_WARN("unexpected affected rows", KR(ret), K(affected_rows), K(sql));
   }
   return ret;
 }
@@ -816,7 +816,7 @@ int ObTenantSnapshotTableOperator::update_tenant_snap_item(const ObTenantSnapsho
     LOG_WARN("exec sql failed", KR(ret), K(sql), K(gen_meta_tenant_id(user_tenant_id_)));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected affected rows", KR(ret), K(affected_rows), K(sql));
+    LOG_WARN("unexpected affected rows", KR(ret), K(affected_rows), K(sql));
   }
   return ret;
 }
@@ -853,7 +853,7 @@ int ObTenantSnapshotTableOperator::update_tenant_snap_item(const ObString &snaps
     LOG_WARN("exec sql failed", KR(ret), K(sql), K(gen_meta_tenant_id(user_tenant_id_)));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected affected rows", KR(ret), K(affected_rows), K(sql));
+    LOG_WARN("unexpected affected rows", KR(ret), K(affected_rows), K(sql));
   }
   return ret;
 }

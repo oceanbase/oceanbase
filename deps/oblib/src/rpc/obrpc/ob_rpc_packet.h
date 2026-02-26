@@ -103,6 +103,11 @@ public:
     return name;
   }
 
+  const char *name_of_pcode(ObRpcPacketCode code) const
+  {
+    return name_of_idx(idx_of_pcode(code));
+  }
+
   const char *label_of_idx(int64_t idx) const
   {
     const char *name = "Unknown";
@@ -180,6 +185,7 @@ public:
   int64_t seq_no_;
   int32_t group_id_;
   uint64_t cluster_name_hash_;
+  uint64_t data_version_;
 
 #ifdef ERRSIM
   ObErrsimModuleType module_type_;
@@ -191,12 +197,13 @@ public:
   TO_STRING_KV(K(checksum_), K(pcode_), K(hlen_), K(priority_),
                K(flags_), K(tenant_id_), K(priv_tenant_id_), K(session_id_),
                K(trace_id_), K(timeout_), K_(timestamp), K_(dst_cluster_id), K_(cost_time),
-               K(compressor_type_), K(original_len_), K(src_cluster_id_), K(seq_no_));
+               K(compressor_type_), K(original_len_), K(src_cluster_id_), K(seq_no_),
+               K(data_version_));
 
   ObRpcPacketHeader() { memset(this, 0, sizeof(*this)); flags_ |= (OB_LOG_LEVEL_NONE & OB_LOG_LEVEL_MASK); }
   static inline int64_t get_encoded_size()
   {
-    return HEADER_SIZE + ObRpcCostTime::get_encoded_size() + 8 /* for seq no */;
+    return HEADER_SIZE + ObRpcCostTime::get_encoded_size() + 8 /* for seq no */ + 8 /* for data version*/;
   }
 
 };
@@ -276,6 +283,7 @@ public:
   inline bool require_rerouting() const;
   inline bool is_kv_request() const;
   inline void set_kv_request();
+  inline void set_kv_route_meta_error();
 
   inline bool ratelimit_enabled() const;
   inline void enable_ratelimit();
@@ -339,6 +347,7 @@ public:
   inline int32_t get_request_level() const;
   inline void set_group_id(int32_t group_id);
   inline int32_t get_group_id() const;
+  inline uint64_t get_data_version() const;
 
   int encode_ez_header(char *buf, int64_t len, int64_t &pos);
   TO_STRING_KV(K(hdr_), K(chid_), K(clen_), K_(assemble), K_(msg_count), K_(payload));
@@ -392,7 +401,7 @@ int ObRpcPacket::verify_checksum() const
 {
   return hdr_.checksum_ == common::ob_crc64(cdata_, clen_) ?
       common::OB_SUCCESS :
-      common::OB_CHECKSUM_ERROR;
+      common::OB_PACKET_CHECKSUM_ERROR;
 }
 
 void ObRpcPacket::set_content(const char *content, int64_t len)
@@ -506,6 +515,12 @@ bool ObRpcPacket::is_kv_request() const
 
 void ObRpcPacket::set_kv_request()
 {
+  hdr_.flags_ |= ObRpcPacketHeader::IS_KV_REQUEST_FALG;
+}
+
+void ObRpcPacket::set_kv_route_meta_error()
+{
+  // reuse IS_KV_REQUEST_FALG flag when returning packet to refresh table_entry meta information
   hdr_.flags_ |= ObRpcPacketHeader::IS_KV_REQUEST_FALG;
 }
 
@@ -835,6 +850,11 @@ void ObRpcPacket::set_group_id(int32_t group_id)
 int32_t ObRpcPacket::get_group_id() const
 {
   return hdr_.group_id_;
+}
+
+uint64_t ObRpcPacket::get_data_version() const
+{
+  return hdr_.data_version_;
 }
 
 RLOCAL_EXTERN(int, g_pcode);

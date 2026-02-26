@@ -92,6 +92,16 @@ ColumnItem* ObLoadDataStmt::get_column_item_by_idx(uint64_t column_id) {
   return tar_item;
 }
 
+int ObLoadDataStmt::set_part_ids(common::ObIArray<ObObjectID> &part_ids)
+{
+  return part_ids_.assign(part_ids);
+}
+
+int ObLoadDataStmt::set_part_names(common::ObIArray<ObString> &part_names)
+{
+  return part_names_.assign(part_names);
+}
+
 int ObLoadDataHint::get_value(IntHintItem item, int64_t &value) const
 {
   int ret = OB_SUCCESS;

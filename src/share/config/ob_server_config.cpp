@@ -11,23 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SHARE_CONFIG
-#include <string>
-#include <sstream>
 
-#include "share/config/ob_server_config.h"
-#include "common/ob_common_utility.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/utility/utility.h"
-#include "lib/net/ob_net_util.h"
-#include "common/ob_record_header.h"
-#include "common/ob_zone.h"
+#include "ob_server_config.h"
 #include "observer/ob_server.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/unit/ob_unit_resource.h"     // ObUnitResource
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "share/ob_rpc_struct.h"
-#include "observer/ob_server_struct.h"
 extern "C" {
 #include "ussl-hook.h"
 #include "auth-methods.h"
@@ -41,6 +27,22 @@ int64_t get_cpu_count()
 {
   int64_t cpu_cnt = GCONF.cpu_count;
   return cpu_cnt > 0 ? cpu_cnt : get_cpu_num();
+}
+
+int64_t get_tenant_stack_size(const uint64_t tenant_id)
+{
+  int64_t stack_size = static_cast<int64_t>(GCONF.stack_size);
+  if (OB_LIKELY(OB_DEFAULT_STACK_SIZE == stack_size)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      stack_size = tenant_config->_tenant_stack_size;
+    }
+  }
+  // stack_size_upper_limit = (memory_limit / 1G) * 512K
+  // stack_size_lower_limit = OB_DEFAULT_STACK_SIZE
+  stack_size = MIN(stack_size, get_tenant_memory_limit(tenant_id) / (2L << 10));
+  stack_size = MAX(stack_size, OB_DEFAULT_STACK_SIZE);
+  return stack_size;
 }
 
 using namespace share;
@@ -167,6 +169,14 @@ void ObServerConfig::print() const
   OB_LOG(INFO, "===================== *stop server config report* =======================");
 }
 
+int ObServerConfig::add_extra_config(const char *config_str,
+                                     const int64_t version /* = 0 */,
+                                     const bool check_config /* = true */)
+{
+  DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
+  return add_extra_config_unsafe(config_str, version, check_config);
+}
+
 double ObServerConfig::get_sys_tenant_default_min_cpu()
 {
   double min_cpu = server_cpu_quota_min;
@@ -201,49 +211,6 @@ double ObServerConfig::get_sys_tenant_default_max_cpu()
     }
   }
   return max_cpu;
-}
-
-int ObServerConfig::deserialize_with_compat(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  if (data_len - pos < MIN_LENGTH) {
-    ret = OB_BUF_NOT_ENOUGH;
-  } else {
-    /*
-     * Extra 'OB_UNIS_VERSION' and 'len' field are added by using new version
-     * serialization framework, which makes it hard to use header.version_ for
-     * compatible distinguish, also makes codes bellow ugly.
-     * TODO: remove this code after 2.2
-     */
-    const int64_t saved_pos = pos;
-    if (OB_FAIL(deserialize(buf, data_len, pos))) {
-      /* try old version */
-      pos = saved_pos;
-      ObRecordHeader header;
-      const char *const p_header = buf + pos;
-      const char *const p_data = p_header + header.get_serialize_size();
-      const int64_t pos_data = pos + header.get_serialize_size();
-      if (OB_FAIL(header.deserialize(buf, data_len, pos))) {
-        LOG_ERROR("deserialize header failed", K(ret));
-      } else if (OB_FAIL(header.check_header_checksum())) {
-        LOG_ERROR("check header checksum failed", K(ret));
-      } else if (OB_CONFIG_MAGIC != header.magic_) {
-        ret = OB_INVALID_DATA;
-        LOG_ERROR("check magic number failed", K_(header.magic), K(ret));
-      } else if (data_len - pos_data != header.data_zlength_) {
-        ret = OB_INVALID_DATA;
-        LOG_ERROR("check data len failed",
-                  K(data_len), K(pos_data), K_(header.data_zlength), K(ret));
-      } else if (OB_FAIL(header.check_payload_checksum(p_data, data_len - pos_data))) {
-        LOG_ERROR("check data checksum failed", K(ret));
-      } else if (OB_FAIL(add_extra_config(buf + pos, 0, false))) {
-        LOG_ERROR("Read server config failed", K(ret));
-      } else {
-        pos += header.data_length_;
-      }
-    } // if
-  }
-  return ret;
 }
 
 ObServerMemoryConfig::ObServerMemoryConfig()
@@ -320,16 +287,18 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
   int ret = OB_SUCCESS;
   const bool is_arbitration_mode = OBSERVER.is_arbitration_mode();
   int64_t memory_limit = server_config.memory_limit;
-
+  int64_t phy_mem_size = get_phy_mem_size();
   if (0 == memory_limit) {
-    memory_limit = get_phy_mem_size() * server_config.memory_limit_percentage / 100;
+    memory_limit = phy_mem_size * server_config.memory_limit_percentage / 100;
+  } else if (memory_limit >= phy_mem_size) {
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "memory_limit is larger than phy_mem_size", K(memory_limit), K(phy_mem_size));
   }
 
   if (is_arbitration_mode) {
     if (memory_limit < (1LL << 30) ) {
       // The memory_limit should not be less than 1G for arbitration mode
       ret = OB_INVALID_CONFIG;
-      LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
+      LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), K(phy_mem_size));
     } else {
       memory_limit_ = memory_limit;
       LOG_INFO("update observer memory config success", K_(memory_limit));
@@ -337,7 +306,7 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
   } else if (memory_limit < (4LL << 30)) {
     // The memory_limit should not be less than 4G for observer
     ret = OB_INVALID_CONFIG;
-    LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
+    LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), K(phy_mem_size));
   } else {
     // update observer memory config
     int64_t system_memory = server_config.system_memory;
@@ -421,10 +390,10 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
   return ret;
 }
 
-void ObServerMemoryConfig::check_500_tenant_hold(bool ignore_error)
+void ObServerMemoryConfig::check_limit(bool ignore_error)
 {
-  //check the hold memory of tenant 500
   int ret = OB_SUCCESS;
+  //check the hold memory of tenant 500
   int64_t hold = lib::get_tenant_memory_hold(OB_SERVER_TENANT_ID);
   int64_t reserved = system_memory_ - get_extra_memory();
   if (hold > reserved) {
@@ -434,6 +403,16 @@ void ObServerMemoryConfig::check_500_tenant_hold(bool ignore_error)
     } else {
       LOG_ERROR("the hold memory of tenant_500 is over the reserved memory",
               K(hold), K(reserved));
+    }
+  }
+  // check unmanaged memory size
+  const int64_t UNMANAGED_MEMORY_LIMIT = 2LL<<30;
+  int64_t unmanaged_memory_size = get_unmanaged_memory_size();
+  if (unmanaged_memory_size > UNMANAGED_MEMORY_LIMIT) {
+    if (ignore_error) {
+      LOG_WARN("unmanaged_memory_size is over the limit", K(unmanaged_memory_size), K(UNMANAGED_MEMORY_LIMIT));
+    } else {
+      LOG_ERROR("unmanaged_memory_size is over the limit", K(unmanaged_memory_size), K(UNMANAGED_MEMORY_LIMIT));
     }
   }
 }
@@ -460,7 +439,8 @@ int ObServerMemoryConfig::set_500_tenant_limit(const int64_t limit_mode)
     LOG_WARN("invalid limit mode", K(ret), K(limit_mode));
   }
   if (OB_SUCC(ret)) {
-    set_tenant_memory_limit(OB_SERVER_TENANT_ID, tenant_limit);
+    ma->set_tenant_limit(OB_SERVER_TENANT_ID, tenant_limit);
+    ma->set_tenant_max_min(OB_SERVER_TENANT_ID, tenant_limit, 0);
   }
   for (int ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
     if (ObCtxIds::SCHEMA_SERVICE == ctx_id ||
@@ -600,11 +580,11 @@ OB_DEF_SERIALIZE_SIZE(ObServerConfig)
 namespace obrpc {
 bool enable_pkt_nio(bool start_as_client) {
   bool bool_ret = false;
-  if (OB_UNLIKELY(start_as_client || OBSERVER.is_arbitration_mode())) {
+  if (OB_UNLIKELY(start_as_client)) {
     bool enable_client_auth = (get_client_auth_methods() != USSL_AUTH_NONE);
     bool_ret = GCONF._enable_pkt_nio && enable_client_auth;
   } else {
-    bool_ret =  GCONF._enable_pkt_nio && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
+    bool_ret =  GCONF._enable_pkt_nio;
   }
   return bool_ret;
 }
@@ -623,6 +603,16 @@ int64_t get_stream_rpc_max_wait_timeout(int64_t tenant_id)
   }
   return stream_rpc_max_wait_timeout;
 }
+
+bool stream_rpc_update_timeout()
+{
+  bool bool_ret = false;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
 } // end of namespace obrpc
 } // end of namespace oceanbase
 

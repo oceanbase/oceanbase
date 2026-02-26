@@ -11,17 +11,8 @@
  */
 
 #include "ob_archive_service.h"
-#include "lib/ob_define.h"                          // is_meta_tenant is_sys_tenant
-#include "lib/compress/ob_compress_util.h"          // ObCompressorType
-#include "lib/ob_errno.h"
-#include "share/backup/ob_archive_struct.h"         // ObTenantArchiveRoundAttr
-#include "share/backup/ob_tenant_archive_round.h"   // ObArchiveRoundHandler
-#include "share/rc/ob_tenant_base.h"                // MTL_*
-#include "observer/ob_server_struct.h"              // GCTX
-#include "logservice/palf/lsn.h"                    // LSN
-#include "share/scn.h"                    // LSN
 #include "share/backup/ob_backup_connectivity.h"
-#include "share/ob_debug_sync.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -83,7 +74,7 @@ int ObArchiveService::init(logservice::ObLogService *log_service,
   } else if (OB_FAIL(ls_mgr_.init(tenant_id, log_service, ls_svr, &allocator_,
                                   &sequencer_, &archive_round_mgr_, &persist_mgr_))) {
     ARCHIVE_LOG(WARN, "ls mgr init failed", K(ret));
-  } else if (OB_FAIL(sender_.init(tenant_id, &allocator_, &ls_mgr_,
+  } else if (OB_FAIL(sender_.init(tenant_id, &allocator_, &ls_mgr_, &fetcher_,
                                   &persist_mgr_, &archive_round_mgr_))) {
     ARCHIVE_LOG(WARN, "sender init failed", K(ret));
   } else if (OB_FAIL(fetcher_.init(tenant_id, log_service, &allocator_, &sender_,
@@ -214,6 +205,7 @@ int ObArchiveService::iterate_ls(const std::function<int (const ObLSArchiveTask 
 void ObArchiveService::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveService thread start", K_(tenant_id));
+  ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveScheduler");
   lib::set_thread_name("ArcSrv");
   ObCurTraceId::init(GCONF.self_addr_);
 
@@ -226,6 +218,7 @@ void ObArchiveService::run1()
       int64_t end_tstamp = ObTimeUtility::current_time();
       int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
+        common::ObBKGDSessInActiveGuard inactive_guard;
         cond_.timedwait(wait_interval);
       }
     }
@@ -400,6 +393,7 @@ int ObArchiveService::start_archive_(const ObTenantArchiveRoundAttr &attr)
   int ret = OB_SUCCESS;
   ArchiveKey key(attr.incarnation_, attr.dest_id_, attr.round_id_);
   ObBackupDest dest;
+  int64_t dest_id = 0;
   ObMySQLProxy *mysql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(mysql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
@@ -409,9 +403,12 @@ int ObArchiveService::start_archive_(const ObTenantArchiveRoundAttr &attr)
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(
           *mysql_proxy, attr.key_.tenant_id_, attr.path_, dest))) {
     ARCHIVE_LOG(ERROR, "get backup dest failed", K(ret), K(attr));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(
+          *mysql_proxy, attr.key_.tenant_id_, dest, dest_id))) {
+    ARCHIVE_LOG(ERROR, "get_dest_id failed", K(ret), K(attr), K(dest));
   } else if (OB_FAIL(archive_round_mgr_.set_archive_start(key, attr.start_scn_,
           attr.piece_switch_interval_, attr.start_scn_, attr.base_piece_id_,
-          share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2, dest))) {
+          share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2, dest, dest_id))) {
     ARCHIVE_LOG(ERROR, "archive round mgr set archive info failed", K(ret), K(attr));
   } else {
     notify_start_();

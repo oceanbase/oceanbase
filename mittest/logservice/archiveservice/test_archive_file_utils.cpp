@@ -10,11 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/container/ob_se_array.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "logservice/palf/lsn.h"
-#include <cstdint>
 #define private public
 #include "logservice/archiveservice/ob_archive_file_utils.h"
 #undef private

@@ -13,15 +13,11 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_inner_trim.h"
 #include "sql/engine/expr/ob_expr_trim.h"
-#include <string.h>
-#include "share/object/ob_obj_cast.h"
-#include "objit/common/ob_item_type.h"
-#include "sql/session/ob_sql_session_info.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace sql
 {
 
@@ -64,7 +60,7 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprInnerTrim, raw_expr) {
   int ret = OB_SUCCESS;
   if (lib::is_mysql_mode()) {
     SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   }
   return ret;
 }

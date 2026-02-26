@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_for_update.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 
 using namespace oceanbase;

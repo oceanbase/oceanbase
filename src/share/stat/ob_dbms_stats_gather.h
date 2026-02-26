@@ -28,11 +28,14 @@ public:
 
   static int gather_stats(ObExecContext &ctx,
                           const ObOptStatGatherParam &param,
+                          ObOptStatGatherAudit &audit,
                           ObIArray<ObOptStat> &opt_stats);
 
   static int gather_index_stats(ObExecContext &ctx,
                                 const ObOptStatGatherParam &param,
-                                ObIArray<ObOptTableStat *> &all_index_stats);
+                                ObIArray<ObOptStat> &opt_stats,
+                                ObIArray<ObOptTableStat *> &all_index_stats,
+                                ObIArray<ObOptColumnStat *> &all_column_stats);
 private:
 
   static int init_opt_stats(ObIAllocator &allocator,
@@ -48,6 +51,7 @@ private:
   static int classfy_column_histogram(const ObOptStatGatherParam &param,
                                       ObOptStat &opt_stat);
 
+  static int adjust_sample_param(const ObIArray<ObOptStat> &opt_stats, ObOptStatGatherParam &param);
 };
 
 } // end of sql

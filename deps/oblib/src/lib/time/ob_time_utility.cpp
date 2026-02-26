@@ -11,11 +11,7 @@
  */
 
 #include "lib/time/ob_time_utility.h"
-#include "lib/time/ob_tsc_timestamp.h"
-#include "lib/ob_abort.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_print_utils.h"
-#include <ctime>
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -35,6 +31,21 @@ int64_t ObTimeUtility::current_time()
   }
   return (static_cast<int64_t>(t.tv_sec) * 1000000L +
           static_cast<int64_t>(t.tv_usec));
+}
+
+int64_t ObTimeUtility::current_time_s()
+{
+  return (ObTimeUtility::current_time() / 1000000L);
+}
+
+int64_t ObTimeUtility::current_time_ms()
+{
+  return (ObTimeUtility::current_time() / 1000L);
+}
+
+int64_t ObTimeUtility::current_time_us()
+{
+  return ObTimeUtility::current_time();
 }
 
 int64_t ObTimeUtility::current_time_ns()

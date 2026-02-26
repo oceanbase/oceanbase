@@ -18,25 +18,12 @@
 
 #include "ob_table_service_config.h"
 
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_connection_pool.h"
-#include "lib/mysqlclient/ob_single_mysql_connection_pool.h"
-#include "lib/task/ob_timer.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "share/schema/ob_schema_getter_guard.h"          // ObSchemaGetterGuard
-#include "share/schema/ob_schema_struct.h"                // TableStatus
-#include "share/table/ob_table_rpc_proxy.h"               // ObTableRpcProxy
-#include "share/ob_thread_mgr.h"
 #include "rpc/obrpc/ob_net_client.h"      // ObNetClient
-#include "sql/optimizer/ob_table_location.h"  // ObTableLocation
 #include "sql/session/ob_sql_session_info.h"
 #include "ob_tablet_location_proxy.h"
 #include "observer/ob_signal_handle.h"
-#include "share/ob_get_compat_mode.h"
-#include "observer/ob_server_struct.h"
 #include "share/ob_schema_status_proxy.h"
-#include "share/rc/ob_tenant_base.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share;

@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_PC
-#include "sql/plan_cache/ob_i_lib_cache_node.h"
+#include "ob_i_lib_cache_node.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 
 using namespace oceanbase::common;
@@ -128,22 +128,24 @@ int ObILibCacheNode::add_cache_obj(ObILibCacheCtx &ctx,
       LOG_DEBUG("succ to add cache obj", KPC(obj));
     }
   }
+  if (OB_FAIL(ret) && (ret != OB_SQL_PC_PLAN_DUPLICATE && ret != OB_BATCHED_MULTI_STMT_ROLLBACK)) {
+    is_invalid_ = true;
+  }
   return ret;
 }
 
-int ObILibCacheNode::lock(bool is_rdlock)
+int ObILibCacheNode::lock(bool is_rdlock, int64_t timeout)
 {
   int ret = OB_SUCCESS;
-  // if the lock fails, keep retrying the lock until the lock_timeout_ts_ is exceeded
+  // if the lock fails, keep retrying the lock until the lock_timeout is exceeded
+  const int64_t lock_timeout_ts = ObTimeUtility::current_time() + timeout;
   if (is_rdlock) {
     if (!rwlock_.try_rdlock()) {
-      const int64_t lock_timeout_ts = ObTimeUtility::current_time() + lock_timeout_ts_;
       if (OB_FAIL(rwlock_.rdlock(lock_timeout_ts))) {
         ret = OB_PC_LOCK_CONFLICT;
       }
     }
   } else {
-    const int64_t lock_timeout_ts = ObTimeUtility::current_time() + lock_timeout_ts_;
     if (OB_FAIL(rwlock_.wrlock(lock_timeout_ts))) {
       ret = OB_PC_LOCK_CONFLICT;
     }

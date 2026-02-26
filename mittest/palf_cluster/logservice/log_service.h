@@ -50,7 +50,14 @@ namespace share
 class ObLSID;
 class SCN;
 }
-
+namespace ipalf
+{
+class IPalfEnv;
+}
+namespace libpalf
+{
+class LibPalfEnv;
+}
 namespace palf
 {
 class PalfHandleGuard;
@@ -155,7 +162,7 @@ public:
   int update_palf_options_except_disk_usage_limit_size();
   int update_log_disk_usage_limit_size(const int64_t log_disk_usage_limit_size);
   int get_palf_options(palf::PalfOptions &options);
-  int iterate_palf(const ObFunction<int(const palf::PalfHandle&)> &func);
+  int iterate_palf(const ObFunction<int(const ipalf::IPalfHandle&)> &func);
 
   int get_io_start_time(int64_t &last_working_time);
   int check_disk_space_enough(bool &is_disk_enough);
@@ -191,7 +198,7 @@ private:
   bool is_running_;
 
   common::ObAddr self_;
-  palf::PalfEnv *palf_env_;
+  ipalf::IPalfEnv *palf_env_;
 
   logservice::ObLogApplyService apply_service_;
   logservice::ObLogReplayService replay_service_;

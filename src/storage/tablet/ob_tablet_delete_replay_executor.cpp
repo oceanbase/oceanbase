@@ -11,12 +11,6 @@
  */
 
 #include "storage/tablet/ob_tablet_delete_replay_executor.h"
-#include "lib/worker.h"
-#include "storage/multi_data_source/mds_ctx.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_map_key.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 
 #define USING_LOG_PREFIX MDS
 
@@ -66,7 +60,7 @@ int ObTabletDeleteReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   if (OB_ISNULL(tablet)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
-  } else if (CLICK_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), data, timeout))) {
+  } else if (CLICK_FAIL(tablet->get_latest_committed_tablet_status(data))) {
     LOG_WARN("failed to get tablet status", K(ret), K(timeout));
   } else {
     data.tablet_status_ = ObTabletStatus::DELETED;

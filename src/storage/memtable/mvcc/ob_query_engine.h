@@ -57,6 +57,7 @@ public:
   virtual void reset() = 0;
 };
 
+
 // ObQueryEngine consists of hashtable and btree. We will maintain key and value
 // into both of the hashtable and btree and use them to complete efficient
 // point select and range query operations
@@ -73,6 +74,7 @@ public:
   typedef keybtree::BtreeRawIterator<ObStoreRowkeyWrapper, ObMvccRow *> BtreeRawIterator;
   // hashtable for point select
   typedef ObMtHash KeyHash;
+  typedef ObFunction<int(const bool is_exist_key, ObStoreRowkeyWrapper &key, ObMvccRow *&row)> ObMvccRowCreator;
 
   // ObQueryEngine Iterator implements the iterator interface
   template <typename BtreeIterator>
@@ -169,6 +171,9 @@ public:
   int ensure(const ObMemtableKey *key, ObMvccRow *value);
   // get() will use the hashtable to support fast point select
   int get(const ObMemtableKey *parameter_key, ObMvccRow *&row, ObMemtableKey *returned_key);
+  int get_from_btree(const ObMemtableKey *parameter_key, ObMvccRow *&row, ObMemtableKey *returned_key);
+  // create_btree_kv() will create the ObMvccRow if it does not exist, otherwise it will return the existing ObMvccRow
+  int create_btree_kv(const ObMemtableKey *parameter_key, const ObMvccRowCreator &row_creator, ObMvccRow *&row);
   // scan() will use the btree to support fast range query
   int scan(const ObMemtableKey *start_key, const bool start_exclude, const ObMemtableKey *end_key,
            const bool end_exclude, ObIQueryEngineIterator *&ret_iter);

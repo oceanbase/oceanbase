@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_udf.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {

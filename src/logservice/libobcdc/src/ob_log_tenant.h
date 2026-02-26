@@ -25,6 +25,7 @@
 #include "ob_log_ref_state.h"                       // RefState
 #include "ob_cdc_lob_aux_meta_storager.h"           // ObCDCLobAuxDataCleanTask
 #include "ob_log_meta_data_struct.h"                // ObDictTenantInfo
+#include "ob_cdc_tenant_checkpoint.h"               // TenantCheckpoint
 #include <cstdint>
 
 namespace oceanbase
@@ -97,6 +98,7 @@ public:
     const int64_t start_tstamp_ns,
     const int64_t start_seq,
     const int64_t start_schema_version,
+    const TenantCheckpoint &tenant_checkpoint,
     void *cf_handle,
     void *lob_storage_cf_handle,
     ObLogTenantMgr &tenant_mgr);
@@ -248,6 +250,7 @@ public:
   // compact data in local storage
   // NOTE: LOB data will compact by resource_collector with lob_aux_meta_storager
   void compact_storage();
+  void refresh_tenant_checkpoint(const int64_t timeout);
 
 public:
   enum
@@ -262,6 +265,7 @@ public:
   int64_t get_active_ls_count() const { return tenant_state_.ref_cnt_; }
   bool is_offlined() const { return TENANT_STATE_OFFLINE == get_tenant_state(); }
   bool is_serving() const { return TENANT_STATE_NORMAL == get_tenant_state(); }
+  const TenantCheckpoint &get_tenant_checkpoint() { return tenant_checkpoint_; }
 
 private:
   int init_compat_mode_(const uint64_t tenant_id, const int64_t start_schema_version,
@@ -299,6 +303,7 @@ private:
   char                    tenant_name_[common::OB_MAX_TENANT_NAME_LENGTH + 1];
   lib::Worker::CompatMode compat_mode_;
   int64_t                 start_schema_version_;
+  TenantCheckpoint        tenant_checkpoint_;
   // task queue
   ObLogTenantTaskQueue    *task_queue_;
 

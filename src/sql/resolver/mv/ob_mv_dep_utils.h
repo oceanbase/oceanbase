@@ -17,6 +17,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/mysqlclient/ob_isql_client.h"
+#include "lib/mysqlclient/ob_mysql_proxy.h"
 
 namespace oceanbase
 {
@@ -60,7 +61,8 @@ public:
   static int get_mview_dep_infos(common::ObISQLClient &sql_client,
                                  const uint64_t tenant_id,
                                  const uint64_t mview_table_id,
-                                 common::ObIArray<ObMVDepInfo> &dep_infos);
+                                 common::ObIArray<ObMVDepInfo> &dep_infos,
+                                 bool ignore_udt_udf = false);
   static int insert_mview_dep_infos(common::ObISQLClient &sql_client,
                                     const uint64_t tenant_id,
                                     const uint64_t mview_table_id,
@@ -76,6 +78,18 @@ public:
       const uint64_t tenant_id,
       const uint64_t mview_table_id,
       common::ObIArray<uint64_t> &ref_table_ids);
+  static int get_table_ids_only_referenced_by_given_fast_lsm_mv(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const uint64_t mview_table_id,
+      common::ObIArray<uint64_t> &ref_table_ids);
+  static int get_referring_mv_of_base_table(ObISQLClient &sql_client, const uint64_t tenant_id,
+                                            const uint64_t base_table_id,
+                                            ObIArray<uint64_t> &mview_ids,
+                                            bool &exists_nested_mv);
+  static int get_all_mview_dep_infos(common::ObMySQLProxy *sql_proxy,
+                                     const uint64_t tenant_id,
+                                     common::ObIArray<ObMVDepInfo> &dep_infos);
 };
 } // end of sql
 } // end of oceanbase

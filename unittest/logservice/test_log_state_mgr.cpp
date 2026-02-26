@@ -11,8 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <random>
-#include <string>
 #define private public
 #include "mock_logservice_container/mock_log_engine.h"
 #include "mock_logservice_container/mock_election.h"
@@ -21,7 +19,6 @@
 #include "mock_logservice_container/mock_log_config_mgr.h"
 #include "mock_logservice_container/mock_log_mode_mgr.h"
 #include "mock_logservice_container/mock_palf_role_change_cb_wrapper.h"
-#include "logservice/palf/log_state_mgr.h"
 #undef private
 
 namespace oceanbase

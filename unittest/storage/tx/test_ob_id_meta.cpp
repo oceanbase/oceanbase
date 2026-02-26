@@ -14,8 +14,6 @@
 #include "storage/tx/ob_id_service.h"
 #undef private
 #include <gtest/gtest.h>
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {

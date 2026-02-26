@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_raw_expr_check_dep.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
 #include "ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -87,7 +84,8 @@ int ObRawExprCheckDep::check(const ObRawExpr &expr)
     case ObRawExpr::EXPR_OPERATOR:
     case ObRawExpr::EXPR_SET_OP:
     case ObRawExpr::EXPR_CASE_OPERATOR:
-    case ObRawExpr::EXPR_WINDOW: {
+    case ObRawExpr::EXPR_WINDOW:
+    case ObRawExpr::EXPR_UNPIVOT: {
       if (OB_FAIL(check_expr(expr, found))) {
         LOG_WARN("failed to check expr", K(expr), K(ret));
       } else if (!found) {

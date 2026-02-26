@@ -19,6 +19,33 @@
 #include "common/ob_clock_generator.h"
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/multi_data_source/compile_utility/compile_mapper.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
+namespace oceanbase {
+namespace storage {
+namespace mds {
+void *DefaultAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void DefaultAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+void *MdsAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void MdsAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+}}}
 namespace oceanbase {
 namespace unittest {
 
@@ -28,7 +55,7 @@ using namespace std;
 class TestMdsCompile: public ::testing::Test
 {
 public:
-  TestMdsCompile() {};
+  TestMdsCompile() { ObMdsSchemaHelper::get_instance().init(); };
   virtual ~TestMdsCompile() {};
   virtual void SetUp() {
   };

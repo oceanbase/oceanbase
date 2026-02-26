@@ -76,7 +76,9 @@ public:
   virtual int64_t get_block_size() const override { return header_size_ + estimate_size_ * 100 / expand_pct_; }
   virtual int64_t get_column_count() const override { return ctx_.column_cnt_;}
   virtual int64_t get_original_size() const override { return estimate_size_; }
-  virtual void dump_diagnose_info() const override;
+  virtual void dump_diagnose_info() override;
+  virtual bool micro_block_row_data_buffered() const override { return true; }
+  virtual int get_pre_agg_param(const int64_t col_idx, ObMicroDataPreAggParam &pre_agg_param) const override;
 private:
   int inner_init();
   int reserve_header(const ObMicroBlockEncodingCtx &ctx);
@@ -175,7 +177,9 @@ private:
   int64_t estimate_base_store_size_;
   common::ObArray<ObColumnEncodingCtx> col_ctxs_;
   int64_t length_;
+  bool encoder_freezed_;
   bool is_inited_;
+  bool block_generated_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockEncoder);
 };

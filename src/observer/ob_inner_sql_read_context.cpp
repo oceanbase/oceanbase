@@ -11,7 +11,6 @@
  */
 
 #include "ob_inner_sql_read_context.h"
-#include "ob_inner_sql_connection.h"
 
 namespace oceanbase
 {
@@ -19,7 +18,8 @@ namespace observer
 {
 
 ObInnerSQLReadContext::ObInnerSQLReadContext(ObInnerSQLConnection &conn)
-    : conn_ref_(conn), vt_iter_factory_(*conn.get_vt_iter_creator()), result_(conn.get_session())
+    : conn_ref_(conn), vt_iter_factory_(*conn.get_vt_iter_creator()),
+      result_(conn.get_session(), conn.is_inner_session(), conn.get_diagnostic_info())
 {
 }
 

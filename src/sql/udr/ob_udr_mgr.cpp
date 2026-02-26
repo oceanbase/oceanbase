@@ -12,15 +12,8 @@
 
 
 #define USING_LOG_PREFIX SQL_QRR
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/thread/thread_mgr.h"
 #include "lib/rc/ob_rc.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/alloc/alloc_func.h"
 #include "observer/ob_server.h"
-#include "share/ob_define.h"
-#include "lib/time/ob_time_utility.h"
 #include "sql/udr/ob_udr_mgr.h"
 
 namespace oceanbase
@@ -41,7 +34,6 @@ void UDRBackupRecoveryGuard::recovery()
 {
   sql_ctx_.is_prepare_protocol_ = is_prepare_protocol_;
   sql_ctx_.cur_sql_ = cur_sql_;
-  pc_ctx_.is_rewrite_sql_ = false;
   pc_ctx_.def_name_ctx_ = nullptr;
   pc_ctx_.mode_ = mode_;
   if (!is_prepare_protocol_) {

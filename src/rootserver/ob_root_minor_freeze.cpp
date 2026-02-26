@@ -14,13 +14,9 @@
 
 #include "ob_root_minor_freeze.h"
 
-#include "share/ob_srv_rpc_proxy.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_all_server_tracer.h"
-#include "lib/container/ob_se_array.h"
-#include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "rootserver/ob_unit_manager.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"
 
 namespace oceanbase
 {

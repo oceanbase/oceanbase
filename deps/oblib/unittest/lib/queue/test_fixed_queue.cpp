@@ -12,8 +12,6 @@
 
 #include "lib/queue/ob_fixed_queue.h"
 #include <gtest/gtest.h>
-#include "lib/atomic/ob_atomic.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/coro/testing.h"
 
 using namespace oceanbase::common;

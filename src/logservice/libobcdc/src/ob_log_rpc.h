@@ -69,6 +69,10 @@ public:
   const char *const OB_CLIENT_SSL_CA_FILE = "wallet/ca.pem";
   const char *const OB_CLIENT_SSL_CERT_FILE = "wallet/client-cert.pem";
   const char *const OB_CLIENT_SSL_KEY_FILE = "wallet/client-key.pem";
+  const char *const OB_CLIENT_SSL_SM_SIGN_CERT_FILE = "wallet/CS.cert.pem";
+  const char *const OB_CLIENT_SSL_SM_SIGN_KEY_FILE = "wallet/CS.key.pem";
+  const char *const OB_CLIENT_SSL_SM_ENC_CERT_FILE = "wallet/CE.cert.pem";
+  const char *const OB_CLIENT_SSL_SM_ENC_KEY_FILE = "wallet/CE.key.pem";
 
 public:
   ObLogRpc();

@@ -13,11 +13,9 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_obj_cast.h"
-#include "observer/table_load/ob_table_load_time_convert.h"
-#include "sql/engine/cmd/ob_load_data_utils.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "src/sql/engine/ob_exec_context.h"
+#include "share/object/ob_obj_cast_util.h"
 
 namespace oceanbase
 {
@@ -26,6 +24,8 @@ namespace observer
 using namespace common;
 using namespace sql;
 
+#define CAST_FAIL(stmt) \
+  (OB_UNLIKELY((OB_SUCCESS != (ret = ObTableLoadObjCaster::get_cast_ret(cast_mode, (stmt), cast_ctx.warning_)))))
 const ObObj ObTableLoadObjCaster::zero_obj(0);
 const ObObj ObTableLoadObjCaster::null_obj(ObObjType::ObNullType);
 
@@ -93,39 +93,91 @@ static int pad_obj(ObTableLoadCastObjCtx &cast_obj_ctx, const ObColumnSchemaV2 *
 }
 
 int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
-                                   const ObColumnSchemaV2 *column_schema, const ObObj &src,
+                                   const ObColumnSchemaV2 *column_schema,
+                                   const ObObj &src,
                                    ObObj &dst)
 {
   int ret = OB_SUCCESS;
   const ObObj *convert_src_obj = nullptr;
   const ObObjType expect_type = column_schema->get_meta_type().get_type();
   const ObAccuracy &accuracy = column_schema->get_accuracy();
-  if (OB_FAIL(convert_obj(expect_type, src, convert_src_obj))) {
-    LOG_WARN("fail to convert obj", KR(ret));
-  }
-
-  if (OB_SUCC(ret)) {
-    if (column_schema->is_enum_or_set()) {
-      if (OB_FAIL(handle_string_to_enum_set(cast_obj_ctx, column_schema, src, dst))) {
-        LOG_WARN("fail to convert string to enum or set", KR(ret), K(src), K(dst));
-      }
+  if (column_schema->is_unused()) {
+    // 快速删除列, 直接填充null
+    if (OB_UNLIKELY(!src.is_nop_value())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected insert specify deleted column", KR(ret), K(src), KPC(column_schema));
     } else {
-      if (OB_FAIL(to_type(expect_type, column_schema, cast_obj_ctx, accuracy, *convert_src_obj, dst))) {
-        LOG_WARN("fail to do to type", KR(ret));
+      dst.set_null();
+    }
+  } else if (src.is_nop_value()) {
+    // 默认值是表达式
+    if (lib::is_mysql_mode() && column_schema->get_cur_default_value().is_ext()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("column default value is ext", KR(ret), KPC(column_schema));
+    } else if (lib::is_oracle_mode() && column_schema->is_default_expr_v2_column()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("column default value is expr", KR(ret), KPC(column_schema));
+    }
+    // 没有默认值, 且为NOT NULL
+    // 例外:枚举类型默认为第一个
+    else if (column_schema->is_not_null_for_write() &&
+             column_schema->get_cur_default_value().is_null()) {
+      if (column_schema->get_meta_type().is_enum()) {
+        const uint64_t ENUM_FIRST_VAL = 1;
+        dst.set_enum(ENUM_FIRST_VAL);
+      } else {
+        ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+        LOG_WARN("column can not be null", KR(ret), KPC(column_schema));
       }
     }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(pad_obj(cast_obj_ctx, column_schema, dst))) {
-      LOG_WARN("fail to pad obj", KR(ret));
+    // mysql模式
+    else if (lib::is_mysql_mode()) {
+      // char,nchar,binary需要转换
+      if (column_schema->get_meta_type().is_fixed_len_char_type() || column_schema->get_meta_type().is_binary()) {
+        convert_src_obj = &(column_schema->get_cur_default_value());
+      } else {
+        // 直接用default value
+        dst = column_schema->get_cur_default_value();
+      }
+    }
+    // oracle模式需要转换
+    else {
+      convert_src_obj = &(column_schema->get_cur_default_value());
+    }
+  } else {
+    if (OB_FAIL(convert_obj(expect_type, src, convert_src_obj))) {
+      LOG_WARN("fail to convert obj", KR(ret));
     }
   }
+  if (OB_SUCC(ret) && convert_src_obj != nullptr) {
+    if (column_schema->is_collection() &&
+        OB_FAIL(handle_string_to_collection(cast_obj_ctx, column_schema, src, dst))) {
+      LOG_WARN("fail to get subschema for collection", KR(ret), K(src), K(dst));
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      if (column_schema->is_enum_or_set() && src.is_string_type()) { // load data from csv is string type, load data from backup need skip
+        if (OB_FAIL(handle_string_to_enum_set(cast_obj_ctx, column_schema, src, dst))) {
+          LOG_WARN("fail to convert string to enum or set", KR(ret), K(src), K(dst));
+        }
+      } else {
+        if (OB_FAIL(to_type(expect_type, column_schema, cast_obj_ctx, accuracy, *convert_src_obj, dst))) {
+          LOG_WARN("fail to do to type", KR(ret));
+        }
+      }
+    }
 
-  if (OB_SUCC(ret)) {
-    if (cast_obj_ctx.is_need_check_ &&
-                OB_FAIL(cast_obj_check(cast_obj_ctx, column_schema, dst))) {
-      LOG_WARN("fail to check cast obj result", KR(ret), K(dst));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(pad_obj(cast_obj_ctx, column_schema, dst))) {
+        LOG_WARN("fail to pad obj", KR(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (cast_obj_ctx.is_need_check_ &&
+                  OB_FAIL(cast_obj_check(cast_obj_ctx, column_schema, dst))) {
+        LOG_WARN("fail to check cast obj result", KR(ret), K(dst));
+      }
     }
   }
   return ret;
@@ -142,6 +194,27 @@ int ObTableLoadObjCaster::convert_obj(const ObObjType &expect_type, const ObObj 
   } else if (src.is_string_type() && lib::is_oracle_mode() &&
              (src.is_null_oracle() || 0 == src.get_val_len())) {
     dest = &null_obj;
+  }
+  return ret;
+}
+
+int ObTableLoadObjCaster::handle_string_to_collection(ObTableLoadCastObjCtx &cast_obj_ctx,
+                                                      const ObColumnSchemaV2 *column_schema,
+                                                      const ObObj &src, ObObj &dst)
+{
+  int ret = OB_SUCCESS;
+  uint16_t subschema_id = 0;
+  const ObIArray<common::ObString> &extended_type_info = column_schema->get_extended_type_info();
+  if (OB_ISNULL(cast_obj_ctx.cast_ctx_->exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (extended_type_info.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected type name", K(ret), K(extended_type_info.count()));
+  } else if (OB_FAIL(cast_obj_ctx.cast_ctx_->exec_ctx_->get_subschema_id_by_type_string(extended_type_info.at(0), subschema_id))) {
+    LOG_WARN("failed to get array type subschema id", K(ret));
+  } else {
+    dst.meta_.set_collection(subschema_id);
   }
   return ret;
 }
@@ -319,10 +392,12 @@ int ObTableLoadObjCaster::to_type(const ObObjType &expect_type, const share::sch
   ObCastCtx cast_ctx = *cast_obj_ctx.cast_ctx_;
   cast_ctx.dest_collation_ = column_schema->get_collation_type();
   const ObTableLoadTimeConverter time_cvrt = *cast_obj_ctx.time_cvrt_;
+  ObCastMode cast_mode = cast_ctx.cast_mode_;
   if (src.is_null()) {
     dst.set_null();
   } else if (src.get_type_class() == ObStringTC &&
-             (expect_type == ObNumberType || expect_type == ObUNumberType)) {
+             (expect_type == ObNumberType || expect_type == ObUNumberType) &&
+             accuracy.get_scale() >= 0) {
     ObNumberDesc d(0);
     uint32_t *digits = nullptr;
     cast_obj_ctx.number_fast_ctx_.reset();
@@ -339,10 +414,14 @@ int ObTableLoadObjCaster::to_type(const ObObjType &expect_type, const share::sch
         LOG_WARN("fail to cast ObObj", KR(ret), K(src), K(expect_type));
       }
     } else {
-      dst.set_number(expect_type, d, digits);
+      number::ObNumber value(d.desc_, digits);
+      if (ObUNumberType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
+        LOG_WARN("numeric_negative_check failed", K(ret), K(value), K(cast_ctx));
+      } else {
+        dst.set_number(expect_type, value);
+      }
     }
   } else if (src.get_type_class() == ObStringTC && expect_type == ObDateTimeType && lib::is_oracle_mode()) {
-    ObCastMode cast_mode = cast_obj_ctx.cast_ctx_->cast_mode_;
     if (OB_FAIL(string_datetime_oracle(expect_type, cast_ctx, src, dst, cast_mode, time_cvrt))) {
       LOG_WARN("fail to convert string to datetime in oracle mode", KR(ret), K(src),
                K(expect_type));
@@ -372,9 +451,7 @@ int ObTableLoadObjCaster::cast_obj_check(ObTableLoadCastObjCtx &cast_obj_ctx,
   const ObAccuracy &accuracy = column_schema->get_accuracy();
   const ObObjType expect_type = column_schema->get_meta_type().get_type();
   bool is_fast_number = cast_obj_ctx.number_fast_ctx_.is_fast_number_;
-   bool not_null_validate = (!column_schema->is_nullable() && lib::is_mysql_mode()) ||
-                           (column_schema->is_not_null_enable_column() && lib::is_oracle_mode());
-  if (obj.is_null() && not_null_validate && !column_schema->is_identity_column()) {
+  if (obj.is_null() && column_schema->is_not_null_for_write() && !column_schema->is_identity_column()) {
     const ObString &column_name = column_schema->get_column_name();
     ret = OB_BAD_NULL_ERROR;
     LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());

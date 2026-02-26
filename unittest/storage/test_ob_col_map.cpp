@@ -11,8 +11,6 @@
  */
 
 #include "storage/ob_col_map.h"
-#include "lib/allocator/page_arena.h"
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 namespace oceanbase

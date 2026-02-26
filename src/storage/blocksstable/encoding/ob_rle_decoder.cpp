@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_rle_decoder.h"
-#include "ob_dict_decoder.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/access/ob_pushdown_aggregate.h"
-#include "ob_bit_stream.h"
 
 namespace oceanbase
 {
@@ -75,7 +72,7 @@ int ObRLEDecoder::update_pointer(const char *old_block, const char *cur_block)
 int ObRLEDecoder::batch_decode(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const
@@ -138,7 +135,7 @@ int ObRLEDecoder::decode_vector(
 int ObRLEDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {
@@ -204,8 +201,14 @@ int ObRLEDecoder::pushdown_operator(
         break;
       }
       case sql::WHITE_OP_IN: {
-        if (OB_FAIL(in_operator(parent, col_ctx, filter, pd_filter_info, result_bitmap))) {
-          LOG_WARN("Failed to run IN operator", K(ret), K(filter));
+        if (filter.is_filter_dynamic_node()) {
+          if (OB_FAIL(in_operator<sql::ObDynamicFilterExecutor>(parent, col_ctx, static_cast<const sql::ObDynamicFilterExecutor &>(filter), pd_filter_info, result_bitmap))) {
+            LOG_WARN("Failed to run IN operator", K(ret), K(filter));
+          }
+        } else {
+          if (OB_FAIL(in_operator<sql::ObWhiteFilterExecutor>(parent, col_ctx, filter, pd_filter_info, result_bitmap))) {
+            LOG_WARN("Failed to run IN operator", K(ret), K(filter));
+          }
         }
         break;
       }
@@ -273,8 +276,8 @@ int ObRLEDecoder::eq_ne_operator(
     const ObDatum &ref_datum = filter.get_datums().at(0);
     if (dict_count > 0) {
       ObDatumCmpFuncType cmp_func = filter.cmp_func_;
-      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
-      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, dict_meta_length);
+      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, filter.is_padding_mode(), dict_meta_length);
+      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, filter.is_padding_mode(), dict_meta_length);
       int64_t dict_ref = 0;
       int cmp_res = 0;
       while (OB_SUCC(ret) && traverse_it != end_it) {
@@ -325,8 +328,8 @@ int ObRLEDecoder::comparison_operator(
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
     if (dict_count > 0) {
       bool found = false;
-      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, dict_meta_length);
-      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
+      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, filter.is_padding_mode(), dict_meta_length);
+      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, filter.is_padding_mode(), dict_meta_length);
       const int64_t ref_bitset_size = dict_count + 1;
       char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
       sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);
@@ -375,8 +378,8 @@ int ObRLEDecoder::bt_operator(
       bool found = false;
       const int64_t dict_meta_length = col_ctx.col_header_->length_ - meta_header_->offset_;
       const common::ObIArray<common::ObDatum> &datums = filter.get_datums();
-      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, dict_meta_length);
-      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
+      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, filter.is_padding_mode(), dict_meta_length);
+      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, filter.is_padding_mode(), dict_meta_length);
       const int64_t ref_bitset_size = dict_count + 1;
       char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
       sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);
@@ -407,10 +410,11 @@ int ObRLEDecoder::bt_operator(
   return ret;
 }
 
+template <typename ObFilterExecutor>
 int ObRLEDecoder::in_operator(
     const sql::ObPushdownFilterExecutor *parent,
     const ObColumnDecoderCtx &col_ctx,
-    const sql::ObWhiteFilterExecutor &filter,
+    const ObFilterExecutor &filter,
     const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
@@ -425,8 +429,8 @@ int ObRLEDecoder::in_operator(
     if (dict_count > 0) {
       bool found = false;
       const int64_t dict_meta_length = col_ctx.col_header_->length_ - meta_header_->offset_;
-      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, dict_meta_length);
-      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
+      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, filter.is_padding_mode(), dict_meta_length);
+      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, filter.is_padding_mode(), dict_meta_length);
       const int64_t ref_bitset_size = dict_count + 1;
       char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
       sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);
@@ -434,7 +438,7 @@ int ObRLEDecoder::in_operator(
       int64_t dict_ref = 0;
       bool is_exist = false;
       while (OB_SUCC(ret) && traverse_it != end_it) {
-        if (OB_FAIL(filter.exist_in_datum_set(*traverse_it, is_exist))) {
+        if (OB_FAIL(filter.exist_in_set(*traverse_it, is_exist))) {
           LOG_WARN("Failed to check object in hashset", K(ret), K(*traverse_it));
         } else if (is_exist) {
           found = true;
@@ -524,7 +528,7 @@ int ObRLEDecoder::set_res_with_bitset(
 
 template<typename T>
 int ObRLEDecoder::extract_ref_and_null_count(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     T ref_buf,
     int64_t &null_count) const
@@ -608,7 +612,7 @@ int ObRLEDecoder::get_distinct_count(int64_t &distinct_count) const
 int ObRLEDecoder::read_distinct(
     const ObColumnDecoderCtx &ctx,
     const char **cell_datas,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dict_decoder_.batch_read_distinct(
@@ -625,9 +629,9 @@ int ObRLEDecoder::read_distinct(
 
 int ObRLEDecoder::read_reference(
     const ObColumnDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   int64_t null_cnt = 0;

@@ -116,6 +116,8 @@ public:
                           const common::ObIArray<common::ObString> &enum_set_values);
   inline const common::ObIArray<common::ObString> &get_enum_set_values() const { return enum_set_values_; }
   int assign(const ObKeyPartPos &other);
+
+  int deep_copy(common::ObIAllocator &allocator, const ObKeyPartPos &other);
   TO_STRING_KV(N_OFFSET, offset_,
                N_COLUMN_TYPE, column_type_,
                N_ENUM_SET_VALUES, enum_set_values_);
@@ -171,6 +173,7 @@ struct InParamMeta
     ObKeyPartPos pos_;
     ObArray<ObObj> vals_;
     int assign(const InParamMeta &other, ObIAllocator &alloc);
+    int deep_copy( ObIAllocator &alloc, const InParamMeta &other);
     TO_STRING_KV(K_(pos), K_(vals));
 };
 
@@ -307,7 +310,7 @@ public:
   void reset_key();
   typedef common::hash::ObHashMap<int64_t, ObSEArray<int64_t, 16>> SameValIdxMap;
   static int try_cast_value(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime, ObIAllocator &alloc,
-                            const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
+                             ObExecContext *exec_ctx, const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
                             common::ObCmpOp cmp_op = CO_EQ, bool left_border = true);
   inline bool operator <=(const ObKeyPart &other) const { return pos_.offset_ <= other.pos_.offset_; }
 
@@ -409,8 +412,8 @@ public:
   int remove_in_dup_vals();
   int convert_to_true_or_false(bool is_always_true);
 
-  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
-                      bool contain_row, bool &is_bound_modified);
+  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, ObExecContext *exec_ctx,
+                      const int64_t cur_datetime, bool contain_row, bool &is_bound_modified);
 
   // copy all except next_ pointer
   int deep_node_copy(const ObKeyPart &other);

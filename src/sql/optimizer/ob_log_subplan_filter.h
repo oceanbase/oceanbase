@@ -39,6 +39,7 @@ public:
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   // re est children cost and gather cost infos
   int get_re_est_cost_infos(const EstimateCostInfo &param, ObIArray<ObBasicCostInfo> &cost_infos);
+  virtual int est_ambient_card() override;
 
   inline int add_subquery_exprs(const ObIArray<ObQueryRefRawExpr *> &query_exprs)
   {
@@ -48,6 +49,10 @@ public:
   inline int add_exec_params(const ObIArray<ObExecParamRawExpr *> &exec_params)
   {
     return append(exec_params_, exec_params);
+  }
+  inline const ObQueryRefRawExpr* get_subquery_expr(int64_t idx) const
+  {
+    return (idx >= 0 && idx < subquery_exprs_.count()) ? subquery_exprs_.at(idx) : NULL;
   }
   /**
    *  Get the exec params
@@ -67,11 +72,11 @@ public:
     return append(onetime_exprs_, onetime_exprs);
   }
 
-  inline const common::ObBitSet<> &get_onetime_idxs() { return one_time_idxs_; }
+  inline const common::ObBitSet<> &get_onetime_idxs() const { return one_time_idxs_; }
 
   inline int add_onetime_idxs(const common::ObBitSet<> &one_time_idxs) { return one_time_idxs_.add_members(one_time_idxs); }
 
-  inline const common::ObBitSet<> &get_initplan_idxs() { return init_plan_idxs_; }
+  inline const common::ObBitSet<> &get_initplan_idxs() const { return init_plan_idxs_; }
 
   inline int add_initplan_idxs(const common::ObBitSet<> &init_plan_idxs) { return init_plan_idxs_.add_members(init_plan_idxs); }
 
@@ -82,6 +87,7 @@ public:
   bool is_my_subquery_expr(const ObQueryRefRawExpr *query_expr);
   bool is_my_exec_expr(const ObRawExpr *expr);
   bool is_my_onetime_expr(const ObRawExpr *expr);
+  inline bool is_in_random_shuffle_senario() { return dist_algo_ == DistAlgo::DIST_RANDOM_ALL || dist_algo_ == DistAlgo::DIST_HASH_ALL; }
 
   int get_exists_style_exprs(ObIArray<ObRawExpr*> &subquery_exprs);
 
@@ -94,17 +100,14 @@ public:
   int allocate_granule_post(AllocGIContext &ctx);
   virtual int compute_one_row_info() override;
   virtual int compute_sharding_info() override;
-  inline DistAlgo get_distributed_algo() { return dist_algo_; }
+  inline DistAlgo get_distributed_algo() const { return dist_algo_; }
   inline void set_distributed_algo(const DistAlgo set_dist_algo) { dist_algo_ = set_dist_algo; }
 
   int add_px_batch_rescan_flag(bool flag) { return enable_px_batch_rescans_.push_back(flag); }
   common::ObIArray<bool> &get_px_batch_rescans() {  return enable_px_batch_rescans_; }
 
-  inline bool enable_das_group_rescan() { return enable_das_group_rescan_; }
+  inline bool enable_das_group_rescan() const { return enable_das_group_rescan_; }
   inline void set_enable_das_group_rescan(bool flag) { enable_das_group_rescan_ = flag; }
-  int check_and_set_das_group_rescan();
-  int check_if_match_das_group_rescan(ObLogicalOperator *root, bool &group_rescan);
-  int set_use_das_batch(ObLogicalOperator* root);
 
   int allocate_startup_expr_post() override;
 
@@ -135,12 +138,24 @@ public:
   virtual int print_used_hint(PlanText &plan_text) override;
   virtual int open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG) override;
   virtual int close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG) override;
+  int compute_spf_batch_rescan();
+  int compute_spf_batch_rescan(bool &can_batch);
+  int compute_spf_batch_rescan_compat(bool &can_batch);
+  int check_right_is_local_scan(int64_t &local_scan_type) const;
+  static int need_compare_batch_rescan(const ObLogSubPlanFilter &first_op,
+                                       const ObLogSubPlanFilter &second_op,
+                                       bool &need_compare);
+  int pre_check_spf_can_px_batch_rescan(bool &can_px_batch_rescan, bool &rescan_contain_match_all) const;
+  bool is_px_batch_rescan_enabled();
 private:
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,
                                          ObIArray<ObRawExpr*> &exist_style_exprs);
   int check_expr_contain_row_subquery(const ObRawExpr *expr,
                                          bool &contains);
   int get_sub_qb_names(ObIArray<ObString>& sub_qb_names);
+  int print_push_subq_outline(PlanText &plan_text);
+  int print_push_subq_used_hint(PlanText &plan_text);
+
 protected:
   DistAlgo dist_algo_;
   common::ObSEArray<ObQueryRefRawExpr *, 8, common::ModulePageAllocator, true> subquery_exprs_;

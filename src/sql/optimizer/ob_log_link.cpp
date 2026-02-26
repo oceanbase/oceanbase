@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_link.h"
-#include "sql/ob_sql_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -58,6 +57,7 @@ int ObLogLink::compute_op_parallel_and_server_info()
     LOG_WARN("failed to assign das path server list", K(ret));
   } else {
     set_parallel(1);
+    set_available_parallel(1);
     set_server_cnt(1);
   }
   return ret;
@@ -84,7 +84,7 @@ int ObLogLink::print_link_stmt(char *buf, int64_t buf_len)
     char *ch = buf;
     char *stmt_end = buf + stmt_fmt_len_ - 3;
     while (ch < stmt_end) {
-      if (0 == ch[0] && 0 == ch[1]) {
+      if (0 == ch[0]) {
         uint16_t param_idx = *(uint16_t *)(ch + 2);
         ch[0] = '$';
         if (param_idx > 999) {
@@ -208,15 +208,20 @@ int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
   ObString sql;
   ObObjPrintParams print_param;
   print_param.for_dblink_ = 1;
+  //print_param.cs_type_ = ObCollationType::CS_TYPE_UTF8MB4_BIN;
   // only link scan need print flashback query for dblink table
   ObOptimizerContext *opt_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
+  ObCollationType spell_coll = CS_TYPE_INVALID;
   if (OB_ISNULL(stmt) || OB_ISNULL(plan) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(session = opt_ctx->get_session_info()) ||
       OB_ISNULL(print_param.exec_ctx_ = opt_ctx->get_exec_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", KP(opt_ctx), KP(stmt), KP(session), KP(plan), K(ret));
+  } else if (OB_FAIL(ObDblinkService::get_spell_collation_type(session, spell_coll))) {
+    LOG_WARN("failed to get spell collation type", K(ret));
+  } else if (FALSE_IT(print_param.cs_type_ = spell_coll)) {
   } else if (OB_FAIL(mark_exec_params(const_cast<ObDMLStmt*>(stmt)))) {
     LOG_WARN("failed to mark exec params", K(ret));
   } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(plan->get_allocator(), stmt, sql, opt_ctx->get_schema_guard(), print_param, NULL, session))) {
@@ -224,7 +229,7 @@ int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
   } else {
     stmt_fmt_buf_ = sql.ptr();
     stmt_fmt_len_ = sql.length();
-    LOG_DEBUG("loglink succ to reconstruct link sql", K(sql));
+    LOG_TRACE("succ to reconstruct dblink sql", K(sql), KP(stmt_fmt_buf_), K(stmt_fmt_len_),  K(ret), K(spell_coll));
   }
   return ret;
 }

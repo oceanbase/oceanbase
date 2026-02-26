@@ -31,7 +31,6 @@ public:
 public:
   int init(
       ObUnitManager &unit_mgr,
-      ObZoneManager &zone_mgr,
       obrpc::ObCommonRpcProxy &common_rpc_proxy,
       common::ObAddr &self,
       share::schema::ObMultiVersionSchemaService &schema_service,

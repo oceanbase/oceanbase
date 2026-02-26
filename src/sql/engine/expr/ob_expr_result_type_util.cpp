@@ -12,11 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/engine/expr/ob_expr_res_type_map.h"
-#include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
+#include "src/sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -117,10 +115,10 @@ int ObExprResultTypeUtil::get_relational_equal_type(ObObjType &type,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("the wrong type", K(type1), K(type2), K(ret));
   } else {
-    // we donot have ORACLE_RELATIONAL_EQUAL_TYPE, just use ORACLE_RELATIONAL_CMP_TYPE instead.
-    type = (lib::is_oracle_mode()
-            ? ORACLE_RELATIONAL_CMP_TYPE[type1][type2]
-            : RELATIONAL_EQUAL_TYPE[type1][type2]);
+    const ObObjType *equal_type_array = lib::is_oracle_mode()
+                                        ? ORACLE_RELATIONAL_EQUAL_TYPE
+                                        : RELATIONAL_EQUAL_TYPE;
+    type = equal_type_array[type1] == equal_type_array[type2] ? equal_type_array[type1] : ObMaxType;
   }
   return ret;
 }
@@ -252,15 +250,29 @@ int ObExprResultTypeUtil::get_div_result_type(ObObjType &result_type,
     }
   } else {
     result_type = DIV_RESULT_TYPE[type1][type2];
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     // FIXME: @zuojiao.hzj : remove this after we can keep high division calc scale
-    // using decimal int
-    bool all_decint_args = (ob_is_decimal_int(type1) && ob_is_decimal_int(type2));
+    // using decimal int as division calc types
+    bool can_use_decint_div = (ob_is_decimal_int(type1) || ob_is_integer_type(type1))
+                           && (ob_is_decimal_int(type2) || ob_is_integer_type(type2))
+                           && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0
+                           && tenant_config.is_valid()
+                           && tenant_config->_enable_decimal_int_type;
     if (ob_is_decimal_int(result_type)) {
       result_type = ObNumberType;
     }
-    if (ob_is_decimal_int(result_type) && !all_decint_args) {
+    if (ob_is_decimal_int(result_type) && !can_use_decint_div) {
       result_ob1_type = ObNumberType;
       result_ob2_type = ObNumberType;
+    } else if (can_use_decint_div && result_type == ObNumberType) {
+      // use decimal int as calc type
+      result_ob1_type = ObDecimalIntType;
+      if (ob_is_integer_type(type2)) {
+        // divisor is integer, not need cast to decint
+        result_ob2_type = type2;
+      } else {
+        result_ob2_type = ObDecimalIntType;
+      }
     } else {
       result_ob1_type = result_type;
       result_ob2_type = result_type;
@@ -485,8 +497,21 @@ int ObExprResultTypeUtil::get_mul_result_type(ObObjType &result_type,
     }
   } else {
     result_type = ARITH_RESULT_TYPE[type1][type2];
-    result_ob1_type = result_type;
-    result_ob2_type = result_type;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) {
+      if (ob_is_decimal_int(result_type) && ob_is_integer_type(type1)) {
+        result_ob1_type = type1;
+        result_ob2_type = result_type;
+      } else if (ob_is_decimal_int(result_type) && ob_is_integer_type(type2)) {
+        result_ob1_type = result_type;
+        result_ob2_type = type2;
+      } else {
+        result_ob1_type = result_type;
+        result_ob2_type = result_type;
+      }
+    } else {
+      result_ob1_type = result_type;
+      result_ob2_type = result_type;
+    }
   }
   return ret;
 }
@@ -692,6 +717,7 @@ int CHECK_STRING_RES_TYPE_ORACLE(const ObExprResType &type)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("incorrect charset of target type", K(ret), K(type));
   } else if (!type.is_clob() && !type.is_clob_locator() && !type.is_raw() &&
+             CS_TYPE_BINARY != type.get_collation_type() &&
              LS_CHAR != type.get_length_semantics() && LS_BYTE != type.get_length_semantics()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("incorrect length_semantics of target type", K(ret), K(type));
@@ -847,6 +873,248 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
     }
   }
 
+  return ret;
+}
+
+int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
+                                              const ObExprResType &type1,
+                                              const ObExprResType &type2,
+                                              ObExprResType &calc_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else {
+    uint32_t depth = 0;
+    bool is_compatiable = false;
+    ObDataType coll_elem1_type;
+    ObDataType coll_elem2_type;
+    bool l_is_vec = false;
+    bool r_is_vec = false;
+    ObObjMeta element_meta;
+    if (OB_FAIL(ObArrayExprUtils::check_array_type_compatibility(exec_ctx, type1.get_subschema_id(),
+                                                                  type2.get_subschema_id(), is_compatiable))) {
+      LOG_WARN("failed to check array compatibilty", K(ret));
+    } else if (!is_compatiable) {
+      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+      LOG_WARN("nested type is mismatch", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, type1.get_subschema_id(), coll_elem1_type, depth, l_is_vec))) {
+      LOG_WARN("failed to get array element type", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, type2.get_subschema_id(), coll_elem2_type, depth, r_is_vec))) {
+      LOG_WARN("failed to get array element type", K(ret));
+    } else if (l_is_vec || r_is_vec) {
+      // cast to vec
+      l_is_vec ? calc_type.set_collection(type1.get_subschema_id()) : calc_type.set_collection(type2.get_subschema_id());
+    } else if (coll_elem1_type.get_obj_type() == coll_elem2_type.get_obj_type() &&
+               coll_elem1_type.get_obj_type() == ObVarcharType) {
+      // use subschema_id whose length is greater
+      if (coll_elem1_type.get_length() > coll_elem2_type.get_length()) {
+        calc_type.set_collection(type1.get_subschema_id());
+      } else {
+        calc_type.set_collection(type2.get_subschema_id());
+      }
+    } else if (OB_FAIL(get_array_calc_type(exec_ctx, coll_elem1_type, coll_elem2_type,
+                                           depth, calc_type, element_meta))) {
+      LOG_WARN("failed to get array calc type", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
+                                              const ObDataType &coll_elem1_type,
+                                              const ObDataType &coll_elem2_type,
+                                              uint32_t depth,
+                                              ObExprResType &calc_type,
+                                              ObObjMeta &element_meta)
+{
+  int ret = OB_SUCCESS;
+  const ObObjType type1 = coll_elem1_type.get_obj_type();
+  const ObObjType type2 = coll_elem2_type.get_obj_type();
+  ObDataType elem_data;
+  ObObjType coll_calc_type = ARITH_RESULT_TYPE[type1][type2];
+  ObCollationType calc_collection_type = CS_TYPE_INVALID;
+  if (ob_is_int_uint(ob_obj_type_class(type1), ob_obj_type_class(type2))) {
+    coll_calc_type = ObIntType;
+  } else if (ob_is_float_tc(type1) &&  ob_is_float_tc(type2)) {
+    if (type1 == ObFloatType || type2 == ObFloatType) {
+      coll_calc_type = ObFloatType;
+    } else {
+      coll_calc_type = ObUFloatType;
+    }
+  } else if (ob_is_null(type1)) {
+    coll_calc_type = type2;
+  } else if (ob_is_null(type2)) {
+    coll_calc_type = type1;
+  }
+  elem_data.meta_.set_type(coll_calc_type);
+  elem_data.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[coll_calc_type]);
+  if (type1 == ObVarcharType || type2 == ObVarcharType) {
+    coll_calc_type = ObVarcharType;
+    ObLength len1 = 0;
+    ObLength len2 = 0;
+    if (ob_is_string_tc(type1)) {
+      len1 = coll_elem1_type.get_length();
+      calc_collection_type = coll_elem1_type.get_collation_type();
+    } else {
+      len1 = ObAccuracy::MAX_ACCURACY[type1].get_precision();
+    }
+    if (ob_is_string_tc(type2)) {
+      len2 = coll_elem2_type.get_length();
+      if (calc_collection_type == CS_TYPE_INVALID) {
+        calc_collection_type = coll_elem2_type.get_collation_type();
+      }
+    } else {
+      len2 = ObAccuracy::MAX_ACCURACY[type2].get_precision();
+    }
+    elem_data.meta_.set_type(coll_calc_type);
+    elem_data.meta_.set_collation_type(calc_collection_type);
+    elem_data.set_length(MAX(len1, len2));
+  }
+  uint16_t subschema_id;
+  const int MAX_LEN = 256;
+  char type_name[MAX_LEN] = {0};
+  ObString type_info;
+  if (coll_calc_type == ObMaxType) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid subschema type", K(ret), K(type1), K(type2));
+  } else if (OB_FAIL(ObArrayUtil::get_type_name(ObNestedType::OB_ARRAY_TYPE, elem_data, type_name, MAX_LEN, depth))) {
+    LOG_WARN("failed to convert len to string", K(ret));
+  } else if (FALSE_IT(type_info.assign_ptr(type_name, strlen(type_name)))) {
+  } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(type_info, subschema_id))) {
+    LOG_WARN("failed get subschema id", K(ret), K(type_info));
+  } else {
+    calc_type.set_collection(subschema_id);
+    element_meta = elem_data.meta_;
+  }
+  return ret;
+}
+
+int ObExprResultTypeUtil::get_deduce_element_type(ObExprResType &input_type, ObDataType &elem_type)
+{
+  int ret = OB_SUCCESS;
+  ObObjType type1 = input_type.get_type();
+  ObObjType type2 = elem_type.get_obj_type();
+  ObObjType res_type = MERGE_RESULT_TYPE[type1][type2];
+  ObObjMeta meta;
+  if (res_type == ObDecimalIntType || res_type == ObNumberType || res_type == ObUNumberType) {
+    // decimal type isn't supported in array, use double/bigint instead
+    if (input_type.get_scale() != 0 || ob_is_float_tc(type2) || ob_is_double_tc(type2)) {
+      meta.set_double();
+    } else {
+      meta.set_int();
+    }
+  } else {
+    meta.set_type(res_type);
+  }
+  if (ob_is_collection_sql_type(elem_type.get_obj_type())) {
+    ret = OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION;
+    LOG_USER_ERROR(OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION);
+  } else if (ob_is_string_tc(res_type)) {
+    if (ob_is_string_tc(type2)) {
+      // do nothing
+    } else {
+      // set max len to fix plan cache issue
+      meta.set_collation_type(input_type.get_collation_type());
+      elem_type.set_meta_type(meta);
+      elem_type.set_length(OB_MAX_VARCHAR_LENGTH / 4);
+    }
+  } else {
+    elem_type.set_meta_type(meta);
+    elem_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[meta.get_type()]);
+  }
+  return ret;
+}
+
+int ObExprResultTypeUtil::assign_type_array(const ObIArray<ObRawExprResType> &src, ObIArray<ObExprResType> &dest)
+{
+  int ret = OB_SUCCESS;
+  dest.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); ++i) {
+    if (OB_FAIL(dest.push_back(src.at(i)))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprResultTypeUtil::get_collection_calc_type(ObExecContext *exec_ctx,
+                                                   const ObExprResType &type1,
+                                                   const ObExprResType & type2,
+                                                   ObExprResType &calc_type)
+{
+  int ret = OB_SUCCESS;
+  const ObSqlCollectionInfo *l_coll_info = NULL;
+  const ObSqlCollectionInfo *r_coll_info = NULL;
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_info_by_subschema_id(exec_ctx, type1.get_subschema_id(), l_coll_info))) {
+    LOG_WARN("failed to get left coll type", K(ret), K(type1.get_subschema_id()));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_info_by_subschema_id(exec_ctx, type2.get_subschema_id(), r_coll_info))) {
+    LOG_WARN("failed to get right coll type", K(ret), K(type2.get_subschema_id()));
+  } else if (!l_coll_info->has_same_super_type(*r_coll_info)) {
+    ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+    LOG_WARN("nested type is mismatch", K(ret));
+  } else if (l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
+             || r_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
+             || l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE
+             || r_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+    uint16_t subschema_id;
+    ObObjMeta key_meta;
+    ObObjMeta value_meta;
+    ObExprResType key_calc_type;
+    ObExprResType value_calc_type;
+    const ObCollectionMapType *l_map_type = dynamic_cast<const ObCollectionMapType*>(l_coll_info->collection_meta_);
+    const ObCollectionMapType *r_map_type = dynamic_cast<const ObCollectionMapType*>(r_coll_info->collection_meta_);
+    if (OB_ISNULL(l_map_type) || OB_ISNULL(r_map_type)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("map type is null", K(ret));
+    } else {
+      uint32_t key_depth = 0;
+      uint32_t value_depth = 0;
+      ObDataType l_map_key_type = l_map_type->get_key_meta(key_depth);
+      ObDataType r_map_key_type = r_map_type->get_key_meta(key_depth);
+      ObDataType l_map_value_type = l_map_type->get_basic_meta(value_depth);
+      ObDataType r_map_value_type = r_map_type->get_basic_meta(value_depth);
+      if (OB_FAIL(get_array_calc_type(exec_ctx, l_map_key_type, r_map_key_type,
+                                             key_depth, key_calc_type, key_meta))) {
+        LOG_WARN("failed to get key calc type", K(ret));
+      } else if (OB_FAIL(get_array_calc_type(exec_ctx, l_map_value_type, r_map_value_type,
+                                             value_depth, value_calc_type, value_meta))) {
+        LOG_WARN("failed to get value calc type", K(ret));
+      } else if (OB_FAIL(ObArrayExprUtils::deduce_map_subschema_id(exec_ctx, key_calc_type.get_subschema_id(), value_calc_type.get_subschema_id(), subschema_id))) {
+        LOG_WARN("failed to deduce map subschema id", K(ret));
+      } else {
+        calc_type.set_collection(subschema_id);
+      }
+    }
+  } else if (l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE || r_coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+    // cast to vec
+    if (l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+      calc_type.set_collection(type1.get_subschema_id());
+    } else {
+      calc_type.set_collection(type2.get_subschema_id());
+    }
+  } else {
+    uint32_t depth = 0;
+    ObDataType coll_elem1_type = l_coll_info->get_basic_meta(depth);
+    ObDataType coll_elem2_type = r_coll_info->get_basic_meta(depth);
+    ObObjMeta element_meta;
+    if (coll_elem1_type.get_obj_type() == coll_elem2_type.get_obj_type() &&
+               coll_elem1_type.get_obj_type() == ObVarcharType) {
+      // use subschema_id whose length is greater
+      if (coll_elem1_type.get_length() > coll_elem2_type.get_length()) {
+        calc_type.set_collection(type1.get_subschema_id());
+      } else {
+        calc_type.set_collection(type2.get_subschema_id());
+      }
+    } else if (OB_FAIL(get_array_calc_type(exec_ctx, coll_elem1_type, coll_elem2_type,
+                                           depth, calc_type, element_meta))) {
+      LOG_WARN("failed to get array calc type", K(ret));
+    }
+  }
   return ret;
 }
 

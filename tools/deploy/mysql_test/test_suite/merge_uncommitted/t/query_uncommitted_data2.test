@@ -1,4 +1,4 @@
-# owner: yanyuan.cxf
+# owner: cxf262476
 # owner group: transaction
 # description: 本case是为了测试查询sstable上未提交的数据
 

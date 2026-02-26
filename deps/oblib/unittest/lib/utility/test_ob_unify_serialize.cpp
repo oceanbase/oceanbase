@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include <stdint.h>
 #include <gtest/gtest.h>
-#include <iostream>
-#include <cstdlib>
 #include "lib/utility/ob_print_utils.h"                // TO_STRING_KV
-#include "lib/utility/ob_unify_serialize.h"
 #include "lib/random/ob_random.h"
 
 using namespace std;

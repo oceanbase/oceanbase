@@ -12,15 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_aggregated_store.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/number/ob_number_v2.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
-#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
-#include "storage/access/ob_table_access_param.h"
-#include "storage/access/ob_table_access_context.h"
-#include "storage/lob/ob_lob_manager.h"
 namespace oceanbase
 {
 namespace storage
@@ -40,8 +32,9 @@ bool ObCGAggCells::check_finished() const
   return finised;
 }
 
-int ObCGAggCells::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg)
+int ObCGAggCells::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index, bool &can_agg)
 {
+  UNUSED(col_index);
   int ret = OB_SUCCESS;
   can_agg = true;
   for (int i = 0; OB_SUCC(ret) && can_agg && i < agg_cells_.count(); ++i) {
@@ -64,18 +57,18 @@ int ObCGAggCells::add_agg_cell(ObAggCell *cell)
   return ret;
 }
 
-int ObCGAggCells::process(const blocksstable::ObMicroIndexInfo &index_info)
+int ObCGAggCells::fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
-    if (OB_FAIL(agg_cells_.at(i)->eval_index_info(index_info, true/*is_cg*/))) {
+    if (OB_FAIL(agg_cells_.at(i)->eval_index_info(index_info, is_cg))) {
       LOG_WARN("Fail to agg index info", K(ret), KPC(agg_cells_.at(i)));
     }
   }
   return ret;
 }
 
-int ObCGAggCells::process(blocksstable::ObStorageDatum &datum, const uint64_t row_count)
+int ObCGAggCells::eval(blocksstable::ObStorageDatum &datum, const int64_t row_count)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
@@ -87,18 +80,22 @@ int ObCGAggCells::process(blocksstable::ObStorageDatum &datum, const uint64_t ro
   return ret;
 }
 
-int ObCGAggCells::process(
-    const ObTableIterParam &iter_param,
-    const ObTableAccessContext &context,
+int ObCGAggCells::eval_batch(
+    const ObTableIterParam *iter_param,
+    const ObTableAccessContext *context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
-    const int64_t *row_ids,
-    const int64_t row_count)
+    const ObPushdownRowIdCtx &pd_row_id_ctx)
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(col_offset < 0 || !pd_row_id_ctx.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid arguments", K(ret), K(col_offset), K(pd_row_id_ctx));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
     if (agg_cells_.at(i)->finished()) {
-    } else if (OB_FAIL(agg_cells_.at(i)->eval_micro_block(iter_param, context, col_offset, reader, row_ids, row_count))) {
+    } else if (OB_FAIL(agg_cells_.at(i)->eval_micro_block(*iter_param, *context, col_offset, reader,
+                                                          pd_row_id_ctx.row_ids_, pd_row_id_ctx.get_row_count()))) {
       LOG_WARN("Fail to eval micro", K(ret));
     }
   }
@@ -262,8 +259,30 @@ void ObAggregatedStore::reuse()
   iter_end_flag_ = IterEndState::PROCESSING;
 }
 
-int ObAggregatedStore::init(const ObTableAccessParam &param)
+int ObAggregatedStore::reuse_for_refresh_table()
 {
+  ObBlockBatchedRowStore::reuse_for_refresh_table();
+  iter_end_flag_ = IterEndState::PROCESSING;
+  return OB_SUCCESS;
+}
+
+int ObAggregatedStore::reuse_capacity(const int64_t capacity)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(capacity <= 0 || capacity > batch_size_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(capacity), K(batch_size_));
+  } else {
+    agg_row_.reuse();
+    row_capacity_ = capacity;
+    eval_ctx_.reuse(capacity);
+  }
+  return ret;
+}
+
+int ObAggregatedStore::init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask)
+{
+  UNUSED(agg_col_mask);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(param.output_exprs_) ||
       OB_ISNULL(param.iter_param_.out_cols_project_) ||
@@ -326,7 +345,7 @@ int ObAggregatedStore::check_agg_in_row_mode(const ObTableIterParam &iter_param)
   return ret;
 }
 
-int ObAggregatedStore::fill_index_info(const blocksstable::ObMicroIndexInfo &index_info)
+int ObAggregatedStore::fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -336,7 +355,7 @@ int ObAggregatedStore::fill_index_info(const blocksstable::ObMicroIndexInfo &ind
     set_aggregated_in_prefetch();
     for (int64_t i = 0; OB_SUCC(ret) && i < agg_row_.get_agg_count(); ++i) {
        ObAggCell *cell = agg_row_.at(i);
-       if (OB_FAIL(cell->eval_index_info(index_info))) {
+       if (OB_FAIL(cell->eval_index_info(index_info, is_cg))) {
          LOG_WARN("Failed to eval index info", K(ret), K(i), K(*cell));
        }
     }
@@ -346,7 +365,7 @@ int ObAggregatedStore::fill_index_info(const blocksstable::ObMicroIndexInfo &ind
 
 int ObAggregatedStore::fill_rows(
     const int64_t group_idx,
-    blocksstable::ObIMicroBlockRowScanner *scanner,
+    blocksstable::ObIMicroBlockRowScanner &scanner,
     int64_t &begin_index,
     const int64_t end_index,
     const ObFilterResult &res)
@@ -356,9 +375,6 @@ int ObAggregatedStore::fill_rows(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggregatedStore is not inited", K(ret), K(*this));
-  } else if (OB_ISNULL(scanner)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null scanner", K(ret));
   } else {
     int64_t row_count = 0;
     bool is_reverse = begin_index > end_index;
@@ -367,7 +383,7 @@ int ObAggregatedStore::fill_rows(
     // must get valid rows
      bool need_get_row_ids = false;
     int64_t micro_row_count = 0;
-    blocksstable::ObIMicroBlockReader *reader = scanner->get_reader();
+    blocksstable::ObIMicroBlockReader *reader = scanner.get_reader();
     if (OB_FAIL(reader->get_row_count(micro_row_count))) {
       LOG_WARN("Failed to get micro row count", K(ret));
     } else if(FALSE_IT(need_get_row_ids = agg_row_.check_need_access_data() || micro_row_count != covered_row_count)) {
@@ -392,12 +408,18 @@ int ObAggregatedStore::fill_rows(
             LOG_WARN("Failed to get row ids", K(ret), K(begin_index), K(end_index));
           }
         } else if (0 == row_count) {
-        } else if (agg_flat_row_mode_ && blocksstable::ObIMicroBlockReader::Reader == reader->get_type()) {
+        } else if (agg_flat_row_mode_
+                   && (blocksstable::ObIMicroBlockReader::Reader == reader->get_type()
+                       || blocksstable::ObIMicroBlockReader::NewFlatReader == reader->get_type())) {
           // for flat block, do aggregate in row mode in some case
-           blocksstable::ObMicroBlockReader *block_reader = static_cast<blocksstable::ObMicroBlockReader*>(reader);
-           if (OB_FAIL(block_reader->get_aggregate_result(*iter_param_, context_, row_ids_, row_count, row_buf_, agg_row_.get_agg_cells()))) {
-             LOG_WARN("Failed to get aggregate", K(ret));
-           }
+          if (OB_FAIL(reader->get_aggregate_result(*iter_param_,
+                                                   context_,
+                                                   row_ids_,
+                                                   row_count,
+                                                   row_buf_,
+                                                   agg_row_.get_agg_cells()))) {
+            LOG_WARN("Failed to get aggregate", K(ret));
+          }
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < agg_row_.get_agg_count(); ++i) {
             ObAggCell *cell = agg_row_.at(i);
@@ -415,8 +437,7 @@ int ObAggregatedStore::fill_rows(
 int ObAggregatedStore::fill_rows(const int64_t group_idx, const int64_t row_count)
 {
   UNUSEDx(group_idx, row_count);
-  int ret = OB_SUCCESS;
-  return ret;
+  return OB_SUCCESS;
 }
 
 int ObAggregatedStore::fill_row(blocksstable::ObDatumRow &row)
@@ -436,7 +457,7 @@ int ObAggregatedStore::fill_row(blocksstable::ObDatumRow &row)
   return ret;
 }
 
-int ObAggregatedStore::collect_aggregated_row(blocksstable::ObDatumRow *&row)
+int ObAggregatedStore::collect_aggregated_result()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -490,6 +511,21 @@ int ObAggregatedStore::get_agg_cell(const sql::ObExpr *expr, ObAggCell *&agg_cel
   if (OB_SUCC(ret) && nullptr == agg_cell) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null agg cell", K(ret), KPC(expr));
+  }
+  return ret;
+}
+
+int ObAggregatedStore::set_ignore_eval_index_info(const bool ignore_eval_index_info)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < agg_row_.get_agg_count(); ++i) {
+    ObAggCell *cell = agg_row_.at(i);
+    if (OB_ISNULL(cell)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null agg cell", K(ret), K(i));
+    } else {
+      cell->set_ignore_eval_index_info(ignore_eval_index_info);
+    }
   }
   return ret;
 }

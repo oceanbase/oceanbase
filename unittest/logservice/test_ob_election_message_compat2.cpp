@@ -9,26 +9,12 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
 #define private public
 #define protected public
-#include "share/ob_cluster_version.h"
-#include "lib/list/ob_dlist.h"
-#include "logservice/palf/election/interface/election_msg_handler.h"
 #include <algorithm>
-#include <chrono>
-#include "logservice/palf/election/interface/election.h"
-#include "logservice/palf/log_meta_info.h"
 #define UNITTEST
-#include "logservice/palf/election/utils/election_common_define.h"
-#include "logservice/palf/election/algorithm/election_impl.h"
 #include "logservice/leader_coordinator/election_priority_impl/election_priority_impl.h"
-#include "share/ob_occam_timer.h"
-#include "share/rc/ob_tenant_base.h"
 #include "mock_logservice_container/mock_election_user.h"
-#include <iostream>
-#include <vector>
 #include "observer/ob_server.h"
 
 using namespace oceanbase::obrpc;
@@ -785,7 +771,7 @@ TEST_F(TestElectionMsgCompat2, old_to_new) {
 }
 
 TEST_F(TestElectionMsgCompat2, new_to_old_fake_new) {
-  observer::ObServer::get_instance().gctx_.startup_mode_ = observer::NORMAL_MODE;
+  observer::ObServer::get_instance().gctx_.startup_mode_ = ObServerMode::NORMAL_MODE;
   oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_1_0_0;
   constexpr int64_t BUFFER_SIZE = 2048;
   char buffer[BUFFER_SIZE] = {0};
@@ -819,7 +805,7 @@ TEST_F(TestElectionMsgCompat2, new_to_old_fake_new) {
 }
 
 TEST_F(TestElectionMsgCompat2, new_to_new_real_new) {
-  observer::ObServer::get_instance().gctx_.startup_mode_ = observer::NORMAL_MODE;
+  observer::ObServer::get_instance().gctx_.startup_mode_ = ObServerMode::NORMAL_MODE;
   oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_2_0_0;
   constexpr int64_t BUFFER_SIZE = 2048;
   char buffer[BUFFER_SIZE] = {0};

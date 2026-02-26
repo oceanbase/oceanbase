@@ -73,7 +73,10 @@ static const char* job_type_str_array[JOB_TYPE_MAX] = {
   "UPGRADE_END",
   "UPGRADE_ALL",
   "ALTER_RESOURCE_TENANT_UNIT_NUM",
-  "ALTER_TENANT_PRIMARY_ZONE"
+  "ALTER_TENANT_PRIMARY_ZONE",
+  "UPGRADE_FINISH",
+  "LOAD_MYSQL_SYS_PACKAGE",
+  "LOAD_ORACLE_SYS_PACKAGE",
 };
 
 bool ObRsJobTableOperator::is_valid_job_type(const ObRsJobType &rs_job_type)

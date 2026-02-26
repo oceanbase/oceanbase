@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/virtual_table/ob_all_virtual_proxy_routine.h"
-#include "share/schema/ob_routine_info.h" // ObRoutineInfo
 #include "sql/resolver/ob_resolver_utils.h" // ObResolverUtils
-#include "sql/resolver/ob_schema_checker.h" // ObSchemaChecker
 
 namespace oceanbase
 {

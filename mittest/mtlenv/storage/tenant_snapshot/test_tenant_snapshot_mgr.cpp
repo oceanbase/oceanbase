@@ -17,10 +17,7 @@
 #define private public
 #define protected public
 
-#include "lib/oblog/ob_log.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
-#include "storage/tenant_snapshot/ob_tenant_snapshot_mgr.h"
 #undef private
 
 namespace  oceanbase

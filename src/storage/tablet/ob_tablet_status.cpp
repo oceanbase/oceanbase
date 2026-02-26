@@ -13,16 +13,13 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_status.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/serialization.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {
 namespace storage
 {
 ObTabletStatus::ObTabletStatus()
-  : status_(Status::MAX)
+  : status_(Status::NONE)
 {
   static_assert(sizeof(status_str_array_) / sizeof(const char *) == static_cast<uint8_t>(ObTabletStatus::MAX) + 1,
       "status str array size does not equal to enum value count");
@@ -42,6 +39,20 @@ const char *ObTabletStatus::get_str(const ObTabletStatus &status)
     str = status_str_array_[status.status_];
   }
   return str;
+}
+
+bool ObTabletStatus::is_deleted_for_gc() const
+{
+  return ObTabletStatus::DELETED == status_
+      || ObTabletStatus::TRANSFER_OUT_DELETED == status_
+      || ObTabletStatus::SPLIT_SRC_DELETED == status_;
+}
+
+bool ObTabletStatus::is_writable_for_dml() const
+{
+  return ObTabletStatus::NORMAL == status_
+      || ObTabletStatus::TRANSFER_IN == status_
+      || ObTabletStatus::SPLIT_DST == status_;
 }
 
 int ObTabletStatus::serialize(char *buf, const int64_t len, int64_t &pos) const

@@ -11,43 +11,37 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-
 #include "ob_resource_plan_info.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
+int oceanbase::share::check_if_function_exist(const ObString &function_name, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  if (
+#define OB_RESOURCE_FUNCTION_TYPE_DEF(function_type_string) 0 == function_name.compare(#function_type_string) ||
+#include "ob_resource_plan_info.h"
+#undef OB_RESOURCE_FUNCTION_TYPE_DEF
+      0) {
+    exist = true;
+  } else {
+    exist = false;
+    LOG_WARN("invalid function name", K(function_name));
+  }
+  return ret;
+}
+
 ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
 {
   ObString ret_name;
   switch (function_type) {
-    case ObFunctionType::PRIO_COMPACTION_HIGH:
-      ret_name = ObString("COMPACTION_HIGH");
-      break;
-    case ObFunctionType::PRIO_HA_HIGH:
-      ret_name = ObString("HA_HIGH");
-      break;
-    case ObFunctionType::PRIO_COMPACTION_MID:
-      ret_name = ObString("COMPACTION_MID");
-      break;
-    case ObFunctionType::PRIO_HA_MID:
-      ret_name = ObString("HA_MID");
-      break;
-    case ObFunctionType::PRIO_COMPACTION_LOW:
-      ret_name = ObString("COMPACTION_LOW");
-      break;
-    case ObFunctionType::PRIO_HA_LOW:
-      ret_name = ObString("HA_LOW");
-      break;
-    case ObFunctionType::PRIO_DDL:
-      ret_name = ObString("DDL");
-      break;
-    case ObFunctionType::PRIO_DDL_HIGH:
-      ret_name = ObString("DDL_HIGH");
-      break;
-    case ObFunctionType::PRIO_OTHER_BACKGROUND:
-      ret_name = ObString("OTHER_BACKGROUND");
-      break;
+#define OB_RESOURCE_FUNCTION_TYPE_DEF(function_type_string) \
+  case ObFunctionType::PRIO_##function_type_string:         \
+    ret_name = ObString(#function_type_string);             \
+    break;
+#include "ob_resource_plan_info.h"
+#undef OB_RESOURCE_FUNCTION_TYPE_DEF
     default:
       ret_name = ObString("OTHER_GROUPS");
       break;
@@ -64,6 +58,8 @@ int ObPlanDirective::assign(const ObPlanDirective &other)
   min_iops_ = other.min_iops_;
   max_iops_ = other.max_iops_;
   weight_iops_ = other.weight_iops_;
+  max_net_bandwidth_ = other.max_net_bandwidth_;
+  net_bandwidth_weight_ = other.net_bandwidth_weight_;
   group_id_ = other.group_id_;
   ret = group_name_.assign(other.group_name_);
   return ret;

@@ -1,0 +1,3 @@
+ob_unittest(test_runtime_metric)
+ob_unittest(test_runtime_profile)
+ob_unittest(test_persist_and_merge_profile)

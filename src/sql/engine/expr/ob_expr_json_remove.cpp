@@ -12,7 +12,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "deps/oblib/src/lib/json_type/ob_json_path.h"
 #include "ob_expr_json_remove.h"
 #include "ob_expr_json_func_helper.h"
 
@@ -90,7 +89,8 @@ int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 
   bool is_null_result = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
@@ -112,15 +112,16 @@ int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     ObDatum *path_data = NULL;
     if (expr.args_[i]->datum_meta_.type_ == ObNullType) {
       is_null_result = true;
-    } else if (OB_FAIL(expr.args_[i]->eval(ctx, path_data))) {
+    } else if (OB_FAIL(temp_allocator.eval_arg(expr.args_[i], ctx, path_data))) {
       ret = OB_ERR_INVALID_JSON_PATH;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH);
     } else {
       ObString path_val = path_data->get_string();
       ObJsonPath *json_path;
+      bool is_const = expr.args_[i]->is_const_expr();
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[i], ctx, temp_allocator, path_val, is_null_result))) {
         LOG_WARN("fail to get real data.", K(ret), K(path_val));
-      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, i, false))) {
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(temp_allocator, path_cache, json_path, path_val, i, false, is_const))) {
         LOG_WARN("parse text to path failed", K(path_data->get_string()), K(ret));
       } else if (json_path->path_node_cnt() == 0) {
         ret = OB_ERR_JSON_VACUOUS_PATH;

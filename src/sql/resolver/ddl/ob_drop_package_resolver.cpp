@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_drop_package_resolver.h"
 #include "ob_drop_package_stmt.h"
-#include "share/ob_rpc_struct.h"
-#include "sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {

@@ -25,6 +25,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/plan_cache/ob_id_manager_allocator.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
+#include "sql/plan_cache/ob_plan_cache_param_constraint.h"
 
 namespace oceanbase
 {
@@ -58,6 +59,7 @@ struct SqlInfo: public ParameterizationHashValue
     ps_need_parameterized_ = that.ps_need_parameterized_;
     parse_infos_ = that.parse_infos_;
     need_check_fp_ = that.need_check_fp_;
+    fmt_int_or_ch_decint_idx_ = that.fmt_int_or_ch_decint_idx_;
     return *this;
   }
   void destroy() {}
@@ -67,6 +69,7 @@ struct SqlInfo: public ParameterizationHashValue
   common::ObBitSet<> fixed_param_index_;//记录限流语句中可参数化的位置不为?的位置
   common::ObBitSet<> trans_from_minus_index_;
   common::ObBitSet<> must_be_positive_index_; // 记录那些常量必须是正数
+  common::ObBitSet<> fmt_int_or_ch_decint_idx_;
   common::ObSEArray<common::ObCharsetType, 16> param_charset_type_;
   ObSqlTraits sql_traits_;
 
@@ -89,6 +92,7 @@ struct SqlInfo: public ParameterizationHashValue
   bool ps_need_parameterized_;
   common::ObSEArray<ObPCParseInfo, 4> parse_infos_;
   bool need_check_fp_;
+  common::ObSEArray<ObPCParamConstraint *, 4> params_constraint_;
 
   SqlInfo();
 };
@@ -145,6 +149,16 @@ public:
   static int check_and_generate_param_info(const common::ObIArray<ObPCParam *> &raw_params,
                                            const SqlInfo &not_param_info,
                                            common::ObIArray<ObPCParam *> &special_param_info);
+  static int formalize_fast_parameter_sql(ObIAllocator &allocator, const ObString &src_sql,
+                                          ObString &dest_sql, ObIArray<ObPCParam *> &raw_params,
+                                          const FPContext &fp_ctx);
+  static int formalize_sql_filter_hint(ObIAllocator &allocator,
+                                       const ObString &src_sql,
+                                       ObString &dest_sql,
+                                       ObIArray<ObPCParam *> &raw_params);
+  static int formalize_sql_text(ObIAllocator &allocator, const ObString &src_sql,
+                                ObString &fmt_sql, const SqlInfo &sql_info,
+                                const FPContext &fp_ctx);
   static int transform_neg_param(ObIArray<ObPCParam *> &pc_params);
   static int construct_not_param(const ObString &no_param_sql,
                                   ObPCParam *pc_param,
@@ -169,6 +183,17 @@ public:
                            char *buf,
                            int32_t buf_len,
                            int32_t &pos);
+  static int try_format_in_expr(const common::ObString &con_sql,
+                           char *buf,
+                           int32_t buf_len,
+                           int32_t &pos,
+                           bool& can_format);
+  static int search_vector(const char* start, const int64_t buf_len,
+                           int64_t& vec_start, int64_t& vec_end,
+                           bool &is_valid, int64_t& qm_cnt);
+  static bool is_in_expr_prefix(char c);
+  static int search_in_expr_pos(const char* buf, const int64_t buf_len,
+                                int64_t& pos, bool& found);
   static int construct_sql_for_pl(const common::ObString &no_param_sql,
                                   common::ObIArray<ObPCParam *> &not_params,
                                   char *buf,
@@ -192,6 +217,7 @@ public:
   static SQL_EXECUTION_MODE get_sql_execution_mode(ObPlanCacheCtx &pc_ctx);
   static bool is_prepare_mode(SQL_EXECUTION_MODE mode);
   static bool is_execute_mode(SQL_EXECUTION_MODE mode);
+  static bool is_text_mode(SQL_EXECUTION_MODE mode);
   static bool is_ignore_scale_check(TransformTreeCtx &ctx, const ParseNode *parent);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlParameterization);
@@ -207,7 +233,7 @@ private:
                        const bool *mark_arr,
                        int64_t arg_num,
                        SqlInfo &sql_info);
-  static int mark_tree(ParseNode *tree, SqlInfo &sql_info);
+  static int mark_tree(TransformTreeCtx &ctx, ParseNode *tree, SqlInfo &sql_info);
   static int get_related_user_vars(const ParseNode *tree, common::ObIArray<common::ObString> &user_vars);
 
   static int get_select_item_param_info(const common::ObIArray<ObPCParam *> &raw_params,
@@ -221,6 +247,7 @@ private:
 
   static int find_leftest_const_node(ParseNode &cur_node, ParseNode *&const_node);
   static bool need_fast_parser(const ObString &sql);
+  static bool is_vector_index_query(const ParseNode *tree);
 };
 
 }

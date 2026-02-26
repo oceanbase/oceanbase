@@ -13,16 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_ordered_coord_op.h"
-#include "share/ob_rpc_share.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/dtl/ob_dtl_channel_group.h"
-#include "sql/dtl/ob_dtl_channel_loop.h"
-#include "sql/dtl/ob_dtl_msg_type.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_px_dtl_msg.h"
-#include "sql/engine/px/ob_px_dtl_proc.h"
-#include "sql/engine/px/ob_px_util.h"
 
 namespace oceanbase
 {
@@ -53,6 +43,9 @@ ObPxOrderedCoordOp::ObPxOrderedCoordOp(ObExecContext &exec_ctx, const ObOpSpec &
     init_channel_piece_msg_proc_(exec_ctx, msg_proc_),
     reporting_wf_piece_msg_proc_(exec_ctx, msg_proc_),
     opt_stats_gather_piece_msg_proc_(exec_ctx, msg_proc_),
+    sp_winfunc_px_piece_msg_proc_(exec_ctx, msg_proc_),
+    rd_winfunc_px_piece_msg_proc_(exec_ctx, msg_proc_),
+    join_filter_count_row_piece_msg_proc_(exec_ctx, msg_proc_),
     readers_(NULL),
     receive_order_(),
     reader_cnt_(0),
@@ -83,7 +76,7 @@ int ObPxOrderedCoordOp::inner_open()
   } else if (OB_FAIL(setup_loop_proc())) {
     LOG_WARN("fail setup loop proc", K(ret));
   } else {
-    if (1 == px_dop_) {
+    if (use_serial_scheduler_) {
       msg_proc_.set_scheduler(&serial_scheduler_);
     } else {
       msg_proc_.set_scheduler(&parallel_scheduler_);
@@ -135,6 +128,9 @@ int ObPxOrderedCoordOp::setup_loop_proc()
       .register_processor(init_channel_piece_msg_proc_)
       .register_processor(reporting_wf_piece_msg_proc_)
       .register_processor(opt_stats_gather_piece_msg_proc_)
+      .register_processor(sp_winfunc_px_piece_msg_proc_)
+      .register_processor(rd_winfunc_px_piece_msg_proc_)
+      .register_processor(join_filter_count_row_piece_msg_proc_)
       .register_interrupt_processor(interrupt_proc_);
   return ret;
 }
@@ -160,11 +156,11 @@ int ObPxOrderedCoordOp::inner_get_next_row()
     int64_t nth_channel = OB_INVALID_INDEX_INT64;
     // Note:
     //   inner_get_next_row is invoked in two pathes (batch vs
-    //   non-batch). The eval flag should be cleared with seperated flags
+    //   non-batch). The eval flag should be cleared with separated flags
     //   under each invoke path (batch vs non-batch). Therefore call the
     //   overriding API do_clear_datum_eval_flag() to replace
     //   clear_evaluated_flag
-    // TODO qubin.qb: Implement seperated inner_get_next_batch to
+    // TODO qubin.qb: Implement separated inner_get_next_batch to
     // isolate them
     do_clear_datum_eval_flag();
     clear_dynamic_const_parent_flag();
@@ -215,7 +211,7 @@ int ObPxOrderedCoordOp::inner_get_next_row()
     } else if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, nth_channel))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message, try again", K(ret));
         ret = OB_SUCCESS;
         if (channel_idx_ < task_ch_set_.count() && first_row_sent_) {
@@ -243,6 +239,9 @@ int ObPxOrderedCoordOp::inner_get_next_row()
         case ObDtlMsgType::DH_INIT_CHANNEL_PIECE_MSG:
         case ObDtlMsgType::DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG:
         case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
+        case ObDtlMsgType::DH_RD_WINFUNC_PX_PIECE_MSG:
+        case ObDtlMsgType::DH_SP_WINFUNC_PX_PIECE_MSG:
+        case ObDtlMsgType::DH_JOIN_FILTER_COUNT_ROW_PIECE_MSG:
           // 这几种消息都在 process 回调函数里处理了
           break;
         default:
@@ -370,7 +369,7 @@ int ObPxOrderedCoordOp::inner_get_next_batch(const int64_t max_row_cnt)
     } else if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, nth_channel))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message, try again", K(ret));
         ret = OB_SUCCESS;
         if (channel_idx_ < task_ch_set_.count() && first_row_sent_) {
@@ -398,6 +397,9 @@ int ObPxOrderedCoordOp::inner_get_next_batch(const int64_t max_row_cnt)
         case ObDtlMsgType::DH_INIT_CHANNEL_PIECE_MSG:
         case ObDtlMsgType::DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG:
         case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
+        case ObDtlMsgType::DH_RD_WINFUNC_PX_PIECE_MSG:
+        case ObDtlMsgType::DH_SP_WINFUNC_PX_PIECE_MSG:
+        case ObDtlMsgType::DH_JOIN_FILTER_COUNT_ROW_PIECE_MSG:
           // 这几种消息都在 process 回调函数里处理了
           break;
         default:
@@ -436,12 +438,15 @@ int ObPxOrderedCoordOp::next_rows(ObReceiveRowReader &reader, int64_t max_row_cn
   LOG_TRACE("Begin next_rows", K(max_row_cnt));
   metric_.mark_interval_start();
   read_rows = 0;
-  // TODO: shanting2.0 use get_next_batch_vec
-  ret = reader.get_next_row(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_);
+  if (MY_SPEC.use_rich_format_) {
+    ret = reader.get_next_batch_vec(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_,
+                                    max_row_cnt, read_rows, vector_rows_);
+  } else {
+    ret = reader.get_next_batch(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_,
+                                max_row_cnt, read_rows, stored_rows_);
+  }
   metric_.mark_interval_end(&time_recorder_);
-  if (OB_SUCC(ret)) {
-    read_rows = 1;
-  } else if (OB_ITER_END == ret) {
+  if (OB_ITER_END == ret) {
     finish_ch_cnt_++;
     channel_idx_++;
     if (OB_LIKELY(finish_ch_cnt_ < task_channels_.count())) {
@@ -508,8 +513,20 @@ int ObPxOrderedCoordOp::setup_readers()
       LOG_WARN("allocate memory failed", K(ret));
     } else {
       reader_cnt_ = task_channels_.count();
+      uint64_t plan_min_cluster_version_ = ctx_.get_physical_plan_ctx()->get_phy_plan()
+                            ->get_min_cluster_version();
+      bool reorder_fixed_expr = ctx_.get_physical_plan_ctx()->get_phy_plan()
+                            ->get_min_cluster_version() >= CLUSTER_VERSION_4_3_3_0;
+      common::ObIAllocator *allocator =
+        ((plan_min_cluster_version_ >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
+          plan_min_cluster_version_ < CLUSTER_VERSION_4_4_0_0) ||
+          plan_min_cluster_version_ >= CLUSTER_VERSION_4_4_1_0)
+          ? &ctx_.get_allocator() : NULL;
       for (int64_t i = 0; i < reader_cnt_; i++) {
-        new (&readers_[i]) ObReceiveRowReader(get_spec().id_);
+        new (&readers_[i]) ObReceiveRowReader(get_spec().id_,
+              &(static_cast<const ObPxReceiveSpec &>(spec_).child_exprs_),
+              reorder_fixed_expr,
+              allocator);
       }
     }
   }

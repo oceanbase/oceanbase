@@ -14,12 +14,14 @@
 #define OCEANBASE_ALLOCATOR_OB_TX_DATA_ALLOCATOR_H_
 
 #include "lib/allocator/ob_slice_alloc.h"
-#include "share/ob_delegate.h"
-#include "share/throttle/ob_share_throttle_define.h"
 #include "lib/allocator/ob_vslice_alloc.h"
+#include "share/ob_delegate.h"
+#include "share/ob_ls_id.h"
+#include "share/throttle/ob_share_throttle_define.h"
 
 namespace oceanbase {
 namespace share {
+class ObLSID;
 
 OB_INLINE int64_t &tx_data_throttled_alloc()
 {
@@ -38,8 +40,8 @@ public:
   static const int64_t ALLOC_TX_DATA_MAX_CONCURRENCY = 32;
   static const uint32_t THROTTLE_TX_DATA_INTERVAL = 20 * 1000; // 20ms
 
-  // The tx data memtable will trigger a freeze if its memory use is more than 2%
-  static constexpr double TX_DATA_FREEZE_TRIGGER_PERCENTAGE = 2;
+  // The tx data memtable will trigger a freeze if its memory use is more than 5%
+  static constexpr double TX_DATA_FREEZE_TRIGGER_PERCENTAGE = 5;
 
 public:
   DEFINE_CUSTOM_FUNC_FOR_THROTTLE(TxData);
@@ -48,7 +50,7 @@ public:
   ObTenantTxDataAllocator()
       : is_inited_(false), throttle_tool_(nullptr), block_alloc_(), slice_allocator_() {}
   ~ObTenantTxDataAllocator() { reset(); }
-  int init(const char* label);
+  int init(const char* label, TxShareThrottleTool *throttle_tool);
   void *alloc(const bool enable_throttle = true, const int64_t abs_expire_time = 0);
   void reset();
   int64_t hold() const { return block_alloc_.hold(); }
@@ -67,10 +69,11 @@ private:
 class ObTxDataThrottleGuard
 {
 public:
-  ObTxDataThrottleGuard(const bool for_replay, const int64_t abs_expire_time);
+  ObTxDataThrottleGuard(const share::ObLSID ls_id, const bool for_replay, const int64_t abs_expire_time);
   ~ObTxDataThrottleGuard();
 
 private:
+  const share::ObLSID ls_id_;
   bool for_replay_;
   int64_t abs_expire_time_;
   share::TxShareThrottleTool *throttle_tool_;

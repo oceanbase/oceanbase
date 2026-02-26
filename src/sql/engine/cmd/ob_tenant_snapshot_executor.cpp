@@ -11,11 +11,9 @@
  */
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_tenant_snapshot_executor.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/resolver/cmd/ob_tenant_snapshot_stmt.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
-#include "share/tenant_snapshot/ob_tenant_snapshot_id.h"
 
 namespace oceanbase
 {

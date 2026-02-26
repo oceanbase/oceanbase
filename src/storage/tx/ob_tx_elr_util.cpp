@@ -11,7 +11,6 @@
  */
 
 #include "ob_tx_elr_util.h"
-#include "common/ob_clock_generator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "ob_trans_event.h"
 
@@ -20,14 +19,10 @@ namespace oceanbase
 namespace transaction
 {
 
-int ObTxELRUtil::check_and_update_tx_elr_info(ObTxDesc &tx)
+int ObTxELRUtil::check_and_update_tx_elr_info()
 {
   int ret = OB_SUCCESS;
   if (OB_SYS_TENANT_ID != MTL_ID() && MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
-    if (can_tenant_elr_) {  // tenant config enable elr
-      tx.set_can_elr(true);
-      TX_STAT_ELR_ENABLE_TRANS_INC(MTL_ID());
-    }
     refresh_elr_tenant_config_();
   }
   return ret;
@@ -41,6 +36,7 @@ void ObTxELRUtil::refresh_elr_tenant_config_()
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (OB_LIKELY(tenant_config.is_valid())) {
       can_tenant_elr_ = tenant_config->enable_early_lock_release;
+      trx_max_log_cb_limit_ =  tenant_config->_trx_max_log_cb_limit;
       last_refresh_ts_ = ObClockGenerator::getClock();
     }
     if (REACH_TIME_INTERVAL(10000000 /* 10s */)) {

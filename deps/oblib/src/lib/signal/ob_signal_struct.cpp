@@ -15,7 +15,6 @@
 #include "lib/signal/ob_signal_struct.h"
 #include <new>
 #include "lib/atomic/ob_atomic.h"
-#include "lib/charset/ob_mysql_global.h"
 #include "lib/coro/co_var.h"
 #include "lib/utility/ob_defer.h"
 

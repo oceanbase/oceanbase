@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_schema_service.h"
-#include "common/sql_mode/ob_sql_mode.h"
 #include "lib/utility/ob_fast_convert.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/serialization.h"
-#include "lib/oblog/ob_log_module.h"
-#include "ob_schema_macro_define.h"
-#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {
@@ -138,7 +132,7 @@ int64_t ObSchemaOperation::to_string(char *buf, const int64_t buf_len) const
        K_(outline_id), K_(udf_name), K_(sequence_id),
        K_(tablespace_id), K_(profile_id), K_(audit_id),
        K_(grantee_id), K_(grantor_id),
-       K_(ddl_stmt_str), K_(dblink_id), K_(directory_id));
+       K_(ddl_stmt_str), K_(dblink_id), K_(directory_id), K_(catalog_id), K_(catalog_name));
   return pos;
 }
 
@@ -374,7 +368,6 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
   int ret = OB_SUCCESS;
   if (this != &src_schema) {
     reset();
-    int ret = common::OB_SUCCESS;
     char *buf = NULL;
     int64_t column_cnt = 0;
 
@@ -408,6 +401,11 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       lob_inrow_threshold_ = src_schema.lob_inrow_threshold_;
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
+      micro_index_clustered_ = src_schema.micro_index_clustered_;
+      enable_macro_block_bloom_filter_ = src_schema.enable_macro_block_bloom_filter_;
+      merge_engine_type_ = src_schema.merge_engine_type_;
+      external_location_id_ = src_schema.external_location_id_;
+      micro_block_format_version_ = src_schema.micro_block_format_version_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -416,6 +414,8 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("Fail to deep copy expire info string", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.parser_name_, parser_name_))) {
         LOG_WARN("deep copy parser name failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.parser_properties_, parser_properties_))) {
+        LOG_WARN("fail to deep copy parser properties", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_, external_file_location_))) {
         LOG_WARN("deep copy external_file_location failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_access_info_, external_file_location_access_info_))) {
@@ -424,6 +424,10 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("deep copy external_file_format failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_pattern_, external_file_pattern_))) {
         LOG_WARN("deep copy external_file_pattern failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_properties_, external_properties_))) {
+        LOG_WARN("deep copy external_properties failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_sub_path_, external_sub_path_))) {
+        LOG_WARN("deep copy external_sub_path failed", K(ret));
       }
 
       //view schema
@@ -540,6 +544,27 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
   }
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.kv_attributes_, kv_attributes_))) {
     LOG_WARN("Fail to deep copy ttl definition string", K(ret));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.storage_cache_policy_, storage_cache_policy_))) {
+    LOG_WARN("Fail to deep copy storage_cache_policy string", K(ret));
+  }
+  if (FAILEDx(mv_mode_.assign(src_schema.mv_mode_))) {
+    LOG_WARN("fail to assign mv_mode", K(ret));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.index_params_, index_params_))) {
+    LOG_WARN("Fail to deep copy vector index param string", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    semistruct_encoding_type_ = src_schema.semistruct_encoding_type_;
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.dynamic_partition_policy_, dynamic_partition_policy_))) {
+    LOG_WARN("fail to deep copy dynamic partition policy string", KR(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.semistruct_properties_, semistruct_properties_))) {
+    LOG_WARN("fail to deep copy semistruct_properties string", KR(ret));
   }
 
   return ret;

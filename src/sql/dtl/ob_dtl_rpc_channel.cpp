@@ -12,15 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_rpc_channel.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/lock/ob_thread_cond.h"
-#include "common/row/ob_row.h"
-#include "sql/dtl/ob_dtl_rpc_proxy.h"
-#include "sql/dtl/ob_dtl.h"
-#include "sql/dtl/ob_dtl_flow_control.h"
 #include "sql/dtl/ob_dtl_channel_agent.h"
-#include "share/rc/ob_context.h"
 #include "sql/dtl/ob_dtl_channel_watcher.h"
 
 using namespace oceanbase::common;
@@ -195,10 +187,10 @@ ObDtlRpcChannel::~ObDtlRpcChannel()
   LOG_TRACE("dtl use time", K(times_), K(write_buf_use_time_), K(send_use_time_), K(lbt()));
 }
 
-int ObDtlRpcChannel::init()
+int ObDtlRpcChannel::init(ObDtlFlowControl *dfc)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDtlBasicChannel::init())) {
+  if (OB_FAIL(ObDtlBasicChannel::init(dfc))) {
     LOG_WARN("Initialize fifo allocator fail", K(ret));
   }
   return ret;
@@ -232,8 +224,9 @@ int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer *&buffer)
     } else if (OB_ISNULL(linked_buffer = alloc_buf(buffer->size()))){
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate buffer", K(ret));
+    } else if (OB_FAIL(ObDtlLinkedBuffer::assign(*buffer, linked_buffer))) {
+      LOG_WARN("failed to assign buffer", K(ret));
     } else {
-      ObDtlLinkedBuffer::assign(*buffer, linked_buffer);
       if (1 == linked_buffer->seq_no() && linked_buffer->is_data_msg()
           && 0 != get_recv_buffer_cnt()) {
         ret = OB_ERR_UNEXPECTED;
@@ -315,15 +308,28 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer *&buf)
     // we wait first message return and retry until peer setup.
     int64_t timeout_us = buf->timeout_ts() - ObTimeUtility::current_time();
     SendMsgCB cb(msg_response_, *cur_trace_id, buf->timeout_ts());
+    bool send_by_tenant = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
     if (timeout_us <= 0) {
       ret = OB_TIMEOUT;
       LOG_WARN("send dtl message timeout", K(ret), K(peer_),
           K(buf->timeout_ts()));
     } else if (OB_FAIL(msg_response_.start())) {
       LOG_WARN("start message process fail", K(ret));
-    } else if (OB_FAIL(DTL.get_rpc_proxy().to(peer_).timeout(timeout_us)
+    } else if (send_by_tenant
+               && OB_FAIL(DTL.get_rpc_proxy().to(peer_).timeout(timeout_us)
+        .group_id(share::OBCG_DTL)
         .compressed(compressor_type_)
+        .by(tenant_id_)
         .ap_send_message(ObDtlSendArgs{peer_id_, *buf}, &cb))) {
+      LOG_WARN("send message failed", K_(peer), K(ret));
+      int tmp_ret = msg_response_.on_start_fail();
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("set start fail failed", K(tmp_ret));
+      }
+    } else if (!send_by_tenant
+               && OB_FAIL(DTL.get_rpc_proxy().to(peer_).timeout(timeout_us)
+                     .compressed(compressor_type_)
+                     .ap_send_message(ObDtlSendArgs{peer_id_, *buf}, &cb))) {
       LOG_WARN("send message failed", K_(peer), K(ret));
       int tmp_ret = msg_response_.on_start_fail();
       if (OB_SUCCESS != tmp_ret) {

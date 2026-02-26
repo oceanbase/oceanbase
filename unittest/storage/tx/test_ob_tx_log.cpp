@@ -14,8 +14,6 @@
 #include <gtest/gtest.h>
 #define private public
 #include "storage/tx/ob_tx_log.h"
-#include "logservice/ob_log_base_header.h"
-#include "lib/container/ob_array_helper.h"
 void ob_abort (void) __THROW {}
 namespace oceanbase
 {
@@ -63,6 +61,7 @@ ObTxSEQ TEST_SERIAL_FINAL_SEQ_NO = ObTxSEQ(12346, 0);
 LSKey TEST_LS_KEY;
 ObXATransID TEST_XID;
 ObTxPrevLogType TEST_PREV_LOG_TYPE(ObTxPrevLogType::TypeEnum::TRANSFER_IN);
+tablelock::ObTableLockPrioOpArray TEST_PRIO_OP_ARRAY;
 
 
 struct OldTestLog
@@ -178,7 +177,7 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
   ObTxBufferNodeArray TEST_TX_BUFFER_NODE_ARRAY;
   ObString str("TEST CASE");
   ObTxBufferNode node;
-  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), transaction::ObTxSEQ::mk_v0(100), nullptr);
   TEST_TX_BUFFER_NODE_ARRAY.push_back(node);
 
   ObTxCommitInfoLog fill_commit_state(TEST_ADDR,
@@ -200,6 +199,7 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
   ObTxActiveInfoLog fill_active_state(TEST_ADDR,
                                        TEST_TRANS_TYPE,
                                        TEST_SESSION_ID,
+                                       0,
                                        TEST_TRACE_ID_STR,
                                        TEST_SCHEMA_VERSION,
                                        TEST_CAN_ELR,
@@ -215,7 +215,8 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
                                        TEST_MAX_SUBMITTED_SEQ_NO,
                                        TEST_CLUSTER_VERSION,
                                        TEST_XID,
-                                       TEST_SERIAL_FINAL_SEQ_NO);
+                                       TEST_SERIAL_FINAL_SEQ_NO,
+                                       TEST_PRIO_OP_ARRAY);
   ObTxPrepareLog filll_prepare(TEST_LS_ARRAY, TEST_LOG_OFFSET, TEST_PREV_LOG_TYPE);
   ObTxCommitLog fill_commit(share::SCN::base_scn(),
                             TEST_CHECKSUM,
@@ -326,7 +327,7 @@ TEST_F(TestObTxLog, tx_log_body_redo)
   ObTxBufferNodeArray TEST_TX_BUFFER_NODE_ARRAY;
   ObString str("TEST CASE");
   ObTxBufferNode node;
-  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), transaction::ObTxSEQ::mk_v0(100), nullptr);
   TEST_TX_BUFFER_NODE_ARRAY.push_back(node);
 
   ObTxCommitInfoLog fill_commit_state(TEST_ADDR,
@@ -448,7 +449,7 @@ TEST_F(TestObTxLog, test_compat_bytes)
   ObTxBufferNodeArray TEST_TX_BUFFER_NODE_ARRAY;
   ObString str("TEST CASE");
   ObTxBufferNode node;
-  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), transaction::ObTxSEQ::mk_v0(100), nullptr);
   TEST_TX_BUFFER_NODE_ARRAY.push_back(node);
 
   ObTxCommitInfoLog fill_commit_info(TEST_ADDR,
@@ -594,6 +595,10 @@ TEST_F(TestObTxLog, test_default_log_deserialize)
   EXPECT_EQ(fill_active_state.get_xid(), replay_active_state.get_xid());
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_serial_final_seq_no(), replay_active_state.get_serial_final_seq_no());
+  replay_member_cnt++;
+  EXPECT_EQ(fill_active_state.get_associated_session_id(), replay_active_state.get_associated_session_id());
+  replay_member_cnt++;
+  EXPECT_EQ(fill_active_state.get_prio_op_array().count(), replay_active_state.get_prio_op_array().count());
   replay_member_cnt++;
   EXPECT_EQ(replay_member_cnt, fill_member_cnt);
 
@@ -864,7 +869,7 @@ TEST_F(TestObTxLog, test_commit_log_with_checksum_signature)
   ObTxBufferNodeArray tx_buffer_node_array;
   ObTxBufferNode node;
   ObString str("hello,world");
-  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), transaction::ObTxSEQ::mk_v0(100), nullptr);
   tx_buffer_node_array.push_back(node);
   ObLSLogInfoArray ls_info_array;
   ls_info_array.push_back(ObLSLogInfo());

@@ -14,12 +14,16 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "io/easy_io_struct.h"
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_server_schema_service.h"
-#include "sql/session/ob_basic_session_info.h"
-#include "lib/allocator/ob_malloc.h"
 #include "observer/ob_server.h"
+#include "sql/session/ob_basic_session_info.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "share/system_variable/ob_system_variable_alias.h"
+#include "share/system_variable/ob_system_variable.h"
+#include "share/ob_errno.h"
+#include "common/ob_smart_var.h"
+#include "deps/easy/src/io/easy_io_struct.h"
+#include "lib/ob_define.h"
+#include "lib/allocator/ob_mod_define.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -76,143 +80,202 @@ TEST(test_basic_session_info, init_set_get)
 
 TEST(test_basic_session_info, load_variables)
 {
+  int ret = OB_SUCCESS;
   OBSERVER.init_schema();
   OBSERVER.init_tz_info_mgr();
   common::ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
-  ObBasicSessionInfo session_info(OB_SERVER_TENANT_ID);
-  ObBasicSessionInfo::LockGuard lock_guard(session_info.get_query_lock());
-  ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
-  ASSERT_EQ(OB_SUCCESS, session_info.test_init(0, 0, &allocator));
-  int ret = OB_SUCCESS;
-  if (OB_SUCCESS != (ret = ObPreProcessSysVars::change_initial_value())){
-    LOG_ERROR("Change initial value failed !", K(ret));
+  SMART_VAR(sql::ObSQLSessionInfo, session_info) {
+    ObBasicSessionInfo::LockGuard lock_guard(session_info.get_query_lock());
+    ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
+    ASSERT_EQ(OB_SUCCESS, session_info.test_init(0, 0, 0, &allocator));
+    if (OB_SUCCESS != (ret = ObPreProcessSysVars::change_initial_value())){
+      LOG_ERROR("Change initial value failed !", K(ret));
+    }
+
+    //test for load_system_variable
+    ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
+    ObString name;
+    ObObj type;
+    ObObj value;
+    name = ObString::make_string("autocommit");
+    type.set_type(ObIntType);
+    value.set_int(1);
+    ret = session_info.update_sys_variable_by_name(name, value);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    //value.set_int(10);
+    //ret = session_info.update_sys_variable(name, value);
+    //ASSERT_EQ(OB_ERR_WRONG_VALUE_FOR_VAR, ret);
+
+    //test replace_user_variable()
+    ObSessionVariable sess_var;
+    ObString empty_name = ObString::make_empty_string();
+    ret = session_info.replace_user_variable(empty_name, sess_var);
+    ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+    ObString user_val("user_val");
+    type.set_type(ObIntType);
+    sess_var.value_.set_int(7);
+    ret = session_info.replace_user_variable(user_val, sess_var);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = session_info.replace_user_variable(user_val, sess_var);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    //test remove_user_variable()
+    ret = session_info.remove_user_variable(empty_name);
+    ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+    ObString not_exist = ObString::make_string("not_exist");
+    ret = session_info.remove_user_variable(not_exist);
+    ASSERT_EQ(OB_ERR_USER_VARIABLE_UNKNOWN, ret);
+    ret = session_info.remove_user_variable(user_val);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    //test update_sys_variable()
+    ret = session_info.update_sys_variable_by_name(empty_name, value);
+    ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+    ret = session_info.update_sys_variable_by_name(not_exist, value);
+    ASSERT_EQ(OB_ERR_SYS_VARIABLE_UNKNOWN, ret);
+    ObString log_level = ObString::make_string("ob_log_level");
+    ObString log_level_string = ObString::make_string("sql.*:debug,rs.*:info");
+    ObObj log_level_value;
+    log_level_value.set_varchar(log_level_string);
+    ret = session_info.update_sys_variable_by_name(log_level, log_level_value);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    log_level_string = ObString::make_string("disabled");
+    log_level_value.set_varchar(log_level_string);
+    ret = session_info.update_sys_variable_by_name(log_level, log_level_value);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    log_level_string = ObString::make_string("wrong value");
+    log_level_value.set_varchar(log_level_string);
+    ret = session_info.update_sys_variable_by_name(log_level, log_level_value);
+    ASSERT_EQ(OB_LOG_LEVEL_INVALID, ret);
+    value.set_int(1);
+    ret = session_info.update_sys_variable_by_name(name, value);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    //test get_user_variable_value()
+    ObObj result;
+    ret = session_info.get_user_variable_value(not_exist, result);
+    ASSERT_EQ(OB_ERR_USER_VARIABLE_UNKNOWN, ret);
+    ret = session_info.replace_user_variable(user_val, sess_var);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = session_info.get_user_variable_value(user_val, result);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(result, sess_var.value_);
+
+    //test get_sys_variable()
+    ObBasicSysVar *val = NULL;
+    ret = session_info.get_sys_variable_by_name(not_exist, val);
+    ASSERT_EQ(OB_ERR_SYS_VARIABLE_UNKNOWN, ret);
+    ret = session_info.get_sys_variable_by_name(name, val);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(val->get_value(), value);
+
+    //test get_sys_variable()
+    result.reset();
+    ret = session_info.get_sys_variable_by_name(not_exist, result);
+    ASSERT_EQ(OB_ERR_SYS_VARIABLE_UNKNOWN, ret);
+    ret = session_info.get_sys_variable_by_name(name, result);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(result, value);
+    result.reset();
+    ret = session_info.get_sys_variable_by_name("not_exist", result);
+    ASSERT_EQ(OB_ERR_SYS_VARIABLE_UNKNOWN, ret);
+    ret = session_info.get_sys_variable_by_name("autocommit", result);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(result, value);
+
+    //test get_user_variable_value()
+    const ObObj * obj_ptr = NULL;
+    ASSERT_EQ(NULL, session_info.get_user_variable_value(not_exist));
+    ASSERT_TRUE(NULL != (obj_ptr= session_info.get_user_variable_value(user_val)));
+    ASSERT_EQ(*obj_ptr, sess_var.value_);
+
+    //test get_user_variable_value()
+    ObObj out_value;
+    ASSERT_TRUE(OB_SUCCESS == session_info.get_sys_variable_by_name(name, out_value));
+    ASSERT_EQ(out_value, value);
+
+    //test variable_exist()
+    ASSERT_FALSE(session_info.user_variable_exists(not_exist));
+    ASSERT_TRUE(session_info.user_variable_exists(user_val));
+
+    //test sys_variable_exist()
+    bool is_exist = false;
+    ASSERT_TRUE(OB_SUCCESS == session_info.sys_variable_exists(not_exist, is_exist));
+    ASSERT_FALSE(is_exist);
+    ASSERT_TRUE(OB_SUCCESS == session_info.sys_variable_exists(name, is_exist));
+    ASSERT_TRUE(is_exist);
+
+    //test get_sys_variable_type()
+    ObObjType re_type;
+    re_type = session_info.get_sys_variable_type(name);
+    ASSERT_EQ(re_type, ObIntType);
+    LOG_WARN("session_info:", K(session_info));
+    session_info.reset(false);
   }
-
-  //test for load_system_variable
-  ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
-  ObString name;
-  ObObj type;
-  ObObj value;
-  name = ObString::make_string("autocommit");
-  type.set_type(ObIntType);
-  value.set_int(1);
-  ret = session_info.update_sys_variable_by_name(name, value);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  //value.set_int(10);
-  //ret = session_info.update_sys_variable(name, value);
-  //ASSERT_EQ(OB_ERR_WRONG_VALUE_FOR_VAR, ret);
-
-  //test replace_user_variable()
-  ObSessionVariable sess_var;
-  ObString empty_name = ObString::make_empty_string();
-  ret = session_info.replace_user_variable(empty_name, sess_var);
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-  ObString user_val("user_val");
-  type.set_type(ObIntType);
-  sess_var.value_.set_int(7);
-  ret = session_info.replace_user_variable(user_val, sess_var);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = session_info.replace_user_variable(user_val, sess_var);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  //test remove_user_variable()
-  ret = session_info.remove_user_variable(empty_name);
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-  ObString not_exist = ObString::make_string("not_exist");
-  ret = session_info.remove_user_variable(not_exist);
-  ASSERT_EQ(OB_ERR_USER_VARIABLE_UNKNOWN, ret);
-  ret = session_info.remove_user_variable(user_val);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  //test update_sys_variable()
-  ret = session_info.update_sys_variable_by_name(empty_name, value);
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-  ret = session_info.update_sys_variable_by_name(not_exist, value);
-  ASSERT_EQ(OB_ERR_SYS_VARIABLE_UNKNOWN, ret);
-  ObString log_level = ObString::make_string("ob_log_level");
-  ObString log_level_string = ObString::make_string("sql.*:debug,rs.*:info");
-  ObObj log_level_value;
-  log_level_value.set_varchar(log_level_string);
-  ret = session_info.update_sys_variable_by_name(log_level, log_level_value);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  log_level_string = ObString::make_string("disabled");
-  log_level_value.set_varchar(log_level_string);
-  ret = session_info.update_sys_variable_by_name(log_level, log_level_value);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  log_level_string = ObString::make_string("wrong value");
-  log_level_value.set_varchar(log_level_string);
-  ret = session_info.update_sys_variable_by_name(log_level, log_level_value);
-  ASSERT_EQ(OB_LOG_LEVEL_INVALID, ret);
-  value.set_int(1);
-  ret = session_info.update_sys_variable_by_name(name, value);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  //test get_user_variable_value()
-  ObObj result;
-  ret = session_info.get_user_variable_value(not_exist, result);
-  ASSERT_EQ(OB_ERR_USER_VARIABLE_UNKNOWN, ret);
-  ret = session_info.replace_user_variable(user_val, sess_var);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = session_info.get_user_variable_value(user_val, result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(result, sess_var.value_);
-
-  //test get_sys_variable()
-  ObBasicSysVar *val = NULL;
-  ret = session_info.get_sys_variable_by_name(not_exist, val);
-  ASSERT_EQ(OB_ERR_SYS_VARIABLE_UNKNOWN, ret);
-  ret = session_info.get_sys_variable_by_name(name, val);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(val->get_value(), value);
-
-  //test get_sys_variable()
-  result.reset();
-  ret = session_info.get_sys_variable_by_name(not_exist, result);
-  ASSERT_EQ(OB_ERR_SYS_VARIABLE_UNKNOWN, ret);
-  ret = session_info.get_sys_variable_by_name(name, result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(result, value);
-  result.reset();
-  ret = session_info.get_sys_variable_by_name("not_exist", result);
-  ASSERT_EQ(OB_ERR_SYS_VARIABLE_UNKNOWN, ret);
-  ret = session_info.get_sys_variable_by_name("autocommit", result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(result, value);
-
-  //test get_user_variable_value()
-  const ObObj * obj_ptr = NULL;
-  ASSERT_EQ(NULL, session_info.get_user_variable_value(not_exist));
-  ASSERT_TRUE(NULL != (obj_ptr= session_info.get_user_variable_value(user_val)));
-  ASSERT_EQ(*obj_ptr, sess_var.value_);
-
-  //test get_user_variable_value()
-  ObObj out_value;
-  ASSERT_TRUE(OB_SUCCESS == session_info.get_sys_variable_by_name(name, out_value));
-  ASSERT_EQ(out_value, value);
-
-  //test variable_exist()
-  ASSERT_FALSE(session_info.user_variable_exists(not_exist));
-  ASSERT_TRUE(session_info.user_variable_exists(user_val));
-
-  //test sys_variable_exist()
-  bool is_exist = false;
-  ASSERT_TRUE(OB_SUCCESS == session_info.sys_variable_exists(not_exist, is_exist));
-  ASSERT_FALSE(is_exist);
-  ASSERT_TRUE(OB_SUCCESS == session_info.sys_variable_exists(name, is_exist));
-  ASSERT_TRUE(is_exist);
-
-  //test get_sys_variable_type()
-  ObObjType re_type;
-  re_type = session_info.get_sys_variable_type(name);
-  ASSERT_EQ(re_type, ObIntType);
-  LOG_WARN("session_info:", K(session_info));
-  session_info.reset();
 }
 
+TEST(test_basic_session_info, reset_sys_vars)
+{
+  int ret = OB_SUCCESS;
+  OBSERVER.init_schema();
+  OBSERVER.init_tz_info_mgr();
+  common::ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
+  SMART_VAR(sql::ObSQLSessionInfo, session_info) {
+    ObBasicSessionInfo::LockGuard lock_guard(session_info.get_query_lock());
+    ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
+    ASSERT_EQ(OB_SUCCESS, session_info.test_init(0, 0, 0, &allocator));
+    if (OB_SUCCESS != (ret = ObPreProcessSysVars::change_initial_value())){
+      LOG_ERROR("Change initial value failed !", K(ret));
+    }
 
-}
+    // Step 1: Load default system variables
+    ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
+
+    // Step 2: Set some variables to non-default values
+
+    ObString current_default_catalog_name = ObString::make_string("_current_default_catalog");
+    ObObj current_default_catalog_value;
+
+    current_default_catalog_value.set_uint64(50008);
+
+    ASSERT_EQ(OB_SUCCESS, session_info.update_sys_variable_by_name(current_default_catalog_name, current_default_catalog_value));
+
+    // Step 3: Verify variables are set to non-default values
+    ObObj result;
+    ASSERT_EQ(OB_SUCCESS, session_info.get_sys_variable_by_name(current_default_catalog_name, result));
+    ASSERT_EQ(result.get_uint64(), current_default_catalog_value.get_uint64());
+
+    // Step 4: Reset session with skip_sys_var = false (no session cache)
+    session_info.reset(false);
+
+    // Step 5: Load default system variables again
+    ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
+
+    // Step 6: Verify variables are back to default values
+    ObObj default_current_default_catalog;
+    default_current_default_catalog.set_uint64(0);
+
+    ASSERT_EQ(OB_SUCCESS, session_info.get_sys_variable_by_name(current_default_catalog_name, result));
+    ASSERT_EQ(result.get_uint64(), default_current_default_catalog.get_uint64()); // both are default value 0
+
+    // Step 7: Test with skip_sys_var = true (preserve system variables)
+    // Set variables again to non-default values
+    ASSERT_EQ(OB_SUCCESS, session_info.update_sys_variable_by_name(current_default_catalog_name, current_default_catalog_value));
+
+    // Reset with skip_sys_var = true (with session cache, only clean inc value by reset inc flags)
+    session_info.reset(true);
+
+    // Load default system variables
+    ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
+
+    // Verify variables are back to default values
+    ASSERT_EQ(OB_SUCCESS, session_info.get_sys_variable_by_name(current_default_catalog_name, result));
+    ASSERT_EQ(result.get_uint64(), default_current_default_catalog.get_uint64());
+  }
 }
 
+} // namespace sql
+} // namespace oceanbase
 
 int main(int argc, char **argv)
 {

@@ -18,4 +18,10 @@ typedef struct listenfd_t {
   sf_t* sf;
 } listenfd_t;
 
+typedef struct listenfd_dispatch_t {
+  int fd;
+  int tid;
+  void* sock_ptr;
+} listenfd_dispatch_t;
+
 extern int listenfd_init(eloop_t* ep, listenfd_t* s, sf_t* sf, int fd);

@@ -12,13 +12,32 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_lease_struct.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/ob_serialization_helper.h"
 namespace oceanbase
 {
 using namespace common;
+using namespace observer;
 namespace share
 {
+
+const char *DataDiskSuggestedOperationType::get_str(const TYPE &type)
+{
+  const char *str = "UNKNOWN";
+  switch (type) {
+    case NONE:
+      str = "NONE";
+      break;
+    case EXPAND:
+      str = "EXPAND";
+      break;
+    case SHRINK:
+      str = "SHRINK";
+      break;
+    default:
+      str = "UNKNOWN";
+      break;
+  }
+  return str;
+}
 
 const char *server_service_status_to_str(const ServerServiceStatus status)
 {
@@ -69,13 +88,14 @@ void ObServerResourceInfo::reset()
 
   log_disk_total_ = 0;
   report_log_disk_assigned_ = 0;
+  log_disk_in_use_ = 0;
 
-  disk_total_ = 0;
-  disk_in_use_ = 0;
+  data_disk_total_ = 0;
+  report_data_disk_assigned_ = 0;
+  data_disk_in_use_ = 0;
 
-  // placeholders
-  log_disk_in_use_ = 0;                  // not used
-  report_data_disk_assigned_ = 0;        // not used
+  report_data_disk_suggested_operation_ = DataDiskSuggestedOperationType::NONE;
+  report_data_disk_suggested_size_ = 0;
 }
 
 bool ObServerResourceInfo::is_valid() const
@@ -88,8 +108,10 @@ bool ObServerResourceInfo::is_valid() const
          && mem_in_use_ >= 0
          && log_disk_total_ > 0
          && report_log_disk_assigned_ >= 0
-         && disk_total_ > 0
-         && disk_in_use_ >= 0;
+         && log_disk_in_use_ >= 0
+         && data_disk_total_ > 0
+         && report_data_disk_assigned_ >= 0
+         && data_disk_in_use_ >= 0;
 }
 
 bool ObServerResourceInfo::operator==(const ObServerResourceInfo &other) const
@@ -102,8 +124,10 @@ bool ObServerResourceInfo::operator==(const ObServerResourceInfo &other) const
       && mem_in_use_ == other.mem_in_use_
       && log_disk_total_ == other.log_disk_total_
       && report_log_disk_assigned_ == other.report_log_disk_assigned_
-      && disk_total_ == other.disk_total_
-      && disk_in_use_ == other.disk_in_use_;
+      && log_disk_in_use_ == other.log_disk_in_use_
+      && data_disk_total_ == other.data_disk_total_
+      && report_data_disk_assigned_ == other.report_data_disk_assigned_
+      && data_disk_in_use_ == other.data_disk_in_use_;
 }
 
 bool ObServerResourceInfo::operator!=(const ObServerResourceInfo &other) const
@@ -116,8 +140,10 @@ bool ObServerResourceInfo::operator!=(const ObServerResourceInfo &other) const
       || mem_in_use_ != other.mem_in_use_
       || log_disk_total_ != other.log_disk_total_
       || report_log_disk_assigned_ != other.report_log_disk_assigned_
-      || disk_total_ != other.disk_total_
-      || disk_in_use_ != other.disk_in_use_;
+      || log_disk_in_use_ != other.log_disk_in_use_
+      || data_disk_total_ != other.data_disk_total_
+      || report_data_disk_assigned_ != other.report_data_disk_assigned_
+      || data_disk_in_use_ != other.data_disk_in_use_;
 }
 
 int ObServerResourceInfo::assign(const ObServerResourceInfo& other)
@@ -127,10 +153,12 @@ int ObServerResourceInfo::assign(const ObServerResourceInfo& other)
   cpu_ = other.cpu_;
   mem_in_use_ = other.mem_in_use_;
   mem_total_ = other.mem_total_;
-  disk_in_use_ = other.disk_in_use_;
-  disk_total_ = other.disk_total_;
+  data_disk_in_use_ = other.data_disk_in_use_;
+  report_data_disk_assigned_ = other.report_data_disk_assigned_;
+  data_disk_total_ = other.data_disk_total_;
   log_disk_total_ = other.log_disk_total_;
   report_log_disk_assigned_ = other.report_log_disk_assigned_;
+  log_disk_in_use_ = other.log_disk_in_use_;
   report_cpu_assigned_ = other.report_cpu_assigned_;
   report_cpu_max_assigned_ = other.report_cpu_max_assigned_;
   report_mem_assigned_ = other.report_mem_assigned_;
@@ -147,10 +175,12 @@ OB_SERIALIZE_MEMBER(ObServerResourceInfo,
                     mem_in_use_,
                     log_disk_total_,
                     report_log_disk_assigned_,
-                    disk_total_,
-                    disk_in_use_,
-                    report_data_disk_assigned_,  // not used, only as placeholder
-                    log_disk_in_use_);           // not used, only as placeholder
+                    data_disk_total_,   // 'disk_total_' in earlier version  // FARM COMPAT WHITELIST
+                    data_disk_in_use_,  // 'disk_in_use_' in earlier version // FARM COMPAT WHITELIST
+                    report_data_disk_assigned_,
+                    log_disk_in_use_,
+                    report_data_disk_suggested_operation_,
+                    report_data_disk_suggested_size_);
 
 DEF_TO_STRING(ObServerResourceInfo)
 {
@@ -165,7 +195,9 @@ DEF_TO_STRING(ObServerResourceInfo)
       "mem_in_use:%.9gGB, "
       "log_disk_capacity:%.9gGB, "
       "log_disk_assigned:%.9gGB, "
+      "log_disk_in_use:%.9gGB, "
       "data_disk_capacity:%.9gGB, "
+      "data_disk_assigned:%.9gGB, "
       "data_disk_in_use:%.9gGB",
       cpu_,
       report_cpu_assigned_,
@@ -175,8 +207,11 @@ DEF_TO_STRING(ObServerResourceInfo)
       (double)mem_in_use_/1024/1024/1024,
       (double)log_disk_total_/1024/1024/1024,
       (double)report_log_disk_assigned_/1024/1024/1024,
-      (double)disk_total_/1024/1024/1024,
-      (double)disk_in_use_/1024/1024/1024);
+      (double)log_disk_in_use_/1024/1024/1024,
+      (double)data_disk_total_/1024/1024/1024,
+      report_data_disk_assigned_ < 0 ? report_data_disk_assigned_
+        : (double)report_data_disk_assigned_/1024/1024/1024,
+      (double)data_disk_in_use_/1024/1024/1024);
   J_OBJ_END();
   return pos;
 }

@@ -11,19 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "share/schema/ob_dependency_info.h"
-#include "ob_schema_getter_guard.h"
-#include "lib/container/ob_tuple.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_schema_utils.h"
-#include "observer/ob_server_struct.h"
+#include "ob_dependency_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
-#include "share/schema/ob_schema_struct.h"
 #include "rootserver/ob_ddl_operator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "rootserver/mview/ob_mview_utils.h"
 
 namespace oceanbase
 {
@@ -344,6 +336,60 @@ int ObDependencyInfo::insert_schema_object_dependency(common::ObISQLClient &tran
   return ret;
 }
 
+int ObDependencyInfo::get_timestamp_str(int64_t timestamp, ObSqlString &value_str)
+{
+  int ret = OB_SUCCESS;
+  if (timestamp > 0) {
+    OZ (value_str.append_fmt("usec_to_time(%ld)", timestamp));
+  } else {
+    OZ (value_str.append_fmt("now(6)"));
+  }
+  return ret;
+}
+
+int ObDependencyInfo::get_insert_value_str(ObSqlString &value_str)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id_);
+  ObSqlString dep_timestamp_str;
+  ObSqlString ref_timestamp_str;
+  OZ (get_timestamp_str(dep_timestamp_, dep_timestamp_str));
+  OZ (get_timestamp_str(ref_timestamp_, ref_timestamp_str));
+
+  OZ (value_str.append_fmt("(%ld,%ld,%d,%ld,%ld,%s,%ld,%d,%s,%ld,%ld,NULL,NULL,NULL,now(6),now(6))",
+                            ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_),
+                            extract_obj_id(exec_tenant_id, dep_obj_id_), dep_obj_type_, order_, schema_version_,
+                            dep_timestamp_str.ptr(), ref_obj_id_, ref_obj_type_,
+                            ref_timestamp_str.ptr(), extract_obj_id(exec_tenant_id, dep_obj_owner_id_), property_));
+
+  return ret;
+}
+
+int ObDependencyInfo::remove_duplicated_dep_infos(ObIArray<ObDependencyInfo> &deps,
+                                                 ObIArray<ObDependencyInfo> &source_deps)
+{
+  int ret = OB_SUCCESS;
+  bool duplicated = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < deps.count();) {
+    duplicated = false;
+    for (int64_t j = 0; OB_SUCC(ret) && j < source_deps.count(); j++) {
+      if (deps.at(i).get_dep_obj_type() == source_deps.at(j).get_dep_obj_type()
+          && deps.at(i).get_ref_obj_id() == source_deps.at(j).get_ref_obj_id()
+          && deps.at(i).get_ref_obj_type() == source_deps.at(j).get_ref_obj_type()) {
+        duplicated = true;
+        break;
+      }
+    }
+    if (duplicated) {
+      OZ (deps.remove(i));
+    } else {
+      OX (deps.at(i).set_order(source_deps.count() + i));
+      i++;
+    }
+  }
+  return ret;
+}
+
 int ObDependencyInfo::collect_dep_info(ObIArray<ObDependencyInfo> &deps,
                                        ObObjectType dep_obj_type,
                                        int64_t ref_obj_id,
@@ -352,33 +398,9 @@ int ObDependencyInfo::collect_dep_info(ObIArray<ObDependencyInfo> &deps,
 {
   int ret = OB_SUCCESS;
   const ObObjectType ref_obj_type = ObSchemaObjVersion::get_schema_object_type(dependent_type);
-  // omit duplicate dependent objects
-  bool exist = false;
-  for (int i = 0; i < deps.count(); i++) {
-    const ObDependencyInfo& tmp_dep = deps.at(i);
-    if (tmp_dep.get_dep_obj_type() == dep_obj_type
-        && tmp_dep.get_ref_obj_id() == ref_obj_id
-        && tmp_dep.get_ref_timestamp() == ref_timestamp
-        && tmp_dep.get_ref_obj_type() == ref_obj_type) {
-      exist = true;
-      break;
-    }
-  }
-  if (OB_SUCC(ret) && !exist) {
-    ObDependencyInfo dep;
-    dep.set_dep_obj_id(OB_INVALID_ID);
-    dep.set_dep_obj_type(dep_obj_type);
-    dep.set_dep_obj_owner_id(OB_INVALID_ID);
-    dep.set_ref_obj_id(ref_obj_id);
-    dep.set_ref_obj_type(ref_obj_type);
-    dep.set_order(deps.count());
-    dep.set_dep_timestamp(-1);
-    dep.set_ref_timestamp(ref_timestamp);
-    dep.set_property(0);
-    ObString dummy;
-    dep.set_dep_attrs(dummy);
-    dep.set_dep_reason(dummy);
-    OZ(deps.push_back(dep));
+  // Use common interface to add dependency if not duplicate
+  if (OB_FAIL(add_dependency_if_not_duplicate(deps, dep_obj_type, ref_obj_id, ref_timestamp, ref_obj_type))) {
+    LOG_WARN("failed to add dependency", KR(ret), K(dep_obj_type), K(ref_obj_id), K(ref_timestamp), K(ref_obj_type));
   }
   return ret;
 }
@@ -392,58 +414,25 @@ int ObDependencyInfo::collect_dep_infos(const ObIArray<ObSchemaObjVersion> &sche
                                bool is_pl)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < schema_objs.count(); ++i) {
+  ARRAY_FOREACH(schema_objs, i) {
     const ObSchemaObjVersion &s_objs = schema_objs.at(i);
     const ObObjectType ref_obj_type = ObSchemaObjVersion::get_schema_object_type(
         s_objs.object_type_);
+    // Skip self reference for TRIGGER or TYPE_BODY
     if (0 == i &&
         (ObObjectType::TRIGGER == dep_obj_type || ObObjectType::TYPE_BODY == dep_obj_type)) {
-      // if dep_obj_type is TRIGGER or TYPE_BODY, schema_objs.at(0) is itself,
-      // need to skip to avoid self reference.
       continue;
-    } else if (!s_objs.is_valid()) {
-      // omit invalid dependency
+    }
+    // Skip invalid dependencies
+    if (!s_objs.is_valid()) {
       continue;
-    } else {
-      // omit duplicate dependent objects
-      bool exist = false;
-      for (int i = 0; i < deps.count(); i++) {
-        const ObDependencyInfo& tmp_dep = deps.at(i);
-        if (tmp_dep.get_dep_obj_type() == dep_obj_type
-            && tmp_dep.get_ref_obj_id() == s_objs.get_object_id()
-            && tmp_dep.get_ref_timestamp() == s_objs.get_version()
-            && tmp_dep.get_ref_obj_type() == ref_obj_type) {
-          exist = true;
-          break;
-        }
-      }
-      if (exist) {
-        continue;
-      }
     }
-
-    ObDependencyInfo dep;
-    dep.set_dep_obj_id(OB_INVALID_ID);
-    dep.set_dep_obj_type(dep_obj_type);
-    dep.set_dep_obj_owner_id(OB_INVALID_ID);
-    dep.set_ref_obj_id(s_objs.get_object_id());
-    dep.set_ref_obj_type(ref_obj_type);
-    dep.set_order(deps.count());
-    dep.set_dep_timestamp(-1);
-    dep.set_ref_timestamp(s_objs.get_version());
-    dep.set_property(property);
-    if (dep_attrs.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH
-        || dep_reason.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("dep attrs or dep reason is too long", K(ret),
-               K(dep_attrs.length()), K(dep_reason.length()));
-    } else {
-      if (!dep_attrs.empty())
-        OZ(dep.set_dep_attrs(dep_attrs));
-      if (!dep_reason.empty())
-        OZ(dep.set_dep_reason(dep_reason));
+    // Use common interface to add dependency if not duplicate
+    if (OB_FAIL(add_dependency_if_not_duplicate(deps, dep_obj_type, s_objs.get_object_id(),
+                                      s_objs.get_version(), ref_obj_type, property,
+                                      dep_attrs, dep_reason))) {
+      LOG_WARN("failed to add dependency", KR(ret), K(s_objs));
     }
-    OZ(deps.push_back(dep));
   }
   return ret;
 }
@@ -463,7 +452,23 @@ int ObDependencyInfo::collect_dep_infos(ObReferenceObjTable &ref_objs,
     uint64_t curr_dep_obj_id = it->first.dep_obj_id_;
     // create view path, only record directly dependency
     if (curr_dep_obj_id == dep_obj_id) {
+      bool exist = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < it->second->ref_obj_versions_.count(); ++i) {
+        exist = false;
+        for (int j = 0; j < deps.count(); j++) {
+          const ObDependencyInfo& tmp_dep = deps.at(j);
+          if (tmp_dep.get_dep_obj_type() == it->first.dep_obj_type_
+              && tmp_dep.get_ref_obj_id() == it->second->ref_obj_versions_.at(i).object_id_
+              && tmp_dep.get_ref_timestamp() == it->second->ref_obj_versions_.at(i).version_
+              && tmp_dep.get_ref_obj_type()
+                 == ObSchemaObjVersion::get_schema_object_type(it->second->ref_obj_versions_.at(i).object_type_)) {
+            exist = true;
+            break;
+          }
+        }
+        if (exist) {
+          continue;
+        }
         ObDependencyInfo dep;
         max_version = std::max(it->second->ref_obj_versions_.at(i).version_, max_version);
         dep.set_dep_obj_id(OB_INVALID_ID);
@@ -498,32 +503,27 @@ int ObDependencyInfo::collect_dep_infos(
   int ret = OB_SUCCESS;
   int64_t order = 0;
   deps.reset();
-  for (int64_t i = 0; OB_SUCC(ret) && i < based_schema_object_infos.count(); ++i) {
+  ARRAY_FOREACH(based_schema_object_infos, i) {
     const ObBasedSchemaObjectInfo &base_info = based_schema_object_infos.at(i);
+    const ObObjectType ref_obj_type = rootserver::ObMViewUtils::get_object_type_for_mview(base_info.schema_type_);
+    // Validate tenant ID and schema type
     if (OB_UNLIKELY((OB_INVALID_TENANT_ID != base_info.schema_tenant_id_ &&
-                     tenant_id != base_info.schema_tenant_id_) ||
-                    TABLE_SCHEMA != base_info.schema_type_)) {
+                     tenant_id != base_info.schema_tenant_id_))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid based schema object", KR(ret), K(base_info));
+    } else if (OB_UNLIKELY(ObObjectType::MAX_TYPE == ref_obj_type)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected schema type", KR(ret), K(base_info.schema_type_));
     } else {
-      ObDependencyInfo dep;
-      dep.set_tenant_id(tenant_id);
-      dep.set_dep_obj_type(dep_obj_type);
-      dep.set_dep_obj_id(dep_obj_id);
-      dep.set_order(order++);
-      dep.set_schema_version(schema_version);
-      dep.set_dep_timestamp(-1);
-      dep.set_ref_obj_type(ObObjectType::TABLE);
-      dep.set_ref_obj_id(base_info.schema_id_);
-      dep.set_ref_timestamp(base_info.schema_version_);
-      dep.set_dep_obj_owner_id(dep_obj_owner_id);
-      dep.set_property(property);
-      if (!dep_attrs.empty() && OB_FAIL(dep.set_dep_attrs(dep_attrs))) {
-        LOG_WARN("fail to set dep attrs", KR(ret), K(dep_attrs));
-      } else if (!dep_reason.empty() && OB_FAIL(dep.set_dep_reason(dep_reason))) {
-        LOG_WARN("fail to set dep reason", KR(ret), K(dep_attrs));
-      } else if (OB_FAIL(deps.push_back(dep))) {
-        LOG_WARN("fail to push back dep", KR(ret), K(dep));
+      // Use custom order that starts from 0 and increments, matching original behavior
+      if (OB_FAIL(add_dependency_if_not_duplicate(deps, dep_obj_type, base_info.schema_id_,
+                                        base_info.schema_version_, ref_obj_type, property,
+                                        dep_attrs, dep_reason, tenant_id, dep_obj_id,
+                                        dep_obj_owner_id, schema_version, static_cast<uint64_t>(order)))) {
+        LOG_WARN("failed to add dependency", KR(ret), K(base_info));
+      } else {
+        // Increment order for next iteration
+        ++order;
       }
     }
   }
@@ -654,7 +654,7 @@ int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret));
       } else {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           int64_t tmp_obj_id = OB_INVALID_ID;
           int64_t tmp_type = static_cast<int64_t> (share::schema::ObObjectType::INVALID);
           EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_id", tmp_obj_id, int64_t);
@@ -748,7 +748,7 @@ int ObDependencyInfo::collect_all_dep_objs(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret));
       } else {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           int64_t tmp_obj_id = OB_INVALID_ID;
           int64_t tmp_type = static_cast<int64_t>(share::schema::ObObjectType::INVALID);
           int64_t tmp_schema_version = OB_INVALID_VERSION;
@@ -924,6 +924,33 @@ int ObDependencyInfo::modify_all_obj_status(const ObIArray<std::pair<uint64_t, s
       } else if (share::schema::ObObjectType::SYNONYM == objs.at(i).second) {
         // TODO:peihan.dph
       }
+    }
+  }
+  return ret;
+}
+
+int ObDependencyInfo::insert_dependency_infos(common::ObMySQLTransaction &trans,
+                                           ObIArray<ObDependencyInfo> &dep_infos,
+                                           uint64_t tenant_id,
+                                           uint64_t dep_obj_id,
+                                           uint64_t schema_version, uint64_t owner_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == owner_id
+   || OB_INVALID_ID == dep_obj_id
+   || OB_INVALID_ID == tenant_id
+   || OB_INVALID_SCHEMA_VERSION == schema_version) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("illegal schema version or owner id", K(ret), K(schema_version),
+                                                   K(owner_id), K(dep_obj_id));
+  } else {
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < dep_infos.count(); ++i) {
+      ObDependencyInfo & dep = dep_infos.at(i);
+      dep.set_tenant_id(tenant_id);
+      dep.set_dep_obj_id(dep_obj_id);
+      dep.set_dep_obj_owner_id(owner_id);
+      dep.set_schema_version(schema_version);
+      OZ (dep.insert_schema_object_dependency(trans));
     }
   }
   return ret;
@@ -1287,7 +1314,6 @@ int ObReferenceObjTable::fill_rowkey_pairs(
 
 int ObReferenceObjTable::batch_execute_insert_or_update_obj_dependency(
     const uint64_t tenant_id,
-    const bool is_standby,
     const int64_t new_schema_version,
     const ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
     ObMySQLTransaction &trans,
@@ -1299,8 +1325,6 @@ int ObReferenceObjTable::batch_execute_insert_or_update_obj_dependency(
   if (OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
-  } else if (is_standby) {
-    // do nothing
   } else {
     ObSqlString sql;
     ObDMLSqlSplicer dml;
@@ -1345,7 +1369,6 @@ int ObReferenceObjTable::batch_execute_insert_or_update_obj_dependency(
 
 int ObReferenceObjTable::batch_execute_delete_obj_dependency(
     const uint64_t tenant_id,
-    const bool is_standby,
     const ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
     ObMySQLTransaction &trans)
 {
@@ -1354,8 +1377,6 @@ int ObReferenceObjTable::batch_execute_delete_obj_dependency(
   if (OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
-  } else if (is_standby) {
-    // do nothing
   } else {
     share::ObDMLSqlSplicer dml;
     ObSqlString sql;
@@ -1433,7 +1454,9 @@ int ObReferenceObjTable::get_or_add_def_obj_item(const uint64_t dep_obj_id,
     if (OB_FAIL(ref_obj_version_table_.get_refactored(ref_obj_key, dep_obj_item))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
-        CK (OB_NOT_NULL(buf = static_cast<char *>(allocator.alloc(sizeof(ObDependencyObjItem)))));
+        OV (OB_NOT_NULL(buf = static_cast<char *>(allocator.alloc(sizeof(ObDependencyObjItem)))),
+            OB_ALLOCATE_MEMORY_FAILED,
+            K(sizeof(ObDependencyObjItem)));
         OX (dep_obj_item = new(buf) ObDependencyObjItem);
         OZ (ref_obj_version_table_.set_refactored(ref_obj_key, dep_obj_item));
       } else {
@@ -1510,7 +1533,11 @@ int ObReferenceObjTable::process_reference_obj_table(const uint64_t tenant_id,
                                                      sql::ObMaintainDepInfoTaskQueue &task_queue)
 {
   int ret = OB_SUCCESS;
-  if (!is_inited() || GCTX.is_standby_cluster()) {
+  share::ObTenantRole::Role tenant_role;
+  bool is_standby = false;
+  if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+    LOG_WARN("fail to execute mtl_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!is_inited() || is_standby)) {
     if (OB_INVALID_ID != dep_obj_id) {
       OZ (task_queue.erase_view_id_from_set(dep_obj_id));
     }
@@ -1548,6 +1575,114 @@ int ObReferenceObjTable::process_reference_obj_table(const uint64_t tenant_id,
       LOG_TRACE("async queue is full");
     }
   }
+  return ret;
+}
+
+// Common internal interfaces for dependency collection
+bool ObDependencyInfo::is_duplicate_dependency(const ObIArray<ObDependencyInfo> &deps,
+                                               ObObjectType dep_obj_type,
+                                               int64_t ref_obj_id,
+                                               int64_t ref_timestamp,
+                                               ObObjectType ref_obj_type)
+{
+  for (int i = 0; i < deps.count(); i++) {
+    const ObDependencyInfo& tmp_dep = deps.at(i);
+    if (tmp_dep.get_dep_obj_type() == dep_obj_type
+        && tmp_dep.get_ref_obj_id() == ref_obj_id
+        && tmp_dep.get_ref_timestamp() == ref_timestamp
+        && tmp_dep.get_ref_obj_type() == ref_obj_type) {
+      return true;
+    }
+  }
+  return false;
+}
+
+int ObDependencyInfo::create_dependency_info(ObDependencyInfo &dep,
+                                            ObObjectType dep_obj_type,
+                                            int64_t ref_obj_id,
+                                            int64_t ref_timestamp,
+                                            ObObjectType ref_obj_type,
+                                            uint64_t property,
+                                            const ObString &dep_attrs,
+                                            const ObString &dep_reason,
+                                            uint64_t order,
+                                            uint64_t tenant_id,
+                                            uint64_t dep_obj_id,
+                                            uint64_t dep_obj_owner_id,
+                                            int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+
+  // Set basic dependency information
+  dep.set_dep_obj_type(dep_obj_type);
+  dep.set_ref_obj_id(ref_obj_id);
+  dep.set_ref_obj_type(ref_obj_type);
+  dep.set_ref_timestamp(ref_timestamp);
+  dep.set_property(property);
+  dep.set_dep_timestamp(-1);
+
+  // Set optional fields - since ObDependencyInfo is initialized with invalid values,
+  // we can directly set the provided values
+  dep.set_tenant_id(tenant_id);
+  dep.set_dep_obj_id(dep_obj_id);
+  dep.set_dep_obj_owner_id(dep_obj_owner_id);
+  dep.set_order(order);
+  dep.set_schema_version(schema_version);
+
+  // Set dep_attrs and dep_reason if provided
+  if (!dep_attrs.empty()) {
+    if (dep_attrs.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dep attrs is too long", K(ret), K(dep_attrs.length()));
+    } else if (OB_FAIL(dep.set_dep_attrs(dep_attrs))) {
+      LOG_WARN("fail to set dep attrs", K(ret), K(dep_attrs));
+    }
+  }
+
+  if (OB_SUCC(ret) && !dep_reason.empty()) {
+    if (dep_reason.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dep reason is too long", K(ret), K(dep_reason.length()));
+    } else if (OB_FAIL(dep.set_dep_reason(dep_reason))) {
+      LOG_WARN("fail to set dep reason", K(ret), K(dep_reason));
+    }
+  }
+
+  return ret;
+}
+
+int ObDependencyInfo::add_dependency_if_not_duplicate(ObIArray<ObDependencyInfo> &deps,
+                                                     ObObjectType dep_obj_type,
+                                                     int64_t ref_obj_id,
+                                                     int64_t ref_timestamp,
+                                                     ObObjectType ref_obj_type,
+                                                     uint64_t property,
+                                                     const ObString &dep_attrs,
+                                                     const ObString &dep_reason,
+                                                     uint64_t tenant_id,
+                                                     uint64_t dep_obj_id,
+                                                     uint64_t dep_obj_owner_id,
+                                                     int64_t schema_version,
+                                                     uint64_t custom_order)
+{
+  int ret = OB_SUCCESS;
+
+  // Check for duplicates
+  if (is_duplicate_dependency(deps, dep_obj_type, ref_obj_id, ref_timestamp, ref_obj_type)) {
+    // Skip duplicate dependency
+  } else {
+    ObDependencyInfo dep;
+    // Use custom_order if provided, otherwise use deps.count()
+    uint64_t order_val = (custom_order != UINT64_MAX) ? custom_order : static_cast<uint64_t>(deps.count());
+    if (OB_FAIL(create_dependency_info(dep, dep_obj_type, ref_obj_id, ref_timestamp,
+                                    ref_obj_type, property, dep_attrs, dep_reason,
+                                    order_val, tenant_id, dep_obj_id, dep_obj_owner_id, schema_version))) {
+      LOG_WARN("fail to create dependency info", K(ret));
+    } else if (OB_FAIL(deps.push_back(dep))) {
+      LOG_WARN("fail to push back dependency", K(ret), K(dep));
+    }
+  }
+
   return ret;
 }
 

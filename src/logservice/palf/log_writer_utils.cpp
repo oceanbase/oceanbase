@@ -11,9 +11,6 @@
  */
 
 #include "log_writer_utils.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/serialization.h"
 #include "logservice/palf/log_define.h"
 namespace oceanbase
 {

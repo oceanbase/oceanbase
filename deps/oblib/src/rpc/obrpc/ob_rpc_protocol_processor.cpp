@@ -14,15 +14,7 @@
 #include "rpc/obrpc/ob_rpc_protocol_processor.h"
 
 #include <byteswap.h>
-#include "io/easy_io.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/serialization.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
-#include "rpc/frame/ob_req_handler.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::serialization;

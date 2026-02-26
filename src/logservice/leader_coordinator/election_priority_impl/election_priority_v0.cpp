@@ -11,8 +11,6 @@
  */
 
 #include "election_priority_impl.h"
-#include "lib/ob_errno.h"
-#include "share/ob_ls_id.h"
 
 namespace oceanbase
 {

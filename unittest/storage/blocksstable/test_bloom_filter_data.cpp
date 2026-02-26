@@ -279,7 +279,7 @@ int TestBloomFilterDataReaderWriter::check_bloom_filter_cache(const ObBloomFilte
 TEST_F(TestBloomFilterDataReaderWriter, test_cache_value_serial)
 {
   int ret = OB_SUCCESS;
-  int64_t macro_block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  int64_t macro_block_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   int64_t pos = 0;
 
   ObBloomFilterCacheValue bf_cache_value;

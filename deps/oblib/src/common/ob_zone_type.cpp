@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "common/ob_zone_type.h"
-#include "lib/ob_define.h"
 #include "lib/oblog/ob_log.h"
 
 namespace oceanbase

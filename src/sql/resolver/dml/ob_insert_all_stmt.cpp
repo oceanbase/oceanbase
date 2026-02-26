@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_insert_all_stmt.h"
-#include "sql/rewrite/ob_transform_utils.h"
+#include "src/sql/resolver/dml/ob_select_stmt.h"
 
 namespace oceanbase
 {

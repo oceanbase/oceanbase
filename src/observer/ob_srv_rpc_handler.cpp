@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/ob_srv_rpc_handler.h"
-#include "rpc/obrpc/ob_rpc_handler.h"
 #include "observer/table/ob_table_connection_mgr.h"
 
 namespace oceanbase

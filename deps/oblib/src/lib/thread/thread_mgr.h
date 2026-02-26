@@ -115,7 +115,7 @@ extern void set_tenant_tg_helper(TGHelper *tg_helper);
 class ITG
 {
 public:
-  ITG() : tg_helper_(nullptr) {}
+  ITG() : tg_helper_(nullptr), thread_group_id_(OB_INVALID_GROUP_ID) {}
   virtual ~ITG() {}
   int64_t get_tenant_id() const
   { return NULL == tg_helper_ ? common::OB_SERVER_TENANT_ID : tg_helper_->id(); }
@@ -125,6 +125,7 @@ public:
   virtual void stop() = 0;
   virtual void wait() = 0;
   virtual void wait_only() {}
+  virtual void set_thread_group_id(uint64_t group_id) { thread_group_id_ = group_id; }
 
   virtual int set_runnable(TGRunnable &runnable)
   {
@@ -139,6 +140,12 @@ public:
   virtual int set_adaptive_strategy(const common::ObAdaptiveStrategy &strategy)
   {
     UNUSED(strategy);
+    return common::OB_NOT_SUPPORTED;
+  }
+  virtual int set_adaptive_thread(int64_t min_thread_num, int64_t max_thread_num)
+  {
+    UNUSED(min_thread_num);
+    UNUSED(max_thread_num);
     return common::OB_NOT_SUPPORTED;
   }
   virtual int push_task(void *task)
@@ -207,6 +214,7 @@ public:
   }
   TGHelper *tg_helper_;
   TGCommonAttr attr_;
+  uint64_t thread_group_id_;
 };
 
 template<enum TGType type>
@@ -302,8 +310,8 @@ public:
   void stop() override
   {
     if (nullptr != th_) {
-      th_->runnable_->set_stop(true);
       th_->stop();
+      th_->runnable_->set_stop(true);
     }
   }
   void wait() override
@@ -368,6 +376,9 @@ public:
     } else {
       th_ = new (buf_) MyThreadPool();
       th_->runnable_= &runnable;
+      if (OB_INVALID_GROUP_ID != thread_group_id_) {
+        th_->set_thread_group_id(thread_group_id_);
+      }
     }
     return ret;
   }
@@ -439,23 +450,25 @@ class TG_QUEUE_THREAD : public ITG
 {
 public:
   TG_QUEUE_THREAD(ThreadCountPair pair, const int64_t task_num_limit)
-    : thread_num_(pair.get_thread_cnt()),
+    : min_thread_num_(pair.get_thread_cnt()),
+      max_thread_num_(pair.get_thread_cnt()),
       task_num_limit_(task_num_limit)
   {}
   TG_QUEUE_THREAD(int64_t thread_num, const int64_t task_num_limit)
-    : thread_num_(thread_num),
+    : min_thread_num_(thread_num),
+      max_thread_num_(thread_num),
       task_num_limit_(task_num_limit)
   {}
   ~TG_QUEUE_THREAD() { destroy(); }
-  int thread_cnt() override { return (int)thread_num_; }
+  int thread_cnt() override { return (int)max_thread_num_; }
   int set_thread_cnt(int64_t thread_cnt) override
   {
     int ret = common::OB_SUCCESS;
     if (qth_ == nullptr) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
-      thread_num_ = thread_cnt;
-      qth_->set_thread_count(thread_num_);
+      max_thread_num_ = thread_cnt;
+      qth_->set_thread_count(max_thread_num_);
     }
     return ret;
   }
@@ -469,7 +482,12 @@ public:
       qth_ = new (buf_) MySimpleThreadPool();
       qth_->handler_ = &handler;
       qth_->set_run_wrapper(tg_helper_);
-      ret = qth_->init(thread_num_, task_num_limit_, attr_.name_, tenant_id);
+      if (min_thread_num_ != max_thread_num_) {
+        ret = qth_->set_adaptive_thread(min_thread_num_, max_thread_num_);
+      }
+      if (OB_SUCC(ret)) {
+        ret = qth_->init(max_thread_num_, task_num_limit_, attr_.name_, tenant_id);
+      }
     }
     return ret;
   }
@@ -518,6 +536,13 @@ public:
     }
     return ret;
   }
+  int set_adaptive_thread(int64_t min_thread_num, int64_t max_thread_num) override
+  {
+    int ret = common::OB_SUCCESS;
+    min_thread_num_ = min_thread_num;
+    max_thread_num_ = max_thread_num;
+    return ret;
+  }
   void destroy()
   {
     if (qth_ != nullptr) {
@@ -535,7 +560,8 @@ public:
 private:
   char buf_[sizeof(MySimpleThreadPool)];
   MySimpleThreadPool *qth_ = nullptr;
-  int64_t thread_num_;
+  int64_t min_thread_num_;
+  int64_t max_thread_num_;
   int64_t task_num_limit_;
 };
 
@@ -760,9 +786,7 @@ private:
 class TG_TIMER : public ITG
 {
 public:
-  TG_TIMER(int64_t max_task_num = 32)
-    : max_task_num_(max_task_num)
-  {}
+  TG_TIMER() {}
   ~TG_TIMER() { destroy(); }
   int thread_cnt() override { return 1; }
   int set_thread_cnt(int64_t thread_cnt) override
@@ -777,9 +801,10 @@ public:
     if (timer_ != nullptr) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
-      timer_ = new (buf_) common::ObTimer(max_task_num_);
-      timer_->set_run_wrapper(tg_helper_);
-      if (OB_FAIL(timer_->init(attr_.name_,
+      timer_ = new (buf_) common::ObTimer();
+      if (OB_FAIL(timer_->set_run_wrapper_with_ret(tg_helper_))) {
+        OB_LOG(WARN, "timer set run wrapper failed", K(ret));
+      } else if (OB_FAIL(timer_->init(attr_.name_,
                                ObMemAttr(get_tenant_id(), "TGTimer")))) {
         OB_LOG(WARN, "init failed", K(ret));
       }
@@ -822,7 +847,7 @@ public:
     if (OB_ISNULL(timer_)) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
-      ret = timer_->task_exist(task, exist);
+      exist = timer_->task_exist(task);
     }
     return ret;
   }
@@ -877,7 +902,6 @@ public:
 private:
   char buf_[sizeof(common::ObTimer)];
   common::ObTimer *timer_ = nullptr;
-  int64_t max_task_num_;
 };
 
 class TG_ASYNC_TASK_QUEUE : public ITG
@@ -1007,7 +1031,8 @@ public:
   // tenant isolation
   int create_tg_tenant(int tg_def_id,
                        int &tg_id,
-                       int64_t qsize = 0)
+                       int64_t qsize = 0,
+                       uint64_t thread_group_id = OB_INVALID_GROUP_ID)
   {
     tg_id = -1;
     int ret = common::OB_SUCCESS;
@@ -1036,6 +1061,7 @@ public:
         tg_helper->tg_create_cb(tg_id);
       }
       tg->set_queue_size(qsize);
+      tg->set_thread_group_id(thread_group_id);
       tgs_[tg_id] = tg;
       OB_LOG(INFO, "create tg succeed",
              "tg_id", tg_id,
@@ -1051,6 +1077,7 @@ private:
   common::ObLatchMutex lock_;
   ABitSet bs_;
   char bs_buf_[ABitSet::buf_len(MAX_ID)];
+  int tg_seq_;
 public:
   ITG *tgs_[MAX_ID] = {nullptr};
 };
@@ -1113,6 +1140,7 @@ public:
     ret;                                                   \
   })
 #define TG_SET_ADAPTIVE_STRATEGY(tg_id, args...) TG_INVOKE(tg_id, set_adaptive_strategy, args)
+#define TG_SET_ADAPTIVE_THREAD(tg_id, min_thread, max_thread) TG_INVOKE(tg_id, set_adaptive_thread, min_thread, max_thread)
 #define TG_PUSH_TASK(tg_id, args...) TG_INVOKE(tg_id, push_task, args)
 #define TG_GET_QUEUE_NUM(tg_id, args...) TG_INVOKE(tg_id, get_queue_num, args)
 #define TG_GET_THREAD_CNT(tg_id) TG_INVOKE(tg_id, thread_cnt)
@@ -1163,7 +1191,7 @@ public:
       ret = tmp_tg->logical_start();                                                                    \
     } else {                                                                                            \
       ret = common::OB_ERR_UNEXPECTED;                                                                  \
-      OB_LOG(WARN, "logical start only can be used with REENTRANT_THREAD_POOL");                        \
+      OB_LOG(ERROR, "logical start only can be used with REENTRANT_THREAD_POOL");                       \
     }                                                                                                   \
     ret;                                                                                                \
   })
@@ -1181,7 +1209,7 @@ public:
       tmp_tg->logical_stop();                                                                           \
     } else {                                                                                            \
       ret = common::OB_ERR_UNEXPECTED;                                                                  \
-      OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
+      OB_LOG(ERROR, "logical stop only can be used with REENTRANT_THREAD_POOL");                        \
     }                                                                                                   \
   })
 
@@ -1198,7 +1226,7 @@ public:
       tmp_tg->logical_wait();                                                                           \
     } else {                                                                                            \
       ret = common::OB_ERR_UNEXPECTED;                                                                  \
-      OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
+      OB_LOG(ERROR, "logical stop only can be used with REENTRANT_THREAD_POOL");                        \
     }                                                                                                   \
   })
 } // end of namespace lib

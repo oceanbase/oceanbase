@@ -158,6 +158,7 @@ public:
 #ifdef ENABLE_OBJ_LEAK_CHECK
 #define DEFINE_OBJ_LEAK_DEBUG_NODE(node) oceanbase::share::ObObjLeakDebugNode node
 #define INIT_OBJ_LEAK_DEBUG_NODE(node, obj_ptr, obj_type, tenant_id)  node.init(obj_ptr, obj_type, tenant_id)
+#define RESET_OBJ_LEAK_DEBUG_NODE(node) node.reset()
 
 // if obj_type == LEAK_CHECK_OBJ_MAX_NUM, dump all type obj
 #define PRINT_OBJ_LEAK(tenant_id, obj_type)                                       \
@@ -169,6 +170,7 @@ public:
 #define DEFINE_OBJ_LEAK_DEBUG_NODE(node)
 #define INIT_OBJ_LEAK_DEBUG_NODE(node, obj_ptr, desc, tenant_id)
 #define PRINT_OBJ_LEAK(tenant_id, obj_type)
+#define RESET_OBJ_LEAK_DEBUG_NODE(node)
 #endif
 
 

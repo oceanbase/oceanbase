@@ -11,6 +11,7 @@
  */
 #pragma once
 
+#include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_data_block.h"
 #include "storage/direct_load/ob_direct_load_data_block_reader.h"
 #include "storage/direct_load/ob_direct_load_multiple_external_row.h"
@@ -30,14 +31,14 @@ class ObDirectLoadMultipleHeapTableTabletWholeScanner
 public:
   ObDirectLoadMultipleHeapTableTabletWholeScanner();
   ~ObDirectLoadMultipleHeapTableTabletWholeScanner();
-  int init(ObDirectLoadMultipleHeapTable *heap_table, const common::ObTabletID &tablet_id,
+  int init(const ObDirectLoadTableHandle &heap_table, const common::ObTabletID &tablet_id,
            const ObDirectLoadTableDataDesc &table_data_desc);
   int get_next_row(const RowType *&external_row);
-  TO_STRING_KV(KP_(heap_table), K_(tablet_id));
+  TO_STRING_KV(K_(heap_table), K_(tablet_id));
 private:
   int switch_next_fragment();
 private:
-  ObDirectLoadMultipleHeapTable *heap_table_;
+  ObDirectLoadTableHandle heap_table_;
   common::ObTabletID tablet_id_;
   ObDirectLoadMultipleHeapTableTabletIndexWholeScanner index_scanner_;
   DataBlockReader data_block_reader_;

@@ -24,6 +24,7 @@
 #include "storage/tx_storage/ob_tenant_freezer_rpc.h"
 #include "storage/multi_data_source/runtime_utility/mds_factory.h"
 #include "storage/compaction/ob_compaction_util.h"
+#include "storage/ls/ob_freezer_define.h"
 
 namespace oceanbase
 {
@@ -102,6 +103,16 @@ class ObTenantFreezer
 {
 friend ObTenantTxDataFreezeGuard;
 friend class ObFreezer;
+struct PeriodicalUpdateValueCache {
+  PeriodicalUpdateValueCache() : value_(false), update_ts_(0) {}
+  void reset()
+  {
+    value_ = false;
+    update_ts_ = 0;
+  }
+  bool value_;
+  int64_t update_ts_;
+};
 
 public:
   const static int64_t TIME_WHEEL_PRECISION = 100_ms;
@@ -114,6 +125,7 @@ public:
   // replay use 1G/s
   const static int64_t REPLAY_RESERVE_MEMSTORE_BYTES = 100 * 1024 * 1024; // 100 MB
   const static int64_t MEMSTORE_USED_CACHE_REFRESH_INTERVAL = 100_ms;
+  const static int64_t TENANT_FREEZE_RETRY_TIME_US = 600LL * 1000LL * 1000LL; // 10 minutes
   static double MDS_TABLE_FREEZE_TRIGGER_TENANT_PERCENTAGE;
 
 public:
@@ -127,24 +139,32 @@ public:
   void wait();
 
   // freeze all the checkpoint unit of this tenant.
-  int tenant_freeze();
+  int tenant_freeze(const ObFreezeSourceFlag source);
 
   // freeze a ls, if the ls is freezing, do nothing and return OB_ENTRY_EXIST.
   // if there is some process hold the ls lock or a OB_EAGAIN occur, we will retry
   // until timeout.
-  int ls_freeze(const share::ObLSID &ls_id);
+  int ls_freeze_all_unit(const share::ObLSID &ls_id,
+                         const ObFreezeSourceFlag source);
   // freeze a tablet
-  int tablet_freeze(const common::ObTabletID &tablet_id,
-                    const bool need_rewrite_tablet_meta = false,
-                    const bool is_sync = false);
   int tablet_freeze(share::ObLSID ls_id,
                     const common::ObTabletID &tablet_id,
-                    const bool need_rewrite_tablet_meta = false,
-                    const bool is_sync = false);
+                    const bool is_sync,
+                    const int64_t max_retry_time,
+                    const bool need_rewrite_tablet_meta,
+                    const ObFreezeSourceFlag source);
   // check if this tenant's memstore is out of range, and trigger minor/major freeze.
   int check_and_do_freeze();
 
+  // do freezer diagnose info
   int do_freeze_diagnose();
+
+  // record freeze source history
+  void record_freezer_source_event(const share::ObLSID &ls_id,
+                                   const ObFreezeSourceFlag source);
+
+  // report freeze source history
+  void report_freezer_source_events();
 
   // used for replay to check whether can enqueue another replay task
   bool is_replay_pending_log_too_large(const int64_t pending_size);
@@ -183,6 +203,7 @@ public:
                                int64_t &memstore_freeze_trigger,
                                int64_t &memstore_limit,
                                int64_t &freeze_cnt,
+                               int64_t &throttle_trigger_percentage,
                                const bool force_refresh = true);
   // get the tenant memstore used
   int get_tenant_memstore_used(int64_t &total_memstore_used,
@@ -217,7 +238,10 @@ public:
     retry_major_info_ = retry_major_info;
   }
   static int64_t get_freeze_trigger_interval() { return FREEZE_TRIGGER_INTERVAL; }
+  static int64_t get_freeze_trigger_percentage();
   bool exist_ls_freezing();
+  bool exist_ls_throttle_is_skipping();
+  bool memstore_remain_memory_is_exhausting();
 
   // freezer stat collector and generator
   void add_merge_event(const compaction::ObMergeType type, const int64_t cost)
@@ -229,36 +253,38 @@ public:
 
   void get_freezer_stat_from_history(int64_t pos, ObTenantFreezerStat& stat);
 
+  // record major frozen scn and reset freeze cnt
+  int update_frozen_scn(const int64_t frozen_scn);
+
 private:
   int get_tenant_memstore_cond_(int64_t &active_memstore_used,
                                 int64_t &total_memstore_used,
                                 int64_t &memstore_freeze_trigger,
                                 int64_t &memstore_limit,
                                 int64_t &freeze_cnt,
+                                int64_t &throttle_trigger_percentage,
                                 const bool force_refresh = true);
   int check_memstore_full_(bool &last_result,
                            int64_t &last_check_timestamp,
                            bool &is_out_of_mem,
                            const bool from_user = true);
-  static int ls_freeze_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts);
-  static int ls_freeze_all_unit_(ObLS *ls,
-                                 const int64_t abs_timeout_ts = INT64_MAX);
-  static int tablet_freeze_(ObLS *ls,
-                            const common::ObTabletID &tablet_id,
-                            const bool need_rewrite_tablet_meta,
-                            const bool is_sync,
-                            const int64_t abs_timeout_ts);
+  static int ls_freeze_data_(ObLS *ls);
+  static int ls_freeze_data_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts);
+  static int ls_freeze_all_unit_(
+    ObLS *ls,
+    const int64_t abs_timeout_ts = INT64_MAX,
+    const ObFreezeSourceFlag source = ObFreezeSourceFlag::INVALID_SOURCE);
   // freeze all the ls of this tenant.
   // return the first failed code.
-  int tenant_freeze_();
+  int tenant_freeze_data_();
   // we can only deal with freeze one by one.
   // set tenant freezing will prevent a new freeze.
   int set_tenant_freezing_();
   // unset tenant freezing flag.
   // @param[in] rollback_freeze_cnt, reduce the tenant's freeze count by 1, if true.
   int unset_tenant_freezing_(const bool rollback_freeze_cnt);
-  static int64_t get_freeze_trigger_percentage_();
   static int64_t get_memstore_limit_percentage_();
+  static int64_t get_throttle_trigger_percentage_();
   int post_freeze_request_(const storage::ObFreezeType freeze_type,
                            const int64_t try_frozen_version);
   int retry_failed_major_freeze_(bool &triggered);
@@ -271,7 +297,7 @@ private:
   bool need_freeze_(const ObTenantFreezeCtx &ctx);
   bool is_major_freeze_turn_();
   int do_major_if_need_(const bool need_freeze);
-  int do_minor_freeze_(const ObTenantFreezeCtx &ctx);
+  int do_minor_freeze_data_(const ObTenantFreezeCtx &ctx);
   int do_major_freeze_(const int64_t try_frozen_scn);
   void log_frozen_memstore_info_if_need_(const ObTenantFreezeCtx &ctx);
   void halt_prewarm_if_need_(const ObTenantFreezeCtx &ctx);
@@ -279,6 +305,10 @@ private:
   int check_and_freeze_tx_data_();
   int check_and_freeze_mds_table_();
 
+  int get_tx_data_info_for_freeze_(int64_t &tenant_tx_data_frozen_mem_used,
+                                   int64_t &tenant_tx_data_active_mem_used,
+                                   bool &need_re_freeze,
+                                   bool for_statistic_print = false);
   int get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_frozen_mem_used,
                                    int64_t &tenant_tx_data_active_mem_used,
                                    bool for_statistic_print = false);
@@ -305,13 +335,13 @@ private:
   common::ObOccamTimerTaskRAIIHandle timer_handle_;
   common::ObOccamThreadPool freeze_thread_pool_;
   ObSpinLock freeze_thread_pool_lock_;
-  bool exist_ls_freezing_;
-  int64_t last_update_ts_;
 
   // diagnose only, we capture the freeze stats every 30 minutes
   ObTenantFreezerStat freezer_stat_;
   // diagnose only, we capture the freeze history in one monthes
   ObTenantFreezerStatHistory freezer_history_;
+  PeriodicalUpdateValueCache throttle_is_skipping_cache_;
+  PeriodicalUpdateValueCache memstore_remain_memory_is_exhausting_cache_;
 };
 
 class ObTenantTxDataFreezeGuard

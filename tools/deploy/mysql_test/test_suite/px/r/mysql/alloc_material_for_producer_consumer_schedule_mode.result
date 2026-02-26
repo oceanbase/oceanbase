@@ -8,7 +8,7 @@ Query Plan
 ====================================================================================
 |ID|OPERATOR                                    |NAME        |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------------------
-|0 |TEMP TABLE TRANSFORMATION                   |            |1       |4           |
+|0 |TEMP TABLE TRANSFORMATION                   |            |1       |6           |
 |1 |├─PX COORDINATOR                            |            |0       |3           |
 |2 |│ └─EXCHANGE OUT DISTR                      |:EX10001    |0       |3           |
 |3 |│   └─TEMP TABLE INSERT                     |TEMP1       |0       |3           |
@@ -18,10 +18,10 @@ Query Plan
 |7 |│           └─HASH GROUP BY                 |            |1       |2           |
 |8 |│             └─PX BLOCK ITERATOR           |            |1       |2           |
 |9 |│               └─TABLE FULL SCAN           |t1          |1       |2           |
-|10|└─PX COORDINATOR                            |            |1       |2           |
-|11|  └─EXCHANGE OUT DISTR                      |:EX20002    |1       |2           |
-|12|    └─SHARED HASH JOIN                      |            |1       |1           |
-|13|      ├─EXCHANGE IN DISTR                   |            |1       |1           |
+|10|└─PX COORDINATOR                            |            |1       |3           |
+|11|  └─EXCHANGE OUT DISTR                      |:EX20002    |1       |3           |
+|12|    └─SHARED HASH JOIN                      |            |1       |2           |
+|13|      ├─EXCHANGE IN DISTR                   |            |1       |2           |
 |14|      │ └─EXCHANGE OUT DISTR (BC2HOST)      |:EX20001    |1       |1           |
 |15|      │   └─SHARED HASH JOIN                |            |1       |1           |
 |16|      │     ├─EXCHANGE IN DISTR             |            |1       |1           |
@@ -73,11 +73,11 @@ Query Plan
 =====================================================================================
 |ID|OPERATOR                                         |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                   |        |1       |5           |
+|0 |PX COORDINATOR                                   |        |1       |6           |
 |1 |└─EXCHANGE OUT DISTR                             |:EX10003|1       |5           |
 |2 |  └─HASH GROUP BY                                |        |1       |5           |
 |3 |    └─EXCHANGE IN DISTR                          |        |1       |5           |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                |:EX10002|1       |4           |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                |:EX10002|1       |5           |
 |5 |        └─HASH GROUP BY                          |        |1       |4           |
 |6 |          └─SUBPLAN SCAN                         |VIEW1   |1       |4           |
 |7 |            └─MERGE GROUP BY                     |        |1       |4           |
@@ -140,7 +140,7 @@ Query Plan
 ===========================================================================
 |ID|OPERATOR                               |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------
-|0 |PX COORDINATOR                         |        |1       |5           |
+|0 |PX COORDINATOR                         |        |1       |6           |
 |1 |└─EXCHANGE OUT DISTR                   |:EX10002|1       |5           |
 |2 |  └─MERGE GROUP BY                     |        |1       |4           |
 |3 |    └─PARTITION SORT                   |        |1       |4           |

@@ -11,7 +11,7 @@
  */
 #pragma once
 
-#include "storage/blocksstable/ob_datum_row.h"
+#include "storage/blocksstable/ob_storage_datum.h"
 
 namespace oceanbase
 {

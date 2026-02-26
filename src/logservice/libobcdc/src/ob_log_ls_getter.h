@@ -28,8 +28,9 @@ typedef ObArray<share::ObLSID> LSIDArray;
 class TenantLSQueryer : public ObCDCTenantQuery<LSIDArray>
 {
 public:
+  // only working with cluster_sql_proxy, won't qeury tenant ls info in tenant_sync_mode
   TenantLSQueryer(const int64_t snapshot_ts_ns, common::ObMySQLProxy &sql_proxy)
-    : ObCDCTenantQuery(sql_proxy), snapshot_ts_ns_(snapshot_ts_ns) {}
+    : ObCDCTenantQuery(true/*is_cluster_sql_proxy = false*/, sql_proxy), snapshot_ts_ns_(snapshot_ts_ns) {}
   ~TenantLSQueryer() { snapshot_ts_ns_ = OB_INVALID_TIMESTAMP; }
 private:
   int build_sql_statement_(const uint64_t tenant_id, ObSqlString &sql) override;

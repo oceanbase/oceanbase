@@ -11,36 +11,18 @@
  */
 
 #include "ob_lua_api.h"
-#include "ob_lua_handler.h"
 
-#include <algorithm>
-#include <bitset>
-#include <functional>
-#include <vector>
 
 #include "lib/alloc/memory_dump.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_di_cache.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/virtual_table/ob_all_virtual_sys_stat.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "share/scheduler/ob_sys_task_stat.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/tx/ob_trans_ctx_mgr_v4.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_tx_stat.h"
 #include "observer/ob_server.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
-#include "rpc/obrpc/ob_rpc_stat.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_tenant_sql_memory_manager.h"
 
 #include <lua.hpp>
+#include "share/ash/ob_di_util.h"
+
 
 using namespace oceanbase;
 using namespace common;
@@ -866,9 +848,9 @@ int select_sysstat(lua_State* L)
     for (int64_t i = 0; i < ids.size() && !gen.is_end(); ++i) {
       ObArenaAllocator diag_allocator;
       HEAP_VAR(ObDiagnoseTenantInfo, diag_info, &diag_allocator) {
-        if (OB_FAIL(ObDIGlobalTenantCache::get_instance().get_the_diag_info(ids.at(i), diag_info))) {
+        if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(ids.at(i), diag_info))) {
           OB_LOG(ERROR, "failed to get_the_diag_info", K(ids.at(i)), K(ret));
-        } else if (OB_FAIL(observer::ObAllVirtualSysStat::update_all_stats(ids.at(i), diag_info.get_set_stat_stats()))) {
+        } else if (OB_FAIL(observer::ObAllVirtualSysStat::update_all_stats(ids.at(i), diag_info))) {
           OB_LOG(ERROR, "failed to update_all_stats", K(ids.at(i)), K(ret));
         } else {
           for (int64_t stat_idx = 0;
@@ -1492,11 +1474,11 @@ int select_disk_stat(lua_State *L)
     gen.next_row();
 
     // total_size
-    gen.next_column(OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+    gen.next_column(OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size());
     // used_size
-    gen.next_column(OB_SERVER_BLOCK_MGR.get_used_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+    gen.next_column(OB_STORAGE_OBJECT_MGR.get_used_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size());
     // free_size
-    gen.next_column(OB_SERVER_BLOCK_MGR.get_free_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+    gen.next_column(OB_STORAGE_OBJECT_MGR.get_free_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size());
     // is_disk_valid
     gen.next_column(DEVICE_HEALTH_NORMAL != dhs ? 0 : 1);
     // disk_error_begin_ts
@@ -2031,9 +2013,9 @@ int get_tenant_sysstat(int64_t tenant_id, int64_t statistic, int64_t &value)
         || statistic >= ObStatEventIds::STAT_EVENT_SET_END
         || ObStatEventIds::STAT_EVENT_ADD_END == statistic) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (OB_FAIL(ObDIGlobalTenantCache::get_instance().get_the_diag_info(tenant_id, diag_info))) {
+    } else if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(tenant_id, diag_info))) {
       // do nothing
-    } else if (OB_FAIL(observer::ObAllVirtualSysStat::update_all_stats(tenant_id, diag_info.get_set_stat_stats()))) {
+    } else if (OB_FAIL(observer::ObAllVirtualSysStat::update_all_stats(tenant_id, diag_info))) {
       // do nothing
     } else if (statistic < ObStatEventIds::STAT_EVENT_ADD_END) {
       ObStatEventAddStat* stat = diag_info.get_add_stat_stats().get(statistic);

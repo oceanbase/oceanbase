@@ -59,7 +59,7 @@ public:
                               common::ObIAllocator &allocator) const override;
   virtual bool is_ha_dag() const override { return false; }
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return lib::Worker::CompatMode::MYSQL; }
 
@@ -141,7 +141,7 @@ public:
                               ObIAllocator &allocator) const override;
   virtual bool is_ha_dag() const override { return false; }
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return lib::Worker::CompatMode::MYSQL; }
 

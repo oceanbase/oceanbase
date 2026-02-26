@@ -11,16 +11,9 @@
  */
 
 #include "ob_all_virtual_log_stat.h"
-#include "common/row/ob_row.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string.h"
-#include "logservice/ob_log_service.h"
-#include "logservice/ob_log_handler.h"
-#include "share/ls/ob_ls_info.h" //MemberList, SimpleMember
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "common/ob_member.h" //ObMember
+#include "logservice/ob_log_handler.h"
+#include "share/ob_scanner.h"
 
 namespace oceanbase
 {
@@ -39,35 +32,54 @@ void ObAllVirtualPalfStat::destroy()
 {
 }
 
+ERRSIM_POINT_DEF(ERRSIM_VIRTUAL_LOG_STAT_ERROR);
 int ObAllVirtualPalfStat::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  if (false == start_to_read_) {
-    auto func_iterate_palf = [&](const palf::PalfHandle &palf_handle) -> int {
-      int ret = OB_SUCCESS;
-      logservice::ObLogStat log_stat;
-      int64_t palf_id = -1;
-      palf_handle.get_palf_id(palf_id);
-      if (OB_FAIL(palf_handle.stat(log_stat.palf_stat_))) {
-        SERVER_LOG(WARN, "PalfHandle stat failed", K(ret), K(palf_id));
-      } else if (OB_FAIL(insert_log_stat_(log_stat, &cur_row_))){
-        SERVER_LOG(WARN, "ObAllVirtualPalfStat insert_log_stat_ failed", K(ret), K(palf_id), K(log_stat));
-      } else {
-        SERVER_LOG(TRACE, "iterate this log_stream success", K(palf_id), K(log_stat));
-        scanner_.add_row(cur_row_);
-      }
-      return ret;
-    };
-    auto func_iterate_tenant = [&func_iterate_palf]() -> int
+  // use for debug
+  if (OB_FAIL(ERRSIM_VIRTUAL_LOG_STAT_ERROR)) {
+    SERVER_LOG(WARN, "ERRSIM_VIRTUAL_LOG_STAT_ERROR is opened, returning OB_SIZE_OVERFLOW");
+  }
+  if (OB_SUCC(ret) && false == start_to_read_) {
+    auto func_iterate_tenant = [&]() -> int
     {
       int ret = OB_SUCCESS;
-      logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
-      if (NULL == log_service) {
-        SERVER_LOG(INFO, "tenant has no ObLogService", K(MTL_ID()));
-      } else if (OB_FAIL(log_service->iterate_palf(func_iterate_palf))) {
-        SERVER_LOG(WARN, "ObLogService iterate_palf failed", K(ret));
-      } else {
-        SERVER_LOG(TRACE, "itearte this tenant success", K(MTL_ID()));
+      ObLSService *ls_service = MTL(ObLSService*);
+      ObSharedGuard<ObLSIterator> ls_iter;
+
+      if (OB_NOT_NULL(ls_service)) {
+        if (OB_FAIL(ls_service->get_ls_iter(ls_iter, ObLSGetMod::SHARE_MOD))) {
+          SERVER_LOG(WARN, "get_ls_iter failed", KR(ret));
+          ret = OB_SUCCESS;
+        } else {
+          while (OB_SUCC(ret)) {
+            storage::ObLS *ls = nullptr;
+            if (OB_FAIL(ls_iter->get_next(ls))) {
+              if (OB_ITER_END != ret) {
+                SERVER_LOG(WARN, "scan next ls failed.", K(ret));
+              }
+            } else if (OB_NOT_NULL(ls)) {
+              const logservice::ObLogHandler *log_handler= nullptr;
+              if (OB_NOT_NULL(log_handler = ls->get_log_handler())) {
+                logservice::ObLogStat log_stat;
+                if (OB_FAIL(log_handler->stat(log_stat.palf_stat_))) {
+                  SERVER_LOG(WARN, "ObLogHandler stat failed", K(ret), K(ls->get_ls_id()));
+                  // try another ls
+                  ret = OB_SUCCESS;
+                } else if (OB_FAIL(insert_log_stat_(log_stat, &cur_row_))){
+                  SERVER_LOG(WARN, "ObAllVirtualPalfStat insert_log_stat_ failed", K(ret), K(log_stat));
+                } else {
+                  SERVER_LOG(TRACE, "iterate this log_stream success", K(log_stat));
+                  scanner_.add_row(cur_row_);
+                }
+              }
+            }
+          }
+        }
+
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
       }
       return ret;
     };
@@ -138,7 +150,8 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 6: {
-        if (0 >= palf_stat.config_version_.to_string(config_version_buf_, VARCHAR_128)) {
+        if (0 >= palf_stat.config_version_.to_string(config_version_buf_,
+              palf::LogConfigVersion::CONFIG_VERSION_LEN)) {
           SERVER_LOG(WARN, "config_version_ to_string failed", K(ret), K(palf_stat));
         } else {
           cur_row_.cells_[i].set_varchar(ObString::make_string(config_version_buf_));

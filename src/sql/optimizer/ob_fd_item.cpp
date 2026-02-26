@@ -11,9 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_JO
-#include "sql/optimizer/ob_fd_item.h"
+#include "ob_fd_item.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_fd_item.h"
 
 
 using namespace oceanbase;
@@ -117,12 +116,11 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr *expr,
 {
   int ret = OB_SUCCESS;
   const ObRawExpr *cur_expr = NULL;
-  bool is_consistent = false;
   is_in_child = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null expr", K(ret));
-  } else if (expr->has_flag(CNT_AGG)) {
+  } else if (expr->has_flag(CNT_AGG) || expr->has_flag(CNT_WINDOW_FUNC)) {
     //do nothing
   } else if (expr->has_flag(CNT_COLUMN) || expr->has_flag(CNT_SET_OP)) {
     if (!expr->get_relation_ids().is_empty() &&
@@ -144,9 +142,7 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr *expr,
         } else if (cur_expr->get_relation_ids().is_empty() || 
                   !child_tables_.is_superset(cur_expr->get_relation_ids())) {
           // do nothing
-        } else if (OB_FAIL(ObRawExprUtils::expr_is_order_consistent(cur_expr, expr, is_consistent))) {
-          LOG_WARN("failed to check expr is order consistent", K(ret));
-        } else if (is_consistent) {
+        } else {
           is_in_child = true;
         }
       }

@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_version.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "share/system_variable/ob_sys_var_class_type.h"
 
 using namespace oceanbase::common;
 

@@ -89,7 +89,8 @@ public:
                     const bool is_batched_multi_stmt_split_on = false,
                     const bool no_throw_parser_error = false,
                     const bool is_pl_inner_parse = false,
-                    const bool is_dbms_sql = false);
+                    const bool is_dbms_sql = false,
+                    const bool is_parser_dynamic_sql = false);
 
   virtual void free_result(ParseResult &parse_result);
   /**
@@ -153,6 +154,10 @@ enum State {
   S_VALUES,
   S_TABLE,
   S_INTO,
+  S_SUBMIT,
+  S_CANCEL,
+  S_JOB,
+  S_EVENT,
   // add new states above me
   S_MAX
 };

@@ -12,20 +12,21 @@
 
 #define USING_LOG_PREFIX COMMON_MYSQLP
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include "lib/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_statement.h"
-#include "lib/mysqlclient/ob_isql_connection.h"
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
+#include "lib/string/ob_sql_string.h"
+
+#include "sql/session/ob_local_session_var.h"
+#include "src/share/system_variable/ob_system_variable_factory.h"
 #ifdef OB_BUILD_DBLINK
-#include "lib/oracleclient/ob_oci_environment.h"
 #endif
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
 
-OB_SERIALIZE_MEMBER(ObSessionDDLInfo, ddl_info_);
+OB_SERIALIZE_MEMBER(ObSessionDDLInfo, ddl_info_.ddl_info_, // FARM COMPAT WHITELIST
+                                      session_id_);
 
 ObCommonSqlProxy::ObCommonSqlProxy() : pool_(NULL)
 {
@@ -101,6 +102,12 @@ int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const c
         LOG_WARN("set inner connection sql mode failed", K(ret));
       }
     }
+    if (OB_SUCC(ret) && nullptr != session_param && nullptr != session_param->tz_info_wrap_) {
+      if (OB_FAIL(conn->set_tz_info_wrap(*session_param->tz_info_wrap_))) {
+        LOG_WARN("fail to set time zone info wrap", K(ret));
+      }
+    }
+
     if (session_param->ddl_info_.is_ddl()) {
       conn->set_force_remote_exec(true);
     }
@@ -128,7 +135,10 @@ int ObCommonSqlProxy::read(ObISQLConnection *conn, ReadResult &result,
     ret = OB_INACTIVE_SQL_CLIENT;
     LOG_WARN("in active sql client", K(ret), KCSTRING(sql));
   } else {
-    if (OB_FAIL(conn->execute_read(tenant_id, sql, result, exec_sql_addr))) {
+    // The original code lacks the is_user_sql parameter.
+    // When sql_exec_addr is not empty, is_user_sql is implicitly converted to true.
+    // Here, is_user_sql is set to false.
+    if (OB_FAIL(conn->execute_read(tenant_id, sql, result, false/*is_user_sql*/, exec_sql_addr))) {
       LOG_WARN("query failed", K(ret), K(conn), K(start), KCSTRING(sql));
     }
   }
@@ -205,6 +215,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
     conn->set_is_load_data_exec(param->is_load_data_exec_);
     conn->set_use_external_session(param->use_external_session_);
     conn->set_group_id(param->consumer_group_id_);
+    conn->set_ob_enable_pl_cache(param->enable_pl_cache_);
     if (param->is_load_data_exec_) {
       is_user_sql = true;
     }
@@ -214,6 +225,9 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
     if (param->ddl_info_.is_ddl()) {
       conn->set_force_remote_exec(true);
       conn->set_nls_formats(param->nls_formats_);
+    }
+    if (!param->secure_file_priv_.empty()) {
+      conn->set_session_variable("secure_file_priv", param->secure_file_priv_);
     }
   }
   if (OB_SUCC(ret) && nullptr != param && nullptr != param->sql_mode_) {
@@ -227,6 +241,32 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
   if (OB_SUCC(ret) && nullptr != param && nullptr != param->tz_info_wrap_) {
     if (OB_FAIL(conn->set_tz_info_wrap(*param->tz_info_wrap_))) {
       LOG_WARN("fail to set time zone info wrap", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && nullptr != param && NULL != param->mview_local_session_vars_
+      && param->mview_local_session_vars_->get_var_count() != 0) {
+    using namespace oceanbase::sql;
+    ObSEArray<const ObSessionSysVar *, 10> mv_session_vars;
+    if (OB_FAIL(param->mview_local_session_vars_->get_local_vars(mv_session_vars))) {
+      LOG_WARN("fail to get local session vars", K(ret));
+    } else {
+      ARRAY_FOREACH(mv_session_vars, i) {
+        ObString var_name = share::ObSysVarFactory::get_sys_var_name_by_id(mv_session_vars[i]->type_);
+        if (var_name.empty()) {
+          // do nothing
+        } else if (mv_session_vars[i]->val_.is_varchar()) {
+          if (OB_FAIL(conn->set_session_variable(
+                      var_name, mv_session_vars[i]->val_.get_varchar()))) {
+            LOG_WARN("fail to set session variable", K(ret), K(mv_session_vars[i]->type_), K(mv_session_vars[i]->val_));
+          }
+        } else if (mv_session_vars[i]->val_.is_int()) {
+          if (OB_FAIL(conn->set_session_variable(
+                      var_name, mv_session_vars[i]->val_.get_int()))) {
+            LOG_WARN("fail to set session variable", K(ret), K(mv_session_vars[i]->type_), K(mv_session_vars[i]->val_));
+          }
+        }
+        LOG_INFO("set mview session variable", K(var_name), K(mv_session_vars[i]->val_));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -434,7 +474,7 @@ int ObDbLinkProxy::switch_dblink_conn_pool(DblinkDriverProto type, ObISQLConnect
   return ret;
 }
 
-int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObAddr &server,
+int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObString &host_name, int32_t port,
                                       const ObString &db_tenant, const ObString &db_user,
                                       const ObString &db_pass, const ObString &db_name,
                                       const common::ObString &conn_str,
@@ -450,10 +490,10 @@ int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const O
     LOG_WARN("mysql proxy not inited");
   } else if (OB_FAIL(switch_dblink_conn_pool(param_ctx.link_type_, dblink_pool))) {
     LOG_WARN("failed to get dblink interface", K(ret));
-  } else if (OB_FAIL(dblink_pool->create_dblink_pool(param_ctx, server, db_tenant,
+  } else if (OB_FAIL(dblink_pool->create_dblink_pool(param_ctx, host_name, port, db_tenant,
                                                      db_user, db_pass, db_name,
                                                      conn_str, cluster_str))) {
-    LOG_WARN("create dblink pool failed", K(ret), K(param_ctx), K(server),
+    LOG_WARN("create dblink pool failed", K(ret), K(param_ctx), K(host_name), K(port),
              K(db_tenant), K(db_user), K(db_pass), K(db_name));
   }
   return ret;
@@ -505,19 +545,120 @@ int ObDbLinkProxy::prepare_enviroment(const sqlclient::dblink_param_ctx &param_c
   return ret;
 }
 
+int ObDbLinkProxy::init_conn_character_set(ObMySQLConnection &mysql_conn, ObMySQLStatement &stmt,
+                                           ObCharsetType charset_type)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const char *charset_name = ObCharset::charset_name(charset_type);
+  if (mysql_conn.get_last_set_conn_charset_type() == charset_type) {
+    // do nothing.
+  } else if (OB_FAIL(sql.append_fmt("set names %s", charset_name))) {
+    LOG_WARN("fail to assign sql", K(ret), K(charset_type));
+  } else if (OB_FAIL(stmt.init(mysql_conn, sql.string()))) {
+    LOG_WARN("create statement failed", K(ret));
+  } else if (OB_FAIL(stmt.execute_update())) {
+    LOG_WARN("execute sql failed", K(sql), K(ret), K(charset_type));
+    mysql_conn.set_last_set_conn_charset_type(CHARSET_INVALID);
+  } else {
+    mysql_conn.set_last_set_conn_charset_type(charset_type);
+  }
+  return ret;
+}
+
+int ObDbLinkProxy::init_conn_sql_mode(ObMySQLConnection &mysql_conn, ObMySQLStatement &stmt,
+                                      const char *sql_mode_cstr)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (0 == ObString(sql_mode_cstr).compare(mysql_conn.get_last_set_sql_mode_cstr())) {
+    // do nothing.
+  } else if (OB_FAIL(stmt.init(mysql_conn, sql_mode_cstr))) {
+    LOG_WARN("create statement failed", K(ret));
+  } else if (OB_FAIL(stmt.execute_update())) {
+    LOG_WARN("execute sql failed", K(sql), K(ret), K(sql_mode_cstr));
+    mysql_conn.save_last_set_sql_mode_cstr("\0");
+  } else {
+    mysql_conn.save_last_set_sql_mode_cstr(sql_mode_cstr);
+  }
+  return ret;
+}
+
+int ObDbLinkProxy::init_conn_trans_isolation(ObMySQLConnection &mysql_conn, ObMySQLStatement &stmt,
+                                             const char *trans_isolation_str)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (trans_isolation_str == mysql_conn.get_last_set_transaction_isolation_cstr()) {
+    // do nothing.
+  } else if (OB_FAIL(stmt.init(mysql_conn, trans_isolation_str))) {
+    LOG_WARN("create statement failed", K(ret));
+  } else if (OB_FAIL(stmt.execute_update())) {
+    LOG_WARN("execute sql failed", K(sql), K(ret), K(trans_isolation_str));
+    mysql_conn.set_last_set_transaction_isolation_cstr(NULL);
+  } else {
+    mysql_conn.set_last_set_transaction_isolation_cstr(trans_isolation_str);
+  }
+  return ret;
+}
+
+int ObDbLinkProxy::init_conn_query_timeout(ObMySQLConnection &mysql_conn, ObMySQLStatement &stmt,
+                                           int64_t query_timeout)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (query_timeout == mysql_conn.get_ob_query_timeout()) {
+    // do nothing.
+  } else if (OB_FAIL(sql.append_fmt("set ob_query_timeout = %ld", query_timeout))) {
+    LOG_WARN("fail to assign sql", K(ret), K(query_timeout));
+  } else if (OB_FAIL(stmt.init(mysql_conn, sql.string()))) {
+    LOG_WARN("create statement failed", K(ret));
+  } else if (OB_FAIL(stmt.execute_update())) {
+    LOG_WARN("execute sql failed", K(sql), K(ret), K(query_timeout));
+    mysql_conn.set_ob_query_timeout(0);
+  } else {
+    mysql_conn.set_ob_query_timeout(query_timeout);
+  }
+  return ret;
+  return ret;
+}
+
 int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx,
                                     ObISQLConnection *dblink_conn)
 {
   int ret = OB_SUCCESS;
   typedef const char * sql_ptr_type;
-  if (!lib::is_oracle_mode()) {
-    sql_ptr_type sql_ptr[] = {param_ctx.set_sql_mode_cstr_,
-                              param_ctx.set_client_charset_cstr_,
-                              param_ctx.set_connection_charset_cstr_,
-                              param_ctx.set_results_charset_cstr_,
-                              param_ctx.set_transaction_isolation_cstr_};
+  if (OB_ISNULL(dblink_conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dblink conn is null", K(ret));
+  } else if (!lib::is_oracle_mode()) {
     ObMySQLStatement stmt;
     ObMySQLConnection *mysql_conn = static_cast<ObMySQLConnection *>(dblink_conn);
+    if (OB_FAIL(init_conn_character_set(*mysql_conn, stmt, param_ctx.set_conn_charset_type_))) {
+      LOG_WARN("init connection character set failed", K(ret));
+    } else if (OB_FAIL(init_conn_sql_mode(*mysql_conn, stmt, param_ctx.set_sql_mode_cstr_))) {
+      LOG_WARN("init connection sql mode failed", K(ret));
+    } else if (OB_FAIL(init_conn_trans_isolation(*mysql_conn, stmt, param_ctx.set_transaction_isolation_cstr_))) {
+      LOG_WARN("init connection trans isolation failed", K(ret));
+    } else if (OB_FAIL(init_conn_query_timeout(*mysql_conn, stmt, param_ctx.ob_query_timeout_))) {
+      LOG_WARN("init connection ob query timeout failed", K(ret));
+    }
+  } else if (DBLINK_DRV_OB == param_ctx.link_type_) {
+    sql_ptr_type sql_ptr[] = {
+      "set nls_date_format='YYYY-MM-DD HH24:MI:SS'",
+      "set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS.FF'",
+      "set nls_timestamp_tz_format = 'YYYY-MM-DD HH24:MI:SS.FF TZR TZD'"
+    };
+    // todo statement may different
+    ObMySQLStatement stmt;
+    ObMySQLConnection *mysql_conn = static_cast<ObMySQLConnection *>(dblink_conn);
+    if (OB_FAIL(init_conn_character_set(*mysql_conn, stmt, param_ctx.set_conn_charset_type_))) {
+      LOG_WARN("init connection character set failed", K(ret));
+    } else if (OB_FAIL(init_conn_trans_isolation(*mysql_conn, stmt, param_ctx.set_transaction_isolation_cstr_))) {
+      LOG_WARN("init connection trans isolation failed", K(ret));
+    } else if (OB_FAIL(init_conn_query_timeout(*mysql_conn, stmt, param_ctx.ob_query_timeout_))) {
+      LOG_WARN("init connection ob query timeout failed", K(ret));
+    }
     for (int i = 0; OB_SUCC(ret) && i < sizeof(sql_ptr) / sizeof(sql_ptr_type); ++i) {
       if (OB_ISNULL(sql_ptr[i])) {
         //do nothing
@@ -526,29 +667,7 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
       } else if (OB_FAIL(stmt.execute_update())) {
         LOG_WARN("execute sql failed",  K(ret), K(param_ctx));
       } else {
-        // do nothing
-      }
-    }
-  } else if (DBLINK_DRV_OB == param_ctx.link_type_) {
-    static sql_ptr_type sql_ptr[] = {
-      param_ctx.set_client_charset_cstr_,
-      param_ctx.set_connection_charset_cstr_,
-      param_ctx.set_results_charset_cstr_,
-      param_ctx.set_transaction_isolation_cstr_,
-      "set nls_date_format='YYYY-MM-DD HH24:MI:SS'",
-      "set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS.FF'",
-      "set nls_timestamp_tz_format = 'YYYY-MM-DD HH24:MI:SS.FF TZR TZD'"
-    };
-    // todo statement may different
-    ObMySQLStatement stmt;
-    ObMySQLConnection *mysql_conn = static_cast<ObMySQLConnection *>(dblink_conn);
-    for (int i = 0; OB_SUCC(ret) && i < sizeof(sql_ptr) / sizeof(sql_ptr_type); ++i) {
-      if (OB_ISNULL(sql_ptr[i])) {
-        //do nothing
-      } else if (OB_FAIL(stmt.init(*mysql_conn, sql_ptr[i]))) {
-        LOG_WARN("create statement failed", K(ret), K(param_ctx));
-      } else if (OB_FAIL(stmt.execute_update())) {
-        LOG_WARN("execute sql failed",  K(ret), K(param_ctx));
+        LOG_TRACE("succ to excute initial dblink sql", K(sql_ptr[i]), K(ret));
       }
     }
   }
@@ -574,6 +693,15 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
         LOG_WARN("failed to set sql text", K(ret), K(ObString(sql_ptr_ora[i])));
       } else if (OB_FAIL(stmt.execute_update(affected_rows))) {
         LOG_WARN("execute sql failed",  K(ret), K(param_ctx));
+      } else {
+        LOG_TRACE("succ to excute initial dblink sql", K(sql_ptr_ora[i]), K(ret));
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = stmt.terminate())) {
+        LOG_WARN("faild to terminate oci stmt", K(tmp_ret));
+        if (OB_SUCC(ret)) {
+          ret = tmp_ret;
+        }
       }
     }
   }
@@ -601,27 +729,27 @@ int ObDbLinkProxy::release_dblink(/*uint64_t dblink_id,*/ DblinkDriverProto dbli
   return ret;
 }
 
-int ObDbLinkProxy::dblink_read(ObISQLConnection *dblink_conn, ReadResult &result, const char *sql)
+int ObDbLinkProxy::dblink_read(ObISQLConnection *dblink_conn, ReadResult &result, const ObString &sql)
 {
   int ret = OB_SUCCESS;
   result.reset();
-  if (OB_ISNULL(dblink_conn) || OB_ISNULL(sql)) {
+  if (OB_ISNULL(dblink_conn) || sql.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null ptr", K(ret), KP(dblink_conn), KP(sql));
+    LOG_WARN("null ptr", K(ret), KP(dblink_conn), K(sql));
   } else if (OB_FAIL(dblink_conn->execute_read(OB_INVALID_TENANT_ID, sql, result))) {
-    LOG_WARN("read from dblink failed", K(ret), K(dblink_conn), KCSTRING(sql));
+    LOG_WARN("read from dblink failed", K(ret), K(dblink_conn), K(sql));
   } else {
     LOG_DEBUG("succ to read from dblink", K(sql));
   }
   return ret;
 }
 
-int ObDbLinkProxy::dblink_write(ObISQLConnection *dblink_conn, int64_t &affected_rows, const char *sql)
+int ObDbLinkProxy::dblink_write(ObISQLConnection *dblink_conn, int64_t &affected_rows, const ObString &sql)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(dblink_conn) || OB_ISNULL(sql)) {
+  if (OB_ISNULL(dblink_conn) || sql.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null ptr", K(ret), KP(dblink_conn), KP(sql));
+    LOG_WARN("null ptr", K(ret), KP(dblink_conn), K(sql));
   } else if (OB_FAIL(dblink_conn->execute_write(OB_INVALID_TENANT_ID, sql, affected_rows))) {
     LOG_WARN("write to dblink failed", K(ret), K(dblink_conn), K(sql));
   } else {
@@ -643,14 +771,17 @@ int ObDbLinkProxy::dblink_execute_proc(ObISQLConnection *dblink_conn)
 }
 
 
-int ObDbLinkProxy::dblink_prepare(sqlclient::ObISQLConnection *dblink_conn, const char *sql)
+int ObDbLinkProxy::dblink_prepare(sqlclient::ObISQLConnection *dblink_conn,
+                                  const ObString &sql,
+                                  int64_t param_count,
+                                  ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(dblink_conn) || OB_ISNULL(sql)) {
+  if (OB_ISNULL(dblink_conn) || sql.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null ptr", K(ret), KP(dblink_conn), KP(sql));
-  } else if (OB_FAIL(dblink_conn->prepare(sql))) {
-    LOG_WARN("prepare to dblink failed", K(ret), K(ObString(sql)));
+    LOG_WARN("null ptr", K(ret), KP(dblink_conn), K(sql));
+  } else if (OB_FAIL(dblink_conn->prepare(sql, param_count, allocator))) {
+    LOG_WARN("prepare to dblink failed", K(ret), K(sql));
   }
   return ret;
 }
@@ -660,13 +791,14 @@ int ObDbLinkProxy::dblink_bind_basic_type_by_pos(sqlclient::ObISQLConnection *db
                                                  void *param,
                                                  int64_t param_size,
                                                  int32_t datatype,
-                                                 int32_t &indicator)
+                                                 int32_t &indicator,
+                                                 bool is_out_param)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dblink_conn)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), KP(dblink_conn));
-  } else if (OB_FAIL(dblink_conn->bind_basic_type_by_pos(position, param, param_size, datatype, indicator))) {
+  } else if (OB_FAIL(dblink_conn->bind_basic_type_by_pos(position, param, param_size, datatype, indicator, is_out_param))) {
     LOG_WARN("bind_basic_type_by_pos to dblink failed", K(ret));
   } else {
     LOG_DEBUG("succ to bind_basic_type_by_pos dblink", K(ret));
@@ -740,14 +872,15 @@ int ObDbLinkProxy::dblink_execute_proc(const uint64_t tenant_id,
                                        const share::schema::ObRoutineInfo &routine_info,
                                        const common::ObIArray<const pl::ObUserDefinedType *> &udts,
                                        const ObTimeZoneInfo *tz_info,
-                                       ObObj *result)
+                                       ObObj *result,
+                                       bool is_sql)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dblink_conn) || sql.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), KP(dblink_conn), K(sql));
   } else if (OB_FAIL(dblink_conn->execute_proc(tenant_id, allocator, params, sql,
-                                               routine_info, udts, tz_info, result))) {
+                                               routine_info, udts, tz_info, result, is_sql))) {
     LOG_WARN("call procedure to dblink failed", K(ret), K(dblink_conn), K(sql));
   } else {
     LOG_DEBUG("succ to call procedure by dblink", K(sql));

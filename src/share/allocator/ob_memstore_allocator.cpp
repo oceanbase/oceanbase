@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "ob_memstore_allocator.h"
 #include "ob_shared_memory_allocator_mgr.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/memtable/ob_memtable.h"
-#include "lib/utility/ob_print_utils.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_tenant_mgr.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 
 namespace oceanbase
 {

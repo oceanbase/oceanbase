@@ -50,6 +50,8 @@ select substr(3.14159, 2.1, 2.1) from dual;
 # bug: 
 select substr(1, 1, 9223372036854775807);
 select substr(123, 2, 9223372036854775806);
+select substr('测1234', 4, 1);
+
 --disable_warnings
 drop view if exists v1;
 --enable_warnings

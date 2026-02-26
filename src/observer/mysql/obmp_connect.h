@@ -15,6 +15,7 @@
 
 #include "rpc/obmysql/packet/ompk_handshake_response.h"
 #include "observer/mysql/obmp_base.h"
+#include "rpc/obmysql/ob_i_cs_mem_pool.h"
 
 namespace oceanbase
 {
@@ -30,6 +31,24 @@ struct ObSMConnection;
 ObString extract_user_name(const ObString &in);
 int extract_user_tenant(const ObString &in, ObString &user_name, ObString &tenant_name);
 int extract_tenant_id(const ObString &tenant_name, uint64_t &tenant_id);
+
+class AuthSwitchResonseMemPool : public obmysql::ObICSMemPool
+{
+public:
+  explicit AuthSwitchResonseMemPool(ObIAllocator *allocator)
+      : allocator_(allocator)
+  {}
+
+  virtual ~AuthSwitchResonseMemPool() {}
+
+  void *alloc(int64_t size) override
+  {
+    return allocator_->alloc(size);
+  }
+private:
+  ObIAllocator *allocator_;
+};
+
 class ObMPConnect
     : public ObMPBase
 {
@@ -65,6 +84,7 @@ private:
   int check_client_property(ObSMConnection &conn);
   int check_common_property(ObSMConnection &conn, obmysql::ObMySQLCapabilityFlags &client_cap);
   int check_update_proxy_capability(ObSMConnection &conn) const;
+  int check_update_client_capability(uint64_t &cap) const;
   int check_user_cluster(const ObString &server_cluster, const int64_t server_cluster_id) const;
   int init_process_single_stmt(const sql::ObMultiStmtItem &multi_stmt_item,
                                sql::ObSQLSessionInfo &session,
@@ -106,9 +126,15 @@ private:
                                        const bool is_login_succ,
                                        bool &is_locked_now);
   bool is_connection_control_enabled(const uint64_t tenant_id);
-  int get_connection_control_stat(const uint64_t tenant_id, const int64_t current_failed_login_num,
-                                  const int64_t last_failed_login_timestamp,
-                                  bool &need_lock, bool &is_locked);
+  int get_connection_control_stat_mysql(const uint64_t tenant_id,
+                                        const int64_t current_failed_login_num,
+                                        const int64_t last_failed_login_timestamp,
+                                        bool &is_locked);
+  int is_need_lock_user_mysql(const uint64_t tenant_id,
+                              const int64_t current_failed_login_num,
+                              const int64_t last_failed_login_timestamp,
+                              bool &need_lock);
+
 
   int unlock_user_if_time_is_up(const uint64_t tenant_id,
                                 share::schema::ObSchemaGetterGuard &schema_guard,
@@ -123,10 +149,98 @@ private:
 #ifdef OB_BUILD_AUDIT_SECURITY
   int check_audit_user(const uint64_t tenant_id, ObString &user_name);
 #endif
-
+  int load_audit_log_filter(const uint64_t tenant_id,
+                            ObString &user_name,
+                            ObString &client_ip,
+                            sql::ObSQLSessionInfo &session);
   int set_proxy_version(ObSMConnection &conn);
   int set_client_version(ObSMConnection &conn);
+  int extract_service_name(ObSMConnection &conn, ObString &service_name, bool &failover_mode);
+  int set_service_name(const uint64_t tenant_id, sql::ObSQLSessionInfo &session,
+      const ObString &service_name, const bool failover_mode);
   int get_proxy_user_name(ObString &real_user);
+  int execute_trigger(const uint64_t tenant_id,
+                      sql::ObSQLSessionInfo &session);
+
+  int get_user_required_plugin(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      common::ObString &required_plugin,
+      const common::ObSEArray<const share::schema::ObUserInfo *, 2> &user_infos,
+      const share::schema::ObUserInfo *&matched_user_info);
+
+  int handle_auth_switch_if_needed(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const common::ObString &required_plugin);
+
+  int send_auth_switch_request(
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const common::ObString &required_plugin);
+
+  int receive_auth_switch_response(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      const common::ObString &required_plugin);
+
+  // caching_sha2_password authentication methods
+  int handle_caching_sha2_authentication_if_need(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const common::ObString &required_plugin,
+      const share::schema::ObUserInfo *matched_user_info,
+      SSL *ssl_st);
+
+  int try_caching_sha2_fast_auth(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      const share::schema::ObUserInfo *matched_user_info,
+      bool &need_full_auth);
+
+  int perform_caching_sha2_full_auth(
+      share::schema::ObUserLoginInfo &login_info,
+      ObSMConnection *conn,
+      sql::ObSQLSessionInfo &session,
+      SSL *ssl_st);
+
+  int perform_ssl_full_auth(
+      share::schema::ObUserLoginInfo &login_info);
+
+  int perform_rsa_full_auth(
+      share::schema::ObUserLoginInfo &login_info,
+      sql::ObSQLSessionInfo &session);
+
+  // Helper methods for perform_rsa_full_auth
+  int check_rsa_keys_available();
+
+  int receive_client_rsa_packet(
+      obmysql::ObMySQLPacket *&client_pkt);
+
+  int handle_rsa_public_key_request(
+      obmysql::ObMySQLPacket *&client_pkt,
+      sql::ObSQLSessionInfo &session,
+      const char *&client_data,
+      int64_t &client_data_len);
+
+  int send_rsa_public_key(
+      sql::ObSQLSessionInfo &session);
+
+  int receive_encrypted_password(
+      obmysql::ObMySQLPacket *&client_pkt,
+      const char *&client_data,
+      int64_t &client_data_len);
+
+  int decrypt_rsa_password(
+      const char *client_data,
+      int64_t client_data_len,
+      share::schema::ObUserLoginInfo &login_info);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPConnect);
   obmysql::OMPKHandshakeResponse hsr_;
@@ -140,6 +254,8 @@ private:
   char proxied_user_name_var_[OB_MAX_USER_NAME_BUF_LENGTH];
   char db_name_var_[OB_MAX_DATABASE_NAME_BUF_LENGTH];
   int deser_ret_;
+  ObArenaAllocator allocator_;
+  AuthSwitchResonseMemPool asr_mem_pool_;
   int32_t client_port_;
 }; // end of class ObMPConnect
 

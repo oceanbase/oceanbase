@@ -260,6 +260,11 @@ enum EMySQLFieldType
   MYSQL_TYPE_OB_UROWID = 209,
   MYSQL_TYPE_ORA_BLOB = 210,
   MYSQL_TYPE_ORA_CLOB = 211,
+  MYSQL_TYPE_ROARINGBITMAP = 215,
+  MYSQL_TYPE_OB_VECTOR = 216, // used in cdc/oms not used in client
+  MYSQL_TYPE_OB_ARRAY = 217, // used in cdc/oms not used in client
+  MYSQL_TYPE_OB_MAP = 218, // used in cdc/oms not used in client
+  MYSQL_TYPE_OB_SPARSE_VECTOR = 219, // used in cdc/oms not used in client
   MYSQL_TYPE_JSON = 245,
   MYSQL_TYPE_NEWDECIMAL = 246,
   MYSQL_TYPE_ENUM = 247,
@@ -354,6 +359,21 @@ inline const char *get_emysql_field_type_str(const obmysql::EMySQLFieldType &typ
       break;
     case obmysql::MYSQL_TYPE_OB_RAW:
       str = "MYSQL_TYPE_OB_RAW";
+      break;
+    case obmysql::MYSQL_TYPE_ROARINGBITMAP:
+      str = "MYSQL_TYPE_ROARINGBITMAP";
+      break;
+    case obmysql::MYSQL_TYPE_OB_VECTOR:
+      str = "MYSQL_TYPE_OB_VECTOR";
+      break;
+    case obmysql::MYSQL_TYPE_OB_ARRAY:
+      str = "MYSQL_TYPE_OB_ARRAY";
+      break;
+    case obmysql::MYSQL_TYPE_OB_MAP:
+      str = "MYSQL_TYPE_OB_MAP";
+      break;
+    case obmysql::MYSQL_TYPE_OB_SPARSE_VECTOR:
+      str = "MYSQL_TYPE_OB_SPARSE_VECTOR";
       break;
     case obmysql::MYSQL_TYPE_NEWDECIMAL:
       str = "MYSQL_TYPE_NEWDECIMAL";

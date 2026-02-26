@@ -15,7 +15,6 @@
 #define protected public
 #define private public
 #define UNITTEST
-#include "storage/tx/ob_tx_data_define.h"
 #include "storage/tx_table/ob_tx_table.h"
 
 namespace oceanbase

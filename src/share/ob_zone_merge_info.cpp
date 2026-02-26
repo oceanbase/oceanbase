@@ -12,15 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_zone_merge_info.h"
-#include "share/ob_zone_merge_table_operator.h"
-#include "share/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_storage_format.h"
-#include "share/config/ob_server_config.h"
-#include "common/ob_zone_type.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_table_param.h"
-#include "share/schema/ob_column_schema.h"
 
 namespace oceanbase
 {
@@ -236,6 +227,24 @@ ObGlobalMergeInfo::ObGlobalMergeInfo()
   : tenant_id_(OB_INVALID_TENANT_ID),
     CONSTRUCT_GLOBAL_MERGE_INFO()
 {
+  // tmp defensive code
+  int ret = OB_SUCCESS;
+  const ObMergeInfoItem *it = list_.get_first();
+  const ObMergeInfoItem *header = list_.get_header();
+
+  if (OB_ISNULL(header)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get unexpected null list", K(ret), K(list_), K(tenant_id_));
+  }
+
+  while (OB_SUCC(ret) && it != header) {
+    if (OB_ISNULL(it)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get unexpected null item", K(ret), KP(it), K(list_), K(tenant_id_));
+    } else {
+      it = it->get_next();
+    }
+  }
 }
 
 void ObGlobalMergeInfo::reset()
@@ -284,10 +293,10 @@ int ObGlobalMergeInfo::assign(
     tenant_id_ = other.tenant_id_;
     ObMergeInfoItem *it = list_.get_first();
     const ObMergeInfoItem *o_it = other.list_.get_first();
-    while ((it != list_.get_header()) && (o_it != other.list_.get_header())) {
+    while (OB_SUCC(ret) && (it != list_.get_header()) && (o_it != other.list_.get_header())) {
       if (NULL == it || NULL == o_it) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null item", KR(ret), KP(it), KP(o_it));
+        LOG_ERROR("null item", KR(ret), KP(it), KP(o_it));
       } else {
         *it = *o_it;
         it = it->get_next();
@@ -306,10 +315,10 @@ int ObGlobalMergeInfo::assign_value(
     tenant_id_ = other.tenant_id_;
     ObMergeInfoItem *it = list_.get_first();
     const ObMergeInfoItem *o_it = other.list_.get_first();
-    while ((it != list_.get_header()) && (o_it != other.list_.get_header())) {
+    while (OB_SUCC(ret) && (it != list_.get_header()) && (o_it != other.list_.get_header())) {
       if (NULL == it || NULL == o_it) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null item", KR(ret), KP(it), KP(o_it));
+        LOG_ERROR("null item", KR(ret), KP(it), KP(o_it));
       } else {
         it->assign_value(*o_it);
         it = it->get_next();

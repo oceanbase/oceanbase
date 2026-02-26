@@ -11,17 +11,9 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <limits.h>
 #include "storage/utl_file/ob_utl_file_handler.h"
-#include "common/ob_smart_var.h"
 #include "common/storage/ob_io_device.h"
 #include "share/ob_io_device_helper.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/alloc/alloc_assist.h"
-#include "lib/utility/utility.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -142,7 +134,7 @@ int ObUtlFileHandler::get_line(const int64_t &fd, char *buffer, const int64_t le
         // cannot find '\n' within [0, len)
         buffer[len] = '\0';
         target_pos = current_read_pos + len;
-        line_size = pos;
+        line_size = len + 1;
       } else {
         buffer[pos] = '\0';
         target_pos = current_read_pos + pos + 1;
@@ -490,13 +482,6 @@ int ObUtlFileHandler::frename(const char *src_dir, const char *src_filename,
           K(dst_path), K(b_dst_path_exist), K(overwrite));
     }
   }
-  return ret;
-}
-
-int ObUtlFileHandler::fis_open(const int64_t &fd, bool &b_open)
-{
-  int ret = OB_SUCCESS;
-  b_open = (fd > 0);
   return ret;
 }
 

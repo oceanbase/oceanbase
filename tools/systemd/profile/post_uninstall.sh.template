@@ -8,13 +8,10 @@ NC="\033[0m"
 if [ $1 -eq 0 ]; then
     rm -rf $prefix/.meta $prefix/log_obshell
 
-    # prepare clean script
-    echo "find $prefix/ -mindepth 1 -maxdepth 1 ! -name lib -exec rm -rf {} +" > $prefix/oceanbase_clean.sh
-
     if [ -f "$json_file" ] && [ -s "$json_file" ]; then
-        redo_dir=$(cat "$json_file" | jq -r '.oceanbase_ce.server.observerConfig.redo_dir')
+        redo_dir=$(cat "$json_file" | grep -o '"redo_dir":[^,]*' | sed 's/"redo_dir"://')
         echo "rm -rf $redo_dir" >> $prefix/oceanbase_clean.sh
-        data_dir=$(cat "$json_file" | jq -r '.oceanbase_ce.server.observerConfig.data_dir')
+        data_dir=$(cat "$json_file" | grep -o '"data_dir":[^,]*' | sed 's/"data_dir"://')
         echo "rm -rf $data_dir" >> $prefix/oceanbase_clean.sh
         echo "echo OK" >> $prefix/oceanbase_clean.sh
     fi

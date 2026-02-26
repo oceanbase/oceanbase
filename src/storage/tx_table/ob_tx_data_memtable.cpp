@@ -10,19 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx_table/ob_tx_data_memtable.h"
 
+#include "ob_tx_data_memtable.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/ls/ob_freezer.h"
 #include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tx/ob_tx_data_functor.h"
-#include "storage/tx_table/ob_tx_data_memtable_mgr.h"
-#include "storage/tx_table/ob_tx_data_table.h"
-#include "storage/tx_table/ob_tx_table_iterator.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
+#include "storage/ls/ob_ls.h"
 
 namespace oceanbase
 {
@@ -68,7 +61,6 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
     ls_id_ = freezer_->get_ls_id();
     construct_list_done_ = false;
     pre_process_done_ = false;
-    do_recycle_ = false;
     max_tx_scn_.set_min();
     inserted_cnt_ = 0;
     deleted_cnt_ = 0;
@@ -129,7 +121,6 @@ void ObTxDataMemtable::reset()
   }
   construct_list_done_ = false;
   pre_process_done_ = false;
-  do_recycle_ = false;
   key_.reset();
   max_tx_scn_.set_min();
   inserted_cnt_ = 0;
@@ -171,6 +162,10 @@ int ObTxDataMemtable::insert(ObTxData *tx_data)
   } else if (OB_ISNULL(tx_data)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "tx data is nullptr", KR(ret));
+  } else if (ObTxCommitData::COMMIT == tx_data->state_ &&
+             (tx_data->commit_version_.is_max() || !tx_data->commit_version_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "invalid tx data", KR(ret), KPC(tx_data));
   } else if (OB_ISNULL(tx_data_map_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "unexpected null value of tx_data_map_", KR(ret));
@@ -337,28 +332,23 @@ int ObTxDataMemtable::pre_process_commit_version_row_(ObTxData *fake_tx_data)
   int ret = OB_SUCCESS;
 
   SCN recycle_scn = SCN::min_scn();
-  do_recycle_ = true;
   ObCommitVersionsArray cur_commit_versions;
   ObCommitVersionsArray past_commit_versions;
   ObCommitVersionsArray merged_commit_versions;
 
-  int64_t current_time = ObClockGenerator::getClock();
-  int64_t prev_recycle_time = memtable_mgr_->get_mini_merge_recycle_commit_versions_ts();
-  if (current_time - prev_recycle_time < MINI_RECYCLE_COMMIT_VERSIONS_INTERVAL_US) {
-    // tx data mini merge do not recycle commit versions array every time
-    do_recycle_ = false;
-  } else {
-    do_recycle_ = true;
+  STORAGE_LOG(INFO, "pre-process commit versions row", K(get_ls_id()));
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(freezer_->get_ls()->get_recycle_scn(recycle_scn))) {
+    // get_recycle_scn failed should not affect the following process
+    recycle_scn.set_min();
   }
-  STORAGE_LOG(
-      INFO, "pre-process commit versions row", K(get_ls_id()), K(do_recycle_), K(current_time), K(prev_recycle_time));
 
   if (OB_FAIL(fill_in_cur_commit_versions_(cur_commit_versions)/*step 1*/)) {
     STORAGE_LOG(WARN, "periodical select commit version failed.", KR(ret));
   } else if (OB_FAIL(get_past_commit_versions_(past_commit_versions)/*step 2*/)) {
-    STORAGE_LOG(WARN, "get past commit versions failed.", KR(ret));
-  } else if (do_recycle_ && OB_FAIL(memtable_mgr_->get_tx_data_table()->get_recycle_scn(recycle_scn) /*step 3*/)) {
-    STORAGE_LOG(WARN, "get recycle ts failed.", KR(ret));
+    STORAGE_LOG(WARN, "get past commit versions failed.", KR(ret), K(past_commit_versions));
+  } else if (FALSE_IT(clear_fake_node_if_exist_(past_commit_versions))) {
   } else if (OB_FAIL(merge_cur_and_past_commit_verisons_(recycle_scn, cur_commit_versions,/*step 4*/
                                                          past_commit_versions,
                                                          merged_commit_versions))) {
@@ -450,6 +440,11 @@ int ObTxDataMemtable::periodical_get_next_commit_version_(ProcessCommitVersionDa
       cur_max_commit_version = tx_data->commit_version_;
     }
 
+    if (cur_max_commit_version.is_max()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected max commit version", KR(ret), KPC(tx_data));
+    }
+
     // If this tx data is the first tx data in sorted list or its start_log_ts is 1_s larger than
     // the pre_start_scn, we use this start_log_ts to calculate upper_trans_version
     if (SCN::min_scn() == pre_start_scn ||
@@ -496,7 +491,7 @@ int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_comm
       ObSSTable *tmp_sstable = nullptr;
       if (sstable->is_loaded()) {
         tmp_sstable = sstable;
-      } else if (OB_FAIL(ObTabletTableStore::load_sstable(sstable->get_addr(), sstable->is_co_sstable(), sstable_handle))) {
+      } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(sstable->get_addr(), sstable->is_co_sstable(), sstable_handle))) {
         STORAGE_LOG(WARN, "fail to load sstable", K(ret), KPC(sstable));
       } else if (OB_FAIL(sstable_handle.get_sstable(tmp_sstable))) {
         STORAGE_LOG(WARN, "fail to get sstable", K(ret), K(sstable_handle));
@@ -505,14 +500,27 @@ int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_comm
         ObCommitVersionsGetter getter(iter_param, tmp_sstable);
         if (OB_FAIL(getter.get_next_row(past_commit_versions))) {
           STORAGE_LOG(WARN, "get commit versions from tx data sstable failed.", KR(ret));
+        } else if (!past_commit_versions.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(ERROR, "invalid past commit versions array", KR(ret), K(past_commit_versions), KPC(sstable));
+        } else {
+          STORAGE_LOG(INFO, "finish get past commit versions", KR(ret), K(past_commit_versions), KPC(sstable));
         }
       }
     } else {
-      STORAGE_LOG(DEBUG, "There is no tx data sstable yet", KR(ret), KPC(sstable));
+      STORAGE_LOG(INFO, "There is no tx data sstable yet", KR(ret), K(past_commit_versions), KP(sstable));
     }
   }
 
   return ret;
+}
+
+void ObTxDataMemtable::clear_fake_node_if_exist_(ObCommitVersionsArray &past_commit_versions)
+{
+  if (1 == past_commit_versions.array_.count() && past_commit_versions.array_.at(0).commit_version_.is_max()) {
+    STORAGE_LOG(INFO, "clear fake commit version node", K(past_commit_versions));
+    past_commit_versions.reset();
+  }
 }
 
 int ObTxDataMemtable::merge_cur_and_past_commit_verisons_(const SCN recycle_scn,
@@ -605,7 +613,6 @@ int ObTxDataMemtable::merge_pre_process_node_(const int64_t step_len,
         STORAGE_LOG(WARN, "push back commit version node failed.", KR(ret), KPC(this));
       }
     }
-
   }
   return ret;
 }
@@ -1101,25 +1108,39 @@ int ObTxDataMemtable::dump2text(const char *fname)
     int64_t ls_id = freezer_->get_ls_id().id();
     int64_t tenant_id = MTL_ID();
     fprintf(fd, "tenant_id=%ld ls_id=%ld\n", tenant_id, ls_id);
-    fprintf(fd,
-        "memtable: key=%s is_inited=%d construct_list_done=%d pre_process_done=%d do_recycle_=%d min_tx_log_ts=%s max_tx_log_ts=%s "
-        "min_start_log_ts=%s inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld total_undo_node_cnt=%ld last_insert_ts=%ld "
-        "state=%d\n",
-        S(key_),
-        is_inited_,
-        construct_list_done_,
-        pre_process_done_,
-        do_recycle_,
-        to_cstring(get_min_tx_scn()),
-        to_cstring(max_tx_scn_),
-        to_cstring(get_min_start_scn()),
-        inserted_cnt_,
-        deleted_cnt_,
-        write_ref_,
-        get_occupied_size(),
-        get_total_undo_node_cnt(),
-        last_insert_ts_,
-        state_);
+    ObCStringHelper helper;
+    const char *key_ptr = NULL;
+    const char *min_tx_scn_ptr = NULL;
+    const char *max_tx_scn_ptr = NULL;
+    const char *min_start_scn_ptr = NULL;
+    if (OB_FAIL(helper.convert(key_, key_ptr))) {
+      STORAGE_LOG(WARN, "convert key fail", K_(key), K(ret));
+    } else if (OB_FAIL(helper.convert(get_min_tx_scn(), min_tx_scn_ptr))) {
+      STORAGE_LOG(WARN, "convert min_tx_scn fail", "min_tx_scn", get_min_tx_scn(), K(ret));
+    } else if (OB_FAIL(helper.convert(max_tx_scn_, max_tx_scn_ptr))) {
+      STORAGE_LOG(WARN, "convert max_tx_scn fail", K_(max_tx_scn), K(ret));
+    } else if (OB_FAIL(helper.convert(get_min_start_scn(), min_start_scn_ptr))) {
+      STORAGE_LOG(WARN, "convert min_start_scn fail", "min_start_scn", get_min_start_scn(), K(ret));
+    } else {
+      fprintf(fd,
+          "memtable: key=%s is_inited=%d construct_list_done=%d pre_process_done=%d min_tx_log_ts=%s max_tx_log_ts=%s "
+          "min_start_log_ts=%s inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld total_undo_node_cnt=%ld last_insert_ts=%ld "
+          "state=%d\n",
+          key_ptr,
+          is_inited_,
+          construct_list_done_,
+          pre_process_done_,
+          min_tx_scn_ptr,
+          max_tx_scn_ptr,
+          min_start_scn_ptr,
+          inserted_cnt_,
+          deleted_cnt_,
+          write_ref_,
+          get_occupied_size(),
+          get_total_undo_node_cnt(),
+          last_insert_ts_,
+          state_);
+    }
     fprintf(fd, "tx_data_count=%ld \n", tx_data_map_->count());
     DumpTxDataMemtableFunctor fn(fd);
     // tx_data_map_->for_each(fn);
@@ -1233,15 +1254,16 @@ void ObTxDataMemtable::DEBUG_print_start_scn_list_(const char* fname)
       ObTxData *tx_data = cur_node;
       cur_node = cur_node->sort_list_node_.next_;
 
+      ObCStringHelper helper;
       fprintf(fd,
               "ObTxData : tx_id=%-19ld state=%-8s start_scn=%-19s "
               "end_scn=%-19s "
               "commit_version=%-19s\n",
               tx_data->tx_id_.get_id(),
               ObTxData::get_state_string(tx_data->state_),
-              to_cstring(tx_data->start_scn_),
-              to_cstring(tx_data->end_scn_),
-              to_cstring(tx_data->commit_version_));
+              helper.convert(tx_data->start_scn_),
+              helper.convert(tx_data->end_scn_),
+              helper.convert(tx_data->commit_version_));
     }
   }
 
@@ -1269,11 +1291,12 @@ void ObTxDataMemtable::DEBUG_print_merged_commit_versions_(ObCommitVersionsArray
     int64_t tenant_id = MTL_ID();
     fprintf(fd, "tenant_id=%ld \n", tenant_id);
     for (int i = 0; i < array.count(); i++) {
+      ObCStringHelper helper;
       fprintf(fd,
               "start_scn=%-19s "
               "commit_version=%-19s\n",
-              to_cstring(array.at(i).start_scn_),
-              to_cstring(array.at(i).commit_version_));
+              helper.convert(array.at(i).start_scn_),
+              helper.convert(array.at(i).commit_version_));
     }
   }
 

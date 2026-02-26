@@ -11,27 +11,11 @@
  */
 
 #include <gtest/gtest.h>
-#include <boost/geometry.hpp>
-#include <boost/geometry/geometries/point_xy.hpp>
-#include <boost/geometry/geometries/polygon.hpp>
-#include <boost/foreach.hpp>
 #define private public
-#include "lib/geo/ob_geo_bin.h"
-#include "lib/geo/ob_geo_tree.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
-#include "lib/geo/ob_geo_tree_traits.h"
-#include "lib/geo/ob_geo_bin_traits.h"
-#include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_func_box.h"
 #include "lib/geo/ob_geo_func_utils.h"
 #include "lib/json_type/ob_json_common.h"
-#include "lib/random/ob_random.h"
 #undef private
 
-#include <sys/time.h>
-#include <stdexcept>
-#include <exception>
-#include <typeinfo>
 
 namespace bg = boost::geometry;
 using namespace oceanbase::common;
@@ -236,7 +220,10 @@ TEST_F(TestGeoFuncBox, geom_point)
   ObIWkbGeomPoint p;
   p.set_data(data.string());
 
-  ObGeoEvalCtx gis_context(&allocator);
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
   gis_context.ut_set_geo_arg(0, &p);
   ObGeogBox *result = NULL;
@@ -260,7 +247,10 @@ TEST_F(TestGeoFuncBox, geom_linestring)
   ObIWkbGeomLineString line;
   line.set_data(data.string());
 
-  ObGeoEvalCtx gis_context(&allocator);
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
   gis_context.ut_set_geo_arg(0, &line);
   ObGeogBox *result = NULL;
@@ -287,7 +277,10 @@ TEST_F(TestGeoFuncBox, geom_polygon)
   ObIWkbGeomPolygon poly;
   poly.set_data(data.string());
 
-  ObGeoEvalCtx gis_context(&allocator);
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
   gis_context.ut_set_geo_arg(0, &poly);
   ObGeogBox *result = NULL;
@@ -313,7 +306,10 @@ TEST_F(TestGeoFuncBox, geom_multipoint)
   ObIWkbGeomMultiPoint multi_point;
   multi_point.set_data(data1.string());
 
-  ObGeoEvalCtx gis_context(&allocator);
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
   gis_context.ut_set_geo_arg(0, &multi_point);
   ObGeogBox *result = NULL;
@@ -342,7 +338,10 @@ TEST_F(TestGeoFuncBox, geom_multilinestring)
   ObIWkbGeomMultiLineString multi_line;
   multi_line.set_data(data1.string());
 
-  ObGeoEvalCtx gis_context(&allocator);
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
   gis_context.ut_set_geo_arg(0, &multi_line);
   ObGeogBox *result = NULL;
@@ -375,7 +374,10 @@ TEST_F(TestGeoFuncBox, geom_multipolygon)
   ObIWkbGeomMultiPolygon multi_poly;
   multi_poly.set_data(data1.string());
 
-  ObGeoEvalCtx gis_context(&allocator);
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
   gis_context.ut_set_geo_arg(0, &multi_poly);
   ObGeogBox *result = NULL;
@@ -442,7 +444,10 @@ TEST_F(TestGeoFuncBox, geom_collection)
   ObIWkbGeomCollection collection;
   collection.set_data(data.string());
 
-  ObGeoEvalCtx gis_context(&allocator);
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
   gis_context.ut_set_geo_count(1);
   gis_context.ut_set_geo_arg(0, &collection);
   ObGeogBox *result = NULL;

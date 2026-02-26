@@ -22,8 +22,8 @@ namespace sql
 {
 class ObDASInsertResult;
 
-typedef common::ObList<ObNewRowIterator *, common::ObIAllocator> ObDuplicatedIterList;
-class ObDASConflictIterator : public common::ObNewRowIterator
+typedef common::ObList<blocksstable::ObDatumRowIterator *, common::ObIAllocator> ObDuplicatedIterList;
+class ObDASConflictIterator : public blocksstable::ObDatumRowIterator
 {
 public:
   ObDASConflictIterator(const ObjMetaFixedArray &output_types,
@@ -36,9 +36,8 @@ public:
 
   ~ObDASConflictIterator() {};
 
-  virtual int get_next_row(common::ObNewRow *&row) override;
-  virtual int get_next_row() override;
-  virtual void reset() override;
+  void reset();
+  virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
 
   void init_curr_iter()
   { curr_iter_ = duplicated_iter_list_.begin(); }
@@ -60,6 +59,8 @@ public:
 
   virtual int open_op() override;
   virtual int release_op() override;
+  virtual int record_task_result_to_rtdef() override;
+  virtual int assign_task_result(ObIDASTaskOp *other) override;
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   virtual int init_task_info(uint32_t row_extend_size) override;
@@ -68,8 +69,7 @@ public:
   virtual ObDASBaseRtDef *get_rtdef() override { return ins_rtdef_; }
   int write_row(const ExprFixedArray &row,
                 ObEvalCtx &eval_ctx,
-                ObChunkDatumStore::StoredRow *&stored_row,
-                bool &buffer_full);
+                ObChunkDatumStore::StoredRow *&stored_row);
   int64_t get_row_cnt() const { return insert_buffer_.get_row_cnt(); }
   void set_das_ctdef(const ObDASInsCtDef *ins_ctdef) { ins_ctdef_ = ins_ctdef; }
   void set_das_rtdef(ObDASInsRtDef *ins_rtdef) { ins_rtdef_ = ins_rtdef; }
@@ -78,8 +78,11 @@ public:
     return insert_buffer_.dump_data(*ins_ctdef_);
   }
 
-  common::ObNewRowIterator *get_duplicated_result()
+  blocksstable::ObDatumRowIterator *get_duplicated_result()
   { return result_; }
+
+  int64_t get_affected_rows() { return affected_rows_; }
+  bool get_is_duplicated() { return is_duplicated_; }
 
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,
                        KPC_(ins_ctdef),
@@ -91,25 +94,27 @@ private:
   int insert_row_with_fetch();
   int store_conflict_row(ObDASInsertResult &ins_result);
 
-  int insert_index_with_fetch(ObAccessService *as,
-                              common::ObNewRowIterator &dml_iter,
+  int insert_index_with_fetch(ObDMLBaseParam &dml_param,
+                              ObAccessService *as,
+                              blocksstable::ObDatumRowIterator &dml_iter,
                               ObDASConflictIterator *result_iter,
                               const ObDASInsCtDef *ins_ctdef,
                               ObDASInsRtDef *ins_rtdef,
                               storage::ObStoreCtxGuard &store_ctx_guard,
                               const UIntFixedArray *duplicated_column_ids,
-                              common::ObTabletID tablet_id);
+                              common::ObTabletID tablet_id,
+                              transaction::ObTxReadSnapshot *snapshot);
 
 private:
   const ObDASInsCtDef *ins_ctdef_;
   ObDASInsRtDef *ins_rtdef_;
   ObDASWriteBuffer insert_buffer_;
-  common::ObNewRowIterator *result_;
+  blocksstable::ObDatumRowIterator *result_;
   int64_t affected_rows_;  // local execute result, no need to serialize
   bool is_duplicated_;  // local execute result, no need to serialize
 };
 
-class ObDASInsertResult : public ObIDASTaskResult, public common::ObNewRowIterator
+class ObDASInsertResult : public ObIDASTaskResult, public blocksstable::ObDatumRowIterator
 {
   OB_UNIS_VERSION_V(1);
 public:
@@ -117,11 +122,9 @@ public:
   virtual ~ObDASInsertResult();
   virtual int init(const ObIDASTaskOp &op, common::ObIAllocator &alloc) override;
   virtual int reuse() override;
-  virtual int get_next_row(ObNewRow *&row) override;
-  virtual int get_next_row() override;
-  virtual int get_next_rows(int64_t &count, int64_t capacity) override;
-  virtual void reset() override;
-  virtual int link_extra_result(ObDASExtraData &extra_result) override;
+  virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
+  virtual void reset();
+  virtual int link_extra_result(ObDASExtraData &extra_result, ObIDASTaskOp *task_op) override;
   int init_result_newrow_iter(const ObjMetaFixedArray *output_types);
   ObDASWriteBuffer &get_result_buffer() { return result_buffer_; }
   int64_t get_affected_rows() const { return affected_rows_; }
@@ -129,15 +132,19 @@ public:
 
   bool is_duplicated() { return is_duplicated_; }
   void set_is_duplicated(bool is_duplicated) { is_duplicated_ = is_duplicated; }
+  transaction::ObTxReadSnapshot &get_response_snapshot() { return response_snapshot_; }
 
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,
-                        K_(affected_rows));
+                       K_(affected_rows),
+                       K_(is_duplicated),
+                       K_(response_snapshot));
 private:
   int64_t affected_rows_;
   ObDASWriteBuffer result_buffer_;
   ObDASWriteBuffer::NewRowIterator result_newrow_iter_;
   const ObjMetaFixedArray *output_types_;
   bool is_duplicated_;
+  transaction::ObTxReadSnapshot response_snapshot_;
 };
 }  // namespace sql
 }  // namespace oceanbase

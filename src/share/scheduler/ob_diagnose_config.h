@@ -10,15 +10,20 @@
  * See the Mulan PubL v2 for more details.
  */
 
+//SUSPECT_INFO_TYPE_DEF(suspect_info_type, info_priority, with_comment, info_str, int_info_cnt, ...)
+// ATTENTION:
+// 1. the int_info_cnt must be consistent with the number of parameters in the macro,
+//    only int info need to be defined in the macro
+// 2. with_comment is true means that suspect_info contain other string info
 #ifdef SUSPECT_INFO_TYPE_DEF
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MEMTABLE_CANT_MINOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "memtable can not minor merge",
     2, {"memtable end_scn", "memtable timestamp"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_CANT_SCHEDULE_MINOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "can't schedule minor merge",
     3, {"min_snapshot_version", "max_snapshot_version", "mini_sstable_cnt"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_CANT_MAJOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "need major merge but can't merge now",
-    6, {"compaction_scn", "tablet_snapshot_version", "is_tablet_data_status_complete", "ls_weak_read_ts_ready", "need_force_freeze", "max_serialized_medium_scn"})
+    6, {"compaction_scn", "tablet_snapshot_version", "need_force_freeze", "ls_weak_read_ts_ready", "exist_unfinished_inc_major", "max_serialized_medium_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SCHEDULE_MEDIUM_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "schedule medium failed",
-    3, {"compaction_scn", "store_column_cnt", "error_code"})
+    4, {"compaction_scn", "store_column_cnt", "exist_unfinished_inc_major", "error_code"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SSTABLE_COUNT_NOT_SAFE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, true, "sstable count is not safe",
     4, {"minor_compact_trigger", "major_table_count", "minor_tables_count", "first_minor_start_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SUBMIT_LOG_FOR_FREEZE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "traverse_trans_to_submit_redo_log failed",
@@ -30,17 +35,33 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_NOT_READY_FOR_FLUSH, ObDiagnoseInfoPrio::DIAGNOSE_
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MEMTABLE_CANT_CREATE_DAG, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "memtable can not create dag successfully",
     3, {"error_code", "has been ready for flush time", "ready for flush time"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SUSPEND_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "merge has been paused",
-    2, {"schedule_scn", "is_row_store"})
+    1, {"schedule_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_INVALID_DATA_VERSION, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "invalid data version to schedule medium merge",
     2, {"curr_data_version", "target_data_version"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_FAILED_TO_REFRESH_LS_LOCALITY, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "refresh ls locality cache failed",
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_RS_SCHEDULE_ERROR, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "rs check progress failed",
     3, {"compaction_scn", "errno", "unfinish_table_cnt"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_RS_FROZEN_SCN_ERROR, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "unexpect frozen scn, maybe changed manually",
+    2, {"last_frozen_scn", "curr_frozen_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_ADD_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "compaction report task add failed",
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_PROGRESS_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "compaction report task process failed",
     1, {"errno"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, true, "ls can't schedule merge",
+    1, {"weak_read_ts"})
+#ifdef OB_BUILD_SHARED_STORAGE
+SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_CANT_MAJOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "shared tablet can't schedule major merge",
+    5, {"compaction_scn", "ss_tablet_snapshot_version", "ss_checkpoint_scn", "local_tablet_clog_checkpoint_scn", "ss_tablet_clog_checkpoint_scn"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_REORG_SKIP_MAJOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false,
+    "shared tablet can't schedule major merge because it is reorganizing", 3, {"compaction_scn", "ss_tablet_snapshot_version", "ss_checkpoint_scn"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_MAJOR_ATTACH_WAIT_SS_MAJOR_READY, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "local tablet attach major waiting for shared major finish",
+    2, {"compaction_scn", "ss_tablet_last_major"})
+#endif
+SUSPECT_INFO_TYPE_DEF(SUSPECT_MV_IN_CREATION, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false,
+                      "materialized view creation has not finished", 2, {"schedule_scn", "is_row_store"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_MULTI_VERSION_START_NOT_ADVANCE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "multi version start not advance for a long time",
+    2, {"multi_version_start", "current_time"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_INFO_TYPE_MAX, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "", 0, {})
 #endif
 
@@ -62,7 +83,7 @@ struct ObDiagnoseInfoStruct {
   const char *info_str_fmt[DIAGNOSE_INFO_STR_FMT_MAX_NUM];
 };
 
-enum ObSuspectInfoType
+enum ObSuspectInfoType : uint8_t
 {
 #define SUSPECT_INFO_TYPE_DEF(suspect_info_type, info_priority, with_comment, info_str, int_info_cnt, ...) suspect_info_type,
 #include "ob_diagnose_config.h"
@@ -77,10 +98,18 @@ enum ObDiagnoseTabletType {
   TYPE_REPORT,
   TYPE_RS_MAJOR_MERGE, // for tenant major in RS
   TYPE_TX_TABLE_MERGE,
-  TYPE_MDS_MINI_MERGE,
-  TYPE_BATCH_FREEZE,
+  TYPE_MDS_MINI_MERGE, // for mds mini merge
+  TYPE_BATCH_EXECUTE, // for batch execute dag
+  TYPE_S2_REFRESH, // for shared storage
+  TYPE_MICRO_MINI_MERGE,
+  TYPE_MDS_MINOR_MERGE, // for mds minor merge
   TYPE_DIAGNOSE_TABLET_MAX
 };
+
+static bool is_valid_diagnose_tablet_type(const ObDiagnoseTabletType type)
+{
+  return type >= TYPE_SPECIAL && type < TYPE_DIAGNOSE_TABLET_MAX;
+}
 
 static constexpr ObDiagnoseInfoStruct OB_SUSPECT_INFO_TYPES[] = {
   #define SUSPECT_INFO_TYPE_DEF(suspect_info_type, info_priority, with_comment, info_str, int_info_cnt, ...) \

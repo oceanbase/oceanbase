@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX  SQL_RESV
 
 #include "sql/resolver/ddl/ob_drop_index_resolver.h"
-#include "share/schema/ob_table_schema.h"
 #include "sql/resolver/ddl/ob_drop_index_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 namespace oceanbase
 {
 using namespace common;
@@ -50,6 +48,17 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("invalid parse tree type or invalid children number", K(parse_tree.type_),
              K(parse_tree.num_child_), K(parse_tree.children_), K(ret));
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info should not be null", K(ret));
+    } else if (is_external_catalog_id(session_info_->get_current_default_catalog())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop index in catalog is");
+    }
+  }
+
   if (OB_SUCC(ret)) {
     ObDropIndexStmt *drop_index_stmt = NULL;
     if (OB_UNLIKELY(NULL == (drop_index_stmt = create_stmt<ObDropIndexStmt>()))) {
@@ -167,7 +176,9 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
             false /* not index table */,
             table_schema))) {
           if (OB_TABLE_NOT_EXIST == ret) {
-            LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(drop_index_stmt->get_database_name()), to_cstring(drop_index_stmt->get_table_name()));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(drop_index_stmt->get_database_name()),
+                helper.convert(drop_index_stmt->get_table_name()));
           }
           LOG_WARN("fail to get table schema", K(ret));
         } else if (OB_ISNULL(table_schema)) {

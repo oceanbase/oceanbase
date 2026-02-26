@@ -11,15 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/rewrite/ob_transform_utils.h"
-#include "pl/sys_package/ob_dbms_stats.h"
+#include "ob_log_optimizer_stats_gathering.h"
 #include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_optimizer_context.h"
-#include "ob_opt_est_cost.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
 
 using namespace oceanbase;
 using namespace sql;

@@ -16,7 +16,6 @@
 #include "common/object/ob_obj_type.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "common/object/ob_obj_compare.h"
-#include "sql/engine/expr/ob_expr_between.h"
 
 namespace oceanbase
 {

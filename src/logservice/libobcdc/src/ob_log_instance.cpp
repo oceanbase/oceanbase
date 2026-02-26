@@ -14,14 +14,14 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include "ob_log_instance.h"
 
+#include "ob_log_instance.h"
 #include "lib/oblog/ob_log_module.h"        // LOG_ERROR
-#include "lib/file/file_directory_utils.h"  // FileDirectoryUtils
+#include "share/io/ob_io_manager.h"         // ObIOManager
+#include "share/ob_device_manager.h"        // ObDeviceManager
 #include "share/ob_version.h"               // build_version
 #include "share/system_variable/ob_system_variable.h" // ObPreProcessSysVars
 #include "share/ob_time_utility2.h"         // ObTimeUtility2
-#include "share/ob_get_compat_mode.h"
 #include "sql/ob_sql_init.h"                // init_sql_factories
 #include "observer/omt/ob_tenant_timezone_mgr.h"  // OTTZ_MGR
 #include "common/ob_clock_generator.h"
@@ -34,14 +34,11 @@
 #include "ob_log_sql_server_provider.h"   // ObLogSQLServerProvider (for cluster sync mode)
 #include "ob_cdc_tenant_sql_server_provider.h"  // ObCDCTenantSQLServerProvider(for cluster sync mode)
 #include "ob_cdc_tenant_endpoint_provider.h"    // ObCDCEndpointProvider (for tenant sync mode)
-#include "ob_log_schema_getter.h"         // ObLogSchemaGetter
 #include "ob_log_timezone_info_getter.h"  // ObCDCTimeZoneInfoGetter
 #include "ob_log_committer.h"             // ObLogCommitter
 #include "ob_log_formatter.h"             // ObLogFormatter
 #include "ob_cdc_lob_data_merger.h"       // ObCDCLobDataMerger
-#include "ob_log_batch_buffer.h"          // ObLogBatchBuffer
 #include "ob_log_storager.h"              // ObLogStorager
-#include "ob_log_reader.h"                // ObLogReader
 #include "ob_log_sequencer1.h"            // ObLogSequencer
 #include "ob_log_part_trans_parser.h"     // ObLogPartTransParser
 #include "ob_log_dml_parser.h"            // ObLogDmlParser
@@ -60,9 +57,15 @@
 #include "ob_log_rocksdb_store_service.h" // RocksDbStoreService
 #include "ob_cdc_auto_config_mgr.h"       // CDC_CFG_MGR
 #include "ob_cdc_malloc_sample_info.h"    // ObCDCMallocSampleInfo
+#include "share/ls/ob_ls_log_stat_info.h" // ObLogserviceModelInfo
+#include "observer/ob_server_struct.h"    // GCTX
 
 #include "ob_log_trace_id.h"
 #include "share/ob_simple_mem_limit_getter.h"
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "close_modules/shared_log_service/logservice/libpalf/libpalf_logger.h" // libpalf logger
+#endif
 
 #define INIT(v, type, args...) \
     do {\
@@ -89,6 +92,13 @@
         (void)var->destroy(); \
         delete v; \
         v = NULL; \
+      } \
+    } while (0)
+
+#define MARK_STOP_FLAG(v) \
+    do { \
+      if (OB_NOT_NULL(v)) { \
+        v->mark_stop_flag(); \
       } \
     } while (0)
 
@@ -243,6 +253,9 @@ int ObLogInstance::init_with_start_tstamp_usec(const char *config_file,
     LOG_ERROR("config init fail", KR(ret));
   } else if (OB_FAIL(TCONF.load_from_file(config_file))) {
     LOG_ERROR("load config from file fail", KR(ret), K(config_file));
+    // init self addr
+  } else if (OB_FAIL(init_self_addr_())) {
+    LOG_ERROR("init self addr error", KR(ret));
   } else if (OB_FAIL(init_common_(start_tstamp_ns, err_cb))) {
     LOG_ERROR("init_common_ fail", KR(ret), K(start_tstamp_ns), K(err_cb));
   } else {
@@ -283,6 +296,9 @@ int ObLogInstance::init_with_start_tstamp_usec(const std::map<std::string, std::
     LOG_ERROR("config init fail", KR(ret));
   } else if (OB_FAIL(TCONF.load_from_map(configs))) {
     LOG_ERROR("load config from map fail", KR(ret));
+    // init self addr
+  } else if (OB_FAIL(init_self_addr_())) {
+    LOG_ERROR("init self addr error", KR(ret));
   } else if (OB_FAIL(init_common_(start_tstamp_ns, err_cb))) {
     // handle error
   } else {
@@ -393,6 +409,31 @@ int ObLogInstance::set_start_global_trans_version(const int64_t start_global_tra
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+int ObLogInstance::init_max_syslog_file_count_with_libpalf(logservice::ObLogserviceModelInfo &logservice_model_info)
+{
+  int ret = OB_SUCCESS;
+  const bool enable_logservice = logservice_model_info.get_model();
+  int64_t libpalf_max_syslog_file_count = 0;
+  int64_t max_log_file_count = 0;
+  int64_t max_syslog_disk_size = 0;
+  if (enable_logservice && OB_FAIL(libpalf::LibPalfLogger::cal_libpalf_shared_syslog_capacity(
+    TCONF.max_log_file_count, 0, libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE,
+    MAX_LOG_FILE_SIZE, libpalf_max_syslog_file_count, max_log_file_count, max_syslog_disk_size))) {
+    LOG_ERROR("cal_libpalf_shared_syslog_capacity fail", KR(ret), K(TCONF.max_log_file_count.get()),
+      K(libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE), K(MAX_LOG_FILE_SIZE));
+  } else if (enable_logservice && OB_FAIL(libpalf::LibPalfLogger::set_max_syslog_file_count(libpalf_max_syslog_file_count))) {
+    LOG_ERROR("set libpalf_max_syslog_file_count fail", KR(ret), KR(libpalf_max_syslog_file_count));
+  } else if (!enable_logservice && FALSE_IT(max_log_file_count = TCONF.max_log_file_count)) { // do nothing
+  } else {
+    OB_LOGGER.set_max_file_index(max_log_file_count);
+  }
+  return ret;
+}
+#endif
+
+#define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
+
 int ObLogInstance::init_logger_()
 {
   int ret = OB_SUCCESS;
@@ -443,12 +484,18 @@ int ObLogInstance::init_logger_()
       }
     }
 
+    #ifndef ENABLE_SANITY
+      const char *extra_flags = "";
+    #else
+      const char *extra_flags = "|Sanity";
+    #endif
     _LOG_INFO("====================libobcdc start====================");
-    _LOG_INFO("libobcdc %s %s", PACKAGE_VERSION, RELEASEID);
+    _LOG_INFO("libobcdc %s", PACKAGE_VERSION);
     _LOG_INFO("BUILD_VERSION: %s", build_version());
     _LOG_INFO("BUILD_TIME: %s %s", build_date(), build_time());
-    _LOG_INFO("BUILD_FLAGS: %s", build_flags());
-    _LOG_INFO("Copyright (c) 2022 Ant Group Co., Ltd.");
+    _LOG_INFO("BUILD_FLAGS: %s%s", build_flags(), extra_flags);
+    _LOG_INFO("BUILD_INFO: %s", build_info());
+    _LOG_INFO("Copyright (c) 2024 Ant Group Co., Ltd.");
     _LOG_INFO("======================================================");
     _LOG_INFO("\n");
   }
@@ -456,15 +503,19 @@ int ObLogInstance::init_logger_()
   return ret;
 }
 
-#define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
-
 void ObLogInstance::print_version()
 {
-  MPRINT("libobcdc %s %s", PACKAGE_VERSION, RELEASEID);
+  #ifndef ENABLE_SANITY
+    const char *extra_flags = "";
+  #else
+    const char *extra_flags = "|Sanity";
+  #endif
+  MPRINT("libobcdc %s", PACKAGE_VERSION);
   MPRINT("REVISION: %s", build_version());
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
-  MPRINT("BUILD_FLAGS: %s\n", build_flags());
-  MPRINT("Copyright (c) 2022 Ant Group Co., Ltd.");
+  MPRINT("BUILD_FLAGS: %s%s\n", build_flags(), extra_flags);
+  MPRINT("BUILD_INFO: %s\n", build_info());
+  MPRINT("Copyright (c) 2024 Ant Group Co., Ltd.");
   MPRINT();
 }
 
@@ -541,11 +592,14 @@ int ObLogInstance::init_sys_var_for_generate_column_schema_()
 int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
   int64_t current_timestamp_usec = get_timestamp() * NS_CONVERSION;
 
   if (start_tstamp_ns <= 0) {
     start_tstamp_ns =  current_timestamp_usec;
     _LOG_INFO("start libobcdc from current timestamp: %ld", start_tstamp_ns);
+  } else {
+    _LOG_INFO("start libobcdc from user specified timestamp: %ld", start_tstamp_ns);
   }
 
   if (OB_SUCC(ret)) {
@@ -561,16 +615,24 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
     // 2. Change the schema to WARN after the startup is complete
     OB_LOGGER.set_mod_log_levels(TCONF.init_log_level.str());
 
+    // set obcdc mode
+    GCTX.init();
+    GCTX.set_is_obcdc(true);
+
     if (OB_FAIL(common::ObClockGenerator::init())) {
       LOG_ERROR("failed to init ob clock generator", KR(ret));
     }
-    // 校验配置项是否满足期望
+    // check config items are valid or not
     else if (OB_FAIL(TCONF.check_all())) {
       LOG_ERROR("check config fail", KR(ret));
     } else if (OB_FAIL(dump_config_())) {
       LOG_ERROR("dump_config_ fail", KR(ret));
     } else if (OB_FAIL(lib::ThreadPool::set_thread_count(DAEMON_THREAD_COUNT))) {
       LOG_ERROR("set ObLogInstance daemon thread count failed", KR(ret), K(DAEMON_THREAD_COUNT));
+    } else if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
+      LOG_ERROR("init simple thread pool dynamic mgr failed", KR(ret));
+    } else if (OB_FAIL(ObTimerService::get_instance().start())) {
+      LOG_ERROR("start timer service failed", KR(ret));
     } else if (OB_FAIL(trans_task_pool_alloc_.init(
         TASK_POOL_ALLOCATOR_TOTAL_LIMIT,
         TASK_POOL_ALLOCATOR_HOLD_LIMIT,
@@ -692,7 +754,7 @@ int ObLogInstance::init_self_addr_()
 }
 
 // init schema module
-int ObLogInstance::init_schema_(const int64_t start_tstamp_us, int64_t &sys_start_schema_version)
+int ObLogInstance::init_schema_(const int64_t start_tstamp_us, int64_t &sys_start_schema_version, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   const uint64_t sys_tenant_id = OB_SYS_TENANT_ID;
@@ -700,13 +762,13 @@ int ObLogInstance::init_schema_(const int64_t start_tstamp_us, int64_t &sys_star
 
   INIT(schema_getter_, ObLogSchemaGetter, tenant_sql_proxy_.get_ob_mysql_proxy(),
       &(TCONF.get_common_config()), TCONF.cached_schema_version_count,
-      TCONF.history_schema_version_count);
+      TCONF.history_schema_version_count, timeout);
 
   if (OB_SUCC(ret)) {
     // Get the SYS tenant startup schema version
     // Note: SYS tenants do not need to handle tenant deletion scenarios
     if (OB_FAIL(schema_getter_->get_schema_version_by_timestamp(sys_tenant_id, start_tstamp_us,
-        sys_start_schema_version, GET_SCHEMA_TIMEOUT_ON_START_UP))) {
+        sys_start_schema_version, timeout))) {
       LOG_ERROR("get_schema_version_by_timestamp fail", KR(ret), K(sys_tenant_id), K(start_tstamp_us));
     }
   }
@@ -719,18 +781,18 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   int ret = OB_SUCCESS;
   IObLogErrHandler *err_handler = this;
   int64_t start_seq = DEFAULT_START_SEQUENCE_NUM;
-  bool skip_dirty_data = (TCONF.skip_dirty_data != 0);
-  bool skip_reversed_schema_verison = (TCONF.skip_reversed_schema_verison != 0);
-  bool enable_hbase_mode = (TCONF.enable_hbase_mode != 0);
-  bool enable_backup_mode = (TCONF.enable_backup_mode != 0);
-  bool skip_hbase_mode_put_column_count_not_consistency = (TCONF.skip_hbase_mode_put_column_count_not_consistency != 0);
-  bool enable_convert_timestamp_to_unix_timestamp = (TCONF.enable_convert_timestamp_to_unix_timestamp != 0);
-  bool enable_output_hidden_primary_key = (TCONF.enable_output_hidden_primary_key != 0);
-  bool enable_oracle_mode_match_case_sensitive = (TCONF.enable_oracle_mode_match_case_sensitive != 0);
+  const bool skip_dirty_data = (TCONF.skip_dirty_data != 0);
+  const bool skip_reversed_schema_verison = (TCONF.skip_reversed_schema_verison != 0);
+  const bool enable_hbase_mode = (TCONF.enable_hbase_mode != 0);
+  const bool enable_backup_mode = (TCONF.enable_backup_mode != 0);
+  const bool skip_hbase_mode_put_column_count_not_consistency = (TCONF.skip_hbase_mode_put_column_count_not_consistency != 0);
+  const bool enable_convert_timestamp_to_unix_timestamp = (TCONF.enable_convert_timestamp_to_unix_timestamp != 0);
+  const bool enable_output_hidden_primary_key = (TCONF.enable_output_hidden_primary_key != 0);
+  const bool enable_output_virtual_generated_column = (TCONF.enable_output_virtual_generated_column != 0);
+  const bool enable_oracle_mode_match_case_sensitive = (TCONF.enable_oracle_mode_match_case_sensitive != 0);
   const char *rs_list = TCONF.rootserver_list.str();
   const char *tg_white_list = TCONF.tablegroup_white_list.str();
   const char *tg_black_list = TCONF.tablegroup_black_list.str();
-  int64_t max_cached_trans_ctx_count = MAX_CACHED_TRANS_CTX_COUNT;
   const char *ob_trace_id_ptr = TCONF.ob_trace_id.str();
   const char *drc_message_factory_binlog_record_type_str = TCONF.drc_message_factory_binlog_record_type.str();
   // The starting schema version of the SYS tenant
@@ -739,7 +801,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const char *working_mode_str = TCONF.working_mode.str();
   WorkingMode working_mode = get_working_mode(working_mode_str);
   const char *refresh_mode_str = TCONF.meta_data_refresh_mode.str();
-  RefreshMode refresh_mode = get_refresh_mode(refresh_mode_str);
+  RefreshMode refresh_mode = parse_refresh_mode(refresh_mode_str);
   const char *fetching_mode_str = TCONF.fetching_log_mode.str();
   ClientFetchingMode fetching_mode = get_fetching_mode(fetching_mode_str);
   const char *archive_dest_str = TCONF.archive_dest.str();
@@ -760,6 +822,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       : TCONF.tb_black_list.str();
 
   const bool enable_direct_load_inc = (1 == TCONF.enable_direct_load_inc);
+  const bool is_mock_fail_on_init = (0 != TCONF.test_mode_on && 0 != TCONF.test_mode_init_fail);
 
   if (OB_UNLIKELY(! is_working_mode_valid(working_mode))) {
     ret = OB_INVALID_CONFIG;
@@ -801,6 +864,22 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
+  // init io manager for operate io device directly in obcdc
+  const int64_t io_mgr_memory_limit = 200 * _M_;
+  if (OB_SUCC(ret) && is_direct_fetching_mode(fetching_mode_)) {
+    if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+      LOG_ERROR("init device manager failed", KR(ret));
+    } else if (ObIOManager::get_instance().is_inited()) {
+      // do nothing
+    }
+    // mini_mode will start 2 io scheduler threads, !mini_mode will start 16 io scheduler threads
+    else if (OB_FAIL(ObIOManager::get_instance().init(io_mgr_memory_limit))) {
+      LOG_ERROR("init io manager fail", KR(ret));
+    } else if (OB_FAIL(ObIOManager::get_instance().start())) {
+      LOG_ERROR("start io manager fail", KR(ret));
+    }
+  }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(global_info_.init())) {
     LOG_ERROR("global_info_ init fail", KR(ret));
@@ -820,9 +899,10 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     // init self addr
     } else if (OB_FAIL(init_self_addr_())) {
       LOG_ERROR("init self addr error", KR(ret));
+    } else if (OB_FAIL(global_poc_server.start_net_client(TCONF.io_thread_num))) {
+      LOG_ERROR("start net client failed", KR(ret));
     }
   }
-
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_sql_provider_())) {
@@ -872,9 +952,9 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(br_pool_, ObLogBRPool, TCONF.binlog_record_prealloc_count);
 
-  INIT(trans_ctx_mgr_, ObLogTransCtxMgr, max_cached_trans_ctx_count, TCONF.sort_trans_participants);
+  INIT(trans_ctx_mgr_, ObLogTransCtxMgr, TCONF.sort_trans_participants);
 
-  INIT(meta_manager_, ObLogMetaManager, &obj2str_helper_, enable_output_hidden_primary_key);
+  INIT(meta_manager_, ObLogMetaManager, &obj2str_helper_, enable_output_hidden_primary_key, enable_output_virtual_generated_column);
 
   INIT(resource_collector_, ObLogResourceCollector,
       TCONF.resource_collector_thread_num, TCONF.resource_collector_thread_num_for_br,
@@ -906,13 +986,14 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   }
 
   const int64_t start_tstamp_usec = start_tstamp_ns / NS_CONVERSION;
+  const int64_t timeout = TCONF.init_timeout.get();
   // The initialization of schema depends on the initialization of timezone_info_getter_,
   // and the initialization of timezone_info_getter_ depends on the initialization of tenant_mgr_
   if (OB_SUCC(ret)) {
     // Initialize schema-related modules, split patterns, and SYS tenant starting schema versions based on start-up timestamps
     if (is_online_refresh_mode(refresh_mode_)) {
-      if (OB_FAIL(init_schema_(start_tstamp_usec, sys_start_schema_version_))) {
-        LOG_ERROR("init schema fail", KR(ret), K(start_tstamp_usec));
+      if (OB_FAIL(init_schema_(start_tstamp_usec, sys_start_schema_version_, timeout))) {
+        LOG_ERROR("init schema fail", KR(ret), K(start_tstamp_usec), "timeout", TVAL_TO_STR(timeout));
       }
     } else if (is_data_dict_refresh_mode(refresh_mode_)) {
       sys_start_schema_version_ = start_tstamp_usec;
@@ -939,7 +1020,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   ObLogSysTableHelper::ClusterInfo cluster_info;
   if (OB_SUCC(ret)) {
     if (is_integrated_fetching_mode(fetching_mode_)) {
-      if (OB_FAIL(query_cluster_info_(cluster_info))) {
+      if (OB_FAIL(query_cluster_info_(cluster_info, timeout))) {
         LOG_ERROR("query_cluster_info_ fail", KR(ret), K(cluster_info));
       }
     } else {
@@ -964,7 +1045,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   INIT(formatter_, ObLogFormatter, TCONF.formatter_thread_num, CDC_CFG_MGR.get_formatter_queue_length(), working_mode_,
       &obj2str_helper_, br_pool_, meta_manager_, schema_getter_, storager_, err_handler,
       skip_dirty_data, enable_hbase_mode, hbase_util_, skip_hbase_mode_put_column_count_not_consistency,
-      enable_output_hidden_primary_key);
+      enable_output_hidden_primary_key, enable_output_virtual_generated_column);
 
   INIT(lob_data_merger_, ObCDCLobDataMerger, TCONF.lob_data_merger_thread_num,
       TCONF.lob_data_merger_queue_length, *err_handler);
@@ -1016,13 +1097,31 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(start_tenant_service_())) {
-    LOG_ERROR("start_tenant_service_ failed", KR(ret));
+  if (OB_SUCC(ret) && OB_FAIL(start_tenant_service_(timeout))) {
+    LOG_ERROR("start_tenant_service_ failed", KR(ret), "timeout", TVAL_TO_STR(timeout));
+  }
+
+  if (is_mock_fail_on_init) {
+    ret = OB_ERR_UNEXPECTED;
+  }
+
+  if (OB_SUCC(ret) && enable_output_virtual_generated_column) {
+    ObLogFormatter *formatter_instance = nullptr;
+    // mock sys tenant timezone info
+    if (OB_FAIL(ObCDCTimeZoneInfoGetter::get_instance().init_tenant_tz_info(OB_SYS_TENANT_ID))) {
+      LOG_ERROR("create_sys_tenant_tz_info fail", KR(ret));
+    } else if (OB_ISNULL(formatter_instance = static_cast<ObLogFormatter *>(formatter_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("formatter_instance is nullptr", KR(ret), K(formatter_), K(formatter_instance));
+    } else if (OB_FAIL(formatter_instance->init_after(TCONF.formatter_thread_num))) {
+      LOG_ERROR("formatter init after fail", KR(ret));
+    } else {
+    }
   }
 
   if (OB_SUCC(ret)) {
     LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K_(sys_start_schema_version),
-        K(max_cached_trans_ctx_count), K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
+        K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
   } else {
     do_destroy_(true/*force_destroy*/);
   }
@@ -1230,14 +1329,15 @@ int ObLogInstance::config_data_start_schema_version_(const int64_t global_data_s
 }
 
 
-int ObLogInstance::start_tenant_service_()
+int ObLogInstance::start_tenant_service_(const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("start_tenant_service_ begin", K_(start_tstamp_ns), K_(sys_start_schema_version));
   // config tenant mgr
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(config_tenant_mgr_(start_tstamp_ns_, sys_start_schema_version_))) {
-      LOG_ERROR("config_tenant_mgr_ fail", KR(ret), K_(start_tstamp_ns), K_(sys_start_schema_version));
+    if (OB_FAIL(config_tenant_mgr_(start_tstamp_ns_, sys_start_schema_version_, timeout))) {
+      LOG_ERROR("config_tenant_mgr_ fail", KR(ret),
+          K_(start_tstamp_ns), K_(sys_start_schema_version), "timeout", TVAL_TO_STR(timeout));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1262,7 +1362,8 @@ int ObLogInstance::start_tenant_service_()
 }
 
 int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
-    const int64_t sys_schema_version)
+    const int64_t sys_schema_version,
+    const int64_t timeout)
 {
   int ret = OB_SUCCESS;
 
@@ -1298,13 +1399,12 @@ int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
   if (OB_SUCC(ret)) {
     if (is_online_sql_not_available()) {
       bool add_tenant_succ = false;
-      const char *tenant_name = nullptr;
-
+      ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name;
       if (OB_FAIL(tenant_mgr_->add_tenant(
           start_tstamp_ns,
           sys_schema_version,
           tenant_name,
-          GET_SCHEMA_TIMEOUT_ON_START_UP,
+          timeout,
           add_tenant_succ))) {
         LOG_ERROR("add_tenant fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
       } else if (! add_tenant_succ) {
@@ -1316,7 +1416,7 @@ int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
       if (OB_FAIL(tenant_mgr_->add_all_tenants(
           start_tstamp_ns,
           sys_schema_version,
-          GET_SCHEMA_TIMEOUT_ON_START_UP))) {
+          timeout))) {
         LOG_ERROR("add_all_tenants fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
       }
     }
@@ -1375,6 +1475,7 @@ void ObLogInstance::destroy_components_()
   if (is_data_dict_refresh_mode(refresh_mode_)) {
     ObLogMetaDataService::get_instance().destroy();
   }
+  global_poc_server.destroy();
 
   LOG_INFO("destroy all components end");
 }
@@ -1430,6 +1531,12 @@ void ObLogInstance::do_destroy_(const bool force_destroy)
     ObKVGlobalCache::get_instance().destroy();
     ObMemoryDump::get_instance().destroy();
     ObClockGenerator::destroy();
+    if (OB_LIKELY(!ObTimerService::get_instance().is_stopped())) {
+      ObTimerService::get_instance().stop();
+      ObTimerService::get_instance().wait();
+    }
+    ObTimerService::get_instance().destroy();
+    ObSimpleThreadPoolDynamicMgr::get_instance().destroy();
 
     is_assign_log_dir_valid_ = false;
     MEMSET(assign_log_dir_, 0, sizeof(assign_log_dir_));
@@ -1517,6 +1624,9 @@ void ObLogInstance::do_stop_(const char *stop_reason)
 
     // stop thread
     wait_threads_stop_();
+    if (is_data_dict_refresh_mode(refresh_mode_)) {
+      ObLogMetaDataService::get_instance().mark_stop_flag();
+    }
     // stop timezon info getter
     timezone_info_getter_->stop();
 
@@ -1534,6 +1644,10 @@ void ObLogInstance::do_stop_(const char *stop_reason)
     resource_collector_->stop();
     mysql_proxy_.stop();
     tenant_sql_proxy_.stop();
+    ObTimerService::get_instance().stop();
+    ObSimpleThreadPoolDynamicMgr::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObSimpleThreadPoolDynamicMgr::get_instance().wait();
 
     // set global error code
     global_errno_ = (global_errno_ == OB_SUCCESS ? OB_IN_STOP_STATE : global_errno_);
@@ -1566,30 +1680,30 @@ int ObLogInstance::get_tenant_ids(std::vector<uint64_t> &tenant_ids)
 void ObLogInstance::mark_stop_flag(const char *stop_reason)
 {
   stop_flag_ = true;
-  if (inited_) {
-    if (OB_ISNULL(stop_reason)) {
-      stop_reason = "UNKNOWN";
-    }
-    LOG_INFO("mark_stop_flag begin", K(global_errno_), KCSTRING(stop_reason));
-
-    fetcher_->mark_stop_flag();
-    sys_ls_handler_->mark_stop_flag();
-    ddl_parser_->mark_stop_flag();
-    dml_parser_->mark_stop_flag();
-    sequencer_->mark_stop_flag();
-    formatter_->mark_stop_flag();
-    lob_data_merger_->mark_stop_flag();
-    storager_->mark_stop_flag();
-    reader_->mark_stop_flag();
-    store_service_->mark_stop_flag();
-    trans_msg_sorter_->mark_stop_flag();
-    committer_->mark_stop_flag();
-    resource_collector_->mark_stop_flag();
-    timezone_info_getter_->mark_stop_flag();
-    lib::ThreadPool::stop();
-
-    LOG_INFO("mark_stop_flag end", K(global_errno_), KCSTRING(stop_reason));
+  if (OB_ISNULL(stop_reason)) {
+    stop_reason = "UNKNOWN";
   }
+  LOG_INFO("mark_stop_flag begin", K(global_errno_), K_(inited), KCSTRING(stop_reason));
+  if (is_data_dict_refresh_mode(refresh_mode_)) {
+    ObLogMetaDataService::get_instance().mark_stop_flag();
+  }
+  MARK_STOP_FLAG(fetcher_);
+  MARK_STOP_FLAG(sys_ls_handler_);
+  MARK_STOP_FLAG(ddl_parser_);
+  MARK_STOP_FLAG(dml_parser_);
+  MARK_STOP_FLAG(sequencer_);
+  MARK_STOP_FLAG(formatter_);
+  MARK_STOP_FLAG(lob_data_merger_);
+  MARK_STOP_FLAG(storager_);
+  MARK_STOP_FLAG(reader_);
+  MARK_STOP_FLAG(store_service_);
+  MARK_STOP_FLAG(trans_msg_sorter_);
+  MARK_STOP_FLAG(committer_);
+  MARK_STOP_FLAG(resource_collector_);
+  MARK_STOP_FLAG(timezone_info_getter_);
+  lib::ThreadPool::stop();
+
+  LOG_INFO("mark_stop_flag end", K(global_errno_), KCSTRING(stop_reason));
 }
 
 int ObLogInstance::next_record(IBinlogRecord **record, const int64_t timeout_us)
@@ -1869,6 +1983,7 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
             dml_unique_id.assign_ptr(buf, static_cast<int32_t>(pos));
 
             if (0 == br_unique_id.compare(dml_unique_id)) {
+              LOG_INFO("verify_dml_unique_id_ succ", KP(br), K(br_unique_id), K(dml_unique_id));
               // succ
             } else {
               LOG_ERROR("verify_dml_unique_id_ fail", K(br_unique_id), K(dml_unique_id), KPC(task));
@@ -1903,6 +2018,15 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
           }
         }
       }
+    } else if (EBEGIN == record_type || EDDL == record_type) {
+      ObString br_unique_id;
+      if (OB_FAIL(get_br_filter_value_(*br, 1, br_unique_id))) {
+        LOG_ERROR("get_br_filter_value_ fail", KR(ret), K(br_unique_id));
+      } else {
+        LOG_INFO("verify_dml_unique_id_ succ", KP(br), K(record_type), K(br_unique_id));
+      }
+    } else {
+      LOG_INFO("verify_dml_unique_id_ skip", KP(br), K(record_type));
     }
   }
 
@@ -1982,33 +2106,31 @@ void ObLogInstance::handle_error(const int err_no, const char *fmt, ...)
   static const int64_t MAX_ERR_MSG_LEN = 1024;
   static char err_msg[MAX_ERR_MSG_LEN];
 
-  if (inited_) {
-    // Call the error callback only once
-    if (0 == ATOMIC_CAS(&handle_error_flag_, 0, 1)) {
-      va_list ap;
-      va_start(ap, fmt);
-      vsnprintf(err_msg, sizeof(err_msg), fmt, ap);
-      va_end(ap);
+  // Call the error callback only once
+  if (0 == ATOMIC_CAS(&handle_error_flag_, 0, 1)) {
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(err_msg, sizeof(err_msg), fmt, ap);
+    va_end(ap);
 
-      global_errno_ = (err_no == OB_SUCCESS ? OB_IN_STOP_STATE : err_no);
-      _LOG_INFO("HANDLE_ERROR: err_cb=%p, errno=%d, errmsg=\"%s\"", err_cb_, err_no, err_msg);
+    global_errno_ = (err_no == OB_SUCCESS ? OB_IN_STOP_STATE : err_no);
+    _LOG_INFO("HANDLE_ERROR: err_cb=%p, errno=%d, errmsg=\"%s\"", err_cb_, err_no, err_msg);
 
-      if (NULL != err_cb_) {
-        ObCDCError err;
-        err.level_ = ObCDCError::ERR_ABORT; // FIXME: Support for other types of error levels
-        err.errno_ = err_no;
-        err.errmsg_ = err_msg;
+    if (NULL != err_cb_) {
+      ObCDCError err;
+      err.level_ = ObCDCError::ERR_ABORT; // FIXME: Support for other types of error levels
+      err.errno_ = err_no;
+      err.errmsg_ = err_msg;
 
-        LOG_INFO("ERROR_CALLBACK begin", KP(err_cb_));
-        err_cb_(err);
-        LOG_INFO("ERROR_CALLBACK end", KP(err_cb_));
-      } else {
-        LOG_ERROR_RET(OB_ERROR, "No ERROR CALLBACK function available, abort now");
-      }
-
-      // notify other module to stop
-      mark_stop_flag("ERROR_CALLBACK");
+      LOG_INFO("ERROR_CALLBACK begin", KP(err_cb_));
+      err_cb_(err);
+      LOG_INFO("ERROR_CALLBACK end", KP(err_cb_));
+    } else {
+      LOG_ERROR_RET(OB_ERROR, "No ERROR CALLBACK function available, abort now");
     }
+
+    // notify other module to stop
+    mark_stop_flag("ERROR_CALLBACK");
   }
 }
 
@@ -2085,6 +2207,7 @@ void ObLogInstance::sql_thread_routine()
 {
   int ret = OB_SUCCESS;
   const static int64_t THREAD_INTERVAL = 1 * _SEC_;
+  const static int64_t TENANT_CHECKPOINT_REFRESH_INTERVAL = 10 * _SEC_;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("instance has not been initialized");
@@ -2125,6 +2248,11 @@ void ObLogInstance::sql_thread_routine()
         if (OB_FAIL(check_observer_version_valid_())) {
           LOG_ERROR("check_observer_version_valid_ fail", KR(ret));
         }
+      }
+
+      if (REACH_TIME_INTERVAL(TENANT_CHECKPOINT_REFRESH_INTERVAL) && OB_NOT_NULL(tenant_mgr_)) {
+        const static int64_t timeout = 10 * _SEC_;
+        tenant_mgr_->refresh_tenant_checkpoint(timeout);
       }
 
       ob_usleep(THREAD_INTERVAL);
@@ -2340,7 +2468,7 @@ void ObLogInstance::run1()
 
   if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret) {
     handle_error(ret, "obcdc daemon thread[idx=%ld] exits, err=%d", lib::ThreadPool::get_thread_idx(), ret);
-    mark_stop_flag("DAEMON THEAD EXIST");
+    mark_stop_flag("DAEMON THREAD EXIST");
   }
 }
 
@@ -2791,7 +2919,7 @@ void ObLogInstance::clean_log_()
     (void)databuff_printf(cmd_buf, CMD_BUF_SIZE, cmd_pos, "; "
         "for file in `find log/ | grep \"libobcdc.log.\" | grep -v err`; "
         "do "
-        "num=`echo $file | cut -d '.' -f 3`; "
+        "num=`echo $file | cut -d '.' -f 3 | cut -c 1-14`; "
         "if [ $num -lt $base_time ]; "
         "then "
         "echo $file >> log/%s; "
@@ -3021,9 +3149,11 @@ int ObLogInstance::init_ob_trace_id_(const char *ob_trace_id_ptr)
   return ret;
 }
 
-int ObLogInstance::query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluster_info)
+int ObLogInstance::query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluster_info, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
+  const int64_t start_ts = get_timestamp();
+  const int64_t end_ts = start_ts + timeout;
   cluster_info.reset();
   bool done = false;
 
@@ -3031,7 +3161,7 @@ int ObLogInstance::query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluster
     LOG_ERROR("systable_helper_ is null", K(systable_helper_));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    while (! done && OB_SUCCESS == ret) {
+    while (! done && OB_SUCC(ret)) {
       if (OB_FAIL(systable_helper_->query_cluster_info(cluster_info))) {
         LOG_WARN("systable_helper_ query_cluster_info fail", KR(ret), K(cluster_info));
       } else {
@@ -3039,8 +3169,16 @@ int ObLogInstance::query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluster
       }
 
       if (OB_NEED_RETRY == ret) {
-        ret = OB_SUCCESS;
-        ob_usleep(100L * 1000L);
+        if (end_ts < get_timestamp()) {
+          ret = OB_TIMEOUT;
+          LOG_ERROR("query_cluster_info timeout", KR(ret), "timeout", TVAL_TO_STR(timeout));
+        } else {
+          ret = OB_SUCCESS;
+          if (TC_REACH_TIME_INTERVAL(10 * _SEC_)) {
+            LOG_INFO("retry to query cluster_info", KR(ret), "start_ts", TS_TO_STR(start_ts), "timeout", TVAL_TO_STR(timeout));
+          }
+          ob_usleep(100L * _MSEC_);
+        }
       }
     }
   }
@@ -3153,6 +3291,7 @@ int ObLogInstance::check_observer_version_valid_()
 
   const uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
   const bool skip_ob_version_compat_check = (0 != TCONF.skip_ob_version_compat_check);
+  const bool enable_output_virtual_generated_column = (0 != TCONF.enable_output_virtual_generated_column);
   uint32_t ob_major = 0;
   uint16_t ob_minor = 0;
   uint8_t  ob_major_patch = 0;
@@ -3191,6 +3330,12 @@ int ObLogInstance::check_observer_version_valid_()
     _LOG_INFO("obcdc_version(%u.%hu.%hu.%hu) in Direct Fetching Log Mode",
         oblog_major_, oblog_minor_, oblog_major_patch_, oblog_minor_patch_);
   } else {}
+
+  const bool is_ob_not_support_cdc_vir_gen_col = ob_version < MOCK_CLUSTER_VERSION_4_2_5_0 || (ob_version >= CLUSTER_VERSION_4_3_0_0 && ob_version < CLUSTER_VERSION_4_3_4_0);
+  if (OB_SUCC(ret) && enable_output_virtual_generated_column && is_ob_not_support_cdc_vir_gen_col) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("OBCDC SYNC VIRTUAL GENERATED COLUMN IS NOT SUPPORTED, REQUIRED OB VERSION: [4.2.5.0, 4.3.0.0) U [4.3.4.0, 4.4.0.0) U [4.4.2.0,), SET enable_out_virtual_generated_column=0", KR(ret), K(ob_version));
+  }
 
   return ret;
 }
@@ -3294,10 +3439,15 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     const int64_t pause_dispatch_threshold = TCONF.pause_redo_dispatch_task_count_threshold;
     const bool touch_memory_warn_limit = (memory_hold > memory_warn_usage);
     const bool touch_memory_limit = (memory_hold > memory_limit);
+    const int64_t out_part_trans_count = get_out_part_trans_task_count_();
+    const int64_t out_dml_br_count = ATOMIC_LOAD(&output_dml_br_count_);
+    const int64_t queue_backlog_lowest_tolerance = TCONF.queue_backlog_lowest_tolerance;
     double pause_dispatch_percent = pause_dispatch_threshold / 100.0;
+
     if (touch_memory_limit) {
-      const int64_t queue_backlog_lowest_tolerance = TCONF.queue_backlog_lowest_tolerance;
-      if (user_queue_br_count > queue_backlog_lowest_tolerance || resource_collector_br_count > queue_backlog_lowest_tolerance) {
+      if (user_queue_br_count > queue_backlog_lowest_tolerance
+        || resource_collector_br_count > queue_backlog_lowest_tolerance
+        || out_dml_br_count > queue_backlog_lowest_tolerance) {
         pause_dispatch_percent = 0;
       }
       // pause redo dispatch
@@ -3322,11 +3472,14 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     } else if (user_queue_br_count > (CDC_CFG_MGR.get_br_queue_length() * pause_dispatch_percent)) {
       current_need_pause = (is_redo_dispatch_over_exceed || touch_memory_warn_limit);
       reason = "SLOW_CONSUMPTION_DOWNSTREAM";
+    } else if (out_dml_br_count > queue_backlog_lowest_tolerance) {
+      current_need_pause = (is_redo_dispatch_over_exceed || touch_memory_warn_limit);
+      reason = "DOWNSTREAM_HOLDING_TOO_MUCH_BR";
     } else {
       current_need_pause = false;
     }
     bool is_state_change = (last_need_paused != current_need_pause);
-    bool need_print_state = (is_state_change || current_need_pause) && REACH_TIME_INTERVAL(PRINT_GLOBAL_FLOW_CONTROL_INTERVAL);
+    bool need_print_state = is_state_change || REACH_TIME_INTERVAL(PRINT_GLOBAL_FLOW_CONTROL_INTERVAL);
     if (need_print_state) {
       _LOG_INFO("[NEED_PAUSE_REDO_DISPATCH=%d]"
           "[REASON:%s]"
@@ -3334,6 +3487,8 @@ bool ObLogInstance::need_pause_redo_dispatch() const
           "[THRESHOLD:%.2f]"
           "[QUEUE_DML_BR:%ld]"
           "[RESOURCE_COLLECTOR:%ld]"
+          "[OUT_TRANS:%ld]"
+          "[OUT_DML_BR:%ld]"
           "[STATE_CHANGED:%d]",
           current_need_pause,
           reason,
@@ -3341,6 +3496,8 @@ bool ObLogInstance::need_pause_redo_dispatch() const
           pause_dispatch_percent,
           user_queue_br_count,
           resource_collector_br_count,
+          out_part_trans_count,
+          out_dml_br_count,
           is_state_change);
     }
     if (is_state_change) {

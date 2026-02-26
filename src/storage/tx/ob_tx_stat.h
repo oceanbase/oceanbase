@@ -64,7 +64,8 @@ struct ObTxStat
            const void* const tx_ctx_addr,
            const int64_t pending_log_size, const int64_t flushed_log_size,
            const int64_t role_state,
-           const int64_t session_id, const common::ObAddr &scheduler,
+           const int64_t session_id, const uint32_t client_sid,
+           const common::ObAddr &scheduler,
            const bool is_exiting, const ObXATransID &xid,
            const share::ObLSID &coord, const int64_t last_request_ts,
            share::SCN start_scn, share::SCN end_scn, share::SCN rec_scn, bool transfer_blocking,
@@ -77,7 +78,7 @@ struct ObTxStat
                K_(last_op_sn), K_(pending_write), K_(state), K_(tx_type),
                KP_(tx_ctx_addr),
                K_(pending_log_size), K_(flushed_log_size),
-               K_(role_state), K_(session_id),
+               K_(role_state), K_(session_id), K_(client_sid),
                K_(scheduler_addr), K_(is_exiting),
                K_(xid), K_(coord), K_(last_request_ts),
                K_(xid), K_(coord), K_(last_request_ts),
@@ -107,6 +108,7 @@ public:
   int64_t flushed_log_size_;
   int64_t role_state_;
   int64_t session_id_;
+  uint32_t client_sid_;
   common::ObAddr scheduler_addr_;
   bool is_exiting_;
   ObXATransID xid_;
@@ -156,6 +158,7 @@ public:
             const share::ObLSID &ls_id,
             const ObMemtableKeyInfo &memtable_key_info,
             uint32_t session_id,
+            uint32_t client_sid,
             uint64_t proxy_session_id,
             const ObTransID &tx_id,
             int64_t tx_ctx_create_time,
@@ -167,6 +170,7 @@ public:
   const ObMemtableKeyInfo &get_memtable_key_info() const { return memtable_key_info_; }
   uint32_t get_session_id() const { return session_id_; }
   uint64_t get_proxy_session_id() const { return proxy_session_id_; }
+  uint32_t get_client_sid() const { return client_sid_; }
   const ObTransID &get_tx_id() const { return tx_id_; }
   int64_t get_tx_ctx_create_time() const { return tx_ctx_create_time_; }
   int64_t get_tx_expired_time() const { return tx_expired_time_; }
@@ -189,6 +193,7 @@ private:
   ObMemtableKeyInfo memtable_key_info_;
   uint32_t session_id_;
   uint64_t proxy_session_id_;
+  uint32_t client_sid_;
   ObTransID tx_id_;
   int64_t tx_ctx_create_time_;
   int64_t tx_expired_time_;
@@ -203,6 +208,7 @@ public:
   int init(const uint64_t tenant_id,
             const common::ObAddr &addr,
             const uint32_t sess_id,
+            const uint32_t client_sid,
             const ObTransID &tx_id,
             const int64_t state,
             const int64_t cluster_id,
@@ -222,7 +228,7 @@ public:
             const ObTxSavePointList &savepoints,
             const int16_t abort_cause,
             const bool can_elr);
-  TO_STRING_KV(K_(tenant_id), K_(addr), K_(sess_id),
+  TO_STRING_KV(K_(tenant_id), K_(addr), K_(sess_id), K_(client_sid),
                K_(tx_id), K_(state), K_(cluster_id),
                K_(xid), K_(coord_id), K_(parts),
                K_(isolation), K_(snapshot_version),
@@ -239,6 +245,7 @@ public:
   uint64_t tenant_id_;
   common::ObAddr addr_;
   uint32_t sess_id_;
+  uint32_t client_sid_;
   ObTransID tx_id_;
   int64_t state_;
   int64_t cluster_id_;

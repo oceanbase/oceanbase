@@ -13,7 +13,6 @@
 #include "ob_gti_source.h"
 #include "ob_trans_service.h"
 #include "ob_gti_rpc.h"
-#include "ob_trans_factory.h"
 
 namespace oceanbase
 {
@@ -23,15 +22,20 @@ using namespace share;
 namespace transaction
 {
 
-int ObGtiSource::init(const ObAddr &server, rpc::frame::ObReqTransport *req_transport)
+int ObGtiSource::init(
+    const ObAddr &server,
+    rpc::frame::ObReqTransport *req_transport,
+    uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     TRANS_LOG(WARN, "init twice", KR(ret));
-  } else if (OB_UNLIKELY(!server.is_valid() || OB_ISNULL(req_transport))) {
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(server), KP(req_transport));
+  } else if (OB_UNLIKELY(!server.is_valid()
+        || OB_ISNULL(req_transport)
+        || !is_valid_tenant_id(tenant_id))) {
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K(server), KP(req_transport), K(tenant_id));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_ISNULL(gti_request_rpc_proxy_ = ObGtiRpcProxyFactory::alloc())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -158,8 +162,9 @@ int ObGtiSource::refresh_gti_location()
 {
   int ret = OB_SUCCESS;
   gti_cache_leader_.reset();
+  ObLSID ls_id = GTI_LS;
   transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-  if (OB_FAIL(txs->get_location_adapter()->nonblock_renew(GCONF.cluster_id, MTL_ID(), GTI_LS))) {
+  if (OB_FAIL(txs->get_location_adapter()->nonblock_renew(GCONF.cluster_id, MTL_ID(), ls_id))) {
     TRANS_LOG(WARN, "gti nonblock renew error", KR(ret), K(MTL_ID()), K(GTI_LS));
   } else {
     TRANS_LOG(INFO, "refresh gti location success", K(MTL_ID()));

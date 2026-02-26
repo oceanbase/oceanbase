@@ -12,18 +12,13 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include <limits>
-#include "ob_infix_expression.h"
-#include "lib/utility/ob_unify_serialize.h"
 
+#include "ob_infix_expression.h"
 #include "sql/engine/expr/ob_expr_operator_factory.h"
 #include "sql/engine/expr/ob_expr_regexp.h"
 #include "share/ob_unique_index_row_transformer.h"
 #include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_sql_expression.h"
-#include "lib/json_type/ob_json_tree.h"
-#include "lib/json_type/ob_json_base.h"
-#include "lib/json_type/ob_json_bin.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase

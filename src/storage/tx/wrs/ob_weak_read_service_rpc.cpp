@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX  TRANS
 
-#include "share/ob_errno.h"
 #include "ob_weak_read_service_rpc.h"
 
-#include "rpc/obrpc/ob_rpc_result_code.h"     // ObRpcResultCode
 
 namespace oceanbase
 {
@@ -121,9 +119,10 @@ void ObWrsRpc::ClusterHeartbeatCB::on_timeout()
 {
   ObRpcResultCode rcode;
   rcode.rcode_ = OB_TIMEOUT;
+  ObCStringHelper helper;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_), "weak read service cluster heartbeat rpc timeout, "
       "tenant_id=%lu, svr=%s, timeout=%ld, send_ts=%ld",
-      tenant_id_, to_cstring(dst_), timeout_, send_ts_);
+      tenant_id_, helper.convert(dst_), timeout_, send_ts_);
   do_process_(rcode);
 }
 
@@ -132,9 +131,10 @@ void ObWrsRpc::ClusterHeartbeatCB::on_invalid()
   ObRpcResultCode rcode;
   // invalid rpc packet, decode fail
   rcode.rcode_ = OB_RPC_PACKET_INVALID;
+  ObCStringHelper helper;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_),
       "weak read service cluster heartbeat rpc response packet is invalid"
-      "tenant_id=%lu, svr=%s, timeout=%ld", tenant_id_, to_cstring(dst_), timeout_);
+      "tenant_id=%lu, svr=%s, timeout=%ld", tenant_id_, helper.convert(dst_), timeout_);
   do_process_(rcode);
 }
 

@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "ob_kill_session_arg.h"
 #include "sql/resolver/cmd/ob_kill_stmt.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/engine/ob_physical_plan.h"
 
 namespace oceanbase
 {
@@ -43,7 +41,27 @@ int ObKillSessionArg::init(ObExecContext &ctx, const ObKillStmt &stmt)
     tenant_id_ = session->get_priv_tenant_id();
     user_id_ = session->get_user_id();
     is_query_ = stmt.is_query();
-    has_user_super_privilege_ = session->has_user_super_privilege();
+    if (lib::is_mysql_mode()) {
+      has_user_super_privilege_ = session->has_user_super_privilege();
+    } else if (ObSchemaChecker::is_ora_priv_check()) {
+      // oracle mode should check alter system privilege
+      // rather than super privilege to kill other user's session
+      ObSchemaChecker schema_checker;
+      ObSchemaGetterGuard *schema_guard = ctx.get_sql_ctx()->schema_guard_;
+      schema_checker.init(*schema_guard);
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = schema_checker.check_ora_ddl_priv(
+          session->get_effective_tenant_id(), session->get_priv_user_id(),
+          ObString(""), stmt::T_KILL, session->get_enable_role_array());
+      if (OB_ERR_NO_SYS_PRIVILEGE == tmp_ret) {
+        has_user_super_privilege_ = false;
+      } else if(OB_SUCC(tmp_ret)) {
+        has_user_super_privilege_ = true;
+      } else {
+        ret = tmp_ret;
+        LOG_WARN("fail to check ora ddl priv", K(tmp_ret));
+      }
+    }
   }
   return ret;
 }
@@ -123,6 +141,16 @@ int ObKillSessionArg::calculate_sessid(ObExecContext &ctx, const ObKillStmt &stm
       }
     }
   }
+  return ret;
+}
+
+int ObKillSessionArg::check_auth_for_kill(uint64_t kill_tid, uint64_t kill_uid) const {
+  int ret = OB_SUCCESS;
+  if (!((OB_SYS_TENANT_ID == tenant_id_)
+             || ((tenant_id_ == kill_tid)
+                 && (has_user_super_privilege_ || user_id_ == kill_uid)))) {
+    ret = OB_ERR_KILL_DENIED;
+ }
   return ret;
 }
 

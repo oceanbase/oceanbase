@@ -37,13 +37,16 @@ class ObTableLoadTransCtx;
 class ObTableLoadCoordinatorTrans;
 class ObITableLoadTaskScheduler;
 class ObTableLoadErrorRowHandler;
+class ObTableLoadEmptyInsertTabletCtxManager;
 
 class ObTableLoadCoordinatorCtx
 {
 public:
   ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadCoordinatorCtx();
-  int init(const common::ObIArray<uint64_t> &column_ids, ObTableLoadExecCtx *exec_ctx);
+  int init(const common::ObIArray<uint64_t> &column_ids,
+           const common::ObIArray<ObTabletID> &tablet_ids,
+           ObTableLoadExecCtx *exec_ctx);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
@@ -54,12 +57,17 @@ public:
   }
   OB_INLINE table::ObTableLoadStatusType get_status() const
   {
-    obsys::ObRLockGuard guard(status_lock_);
+    obsys::ObRLockGuard<> guard(status_lock_);
     return status_;
+  }
+  OB_INLINE int get_error_code() const
+  {
+    obsys::ObRLockGuard<> guard(status_lock_);
+    return error_code_;
   }
   OB_INLINE void get_status(table::ObTableLoadStatusType &status, int &error_code) const
   {
-    obsys::ObRLockGuard guard(status_lock_);
+    obsys::ObRLockGuard<> guard(status_lock_);
     status = status_;
     error_code = error_code_;
   }
@@ -88,7 +96,7 @@ public:
     return advance_status(table::ObTableLoadStatusType::COMMIT);
   }
   int set_status_error(int error_code);
-  int set_status_abort();
+  int set_status_abort(int error_code);
   int check_status(table::ObTableLoadStatusType status) const;
   OB_INLINE bool enable_heart_beat() const { return enable_heart_beat_; }
   OB_INLINE void set_enable_heart_beat(bool enable_heart_beat)
@@ -115,6 +123,7 @@ public:
   int check_exist_trans(bool &is_exist) const;
   int check_exist_committed_trans(bool &is_exist) const;
   int init_complete();
+  int init_partition_location_and_store_infos();
 private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadSegmentID &segment_id,
@@ -123,11 +132,17 @@ private:
   int init_session_ctx_array();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
-  int init_partition_location();
+  void add_to_all_server_event(int ret_code);
+  int init_partition_ids(const ObIArray<ObTabletID> &tablet_ids);
+  int init_empty_insert_tablet_ctx_manager();
 public:
   ObTableLoadTableCtx * const ctx_;
   common::ObArenaAllocator allocator_;
   ObTableLoadSchema target_schema_;
+  common::ObArray<table::ObTableLoadPartitionId> partition_ids_;
+  common::ObArray<table::ObTableLoadPartitionId> target_partition_ids_;
+  common::ObArray<table::ObTableLoadPartitionId> empty_partition_ids_;
+  common::ObArray<table::ObTableLoadPartitionId> empty_target_partition_ids_;
   ObTableLoadPartitionLocation partition_location_;
   ObTableLoadPartitionLocation target_partition_location_;
   ObTableLoadPartitionCalc partition_calc_;
@@ -136,6 +151,7 @@ public:
   ObTableLoadExecCtx *exec_ctx_;
   table::ObTableLoadResultInfo result_info_;
   ObTableLoadErrorRowHandler *error_row_handler_;
+  ObTableLoadEmptyInsertTabletCtxManager *empty_insert_tablet_ctx_manager_;
   share::schema::ObSequenceSchema sequence_schema_;
   struct SessionContext
   {
@@ -144,6 +160,15 @@ public:
     share::AutoincParam autoinc_param_;
   };
   SessionContext *session_ctx_array_;
+  struct StoreInfo
+  {
+    StoreInfo() : enable_heart_beat_(false) {}
+    ~StoreInfo() {}
+    ObAddr addr_;
+    bool enable_heart_beat_;
+    TO_STRING_KV(K_(addr), K_(enable_heart_beat));
+  };
+  common::ObArray<StoreInfo> store_infos_;
 private:
   struct SegmentCtx : public common::LinkHashValue<table::ObTableLoadSegmentID>
   {
@@ -168,10 +193,10 @@ private:
   uint64_t last_trans_gid_ CACHE_ALIGNED;
   uint64_t next_session_id_ CACHE_ALIGNED;
   lib::ObMutex op_lock_;
-  mutable obsys::ObRWLock status_lock_;
+  mutable obsys::ObRWLock<> status_lock_;
   table::ObTableLoadStatusType status_;
   int error_code_;
-  mutable obsys::ObRWLock rwlock_;
+  mutable obsys::ObRWLock<> rwlock_;
   TransMap trans_map_;
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;

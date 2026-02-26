@@ -72,7 +72,9 @@ public:
                K_(replaying_log_entry_no),
                K(lsn_),
                K(log_ts_ns_),
-               K(base_header_));
+               K(base_header_),
+               K(mvcc_row_count_),
+               K(table_lock_row_count_));
 
 private:
   ObTxReplayExecutor(storage::ObLS *ls,
@@ -132,7 +134,7 @@ private:
   virtual int replay_one_row_in_memtable_(memtable::ObMutatorRowHeader& row_head,
                                           memtable::ObMemtableMutatorIterator *mmi_ptr);
   int prepare_memtable_replay_(storage::ObStorageTableGuard &w_guard,
-                          ObIMemtable *&mem_ptr);
+                          storage::ObIMemtable *&mem_ptr);
   int replay_row_(storage::ObStoreCtx &store_ctx,
                   storage::ObTablet *tablet,
                   memtable::ObMemtableMutatorIterator *mmi_ptr);

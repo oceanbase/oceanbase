@@ -49,6 +49,7 @@ public:
   DEFINE_BASIC_SETTER(int64_t, log_purge_time);
   DEFINE_BASIC_SETTER(int64_t, num_steps);
   DEFINE_BASIC_SETTER(int, result);
+  DEFINE_BASIC_SETTER(int64_t, refresh_parallelism)
 
 #undef DEFINE_BASIC_SETTER
 

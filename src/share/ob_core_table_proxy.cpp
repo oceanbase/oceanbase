@@ -14,16 +14,10 @@
 
 #include "share/ob_core_table_proxy.h"
 
-#include <algorithm>
-#include "lib/container/ob_array_helper.h"
 #include "lib/container/ob_array_iterator.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/time/ob_time_utility.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "inner_table/ob_inner_table_schema.h"
 #include "share/ob_debug_sync.h"
-#include "lib/timezone/ob_time_convert.h"
 #include "share/ob_tenant_id_schema_version.h"
 
 namespace oceanbase
@@ -55,7 +49,7 @@ int ObCoreTableProxy::Row::init(const int64_t row_id,
         cells_[cell_cnt_++] = *c;
       }
       if (cell_cnt_ > 0) {
-        std::sort(cells_, cells_ + cell_cnt_);
+        lib::ob_sort(cells_, cells_ + cell_cnt_);
       }
       inited_ = true;
     }
@@ -698,7 +692,7 @@ int ObCoreTableProxy::incremental_update(const ObIArray<UpdateCell> &cells,
           }
         }
         if (OB_SUCC(ret)) {
-          std::sort(new_cells.begin(), new_cells.end());
+          lib::ob_sort(new_cells.begin(), new_cells.end());
           if (OB_FAIL(add_row(new_row_id, new_cells))) {
             LOG_WARN("add row failed", K(ret));
           }
@@ -764,7 +758,7 @@ int ObCoreTableProxy::update(const ObIArray<UpdateCell> &cells,
           }
         }
         if (OB_SUCC(ret)) {
-          std::sort(new_cells.begin(), new_cells.end());
+          lib::ob_sort(new_cells.begin(), new_cells.end());
           if (OB_FAIL(add_row(new_row_id, new_cells))) {
             LOG_WARN("add row failed", K(ret));
           }

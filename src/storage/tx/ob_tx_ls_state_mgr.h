@@ -296,8 +296,7 @@ public:
   bool waiting_SWL_cb();
   void replay_SWL_succ(const share::SCN & swl_scn);
 
-  const char *
-  iter_ctx_mgr_stat_info(uint64_t &state_container, bool &is_master, bool &is_stopped) const;
+  void iter_ctx_mgr_stat_info(uint64_t &state_container, bool &is_master, bool &is_stopped) const;
   // TxLSState get_state() const;
   bool is_master() const;
   bool is_follower() const;
@@ -309,6 +308,7 @@ public:
   bool is_leader_takeover_pending() const;
   bool is_switch_leader_pending() const;
   bool is_resume_leader_pending() const;
+  bool is_follower_swl_pending() const;
   bool is_stopped() const;
 
   TO_STRING_KV(K(ls_id_),
@@ -323,6 +323,7 @@ private:
 
   static bool is_switch_leader_pending_(const TxLSStateContainer &ls_state_container);
   static bool is_resume_leader_pending_(const TxLSStateContainer &ls_state_container);
+  static bool is_follower_swl_pending_(const TxLSStateContainer &ls_state_container);
 
 private:
   share::ObLSID ls_id_;

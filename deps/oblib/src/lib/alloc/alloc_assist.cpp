@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/alloc/alloc_assist.h"
-#include "lib/alloc/alloc_struct.h"
+#include "alloc_assist.h"
 #include "lib/resource/achunk_mgr.h"
-#include "lib/ob_abort.h"
-#include "lib/ob_define.h"
 
 using namespace oceanbase::lib;

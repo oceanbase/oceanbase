@@ -33,7 +33,8 @@ public:
         insert_up_(false),
         is_insert_select_(false),
         append_table_id_(0),
-        constraint_infos_(NULL)
+        constraint_infos_(NULL),
+        in_filter_expr_(nullptr)
   {
   }
 
@@ -59,6 +60,7 @@ public:
     return is_overwrite_;
   }
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   void set_insert_up(bool insert_up)
   {
     insert_up_ = insert_up;
@@ -67,6 +69,7 @@ public:
   {
     return insert_up_;
   }
+  ObRawExpr *get_in_filter_expr() const { return in_filter_expr_; }
   void set_is_insert_select(bool v) { is_insert_select_ = v; }
   bool is_insert_select() const { return is_insert_select_; }
   virtual bool is_single_value() const override
@@ -104,6 +107,11 @@ public:
   virtual int est_cost() override;
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   int inner_est_cost(double child_card, double &op_cost);
+  static int inner_est_cost(const ObOptimizerContext &opt_ctx,
+                            const ObIArray<IndexDMLInfo*> &index_infos,
+                            const ObIArray<IndexDMLInfo*> &insert_up_index_infos,
+                            const double child_card,
+                            double &op_cost);
   inline void set_append_table_id(const uint64_t append_table_id)
   {
     append_table_id_ = append_table_id;
@@ -120,11 +128,15 @@ public:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+  int is_plain_insert(bool &is_plain_insert);
+  int is_insertup_or_replace_values(bool &is);
+  virtual int op_is_update_pk_with_dop(bool &is_update) override;
 protected:
   int get_constraint_info_exprs(ObIArray<ObRawExpr*> &all_exprs);
   virtual int generate_rowid_expr_for_trigger() override;
   virtual int generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int generate_multi_part_partition_id_expr() override;
+  int generate_in_filter_for_insertup_opt();
 protected:
   bool is_replace_;
   bool is_overwrite_;
@@ -136,6 +148,7 @@ protected:
   bool is_insert_select_;
   uint64_t append_table_id_;
   const common::ObIArray<ObUniqueConstraintInfo> *constraint_infos_;
+  ObRawExpr *in_filter_expr_;
 };
 
 }

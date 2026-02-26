@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_tablet_store_stat.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {
@@ -257,14 +256,6 @@ int ObAllVirtualTabletStoreStat::fill_cells(const ObTableStoreStat &stat)
       case OB_APP_MIN_COLUMN_ID + 41:
         // index block cache miss count
         cells[i].set_int(stat.index_block_cache_miss_cnt_);
-        break;
-      case OB_APP_MIN_COLUMN_ID + 42:
-        // logical read count
-        cells[i].set_int(stat.logical_read_cnt_);
-        break;
-      case OB_APP_MIN_COLUMN_ID + 43:
-        // physical read count
-        cells[i].set_int(stat.physical_read_cnt_);
         break;
       default:
         ret = OB_ERR_UNEXPECTED;

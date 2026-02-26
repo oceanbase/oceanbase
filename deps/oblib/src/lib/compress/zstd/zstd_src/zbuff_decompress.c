@@ -12,8 +12,6 @@
 /* *************************************
 *  Dependencies
 ***************************************/
-#include <stdlib.h>
-#include "error_private.h"
 #include "zstd_internal.h"  /* MIN, ZSTD_blockHeaderSize, ZSTD_BLOCKSIZE_MAX */
 #define ZBUFF_STATIC_LINKING_ONLY
 #include "zbuff.h"

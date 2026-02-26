@@ -14,7 +14,6 @@
 
 #include <gtest/gtest.h>
 
-#include "lib/ob_define.h"
 #include "lib/string/ob_fixed_length_string.h"
 
 namespace oceanbase

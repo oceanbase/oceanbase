@@ -55,6 +55,8 @@ class ObDirectLoadMultipleDatumRowkeyCompare
 public:
   ObDirectLoadMultipleDatumRowkeyCompare();
   int init(const blocksstable::ObStorageDatumUtils &datum_utils);
+  int compare(const ObDirectLoadMultipleDatumRowkey &lhs,
+              const ObDirectLoadMultipleDatumRowkey &rhs, int &cmp_ret);
   bool operator()(const ObDirectLoadMultipleDatumRowkey *lhs,
                   const ObDirectLoadMultipleDatumRowkey *rhs);
   int get_error_code() const { return result_code_; }

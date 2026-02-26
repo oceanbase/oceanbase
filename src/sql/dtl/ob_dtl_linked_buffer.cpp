@@ -16,6 +16,7 @@
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/dtl/ob_dtl_vectors_buffer.h"
+#include "sql/engine/basic/ob_temp_row_store.h"
 
 using namespace oceanbase::common;
 
@@ -37,7 +38,7 @@ OB_DEF_SERIALIZE(ObDtlOpInfo)
     pos += common::OB_MAX_SQL_ID_LENGTH + 1;
   }
   LST_DO_CODE(OB_UNIS_ENCODE, op_id_, input_rows_, input_width_,
-              disable_auto_mem_mgr_);
+              disable_auto_mem_mgr_, max_batch_size_);
   return ret;
 }
 
@@ -51,7 +52,7 @@ OB_DEF_DESERIALIZE(ObDtlOpInfo)
     pos += common::OB_MAX_SQL_ID_LENGTH + 1;
   }
   LST_DO_CODE(OB_UNIS_DECODE, op_id_, input_rows_, input_width_,
-              disable_auto_mem_mgr_);
+              disable_auto_mem_mgr_, max_batch_size_);
   return ret;
 }
 
@@ -61,7 +62,7 @@ OB_DEF_SERIALIZE_SIZE(ObDtlOpInfo)
   LST_DO_CODE(OB_UNIS_ADD_LEN, dop_, plan_id_, exec_id_, session_id_, database_id_);
   len += common::OB_MAX_SQL_ID_LENGTH + 1;
   LST_DO_CODE(OB_UNIS_ADD_LEN, op_id_, input_rows_, input_width_,
-              disable_auto_mem_mgr_);
+              disable_auto_mem_mgr_, max_batch_size_);
   return len;
 }
 
@@ -92,25 +93,40 @@ int ObDtlLinkedBuffer::deserialize_msg_header(const ObDtlLinkedBuffer &buffer,
 int ObDtlLinkedBuffer::add_batch_info(int64_t batch_id, int64_t rows)
 {
   int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(!is_data_msg() || (PX_DATUM_ROW != msg_type_ && PX_CHUNK_ROW != msg_type_))) {
+  if (OB_UNLIKELY(!is_data_msg())) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_DTL_LOG(WARN, "unexpected msg type", K(ret), K(is_data_msg()), K(msg_type_));
+    SQL_DTL_LOG(WARN, "unexpected data msg", K(ret), K(is_data_msg()));
   } else {
-    const int64_t count = batch_info_.count();
-    const int64_t header_size = PX_DATUM_ROW == msg_type_ ? sizeof(ObChunkDatumStore::Block)
-                                : sizeof(ObChunkRowStore::Block);
-    const int64_t start = 0 == count ? header_size : batch_info_.at(count - 1).end_;
-    if (OB_UNLIKELY(pos_ < start || rows < rows_cnt_)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_DTL_LOG(WARN, "unexpected start and pos", K(ret), K(pos_), K(start), K(rows_cnt_),
-                  K(rows), K(batch_info_));
-    } else {
-      ObDtlBatchInfo info(batch_id, start, pos_, rows - rows_cnt_);
-      if (OB_FAIL(batch_info_.push_back(info))) {
-        SQL_DTL_LOG(WARN, "push back failed", K(ret));
+    int64_t header_size = 0;
+    switch (msg_type_) {
+      case PX_DATUM_ROW: {
+        header_size = sizeof(ObChunkDatumStore::Block);
+        break;
+      }
+      case PX_VECTOR_ROW: {
+        header_size = sizeof(ObTempRowStore::RowBlock);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_DTL_LOG(WARN, "unexpected msg type", K(ret), K(msg_type_));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const int64_t count = batch_info_.count();
+      const int64_t start = 0 == count ? header_size : batch_info_.at(count - 1).end_;
+      if (OB_UNLIKELY(pos_ < start || rows < rows_cnt_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_DTL_LOG(WARN, "unexpected start and pos", K(ret), K(pos_), K(start), K(rows_cnt_),
+                    K(rows), K(batch_info_));
       } else {
-        batch_info_valid_ = true;
-        rows_cnt_ = rows;
+        ObDtlBatchInfo info(batch_id, start, pos_, rows - rows_cnt_);
+        if (OB_FAIL(batch_info_.push_back(info))) {
+          SQL_DTL_LOG(WARN, "push back failed", K(ret));
+        } else {
+          batch_info_valid_ = true;
+          rows_cnt_ = rows;
+        }
       }
     }
   }
@@ -128,7 +144,36 @@ int ObDtlLinkedBuffer::push_batch_id(int64_t batch_id, int64_t rows)
   return ret;
 }
 
-OB_DEF_SERIALIZE(ObDtlLinkedBuffer)
+int ObDtlLinkedBuffer::serialize(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 &&
+      GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    const int64_t compat_version = 1;
+    OB_UNIS_ENCODE(compat_version);
+  } else {
+    OB_UNIS_ENCODE(UNIS_VERSION);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = common::serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+        RPC_WARN("serialize fail", K(ret));
+      }
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    if (OB_SUCC(ret)) {
+      CHECK_SERIALIZE_SIZE(CLS, serial_size);
+      ret = NS_::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes,
+        size_nbytes, tmp_pos, serial_size);
+    }
+  }
+  return ret;
+}
+
+int ObDtlLinkedBuffer::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
 {
   using namespace oceanbase::common;
   int ret = OB_SUCCESS;
@@ -184,49 +229,77 @@ OB_DEF_SERIALIZE(ObDtlLinkedBuffer)
   return ret;
 }
 
-OB_DEF_DESERIALIZE(ObDtlLinkedBuffer)
+int ObDtlLinkedBuffer::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   using namespace oceanbase::common;
   int ret = OB_SUCCESS;
-  OB_UNIS_DECODE(size_);
+  int64_t version = 0;
+  int64_t len = 0;
+
+  OB_UNIS_DECODE(version);
+  OB_UNIS_DECODE(len);
   if (OB_SUCC(ret)) {
-    buf_ = (char*)buf + pos;
-    pos += size_;
-    LST_DO_CODE(OB_UNIS_DECODE,
-      is_data_msg_,
-      seq_no_,
-      tenant_id_,
-      is_eof_,
-      timeout_ts_,
-      msg_type_,
-      flags_,
-      dfo_key_,
-      use_interm_result_,
-      batch_id_,
-      batch_info_valid_);
-    if (OB_SUCC(ret) && batch_info_valid_) {
-      LST_DO_CODE(OB_UNIS_DECODE, batch_info_);
-    }
-    if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_DECODE, dfo_id_, sqc_id_);
-    }
-    if (OB_SUCC(ret)) {
-      enable_channel_sync_ = false;
-      LST_DO_CODE(OB_UNIS_DECODE, enable_channel_sync_);
-    }
-    if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_DECODE, register_dm_info_);
-    }
-    if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_DECODE, row_meta_);
-    }
-    if (OB_SUCC(ret) && seq_no_ == 1) {
-      LST_DO_CODE(OB_UNIS_DECODE, op_info_);
+    if (len < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_DTL_LOG(WARN, "can't decode object with negative length", K(len));
+    } else if (data_len < len + pos) {
+      ret = OB_DESERIALIZE_ERROR;
+      SQL_DTL_LOG(WARN, "buf length not enough", K(len), K(pos), K(data_len));
     }
   }
   if (OB_SUCC(ret)) {
-    (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
+    const_cast<int64_t&>(data_len) = len;
+    int64_t pos_orig = pos;
+    buf = buf + pos_orig;
+    pos = 0;
+
+    OB_UNIS_DECODE(size_);
+    if (OB_SUCC(ret)) {
+      buf_ = (char*)buf + pos;
+      pos += size_;
+      LST_DO_CODE(OB_UNIS_DECODE,
+        is_data_msg_,
+        seq_no_,
+        tenant_id_,
+        is_eof_,
+        timeout_ts_,
+        msg_type_,
+        flags_,
+        dfo_key_,
+        use_interm_result_,
+        batch_id_,
+        batch_info_valid_);
+      if (OB_SUCC(ret) && batch_info_valid_) {
+        LST_DO_CODE(OB_UNIS_DECODE, batch_info_);
+      }
+      if (OB_SUCC(ret)) {
+        LST_DO_CODE(OB_UNIS_DECODE, dfo_id_, sqc_id_);
+      }
+      if (OB_SUCC(ret)) {
+        enable_channel_sync_ = false;
+        LST_DO_CODE(OB_UNIS_DECODE, enable_channel_sync_);
+      }
+      if (OB_SUCC(ret)) {
+        LST_DO_CODE(OB_UNIS_DECODE, register_dm_info_);
+      }
+      if (OB_SUCC(ret)) {
+        if (version == 2) {
+          row_meta_.reset();
+        } else {
+          LST_DO_CODE(OB_UNIS_DECODE, row_meta_);
+        }
+      }
+      if (OB_SUCC(ret) && seq_no_ == 1) {
+        LST_DO_CODE(OB_UNIS_DECODE, op_info_);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
+    }
+
+    pos = pos_orig + len;
   }
+
   return ret;
 }
 

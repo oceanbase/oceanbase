@@ -38,7 +38,7 @@ namespace observer
 {
 class ObInfoSchemaColumnsTable : public common::ObVirtualTableScannerIterator
 {
-  static const int32_t COLUMNS_COLUMN_COUNT = 21;
+  static const int32_t COLUMNS_COLUMN_COUNT = 22;
   enum COLUMN_NAME {
     TABLE_SCHEMA = common::OB_APP_MIN_COLUMN_ID,
     TABLE_NAME,
@@ -60,7 +60,8 @@ class ObInfoSchemaColumnsTable : public common::ObVirtualTableScannerIterator
     EXTRA,
     PRIVILEGES,
     COLUMN_COMMENT,
-    GENERATION_EXPRESSION
+    GENERATION_EXPRESSION,
+    SRS_ID
   };
 public:
   ObInfoSchemaColumnsTable();
@@ -106,9 +107,11 @@ private:
   int get_type_str(const ObObjMeta &obj_meta, const ObAccuracy &accuracy,
       const common::ObIArray<ObString> &type_info,
       const int16_t default_length_semantics, int64_t &pos,
-      const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOMETRY));
+      const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOMETRY),
+      const bool is_string_lob = false);
   int fill_col_privs(
-      ObSessionPrivInfo &session_priv,
+      const ObSessionPrivInfo &session_priv,
+      const common::ObIArray<uint64_t> &enable_role_id_array,
       ObNeedPriv &need_priv, 
       ObPrivSet priv_set, 
       const char *priv_str,

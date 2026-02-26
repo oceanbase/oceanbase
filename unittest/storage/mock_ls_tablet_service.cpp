@@ -16,15 +16,8 @@
 
 #include "mock_ls_tablet_service.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/ob_errno.h"
-#include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_table_dml_param.h"
-#include "storage/ob_i_store.h"
 #include "storage/ob_dml_running_ctx.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/tablet/ob_tablet.h"
 
 #undef private
 

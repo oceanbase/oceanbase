@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <pthread.h>
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
-#include "lib/allocator/ob_mod_define.h"
 #include "gtest/gtest.h"
 #include "lib/coro/testing.h"
 
@@ -62,6 +60,7 @@ TEST(TestConcurrentFIFOAllocator, single_thread)
     allocator.free(ptr_buffer[i]);
     ptr_buffer[i] = NULL;
   }
+  ASSERT_EQ(allocator.allocated(), 0);
   allocator.destroy();
 }
 
@@ -87,6 +86,7 @@ TEST(TestConcurrentFIFOAllocator, single_thread2)
       ptr_buffer[i] = NULL;
     }
   }
+  ASSERT_EQ(allocator.allocated(), 0);
   allocator.destroy();
 }
 
@@ -129,6 +129,7 @@ TEST(TestConcurrentFIFOAllocator, multipe_threads_direct_alloc)
     ASSERT_EQ(0, pthread_join(work_thread[i], NULL));
   }
   ASSERT_EQ(0, pthread_barrier_destroy(&barrier1));
+  ASSERT_EQ(allocator1.allocated(), 0);
   allocator1.destroy();
 }
 

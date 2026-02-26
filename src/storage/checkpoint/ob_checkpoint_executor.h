@@ -17,6 +17,9 @@
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
 #include "share/scn.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_ss_checkpoint_util.h"
+#endif
 
 namespace oceanbase
 {
@@ -121,6 +124,9 @@ private:
 
   int64_t update_clog_checkpoint_times_;
   int64_t last_add_server_history_time_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  CkptChangeRecord ckpt_change_record_;
+#endif
 };
 
 

@@ -11,9 +11,6 @@
  */
 
 #include "ob_generated_scalar_bp_func.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/utility/utility.h"
 
 namespace oceanbase

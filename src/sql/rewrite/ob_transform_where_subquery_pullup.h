@@ -143,6 +143,9 @@ struct SingleSetParam {
                                  ObIArray<ObSelectStmt*> &unnest_stmts,
                                  bool &trans_happened);
 
+  int check_nested_subquery_cond(const ObQueryRefRawExpr &query_expr,
+                                 bool &is_nested_subq_cond);
+
   int transform_one_expr(ObDMLStmt *stmt,
                          ObRawExpr *expr,
                          ObIArray<ObSelectStmt*> &unnest_stmts,
@@ -246,8 +249,6 @@ struct SingleSetParam {
   int is_where_having_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                           const ObSelectStmt &subquery,
                                           bool &is_correlated);
-
-  int check_const_select(const ObSelectStmt &stmt, bool &is_const_select) const;
 
   virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;

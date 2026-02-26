@@ -1,9 +1,5 @@
-#include <assert.h>
-#include <stdio.h>
 #include <malloc.h>
-#include <stdlib.h>
 #include <pthread.h>
-#include <stdint.h>
 #include "memory/easy_mem_pool.h"
 
 #if __GNUC__ >= 4

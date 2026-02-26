@@ -11,11 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/allocator/ob_malloc.h"
-#include "common/ob_role.h"
-#include "lib/container/ob_se_array.h"
 #include "lib/container/ob_array_serialization.h"
-#include "lib/utility/ob_serialization_helper.h"
 
 using namespace oceanbase;
 using namespace common;

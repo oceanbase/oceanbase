@@ -1,7 +1,5 @@
-#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-//#include "expr/string_cmp.h"
 
 namespace oceanbase {
 namespace jit {

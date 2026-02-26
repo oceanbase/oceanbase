@@ -12,12 +12,8 @@
 
 // #define USING_LOG_PREFIX SQL_ENGINE
 #define USING_LOG_PREFIX COMMON
-#include <iterator>
-#include <gtest/gtest.h>
 #include "../test_op_engine.h"
 #include "../ob_test_config.h"
-#include <vector>
-#include <string>
 
 using namespace ::oceanbase::sql;
 

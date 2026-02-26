@@ -72,6 +72,7 @@ ObCSEncodingAllocator<EncodingItem>::ObCSEncodingAllocator(const int64_t *size_a
     string_pool_(size_array[size_index_++], attr),
     int_dict_pool_(size_array[size_index_++], attr),
     str_dict_pool_(size_array[size_index_++], attr),
+    semistruct_pool_(size_array[size_index_++], attr),
     pool_cnt_(0)
 {
   for (int64_t i = 0; i < ObCSColumnHeader::MAX_TYPE; i++) {
@@ -89,7 +90,8 @@ int ObCSEncodingAllocator<EncodingItem>::init()
     if (OB_FAIL(add_pool(&integer_pool_))
         || OB_FAIL(add_pool(&string_pool_))
         || OB_FAIL(add_pool(&int_dict_pool_))
-        || OB_FAIL(add_pool(&str_dict_pool_))) {
+        || OB_FAIL(add_pool(&str_dict_pool_))
+        || OB_FAIL(add_pool(&semistruct_pool_))) {
       STORAGE_LOG(WARN, "add_pool failed", K(ret));
     } else if (pool_cnt_ != size_index_) {
       ret = common::OB_INNER_STAT_ERROR;

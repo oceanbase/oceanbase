@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_pl_sqlcode_sqlerrm.h"
-#include "lib/utility/ob_print_utils.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/ob_exec_context.h"
 #include "pl/ob_pl.h"
 
 namespace oceanbase
@@ -102,6 +99,13 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
   pl::ObPLSqlCodeInfo *sqlcode_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   bool is_sqlcode = (expr.extra_ == 1);
+  bool enable_config = false;
+  uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    enable_config = tenant_config->enable_pl_rich_error_msg
+                    && ObServerConfig::get_instance().enable_rich_error_msg;
+  }
   CK(OB_NOT_NULL(session));
   CK(expr.arg_cnt_ <= 1);
   CK (OB_NOT_NULL(sqlcode_info = session->get_pl_sqlcode_info()));
@@ -116,18 +120,24 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
       int64_t sqlcode = sqlcode_info->get_sqlcode();
       if (0 == sqlcode) {
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
-        OZ (databuff_printf(sqlerrm_result, max_buf_size, pos, "ORA-0000: normal, successful completion"));
+        OZ (databuff_printf(sqlerrm_result, max_buf_size, pos, "OBE-0000: normal, successful completion"));
       } else if (sqlcode > 0) {
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
         OZ (databuff_printf(sqlerrm_result, max_buf_size, pos, "User-Defined Exception"));
       } else if (sqlcode >= OB_MIN_RAISE_APPLICATION_ERROR
                  && sqlcode <= OB_MAX_RAISE_APPLICATION_ERROR) {
-        max_buf_size = 30 + sqlcode_info->get_sqlmsg().length(); // ORA-CODE: ERRMSG
+        ObString error_trace_msg = ObString("");
+#ifdef OB_BUILD_ORACLE_PL
+        CK (OB_NOT_NULL(session->get_pl_context()));
+        CK (OB_NOT_NULL(session->get_pl_context()->get_call_stack_trace()));
+        OZ (session->get_pl_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
+#endif
+        OX (max_buf_size = error_trace_msg.length() + 1);
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
         OZ (databuff_printf(sqlerrm_result, max_buf_size, pos,
-                           "ORA%ld: %.*s", sqlcode,
-                           sqlcode_info->get_sqlmsg().length(),
-                           sqlcode_info->get_sqlmsg().ptr()));
+                           "%.*s",
+                           error_trace_msg.length(),
+                           error_trace_msg.ptr()));
       } else {
         const ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
         if (OB_LIKELY(NULL != wb) && wb->get_err_code() == sqlcode) {
@@ -137,7 +147,7 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
           if (NULL == err_msg) {
             CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
             OZ (databuff_printf(sqlerrm_result, max_buf_size, pos,
-                "ORA%ld: Message error_code not found; product=RDBMS; facility=ORA", sqlcode));
+                "OBE%ld: Message error_code not found; product=RDBMS; facility=ORA", sqlcode));
           } else {
             sqlerrm_result = const_cast<char*>(err_msg);
           }
@@ -156,21 +166,26 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
         OZ (databuff_printf(sqlerrm_result, 200, pos, "-%ld: non-ORACLE exception", sqlcode));
       } else if (sqlcode == 0) {
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
-        OZ (databuff_printf(sqlerrm_result, 200, pos, "ORA-0000: normal, successful completion"));
+        OZ (databuff_printf(sqlerrm_result, 200, pos, "OBE-0000: normal, successful completion"));
       } else if (sqlcode >= OB_MIN_RAISE_APPLICATION_ERROR
                  && sqlcode <= OB_MAX_RAISE_APPLICATION_ERROR) {
         if (sqlcode_info->get_sqlcode() == sqlcode) {
-          max_buf_size = 30 + sqlcode_info->get_sqlmsg().length(); // ORA-CODE: ERRMSG
-          CK (OB_NOT_NULL(
-            sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
+          ObString error_trace_msg = ObString("");
+#ifdef OB_BUILD_ORACLE_PL
+          CK (OB_NOT_NULL(session->get_pl_context()));
+          CK (OB_NOT_NULL(session->get_pl_context()->get_call_stack_trace()));
+          OZ (session->get_pl_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
+#endif
+          OX (max_buf_size = error_trace_msg.length() + 1);
+          CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
           OZ (databuff_printf(sqlerrm_result, max_buf_size, pos,
-                             "ORA%ld: %.*s", sqlcode,
-                             sqlcode_info->get_sqlmsg().length(),
-                             sqlcode_info->get_sqlmsg().ptr()));
+                            "%.*s",
+                            error_trace_msg.length(),
+                            error_trace_msg.ptr()));
         } else {
           CK (OB_NOT_NULL(sqlerrm_result
             = expr.get_str_res_mem(ctx, max_buf_size)));
-          OZ (databuff_printf(sqlerrm_result, 200, pos, "ORA%ld:", sqlcode));
+          OZ (databuff_printf(sqlerrm_result, 200, pos, "OBE%ld:", sqlcode));
         }
       } else if (sqlcode < 0) {
         const ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
@@ -180,13 +195,51 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
           const char* err_msg = ob_errpkt_str_user_error(sqlcode, true);
           if (NULL == err_msg) {
             CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
-            OZ (databuff_printf(sqlerrm_result, 200, pos, "ORA%ld: Message error_code not found; product=RDBMS; facility=ORA", sqlcode));
+            OZ (databuff_printf(sqlerrm_result, 200, pos, "OBE%ld: Message error_code not found; product=RDBMS; facility=ORA", sqlcode));
           } else {
             sqlerrm_result = const_cast<char*>(err_msg);
           }
         }
       }
       OX (expr_datum.set_string(sqlerrm_result, strlen(sqlerrm_result)));
+    }
+  }
+
+  // if both enable_rich_error_msg and enable_pl_rich_error_msg are enabled, read current expr_datum string
+  // and append addr/time/trace into a new eval buffer so caller sees augmented result.
+  if (OB_SUCC(ret) && enable_config && !is_sqlcode) {
+    // get current string from expr_datum
+    const ObString cur = expr_datum.get_string();
+    const char *cur_ptr = cur.ptr();
+    int64_t cur_len = (NULL != cur_ptr ? static_cast<int64_t>(cur.length()) : 0);
+
+    // prepare addr/time/trace
+    const ObAddr addr = ObCurTraceId::get_addr();
+    struct timeval tv;
+    struct tm tm;
+    char addr_buf[MAX_IP_PORT_LENGTH];
+    (void)gettimeofday(&tv, NULL);
+    if (NULL == ::localtime_r((const time_t *)&tv.tv_sec, &tm)) {
+      memset(&tm, 0, sizeof(tm));
+    }
+    addr.ip_port_to_string(addr_buf, sizeof(addr_buf));
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+
+    // Buffer size reference: response_packet
+    int64_t maxSize = 512;
+    char *new_buf = expr.get_str_res_mem(ctx, maxSize);
+    if (OB_NOT_NULL(new_buf)) {
+      int64_t new_pos = 0;
+      if (cur_len > 0) {
+        OZ (databuff_printf(new_buf, maxSize, new_pos, "%.*s", static_cast<int>(cur_len), cur_ptr));
+      }
+      OZ (databuff_printf(new_buf, maxSize, new_pos,
+                          "\n[%s] [%04d-%02d-%02d %02d:%02d:%02d.%06ld] [%s]",
+                          addr_buf,
+                          tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                          tm.tm_hour, tm.tm_min, tm.tm_sec, (long)tv.tv_usec,
+                          ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))));
+      OX (expr_datum.set_string(new_buf, new_pos));
     }
   }
 

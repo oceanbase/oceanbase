@@ -14,10 +14,6 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 
-#include "lib/worker.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/trace/ob_trace.h"
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -44,8 +40,14 @@ Handle::Handle()
       transport_(NULL),
       proxy_(),
       pcode_(OB_INVALID_RPC_CODE),
-      first_pkt_id_(INVALID_RPC_PKT_ID)
+      first_pkt_id_(INVALID_RPC_PKT_ID),
+      abs_timeout_ts_(OB_INVALID_TIMESTAMP)
 {}
+
+void Handle::reset_timeout()
+{
+  abs_timeout_ts_ = ObTimeUtility::current_time() + proxy_.timeout();
+}
 
 int ObRpcProxy::init(const ObReqTransport *transport,
     const oceanbase::common::ObAddr &dst)
@@ -180,9 +182,11 @@ int ObRpcProxy::init_pkt(
     // For request, src_cluster_id must be the cluster_id of this cluster, directly hard-coded
     pkt->set_src_cluster_id(src_cluster_id_);
     pkt->set_unis_version(0);
+    const int OBCG_LQ = 100;
     if (0 != get_group_id()) {
       pkt->set_group_id(get_group_id());
-    } else if (this_worker().get_group_id() == 100) {
+    } else if (this_worker().get_group_id() == OBCG_LQ ||
+               (is_resource_manager_group(this_worker().get_group_id()) && ob_get_tenant_id() != tenant_id_)) {
       pkt->set_group_id(0);
     } else {
       pkt->set_group_id(this_worker().get_group_id());
@@ -346,9 +350,13 @@ void ObRpcProxy::set_handle_attr(Handle* handle, const ObRpcPacketCode& pcode, c
     handle->do_ratelimit_ = do_ratelimit_;
     handle->is_bg_flow_ = is_bg_flow_;
     handle->transport_ = NULL;
+    handle->abs_timeout_ts_ = send_ts + timeout_;
     if (is_stream_next) {
       handle->first_pkt_id_ = pkt_id;
+      LOG_INFO("stream rpc register", K(pcode), K(pkt_id));
       stream_rpc_register(pkt_id, send_ts);
     }
+    int64_t timeout = min(timeout_, INT64_MAX/2);
+    handle->abs_timeout_ts_ = send_ts + timeout_;
   }
 }

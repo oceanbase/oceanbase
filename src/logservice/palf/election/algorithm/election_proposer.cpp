@@ -11,18 +11,8 @@
  */
 
 
-#include "logservice/palf/election/message/election_message.h"
-#include "ob_role.h"
-#include "share/ob_occam_time_guard.h"
 #include "election_proposer.h"
-#include "common/ob_clock_generator.h"
 #include "election_impl.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string_holder.h"
-#include "logservice/palf/election/interface/election_msg_handler.h"
-#include "logservice/palf/election/utils/election_common_define.h"
-#include "logservice/palf/election/utils/election_member_list.h"
-#include "logservice/palf/palf_callback.h"
 
 namespace oceanbase
 {
@@ -77,6 +67,7 @@ ElectionProposer::ElectionProposer(ElectionImpl *election)
 :role_(ObRole::FOLLOWER),
 ballot_number_(INVALID_VALUE),
 prepare_success_ballot_(INVALID_VALUE),
+last_leader_epoch_(INVALID_VALUE),
 switch_source_leader_ballot_(INVALID_VALUE),
 restart_counter_(INVALID_VALUE),
 p_election_(election),
@@ -204,7 +195,13 @@ bool ElectionProposer::leader_takeover_if_lease_valid_(RoleChangeReason reason)
     (p_election_->role_change_cb_)(p_election_, ObRole::FOLLOWER, ObRole::LEADER, reason);
     highest_priority_cache_.reset();
     role_ = ObRole::LEADER;
-    propose();
+    if (prepare_success_ballot_ == last_leader_epoch_) {
+      LOG_PHASE(WARN, phase, "lease is expired, leader re-takeover at the same prepare_success_ballot, need do leader prepare");
+      advance_ballot_number_and_reset_related_states_(ballot_number_ + 1, "re-takover, do leader prepare");
+      prepare(ObRole::LEADER);
+    } else {
+      propose();
+    }
     ret_bool = true;
   }
   return ret_bool;
@@ -337,6 +334,7 @@ void ElectionProposer::stop()
   renew_lease_task_handle_.stop_and_wait();
   LockGuard lock_guard(p_election_->lock_);
   leader_lease_and_epoch_.reset();
+  last_leader_epoch_ = INVALID_VALUE;
   if (leader_revoke_if_lease_expired_(RoleChangeReason::StopToRevoke)) {
     LOG_DESTROY(INFO, "leader revoke because election is stopped");
   }
@@ -573,6 +571,7 @@ void ElectionProposer::on_accept_response(const ElectionAcceptResponseMsg &accep
     } else {
       if (leader_takeover_if_lease_valid_(RoleChangeReason::DevoteToBeLeader)) {
         LOG_ELECT_LEADER(INFO, "decentralized voting, leader takeover success");
+        last_leader_epoch_ = prepare_success_ballot_;
       }
     }
   }
@@ -720,7 +719,8 @@ int64_t ElectionProposer::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
   if (OB_NOT_NULL(p_election_)) {
     common::databuff_printf(buf, buf_len, pos, "{ls_id:{id:%ld}", p_election_->id_);
-    common::databuff_printf(buf, buf_len, pos, ", addr:%s", to_cstring(p_election_->get_self_addr()));
+    common::databuff_printf(buf, buf_len, pos, ", addr:");
+    common::databuff_printf(buf, buf_len, pos, p_election_->get_self_addr());
   }
   common::databuff_printf(buf, buf_len, pos, ", role:%s", obj_to_string(role_));
   common::databuff_printf(buf, buf_len, pos, ", ballot_number:%ld", ballot_number_);
@@ -735,25 +735,26 @@ int64_t ElectionProposer::to_string(char *buf, const int64_t buf_len) const
   } else {
     common::databuff_printf(buf, buf_len, pos, ", lease_interval:%ldus", lease);
   }
-  common::databuff_printf(buf, buf_len, pos, ", memberlist_with_states:%s",
-                                                to_cstring(memberlist_with_states_));
+  common::databuff_printf(buf, buf_len, pos, ", memberlist_with_states:");
+  common::databuff_printf(buf, buf_len, pos, memberlist_with_states_);
   if (leader_lease_and_epoch_.is_valid()) {// 非有效的leader不打印lease信息
-    common::databuff_printf(buf, buf_len, pos, ", lease_and_epoch:%s",
-                                                  to_cstring(leader_lease_and_epoch_));
+    common::databuff_printf(buf, buf_len, pos, ", lease_and_epoch:");
+    common::databuff_printf(buf, buf_len, pos, leader_lease_and_epoch_);
   }
   if (switch_source_leader_ballot_ != INVALID_VALUE) {// 该变量与切主相关，只在切主过程中打印该变量
     common::databuff_printf(buf, buf_len, pos, ", switch_source_leader_ballot:%ld",
                                                   switch_source_leader_ballot_);
   }
   if (switch_source_leader_addr_.is_valid()) {// 该变量与切主相关，只在切主过程中打印该变量
-    common::databuff_printf(buf, buf_len, pos, ", switch_source_leader_addr:%s",
-                                                  to_cstring(switch_source_leader_addr_));
+    common::databuff_printf(buf, buf_len, pos, ", switch_source_leader_addr:");
+    common::databuff_printf(buf, buf_len, pos, switch_source_leader_addr_);
   }
   common::databuff_printf(buf, buf_len, pos, ", priority_seed:0x%lx", (unsigned long)p_election_->generate_inner_priority_seed_());
   common::databuff_printf(buf, buf_len, pos, ", restart_counter:%ld", restart_counter_);
   common::databuff_printf(buf, buf_len, pos, ", last_do_prepare_ts:%s", ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(last_do_prepare_ts_));
   if (OB_NOT_NULL(p_election_)) {
-    common::databuff_printf(buf, buf_len, pos, ", self_priority:%s", p_election_->priority_ == nullptr ? "NULL" : to_cstring(*(p_election_->priority_)));
+    common::databuff_printf(buf, buf_len, pos, ", self_priority:");
+    common::databuff_printf(buf, buf_len, pos, p_election_->priority_);
   }
   common::databuff_printf(buf, buf_len, pos, ", p_election:0x%lx}", (unsigned long)p_election_);
   return pos;

@@ -19,6 +19,14 @@
 
 namespace oceanbase
 {
+namespace obrpc
+{
+class ObGAISNextSequenceValRpcResult;
+}
+namespace share
+{
+class ObGAISNextSequenceValReq;
+}
 namespace sql
 {
 class ObSequenceSpec : public ObOpSpec
@@ -76,7 +84,7 @@ class ObLocalSequenceExecutor : public ObSequenceExecutor {
     virtual void reset() override;
     virtual void destroy() override;
     virtual int get_nextval(ObExecContext &ctx) override;
-    int handle_gais_request(const ObGAISNextSequenceValReq &request,
+    int handle_gais_request(const share::ObGAISNextSequenceValReq &request,
                                   obrpc::ObGAISNextSequenceValRpcResult &result);
   private:
     // sequence 暴露给用户层的是一个 cache

@@ -13,17 +13,20 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/vector/ob_uniform_base.h"
 #include "sql/engine/basic/ob_compact_row.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
+#include "share/vector/ob_uniform_format.h"
 
 namespace oceanbase
 {
 namespace common
 {
-  void ObUniformBase::to_rows(const sql::RowMeta &row_meta,
+  int ObUniformBase::to_rows(const sql::RowMeta &row_meta,
                               sql::ObCompactRow **stored_rows,
                               const uint16_t selector[],
                               const int64_t size,
                               const int64_t col_idx) const
   {
+    int ret = OB_SUCCESS;
     if (get_format() == VEC_UNIFORM) {
       for (int64_t i = 0; i < size; i++) {
         int64_t row_idx = selector[i];
@@ -47,6 +50,33 @@ namespace common
         }
       }
     }
+    return ret;
+  }
+
+  int ObUniformBase::to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+                              const int64_t size, const int64_t col_idx) const
+  {
+    int ret = OB_SUCCESS;
+    if (get_format() == VEC_UNIFORM) {
+      for (int64_t row_idx = 0; row_idx < size; row_idx++) {
+        if (datums_[row_idx].is_null()) {
+          stored_rows[row_idx]->set_null(row_meta, col_idx);
+        } else {
+          stored_rows[row_idx]->set_cell_payload(row_meta, col_idx, datums_[row_idx].ptr_,
+                                                 datums_[row_idx].len_);
+        }
+      }
+    } else {
+      for (int64_t i = 0, row_idx = 0; i < size; i++) {
+        if (datums_[row_idx].is_null()) {
+          stored_rows[i]->set_null(row_meta, col_idx);
+        } else {
+          stored_rows[i]->set_cell_payload(row_meta, col_idx, datums_[row_idx].ptr_,
+                                           datums_[row_idx].len_);
+        }
+      }
+    }
+    return ret;
   }
 
   DEF_TO_STRING(ObUniformBase)

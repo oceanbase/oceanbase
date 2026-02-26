@@ -14,7 +14,6 @@
 #define USING_LOG_PREFIX LIB
 #include "ob_geo.h"
 
-
 namespace oceanbase {
 namespace common {
 

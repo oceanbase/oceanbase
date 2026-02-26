@@ -14,11 +14,8 @@
 
 #include "sql/engine/expr/ob_expr_mul.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/engine/expr/ob_expr_util.h"
-
 
 using namespace oceanbase::common;
 
@@ -52,6 +49,30 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
     ob_is_decimal_int(type1.get_type()) && ob_is_decimal_int(type2.get_type());
   const bool is_oracle = lib::is_oracle_mode();
   if (OB_FAIL(ObArithExprOperator::calc_result_type2(type, type1, type2, type_ctx))) {
+  } else if (ob_is_integer_type(type1.get_type()) &&
+             get_decimalint_type(type1.get_precision()) > DECIMAL_INT_64 &&
+             type2.is_decimal_int() &&
+             lib::is_mysql_mode()) {
+    type1.set_calc_type(ObDecimalIntType);
+  } else if (ob_is_integer_type(type2.get_type()) &&
+             get_decimalint_type(type2.get_precision()) > DECIMAL_INT_64 &&
+             type1.is_decimal_int() &&
+             lib::is_mysql_mode()) {
+    type2.set_calc_type(ObDecimalIntType);
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (type.is_collection_sql_type()) {
+    // only support vector/array/varchar * vector/array/varchar now // array and varchar need cast to array(float)
+    uint16_t res_subschema_id = UINT16_MAX;
+    if (OB_FAIL(ObArrayExprUtils::calc_cast_type2(type_, type1, type2, type_ctx, res_subschema_id))) {
+      LOG_WARN("failed to calc cast type", K(ret), K(type1));
+    } else if (UINT16_MAX == res_subschema_id) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected result subschema_id", K(ret));
+    } else {
+      type.set_collection(res_subschema_id);
+    }
   } else if (type.is_decimal_int() && (type1.is_null() || type2.is_null())) {
     type.set_precision(MAX(type1.get_precision(), type2.get_precision()));
     type.set_scale(MAX(type1.get_scale(), type2.get_scale()));
@@ -78,6 +99,13 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
         type.set_scale(MAX(scale1, scale2));
       } else {
         type.set_scale(MIN(static_cast<ObScale>(scale1 + scale2), OB_MAX_DECIMAL_SCALE));
+      }
+      const ObObjTypeClass result_tc = type.get_type_class();
+      if (lib::is_mysql_mode() && ObNumberTC == result_tc) {
+        scale1 = static_cast<ObScale>(MAX(type1.get_calc_scale(), scale1));
+        scale2 = static_cast<ObScale>(MAX(type2.get_calc_scale(), scale2));
+        ObScale calc_scale = MAX(scale1, scale2);
+        type.set_calc_scale(calc_scale);
       }
     }
     ObPrecision precision1 = static_cast<ObPrecision>(MAX(type1.get_precision(), 0));
@@ -118,11 +146,13 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
           if (ObRawExprUtils::decimal_int_need_cast(type1.get_accuracy(), l_dst_acc)) {
             type.set_result_flag(DECIMAL_INT_ADJUST_FLAG);
             type1.set_calc_accuracy(l_dst_acc);
+            type1.set_calc_type(ObDecimalIntType);
           }
           ObAccuracy r_dst_acc(type.get_precision(), type2.get_scale());
           if (ObRawExprUtils::decimal_int_need_cast(type2.get_accuracy(), r_dst_acc)) {
             type.set_result_flag(DECIMAL_INT_ADJUST_FLAG);
             type2.set_calc_accuracy(r_dst_acc);
+            type2.set_calc_type(ObDecimalIntType);
           }
         }
         LOG_DEBUG("calc_result_type2", K(type.get_accuracy()), K(type1.get_accuracy()),
@@ -1170,6 +1200,24 @@ DECINC_MUL_EVAL_FUNC_DECL(int256, int128, int64)
 
 #undef DECINC_MUL_EVAL_FUNC_DECL
 
+// noly for mul with int32 and decimalint, def vector eval func
+#define DECINT_MUL_INT_EVAL_FUNC_DECL(RES, DEC_TYPE) \
+int ObExprMul::mul_dec##RES##_dec##DEC_TYPE##_int32_vector(VECTOR_EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_fixed_len_vector_arith_op<ObVectorArithOpWrap< \
+            ObDecimalIntBatchMulRaw<RES##_t, DEC_TYPE##_t, int64_t>>>(VECTOR_EVAL_FUNC_ARG_LIST); \
+} \
+int ObExprMul::mul_dec##RES##_int32_dec##DEC_TYPE##_vector(VECTOR_EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_fixed_len_vector_arith_op<ObVectorArithOpWrap< \
+            ObDecimalIntBatchMulRaw<RES##_t, int64_t, DEC_TYPE##_t>>>(VECTOR_EVAL_FUNC_ARG_LIST); \
+}
+DECINT_MUL_INT_EVAL_FUNC_DECL(int64, int32)
+DECINT_MUL_INT_EVAL_FUNC_DECL(int128, int64)
+DECINT_MUL_INT_EVAL_FUNC_DECL(int256, int128)
+
+#undef DECINT_MUL_INT_EVAL_FUNC_DECL
+
 #define DECINC_RES_TYPE_NOT_LAGER_MUL_EVAL_FUNC_DECL(RES, L, R)                                    \
   int ObExprMul::mul_decimal##RES##_##L##_##R(EVAL_FUNC_ARG_DECL)                                  \
   {                                                                                                \
@@ -1204,7 +1252,29 @@ DECINC_RES_TYPE_NOT_LAGER_MUL_EVAL_FUNC_DECL(int256, int64, int256)
 DECINC_RES_TYPE_NOT_LAGER_MUL_EVAL_FUNC_DECL(int256, int128, int256)
 DECINC_RES_TYPE_NOT_LAGER_MUL_EVAL_FUNC_DECL(int256, int256, int128)
 DECINC_RES_TYPE_NOT_LAGER_MUL_EVAL_FUNC_DECL(int512, int512, int512)
+
+// only for int mul decimalint
+DECINC_RES_TYPE_NOT_LAGER_MUL_EVAL_FUNC_DECL(int64, int64, int64)
 #undef DECINC_RES_TYPE_NOT_LAGER_MUL_EVAL_FUNC_DECL
+
+// noly for mul with int32 and decimalint, def vector eval func
+#define DECINT_MUL_INT_EVAL_FUNC_DECL(RES, DEC_TYPE) \
+int ObExprMul::mul_dec##RES##_dec##DEC_TYPE##_int32_vector(VECTOR_EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_fixed_len_vector_arith_op<ObVectorArithOpWrap< \
+          ObDecimalIntBatchMulResTypeNotLagerRaw<RES##_t, DEC_TYPE##_t, int64_t>>>(VECTOR_EVAL_FUNC_ARG_LIST); \
+} \
+int ObExprMul::mul_dec##RES##_int32_dec##DEC_TYPE##_vector(VECTOR_EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_fixed_len_vector_arith_op<ObVectorArithOpWrap< \
+          ObDecimalIntBatchMulResTypeNotLagerRaw<RES##_t, int64_t, DEC_TYPE##_t>>>(VECTOR_EVAL_FUNC_ARG_LIST); \
+}
+DECINT_MUL_INT_EVAL_FUNC_DECL(int32, int32)
+DECINT_MUL_INT_EVAL_FUNC_DECL(int64, int64)
+DECINT_MUL_INT_EVAL_FUNC_DECL(int128, int128)
+DECINT_MUL_INT_EVAL_FUNC_DECL(int256, int256)
+
+#undef DECINT_MUL_INT_EVAL_FUNC_DECL
 
 #define DECINC_MUL_ROUND_EVAL_FUNC_DECL(TYPE) \
 int ObExprMul::mul_decimal##TYPE##_round(EVAL_FUNC_ARG_DECL)      \
@@ -1335,7 +1405,8 @@ int ObExprMul::mul_decimal##RES##_##L##_##R##_oracle_vector(VECTOR_EVAL_FUNC_ARG
 {                                            \
   ObNumStackOnceAlloc tmp_alloc;                                \
   const int64_t scale = expr.args_[0]->datum_meta_.scale_ + expr.args_[1]->datum_meta_.scale_;      \
-  return def_fixed_len_vector_arith_op_func<ObDecimalOracleVectorMulFunc<RES##_t, L##_t, R##_t>>(VECTOR_EVAL_FUNC_ARG_LIST, scale, tmp_alloc); \
+  return def_fixed_len_vector_arith_op_func<ObDecimalOracleVectorMulFunc<RES##_t, L##_t, R##_t>,\
+                                            ObArithTypedBase<L##_t, R##_t, RES##_t>>(VECTOR_EVAL_FUNC_ARG_LIST, scale, tmp_alloc); \
 }
 
 DECINC_MUL_EVAL_FUNC_ORA_DECL(int32, int32, int32)
@@ -1361,6 +1432,7 @@ int ObExprMul::set_decimal_int_eval_func(ObExpr &rt_expr, const bool is_oracle)
 {
   int ret = OB_SUCCESS;
 #define DECINT_FUNC_VAL(res, l, r) (res << 6) | (l << 3) | r
+#define DECINT_FUNC_VAL_INT32(res, decint) ((res << 3) | decint)
 #define DECINT_SWITCH_CASE_ORA(res, l, r) \
   case DECINT_FUNC_VAL(DECIMAL_INT_##res, DECIMAL_INT_##l, DECIMAL_INT_##r): \
     SET_MUL_FUNC_PTR(mul_decimalint##res##_int##l##_int##r##_oracle); \
@@ -1371,6 +1443,14 @@ int ObExprMul::set_decimal_int_eval_func(ObExpr &rt_expr, const bool is_oracle)
     SET_MUL_FUNC_PTR(mul_decimalint##res##_int##l##_int##r); \
     rt_expr.eval_vector_func_ = mul_decimalint##res##_int##l##_int##r##_vector; \
     break;
+#define DECINT_SWITCH_CASE_LEFT_INT32(res, decint) \
+  case DECINT_FUNC_VAL_INT32(DECIMAL_INT_##res, DECIMAL_INT_##decint): \
+    rt_expr.eval_vector_func_ = mul_decint##res##_int32_decint##decint##_vector; \
+    break;
+#define DECINT_SWITCH_CASE_RIGHT_INT32(res, decint) \
+  case DECINT_FUNC_VAL_INT32(DECIMAL_INT_##res, DECIMAL_INT_##decint): \
+    rt_expr.eval_vector_func_ = mul_decint##res##_decint##decint##_int32##_vector; \
+    break;
 
   const int16_t lp = rt_expr.args_[0]->datum_meta_.precision_;
   const int16_t rp = rt_expr.args_[1]->datum_meta_.precision_;
@@ -1378,9 +1458,11 @@ int ObExprMul::set_decimal_int_eval_func(ObExpr &rt_expr, const bool is_oracle)
   const int16_t rs = rt_expr.args_[1]->datum_meta_.scale_;
   const int16_t res_p = lp + rp;
   const int16_t res_s = ls + rs;
+  bool l_is_integer = ob_is_integer_type(rt_expr.args_[0]->datum_meta_.type_);
+  bool r_is_integer = ob_is_integer_type(rt_expr.args_[1]->datum_meta_.type_);
   const int16_t l_type = get_decimalint_type(lp);
   const int16_t r_type = get_decimalint_type(rp);
-  const int16_t res_type = get_decimalint_type(res_p);
+  const int16_t res_type = static_cast<const int16_t>(get_decimalint_type(res_p));
   if (is_oracle) { // oracle
     switch (DECINT_FUNC_VAL(res_type, l_type, r_type)) {
       DECINT_SWITCH_CASE_ORA(32, 32, 32)
@@ -1406,6 +1488,7 @@ int ObExprMul::set_decimal_int_eval_func(ObExpr &rt_expr, const bool is_oracle)
       DECINT_SWITCH_CASE(64, 32, 32)
       DECINT_SWITCH_CASE(64, 32, 64)
       DECINT_SWITCH_CASE(64, 64, 32)
+      DECINT_SWITCH_CASE(64, 64, 64)
       DECINT_SWITCH_CASE(128, 32, 64)
       DECINT_SWITCH_CASE(128, 64, 32)
       DECINT_SWITCH_CASE(128, 32, 128)
@@ -1429,6 +1512,37 @@ int ObExprMul::set_decimal_int_eval_func(ObExpr &rt_expr, const bool is_oracle)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected precision in mysql", K(ret), K(lp), K(ls), K(rp), K(rs));
         break;
+    }
+    // Special implementation is required for int32 and decimalint multiplication eval_vector_func,
+    // because int32 is stored as 8 bytes and cannot be read continuously using the decimalint32 approach.
+    if (l_is_integer && l_type == DECIMAL_INT_32) {
+      switch (DECINT_FUNC_VAL_INT32(res_type, r_type)) {
+        DECINT_SWITCH_CASE_LEFT_INT32(32, 32)
+        DECINT_SWITCH_CASE_LEFT_INT32(64, 32)
+        DECINT_SWITCH_CASE_LEFT_INT32(64, 64)
+        DECINT_SWITCH_CASE_LEFT_INT32(128, 64)
+        DECINT_SWITCH_CASE_LEFT_INT32(128, 128)
+        DECINT_SWITCH_CASE_LEFT_INT32(256, 128)
+        DECINT_SWITCH_CASE_LEFT_INT32(256, 256)
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected precision in mysql", K(ret), K(lp), K(ls), K(rp), K(rs));
+          break;
+      }
+    } else if (r_is_integer && r_type == DECIMAL_INT_32) {
+      switch (DECINT_FUNC_VAL_INT32(res_type, l_type)) {
+        DECINT_SWITCH_CASE_RIGHT_INT32(32, 32)
+        DECINT_SWITCH_CASE_RIGHT_INT32(64, 32)
+        DECINT_SWITCH_CASE_RIGHT_INT32(64, 64)
+        DECINT_SWITCH_CASE_RIGHT_INT32(128, 64)
+        DECINT_SWITCH_CASE_RIGHT_INT32(128, 128)
+        DECINT_SWITCH_CASE_RIGHT_INT32(256, 128)
+        DECINT_SWITCH_CASE_RIGHT_INT32(256, 256)
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected precision in mysql", K(ret), K(lp), K(ls), K(rp), K(rs));
+          break;
+      }
     }
   } else { // mysql with round or overflow check
     switch (get_decimalint_type(rt_expr.datum_meta_.precision_)) {
@@ -1491,8 +1605,6 @@ int ObExprMul::cg_expr(ObExprCGCtx &op_cg_ctx,
   const common::ObObjType right = rt_expr.args_[1]->datum_meta_.type_;
   const ObObjTypeClass left_tc = ob_obj_type_class(left);
   const ObObjTypeClass right_tc = ob_obj_type_class(right);
-  OB_ASSERT(left == input_types_[0].get_calc_type());
-  OB_ASSERT(right == input_types_[1].get_calc_type());
 
   rt_expr.inner_functions_ = NULL;
   rt_expr.may_not_need_raw_check_ = false;
@@ -1560,6 +1672,10 @@ int ObExprMul::cg_expr(ObExprCGCtx &op_cg_ctx,
       set_decimal_int_eval_func(rt_expr, false /*is_oracle*/);
       break;
     }
+    case ObCollectionSQLType: {
+      SET_MUL_FUNC_PTR(mul_vec_vec);
+      break;
+    }
     default: {
       break;
     }
@@ -1572,6 +1688,18 @@ int ObExprMul::cg_expr(ObExprCGCtx &op_cg_ctx,
   return ret;
 }
 #undef SET_MUL_FUNC_PTR
+
+int ObExprMul::mul_vec_vec(EVAL_FUNC_ARG_DECL)
+{
+  ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::MUL;
+  return def_arith_eval_func<ObVectorVectorArithFunc>(EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+}
+
+int ObExprMul::mul_vec_vec_batch(BATCH_EVAL_FUNC_ARG_DECL)
+{
+  ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::MUL;
+  return def_batch_arith_op_by_datum_func<ObVectorVectorArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+}
 
 }
 }

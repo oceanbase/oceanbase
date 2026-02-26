@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_column_equal_encoder.h"
-#include "lib/container/ob_array_iterator.h"
-#include "storage/blocksstable/ob_data_buffer.h"
-#include "ob_integer_array.h"
-#include "ob_bit_stream.h"
 
 namespace oceanbase
 {
@@ -107,12 +103,6 @@ int ObColumnEqualEncoder::traverse(bool &suitable)
       precision = column_type_.get_stored_precision();
       OB_ASSERT(precision != PRECISION_UNKNOWN_YET);
     }
-    sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
-        column_type_.get_type(), column_type_.get_collation_type(), column_type_.get_scale(),
-        lib::is_oracle_mode(), has_lob_header, precision);
-    ObCmpFunc cmp_func;
-    cmp_func.cmp_func_ = lib::is_oracle_mode()
-        ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
 
     // get all exception row_ids
     for (int64_t row_id = 0; row_id < rows_->count() && OB_SUCC(ret)
@@ -120,7 +110,7 @@ int ObColumnEqualEncoder::traverse(bool &suitable)
       const ObDatum &datum = ctx_->col_datums_->at(row_id);
       const ObDatum &ref_datum = ref_ctx_->col_datums_->at(row_id);
       bool equal = false;
-      if (OB_FAIL(is_datum_equal(datum, ref_datum, cmp_func, equal))) {
+      if (OB_FAIL(is_datum_equal(datum, ref_datum, equal))) {
         LOG_WARN("cmp datum failed", K(ret), K(row_id));
       } else if (!equal && OB_FAIL(exc_row_ids_.push_back(row_id))) {
         LOG_WARN("push_back failed", K(ret), K(row_id));
@@ -158,7 +148,8 @@ int ObColumnEqualEncoder::traverse(bool &suitable)
           case ObStringSC:
           case ObTextSC:
           case ObJsonSC:
-          case ObGeometrySC: {
+          case ObGeometrySC:
+          case ObRoaringBitmapSC: {
             ObStringBitMapMetaWriter *meta_writer =
                 static_cast<ObStringBitMapMetaWriter *>(&base_meta_writer_);
             if (OB_FAIL(meta_writer->init(&exc_row_ids_, ctx_->col_datums_, column_type_))) {
@@ -271,7 +262,8 @@ int ObColumnEqualEncoder::store_meta(ObBufferWriter &writer)
           case ObStringSC:
           case ObTextSC:
           case ObJsonSC:
-          case ObGeometrySC: {
+          case ObGeometrySC:
+          case ObRoaringBitmapSC: {
             ObStringBitMapMetaWriter *meta_writer =
                 static_cast<ObStringBitMapMetaWriter *>(&base_meta_writer_);
             if (OB_FAIL(meta_writer->write(buf))) {

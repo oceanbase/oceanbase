@@ -11,12 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_PC
-#include "sql/plan_cache/ob_dist_plans.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_plan_set.h"
-#include "sql/engine/ob_exec_context.h"
+#include "ob_dist_plans.h"
 #include "sql/plan_cache/ob_plan_cache_value.h"
 #include "sql/plan_cache/ob_plan_match_helper.h"
 using namespace oceanbase::share;
@@ -47,7 +42,9 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
   //need to clear all location info before calculate candi tablet locations
   //because get_phy_locations will build the related_tablet_map in ObDASCtx
   //and add candi table location into DASCtx
-  DAS_CTX(pc_ctx.exec_ctx_).clear_all_location_info();
+  if (!pc_ctx.try_get_plan_) {
+    DAS_CTX(pc_ctx.exec_ctx_).clear_all_location_info();
+  }
   if (OB_ISNULL(plan_set_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null plan_set_", K(ret));
@@ -60,10 +57,11 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
     } else if (OB_ISNULL(dist_plans_.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get an unexpected null plan", K(ret), K(dist_plans_.at(0)));
-    } else {
+    } else if (is_plan_available(*dist_plans_.at(0), pc_ctx)) {
       dist_plans_.at(0)->set_dynamic_ref_handle(pc_ctx.handle_id_);
       plan = dist_plans_.at(0);
       is_matched = true;
+      bool need_check_on_same_server = true;
 
       // fill table location for single plan using px
       // for single dist plan without px, we already fill the phy locations while calculating plan type
@@ -76,13 +74,15 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
         // do nothing
       } else if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(plan->get_table_locations(),
                                                                 pc_ctx,
-                                                                candi_table_locs))) {
+                                                                candi_table_locs,
+                                                                need_check_on_same_server))) {
         LOG_WARN("failed to get physical table locations", K(ret));
       } else if (candi_table_locs.empty()) {
         // do nothing.
-      } else if (OB_FAIL(ObPhyLocationGetter::build_candi_table_locs(pc_ctx.exec_ctx_.get_das_ctx(),
-                                                                     plan->get_table_locations(),
-                                                                     candi_table_locs))) {
+      } else if (!pc_ctx.try_get_plan_
+                 && OB_FAIL(ObPhyLocationGetter::build_table_locs(
+                      pc_ctx.exec_ctx_.get_das_ctx(), plan->get_table_locations(),
+                      candi_table_locs))) {
         LOG_WARN("fail to init table locs", K(ret));
       }
     }
@@ -102,12 +102,16 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
     } else if (OB_FAIL(helper.match_plan(pc_ctx, tmp_plan, is_matched, phy_tbl_infos, out_tbl_locations))) {
       LOG_WARN("fail to match dist plan", K(ret));
     } else if (is_matched) {
-      tmp_plan->set_dynamic_ref_handle(pc_ctx.handle_id_);
-      plan = tmp_plan;
-      if (OB_FAIL(ObPhyLocationGetter::build_table_locs(DAS_CTX(pc_ctx.exec_ctx_),
-                                                        out_tbl_locations,
-                                                        phy_tbl_infos))) {
-        LOG_WARN("fail to init table locs", K(ret));
+      if (!is_plan_available(*tmp_plan, pc_ctx)) {
+        is_matched = false;
+      } else {
+        tmp_plan->set_dynamic_ref_handle(pc_ctx.handle_id_);
+        plan = tmp_plan;
+        if (!pc_ctx.try_get_plan_
+            && OB_FAIL(ObPhyLocationGetter::build_table_locs(DAS_CTX(pc_ctx.exec_ctx_),
+                                                             out_tbl_locations, phy_tbl_infos))) {
+          LOG_WARN("fail to init table locs", K(ret));
+        }
       }
     }
   }
@@ -169,7 +173,8 @@ int ObDistPlans::add_plan(ObPhysicalPlan &plan,
     } else if (OB_FAIL(helper.match_plan(pc_ctx, tmp_plan, is_matched, phy_tbl_infos, out_tbl_locations))) {
       LOG_WARN("fail to match dist plan", K(ret));
     } else {
-      is_matched = is_matched && tmp_plan->has_same_location_constraints(plan);
+      is_matched = is_matched && tmp_plan->has_same_location_constraints(plan)
+                   && is_same_plan(plan, *tmp_plan, pc_ctx);
     }
 
     if (!is_matched) {
@@ -188,20 +193,33 @@ int ObDistPlans::add_plan(ObPhysicalPlan &plan,
   return ret;
 }
 
-//使用plan的hash value判断是否为同一个plan
-int ObDistPlans::is_same_plan(const ObPhysicalPlan *l_plan,
-                              const ObPhysicalPlan *r_plan,
-                              bool &is_same) const
+bool ObDistPlans::is_plan_available(const ObPhysicalPlan &plan, ObPlanCacheCtx &pc_ctx) const
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(l_plan) || OB_ISNULL(r_plan)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(l_plan), K(r_plan));
-  } else {
-    is_same = (l_plan->get_signature() == r_plan->get_signature());
-    LOG_DEBUG("compare plan", K(l_plan->get_signature()), K(r_plan->get_signature()), K(is_same));
+  bool can_use = true;
+  if (pc_ctx.try_get_plan_) {
+    if (pc_ctx.compare_plan_->get_plan_hash_value() != plan.get_plan_hash_value()) {
+      can_use = false;
+    }
+  } else if (pc_ctx.enable_adaptive_plan_cache_) {
+    if (!plan.is_active_status()) {
+      can_use = false;
+      pc_ctx.has_inactive_plan_ = true;
+    } else {
+      pc_ctx.has_inactive_plan_ = false;
+    }
   }
-  return ret;
+  return can_use;
+}
+
+bool ObDistPlans::is_same_plan(const ObPhysicalPlan &plan, const ObPhysicalPlan &compare_plan,
+                               ObPlanCacheCtx &pc_ctx) const
+{
+  bool is_same = true;
+  if (pc_ctx.add_with_compare_
+      && plan.get_plan_hash_value() != compare_plan.get_plan_hash_value()) {
+    is_same = false;
+  }
+  return is_same;
 }
 
 //删除所有plan及对应plan stat

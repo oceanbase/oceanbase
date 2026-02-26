@@ -315,15 +315,23 @@ void MemberListWithStates::print_array_in_pretty_way_(char *buf, const int64_t b
   }
   if (!is_end) {
     if (is_synced && !array.empty()) {
-      common::databuff_printf(buf, buf_len, pos, "%s:%s, ", key, to_cstring(array[0]));
+      common::databuff_printf(buf, buf_len, pos, "%s:", key);
+      common::databuff_printf(buf, buf_len, pos, array[0]);
+      common::databuff_printf(buf, buf_len, pos, ", ");
     } else {
-      common::databuff_printf(buf, buf_len, pos, "%s:%s, ", key, to_cstring(array));
+      common::databuff_printf(buf, buf_len, pos, "%s:", key);
+      common::databuff_printf(buf, buf_len, pos, array);
+      common::databuff_printf(buf, buf_len, pos, ", ");
     }
   } else {
     if (is_synced && !array.empty()) {
-      common::databuff_printf(buf, buf_len, pos, "%s:%s}", key, to_cstring(array[0]));
+      common::databuff_printf(buf, buf_len, pos, "%s:", key);
+      common::databuff_printf(buf, buf_len, pos, array[0]);
+      common::databuff_printf(buf, buf_len, pos, "}");
     } else {
-      common::databuff_printf(buf, buf_len, pos, "%s:%s}", key, to_cstring(array));
+      common::databuff_printf(buf, buf_len, pos, "%s:", key);
+      common::databuff_printf(buf, buf_len, pos, array);
+      common::databuff_printf(buf, buf_len, pos, "}");
     }
   }
 };

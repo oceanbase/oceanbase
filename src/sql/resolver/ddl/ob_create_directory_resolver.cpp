@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "sql/resolver/ddl/ob_create_directory_resolver.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_create_directory_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {
@@ -102,9 +98,16 @@ int ObCreateDirectoryResolver::resolve(const ParseNode &parse_tree)
         ObArrayWrap<char> buffer;
         OZ (buffer.allocate_array(*allocator_, PATH_MAX));
         if (OB_SUCC(ret)) {
-          real_directory_path = ObString(realpath(to_cstring(directory_path), buffer.get_data()));
-          if (real_directory_path.empty()) {
-            real_directory_path = directory_path;
+          ObCStringHelper helper;
+          const char *directory_path_str = helper.convert(directory_path);
+          if (OB_ISNULL(directory_path_str)) {
+            ret = OB_ERR_NULL_VALUE;
+            LOG_WARN("fail to convert directory_path", K(ret), K(directory_path));
+          } else {
+            real_directory_path = ObString(realpath(directory_path_str, buffer.get_data()));
+            if (real_directory_path.empty()) {
+              real_directory_path = directory_path;
+            }
           }
         }
       }

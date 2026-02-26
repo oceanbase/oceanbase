@@ -108,34 +108,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPxReceiveChProvider);
 };
 
-// Root Dfo 专用的 Provider
-class ObPxRootReceiveChProvider
-{
-public:
-  ObPxRootReceiveChProvider() : root_dfo_(NULL) {}
-  ~ObPxRootReceiveChProvider() = default;
-  void set_root_dfo(ObDfo &root_dfo)
-  {
-    root_dfo_ = &root_dfo;
-  }
-  int get_data_ch(const int64_t child_dfo_id,
-                  ObPxTaskChSets &ch_sets,
-                  int64_t timeout_ts)
-  {
-    int ret = OB_SUCCESS;
-    UNUSED(timeout_ts);
-    if (OB_ISNULL(root_dfo_)) {
-      ret = common::OB_NOT_INIT;
-    } else {
-      ret = root_dfo_->get_task_receive_chs(child_dfo_id, ch_sets);
-    }
-    return ret;
-  }
-  void reset() { root_dfo_ = nullptr; }
-private:
-  ObDfo *root_dfo_;
-};
-
 class ObPxBloomfilterChProvider
 {
 public:

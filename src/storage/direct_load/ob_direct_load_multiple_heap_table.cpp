@@ -125,6 +125,7 @@ ObDirectLoadMultipleHeapTable::ObDirectLoadMultipleHeapTable()
   : is_inited_(false)
 {
   data_fragments_.set_tenant_id(MTL_ID());
+  table_type_ = ObDirectLoadTableType::MULTIPLE_HEAP_TABLE;
 }
 
 ObDirectLoadMultipleHeapTable::~ObDirectLoadMultipleHeapTable()
@@ -168,12 +169,6 @@ int ObDirectLoadMultipleHeapTable::init(const ObDirectLoadMultipleHeapTableCreat
     }
   }
   return ret;
-}
-
-void ObDirectLoadMultipleHeapTable::release_data()
-{
-  index_file_handle_.reset();
-  data_fragments_.reset();
 }
 
 int ObDirectLoadMultipleHeapTable::copy(const ObDirectLoadMultipleHeapTable &other)

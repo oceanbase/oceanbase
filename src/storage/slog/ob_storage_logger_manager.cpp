@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE_REDO
 #include <sys/statvfs.h>
-#include "lib/ob_define.h"
-#include "lib/ob_running_mode.h"
 #include "ob_storage_logger_manager.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -38,12 +35,6 @@ ObStorageLoggerManager::ObStorageLoggerManager()
 ObStorageLoggerManager::~ObStorageLoggerManager()
 {
   destroy();
-}
-
-ObStorageLoggerManager &ObStorageLoggerManager::get_instance()
-{
-  static ObStorageLoggerManager instance_;
-  return instance_;
 }
 
 int ObStorageLoggerManager::init(
@@ -71,10 +62,8 @@ int ObStorageLoggerManager::init(
     log_dir_ = log_dir;
     max_log_file_size_ = max_log_file_size;
     log_file_spec_ = log_file_spec;
-    if (OB_FAIL(server_slogger_.init(*this, OB_SERVER_TENANT_ID))) {
+    if (OB_FAIL(server_slogger_.init(*this, OB_SERVER_TENANT_ID, 0/*tenant epoch*/))) {
       STORAGE_REDO_LOG(WARN, "fail to init server slogger", K(ret));
-    } else if (OB_FAIL(server_slogger_.start())) {
-      STORAGE_REDO_LOG(WARN,  "fail to start server slogger", K(ret));
     } else {
       is_inited_ = true;
     }
@@ -85,6 +74,34 @@ int ObStorageLoggerManager::init(
   }
   return ret;
 }
+
+int ObStorageLoggerManager::start()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_REDO_LOG(WARN, "not inited", K(ret));
+  } else if (OB_FAIL(server_slogger_.start())) {
+    STORAGE_REDO_LOG(WARN,  "fail to start server slogger", K(ret));
+  }
+  return ret;
+}
+
+void ObStorageLoggerManager::stop()
+{
+  if (IS_INIT) {
+    server_slogger_.stop();
+  }
+}
+
+void ObStorageLoggerManager::wait()
+{
+  if (IS_INIT) {
+    server_slogger_.wait();
+  }
+}
+
+
 
 void ObStorageLoggerManager::destroy()
 {
@@ -293,8 +310,13 @@ int ObStorageLoggerManager::get_tenant_slog_dir(
 {
   int ret = OB_SUCCESS;
   int pret = 0;
-  pret = snprintf(tenant_slog_dir, MAX_PATH_SIZE, "%s/tenant_%" PRIu64,
-                  log_dir_, tenant_id);
+  if (is_server_tenant(tenant_id)) {
+    pret = snprintf(tenant_slog_dir, MAX_PATH_SIZE, "%s/server",
+                    log_dir_);
+  } else {
+    pret = snprintf(tenant_slog_dir, MAX_PATH_SIZE, "%s/tenant_%" PRIu64,
+                    log_dir_, tenant_id);
+  }
   if (pret < 0 || pret >= MAX_PATH_SIZE) {
     ret = OB_BUF_NOT_ENOUGH;
     STORAGE_REDO_LOG(ERROR, "construct tenant slog path fail", K(ret), K(tenant_id));
@@ -315,10 +337,10 @@ int ObStorageLoggerManager::check_log_disk(
     LOG_WARN("Invalid argument", K(ret), KP(data_dir), KP(log_dir));
   } else if (OB_UNLIKELY(0 != statvfs(data_dir, &data_svfs))) {
     ret = OB_IO_ERROR;
-    LOG_WARN("fail to get sstable directory vfs", K(ret), K(data_dir));
+    LOG_WARN("fail to get sstable directory vfs", K(ret), K(errno), K(data_dir));
   } else if (OB_UNLIKELY(0 != statvfs(log_dir, &log_svfs))) {
     ret = OB_IO_ERROR;
-    LOG_WARN("fail to get slog directory vfs", K(ret), K(log_dir));
+    LOG_WARN("fail to get slog directory vfs", K(ret), K(errno), K(log_dir));
   } else if (OB_UNLIKELY(0 >= log_svfs.f_bavail)) {
     ret = OB_DISK_ERROR;
     LOG_ERROR("slog disk is full, please check", K(ret), K(log_dir), K(log_svfs.f_bavail));
@@ -349,11 +371,7 @@ int ObStorageLoggerManager::get_using_disk_space(int64_t &using_space) const
         STORAGE_REDO_LOG(WARN, "fail to switch tenant", K(ret), K(tenant_id));
       } else {
         int64_t tenant_using_size = 0;
-        ObStorageLogger *slogger = nullptr;
-        if (OB_ISNULL(slogger = MTL(ObStorageLogger*))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_REDO_LOG(WARN, "slogger is null", K(ret), KP(slogger));
-        } else if (OB_FAIL(slogger->get_using_disk_space(tenant_using_size))) {
+        if (OB_FAIL(MTL(ObTenantStorageMetaService*)->get_slogger().get_using_disk_space(tenant_using_size))) {
           STORAGE_REDO_LOG(WARN, "fail to get the disk space that slog used", K(ret));
         } else {
           using_space += tenant_using_size;

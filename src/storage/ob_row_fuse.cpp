@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 #include "storage/ob_row_fuse.h"
 
 namespace oceanbase
@@ -61,7 +60,7 @@ int ObNopPos::get_nop_pos(const int64_t idx, int64_t &pos) const
   int ret = OB_SUCCESS;
   if (idx < 0 || idx >= count_) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(idx), K_(count));
   } else {
     pos = nops_[idx];
   }
@@ -198,7 +197,9 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!former.is_valid() || !result.is_valid() || !nop_pos.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid arguments, ", K(former), K(result), K(nop_pos.count()), K(nop_pos.capacity()), K(ret));
+    STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(former), K(result), K(nop_pos.count()), K(nop_pos.capacity()));
+  } else if (OB_FAIL(result.fuse_delete_insert(former))) {
+    STORAGE_LOG(WARN, "Fail to fuse delete_insert info", K(ret), K(former), K(result));
   } else if (result.row_flag_.is_delete() || former.row_flag_.is_not_exist()) {
     // do nothing
   } else {
@@ -214,6 +215,7 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
     if (first_val) {
       nop_pos.reset();
       result.row_flag_ = former.row_flag_;
+      result.fast_filter_skipped_ = former.fast_filter_skipped_;
       column_cnt = former.count_;
     } else {
       column_cnt = nop_pos.count_;
@@ -239,7 +241,7 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
         ret = common::OB_INVALID_ARGUMENT;
         STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(former), K(result), K(nop_pos.count()));
       } else {
-        STORAGE_LOG(DEBUG, "start to fuse", K(former), K(result), K(nop_pos.count()));
+        STORAGE_LOG(DEBUG, "start to fuse", K(former), K(result), K(nop_pos));
         int64_t idx = -1;
         int64_t left_cnt = 0;
         bool is_former_nop = true;
@@ -261,16 +263,20 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
         final_result = (0 == left_cnt);
         result.count_ = MAX(result.count_, former.count_);
         nop_pos.count_ = left_cnt;
-        STORAGE_LOG(DEBUG, "fuse row", K(ret), K(former), K(result));
+        STORAGE_LOG(DEBUG, "fuse row", K(ret), K(former), K(result), K(nop_pos));
       }
     } else {
       ret = common::OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "wrong row flag", K(ret), K(former));
     }
+
+    if (OB_SUCC(ret) && first_val && former.mvcc_row_flag_.is_uncommitted_row()) {
+      result.trans_id_ = former.trans_id_;
+      result.set_uncommitted_row();
+    }
   }
   return ret;
 }
-
 
 } // namespace storage
 } // namespace oceanbase

@@ -1,3 +1,6 @@
+// owner: zk250686
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -11,37 +14,12 @@
  */
 
 #include <gtest/gtest.h>
-#include <stdlib.h>
 #define USING_LOG_PREFIX STORAGE
 #define protected public
 #define private public
-#include "lib/container/ob_tuple.h"
-#include "lib/ob_define.h"
-#include "ob_tablet_id.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_ls_id.h"
 #include "env/ob_simple_cluster_test_base.h"
 #include "env/ob_simple_server_restart_helper.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "logservice/rcservice/ob_role_change_service.h"
-#include "logservice/ob_ls_adapter.h"
-#include "storage/access/ob_rows_info.h"
-#include "storage/checkpoint/ob_data_checkpoint.h"
-#include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
-#include "storage/ls/ob_freezer.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_meta.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/ob_relative_table.h"
-#include "storage/ob_storage_table_guard.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
-#include <fstream>
+#include "src/storage/tx_storage/ob_ls_service.h"
 
 #undef private
 #undef protected
@@ -169,7 +147,7 @@ void do_flush_mds_table(share::ObLSID ls_id, ObTabletID tablet_id)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
   // 3. 从tablet handle拿到tablet pointer
   const ObTabletPointerHandle &pointer_handle = tablet_handle.get_obj()->get_pointer_handle();
-  ObTabletPointer *tablet_pointer = pointer_handle.get_resource_ptr();
+  ObTabletBasePointer *tablet_pointer = pointer_handle.get_resource_ptr();
   // 4. 做flush动作
   mds::MdsTableHandle handle;
   share::SCN max_decided_scn;
@@ -310,7 +288,9 @@ void advance_checkpoint(share::ObLSID ls_id, share::SCN aim_scn)
 void write_result_to_file(const char *file_name)
 {
   char buffer[2048] = { 0 };
-  databuff_printf(buffer, 2048, "result from virtual table:%s", to_cstring(RESULT));
+  int64_t pos = 0;
+  databuff_printf(buffer, 2048, pos, "result from virtual table:");
+  databuff_printf(buffer, 2048, pos, RESULT);
   std::ofstream file(file_name);
   file << TEST_LS_ID.id() << std::endl
         << TEST_TABLET_ID.id() << std::endl

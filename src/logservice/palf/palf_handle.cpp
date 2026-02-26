@@ -11,25 +11,25 @@
  */
 
 #include "palf_handle.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_errno.h"
-#include "palf_callback.h"
-#include "palf_callback_wrapper.h"
-#include "palf_iterator.h"
-#include "palf_handle_impl.h"
+#include "logservice/ipalf/ipalf_config_change_handle.h"
 
 namespace oceanbase
 {
 using namespace share;
 namespace palf
 {
-#define CHECK_VALID if (NULL == palf_handle_impl_) { return OB_NOT_INIT; }
+#define CHECK_VALID if (OB_ISNULL(palf_handle_impl_)) { return OB_NOT_INIT; }
 
 PalfHandle::PalfHandle() : palf_handle_impl_(NULL),
                            rc_cb_(NULL),
                            fs_cb_(NULL),
                            rebuild_cb_(NULL)
 {
+}
+
+PalfHandle::PalfHandle(const PalfHandle& rhs)
+{
+  *this = rhs;
 }
 
 PalfHandle::~PalfHandle()
@@ -45,37 +45,9 @@ bool PalfHandle::is_valid() const
   return NULL != palf_handle_impl_;
 }
 
-PalfHandle& PalfHandle::operator=(const PalfHandle &rhs)
+bool PalfHandle::operator==(const ipalf::IPalfHandle &rhs) const
 {
-  if (this == &rhs) {
-    return *this;
-  }
-  palf_handle_impl_ = rhs.palf_handle_impl_;
-  rc_cb_ = rhs.rc_cb_;
-  fs_cb_ = rhs.fs_cb_;
-  rebuild_cb_ = rhs.rebuild_cb_;
-  return *this;
-}
-
-PalfHandle& PalfHandle::operator=(PalfHandle &&rhs)
-{
-  if (this == &rhs) {
-    return *this;
-  }
-  palf_handle_impl_ = rhs.palf_handle_impl_;
-  rc_cb_ = rhs.rc_cb_;
-  fs_cb_ = rhs.fs_cb_;
-  rebuild_cb_ = rhs.rebuild_cb_;
-  rhs.palf_handle_impl_ = NULL;
-  rhs.rc_cb_ = NULL;
-  rhs.fs_cb_ = NULL;
-  rhs.rebuild_cb_ = NULL;
-  return *this;
-}
-
-bool  PalfHandle::operator==(const PalfHandle &rhs) const
-{
-  return palf_handle_impl_ == rhs.palf_handle_impl_;
+  return this->palf_handle_impl_ == static_cast<const PalfHandle*>(&rhs)->palf_handle_impl_;
 }
 
 int PalfHandle::set_initial_member_list(const common::ObMemberList &member_list,
@@ -148,6 +120,12 @@ int PalfHandle::seek(const LSN &lsn, PalfBufferIterator &iter)
   return ret;
 }
 
+int PalfHandle::seek(const SCN &scn, PalfBufferIterator &iter)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->alloc_palf_buffer_iterator(scn, iter);
+}
+
 int PalfHandle::seek(const LSN &lsn, PalfGroupBufferIterator &iter)
 {
   CHECK_VALID;
@@ -167,6 +145,54 @@ int PalfHandle::seek(const SCN &scn, PalfGroupBufferIterator &iter)
 {
   CHECK_VALID;
   return palf_handle_impl_->alloc_palf_group_buffer_iterator(scn, iter);
+}
+
+int PalfHandle::seek(const palf::LSN &lsn, ipalf::IPalfIterator<ipalf::ILogEntry> &iter)
+{
+  CHECK_VALID;
+  int ret = OB_SUCCESS;
+  if (!lsn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid lsn to seek iterator", KR(ret), K(lsn));
+  } else if (true == iter.is_inited()) {
+    ret = iter.reuse(lsn);
+  } else if (OB_FAIL(iter.init(lsn, palf_handle_impl_))) {
+    PALF_LOG(WARN, "failed to init ipalf::IPalfIterator", KR(ret), K(lsn));
+  } else {
+    PALF_LOG(INFO, "succeed to init ipalf::IPalfIterator", K(lsn));
+  }
+  return ret;
+}
+
+int PalfHandle::seek(const palf::LSN &lsn, ipalf::IPalfIterator<ipalf::IGroupEntry> &iter)
+{
+  CHECK_VALID;
+  int ret = OB_SUCCESS;
+  if (!lsn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid lsn to seek iterator", KR(ret), K(lsn));
+  } else if (true == iter.is_inited()) {
+    ret = iter.reuse(lsn);
+  } else if (OB_FAIL(iter.init(lsn, palf_handle_impl_))) {
+    PALF_LOG(WARN, "failed to init ipalf::IPalfIterator", KR(ret), K(lsn));
+  } else {
+    PALF_LOG(INFO, "succeed to init ipalf::IPalfIterator", K(lsn));
+  }
+  return ret;
+}
+
+int PalfHandle::seek(const share::SCN &scn, ipalf::IPalfIterator<ipalf::ILogEntry> &iter)
+{
+  CHECK_VALID;
+  iter.set_is_inited();
+  return palf_handle_impl_->alloc_palf_buffer_iterator(scn, iter.palf_iterator_);
+}
+
+int PalfHandle::seek(const share::SCN &scn, ipalf::IPalfIterator<ipalf::IGroupEntry> &iter)
+{
+  CHECK_VALID;
+  iter.set_is_inited();
+  return palf_handle_impl_->alloc_palf_group_buffer_iterator(scn, iter.palf_iterator_);
 }
 
 int PalfHandle::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
@@ -236,7 +262,7 @@ int PalfHandle::get_base_lsn(LSN &lsn) const
 }
 
 int PalfHandle::get_base_info(const LSN &lsn,
-                              PalfBaseInfo &palf_base_info)
+                              palf::PalfBaseInfo &palf_base_info)
 {
   CHECK_VALID;
   return palf_handle_impl_->get_base_info(lsn, palf_base_info);
@@ -293,6 +319,12 @@ int PalfHandle::get_palf_id(int64_t &palf_id) const
   return palf_handle_impl_->get_palf_id(palf_id);
 }
 
+int PalfHandle::get_palf_epoch(int64_t &palf_epoch) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_palf_epoch(palf_epoch);
+}
+
 int PalfHandle::get_end_scn(SCN &scn) const
 {
   int ret = OB_SUCCESS;
@@ -307,18 +339,29 @@ int PalfHandle::get_global_learner_list(common::GlobalLearnerList &learner_list)
   return palf_handle_impl_->get_global_learner_list(learner_list);
 }
 
-int PalfHandle::get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const
+int PalfHandle::get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_replica) const
 {
   CHECK_VALID;
-  return palf_handle_impl_->get_paxos_member_list(member_list, paxos_replica_num);
+  return palf_handle_impl_->get_paxos_member_list(member_list, paxos_replica_num, filter_logonly_replica);
 }
 
 int PalfHandle::get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                        int64_t &paxos_replica_num,
-                                                       GlobalLearnerList &learner_list) const
+                                                       GlobalLearnerList &learner_list,
+                                                       const bool &filter_logonly_replica) const
 {
   CHECK_VALID;
-  return palf_handle_impl_->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list);
+  return palf_handle_impl_->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list, filter_logonly_replica);
+}
+
+int PalfHandle::get_stable_membership(LogConfigVersion &config_version,
+                                      common::ObMemberList &member_list,
+                                      int64_t &paxos_replica_num,
+                                      common::GlobalLearnerList &learner_list,
+                                      const bool &filter_logonly_replica) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_stable_membership(config_version, member_list, paxos_replica_num, learner_list, filter_logonly_replica);
 }
 
 int PalfHandle::get_election_leader(common::ObAddr &addr) const
@@ -346,6 +389,17 @@ int PalfHandle::force_set_as_single_replica()
   CHECK_VALID;
   return palf_handle_impl_->force_set_as_single_replica();
 }
+int PalfHandle::force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->force_set_member_list(new_member_list, new_replica_num);
+}
+int PalfHandle::inc_config_version(int64_t timeout_us)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->inc_config_version(timeout_us);
+}
+
 int PalfHandle::get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                                    common::GlobalLearnerList &degraded_list) const
 {
@@ -453,6 +507,18 @@ int PalfHandle::upgrade_learner_to_acceptor(const LogMemberAckInfoList &upgrade_
   CHECK_VALID;
   return palf_handle_impl_->upgrade_learner_to_acceptor(upgrade_servers, timeout_us);
 }
+
+int PalfHandle::set_election_silent_flag(const bool election_silent_flag)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->set_election_silent_flag(election_silent_flag);
+}
+
+bool PalfHandle::is_election_silent() const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->is_election_silent();
+}
 #endif
 
 int PalfHandle::change_leader_to(const common::ObAddr &dst_addr)
@@ -465,7 +531,7 @@ int PalfHandle::change_leader_to(const common::ObAddr &dst_addr)
 
 int PalfHandle::change_access_mode(const int64_t proposal_id,
                                    const int64_t mode_version,
-                                   const AccessMode &access_mode,
+                                   const ipalf::AccessMode &access_mode,
                                    const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
@@ -474,7 +540,7 @@ int PalfHandle::change_access_mode(const int64_t proposal_id,
   return ret;
 }
 
-int PalfHandle::get_access_mode(int64_t &mode_version, AccessMode &access_mode) const
+int PalfHandle::get_access_mode(int64_t &mode_version, ipalf::AccessMode &access_mode) const
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
@@ -482,7 +548,7 @@ int PalfHandle::get_access_mode(int64_t &mode_version, AccessMode &access_mode) 
   return ret;
 }
 
-int PalfHandle::get_access_mode(AccessMode &access_mode) const
+int PalfHandle::get_access_mode(ipalf::AccessMode &access_mode) const
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
@@ -490,8 +556,15 @@ int PalfHandle::get_access_mode(AccessMode &access_mode) const
   return ret;
 }
 
+int PalfHandle::get_access_mode_version(int64_t &mode_version) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  return palf_handle_impl_->get_access_mode_version(mode_version);
+}
+
 int PalfHandle::get_access_mode_ref_scn(int64_t &mode_version,
-                                        AccessMode &access_mode,
+                                        ipalf::AccessMode &access_mode,
                                         SCN &ref_scn) const
 {
   int ret = OB_SUCCESS;
@@ -649,6 +722,22 @@ int PalfHandle::unregister_rebuild_cb()
   }
 	return ret;
 }
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+int PalfHandle::register_refresh_priority_cb()
+{
+  return OB_NOT_SUPPORTED;
+}
+
+int PalfHandle::unregister_refresh_priority_cb()
+{
+  return OB_NOT_SUPPORTED;
+}
+
+int PalfHandle::set_allow_election_without_memlist(const bool allow_election_without_memlist)
+{
+  return OB_NOT_SUPPORTED;
+}
+#endif
 
 int PalfHandle::set_location_cache_cb(PalfLocationCacheCb *lc_cb)
 {
@@ -733,6 +822,31 @@ int PalfHandle::reset_locality_cb()
   return ret;
 }
 
+int PalfHandle::set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker)
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  if (OB_ISNULL(reconfig_checker)) {
+    PALF_LOG(INFO, "no need set_reconfig_checker_cb", KR(ret), KP(reconfig_checker));
+  } else if (OB_FAIL(palf_handle_impl_->set_reconfig_checker_cb(reconfig_checker))) {
+    PALF_LOG(WARN, "set_reconfig_checker_cb failed", KR(ret));
+  } else {
+  }
+  return ret;
+}
+
+int PalfHandle::reset_reconfig_checker_cb()
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  if (OB_FAIL(palf_handle_impl_->reset_reconfig_checker_cb())) {
+    PALF_LOG(WARN, "reset_reconfig_checker_cb failed", KR(ret));
+  } else {
+    PALF_LOG(INFO, "reset_reconfig_checker_cb success", KR(ret));
+  }
+  return ret;
+}
+
 int PalfHandle::stat(PalfStat &palf_stat) const
 {
   CHECK_VALID;
@@ -767,10 +881,19 @@ int PalfHandle::diagnose(PalfDiagnoseInfo &diagnose_info) const
 int PalfHandle::raw_read(const palf::LSN &lsn,
                          void *buffer,
                          const int64_t nbytes,
-                         int64_t &read_size)
+                         int64_t &read_size,
+                         LogIOContext &io_ctx)
 {
   CHECK_VALID;
-  return palf_handle_impl_->raw_read(lsn, reinterpret_cast<char*>(buffer), nbytes, read_size);
+  return palf_handle_impl_->raw_read(lsn, reinterpret_cast<char*>(buffer), nbytes, read_size, io_ctx);
+}
+
+int PalfHandle::get_readable_end_lsn(LSN &lsn) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  lsn = palf_handle_impl_->get_readable_end_lsn();
+  return ret;
 }
 
 } // end namespace palf

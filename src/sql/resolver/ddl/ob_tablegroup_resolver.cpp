@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_tablegroup_resolver.h"
-#include "share/schema/ob_schema_struct.h"
-#include "sql/resolver/ddl/ob_tablegroup_stmt.h"
-#include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
-#include "sql/parser/parse_node.h"
-#include "sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {

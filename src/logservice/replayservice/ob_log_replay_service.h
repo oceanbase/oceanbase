@@ -25,9 +25,9 @@ namespace share
 {
 class SCN;
 }
-namespace palf
+namespace ipalf
 {
-class PalfEnv;
+class IPalfEnv;
 }
 namespace logservice
 {
@@ -48,6 +48,7 @@ private:
   static const int64_t SCAN_TIMER_INTERVAL = 10 * 1000 * 1000; //10s
   //上一次轮询时总回放日志量
   int64_t last_replayed_log_size_;
+  int64_t last_submitted_log_size_;
   ObLogReplayService *rp_sv_;
   int tg_id_;
   bool is_inited_;
@@ -61,16 +62,51 @@ public:
   virtual int switch_to_follower(const share::ObLSID &id, const palf::LSN &begin_lsn) = 0;
   virtual int switch_to_leader(const share::ObLSID &id) = 0;
 };
+
+class ObReplayStatusHandlerAlloc
+{
+public:
+  ObReplayStatusHandlerAlloc()
+    : ret_code_(common::OB_SUCCESS) {}
+  ~ObReplayStatusHandlerAlloc() {}
+  int get_ret_code() const { return ret_code_; }
+  TO_STRING_KV(K(ret_code_));
+public:
+  typedef common::LinkHashNode<palf::LSKey> ObReplayStatusNode;
+  ObReplayStatus *alloc_value() { return nullptr; }
+  void free_value(ObReplayStatus *replay_status) {
+    if (0 == replay_status->dec_ref()) {
+      CLOG_LOG(INFO, "free replay status", KPC(replay_status));
+      replay_status->~ObReplayStatus();
+      mtl_free(replay_status);
+    }
+  }
+  ObReplayStatusNode *alloc_node(ObReplayStatus *replay_status)
+  {
+    UNUSED(replay_status);
+    return MTL_NEW(ObReplayStatusNode, "ObReplayStatus");
+  }
+  void free_node(ObReplayStatusNode *node)
+  {
+    if (NULL != node) {
+      MTL_DELETE(ObReplayStatusNode, "ObReplayStatus", node);
+      node = NULL;
+    }
+  }
+private:
+  int ret_code_;
+};
 /*
 TODO(yaoying.yyy): replayservice的内存管理需要整理一个文档
 */
 
+typedef common::ObLinkHashMap<palf::LSKey, ObReplayStatus, ObReplayStatusHandlerAlloc> LogReplayMap;
 class ObLogReplayService: public lib::TGTaskHandler, public ObILogReplayService
 {
 public:
   ObLogReplayService();
   virtual ~ObLogReplayService();
-  int init(palf::PalfEnv *palf_env,
+  int init(ipalf::IPalfEnv *palf_env,
            ObLSAdapter *ls_adapter,
            ObILogAllocator *allocator);
 public:
@@ -79,26 +115,13 @@ public:
   void wait();
   void destroy();
 public:
-  class GetReplayStatusFunctor
-  {
-  public:
-    GetReplayStatusFunctor(ObReplayStatusGuard &guard)
-        : ret_code_(common::OB_SUCCESS), guard_(guard){}
-    ~GetReplayStatusFunctor(){}
-    bool operator()(const share::ObLSID &id, ObReplayStatus *replay_status);
-    int get_ret_code() const { return ret_code_; }
-    TO_STRING_KV(K(ret_code_));
-  private:
-    int ret_code_;
-    ObReplayStatusGuard &guard_;
-  };
   class RemoveReplayStatusFunctor
   {
   public:
     explicit RemoveReplayStatusFunctor()
         : ret_code_(common::OB_SUCCESS) {}
     ~RemoveReplayStatusFunctor(){}
-    bool operator()(const share::ObLSID &id, ObReplayStatus *replay_status);
+    bool operator()(const palf::LSKey &id, ObReplayStatus *replay_status);
     int get_ret_code() const { return ret_code_; }
     TO_STRING_KV(K(ret_code_));
   private:
@@ -109,18 +132,37 @@ public:
   public:
     explicit StatReplayProcessFunctor()
         : ret_code_(common::OB_SUCCESS),
-        replayed_log_size_(0),
-        unreplayed_log_size_(0) {}
+          submitted_log_size_(0),
+          unsubmitted_log_size_(0),
+          replayed_log_size_(0),
+          unreplayed_log_size_(0) {}
     ~StatReplayProcessFunctor(){}
-    bool operator()(const share::ObLSID &id, ObReplayStatus *replay_status);
+    bool operator()(const palf::LSKey &id, ObReplayStatus *replay_status);
     int get_ret_code() const { return ret_code_; }
+    int64_t get_submitted_log_size() const { return submitted_log_size_; }
+    int64_t get_unsubmitted_log_size() const { return unsubmitted_log_size_; }
     int64_t get_replayed_log_size() const { return replayed_log_size_; }
     int64_t get_unreplayed_log_size() const { return unreplayed_log_size_; }
     TO_STRING_KV(K(ret_code_), K(replayed_log_size_), K(unreplayed_log_size_));
   private:
     int ret_code_;
+    int64_t submitted_log_size_;
+    int64_t unsubmitted_log_size_;
     int64_t replayed_log_size_;
     int64_t unreplayed_log_size_;
+  };
+  class StatReplayStatusFunctor
+  {
+    public:
+      explicit StatReplayStatusFunctor(const common::ObFunction<int (const ObReplayStatus &)> &func)
+          : ret_code_(common::OB_SUCCESS), func_(func) {}
+      ~StatReplayStatusFunctor(){}
+      bool operator()(const palf::LSKey &id, ObReplayStatus *replay_status);
+      int get_ret_code() const { return ret_code_; }
+      TO_STRING_KV(K(ret_code_));
+    private:
+      int ret_code_;
+      const common::ObFunction<int (const ObReplayStatus &)> func_;
   };
   class FetchLogFunctor
   {
@@ -128,7 +170,7 @@ public:
     explicit FetchLogFunctor()
         : ret_code_(common::OB_SUCCESS) {}
     ~FetchLogFunctor(){}
-    bool operator()(const share::ObLSID &id, ObReplayStatus *replay_status);
+    bool operator()(const palf::LSKey &id, ObReplayStatus *replay_status);
     int get_ret_code() const { return ret_code_; }
     TO_STRING_KV(K(ret_code_));
   private:
@@ -158,7 +200,10 @@ public:
   int update_replayable_point(const share::SCN &replayable_scn);
   int get_replayable_point(share::SCN &replayable_scn);
   int stat_for_each(const common::ObFunction<int (const ObReplayStatus &)> &func);
-  int stat_all_ls_replay_process(int64_t &replayed_log_size, int64_t &unreplayed_log_size);
+  int stat_all_ls_replay_process(int64_t &submitted_log_size,
+                                 int64_t &unsubmitted_log_size,
+                                 int64_t &replayed_log_size,
+                                 int64_t &unreplayed_log_size);
   int diagnose(const share::ObLSID &id, ReplayDiagnoseInfo &diagnose_info);
   void inc_pending_task_size(const int64_t log_size);
   void dec_pending_task_size(const int64_t log_size);
@@ -166,6 +211,8 @@ public:
   void *alloc_replay_task(const int64_t size);
   void free_replay_task(ObLogReplayTask *task);
   void free_replay_task_log_buf(ObLogReplayTask *task);
+  int has_fatal_error(const share::ObLSID &ls_id,
+                      bool &bool_ret);
 private:
   int get_replay_status_(const share::ObLSID &id,
                          ObReplayStatusGuard &guard);
@@ -250,11 +297,11 @@ private:
   int tg_id_;
   ReplayProcessStat replay_stat_;
   ObLSAdapter *ls_adapter_;
-  palf::PalfEnv *palf_env_;
+  ipalf::IPalfEnv *palf_env_;
   ObILogAllocator *allocator_;
   share::SCN replayable_point_;
   // 考虑到迁出迁入场景, 不能只通过map管理replay status的生命周期
-  common::ObLinearHashMap<share::ObLSID, ObReplayStatus*> replay_status_map_;
+  LogReplayMap replay_status_map_;
   int64_t pending_replay_log_size_;
   ObMiniStat::ObStatItem wait_cost_stat_;
   ObMiniStat::ObStatItem replay_cost_stat_;

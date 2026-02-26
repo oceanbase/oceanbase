@@ -1,2 +1,5 @@
 sql_unittest(test_basic_session_info)
 sql_unittest(test_session_mgr)
+sql_unittest(test_sql_session_info_serialize_compat)
+sql_unittest(test_basic_session_info_serialize_compat)
+sql_unittest(test_sysvar_bit_expansion)

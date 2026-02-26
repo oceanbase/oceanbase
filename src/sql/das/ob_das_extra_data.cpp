@@ -27,7 +27,8 @@ ObDASExtraData::ObDASExtraData()
     result_iter_(),
     has_more_(false),
     need_check_output_datum_(false),
-    enable_rich_format_(false)
+    enable_rich_format_(false),
+    tsc_monitor_info_(nullptr)
 {
 }
 
@@ -65,6 +66,7 @@ int ObDASExtraData::fetch_result()
     LOG_WARN("das extra data fetch result timeout", KR(ret), K(timeout_ts_), K(timeout));
   } else if (OB_FAIL(req.init(tenant_id, task_id_))) {
     LOG_WARN("init das data fetch request failed", KR(ret));
+  } else if (FALSE_IT(rpc_proxy_.set_detect_session_killed(true))) {
   } else if (OB_FAIL(rpc_proxy_
                      .to(result_addr_)
                      .by(tenant_id)
@@ -78,6 +80,12 @@ int ObDASExtraData::fetch_result()
   } else {
     LOG_TRACE("das fetch task result", KR(ret), K(req), K(result_));
     has_more_ = result_.has_more();
+    if (OB_NOT_NULL(tsc_monitor_info_)) {
+      tsc_monitor_info_->add_io_read_bytes(result_.io_read_bytes_);
+      tsc_monitor_info_->add_ssstore_read_bytes(result_.ssstore_read_bytes_);
+      tsc_monitor_info_->add_base_read_row_cnt(result_.base_read_row_cnt_);
+      tsc_monitor_info_->add_delta_read_row_cnt(result_.delta_read_row_cnt_);
+    }
   }
   return ret;
 }

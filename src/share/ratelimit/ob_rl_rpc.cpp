@@ -10,12 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/oblog/ob_log_module.h"
-#include "observer/ob_server_struct.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/utility/serialization.h"
-#include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "ob_rl_rpc.h"
 #include "ob_rl_mgr.h"
 

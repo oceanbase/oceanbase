@@ -18,6 +18,7 @@ namespace compaction
 {
 
 const static char * ObMergeTypeStr[] = {
+    "INVALID_MERGE_TYPE",
     "MINOR_MERGE",
     "HISTORY_MINOR_MERGE",
     "META_MAJOR_MERGE",
@@ -27,6 +28,10 @@ const static char * ObMergeTypeStr[] = {
     "DDL_KV_MERGE",
     "BACKFILL_TX_MERGE",
     "MDS_MINI_MERGE",
+    "MDS_MINOR_MERGE",
+    "BATCH_EXEC",
+    "CONVERT_CO_MAJOR_MERGE",
+    "INC_MAJOR_MERGE",
     "EMPTY_MERGE_TYPE"
 };
 
@@ -57,6 +62,30 @@ const char *merge_level_to_str(const ObMergeLevel &merge_level)
     str = "invalid_merge_level";
   }
   return str;
+}
+
+const static char * ObExecModeStr[] = {
+  "EXEC_MODE_LOCAL",
+  "EXEC_MODE_CALC_CKM",
+  "EXEC_MODE_OUTPUT",
+  "EXEC_MODE_VALIDATE"
+};
+
+const char *exec_mode_to_str(const ObExecMode &exec_mode)
+{
+  STATIC_ASSERT(static_cast<int64_t>(EXEC_MODE_MAX) == ARRAYSIZEOF(ObExecModeStr), "exec mode str len is mismatch");
+  const char *str = "";
+  if (is_valid_exec_mode(exec_mode)) {
+    str = ObExecModeStr[exec_mode];
+  } else {
+    str = "invalid_exec_mode";
+  }
+  return str;
+}
+
+bool is_valid_get_macro_seq_stage(const ObGetMacroSeqStage stage)
+{
+  return stage >= BUILD_INDEX_TREE && stage < MACRO_SEQ_TYPE_MAX;
 }
 
 } // namespace compaction

@@ -46,6 +46,7 @@ namespace storage
 class ObLsmtTransNode;
 class ObFreezer;
 class ObExtInfoCallback;
+class ObExtInfoLogHeader;
 }
 
 using namespace transaction::tablelock;
@@ -54,6 +55,11 @@ namespace memtable
 class ObMemtableCtxCbAllocator;
 class ObMemtableKey;
 class ObMvccRow;
+
+using ObMvccWriteResults = common::ObSEArray<ObMvccWriteResult, 8>;
+using ObTxNodeArgs = common::ObSEArray<ObTxNodeArg, 8>;
+using ObStoredKVs = common::ObSEArray<ObStoredKV, 8>;
+
 class ObIMvccCtx
 {
 public:
@@ -88,15 +94,18 @@ public: // for mvcc engine invoke
   virtual int read_lock_yield() { return common::OB_SUCCESS; }
   virtual int write_lock_yield() { return common::OB_SUCCESS; }
   virtual int append_callback(ObITransCallback *cb) = 0;
-  virtual void inc_lock_for_read_retry_count() = 0;
-  virtual void add_lock_for_read_elapse(const int64_t n) = 0;
-  virtual int64_t get_lock_for_read_elapse() const = 0;
-  virtual void on_key_duplication_retry(const ObMemtableKey& key) = 0;
+  virtual int append_callback(ObITransCallback *head,
+                              ObITransCallback *tail,
+                              const int64_t length) = 0;
+  virtual void on_key_duplication_retry(const ObMemtableKey& key,
+                                        const ObMvccRow *value,
+                                        const ObMvccWriteResult &res) = 0;
   virtual void on_tsc_retry(const ObMemtableKey& key,
                             const share::SCN snapshot_version,
                             const share::SCN max_trans_version,
                             const transaction::ObTransID &conflict_tx_id) = 0;
-  virtual void on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id) = 0;
+  virtual void on_wlock_retry(const ObMemtableKey& key,
+                              const transaction::ObTransID &conflict_tx_id) = 0;
   virtual void inc_truncate_cnt() = 0;
   virtual void add_trans_mem_total_size(const int64_t size) = 0;
   virtual void inc_pending_log_size(const int64_t size) = 0;
@@ -139,24 +148,22 @@ public:
       max_table_version_ = table_version;
     }
   }
-  inline bool is_commit_version_valid() const { return commit_version_ != share::SCN::min_scn() && commit_version_ != share::SCN::max_scn(); }
-  inline void set_lock_start_time(const int64_t start_time) { lock_start_time_ = start_time; }
-  inline int64_t get_lock_start_time() { return lock_start_time_; }
+  virtual void set_for_replay(const bool for_replay) = 0;
   inline void set_lock_wait_start_ts(const int64_t lock_wait_start_ts)
   { lock_wait_start_ts_ = lock_wait_start_ts; }
   share::SCN get_replay_compact_version() const { return replay_compact_version_; }
   void  set_replay_compact_version(const share::SCN v) { replay_compact_version_ = v; }
   inline int64_t get_lock_wait_start_ts() const { return lock_wait_start_ts_; }
   int register_row_commit_cb(
-      const ObMemtableKey *key,
-      ObMvccRow *value,
-      ObMvccTransNode *node,
-      const int64_t data_size,
-      const ObRowData *old_row,
-      ObMemtable *memtable,
-      const transaction::ObTxSEQ seq_no,
-      const int64_t column_cnt,
-      const bool is_non_unique_local_index);
+    const storage::ObTableIterParam &param,
+    ObTxNodeArg &arg,
+    ObMvccWriteResult &res,
+    ObMemtable *memtable);
+  int register_row_commit_cb(
+    const storage::ObTableIterParam &param,
+    ObTxNodeArgs &tx_node_args,
+    ObMvccWriteResults &mvcc_results,
+    ObMemtable *memtable);
   int register_row_replay_cb(
       const ObMemtableKey *key,
       ObMvccRow *value,
@@ -174,11 +181,16 @@ public:
       ObMemCtxLockOpLinkNode *lock_op,
       const share::SCN scn);
   int register_ext_info_commit_cb(
+      storage::ObStoreCtx &store_ctx,
       const int64_t timeout,
       const blocksstable::ObDmlFlag dml_flag,
-      transaction::ObTxDesc *tx_desc,
-      transaction::ObTxSEQ &parent_seq_no,
-      ObObj &index_data,
+      const transaction::ObTxSEQ &seq_no_st,
+      const int64_t seq_no_cnt,
+      const ObString &index_data,
+      const ObObjType index_data_type,
+      const transaction::ObTxReadSnapshot &snapshot,
+      const storage::ObExtInfoLogHeader &header,
+      const ObTabletID &tabelt_id,
       ObObj &ext_info_data);
 public:
   virtual void reset()
@@ -201,19 +213,18 @@ public:
         "alloc_type=%d "
         "ctx_descriptor=%u "
         "min_table_version=%ld "
-        "max_table_version=%ld "
-        "trans_version=%s "
-        "commit_version=%s "
-        "lock_wait_start_ts=%ld "
-        "replay_compact_version=%s}",
+        "max_table_version=%ld trans_version=",
         alloc_type_,
         ctx_descriptor_,
         min_table_version_,
-        max_table_version_,
-        to_cstring(trans_version_),
-        to_cstring(commit_version_),
-        lock_wait_start_ts_,
-        to_cstring(replay_compact_version_));
+        max_table_version_);
+    common::databuff_printf(buf, buf_len, pos, trans_version_);
+    common::databuff_printf(buf, buf_len, pos, " commit_version=");
+    common::databuff_printf(buf, buf_len, pos, commit_version_);
+    common::databuff_printf(buf, buf_len, pos, " lock_wait_start_ts=%ld replay_compact_version=",
+        lock_wait_start_ts_);
+    common::databuff_printf(buf, buf_len, pos, replay_compact_version_);
+    common::databuff_printf(buf, buf_len, pos, "}");
     return pos;
   }
 public:
@@ -253,7 +264,8 @@ public:
       memtable_(NULL),
       write_ret_(NULL),
       write_seq_no_(),
-      try_flush_redo_(true)
+      try_flush_redo_(true),
+      is_lob_ext_info_log_(false)
   {}
   ObMvccWriteGuard(const int &ret, const bool exclusive = false)
     : ObMvccWriteGuard(exclusive)
@@ -264,6 +276,8 @@ public:
   void set_memtable(ObMemtable *memtable) {
     memtable_ = memtable;
   }
+
+  void set_is_lob_ext_info_log(const bool val) { is_lob_ext_info_log_ = val; }
   /*
    * purpose of ensure replica writable
    *
@@ -281,6 +295,7 @@ private:
   const int *write_ret_;        // used to sense write result is ok or fail
   transaction::ObTxSEQ write_seq_no_;
   bool try_flush_redo_;
+  bool is_lob_ext_info_log_;
 };
 }
 }

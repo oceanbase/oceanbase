@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_storage.h"
-#include "lib/ob_errno.h"             // OB_INVALID_ARGUMENT
-#include "lib/stat/ob_session_stat.h" // Session
-#include "log_reader_utils.h"         // ReadBuf
 #include "palf_handle_impl.h"         // LogCache
-#include "share/scn.h"
+#include "log_io_adapter.h"           // LogIOAdapter
 
 namespace oceanbase
 {
@@ -25,7 +22,7 @@ using namespace share;
 namespace palf
 {
 class LogReader;
-LogStorage::LogStorage() :
+LogStorage::LogStorage() : ILogStorage(ILogStorageType::DISK_STORAGE),
     block_mgr_(),
     log_reader_(),
     log_tail_(),
@@ -53,7 +50,7 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                      const int64_t align_size, const int64_t align_buf_size,
                      const UpdateManifestCallback &update_manifest_cb,
                      ILogBlockPool *log_block_pool, LogPlugins *plugins,
-                     LogCache *log_cache)
+                     LogCache *log_cache, LogIOAdapter *io_adapter)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -68,7 +65,8 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                               update_manifest_cb,
                               log_block_pool,
                               plugins,
-                              log_cache))) {
+                              log_cache,
+                              io_adapter))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
   } else {
     PALF_LOG(INFO, "LogStorage init success", K(ret), K(base_dir), K(sub_dir),
@@ -270,6 +268,7 @@ int LogStorage::pread(const LSN &read_lsn,
                       LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
+  UNUSED(io_ctx);
   bool need_read_with_block_header = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -427,9 +426,14 @@ int LogStorage::begin_flashback(const LSN &start_lsn_of_block)
     // make tmp block be writeable, set log_tail_ to start_lsn_of_block.
     reset_log_tail_for_last_block_(start_lsn_of_block, true);
     ObSpinLockGuard guard(tail_info_lock_);
-    // In process of flashback, each block after start_lsn_of_block is still readable.
-    readable_log_tail_ = origin_log_tail;
-    PALF_EVENT("[BEGIN STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
+    if (check_in_flashback_(flashback_version_)) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "unexpected error, flashback_version_ must be even number", KPC(this), K(start_lsn_of_block));
+    } else {
+      // In process of flashback, each block after start_lsn_of_block is still readable.
+      readable_log_tail_ = origin_log_tail;
+      PALF_EVENT("[BEGIN STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
+    }
   }
   return ret;
 }
@@ -442,30 +446,40 @@ int LogStorage::end_flashback(const LSN &start_lsn_of_block)
 {
   int ret = OB_SUCCESS;
   const block_id_t block_id = lsn_2_block(start_lsn_of_block, logical_block_size_);
-  // to ensure the integrity of each read data, before delete blocks,
-  // reset readable_log_tail_ and inc flashback_version_ firstly.
-  {
-    ObSpinLockGuard guard(tail_info_lock_);
-    readable_log_tail_ = log_tail_;
-    flashback_version_++;
-  }
-  // constriaints: 'expected_next_block_id' is used to check whether blocks on disk are integral,
-  // we make sure that the content in each block_id which is greater than or equal to
-  // 'expected_next_block_id' are not been used.
-  // we can set 'expected_next_block_id' to 'block_id' + 1 because of the block of 'start_lsn_of_block'
-  // must exist.(we will delete each block after 'block_id', not include 'block_id')
-  const block_id_t expected_next_block_id = block_id + 1;
-  if (OB_FAIL(update_manifest_(expected_next_block_id))) {
-    PALF_LOG(WARN, "update_manifest_ failed", K(ret), KPC(this), K(block_id),
-				K(expected_next_block_id), K(start_lsn_of_block));
-	} else if (OB_FAIL(block_mgr_.delete_block_from_back_to_front_until(block_id))) {
-    PALF_LOG(ERROR, "delete_block_from_back_to_front_until failed", K(ret),
-				KPC(this), K(start_lsn_of_block));
-  } else if (OB_FAIL(block_mgr_.rename_tmp_block_handler_to_normal(block_id))) {
-    PALF_LOG(ERROR, "LogBlockMgr rename_tmp_block_handler_to_normal failed", K(ret), KPC(this),
-        K(start_lsn_of_block));
+  if (check_in_flashback_(flashback_version_)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "unexpected error, flashback_version_ must be even number", KPC(this), K(start_lsn_of_block));
   } else {
-    PALF_EVENT("[END STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
+    // to ensure the integrity of each read data, before delete blocks,
+    // reset readable_log_tail_
+    {
+      ObSpinLockGuard guard(tail_info_lock_);
+      readable_log_tail_ = log_tail_;
+      flashback_version_ ++;
+    }
+
+    // constriaints: 'expected_next_block_id' is used to check whether blocks on disk are integral,
+    // we make sure that the content in each block_id which is greater than or equal to
+    // 'expected_next_block_id' are not been used.
+    // we can set 'expected_next_block_id' to 'block_id' + 1 because of the block of 'start_lsn_of_block'
+    // must exist.(we will delete each block after 'block_id', not include 'block_id')
+    const block_id_t expected_next_block_id = block_id + 1;
+    if (OB_FAIL(update_manifest_(expected_next_block_id))) {
+      PALF_LOG(WARN, "update_manifest_ failed", K(ret), KPC(this), K(block_id),
+				K(expected_next_block_id), K(start_lsn_of_block));
+	  } else if (OB_FAIL(block_mgr_.delete_block_from_back_to_front_until(block_id))) {
+      PALF_LOG(ERROR, "delete_block_from_back_to_front_until failed", K(ret),
+				KPC(this), K(start_lsn_of_block));
+    } else if (OB_FAIL(block_mgr_.rename_tmp_block_handler_to_normal(block_id))) {
+      PALF_LOG(ERROR, "LogBlockMgr rename_tmp_block_handler_to_normal failed", K(ret), KPC(this),
+          K(start_lsn_of_block));
+    } else {
+      PALF_EVENT("[END STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
+    }
+    {
+      ObSpinLockGuard guard(tail_info_lock_);
+      flashback_version_ ++;
+    }
   }
   return ret;
 }
@@ -615,7 +629,8 @@ int LogStorage::do_init_(const char *base_dir,
                          const UpdateManifestCallback &update_manifest_cb,
                          ILogBlockPool *log_block_pool,
                          LogPlugins *plugins,
-                         LogCache *log_cache)
+                         LogCache *log_cache,
+                         LogIOAdapter *io_adapter)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
@@ -630,9 +645,10 @@ int LogStorage::do_init_(const char *base_dir,
                                      align_size,
                                      align_buf_size,
                                      logical_block_size + MAX_INFO_BLOCK_SIZE,
-                                     log_block_pool))) {
+                                     log_block_pool,
+                                     io_adapter))) {
     PALF_LOG(ERROR, "LogBlockMgr init failed", K(ret), K(log_dir));
-  } else if (OB_FAIL(log_reader_.init(log_dir, logical_block_size + MAX_INFO_BLOCK_SIZE))) {
+  } else if (OB_FAIL(log_reader_.init(log_dir, logical_block_size + MAX_INFO_BLOCK_SIZE, io_adapter))) {
     PALF_LOG(ERROR, "LogReader init failed", K(ret), K(log_dir));
   } else {
     log_tail_ = readable_log_tail_ = base_lsn;
@@ -689,7 +705,7 @@ int LogStorage::check_read_out_of_bound_(const block_id_t &block_id,
   // to avoid unnecessary failure, only check flashback_version when read block need to be overwriting.
   // NB: update 'reabable_log_tail_' and 'flashback_version_' is atomic, and updating is performed before
   //     overwriting.
-  } else if (block_id >= readable_end_block_id && flashback_version != curr_flashback_version) {
+  } else if (block_id >= readable_end_block_id && (flashback_version != curr_flashback_version || check_in_flashback_(curr_flashback_version))) {
     ret = OB_NEED_RETRY;
     PALF_LOG(WARN, "there is flashbacking during read data, need read retry",
              KPC(this), K(flashback_version), K(curr_flashback_version),
@@ -865,8 +881,8 @@ int LogStorage::read_block_header_(const block_id_t block_id,
     PALF_LOG(WARN, "block_id is large than max_block_id", K(ret), K(block_id),
              K(readable_log_tail), K(max_block_id), K(log_block_header));
   } else {
-    LogIteratorInfo iterator_info(false);
-    if (OB_FAIL(log_reader_.pread(block_id, 0, in_read_size, read_buf, out_read_size, &iterator_info))) {
+    LogIOContext io_ctx(LogIOUser::META_INFO);
+    if (OB_FAIL(log_reader_.pread(block_id, 0, in_read_size, read_buf, out_read_size, io_ctx))) {
       PALF_LOG(WARN, "read info block failed", K(ret), K(read_buf));
     } else if (OB_FAIL(log_block_header.deserialize(read_buf.buf_, out_read_size, pos))) {
       PALF_LOG(WARN, "deserialize info block failed", K(ret), K(read_buf),
@@ -935,13 +951,17 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
   const offset_t real_read_offset =
     read_offset == 0 && true ==  need_read_log_block_header ? 0 : get_phy_offset_(read_lsn);
 
+  const LSN begin_lsn = get_begin_lsn();
+
   if (read_lsn >= readable_log_tail) {
     ret = OB_ERR_OUT_OF_UPPER_BOUND;
     PALF_LOG(WARN, "read something out of upper bound", K(ret), K(read_lsn), K(log_tail_));
+  } else if (read_lsn < begin_lsn) {
+    ret = OB_ERR_OUT_OF_LOWER_BOUND;
   } else {
     if (is_log_cache_inited_()) {
       if (OB_FAIL(log_cache_->read(flashback_version, read_lsn, real_in_read_size,
-                                   read_buf, out_read_size, io_ctx.get_iterator_info()))) {
+                                   read_buf, out_read_size, io_ctx))) {
         PALF_LOG(WARN, "read log cache failed", K(flashback_version), K(read_lsn),
                  K(real_in_read_size), K(read_buf), K(out_read_size), KPC(this));
       } else {
@@ -953,7 +973,7 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
                                          real_in_read_size,
                                          read_buf,
                                          out_read_size,
-                                         io_ctx.get_iterator_info()))) {
+                                         io_ctx))) {
       PALF_LOG(WARN, "LogReader pread failed", K(ret), K(read_lsn),
                K(log_tail_), K(real_in_read_size), KPC(this));
     } else {
@@ -998,6 +1018,11 @@ int LogStorage::update_manifest_(const block_id_t expected_next_block_id, const 
   return update_manifest_cb_(expected_next_block_id, in_restart);
 }
 
+bool LogStorage::check_in_flashback_(const int64_t flashback_version) const
+{
+  return 1 == (flashback_version_ & 1);
+}
+
 int LogStorage::get_logical_block_size(int64_t &logical_block_size) const
 {
   int ret = OB_SUCCESS;
@@ -1035,5 +1060,20 @@ int LogStorage::fill_cache_when_slide(const LSN &begin_lsn, const int64_t size)
   return ret;
 }
 
+int LogStorage::get_io_statistic_info(int64_t &last_working_time,
+                                      int64_t &last_write_size,
+                                      int64_t &accum_write_size,
+                                      int64_t &accum_write_count,
+                                      int64_t &accum_write_rt) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = block_mgr_.get_io_statistic_info(last_working_time,
+        last_write_size, accum_write_size, accum_write_count, accum_write_rt);
+  }
+  return ret;
+}
 } // end namespace palf
 } // end namespace oceanbase

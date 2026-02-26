@@ -16,13 +16,9 @@
 
 #include "ob_log_schema_getter.h"
 
-#include "lib/mysqlclient/ob_mysql_server_provider.h"     // ObMySQLServerProvider
-#include "share/config/ob_common_config.h"                // ObCommonConfig
-#include "share/ob_get_compat_mode.h"                     // ObCompatModeGetter
 #include "share/inner_table/ob_inner_table_schema.h"      // OB_CORE_SCHEMA_VERSION
 
 #include "ob_log_utils.h"                                 // is_mysql_client_errno
-#include "ob_log_common.h"                                // GET_SCHEMA_TIMEOUT_ON_START_UP
 #include "ob_log_config.h"                                // TCONF
 
 // NOTICE: retry will exist if func return error code OB_TENANT_HAS_BEEN_DROPPED
@@ -285,7 +281,7 @@ int ObLogSchemaGuard::get_tenant_schema_info(uint64_t tenant_id,
       tenant_schema_info.reset(tenant_id,
           tenant_schema->get_schema_version(),
           tenant_schema->get_tenant_name(),
-          tenant_schema->is_restore());
+          tenant_schema->get_status());
     }
   } else {
     // Non-Lazy mode, get Simple Table Schema
@@ -301,7 +297,7 @@ int ObLogSchemaGuard::get_tenant_schema_info(uint64_t tenant_id,
       tenant_schema_info.reset(tenant_id,
           simple_tenant_schema->get_schema_version(),
           simple_tenant_schema->get_tenant_name(),
-          simple_tenant_schema->is_restore());
+          simple_tenant_schema->get_status());
     }
   }
   return ret;
@@ -434,7 +430,8 @@ ObLogSchemaGetter::~ObLogSchemaGetter()
 int ObLogSchemaGetter::init(common::ObMySQLProxy &mysql_proxy,
     common::ObCommonConfig *config,
     const int64_t max_cached_schema_version_count,
-    const int64_t max_history_schema_version_count)
+    const int64_t max_history_schema_version_count,
+    const int64_t timeout)
 {
   int ret = OB_SUCCESS;
 
@@ -454,11 +451,12 @@ int ObLogSchemaGetter::init(common::ObMySQLProxy &mysql_proxy,
     // refresh Schema
     ObSchemaService::g_ignore_column_retrieve_error_ = true;
     ObSchemaService::g_liboblog_mode_ = true;
-    const uint64_t tenant_id = OB_INVALID_TENANT_ID; // to refresh schema of all tenants
-    const int64_t timeout = GET_SCHEMA_TIMEOUT_ON_START_UP;
+    // refresh schema of SYS TENANT to get basic info of user tenant, then choose tenant need sync(filter by tb_white_list) and refresh full tenant schema
+    // ObMultiVersionSchemaService::auto_switch_mode_and_refresh_schema will refresh full tenant_schema
+    // of all tenant if tenant_id = OB_INVALID_TENANT_ID
+    const uint64_t tenant_id = OB_SYS_TENANT_ID;
     bool is_init_succ = false;
 
-    // tenant_id is OB_INVALID_TENANT_ID, can't use RETRY_ON_FAIL_WITH_TENANT_ID
     RETRY_ON_FAIL(timeout, schema_service_, auto_switch_mode_and_refresh_schema, tenant_id);
 
     if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
@@ -688,45 +686,19 @@ int ObLogSchemaGetter::get_schema_guard_and_simple_table_schema_(
     const oceanbase::share::schema::ObSimpleTableSchemaV2 *&tb_schema)
 {
   int ret = OB_SUCCESS;
-  // default not ues force_fallback/force_lazy
-  const ObMultiVersionSchemaService::RefreshSchemaMode normal = ObMultiVersionSchemaService::RefreshSchemaMode::NORMAL;
-  int64_t refreshed_version = OB_INVALID_VERSION;
-  bool schema_guard_suitable = true;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("schema getter has not been initialized");
     ret = OB_NOT_INIT;
-  }
-  // First get the latest version of the local schema
-  // Default to get the latest local schema
-  else if (OB_FAIL(get_schema_guard_(tenant_id, false, expected_version, timeout,
-      schema_guard, normal, refreshed_version))) {
-    if (OB_TIMEOUT != ret) {
-      LOG_ERROR("get_schema_guard_ by non-specify_version_mode fail", KR(ret), K(tenant_id),
-          K(expected_version), K(normal));
-    }
-  }
-  // check if it is the right schema guard
-  // will also get the table schema
-  else if (OB_FAIL(check_schema_guard_suitable_for_table_(schema_guard,
-      tenant_id,
-      table_id,
-      expected_version,
-      refreshed_version,
-      timeout,
-      tb_schema,
-      schema_guard_suitable))) {
-    LOG_WARN("check_schema_guard_suitable_for_table_ fail", KR(ret), K(table_id),
-        K(expected_version), K(refreshed_version));
-  } else if (schema_guard_suitable) {
-    // suitable
   } else {
+    int64_t refreshed_version = OB_INVALID_VERSION;
+    // default not ues force_fallback/force_lazy
     ObMultiVersionSchemaService::RefreshSchemaMode refresh_schema_mode = ObMultiVersionSchemaService::RefreshSchemaMode::NORMAL;
     if (force_lazy) {
       refresh_schema_mode = ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_LAZY;
     }
 
-    // The latest local version of the schema guard does not meet expectations, get the specified version of the schema guard
+    // get the specified version of the schema guard
     if (OB_FAIL(get_schema_guard_(tenant_id, true, expected_version, timeout, schema_guard,
         refresh_schema_mode, refreshed_version))) {
       LOG_ERROR("get_schema_guard_ by specify_version_mode fail", KR(ret), K(tenant_id),
@@ -737,6 +709,7 @@ int ObLogSchemaGetter::get_schema_guard_and_simple_table_schema_(
       // success
     }
   }
+
   return ret;
 }
 
@@ -744,7 +717,9 @@ int ObLogSchemaGetter::get_schema_guard_and_simple_table_schema_(
 // @retval OB_TENANT_HAS_BEEN_DROPPED   Tenant has been dropped
 // @retval OB_TIMEOUT                   Timeout
 // @retval Other error codes            Fail
-int ObLogSchemaGetter::refresh_to_expected_version_(const uint64_t tenant_id,
+int ObLogSchemaGetter::refresh_to_expected_version_(
+    const uint64_t tenant_id,
+    const bool specify_version_mode,
     const int64_t expected_version,
     const int64_t timeout,
     int64_t &latest_version)
@@ -769,23 +744,26 @@ int ObLogSchemaGetter::refresh_to_expected_version_(const uint64_t tenant_id,
     }
   }
 
-  if (OB_FAIL(ret)) {
-    // fail
-  } else if (OB_INVALID_VERSION == latest_version || latest_version < expected_version) {
+  if (OB_SUCC(ret)) {
     // If the tenant version is invalid, or if the desired schema version is not reached, then a refresh of the schema is requested
-    LOG_INFO("begin refresh schema to expected version", K(tenant_id), K(expected_version),
-        K(latest_version));
+    LOG_TRACE("[SCHEMA_GETTER] begin refresh schema to expected version", K(tenant_id), K(expected_version), K(latest_version));
+    bool need_refresh_schema = (OB_INVALID_VERSION == latest_version || latest_version < expected_version);
+    const static int64_t retry_print_interval = 10 * _SEC_;
 
-    RETRY_ON_FAIL_WITH_TENANT_ID(tenant_id, timeout, schema_service_, auto_switch_mode_and_refresh_schema, tenant_id,
-        expected_version);
+    while (need_refresh_schema) {
+      if (TC_REACH_TIME_INTERVAL(retry_print_interval)) {
+        LOG_INFO("[SCHEMA_GETTER] waiting for schema guard to be refreshed", K(tenant_id), K(expected_version), K(specify_version_mode),
+            K(latest_version), "delta", latest_version - expected_version);
+      }
 
-    if (OB_SUCC(ret)) {
+      RETRY_ON_FAIL_WITH_TENANT_ID(tenant_id, timeout, schema_service_, auto_switch_mode_and_refresh_schema, tenant_id, expected_version);
       // Get the latest schema version again
       RETRY_ON_FAIL_WITH_TENANT_ID(tenant_id, timeout, schema_service_, get_tenant_refreshed_schema_version, tenant_id, latest_version);
-    }
 
+      need_refresh_schema = (OB_SUCCESS == ret) && ((OB_INVALID_VERSION == latest_version) || (specify_version_mode && latest_version < expected_version));
+    }
     int64_t cost_time = get_timestamp() - start_time;
-    LOG_INFO("refresh schema to expected version", KR(ret), K(tenant_id),
+    LOG_TRACE("[SCHEMA_GETTER] refresh schema to expected version", KR(ret), K(tenant_id),
         K(latest_version), K(expected_version), "delta", latest_version - expected_version,
         "latest_version", TS_TO_STR(latest_version),
         "cost_time", TVAL_TO_STR(cost_time));
@@ -819,7 +797,7 @@ int ObLogSchemaGetter::get_schema_guard_(const uint64_t tenant_id,
   refreshed_version = OB_INVALID_VERSION;
 
   // First refresh the schema to ensure it is greater than or equal to expected_version
-  if (OB_FAIL(refresh_to_expected_version_(tenant_id, expected_version, timeout, refreshed_version))) {
+  if (OB_FAIL(refresh_to_expected_version_(tenant_id, specify_version_mode, expected_version, timeout, refreshed_version))) {
     if (OB_TENANT_HAS_BEEN_DROPPED != ret && OB_TIMEOUT != ret) {
       LOG_ERROR("refresh_to_expected_version_ fail", KR(ret), K(tenant_id), K(expected_version));
     }
@@ -902,11 +880,10 @@ int ObLogSchemaGetter::load_split_schema_version(int64_t &split_schema_version,
   return ret;
 }
 
-int ObLogSchemaGetter::get_tenant_refreshed_schema_version(const uint64_t tenant_id, int64_t &version)
+int ObLogSchemaGetter::get_tenant_refreshed_schema_version(const uint64_t tenant_id, int64_t &version, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   int64_t refreshed_version = 0;
-  const int64_t timeout = GET_SCHEMA_TIMEOUT_ON_START_UP;
 
   RETRY_ON_FAIL_WITH_TENANT_ID(tenant_id, timeout, schema_service_, get_tenant_refreshed_schema_version, tenant_id, refreshed_version);
   if (OB_FAIL(ret)) {
@@ -957,7 +934,7 @@ int ObLogSchemaGetter::check_if_tenant_is_dropping_or_dropped(
         tenant_id,
         tenant_schema->get_schema_version(),
         tenant_schema->get_tenant_name(),
-        tenant_schema->is_restore());
+        tenant_schema->get_status());
   }
 
   return ret;

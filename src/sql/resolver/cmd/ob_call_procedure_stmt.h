@@ -28,7 +28,7 @@ namespace oceanbase
 namespace sql
 {
 
-class ObCallProcedureInfo : public pl::ObPLCacheObject
+class ObCallProcedureInfo final : public pl::ObPLCacheObject
 {
 public:
   explicit ObCallProcedureInfo(lib::MemoryContext &mem_context)
@@ -37,12 +37,18 @@ public:
         package_id_(common::OB_INVALID_ID),
         routine_id_(common::OB_INVALID_ID),
         param_cnt_(0),
-        out_idx_(),
+        out_bitmap_(),
         out_mode_(),
         out_name_(),
         out_type_(),
+        out_type_name_(),
+        out_type_owner_(),
+        out_client_params_(),
+        out_param_id_(),
+        question_mark_idx_(),
         db_name_(),
-        is_udt_routine_(false) {
+        is_udt_routine_(false),
+        enum_set_ctx_(allocator_) {
   }
 
   virtual ~ObCallProcedureInfo() {
@@ -53,19 +59,29 @@ public:
   inline uint64_t get_routine_id() const { return routine_id_; }
   inline void set_routine_id(const uint64_t routine_id) { routine_id_ = routine_id; }
 
-  inline int64_t get_output_count() { return out_idx_.num_members(); }
-  inline bool is_out_param(int64_t i) { return out_idx_.has_member(i); }
-  inline ObBitSet<> &get_out_idx() { return out_idx_; }
-  inline void set_out_idx(ObBitSet<> &v) { out_idx_ = v; }
-  inline ObIArray<int64_t>& get_out_mode() { return out_mode_; }
-  inline ObIArray<ObString> &get_out_name() { return out_name_; }
-  inline ObIArray<pl::ObPLDataType> &get_out_type() { return out_type_; }
-  inline ObIArray<ObString> &get_out_type_name() { return out_type_name_; }
-  inline ObIArray<ObString> &get_out_type_owner() { return out_type_owner_; }
-  //inline ObNewRow &get_output() { return output_; }
-  int add_out_param(int64_t i, int64_t mode, const ObString &name,
+  inline int64_t get_output_count() const { return out_bitmap_.num_members(); }
+  inline bool is_out_param(int64_t i) const { return out_bitmap_.has_member(i); }
+  inline const ObIArray<int64_t>& get_out_mode() const { return out_mode_; }
+  inline const ObIArray<ObString> &get_out_name() const { return out_name_; }
+  inline const ObIArray<pl::ObPLDataType> &get_out_type() const { return out_type_; }
+  inline const ObIArray<ObString> &get_out_type_name() const { return out_type_name_; }
+  inline const ObIArray<ObString> &get_out_type_owner() const { return out_type_owner_; }
+  inline int64_t get_client_output_count() const { return out_client_params_.num_members(); }
+  inline bool is_client_out_param_by_param_id(int64_t i) const { return out_client_params_.has_member(i); }
+  inline bool is_client_out_param_by_out_param_id(int64_t i) const {
+    return i < out_param_id_.count() && is_client_out_param_by_param_id(out_param_id_.at(i));
+  }
+  inline bool is_out_param_by_question_mark_idx(int64_t i) const {
+    return i < question_mark_idx_.count() && is_out_param(question_mark_idx_.at(i));
+  }
+  int add_out_param(int64_t i,
+                    int64_t mode,
+                    const ObString &name,
                     const pl::ObPLDataType &type,
-                    const ObString &out_type_name, const ObString &out_type_owner);
+                    const ObString &out_type_name,
+                    const ObString &out_type_owner,
+                    const bool is_client_out_param = true);
+  int add_question_mark_idx(int64_t idx);
 
   const ParamTypeInfoArray& get_type_infos() const {
     return in_type_infos_;
@@ -84,6 +100,7 @@ public:
 
   void set_is_udt_routine(bool v) { is_udt_routine_ = v; }
   bool is_udt_routine() const { return is_udt_routine_; }
+  pl::ObPLEnumSetCtx& get_enum_set_ctx() { return enum_set_ctx_; };
 
   int prepare_expression(const common::ObIArray<sql::ObRawExpr*> &params);
   int final_expression(const common::ObIArray<sql::ObRawExpr*> &params,
@@ -98,27 +115,45 @@ public:
   TO_STRING_KV(K_(can_direct_use_param),
                K_(package_id),
                K_(routine_id),
-               //K_(params),
-               K_(out_idx),
+               K_(out_bitmap),
                K_(out_name),
                K_(out_type),
                K_(out_type_name),
                K_(out_type_owner),
+               K_(out_client_params),
+               K_(out_param_id),
+               K_(question_mark_idx),
                K_(is_udt_routine));
 private:
   bool can_direct_use_param_;
   uint64_t package_id_;
   uint64_t routine_id_;
   int64_t param_cnt_;
-  ObBitSet<> out_idx_;
+
+  /* out parameters information for
+   * 1. returning out params to client
+   * 2. setting user variables after procedure call */
+  ObBitSet<> out_bitmap_;
   ObSEArray<int64_t, 32> out_mode_;
   ObSEArray<ObString, 32> out_name_;
   ObSEArray<pl::ObPLDataType, 32> out_type_;
   ObSEArray<ObString, 32> out_type_name_;
   ObSEArray<ObString, 32> out_type_owner_;
+  /* MySQL mode does not return out parameters to non-standard drivers (obclient, opensource MySQL
+   * driver) unless the parameter is bound with "?" */
+  ObBitSet<> out_client_params_;
+  ObSEArray<int64_t, 32> out_param_id_;
+  /* record corresponding param idx of the question marks, for example:
+   *     call proc(arg1, ?, arg3, ?, arg5);
+   *     question_mark_idx_ = [1, 3]
+   * means that the second and fourth parameters are question marks
+   */
+  ObSEArray<int64_t, 32> question_mark_idx_;
+
   ParamTypeInfoArray in_type_infos_;
   ObString db_name_;
   bool is_udt_routine_;
+  pl::ObPLEnumSetCtx enum_set_ctx_;
 
   DISALLOW_COPY_AND_ASSIGN(ObCallProcedureInfo);
 };

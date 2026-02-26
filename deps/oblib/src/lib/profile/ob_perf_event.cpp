@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/profile/ob_perf_event.h"
-#include "lib/utility/ob_print_utils.h"
-#include <unistd.h>
-#include <sys/uio.h>  // for iov
 namespace oceanbase
 {
 namespace common

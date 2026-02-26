@@ -23,7 +23,7 @@ class ObPointLocationAnalyzer {
 public:
   typedef std::pair<ObCartesianBox, ObSegment *> RtreeNodeValue;
 public:
-  ObPointLocationAnalyzer(ObCachedGeomBase *cache_geo, ObRstarTree<ObSegment> *rtree_index)
+  ObPointLocationAnalyzer(ObCachedGeomBase *cache_geo, ObRstarTree<ObSegment> &rtree_index)
     : cache_geo_(cache_geo),
       rtree_index_(rtree_index),
       position_(ObPointLocation::INVALID),
@@ -36,7 +36,7 @@ public:
   void update_farthest_position();
 private:
   ObCachedGeomBase *cache_geo_;
-  ObRstarTree<ObSegment> *rtree_index_;
+  ObRstarTree<ObSegment> &rtree_index_;
   ObPointLocation position_;
   uint32_t intersect_cnt_;
 };

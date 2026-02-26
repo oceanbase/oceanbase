@@ -73,16 +73,13 @@ class ObVTableLocationService
 public:
   ObVTableLocationService();
   virtual ~ObVTableLocationService() {}
-  int init(
-      ObIAliveServerTracer &server_tracer,
-      ObRsMgr &rs_mgr,
-      obrpc::ObCommonRpcProxy &rpc_proxy);
+  int init(ObRsMgr &rs_mgr);
   int vtable_get(
       const uint64_t tenant_id,
       const uint64_t table_id,
       const int64_t expire_renew_time,
       bool &is_cache_hit,
-      ObIArray<common::ObAddr> &locations);
+      common::ObIArray<common::ObAddr> &locations);
   int vtable_nonblock_renew(
       const uint64_t tenant_id,
       const uint64_t table_id);
@@ -91,45 +88,46 @@ public:
       const common::ObIArray<ObVTableLocUpdateTask> &tasks,
       bool &stopped);
   int process_barrier(const ObVTableLocUpdateTask &task, bool &stopped);
+  int check_inner_stat_() const;
   void stop();
   void wait();
   int destroy();
   int reload_config();
 private:
-  int renew_vtable_location_(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      ObSArray<ObPartitionLocation> &locations);
+  /*
+    get cached information,
+    rs machine location information is obtained from rs_mgr_;
+    cluster machine location information is obtained from all_server_tracer;
+    tenant machine location information is obtained from all_server_tracer;
+
+    @param[in] tenant_id:      Tenant for virtual table.
+    @param[in] table_id:       Virtual table id.
+    @param[out] locations:     Array of virtual table locations.
+    @param[out] renew_time:    Refresh time of table locations.
+    @return
+      - OB_SUCCESS:             successfully
+      - OB_ENTRY_NOT_EXIST      cache lacks the required information.
+      - other:                  other failures
+  */
   int get_from_vtable_cache_(
       const uint64_t tenant_id,
       const uint64_t table_id,
-      common::ObSArray<ObPartitionLocation> &locations);
-  int fetch_vtable_location_(
+      common::ObIArray<common::ObAddr> &locations,
+      int64_t &renew_time) const;
+  int renew_vtable_location_(
       const uint64_t tenant_id,
       const uint64_t table_id,
-      ObSArray<ObPartitionLocation> &locations);
-  int update_vtable_cache_(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      const common::ObSArray<ObPartitionLocation> &locations);
-  int cache_value2location_(
-      const ObLocationKVCacheValue &cache_value,
-      common::ObSArray<ObPartitionLocation> &locations);
-  int location2cache_value_(
-      const common::ObSArray<ObPartitionLocation> &locations,
-      char *buf, const int64_t buf_size,
-      ObLocationKVCacheValue &cache_value);
+      common::ObIArray<common::ObAddr> &locations);
+  int get_rs_locations_(common::ObIArray<common::ObAddr> &server, int64_t &renew_time) const;
+  int get_cluster_locations_(common::ObIArray<common::ObAddr> &servers, int64_t &renew_time) const;
+  int get_tenant_locations_(const uint64_t tenant_id, common::ObIArray<common::ObAddr> &servers, int64_t &renew_time) const;
 
-  typedef common::ObKVCache<ObVTableLocationCacheKey, ObLocationKVCacheValue> KVCache;
   typedef observer::ObUniqTaskQueue<ObVTableLocUpdateTask,
     ObVTableLocationService> ObVTableLocUpdateQueue;
 
   int inited_;
-  KVCache vtable_cache_;
   ObVTableLocUpdateQueue update_queue_;
-  ObIAliveServerTracer *server_tracer_;
   ObRsMgr *rs_mgr_;
-  obrpc::ObCommonRpcProxy *rpc_proxy_;
 };
 
 } // end namespace share

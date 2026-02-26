@@ -41,6 +41,12 @@ public:
   char d_names_[MAX_TENANT_NUM][MAX_D_NAME_LEN];
 };
 
+enum ObDumpSlogMode : uint8_t
+{
+  SLOG_MODE_SN = 0,
+  SLOG_MODE_SS = 1,
+};
+
 class ObAdminSlogExecutor : public ObAdminExecutor
 {
 public:
@@ -64,6 +70,8 @@ private:
   int64_t offset_;
   int64_t parse_count_;
   char slog_dir_[common::MAX_PATH_SIZE];
+  char ss_slog_dir_[common::MAX_PATH_SIZE];
+  ObDumpSlogMode dump_mode_;
 };
 
 }

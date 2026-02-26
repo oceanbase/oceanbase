@@ -15,12 +15,8 @@
 
 #include "lib/geo/ob_geo_dispatcher.h"
 #include "lib/geo/ob_geo_func_distance_sphere.h"
-#include "lib/geo/ob_geo_func_disjoint.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "lib/geo/ob_geo_wkb_visitor.h"
-#include "lib/geo/ob_geo_wkb_size_visitor.h"
 #include "common/ob_smart_call.h"
-#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

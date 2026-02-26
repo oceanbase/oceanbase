@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_hex_string_decoder.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "ob_bit_stream.h"
-#include "ob_integer_array.h"
 #include "ob_raw_decoder.h"
 
 namespace oceanbase
@@ -141,7 +138,7 @@ int ObHexStringDecoder::update_pointer(const char *old_block, const char *cur_bl
 int ObHexStringDecoder::batch_decode(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const

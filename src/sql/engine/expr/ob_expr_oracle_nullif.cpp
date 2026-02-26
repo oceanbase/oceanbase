@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/charset/ob_charset.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/engine/expr/ob_expr_equal.h"
 #include "sql/engine/expr/ob_expr_oracle_nullif.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase {
@@ -62,8 +58,7 @@ int ObExprOracleNullif::calc_result_type2(ObExprResType &type,
         type.set_length(type1.get_length());
       } else {
         ObExprResType cmp_type;
-        if (OB_FAIL(calc_cmp_type2(cmp_type, type1, type2,
-                                  type_ctx.get_coll_type()))) {
+        if (OB_FAIL(calc_cmp_type2(cmp_type, type1, type2, type_ctx))) {
           LOG_WARN("failed to calc cmp type", K(ret), K(type1), K(type2));
         } else {
           type.set_type(type1.get_type());

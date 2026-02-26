@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <time.h>
-#include "share/ob_errno.h"
 #include "share/restore/ob_import_arg.h"
 #include "share/restore/ob_import_util.h"
 

@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_host_ip.h"
-#include "observer/ob_server_utils.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "observer/ob_server_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::observer;

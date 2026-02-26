@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX SHARE_LOCATION
 
 #include "share/location_cache/ob_location_service.h"
-#include "share/config/ob_server_config.h" // GCONF
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "observer/ob_server_struct.h" // GCTX
-#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 #include "share/ls/ob_ls_status_operator.h" // ObLSStatus
+#include "share/ob_all_server_tracer.h"
 
 namespace oceanbase
 {
@@ -30,7 +26,8 @@ ObLocationService::ObLocationService()
     : inited_(false),
       stopped_(false),
       ls_location_service_(),
-      tablet_ls_service_()
+      tablet_ls_service_(),
+      vtable_location_service_()
 {
 }
 
@@ -56,6 +53,18 @@ int ObLocationService::get(
     LOG_WARN("fail to get log stream location",
         KR(ret), K(cluster_id), K(tenant_id), K(ls_id),
         K(expire_renew_time), K(is_cache_hit), K(location));
+  }
+  return ret;
+}
+
+int ObLocationService::renew_all_ls_locations_by_rpc()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(ls_location_service_.renew_all_ls_locations_by_rpc())) {
+    LOG_WARN("failed to renew all ls locations by rpc", KR(ret));
   }
   return ret;
 }
@@ -256,13 +265,31 @@ int ObLocationService::vtable_get(
 
 int ObLocationService::external_table_get(
     const uint64_t tenant_id,
-    const uint64_t table_id,
     ObIArray<ObAddr> &locations)
 {
-  UNUSED(table_id);
+  int ret = OB_SUCCESS;
   bool is_cache_hit = false;
   //using the locations from any distributed virtual table
-  return vtable_get(tenant_id, OB_ALL_VIRTUAL_PROCESSLIST_TID, 0, is_cache_hit, locations);
+  ObSEArray<ObAddr, 16> all_active_locations;
+  if (OB_FAIL(vtable_get(tenant_id, OB_ALL_VIRTUAL_PROCESSLIST_TID, 0, is_cache_hit, all_active_locations))) {
+    LOG_WARN("failed to get active server", K(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_active_locations.count(); ++i) {
+      bool is_stopped = false;
+      if (OB_FAIL(SVR_TRACER.is_server_stopped(all_active_locations.at(i), is_stopped))) {
+        LOG_WARN("failed to check is server stopped", K(ret), K(tenant_id), K(i), K(all_active_locations));
+      } else if (!is_stopped && OB_FAIL(locations.push_back(all_active_locations.at(i)))) {
+        LOG_WARN("failed to push back", K(ret), K(i), K(tenant_id));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (0 == locations.count() && OB_FAIL(locations.assign(all_active_locations))) {
+      LOG_WARN("failed to assign locations", K(ret));
+    }
+    LOG_TRACE("locations for external table", K(locations), K(ret));
+  }
+  return ret;
 }
 
 int ObLocationService::vtable_nonblock_renew(
@@ -286,9 +313,7 @@ int ObLocationService::init(
     ObLSTableOperator &ls_pt,
     schema::ObMultiVersionSchemaService &schema_service,
     common::ObMySQLProxy &sql_proxy,
-    ObIAliveServerTracer &server_tracer,
     ObRsMgr &rs_mgr,
-    obrpc::ObCommonRpcProxy &rpc_proxy,
     obrpc::ObSrvRpcProxy &srv_rpc_proxy)
 {
   int ret = OB_SUCCESS;
@@ -299,7 +324,7 @@ int ObLocationService::init(
     LOG_WARN("ls_location_service init failed", KR(ret));
   } else if (OB_FAIL(tablet_ls_service_.init(schema_service, sql_proxy, srv_rpc_proxy))) {
     LOG_WARN("tablet_ls_service init failed", KR(ret));
-  } else if (OB_FAIL(vtable_location_service_.init(server_tracer, rs_mgr, rpc_proxy))) {
+  } else if (OB_FAIL(vtable_location_service_.init(rs_mgr))) {
     LOG_WARN("vtable_location_service init failed", KR(ret));
   } else {
     inited_ = true;
@@ -373,8 +398,10 @@ int ObLocationService::batch_renew_tablet_locations(
     const uint64_t tenant_id,
     const ObList<common::ObTabletID, common::ObIAllocator> &tablet_list,
     const int error_code,
-    const bool is_nonblock)
+    const bool is_nonblock,
+    const int64_t expire_renew_time /* = INT64_MAX */)
 {
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RENEW_TABLET_LOCATION);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -399,8 +426,9 @@ int ObLocationService::batch_renew_tablet_locations(
       } else if (OB_FAIL(tablet_ls_service_.batch_renew_tablet_ls_cache( // block
           tenant_id,
           tablet_list,
-          tablet_ls_caches))) {
-        LOG_WARN("batch renew cache failed", KR(ret), K(tenant_id), K(tablet_list));
+          tablet_ls_caches,
+          expire_renew_time))) {
+        LOG_WARN("batch renew cache failed", KR(ret), K(tenant_id), K(tablet_list), K(expire_renew_time));
       }
     }
     // 2. renew ls location
@@ -413,19 +441,35 @@ int ObLocationService::batch_renew_tablet_locations(
       } else if (!tablet_ls_caches.empty()) { // block renew both
         ls_ids.reset();
         ARRAY_FOREACH(tablet_ls_caches, idx) {
+          bool need_renew = true;
           const ObTabletLSCache &tablet_ls = tablet_ls_caches.at(idx);
           if (!common::has_exist_in_array(ls_ids, tablet_ls.get_ls_id())) {
-            if (OB_FAIL(ls_ids.push_back(tablet_ls.get_ls_id()))) {
-              LOG_WARN("push back failed", KR(ret), K(tablet_ls));
+            if (INT64_MAX != expire_renew_time) {
+              if (OB_FAIL(ls_location_service_.check_ls_needing_renew(
+                  tenant_id,
+                  tablet_ls.get_ls_id(),
+                  expire_renew_time,
+                  need_renew))) {
+                LOG_WARN("failed to check_ls_needing_renew", KR(ret), K(tenant_id),
+                    "ls_id", tablet_ls.get_ls_id(), K(expire_renew_time));
+              }
+            }
+
+            if (OB_SUCC(ret) && need_renew) {
+              if (OB_FAIL(ls_ids.push_back(tablet_ls.get_ls_id()))) {
+                LOG_WARN("push back failed", KR(ret), K(tablet_ls));
+              }
             }
           }
-        }
-        if (FAILEDx(ls_location_service_.batch_renew_ls_locations(
-            GCONF.cluster_id,
-            tenant_id,
-            ls_ids,
-            ls_locations))) {
-          LOG_WARN("batch renew cache failed", KR(ret), K(tenant_id), K(tablet_list), K(ls_ids));
+        } // end ARRAY_FOREACH
+        if (OB_SUCC(ret) && !ls_ids.empty()){
+          if (OB_FAIL(ls_location_service_.batch_renew_ls_locations(
+              GCONF.cluster_id,
+              tenant_id,
+              ls_ids,
+              ls_locations))) {
+            LOG_WARN("batch renew cache failed", KR(ret), K(tenant_id), K(tablet_list), K(ls_ids));
+          }
         }
       } else { // block only renew ls location or block renew both with empty tablet_ls_caches
         if (OB_FAIL(ls_location_service_.renew_location_for_tenant(
@@ -437,8 +481,8 @@ int ObLocationService::batch_renew_tablet_locations(
       }
     }
     FLOG_INFO("[TABLET_LOCATION] batch renew tablet locations finished",
-        KR(ret), K(tenant_id), K(renew_type), K(is_nonblock), K(tablet_list), K(ls_ids),
-        K(error_code));
+        KR(ret), K(tenant_id), K(renew_type), K(is_nonblock), K(tablet_list), K(tablet_ls_caches),
+        "need_refresh_ls_ids", ls_ids, K(error_code), K(expire_renew_time));
   }
   return ret;
 }

@@ -22,6 +22,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/net/ob_ingress_bw_alloc_service.h"
 #include "observer/ob_srv_rpc_handler.h"
+#include "observer/net/ob_shared_storage_net_throt_service.h"
 
 namespace oceanbase {
 namespace rpc {
@@ -42,7 +43,8 @@ public:
 
   virtual ~ObSrvNetworkFrame();
 
-  int init();
+  int init(const char* mysql_unix_path,
+           const char* rpc_unix_path);
   void destroy();
   int start();
   int mysql_shutdown();
@@ -81,6 +83,12 @@ public:
   int net_endpoint_register(const ObNetEndpointKey &endpoint_key, int64_t expire_time);
   int net_endpoint_predict_ingress(const ObNetEndpointKey &endpoint_key, int64_t &predicted_bw);
   int net_endpoint_set_ingress(const ObNetEndpointKey &endpoint_key, int64_t assigned_bw);
+  // share storage net throt
+  rootserver::ObSSNTAllocService *get_SSNT_service();
+  int shared_storage_net_throt_register(const obrpc::ObSSNTEndpointArg &endpoint_storage_infos);
+  int shared_storage_net_throt_predict(
+      const obrpc::ObSSNTEndpointArg &endpoint_storage_infos, ObSharedDeviceResourceArray &predicted_resource);
+  int shared_storage_net_throt_set(const ObSharedDeviceResourceArray &assigned_resource);
 
 private:
   uint64_t get_root_certificate_table_hash();
@@ -96,6 +104,7 @@ private:
   ObSrvRpcHandler rpc_handler_;
   ObSMHandler mysql_handler_;
   rootserver::ObIngressBWAllocService ingress_service_;
+  rootserver::ObSSNTAllocService SSNT_service_;
 
   rpc::frame::ObNetEasy net_;
   rpc::frame::ObReqTransport *rpc_transport_;
@@ -123,17 +132,19 @@ static int get_default_net_thread_count()
   int cnt = 1;
   int cpu_num = static_cast<int>(get_cpu_count());
 
-  if (cpu_num <= 4) {
+  if (cpu_num <= 2) {
     cnt = 1;
-  } else if (cpu_num <= 8) {
+  } else if (cpu_num <= 4) {
     cnt = 2;
+  } else if (cpu_num <= 8) {
+    cnt = 3;
   } else if (cpu_num <= 16) {
-    cnt = 4;
+    cnt = cpu_num / 2;
   } else if (cpu_num <= 32) {
-    cnt = 7;
+    cnt = 6 + cpu_num / 8;
   } else {
-    cnt = max(8, cpu_num / 6);
-    cnt = min(cnt, 64);
+    cnt = max(10, 4 + cpu_num / 6);
+    cnt = min(cnt, 128);
   }
   return cnt;
 }

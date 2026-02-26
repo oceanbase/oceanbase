@@ -13,7 +13,6 @@
 
 #include "ob_string_stream_decoder.h"
 #include "ob_cs_decoding_util.h"
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 
 namespace oceanbase
 {
@@ -33,7 +32,7 @@ static void process(
     const ObStringStreamDecoderCtx &str_ctx,
     const char *offset_arr_buf,
     const char *ref_data,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums)
 {
@@ -46,8 +45,8 @@ static void process(
 template<int32_t offset_width_V, int32_t ref_store_width_V, bool need_copy_V>
 struct ConvertStringToDatum_T<offset_width_V,
                               ref_store_width_V,
-                              ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL,
-                              need_copy_V >
+                              ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP,
+                              need_copy_V>
 {
 static void process(
     const ObBaseColumnDecoderCtx &base_col_ctx,
@@ -55,7 +54,7 @@ static void process(
     const ObStringStreamDecoderCtx &str_ctx,
     const char *offset_data,
     const char *ref_data,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums)
 {
@@ -96,7 +95,7 @@ static void process(
 template<int32_t offset_width_V, int32_t ref_store_width_V, bool need_copy_V>
 struct ConvertStringToDatum_T<offset_width_V,
                               ref_store_width_V,
-                              ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_BITMAP,
+                              ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_OR_NOP_BITMAP,
                               need_copy_V>
 {
 static void process(
@@ -105,7 +104,7 @@ static void process(
     const ObStringStreamDecoderCtx &str_ctx,
     const char *offset_data,
     const char *ref_data,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums)
 {
@@ -126,7 +125,7 @@ static void process(
       cur_start = str_data + offset_arr[row_id - 1];
       str_len = offset_arr[row_id] - offset_arr[row_id - 1];
     }
-    if (ObCSDecodingUtil::test_bit(base_col_ctx.null_bitmap_, row_id)) {
+    if (ObCSDecodingUtil::test_bit(base_col_ctx.null_or_nop_bitmap_, row_id)) {
       datum.set_null();
     } else if (need_copy_V) {
       ENCODING_ADAPT_MEMCPY(const_cast<char *>(datum.ptr_), cur_start, str_len);
@@ -151,7 +150,7 @@ static void process(
     const ObStringStreamDecoderCtx &str_ctx,
     const char *offset_data,
     const char *ref_data,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums)
 {
@@ -196,7 +195,7 @@ static void process(
     const ObStringStreamDecoderCtx &str_ctx,
     const char *offset_data,
     const char *ref_data,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums)
 {
@@ -217,7 +216,6 @@ static void process(
     }
     if (row_id == base_col_ctx.null_replaced_ref_) {
       datum.set_null();
-      // not exist in offset_arr, must skip below
     } else {
       if (0 == row_id) {
         cur_start = str_data;
@@ -242,7 +240,7 @@ static void process(
 template<int32_t ref_store_width_V, bool need_copy_V>
 struct ConvertStringToDatum_T<FIX_STRING_OFFSET_WIDTH_V,
                              ref_store_width_V,
-                             ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL,
+                             ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP,
                              need_copy_V>
 {
 static void process(
@@ -251,7 +249,7 @@ static void process(
     const ObStringStreamDecoderCtx &str_ctx,
     const char *offset_data,
     const char *ref_data,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums)
 {
@@ -284,7 +282,7 @@ static void process(
 template<int32_t ref_store_width_V, bool need_copy_V>
 struct ConvertStringToDatum_T<FIX_STRING_OFFSET_WIDTH_V,
                              ref_store_width_V,
-                             ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_BITMAP,
+                             ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_OR_NOP_BITMAP,
                              need_copy_V>
 {
 static void process(
@@ -293,7 +291,7 @@ static void process(
     const ObStringStreamDecoderCtx &str_ctx,
     const char *offset_data,
     const char *ref_data,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums)
 {
@@ -305,7 +303,7 @@ static void process(
     ObDatum &datum = datums[i];
     row_id = row_ids[i];
     cur_start = str_data + row_id * str_len;
-    if (ObCSDecodingUtil::test_bit(base_col_ctx.null_bitmap_, row_id)) {
+    if (ObCSDecodingUtil::test_bit(base_col_ctx.null_or_nop_bitmap_, row_id)) {
       datum.set_null();
     } else if (need_copy_V) {
       ENCODING_ADAPT_MEMCPY(const_cast<char *>(datum.ptr_), cur_start, str_len);
@@ -332,7 +330,7 @@ static void process(
     const ObStringStreamDecoderCtx &str_ctx,
     const char *offset_data,
     const char *ref_data,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums)
 {
@@ -354,7 +352,7 @@ static void process(
     const ObStringStreamDecoderCtx &str_ctx,
     const char *offset_data,
     const char *ref_data,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums)
 {
@@ -373,7 +371,6 @@ static void process(
     }
     if (row_id == base_col_ctx.null_replaced_ref_) {
       datum.set_null();
-      // not exist in offset_arr, must skip below
     } else {
       cur_start = str_data + row_id * str_len;
       if (need_copy_V) {
@@ -389,7 +386,10 @@ static void process(
 };
 
 ObMultiDimArray_T<ConvertStringToDatumFunc,
-    5, ObRefStoreWidthV::MAX_WIDTH_V, ObBaseColumnDecoderCtx::ObNullFlag::MAX, 2> convert_string_to_datum_funcs;
+    5,
+    ObRefStoreWidthV::MAX_WIDTH_V,
+    ObBaseColumnDecoderCtx::ObNullFlag::MAX,
+    2> convert_string_to_datum_funcs;
 
 template<int32_t offset_width_V,
          int32_t ref_store_width_V,
@@ -411,8 +411,12 @@ struct ConvertStringToDatumInit
   }
 };
 
-static bool convert_string_to_datum_funcs_inited = ObNDArrayIniter<ConvertStringToDatumInit,
-    5, ObRefStoreWidthV::MAX_WIDTH_V, ObBaseColumnDecoderCtx::ObNullFlag::MAX, 2>::apply();
+static bool convert_string_to_datum_funcs_inited = ObNDArrayIniter<
+    ConvertStringToDatumInit,
+    5,
+    ObRefStoreWidthV::MAX_WIDTH_V,
+    ObBaseColumnDecoderCtx::ObNullFlag::MAX,
+    2>::apply();
 
 
 

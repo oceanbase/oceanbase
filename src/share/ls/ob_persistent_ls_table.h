@@ -33,6 +33,7 @@ namespace share
 // [class_full_name] ObPersistentLSTable
 // [class_functions] for log stream table store in meta_tanant or user_tenant
 // [class_attention] None
+class ObDMLSqlSplicer;
 class ObPersistentLSTable : public ObLSTable
 {
 public:

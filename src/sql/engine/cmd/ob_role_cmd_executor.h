@@ -37,10 +37,6 @@ public:
   ObCreateRoleExecutor() {}
   virtual ~ObCreateRoleExecutor() {}
   int execute(ObExecContext &ctx, ObCreateRoleStmt &stmt);
-  static int encrypt_passwd(const common::ObString& passwd,
-                            common::ObString& encrypted_passwd,
-                            char *enc_buf,
-                            int64_t buf_len);
 private:
   int create_role(obrpc::ObCommonRpcProxy *rpc_proxy,
                   const obrpc::ObCreateRoleArg &arg) const;
@@ -56,10 +52,6 @@ public:
   ObDropRoleExecutor() {}
   virtual ~ObDropRoleExecutor() {}
   int execute(ObExecContext &ctx, ObDropRoleStmt &stmt);
-  static int encrypt_passwd(const common::ObString& passwd,
-                            common::ObString& encrypted_passwd,
-                            char *enc_buf,
-                            int64_t buf_len);
 private:
   int drop_role(obrpc::ObCommonRpcProxy *rpc_proxy,
                   const obrpc::ObDropUserArg &arg) const;
@@ -73,10 +65,6 @@ public:
   ObAlterRoleExecutor() {}
   virtual ~ObAlterRoleExecutor() {}
   int execute(ObExecContext &ctx, ObAlterRoleStmt &stmt);
-  static int encrypt_passwd(const common::ObString& passwd,
-                            common::ObString& encrypted_passwd,
-                            char *enc_buf,
-                            int64_t buf_len);
 private:
   int alter_role(obrpc::ObCommonRpcProxy *rpc_proxy,
                  const obrpc::ObAlterRoleArg &arg) const;

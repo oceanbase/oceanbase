@@ -37,11 +37,12 @@ public:
       const int64_t parallelism,
       const bool is_partitioned_local_index_task,
       ObRootService *root_service,
-      const common::ObAddr &inner_sql_exec_addr)
+      const common::ObAddr &inner_sql_exec_addr,
+      const bool is_retryable_ddl)
       : task_id_(task_id), tenant_id_(tenant_id), data_table_id_(data_table_id), dest_table_id_(dest_table_id),
         schema_version_(schema_version), snapshot_version_(snapshot_version), execution_id_(execution_id),
         consumer_group_id_(consumer_group_id), trace_id_(trace_id), parallelism_(parallelism), is_partitioned_local_index_task_(is_partitioned_local_index_task),
-        allocator_("IdxSSTBuildTask"), root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr)
+        allocator_("IdxSSTBuildTask"), root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), is_retryable_ddl_(is_retryable_ddl)
   {
     set_retry_times(0);
   }
@@ -58,7 +59,7 @@ public:
   void add_event_info(const int ret, const ObString &ddl_event_stmt);
   TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
                K_(execution_id), K_(consumer_group_id), K_(trace_id), K_(parallelism), K_(is_partitioned_local_index_task),
-               K_(addition_info), K_(nls_date_format), K_(nls_timestamp_format), K_(nls_timestamp_tz_format));
+               K_(addition_info), K_(nls_date_format), K_(nls_timestamp_format), K_(nls_timestamp_tz_format), K_(is_retryable_ddl));
 private:
   inline bool is_partitioned_local_index_task() const { return is_partitioned_local_index_task_ == true; }
 private:
@@ -80,6 +81,7 @@ private:
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
   ObDDLTaskInfo addition_info_;
+  bool is_retryable_ddl_;
 
   DISALLOW_COPY_AND_ASSIGN(ObIndexSSTableBuildTask);
 };
@@ -104,30 +106,34 @@ public:
       const int64_t parent_task_id /* = 0 */,
       const uint64_t tenant_data_version,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
-      const int64_t snapshot_version = 0);
+      const int64_t snapshot_version = 0,
+      const bool is_retryable_ddl = true);
   int init(const ObDDLTaskRecord &task_record);
   int update_column_checksum_calc_status(
       const common::ObTabletID &tablet_id,
       const int ret_code);
   int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
+      const ObAddr &addr,
       const int64_t snapshot_version,
       const int64_t execution_id,
       const int ret_code,
       const ObDDLTaskInfo &addition_info);
   virtual int process() override;
-  virtual void flt_set_task_span_tag() const override;
-  virtual void flt_set_status_span_tag() const override;
-  virtual int cleanup_impl() override;
   virtual bool is_valid() const override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
   virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   virtual bool support_longops_monitoring() const override { return true; }
+  virtual bool task_can_retry() const
+  {
+    return share::ObDDLTaskStatus::REDEFINITION == task_status_ ? is_retryable_ddl_ : true;
+  }
   static int deep_copy_index_arg(common::ObIAllocator &allocator, const obrpc::ObCreateIndexArg &source_arg, obrpc::ObCreateIndexArg &dest_arg);
-  INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_),K(snapshot_held_), K(is_sstable_complete_task_submitted_),
-      K(sstable_complete_ts_), K(check_unique_snapshot_), K_(redefinition_execution_id), K(create_index_arg_), K(target_cg_cnt_));
+  bool is_offline_rebuild() const { return create_index_arg_.is_offline_rebuild_; }
+  INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_), K(is_sstable_complete_task_submitted_), K(sstable_complete_request_time_),
+      K(sstable_complete_ts_), K(check_unique_snapshot_), K(complete_sstable_job_ret_code_), K_(redefinition_execution_id), K(create_index_arg_), K(target_cg_cnt_));
 private:
   int prepare();
   int wait_trans_end();
@@ -138,16 +144,18 @@ private:
   int enable_index();
   int clean_on_failed();
   int succ();
-  int hold_snapshot(const int64_t snapshot);
+  virtual int cleanup_impl() override;
+  int hold_snapshot(common::ObMySQLTransaction &trans, const int64_t snapshot);
   int release_snapshot(const int64_t snapshot);
   int update_index_status_in_schema(
       const share::schema::ObTableSchema &index_schema,
-      const share::schema::ObIndexStatus new_status);
+      const share::schema::ObIndexStatus new_status,
+      ObSchemaGetterGuard &schema_guard);
   int check_health();
   int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   int send_build_single_replica_request(const bool &is_partitioned_local_index_task,
                                         const int64_t &parallelism,
-                                        const int64_t &execution_id,
+                                        const int64_t &task_execution_id,
                                         const share::ObLSID &ls_id,
                                         const common::ObAddr &leader_addr,
                                         const ObIArray<ObTabletID> &index_partition_ids);
@@ -155,13 +163,11 @@ private:
   int check_build_single_replica(bool &is_end);
   int check_build_local_index_single_replica(bool &is_end);
   int check_need_verify_checksum(bool &need_verify);
-  int check_need_acquire_lob_snapshot(const ObTableSchema *data_table_schema,
-                                      const ObTableSchema *index_table_schema,
-                                      bool &need_acquire);
   bool is_sstable_complete_task_submitted();
   int check_target_cg_cnt();
   int update_mlog_last_purge_scn();
   bool is_create_partitioned_local_index();
+  int serialize_and_update_message();
 private:
   static const int64_t OB_INDEX_BUILD_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;
@@ -171,11 +177,7 @@ private:
   using ObDDLTask::schema_version_;
   using ObDDLTask::snapshot_version_;
   uint64_t &index_table_id_;
-  bool is_unique_index_;
-  bool is_global_index_;
   ObRootService *root_service_;
-  ObDDLWaitTransEndCtx wait_trans_ctx_;
-  bool snapshot_held_;
   bool is_sstable_complete_task_submitted_;
   int64_t sstable_complete_request_time_;
   int64_t sstable_complete_ts_;
@@ -186,6 +188,7 @@ private:
   ObDDLTabletScheduler tablet_scheduler_;
   obrpc::ObCreateIndexArg create_index_arg_; // this is not a valid arg, only has nls formats for now
   int64_t target_cg_cnt_;
+  bool is_retryable_ddl_;
 };
 
 }  // end namespace rootserver

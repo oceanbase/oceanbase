@@ -45,7 +45,7 @@ public:
   int assign(const ObTabletReplicaChecksumItem &replica_item);
   int assign(const ObTabletChecksumItem &other);
   ObTabletChecksumItem &operator =(const ObTabletChecksumItem &other);
-
+  common::ObTabletID get_tablet_id() const { return tablet_id_; }
   TO_STRING_KV(K_(tenant_id), K_(tablet_id), K_(ls_id), K_(data_checksum), K_(row_count), 
     K_(compaction_scn), K_(replica_type), K_(column_meta));
   
@@ -87,10 +87,6 @@ public:
       const common::ObSqlString &sql,
       const uint64_t tenant_id,
       common::ObIArray<ObTabletChecksumItem> &items);
-  static int insert_tablet_checksum_item(
-      common::ObISQLClient &sql_client,
-      const uint64_t tenant_id,
-      const ObTabletChecksumItem &item);
   static int insert_tablet_checksum_items(
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,

@@ -84,7 +84,7 @@ class ObOptStatsGatherWholeMsg
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<ObOptStatsGatherWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<ObOptStatsGatherPieceMsg, ObOptStatsGatherWholeMsg>;
 public:
   ObOptStatsGatherWholeMsg() : ready_state_(0) {};
   ~ObOptStatsGatherWholeMsg() = default;
@@ -127,7 +127,7 @@ public:
   ~ObOptStatsGatherPieceMsgListener() = default;
   static int on_message(
     ObOptStatsGatherPieceMsgCtx &piece_ctx,
-    common::ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<ObPxSqcMeta> &sqcs,
     const ObOptStatsGatherPieceMsg &pkt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptStatsGatherPieceMsgListener);

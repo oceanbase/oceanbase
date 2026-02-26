@@ -14,8 +14,6 @@
 
 #include "sql/engine/aggregate/ob_hash_distinct_vec_op.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -29,7 +27,11 @@ ObHashDistinctVecSpec::ObHashDistinctVecSpec(ObIAllocator &alloc, const ObPhyOpe
   sort_collations_(alloc),
   is_block_mode_(false),
   by_pass_enabled_(false),
-  is_push_down_(false)
+  is_push_down_(false),
+  group_distinct_exprs_(alloc),
+  grouping_id_(nullptr),
+  group_sort_collations_(alloc),
+  has_non_distinct_aggr_params_(false)
 {}
 
 OB_SERIALIZE_MEMBER((ObHashDistinctVecSpec, ObOpSpec),
@@ -37,7 +39,11 @@ OB_SERIALIZE_MEMBER((ObHashDistinctVecSpec, ObOpSpec),
                     sort_collations_,
                     is_block_mode_,
                     by_pass_enabled_,
-                    is_push_down_);
+                    is_push_down_,
+                    group_distinct_exprs_,
+                    grouping_id_,
+                    group_sort_collations_,
+                    has_non_distinct_aggr_params_);
 
 ObHashDistinctVecOp::ObHashDistinctVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
     : ObOperator(exec_ctx, spec, input),
@@ -161,7 +167,8 @@ int ObHashDistinctVecOp::init_hash_partition_infras()
     LOG_WARN("failed to init sql mem processor", K(ret));
   } else if (OB_FAIL(hp_infras_.init(tenant_id_,
       enable_sql_dumped_,
-      true, true, 2, MY_SPEC.max_batch_size_, MY_SPEC.distinct_exprs_, &sql_mem_processor_))) {
+      true, true, 2, MY_SPEC.max_batch_size_, MY_SPEC.distinct_exprs_, &sql_mem_processor_,
+      MY_SPEC.compress_type_))) {
     LOG_WARN("failed to init hash partition infrastructure", K(ret));
   } else {
     hp_infras_.set_io_event_observer(&io_event_observer_);
@@ -214,9 +221,9 @@ int ObHashDistinctVecOp::build_distinct_data_for_batch(const int64_t batch_size,
         finish_turn = true;
       } else if (OB_FAIL(child_->get_next_batch(batch_size, child_brs))) {
         LOG_WARN("failed to get next batch from child op", K(ret), K(is_block));
-      } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(MY_SPEC.distinct_exprs_,
-                                                              *child_brs,
-                                                              hash_values_for_batch_))) {
+      } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(
+                   MY_SPEC.distinct_exprs_, *child_brs->skip_, child_brs->size_,
+                   child_brs->all_rows_active_, hash_values_for_batch_))) {
         LOG_WARN("failed to calc hash values batch for child", K(ret));
       } else {
         //child_op_is_end_ means last batch data is return, finish_turn means no data to process
@@ -331,9 +338,9 @@ int ObHashDistinctVecOp::build_distinct_data_for_batch_by_pass(const int64_t bat
       finish_turn = true;
     } else if (OB_FAIL(child_->get_next_batch(batch_size, child_brs))) {
       LOG_WARN("failed to get next batch from child op", K(ret));
-    } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(MY_SPEC.distinct_exprs_,
-                                                            *child_brs,
-                                                            hash_values_for_batch_))) {
+    } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(
+                 MY_SPEC.distinct_exprs_, *child_brs->skip_, child_brs->size_,
+                 child_brs->all_rows_active_, hash_values_for_batch_))) {
       LOG_WARN("failed to calc hash values batch for child", K(ret));
     } else {
       int64_t add_cnt = (child_brs->size_
@@ -511,7 +518,7 @@ int ObHashDistinctVecOp::by_pass_get_next_batch(const int64_t batch_size)
   } else {
     brs_.size_ = child_brs->size_;
     group_cnt_ += (child_brs->size_ - child_brs->skip_->accumulate_bit_cnt(batch_size));
-    brs_.skip_->deep_copy(*(child_brs->skip_), batch_size);
+    brs_.skip_->deep_copy(*(child_brs->skip_), brs_.size_);
     if (child_brs->end_ && (0 == child_brs->size_)) {
       brs_.end_ = true;
       brs_.size_ = 0;
@@ -528,16 +535,14 @@ int ObHashDistinctVecOp::process_state(int64_t probe_cnt, bool &can_insert)
   int ret = OB_SUCCESS;
   if (ObAdaptiveByPassCtrl::STATE_L2_INSERT == bypass_ctrl_.state_) {
     can_insert = true;
-    if (hp_infras_.hash_table_full()
-        || hp_infras_.get_hash_store_mem_used() > INIT_L3_CACHE_SIZE) {
+    if (hp_infras_.get_actual_mem_used() > INIT_L2_CACHE_SIZE) {
       bypass_ctrl_.period_cnt_ = std::max(hp_infras_.get_hash_table_size(), min_period_cnt);
       bypass_ctrl_.probe_cnt_ += probe_cnt;
       bypass_ctrl_.state_ = ObAdaptiveByPassCtrl::STATE_ANALYZE;
     }
   } else if (ObAdaptiveByPassCtrl::STATE_L3_INSERT == bypass_ctrl_.state_) {
     can_insert = true;
-    if (hp_infras_.hash_table_full()
-        || hp_infras_.get_hash_store_mem_used() > MAX_L3_CACHE_SIZE) {
+    if (hp_infras_.get_actual_mem_used() > INIT_L3_CACHE_SIZE) {
       bypass_ctrl_.period_cnt_ = std::max(hp_infras_.get_hash_table_size(), min_period_cnt);
       bypass_ctrl_.probe_cnt_ += probe_cnt;
       bypass_ctrl_.state_ = ObAdaptiveByPassCtrl::STATE_ANALYZE;

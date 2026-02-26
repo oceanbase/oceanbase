@@ -13,15 +13,8 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "sql/monitor/flt/ob_flt_utils.h"
-#include "share/ob_define.h"
-#include "sql/session/ob_basic_session_info.h"
-#include "lib/trace/ob_trace.h"
-#include "lib/trace/ob_trace_def.h"
-#include "sql/monitor/flt/ob_flt_extra_info.h"
+#include "ob_flt_utils.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/json_type/ob_json_base.h"
 
 namespace oceanbase
 {
@@ -92,7 +85,8 @@ namespace sql
 
   int ObFLTUtils::init_flt_info(Ob20ExtraInfo extra_info,
                                sql::ObSQLSessionInfo &session,
-                               bool is_client_support_flt)
+                               bool is_client_support_flt,
+                               bool enable_flt)
   {
     int ret = OB_SUCCESS;
     if (extra_info.exist_full_link_trace()) {
@@ -101,7 +95,7 @@ namespace sql
                                 session));
       extra_info.get_full_link_trace().reset();
     }
-    if (session.get_control_info().is_valid()){
+    if (enable_flt) {
       OZ(init_flt_log_framework(session, is_client_support_flt));
     } else {
       FLT_SET_TRACE_LEVEL(0);
@@ -448,7 +442,7 @@ namespace sql
       // init trace enable
       con.print_sample_pct_ = ((double)(sess.get_tenant_print_sample_ppm()))/1000000;
       ObRandom r;
-      double rand_num = 1.0 * (r.rand(0, RAND_MAX)/RAND_MAX);
+      double rand_num = (1.0 * r.rand(0, RAND_MAX)/RAND_MAX);
       if (rand_num < con.sample_pct_) {
         sess.set_trace_enable(true);
       } else {
@@ -465,7 +459,7 @@ namespace sql
       } else if (con.rp_ == FLTControlInfo::RecordPolicy::RP_ONLY_SLOW_QUERY) {
         // do nothing, slow query will must flush
       } else if (con.rp_ == FLTControlInfo::RecordPolicy::RP_SAMPLE_AND_SLOW_QUERY) {
-        double rand_num2 = 1.0 * (r.rand(0, RAND_MAX)/RAND_MAX);
+        double rand_num2 = (1.0 * r.rand(0, RAND_MAX)/RAND_MAX);
         if (rand_num2 < con.print_sample_pct_) {
           sess.set_auto_flush_trace(true);
         } else {
@@ -626,7 +620,7 @@ namespace sql
               jo_ptr->json_type() != ObJsonNodeType::J_ARRAY) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid json type", K(ret), K(jo_ptr->json_type()));
-    } else if (OB_FAIL(jo_ptr->print(j_buf, true, false, 0))) {
+    } else if (OB_FAIL(jo_ptr->print(j_buf, true, 0, false, 0))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("fail to convert json to string", K(ret));
     } else {

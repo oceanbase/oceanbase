@@ -15,6 +15,7 @@
 
 #include "share/ob_define.h"
 #include "ob_root_utils.h"
+#include "share/ob_ddl_args.h"
 
 namespace oceanbase
 {
@@ -58,7 +59,6 @@ public:
       share::schema::ObMultiVersionSchemaService &schema_service,
       obrpc::ObCommonRpcProxy &common_rpc_proxy,
       common::ObAddr &self,
-      ObZoneManager &zone_mgr,
       common::ObMySQLProxy &sql_proxy,
       share::ObLSTableOperator &lst_operator);
   int check();
@@ -73,7 +73,6 @@ private:
   share::schema::ObMultiVersionSchemaService *schema_service_;
   obrpc::ObCommonRpcProxy *common_rpc_proxy_;   //use GCTX.rs_rpc_proxy_
   common::ObAddr self_;
-  ObZoneManager *zone_mgr_;
   common::ObMySQLProxy *sql_proxy_;
   share::ObLSTableOperator *lst_operator_;
   volatile bool &stop_;

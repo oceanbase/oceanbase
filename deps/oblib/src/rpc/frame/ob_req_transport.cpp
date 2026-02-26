@@ -12,20 +12,12 @@
 
 #define USING_LOG_PREFIX RPC_FRAME
 
-#include "rpc/frame/ob_req_transport.h"
 
-#include <byteswap.h>
-#include <arpa/inet.h>
+#include "ob_req_transport.h"
 #include "util/easy_mod_stat.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/worker.h"
-#include "lib/net/ob_addr.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_stat.h"
-#include "rpc/obrpc/ob_net_keepalive.h"
 #include "rpc/frame/ob_net_easy.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace easy
 {
@@ -97,6 +89,7 @@ int async_cb(easy_request_t *r)
 
       ret = OB_LIBEASY_ERROR;
     } else if (OB_FAIL(cb->decode(r->ipacket))) {
+      cb->set_error(ret);
       cb->on_invalid();
       LOG_WARN("decode failed", K(ret), K(pcode));
     } else if (OB_PACKET_CLUSTER_ID_NOT_MATCH == cb->get_rcode()) {
@@ -490,10 +483,17 @@ int ObReqTransport::send(const Request &req, Result &r) const
     ret = common::OB_INVALID_ARGUMENT;
     RPC_FRAME_LOG(ERROR, "invalid argument", K(req));
   } else {
-    EVENT_INC(RPC_PACKET_OUT);
-    EVENT_ADD(RPC_PACKET_OUT_BYTES,
-              req.const_pkt().get_clen() + req.const_pkt().get_header_size() + common::OB_NET_HEADER_LENGTH);
-
+    if (oceanbase::obrpc::OB_LOG_PUSH_REQ == req.const_pkt().get_pcode()) {
+      //don not collect push log rpc in sql audit
+      ObTenantDiagnosticInfoSummaryGuard guard(req.const_pkt().get_tenant_id());
+      EVENT_INC(RPC_PACKET_OUT);
+      EVENT_ADD(RPC_PACKET_OUT_BYTES,
+                req.const_pkt().get_clen() + req.const_pkt().get_header_size() + common::OB_NET_HEADER_LENGTH);
+    } else {
+      EVENT_INC(RPC_PACKET_OUT);
+      EVENT_ADD(RPC_PACKET_OUT_BYTES,
+                req.const_pkt().get_clen() + req.const_pkt().get_header_size() + common::OB_NET_HEADER_LENGTH);
+    }
     {
       lib::Thread::RpcGuard guard(req.s_->addr, req.const_pkt().get_pcode());
       r.pkt_ = reinterpret_cast<obrpc::ObRpcPacket*>(send_session(req.s_));
@@ -520,8 +520,16 @@ int ObReqTransport::send(const Request &req, Result &r) const
 
 int ObReqTransport::post(const Request &req) const
 {
-  EVENT_INC(RPC_PACKET_OUT);
-  EVENT_ADD(RPC_PACKET_OUT_BYTES,
-            req.const_pkt().get_clen() + req.const_pkt().get_header_size() + common::OB_NET_HEADER_LENGTH);
+  if (oceanbase::obrpc::OB_LOG_PUSH_REQ == req.const_pkt().get_pcode()) {
+    //don not collect push log rpc in sql audit
+    ObTenantDiagnosticInfoSummaryGuard guard(req.const_pkt().get_tenant_id());
+    EVENT_INC(RPC_PACKET_OUT);
+    EVENT_ADD(RPC_PACKET_OUT_BYTES,
+              req.const_pkt().get_clen() + req.const_pkt().get_header_size() + common::OB_NET_HEADER_LENGTH);
+  } else {
+    EVENT_INC(RPC_PACKET_OUT);
+    EVENT_ADD(RPC_PACKET_OUT_BYTES,
+              req.const_pkt().get_clen() + req.const_pkt().get_header_size() + common::OB_NET_HEADER_LENGTH);
+  }
   return post_session(req.s_);
 }

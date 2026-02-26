@@ -28,7 +28,7 @@ namespace oceanbase
 namespace common
 {
 
-static const int64_t MAX_CACHE_NUM = 32;
+static const int64_t MAX_CACHE_NUM = 48;
 static const int64_t INVALID_CACHE_ID = -1;  // cache id must be in [0,MAX_CACHE_NUM)
 static const int64_t MAX_TENANT_NUM_PER_SERVER = 1024;
 static const int32_t MAX_CACHE_NAME_LENGTH = 127;
@@ -68,6 +68,7 @@ struct ObKVCachePair
       : magic_(KVPAIR_MAGIC_NUM), size_(0), key_(NULL), value_(NULL)
   {
   }
+  TO_STRING_KV(K_(magic), K_(size), KP_(key), KP_(value));
 };
 
 enum ObKVCachePolicy
@@ -88,16 +89,10 @@ public:
   static int64_t get_align_size(const int64_t key_size, const int64_t value_size);
   int store(const ObIKVCacheKey &key, const ObIKVCacheValue &value, ObKVCachePair *&kvpair);
   int alloc(const int64_t key_size, const int64_t value_size, const int64_t align_kv_size, ObKVCachePair *&kvpair);
-  inline int64_t get_payload_size() const
-  {
-    return payload_size_;
-  }
-  inline int64_t get_align_size() const
-  {
-    return lib::ObTenantMemoryMgr::align(payload_size_ + sizeof(ObKVStoreMemBlock));
-  }
-  inline int64_t get_size() const { return atomic_pos_.buffer; }
-  inline int64_t get_kv_cnt() const { return atomic_pos_.pairs; }
+  int64_t get_payload_size() const { return payload_size_; }
+  int64_t get_hold_size() const { return payload_size_ + sizeof(ObKVStoreMemBlock); }
+  int64_t get_size() const { return atomic_pos_.buffer; }
+  int64_t get_kv_cnt() const { return atomic_pos_.pairs; }
 private:
   static const int64_t ALIGN_SIZE = sizeof(size_t);
   AtomicInt64 atomic_pos_;
@@ -117,28 +112,32 @@ class ObWorkingSet;
 struct ObKVMemBlockHandle : public common::ObDLink
 {
   ObKVStoreMemBlock * volatile mem_block_;
-  volatile enum ObKVMBHandleStatus status_;
   ObKVCacheInst *inst_;
   enum ObKVCachePolicy policy_;
   int64_t get_cnt_;
   int64_t recent_get_cnt_;
   double score_;
   int64_t kv_cnt_;
-  ObAtomicReference handle_ref_;
+  int64_t ref_cnt_;
+  int64_t seq_num_;
+  int64_t last_modified_time_us_;
+  ObKVMBHandleStatus status_;
   common::ObLink retire_link_;
-  ObWorkingSet *working_set_;
 
   ObKVMemBlockHandle();
   virtual ~ObKVMemBlockHandle();
   void reset();
   bool is_mark_delete() const { return is_last_bit_set((uint64_t)ATOMIC_LOAD(&next_)); }
-  uint32_t get_seq_num() const { return handle_ref_.get_seq_num(); }
-  uint32_t get_ref_cnt() const { return handle_ref_.get_ref_cnt(); }
+  int64_t get_seq_num() const { return seq_num_; }
+  int64_t get_seq_num_for_node() const;
+  ObKVMBHandleStatus get_status() const { return status_; }
   int store(const ObIKVCacheKey &key, const ObIKVCacheValue &value, ObKVCachePair *&kvpair);
   int alloc(const int64_t key_size, const int64_t value_size, const int64_t align_kv_size, ObKVCachePair *&kvpair);
   void set_full(const double base_mb_score);
   ObKVMemBlockHandle *get_mb_handle() { return this; }
-  TO_STRING_KV(KP_(mem_block), K_(status), KP_(inst), K_(policy), K_(get_cnt),
+  bool retire();
+
+  TO_STRING_KV(KP_(mem_block), KP_(inst), K_(policy), K_(get_cnt),
       K_(recent_get_cnt), K_(score), K_(kv_cnt));
 };
 
@@ -160,7 +159,7 @@ struct ObKVCacheInstKey
     return !(*this == other);
   }
   inline bool is_valid() const { return cache_id_ >= 0 && cache_id_ < MAX_CACHE_NUM
-      && tenant_id_ < (uint64_t) OB_DEFAULT_TENANT_COUNT; }
+      && tenant_id_ != OB_INVALID_ID; }
   inline void reset()
   {
     tenant_id_ = OB_INVALID_ID;
@@ -201,6 +200,7 @@ public:
   ObPCNonAtomicCounter total_hit_cnt_;
   int64_t kv_cnt_;
   int64_t store_size_;
+  int64_t retired_size_;
   int64_t lru_mb_cnt_;
   int64_t lfu_mb_cnt_;
   int64_t map_size_;
@@ -268,11 +268,7 @@ public:
   virtual int alloc_mbhandle(ObKVCacheInst &inst, ObKVMemBlockHandle *&mb_handle) = 0;
   virtual int alloc_mbhandle(const ObKVCacheInstKey &inst_key, ObKVMemBlockHandle *&mb_handle) = 0;
   virtual int free_mbhandle(ObKVMemBlockHandle *mb_handle, const bool do_retire) = 0;
-  virtual int mark_washable(ObKVMemBlockHandle *mb_handle) = 0;
 
-  virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle, const uint32_t seq_num) = 0;
-  virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle) = 0;
-  virtual uint32_t de_handle_ref(ObKVMemBlockHandle *mb_handle, const bool do_retire = true) = 0;
 
   virtual int64_t get_block_size() const = 0;
 };

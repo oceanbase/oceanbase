@@ -11,15 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include <string.h>
-#include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_rawtohex.h"
-#include "sql/engine/expr/ob_expr_hex.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "share/object/ob_obj_cast.h"
-#include "lib/oblog/ob_log.h"
-#include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -35,7 +28,7 @@ int internal_calc_result_length(ObExprResType &type, ObExprResType &text)
   if (ob_is_text_tc(param_type) && lib::is_oracle_mode()) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "RAW", ob_obj_type_str(param_type));
-    LOG_WARN("ORA-00932: inconsistent datatypes: expected - got LOB", K(ret));
+    LOG_WARN("OBE-00932: inconsistent datatypes: expected - got LOB", K(ret));
   } else if (ob_is_string_type(param_type) || ob_is_raw(param_type)) {
     length = 2 * text.get_length();
     if (text.get_length_semantics() == LS_CHAR) {

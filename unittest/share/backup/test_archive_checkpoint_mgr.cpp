@@ -11,25 +11,13 @@
  */
 #define USING_LOG_PREFIX SHARE
 #define private public
-#include "lib/restore/ob_storage.h"
-#include "lib/restore/ob_storage_oss_base.cpp"
 #undef private
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "share/backup/ob_backup_struct.h"
 #define private public
 #include "share/backup/ob_archive_checkpoint_mgr.h"
 #undef private
 #include "test_ob_backup_dest_config.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_force_print_log.h"
-#include "share/backup/ob_backup_path.h"
-#include "share/ob_thread_pool.h"
-#include "apr_allocator.h"
 
 
 using namespace oceanbase::common;
@@ -173,7 +161,8 @@ int TestArchiveCheckpointMgr::generate_simple_files(const ObStorageType &type)
       LOG_WARN("failed to join path", K(ret));
     } else if (OB_FAIL(util.mk_parent_dir(tmp_root_path.get_ptr(), &storage_info_))) {
       LOG_WARN("failed to mk dir", K(ret));
-    } else if (OB_FAIL(util.write_single_file(tmp_root_path.get_ptr(), &storage_info_, buf, sizeof(buf)))) {
+    } else if (OB_FAIL(util.write_single_file(tmp_root_path.get_ptr(), &storage_info_, buf, sizeof(buf),
+                                              ObStorageIdMod::get_default_archive_id_mod()))) {
       LOG_WARN("failed to write dir less", K(ret));
     }
   }
@@ -245,17 +234,17 @@ int TestArchiveCheckpointMgr::test_write_and_read_checkpoint(const ObStorageType
     uint64_t checkpoint = 0;
     if (OB_FAIL(mgr.init(root_path, OB_STR_CHECKPOINT_FILE_NAME, ObBackupFileSuffix::ARCHIVE, &storage_info_))) {
       LOG_WARN("failed to init checkpoint mgr", K(ret), K(root_path));
-    } else if (OB_FAIL(mgr.write(10))) {
+    } else if (OB_FAIL(mgr.write(10, 9))) {
       LOG_WARN("failed to write files", K(ret), K(root_path));
-    } else if (OB_FAIL(mgr.write(9))) {
+    } else if (OB_FAIL(mgr.write(9, 8))) {
       LOG_WARN("failed to write files", K(ret), K(root_path));
     } else if (OB_FAIL(mgr.read(checkpoint))) {
       LOG_WARN("failed to read files", K(ret));
     } else if (checkpoint != 10) {
       ret = OB_ERROR;
-    } else if (OB_FAIL(mgr.write(100))) {
+    } else if (OB_FAIL(mgr.write(100, 99))) {
       LOG_WARN("failed to write files", K(ret), K(root_path));
-    } else if (OB_FAIL(mgr.write(50))) {
+    } else if (OB_FAIL(mgr.write(50, 49))) {
       LOG_WARN("failed to write files", K(ret), K(root_path));
     } else if (OB_FAIL(mgr.read(checkpoint))) {
       LOG_WARN("failed to read files", K(ret));

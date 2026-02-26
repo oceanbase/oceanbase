@@ -12,20 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_synonym_resolver.h"
-#include "lib/number/ob_number_v2.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/config/ob_server_config.h"
 #include "sql/resolver/ddl/ob_create_synonym_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
-#include "sql/resolver/expr/ob_raw_expr_part_func_checker.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/dml/ob_select_resolver.h"
-#include "share/schema/ob_dependency_info.h"
-#include "share/ob_tenant_id_schema_version.h"
 
 
 

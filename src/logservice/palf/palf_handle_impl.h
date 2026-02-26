@@ -37,6 +37,8 @@
 #include "log_io_task_cb_utils.h"
 #include "palf_options.h"
 #include "palf_iterator.h"
+#include "log_net_service.h"
+#include "logservice/ipalf/ipalf_config_change_handle.h"
 
 namespace oceanbase
 {
@@ -49,9 +51,7 @@ namespace palf
 {
 class FlushLogCbCtx;
 class ObMemberChangeCtx;
-class LSN;
 class FetchLogEngine;
-class FlushLogCbCtx;
 class TruncateLogCbCtx;
 class FlushMetaCbCtx;
 class LogIOFlushLogTask;
@@ -63,6 +63,8 @@ class LogIOWorker;
 class LogSharedQueueTh;
 class LogRpc;
 class IPalfEnvImpl;
+class LogEngine;
+class LogCache;
 
 struct PalfStat {
   OB_UNIS_VERSION(1);
@@ -79,6 +81,7 @@ public:
   LogConfigVersion config_version_;
   int64_t mode_version_;
   AccessMode access_mode_;
+  SyncMode sync_mode_;
   ObMemberList paxos_member_list_;
   int64_t paxos_replica_num_;
   common::ObMember arbitration_member_;
@@ -98,7 +101,7 @@ public:
   TO_STRING_KV(K_(self), K_(palf_id), K_(role), K_(log_proposal_id), K_(config_version), K_(mode_version),
       K_(access_mode), K_(paxos_member_list), K_(paxos_replica_num), K_(learner_list), K_(allow_vote), K_(replica_type),
       K_(begin_lsn), K_(begin_scn), K_(base_lsn), K_(end_lsn), K_(end_scn), K_(max_lsn), K_(max_scn),
-      K_(is_in_sync), K_(is_need_rebuild));
+      K_(is_in_sync), K_(is_need_rebuild), K_(sync_mode));
 };
 
 struct PalfDiagnoseInfo {
@@ -181,52 +184,6 @@ struct BatchFetchParams {
   int64_t has_consumed_count_;
 };
 
-struct LSKey {
-  LSKey() : id_(-1) {}
-  explicit LSKey(const int64_t id) : id_(id) {}
-  ~LSKey() {id_ = -1;}
-  LSKey(const LSKey &key) { this->id_ = key.id_; }
-  LSKey &operator=(const LSKey &other)
-  {
-    this->id_ = other.id_;
-    return *this;
-  }
-
-  bool operator==(const LSKey &palf_id) const
-  {
-    return this->compare(palf_id) == 0;
-  }
-  bool operator!=(const LSKey &palf_id) const
-  {
-    return this->compare(palf_id) != 0;
-  }
-  uint64_t hash() const
-  {
-    uint64_t hash_val = 0;
-    hash_val = common::murmurhash(&hash_val, sizeof(id_), id_);
-    return hash_val;
-  }
-  int hash(uint64_t &hash_val) const
-  {
-    hash_val = hash();
-    return OB_SUCCESS;
-  }
-  int compare(const LSKey &palf_id) const
-  {
-    if (palf_id.id_ < id_) {
-      return 1;
-    } else if (palf_id.id_ == id_) {
-      return 0;
-    } else {
-      return -1;
-    }
-  }
-  void reset() {id_ = -1;}
-  bool is_valid() const {return -1 != id_;}
-  int64_t id_;
-  TO_STRING_KV(K_(id));
-};
-
 struct RebuildMetaInfo
 {
 public:
@@ -260,24 +217,19 @@ public:
 };
 
 // 日志服务的接口类，logservice以外的模块使用日志服务，只允许调用IPalfHandleImpl的接口
-class IPalfHandleImpl : public common::LinkHashValue<LSKey>
+class IPalfHandleImpl : public common::LinkHashValue<LSKey>, public ipalf::IPalfConfigChangeHandler
 {
 public:
-  IPalfHandleImpl() {};
-  virtual ~IPalfHandleImpl() {};
+  IPalfHandleImpl() {}
+  virtual ~IPalfHandleImpl() {}
 public:
   virtual bool check_can_be_used() const = 0;
-
-  // after creating palf successfully, set initial memberlist(can only be called once)
-  //
-  // @param [in] member_list, paxos memberlist
-  // @param [in] paxos_replica_num, number of paxos replicas
-  // @param [in] learner_list, learner_list
-  //
-  // @return :TODO
+  // virtual int set_initial_member_list(const common::ObMemberList &member_list,
+  //                                     const int64_t paxos_replica_num,
+  //                                     const common::GlobalLearnerList &learner_list) = 0;
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
-                                      const int64_t paxos_replica_num,
-                                      const common::GlobalLearnerList &learner_list) = 0;
+                                    const int64_t paxos_replica_num,
+                                    const common::GlobalLearnerList &learner_list) = 0;
 #ifdef OB_BUILD_ARBITRATION
   // after creating palf which includes arbitration replica successfully,
   // set initial memberlist(can only be called once)
@@ -356,156 +308,15 @@ public:
   virtual int change_leader_to(const common::ObAddr &dest_addr) = 0;
 
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
-  virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
+  virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_replica = false) const = 0;
   virtual int get_config_version(LogConfigVersion &config_version) const = 0;
   virtual int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                      int64_t &paxos_replica_num,
-                                                     common::GlobalLearnerList &learner_list) const = 0;
+                                                     common::GlobalLearnerList &learner_list,
+                                                     const bool &filter_logonly_replica = false) const = 0;
   virtual int get_election_leader(common::ObAddr &addr) const = 0;
   virtual int get_parent(common::ObAddr &parent) const = 0;
 
-  // @brief: a special config change interface, change replica number of paxos group
-  // @param[in] common::ObMemberList: current memberlist, for pre-check
-  // @param[in] const int64_t curr_replica_num: current replica num, for pre-check
-  // @param[in] const int64_t new_replica_num: new replica num
-  // @param[in] const int64_t timeout_us: timeout, us
-  // @return
-  // - OB_SUCCESS: change_replica_num successfully
-  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
-  // - OB_TIMEOUT: change_replica_num timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  // - other: bug
-  virtual int change_replica_num(const common::ObMemberList &member_list,
-                                 const int64_t curr_replica_num,
-                                 const int64_t new_replica_num,
-                                 const int64_t timeout_us) = 0;
-  // @brief: force set self as single replica.
-  virtual int force_set_as_single_replica() = 0;
-
-  // @brief, add a member into paxos group
-  // @param[in] common::ObMember &member: member which will be added
-  // @param[in] const int64_t new_replica_num: replica number of paxos group after adding 'member'
-  // @param[in] const int64_t timeout_us: add member timeout, us
-  // @return
-  // - OB_SUCCESS: add member successfully
-  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
-  // - OB_TIMEOUT: add member timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  // - other: bug
-  virtual int add_member(const common::ObMember &member,
-                        const int64_t new_replica_num,
-                        const LogConfigVersion &config_version,
-                        const int64_t timeout_us) = 0;
-
-  // @brief, remove a member from paxos group
-  // @param[in] common::ObMember &member: member which will be removed
-  // @param[in] const int64_t new_replica_num: replica number of paxos group after removing 'member'
-  // @param[in] const int64_t timeout_us: remove member timeout, us
-  // @return
-  // - OB_SUCCESS: remove member successfully
-  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
-  // - OB_TIMEOUT: remove member timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  // - other: bug
-  virtual int remove_member(const common::ObMember &member,
-                            const int64_t new_replica_num,
-                            const int64_t timeout_us) = 0;
-
-  // @brief, replace old_member with new_member
-  // @param[in] const common::ObMember &added_member: member will be added
-  // @param[in] const common::ObMember &removed_member: member will be removed
-  // @param[in] const LogConfigVersion &config_version: config_version for leader checking
-  // @param[in] const int64_t timeout_us
-  // @return
-  // - OB_SUCCESS: replace member successfully
-  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
-  // - OB_TIMEOUT: replace member timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  // - other: bug
-  virtual int replace_member(const common::ObMember &added_member,
-                             const common::ObMember &removed_member,
-                             const LogConfigVersion &config_version,
-                             const int64_t timeout_us) = 0;
-
-  // @brief: add a learner(read only replica) in this clsuter
-  // @param[in] const common::ObMember &added_learner: learner will be added
-  // @param[in] const int64_t timeout_us
-  // @return
-  // - OB_SUCCESS
-  // - OB_INVALID_ARGUMENT: invalid argument
-  // - OB_TIMEOUT: add_learner timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  virtual int add_learner(const common::ObMember &added_learner, const int64_t timeout_us) = 0;
-
-  // @brief: remove a learner(read only replica) in this clsuter
-  // @param[in] const common::ObMember &removed_learner: learner will be removed
-  // @param[in] const int64_t timeout_us
-  // @return
-  // - OB_SUCCESS
-  // - OB_INVALID_ARGUMENT: invalid argument
-  // - OB_TIMEOUT: remove_learner timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  virtual int remove_learner(const common::ObMember &removed_learner, const int64_t timeout_us) = 0;
-
-  // @brief: switch a learner(read only replica) to acceptor(full replica) in this clsuter
-  // @param[in] const common::ObMember &learner: learner will be switched to acceptor
-  // @param[in] const int64_t new_replica_num: replica number of paxos group after switching
-  //            learner to acceptor (similar to add_member)
-  // @param[in] const LogConfigVersion &config_version: config_version for leader checking
-  // @param[in] const int64_t timeout_us
-  // @return
-  // - OB_SUCCESS
-  // - OB_INVALID_ARGUMENT: invalid argument
-  // - OB_TIMEOUT: switch_learner_to_acceptor timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  virtual int switch_learner_to_acceptor(const common::ObMember &learner,
-                                         const int64_t new_replica_num,
-                                         const LogConfigVersion &config_version,
-                                         const int64_t timeout_us) = 0;
-
-  // @brief: switch an acceptor(full replica) to learner(read only replica) in this clsuter
-  // @param[in] const common::ObMember &member: acceptor will be switched to learner
-  // @param[in] const int64_t new_replica_num: replica number of paxos group after switching
-  //            acceptor to learner (similar to remove_member)
-  // @param[in] const int64_t timeout_us
-  // @return
-  // - OB_SUCCESS
-  // - OB_INVALID_ARGUMENT: invalid argument
-  // - OB_TIMEOUT: switch_acceptor_to_learner timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  virtual int switch_acceptor_to_learner(const common::ObMember &member,
-                                         const int64_t new_replica_num,
-                                         const int64_t timeout_us) = 0;
-
-  // @brief, replace removed_learners with added_learners
-  // @param[in] const common::ObMemberList &added_learners: learners will be added
-  // @param[in] const common::ObMemberList &removed_learners: learners will be removed
-  // @param[in] const int64_t timeout_us
-  // @return
-  // - OB_SUCCESS: replace learner successfully
-  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
-  // - OB_TIMEOUT: replace learner timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  // - other: bug
-  virtual int replace_learners(const common::ObMemberList &added_learners,
-                               const common::ObMemberList &removed_learners,
-                               const int64_t timeout_us) = 0;
-
-  // @brief, replace removed_member with learner
-  // @param[in] const common::ObMember &added_member: member will be added
-  // @param[in] const common::ObMember &removed_member: member will be removed
-  // @param[in] const LogConfigVersion &config_version: config_version for leader checking
-  // @param[in] const int64_t timeout_us
-  // @return
-  // - OB_SUCCESS: replace member successfully
-  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
-  // - OB_TIMEOUT: replace member timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  // - other: bug
-  virtual int replace_member_with_learner(const common::ObMember &added_member,
-                                          const common::ObMember &removed_member,
-                                          const LogConfigVersion &config_version,
-                                          const int64_t timeout_us) = 0;
 #ifdef OB_BUILD_ARBITRATION
   // @brief, add an arbitration member to paxos group
   // @param[in] common::ObMember &member: arbitration member which will be added
@@ -549,6 +360,8 @@ public:
   // - OB_NOT_MASTER: not leader
   virtual int upgrade_learner_to_acceptor(const LogMemberAckInfoList &upgrade_servers,
                                           const int64_t timeout_us) = 0;
+  virtual int set_election_silent_flag(const bool election_silent_flag) = 0;
+  virtual bool is_election_silent() const = 0;
 #endif
 
   // 设置日志文件的可回收位点，小于等于lsn的日志文件均可以安全回收
@@ -631,6 +444,7 @@ public:
   virtual const share::SCN get_max_scn() const = 0;
   virtual const share::SCN get_end_scn() const = 0;
   virtual int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const = 0;
+  virtual const LSN get_readable_end_lsn() const = 0;
   virtual int get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const = 0;
   virtual const LSN &get_base_lsn_used_for_block_gc() const = 0;
   // @desc: get ack_info_array and degraded_list for judging to degrade/upgrade
@@ -641,10 +455,6 @@ public:
                                  common::GlobalLearnerList &degraded_list) const = 0;
 
   virtual int delete_block(const block_id_t &block_id) = 0;
-  virtual int read_log(const LSN &lsn,
-                       const int64_t in_read_size,
-                       ReadBuf &read_buf,
-                       int64_t &out_read_size) = 0;
   virtual int inner_after_flush_log(const FlushLogCbCtx &flush_log_cb_ctx) = 0;
   virtual int inner_after_truncate_log(const TruncateLogCbCtx &truncate_log_cb_ctx) = 0;
   virtual int inner_after_flush_meta(const FlushMetaCbCtx &flush_meta_cb_ctx) = 0;
@@ -751,6 +561,7 @@ public:
                                  const share::SCN &ref_scn) = 0;
   virtual int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const = 0;
   virtual int get_access_mode(AccessMode &access_mode) const = 0;
+  virtual int get_access_mode_version(int64_t &mode_version) const = 0;
   virtual int get_access_mode_ref_scn(int64_t &mode_version,
                                       AccessMode &access_mode,
                                       SCN &ref_scn) const = 0;
@@ -785,6 +596,8 @@ public:
   // ===================== Iterator start =======================
   virtual int alloc_palf_buffer_iterator(const LSN &offset,
                                          PalfBufferIterator &iterator) = 0;
+  virtual int alloc_palf_buffer_iterator(const SCN &scn,
+                                         PalfBufferIterator &iterator) = 0;
   virtual int alloc_palf_group_buffer_iterator(const LSN &offset,
                                                PalfGroupBufferIterator &iterator) = 0;
   virtual int alloc_palf_group_buffer_iterator(const share::SCN &scn,
@@ -804,6 +617,8 @@ public:
   virtual int reset_election_priority() = 0;
   virtual int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) = 0;
   virtual int reset_locality_cb() = 0;
+  virtual int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker) = 0;
+  virtual int reset_reconfig_checker_cb() = 0;
   // ==================== Callback end ========================
   virtual int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
                                                             const int64_t downgrade_priority_time_us,
@@ -823,12 +638,20 @@ public:
                                     const int64_t in_read_size,
                                     char *buf,
                                     int64_t &out_read_size) const = 0;
-  virtual int try_handle_next_submit_log() = 0;
+  // =================== Callback end ===========================
 
   virtual int raw_read(const palf::LSN &lsn,
                        char *read_buf,
                        const int64_t nbytes,
-                       int64_t &read_size) = 0;
+                       int64_t &read_size,
+                       LogIOContext &io_ctx) = 0;
+  virtual int try_handle_next_submit_log() = 0;
+  virtual int fill_cache_when_slide(const LSN &read_begin_lsn, const int64_t in_read_size) = 0;
+  virtual int get_io_statistic_info(int64_t &last_working_time,
+                                    int64_t &last_write_size,
+                                    int64_t &accum_write_size,
+                                    int64_t &accum_write_count,
+                                    int64_t &accum_write_rt) const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -851,7 +674,8 @@ public:
            IPalfEnvImpl *palf_env_impl,
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
-           const int64_t palf_epoch);
+           const int64_t palf_epoch,
+           LogIOAdapter *io_adapter);
   bool check_can_be_used() const override final;
   // 重启接口
   // 1. 生成迭代器，定位meta_storage和log_storage的终点;
@@ -870,6 +694,7 @@ public:
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
            const int64_t palf_epoch,
+           LogIOAdapter *io_adapter,
            bool &is_integrity);
   void destroy();
   int start();
@@ -899,14 +724,22 @@ public:
   int get_palf_id(int64_t &palf_id) const override final;
   int change_leader_to(const common::ObAddr &dest_addr) override final;
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
-  int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const override final;
+  int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num, const bool &filter_logonly_member = false) const override final;
   int get_config_version(LogConfigVersion &config_version) const;
   int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                              int64_t &paxos_replica_num,
-                                             common::GlobalLearnerList &learner_list) const override final;
+                                             common::GlobalLearnerList &learner_list,
+                                             const bool &filter_logonly_member = false) const override final;
+  int get_stable_membership(LogConfigVersion &config_version,
+                            common::ObMemberList &member_list,
+                            int64_t &paxos_replica_num,
+                            common::GlobalLearnerList &learner_list,
+                            const bool &filter_logonly_member = false) const override final;
   int get_election_leader(common::ObAddr &addr) const;
   int get_parent(common::ObAddr &parent) const;
   int force_set_as_single_replica() override final;
+  int force_set_member_list(const common::ObMemberList &member_list,
+                            const int64_t new_replica_num) override final;
   int change_replica_num(const common::ObMemberList &member_list,
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,
@@ -952,6 +785,8 @@ public:
   int get_remote_arb_member_info(ArbMemberInfo &arb_member_info) override final;
   int get_arb_member_info(ArbMemberInfo &arb_member_info) const override final;
   int get_arbitration_member(common::ObMember &arb_member) const override final;
+  int set_election_silent_flag(const bool election_silent_flag) override final;
+  bool is_election_silent() const override final;
 #endif
   int set_base_lsn(const LSN &lsn) override final;
   int enable_sync() override final;
@@ -968,18 +803,15 @@ public:
                             const int64_t in_read_size,
                             char *buf,
                             int64_t &out_read_size) const;
-  int try_handle_next_submit_log();
-
   int raw_read(const palf::LSN &lsn,
                char *buffer,
                const int64_t nbytes,
-               int64_t &read_size) override final;
+               int64_t &read_size,
+               LogIOContext &io_ctx) override;
+  int try_handle_next_submit_log();
+  int fill_cache_when_slide(const LSN &read_begin_lsn, const int64_t in_read_size) override;
 public:
   int delete_block(const block_id_t &block_id) override final;
-  int read_log(const LSN &lsn,
-               const int64_t in_read_size,
-               ReadBuf &read_buf,
-               int64_t &out_read_size) override final;
   int set_scan_disk_log_finished() override;
   int change_access_mode(const int64_t proposal_id,
                          const int64_t mode_version,
@@ -987,12 +819,13 @@ public:
                          const share::SCN &ref_scn) override final;
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const override final;
   int get_access_mode(AccessMode &access_mode) const override final;
-  int get_access_mode_version(int64_t &mode_version) const;
+  int get_access_mode_version(int64_t &mode_version) const override final;
   int get_access_mode_ref_scn(int64_t &mode_version,
                               AccessMode &access_mode,
                               SCN &ref_scn) const override final;
   // =========================== Iterator start ============================
   int alloc_palf_buffer_iterator(const LSN &offset, PalfBufferIterator &iterator) override final;
+  int alloc_palf_buffer_iterator(const SCN &scn, PalfBufferIterator &iterator) override final;
   int alloc_palf_group_buffer_iterator(const LSN &offset, PalfGroupBufferIterator &iterator) override final;
   int alloc_palf_group_buffer_iterator(const share::SCN &scn, PalfGroupBufferIterator &iterator) override final;
   // =========================== Iterator end ============================
@@ -1012,6 +845,8 @@ public:
   int reset_election_priority() override final;
   int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) override final;
   int reset_locality_cb() override final;
+  int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker) override final;
+  int reset_reconfig_checker_cb() override final;
   // ==================== Callback end ========================
 public:
   int get_begin_lsn(LSN &lsn) const override final;
@@ -1024,7 +859,9 @@ public:
   {
     LSN committed_end_lsn;
     sw_.get_committed_end_lsn(committed_end_lsn);
-    return committed_end_lsn;
+    LSN max_flushed_end_lsn;
+    (void)sw_.get_max_flushed_end_lsn(max_flushed_end_lsn);
+    return MIN(max_flushed_end_lsn, committed_end_lsn);
   }
 
   LSN get_max_lsn() const override final
@@ -1044,6 +881,14 @@ public:
     return sw_.get_last_slide_scn();
   }
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const override final;
+  const LSN get_readable_end_lsn() const override final
+  {
+    LSN committed_end_lsn;
+    sw_.get_committed_end_lsn(committed_end_lsn);
+    LSN max_flushed_end_lsn;
+    sw_.get_max_flushed_end_lsn(max_flushed_end_lsn);
+    return MIN(committed_end_lsn, max_flushed_end_lsn);
+  }
   int get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const;
   // return the smallest recycable lsn
   const LSN &get_base_lsn_used_for_block_gc() const override final
@@ -1175,7 +1020,13 @@ public:
 
   int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   int update_palf_stat() override final;
+  int get_io_statistic_info(int64_t &last_working_time,
+                            int64_t &last_write_size,
+                            int64_t &accum_write_size,
+                            int64_t &accum_write_count,
+                            int64_t &accum_write_rt) const override final;
   TO_STRING_KV(K_(palf_id), K_(self), K_(has_set_deleted));
+
 private:
   int do_init_mem_(const int64_t palf_id,
                    const PalfBaseInfo &palf_base_info,
@@ -1297,6 +1148,9 @@ private:
                                     const bool is_rebuild);
   int get_election_leader_without_lock_(ObAddr &addr) const;
   int update_self_region_();
+  int force_set_member_list_(const common::ObMemberList &new_member_list, const int64_t new_replica_num);
+  int inc_config_version(int64_t timeout_us) override final;
+
   // ========================= flashback ==============================
   int can_do_flashback_(const int64_t mode_version,
                         const share::SCN &flashback_scn,
@@ -1324,6 +1178,7 @@ private:
   void report_set_initial_member_list_(const int64_t paxos_replica_num, const common::ObMemberList &member_list);
   void report_set_initial_member_list_with_arb_(const int64_t paxos_replica_num, const common::ObMemberList &member_list, const common::ObMember &arb_member);
   void report_force_set_as_single_replica_(const int64_t prev_replica_num, const int64_t curr_replica_num, const ObMember &member);
+  void report_force_set_member_list(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMemberList &member_list);
   void report_change_replica_num_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMemberList &member_list);
   void report_add_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &added_member);
   void report_remove_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &removed_member);
@@ -1339,22 +1194,35 @@ private:
   void report_switch_acceptor_to_learner_(const common::ObMember &acceptor);
   void report_replace_learners_(const common::ObMemberList &added_learners,
                                 const common::ObMemberList &removed_learners);
+#ifdef OB_BUILD_ARBITRATION
+  void report_election_silent_event_(const char *event_name);
+#endif
   // ======================= report event end =======================================
   bool check_need_hook_fetch_log_(const FetchLogType fetch_type, const LSN &start_lsn);
+  template<typename LogEntryType>
+  int alloc_iterator_from_scn_(const SCN &scn,
+                               PalfIterator<LogEntryType> &iterator);
 private:
   class ElectionMsgSender : public election::ElectionMsgSender
   {
   public:
-    ElectionMsgSender(LogNetService &net_service) : net_service_(net_service) {};
+    ElectionMsgSender(LogNetService &net_service) : net_service_(net_service), is_in_silent_(false), palf_id_(INVALID_PALF_ID) {};
+    ~ElectionMsgSender() {
+      is_in_silent_ = false;
+      palf_id_ = INVALID_PALF_ID;
+    }
     virtual int broadcast(const election::ElectionPrepareRequestMsg &msg,
                           const ObIArray<ObAddr> &list) const override final
     {
-      int tmp_ret = common::OB_SUCCESS;
-      for (int64_t idx = 0; idx < list.count(); ++idx) {
-        const_cast<election::ElectionPrepareRequestMsg *>(&msg)->set_receiver(list.at(idx));
-        if (OB_SUCCESS != (tmp_ret = net_service_.post_request_to_server_(list.at(idx), msg))) {
-          PALF_LOG(INFO, "post prepare request msg failed", K(tmp_ret), "server", list.at(idx),
-              K(msg));
+      if (false == is_allowed_broadcast_()) {
+      } else {
+        int tmp_ret = common::OB_SUCCESS;
+        for (int64_t idx = 0; idx < list.count(); ++idx) {
+          const_cast<election::ElectionPrepareRequestMsg *>(&msg)->set_receiver(list.at(idx));
+          if (OB_SUCCESS != (tmp_ret = net_service_.post_request_to_server_(list.at(idx), msg))) {
+            PALF_LOG(INFO, "post prepare request msg failed", K(tmp_ret), "server", list.at(idx),
+                K(msg));
+          }
         }
       }
       return common::OB_SUCCESS;
@@ -1362,12 +1230,15 @@ private:
     virtual int broadcast(const election::ElectionAcceptRequestMsg &msg,
                           const ObIArray<ObAddr> &list) const override final
     {
-      int tmp_ret = common::OB_SUCCESS;
-      for (int64_t idx = 0; idx < list.count(); ++idx) {
-        const_cast<election::ElectionAcceptRequestMsg *>(&msg)->set_receiver(list.at(idx));
-        if (OB_SUCCESS != (tmp_ret = net_service_.post_request_to_server_(list.at(idx), msg))) {
-          PALF_LOG(INFO, "post accept request msg failed", K(tmp_ret), "server", list.at(idx),
-              K(msg));
+      if (false == is_allowed_broadcast_()) {
+      } else {
+        int tmp_ret = common::OB_SUCCESS;
+        for (int64_t idx = 0; idx < list.count(); ++idx) {
+          const_cast<election::ElectionAcceptRequestMsg *>(&msg)->set_receiver(list.at(idx));
+          if (OB_SUCCESS != (tmp_ret = net_service_.post_request_to_server_(list.at(idx), msg))) {
+            PALF_LOG(INFO, "post accept request msg failed", K(tmp_ret), "server", list.at(idx),
+                K(msg));
+          }
         }
       }
       return common::OB_SUCCESS;
@@ -1384,8 +1255,31 @@ private:
     {
       return net_service_.post_request_to_server_(msg.get_receiver(), msg);
     }
+    void set_silent_flag(const bool &silent_flag)
+    {
+      is_in_silent_ = silent_flag;
+    }
+    bool get_silent_flag() const
+    {
+      return is_in_silent_;
+    }
+    void set_palf_id(const int64_t palf_id) {
+      palf_id_ = palf_id;
+    }
+  private:
+    bool is_allowed_broadcast_() const
+    {
+      bool bool_ret = (true == is_in_silent_) ? false : true;
+      if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+        PALF_LOG(INFO, "keep in silent because of disconnected with RS, do not solicit votes.",
+                 K_(is_in_silent), K_(palf_id), "is_allowed_broadcast", bool_ret);
+      }
+      return bool_ret;
+    }
   private:
     LogNetService &net_service_;
+    bool is_in_silent_;  // false by default. True means that this replica is not allowed to solicit votes
+    int64_t palf_id_;
   };
 private:
   typedef common::RWLock RWLock;
@@ -1452,7 +1346,7 @@ private:
   // a spin lock for read/write replica_meta mutex
   SpinLock replica_meta_lock_;
   SpinLock rebuilding_lock_;
-  SpinLock config_change_lock_;
+  mutable SpinLock config_change_lock_;
   SpinLock mode_change_lock_;
   // a spin lock for single replica mutex
   SpinLock flashback_lock_;

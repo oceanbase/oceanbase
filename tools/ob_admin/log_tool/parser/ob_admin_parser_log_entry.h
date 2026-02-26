@@ -38,10 +38,16 @@ namespace tools
 class ObAdminParserLogEntry
 {
 public:
-  ObAdminParserLogEntry(const palf::LogEntry &log_entry,
+  ObAdminParserLogEntry(const palf::LogEntry *log_entry,
                         const char *block_name,
                         const palf::LSN lsn,
                         const share::ObAdminMutatorStringArg &str_arg);
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  ObAdminParserLogEntry(const libpalf::LibPalfLogEntry *log_entry,
+                        const char *block_name,
+                        const palf::LSN lsn,
+                        const share::ObAdminMutatorStringArg &str_arg);
+#endif
   ~ObAdminParserLogEntry();
   int parse();
 
@@ -65,6 +71,7 @@ private:
   int parse_reserved_snapshot_log_();
   int parse_medium_log_();
   int parse_dup_table_log_();
+  int parse_vector_index_log_();
 
   //log type belong to trans_service
   int parse_trans_redo_log_(transaction::ObTxLogBlock &tx_log_block,
@@ -84,7 +91,10 @@ private:
   int64_t pos_;
 
   int64_t scn_val_;
-  const palf::LogEntry &entry_;
+  const palf::LogEntry *entry_;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  const libpalf::LibPalfLogEntry *libpalf_entry_;
+#endif
   char block_name_[OB_MAX_FILE_NAME_LENGTH];
   palf::LSN lsn_;
   share::ObAdminMutatorStringArg str_arg_;

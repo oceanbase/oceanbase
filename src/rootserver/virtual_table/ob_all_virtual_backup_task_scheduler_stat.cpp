@@ -10,9 +10,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_all_virtual_backup_task_scheduler_stat.h"
-#include "rootserver/backup/ob_backup_schedule_task.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
 
 namespace oceanbase
 {

@@ -19,11 +19,15 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "ob_storage_ha_dag.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "storage/multi_data_source/ob_tablet_mds_merge_ctx.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+class ObBackfillTabletsTableMgr;
+class ObBackfillMdsTableHandle;
+class ObTabletBackfillTXDag;
 
 struct ObBackfillTXCtx
 {
@@ -36,7 +40,7 @@ public:
   int build_backfill_tx_ctx(
       const share::ObTaskId &task_id,
       const share::ObLSID &ls_id,
-      const share::SCN log_sync_scn,
+      const share::SCN backfill_scn,
       const common::ObIArray<ObTabletBackfillInfo> &tablet_info_array);
   bool is_empty() const;
   int check_is_same(
@@ -48,13 +52,13 @@ public:
   VIRTUAL_TO_STRING_KV(
       K_(task_id),
       K_(ls_id),
-      K_(log_sync_scn),
+      K_(backfill_scn),
       K_(tablet_info_index),
       K_(tablet_info_array));
 public:
   share::ObTaskId task_id_;
   share::ObLSID ls_id_;
-  share::SCN log_sync_scn_;
+  share::SCN backfill_scn_;
 private:
   bool inner_is_valid_() const;
 private:
@@ -62,6 +66,35 @@ private:
   int64_t tablet_info_index_;
   common::ObArray<ObTabletBackfillInfo> tablet_info_array_;
   DISALLOW_COPY_AND_ASSIGN(ObBackfillTXCtx);
+};
+
+struct ObTabletBackfillMergeCtx : public compaction::ObTabletMergeCtx
+{
+public:
+  ObTabletBackfillMergeCtx(
+      compaction::ObTabletMergeDagParam &param,
+      common::ObArenaAllocator &allocator);
+  virtual ~ObTabletBackfillMergeCtx();
+  int init(
+      ObTabletBackfillTXDag *dag,
+      const SCN &backfill_scn,
+      const int64_t ls_rebuild_seq,
+      ObTabletHandle &tablet_handle,
+      storage::ObTableHandleV2 &backfill_table_handle);
+  virtual ObDagPrio::ObDagPrioEnum get_dag_priority() const override;
+protected:
+  virtual int get_ls_and_tablet() override;
+  virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
+  virtual int prepare_schema() override;
+  virtual int cal_merge_param() override;
+
+private:
+  bool is_inited_;
+  storage::ObTableHandleV2 backfill_table_handle_;
+  share::SCN backfill_scn_;
+  int64_t ls_rebuild_seq_;
+  ObTabletBackfillTXDag *dag_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletBackfillMergeCtx);
 };
 
 class ObTabletBackfillTXDag : public ObStorageHADag
@@ -73,16 +106,21 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   ObBackfillTXCtx *get_backfill_tx_ctx() { return backfill_tx_ctx_; }
+  ObBackfillTabletsTableMgr *get_backfill_tablets_table_mgr() { return tablets_table_mgr_; }
+  virtual int inner_reset_status_for_retry() override;
+
   int init(
       const share::ObTaskId &dag_net_id,
       const share::ObLSID &ls_id,
       const storage::ObTabletBackfillInfo &tablet_info,
       ObIHADagNetCtx *ha_dag_net_ctx,
-      ObBackfillTXCtx *backfill_tx_ctx);
+      ObBackfillTXCtx *backfill_tx_ctx,
+      ObBackfillTabletsTableMgr *tablets_table_mgr);
   virtual int generate_next_dag(share::ObIDag *&dag);
   int get_tablet_handle(ObTabletHandle &tablet_handle);
+  int init_tablet_handle();
 
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
 protected:
@@ -92,10 +130,10 @@ protected:
   ObTabletBackfillInfo tablet_info_;
   ObBackfillTXCtx *backfill_tx_ctx_;
   ObTabletHandle tablet_handle_;
+  ObBackfillTabletsTableMgr *tablets_table_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletBackfillTXDag);
 };
 
-class ObFinishTabletBackfillTXTask;
 class ObTabletBackfillTXTask : public share::ObITask
 {
 public:
@@ -110,18 +148,53 @@ public:
 private:
   int generate_backfill_tx_task_();
   int generate_table_backfill_tx_task_(
-      ObFinishTabletBackfillTXTask *finish_tablet_backfill_tx_task,
-      common::ObIArray<ObTableHandleV2> &table_array);
+      share::ObITask *replace_task,
+      common::ObIArray<ObTableHandleV2> &table_array,
+      share::ObITask *child);
   int get_backfill_tx_memtables_(
       ObTablet *tablet,
       common::ObIArray<ObTableHandleV2> &table_array);
-  int get_backfill_tx_minor_sstables_(
-      ObTablet *tablet,
-      common::ObIArray<ObTableHandleV2> &minor_sstables);
   int get_all_backfill_tx_tables_(
+      const ObTablesHandleArray &sstable_handles,
       ObTablet *tablet,
       common::ObIArray<ObTableHandleV2> &table_array);
-  int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &log_sync_scn) const;
+  int get_all_sstable_handles_(
+      const ObTablet *tablet,
+      ObTablesHandleArray &sstable_handles,
+      bool &inc_major_exist);
+  int init_tablet_table_mgr_();
+  int split_sstable_array_by_backfill_(
+      const ObTablesHandleArray &sstable_handles,
+      common::ObIArray<ObTableHandleV2> &non_backfill_sstable,
+      common::ObIArray<ObTableHandleV2> &backfill_sstable,
+      share::SCN &max_end_major_scn);
+  int add_ready_sstable_into_table_mgr_(
+      const share::SCN &max_major_end_scn,
+      ObTablet *tablet,
+      common::ObIArray<ObTableHandleV2> &non_backfill_sstable);
+
+  int add_sstable_into_handles_(
+      ObTableStoreIterator &sstable_iter,
+      ObTablesHandleArray &sstable_handles);
+  int generate_mds_table_backfill_task_(
+      share::ObITask *finish_task,
+      share::ObITask *&child);
+  int generate_inc_major_table_backfill_task_(
+      share::ObITask *finish_task,
+      share::ObITask *pre_task);
+  int wait_memtable_frozen_();
+  int init_tablet_handle_();
+
+  //shared_storage
+#ifdef OB_BUILD_SHARED_STORAGE
+  int generate_ss_backfill_tx_task_();
+  int generate_ss_table_backfill_tx_task_(
+      share::ObITask *replace_task,
+      common::ObIArray<ObTableHandleV2> &table_array,
+      share::ObITask *child);
+#endif
+
+  int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &backfill_scn) const;
   void process_transfer_perf_diagnose_(
       const int64_t timestamp,
       const int64_t start_ts,
@@ -131,9 +204,10 @@ private:
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
-  ObIHADagNetCtx *ha_dag_net_ctx_;
+  ObTransferBackfillTXBaseCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
   ObTabletBackfillInfo tablet_info_;
+  ObBackfillTabletsTableMgr *tablets_table_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletBackfillTXTask);
 };
 
@@ -144,17 +218,16 @@ public:
   virtual ~ObTabletTableBackfillTXTask();
   int init(
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
+      const ObTabletBackfillInfo &tablet_info,
       ObTabletHandle &tablet_handle,
-      ObTableHandleV2 &table_handle);
+      ObTableHandleV2 &table_handle,
+      share::ObITask *child);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
 private:
-  int prepare_merge_ctx_();
   int check_need_merge_(bool &need_merge);
-  int do_backfill_tx_();
-  int prepare_partition_merge_();
-  int update_merge_sstable_();
+  int generate_merge_task_();
+
   int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &log_sync_scn) const;
   void process_transfer_perf_diagnose_(
       const int64_t timestamp,
@@ -163,41 +236,53 @@ private:
       const ObStorageHACostItemType type,
       const ObStorageHACostItemName name,
       const int result) const;
+private:
+  bool is_inited_;
+  ObBackfillTXCtx *backfill_tx_ctx_;
+  ObTransferBackfillTXBaseCtx *ha_dag_net_ctx_;
+  share::ObLSID ls_id_;
+  ObTabletBackfillInfo tablet_info_;
+  ObTabletHandle tablet_handle_;
+  ObTableHandleV2 table_handle_;
+  ObBackfillTabletsTableMgr *tablets_table_mgr_;
+  share::ObITask *child_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletTableBackfillTXTask);
+};
+
+class ObTabletTableFinishBackfillTXTask : public share::ObITask
+{
+public:
+  ObTabletTableFinishBackfillTXTask();
+  virtual ~ObTabletTableFinishBackfillTXTask();
+  int init(
+      const share::ObLSID &ls_id,
+      const ObTabletBackfillInfo &tablet_info,
+      ObTabletHandle &tablet_handle,
+      ObTableHandleV2 &table_handle,
+      share::ObITask *child);
+  virtual int process() override;
+  compaction::ObTabletBackfillMergeCtx &get_tablet_merge_ctx() { return tablet_merge_ctx_; }
+
+  VIRTUAL_TO_STRING_KV(K("ObTabletTableFinishBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
+private:
+  int prepare_merge_ctx_();
+  int update_merge_sstable_();
+  int update_merge_sstable_for_ss_();
 
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
-  ObIHADagNetCtx *ha_dag_net_ctx_;
+  ObTransferBackfillTXBaseCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
+  ObTabletBackfillInfo tablet_info_;
   ObTabletHandle tablet_handle_;
   ObTableHandleV2 table_handle_;
   compaction::ObTabletMergeDagParam param_;
   common::ObArenaAllocator allocator_;
-  compaction::ObTabletMergeCtx tablet_merge_ctx_;
-  compaction::ObLocalArena merger_arena_;
-  compaction::ObPartitionMerger *merger_;
-  int64_t transfer_seq_;
-  DISALLOW_COPY_AND_ASSIGN(ObTabletTableBackfillTXTask);
-};
-
-class ObFinishTabletBackfillTXTask : public share::ObITask
-{
-public:
-  ObFinishTabletBackfillTXTask();
-  virtual ~ObFinishTabletBackfillTXTask();
-  int init(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id);
-  virtual int process() override;
-  VIRTUAL_TO_STRING_KV(K("ObTabletBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
-
-private:
-  bool is_inited_;
-  ObIHADagNetCtx *ha_dag_net_ctx_;
-  share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
-  DISALLOW_COPY_AND_ASSIGN(ObFinishTabletBackfillTXTask);
+  ObTabletBackfillMergeCtx tablet_merge_ctx_;
+  ObBackfillTabletsTableMgr *tablets_table_mgr_;
+  share::ObITask *child_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletTableFinishBackfillTXTask);
 };
 
 class ObFinishBackfillTXDag : public ObStorageHADag
@@ -208,7 +293,7 @@ public:
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int create_first_task() override;
 
   int init(
@@ -216,13 +301,16 @@ public:
       const share::ObLSID &ls_id,
       const share::SCN &log_sync_scn,
       common::ObArray<ObTabletBackfillInfo> &tablet_info_array,
-      ObIHADagNetCtx *ha_dag_net_ctx);
+      ObIHADagNetCtx *ha_dag_net_ctx,
+      ObBackfillTabletsTableMgr *tablets_table_mgr);
   ObBackfillTXCtx *get_backfill_tx_ctx() { return &backfill_tx_ctx_; }
+  ObBackfillTabletsTableMgr *get_tablets_table_mgr() { return tablets_table_mgr_; }
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
 
 protected:
   bool is_inited_;
   ObBackfillTXCtx backfill_tx_ctx_;
+  ObBackfillTabletsTableMgr *tablets_table_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObFinishBackfillTXDag);
 };
 
@@ -237,10 +325,85 @@ public:
 
 private:
   bool is_inited_;
-  ObIHADagNetCtx *ha_dag_net_ctx_;
+  ObTransferBackfillTXBaseCtx *ha_dag_net_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObFinishBackfillTXTask);
 };
 
+class ObTabletMdsTableBackfillTXTask : public share::ObITask
+{
+public:
+  ObTabletMdsTableBackfillTXTask();
+  virtual ~ObTabletMdsTableBackfillTXTask();
+  int init(
+      const share::ObLSID &ls_id,
+      const ObTabletBackfillInfo &tablet_info,
+      ObTabletHandle &tablet_handle);
+  virtual int process() override;
+  VIRTUAL_TO_STRING_KV(K("ObTabletMdsTableBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
+private:
+  int do_backfill_mds_table_(
+      compaction::ObTabletMergeCtx &tablet_merge_ctx,
+      ObTableHandleV2 &mds_sstable);
+  int prepare_mds_table_merge_ctx_(
+      compaction::ObTabletMergeCtx &tablet_merge_ctx);
+  int build_mds_table_to_sstable_(
+      compaction::ObTabletMergeCtx &tablet_merge_ctx,
+      ObTableHandleV2 &table_handle);
+  int prepare_backfill_mds_sstables_(
+      const ObTableHandleV2 &mds_sstable,
+      common::ObIArray<ObTableHandleV2> &mds_sstable_array);
+  int do_backfill_mds_sstables_(
+      const common::ObIArray<ObTableHandleV2> &mds_sstable_array,
+      ObTableHandleV2 &table_handle);
+  int prepare_mds_sstable_merge_ctx_(
+      const common::ObIArray<ObTableHandleV2> &mds_sstable_array,
+      ObTabletCrossLSMdsMinorMergeCtx &tablet_merge_ctx);
+  int build_mds_sstable_(
+      compaction::ObTabletCrossLSMdsMinorMergeCtx &tablet_merge_ctx,
+      ObTableHandleV2 &table_handle);
+  int update_merge_sstable_(
+      compaction::ObTabletCrossLSMdsMinorMergeCtx &tablet_merge_ctx);
+  int add_sstable_(ObTableHandleV2 &sstable);
+  int do_backfill_mds_();
+#ifdef OB_BUILD_SHARED_STORAGE
+  int do_ss_backfill_mds_();
+#endif
+
+private:
+  bool is_inited_;
+  ObBackfillTXCtx *backfill_tx_ctx_;
+  ObTransferBackfillTXBaseCtx *ha_dag_net_ctx_;
+  share::ObLSID ls_id_;
+  ObTabletBackfillInfo tablet_info_;
+  ObTabletHandle tablet_handle_;
+  common::ObArenaAllocator allocator_;
+  compaction::ObLocalArena merger_arena_;
+  ObBackfillTabletsTableMgr *tablets_table_mgr_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletMdsTableBackfillTXTask);
+};
+
+
+class ObTabletIncMajorTableBackfillTXTask : public share::ObITask
+{
+public:
+  ObTabletIncMajorTableBackfillTXTask();
+  virtual ~ObTabletIncMajorTableBackfillTXTask();
+  int init(
+    const share::ObLSID &ls_id,
+    const ObTabletBackfillInfo &tablet_info,
+    ObTabletHandle &tablet_handle);
+  virtual int process() override;
+  VIRTUAL_TO_STRING_KV(K("ObTabletIncMajorTableBackfillTxTask"), KP(this));
+private:
+  bool is_inited_;
+  ObBackfillTXCtx *backfill_tx_ctx_;
+  share::ObLSID ls_id_;
+  ObTabletBackfillInfo tablet_info_;
+  ObTabletHandle tablet_handle_;
+  common::ObArenaAllocator allocator_;
+  ObBackfillTabletsTableMgr *tablets_table_mgr_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletIncMajorTableBackfillTXTask);
+};
 
 
 

@@ -14,12 +14,6 @@
 
 #include "common/sql_mode/ob_sql_mode_utils.h"
 
-#include <string.h>
-#include "lib/charset/ob_charset.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/allocator/ob_allocator.h"
-#include "common/object/ob_object.h"
-#include "common/sql_mode/ob_sql_mode.h"
 namespace oceanbase
 {
 namespace common

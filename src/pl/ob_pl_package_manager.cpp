@@ -12,23 +12,12 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "pl/ob_pl_package_manager.h"
-#include "pl/ob_pl.h"
+#include "ob_pl_package_manager.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_compile.h"
-#include "pl/ob_pl_stmt.h"
-#include "pl/ob_pl_package_state.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/ob_sql_utils.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_req_time_service.h"
-#include "lib/file/file_directory_utils.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/session/ob_session_val_map.h"
+#include "pl/ob_pl_dependency_util.h"
 
 namespace oceanbase
 {
@@ -39,14 +28,152 @@ using namespace sql;
 namespace pl
 {
 
-int ObPLPackageManager::read_package_sql(FILE* file, char* buf, int64_t buf_len, bool &eof)
+// Usage: ObCharStream *s -> s.open() -> s.next().is_eos() ... -> s.close()
+class ObCharStream
+{
+public:
+  ObCharStream(const char *name) : eos_flag_(false), name_(name) {}
+  virtual ~ObCharStream() {}
+  ObCharStream(const ObCharStream &) = delete;
+  const ObCharStream &operator=(const ObCharStream &) = delete;
+
+  const char *get_name() { return name_; }
+  virtual int open() = 0;
+  virtual const ObCharStream &next(char &c) = 0;
+  virtual bool is_eos() const { return eos_flag_; }
+  virtual int close() = 0;
+
+  VIRTUAL_TO_STRING_KV(K_(eos_flag), K_(name));
+
+protected:
+  static const char EOS = '\0';
+  bool eos_flag_;
+
+private:
+  const char *const name_;
+};
+
+// read package sql from array embeded in the oberver binary file
+class ObCStringStream final : public ObCharStream
+{
+public:
+  ObCStringStream(const char *package_name, const char *data)
+      : ObCharStream(package_name), data_(data), cursor_(nullptr) {}
+  ~ObCStringStream() {}
+
+  int open() override {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(data_)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("package sql data is null", K(ret), K(data_));
+    } else if (0 == strlen(data_)) {
+      LOG_INFO("package sql file is empty or not exists", K(ret));
+    } else {
+      cursor_ = data_;
+    }
+    return ret;
+  }
+  const ObCharStream &next(char &c) override {
+    if (OB_NOT_NULL(cursor_) && !eos_flag_) {
+      c = *cursor_++;
+      eos_flag_ = (c == EOS);
+    } else {
+      c = EOS;
+    }
+    return *this;
+  }
+  int close() override {
+    int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(cursor_)) {
+      if (EOS != *(cursor_ - 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("C string stream has not been completely consumed", K(ret),
+                 K(cursor_ - data_), K(data_), K(cursor_));
+      } else {
+        cursor_ = nullptr;
+        eos_flag_ = false;
+      }
+    }
+    return ret;
+  }
+
+  INHERIT_TO_STRING_KV("ObCharStream", ObCharStream,
+                       "C string stream bytes comsumed", cursor_ - data_);
+
+private:
+  const char *const data_;
+  const char *cursor_;
+};
+
+// read package sql from file under admin/
+class ObFileStream final : public ObCharStream
+{
+public:
+  ObFileStream(const char *package_name, const char *file_path)
+      : ObCharStream(package_name), file_path_(file_path), file_(nullptr) {}
+  ~ObFileStream() {
+    // make sure file_ closed
+    if (file_) {
+      fclose(file_);
+      file_ = nullptr;
+    }
+  }
+
+  int open() override {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(file_path_) || 0 != access(file_path_, F_OK)) {
+      ret = OB_FILE_NOT_EXIST;
+      LOG_WARN("package sql file not exists", K(ret), K(file_path_));
+    } else if (OB_ISNULL(file_ = fopen(file_path_, "rb"))) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("package sql file open failed", K(ret), K(file_path_));
+    }
+    return ret;
+  }
+  const ObCharStream &next(char &c) override {
+    int ch;
+    if (OB_NOT_NULL(file_) && !eos_flag_) {
+      if (EOF == (ch = fgetc(file_))) {
+        c = EOS;
+        eos_flag_ = true;
+      } else {
+        c = static_cast<char>(ch);
+      }
+    } else {
+      c = EOS;
+    }
+    return *this;
+  }
+  int close() override {
+    int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(file_)) {
+      if (0 == feof(file_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("file content has not been completely consumed", K(ret), K(errno));
+      } else if (0 != fclose(file_)) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("close file failed", K(ret), K(file_path_), K(file_));
+      } else {
+        file_ = nullptr;
+        eos_flag_ = false;
+      }
+    }
+    return ret;
+  }
+
+  INHERIT_TO_STRING_KV("ObCharStream", ObCharStream, K_(file_path),
+                       "file stream bytes comsumed", file_ ? ftell(file_) : -1);
+
+private:
+  const char *const file_path_;
+  FILE *file_;
+};
+
+int ObPLPackageManager::read_package_sql(ObCharStream &stream, char* buf, int64_t buf_len, bool &eos)
 {
   int ret = OB_SUCCESS;
   enum {S_LINE_START, S_NORMAL, S_COMMENT, S_TERMINATE} state = S_LINE_START;
-  if (OB_ISNULL(file)) {
-    ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("package sql file is null", K(ret));
-  } else if (OB_ISNULL(buf)) {
+  if (OB_ISNULL(buf)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("sql buffer is null", K(ret));
   } else if (buf_len <= 0) {
@@ -56,13 +183,13 @@ int ObPLPackageManager::read_package_sql(FILE* file, char* buf, int64_t buf_len,
     char *p = buf;
     char *p_start = p;
     char *p_end = p + buf_len - 1;
-    int c;
+    char c;
     // clear buffer
     *p = '\0';
     *p_end = '\0';
     while (OB_SUCC(ret) && state != S_TERMINATE) {
-      if (EOF == (c = fgetc(file))) {
-        ret = OB_IO_ERROR;
+      if (stream.next(c).is_eos()) {
+        ret = OB_ITER_END;
       } else {
         if (p >= p_end) {
           ret = OB_INVALID_ARGUMENT;
@@ -77,18 +204,43 @@ int ObPLPackageManager::read_package_sql(FILE* file, char* buf, int64_t buf_len,
               } else if ('#' == c) {
                 state = S_COMMENT;
               } else if ('-' == c) {
-                c = fgetc(file);
-                if ('-' == c) {
+                if (stream.next(c).is_eos()) {
+                  ret = OB_ITER_END;
+                } else if ('-' == c) {
                   state = S_COMMENT;
-                } else if (EOF == c) {
-                  ret = OB_IO_ERROR;
                 } else {
                   *p++ = '-';
-                  *p++ = static_cast<char>(c);
+                  *p++ = c;
                   state = S_NORMAL;
                 }
+              } else if ('/' == c) {
+                if (stream.next(c).is_eos()) {
+                  *p++ = '/';
+                  ret = OB_ITER_END;
+                } else if ('/' == c) {
+                  if (stream.next(c).is_eos()) {
+                    *p++ = '\0';
+                    ret = OB_ITER_END;
+                  } else if ('\n' == c) {
+                    *p++ = '\0';
+                    state = S_TERMINATE;
+                  } else {
+                    *p++ = '/';
+                    *p++ = '/';
+                    *p++ = c;
+                    state = S_NORMAL;
+                  }
+                } else {
+                  *p++ = '/';
+                  *p++ = c;
+                  if ('\n' == c) {
+                    state = S_LINE_START;
+                  } else {
+                    state = S_NORMAL;
+                  }
+                }
               } else {
-                *p++ = static_cast<char>(c);
+                *p++ = c;
                 state = S_NORMAL;
               }
             }
@@ -100,23 +252,11 @@ int ObPLPackageManager::read_package_sql(FILE* file, char* buf, int64_t buf_len,
             }
             break;
             case S_NORMAL: {
-              /* if ('#' == c) {
-                state = S_COMMENT;
-              } else */ if ('/' == c) {
-                if ((p != p_start) && '/' == *(p - 1)) {
-                  *(p - 1) = '\0';
-                  state = S_TERMINATE;
-                } else {
-                  *p++ = static_cast<char>(c);
-                  state = S_NORMAL;
-                }
+              *p++ = c;
+              if ('\n' == c) {
+                state = S_LINE_START;
               } else {
-                *p++ = static_cast<char>(c);
-                if ('\n' == c) {
-                  state = S_LINE_START;
-                } else {
-                  state = S_NORMAL;
-                }
+                state = S_NORMAL;
               }
             }
             break;
@@ -130,19 +270,20 @@ int ObPLPackageManager::read_package_sql(FILE* file, char* buf, int64_t buf_len,
       }
     }
     if (OB_FAIL(ret)) {
-      if (feof(file)) {
-        eof = true;
+      if (stream.is_eos()) {
+        eos = true;
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("read package file error", K(errno), K(ret));
+        LOG_WARN("read package file error", K(ret), K(stream));
       }
     }
   }
   return ret;
 }
 
-int ObPLPackageManager::read_and_exec_package_sql(
-  ObMySQLProxy &sql_proxy, const char* package_full_path, ObCompatibilityMode compa_mode)
+int ObPLPackageManager::read_and_exec_package_sql(ObMySQLProxy &sql_proxy,
+                                                  ObCharStream &stream,
+                                                  ObCompatibilityMode compa_mode)
 {
   int ret = OB_SUCCESS;
   if (!sql_proxy.is_inited() || !sql_proxy.is_active()) {
@@ -150,271 +291,243 @@ int ObPLPackageManager::read_and_exec_package_sql(
     LOG_WARN("sql_proxy not inited or not active", "sql_proxy inited",
              sql_proxy.is_inited(), "sql_proxy active", sql_proxy.is_active(), K(ret));
   } else {
-    FILE* file = NULL;
     int64_t affected_rows = 0;
-    if (access(package_full_path, F_OK) != 0) {
-      LOG_INFO("package sql file not exists", K(package_full_path), K(ret));
-    } else if (OB_ISNULL(file = fopen(package_full_path, "rb"))) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("package sql file open failed", K(package_full_path), K(ret));
+    if (OB_FAIL(stream.open())) {
+      LOG_WARN("failed to open package file data stream", K(ret), K(stream));
     } else {
       // system tenant will run with mysql compatibility mode
       // but we need to create system packages with oralce compatibility
       // here hack to oracle mode
       bool eof = false;
-      bool skip_affected_rows_check = false;
+      bool create_external_table = false;
       ObSessionParam param;
       ObSessionParam *param_ptr = nullptr;
-      char *last_slash = strrchr(const_cast<char*>(package_full_path), '/');
-      const char *pacakge_filename = (last_slash != NULL) ? last_slash + 1 : package_full_path;
       int64_t sql_mode = SMO_STRICT_ALL_TABLES | SMO_NO_ZERO_IN_DATE | SMO_NO_AUTO_CREATE_USER;
       // allow affected_rows > 0 when exec sql in external_table_alert_log.sql
-      if (strcmp(pacakge_filename, "external_table_alert_log.sql") == 0) {
-        skip_affected_rows_check = true;
+      if (strcmp(stream.get_name(), "external_table_alert_log") == 0) {
+        create_external_table = true;
         param.sql_mode_ = &sql_mode;
         param_ptr = &param;
       }
+      // do not cache the compilation results of system packages into the PL cache when loading system packages.
+      param.enable_pl_cache_ = false;
       SMART_VAR(char[OB_MAX_SQL_LENGTH], sql_buf) {
         while (OB_SUCC(ret) && !eof) {
-          if (OB_FAIL(read_package_sql(file, sql_buf, OB_MAX_SQL_LENGTH, eof))) {
-            LOG_WARN("fail to read package sql file", K(ret));
+          if (FAILEDx(read_package_sql(stream, sql_buf, OB_MAX_SQL_LENGTH, eof))) {
+            LOG_WARN("fail to read package sql data", K(ret));
           } else if (strlen(sql_buf) != 0
-                    && OB_FAIL(sql_proxy.write(OB_SYS_TENANT_ID,
+                     && OB_FAIL(sql_proxy.write(OB_SYS_TENANT_ID,
                                                 sql_buf,
                                                 affected_rows,
                                                 static_cast<int64_t>(compa_mode),
-                                                param_ptr))) {
+                                                &param))) {
             LOG_WARN("fail to exec package sql", K(sql_buf), K(ret));
-          } else if (affected_rows != 0 && !skip_affected_rows_check) {
+          } else if (affected_rows != 0 && !create_external_table) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("affected_rows expected to be zero", K(affected_rows), K(ret));
+            LOG_WARN("affected_rows expected to be zero", K(ret), K(affected_rows), K(stream.get_name()));
           } else {
             OZ (ObSPIService::force_refresh_schema(OB_SYS_TENANT_ID));
           }
+          LOG_INFO("package source data consumed", K(ret), K(stream));
         }
       }
-      fclose(file);
+      if (create_external_table && OB_SUCC(ret)) {
+        uint64_t data_version = 0;
+        common::ObString alter_table_sql("alter external table sys_external_tbs.__all_external_alert_log_info auto_refresh immediate");
+        if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+          LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
+        } else if (data_version >= DATA_VERSION_4_3_3_0) {
+          if (OB_FAIL(sql_proxy.write(OB_SYS_TENANT_ID,
+                                      alter_table_sql,
+                                      affected_rows,
+                                      static_cast<int64_t>(compa_mode),
+                                      param_ptr))) {
+            LOG_WARN("fail to alter auto_refresh flag of external table ", K(ret), K(alter_table_sql));
+          } else {
+            LOG_INFO("seccess to alter auto_refresh flag", KR(ret), K(alter_table_sql));
+          }
+        }
+      }
     }
   }
   return ret;
 }
 
-int ObPLPackageManager::load_sys_package(
-  ObMySQLProxy &sql_proxy, const char *package_spec_name, const char *package_body_name, ObCompatibilityMode compa_mode)
+// import variables defined in `syspack_source.cpp` generated by `syspack_codegen.py`.
+extern int64_t syspack_source_count;
+extern std::pair<const char * const, const char* const> syspack_source_contents[];
+
+extern int oracle_syspack_file_list_length;
+extern int mysql_syspack_file_list_length;
+extern ObSysPackageFile oracle_syspack_file_list[];
+extern ObSysPackageFile mysql_syspack_file_list[];
+// for now! we only have one special system package "__DBMS_UPGRADE"
+extern int oracle_special_syspack_file_list_length;
+extern int mysql_special_syspack_file_list_length;
+extern ObSysPackageFile oracle_special_syspack_file_list[];
+extern ObSysPackageFile mysql_special_syspack_file_list[];
+
+#define SIZE_OF_SYSPACK_LST(lst) (lst##_length)
+
+int ObPLPackageManager::get_syspack_source_file_content(const char *file_name, const char *&content)
 {
   int ret = OB_SUCCESS;
-  const int64_t begin_time = ObTimeUtility::current_time();
-  LOG_INFO("load sys package begin",
-           "package name", package_spec_name, "package body name", package_body_name);
+  OX (content = nullptr);
+  if (OB_ISNULL(file_name)) {
+    // return nullptr as `content`
+    LOG_INFO("file name c string is null", K(file_name));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < syspack_source_count; i++) {
+      if (ObString(file_name).case_compare_equal(syspack_source_contents[i].first)) {
+        content = syspack_source_contents[i].second;
+        break;
+      }
+    }
+    // `content` not found, report error
+    OV (OB_NOT_NULL(content), OB_ERR_UNEXPECTED, "system source file not found", ret, file_name);
+  }
+  return ret;
+}
 
-  if (OB_FAIL(read_and_exec_package_sql(sql_proxy, package_spec_name, compa_mode))) {
-    LOG_WARN("fail to read and exec package header sql", K(package_spec_name), K(ret));
-  } else if (OB_FAIL(read_and_exec_package_sql(sql_proxy, package_body_name, compa_mode))) {
-    LOG_WARN("fail to read and exec package body sql", K(package_body_name), K(ret));
+int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy,
+                                         const ObSysPackageFile &pack_file_info,
+                                         ObCompatibilityMode compa_mode,
+                                         bool from_file)
+{
+  int ret = OB_SUCCESS;
+  const char *package_name = pack_file_info.package_name;
+  const char *spec_file = pack_file_info.package_spec_file_name;
+  const char *body_file = pack_file_info.package_body_file_name;
+
+  const int64_t begin_time = ObTimeUtility::current_time();
+  LOG_INFO("load sys package", K(package_name), K(spec_file), K(body_file), K(begin_time));
+
+  if (from_file) {
+    const char *sys_package_dir = "admin";
+    char spec_file_path[MAX_PATH_SIZE] = {0};
+    char body_file_path[MAX_PATH_SIZE] = {0};
+    if (OB_SUCC(ret) && OB_NOT_NULL(spec_file)) {
+      OZ (databuff_printf(spec_file_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, spec_file));
+      ObFileStream spec_stream{package_name, spec_file_path};
+      OZ (read_and_exec_package_sql(sql_proxy, spec_stream, compa_mode), spec_stream);
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(body_file)) {
+      OZ (databuff_printf(body_file_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, body_file));
+      ObFileStream body_stream{package_name, body_file_path};
+      OZ (read_and_exec_package_sql(sql_proxy, body_stream, compa_mode), body_stream);
+    }
+  } else {
+    const char *spec_content = nullptr;
+    const char *body_content = nullptr;
+    OZ (get_syspack_source_file_content(spec_file, spec_content));
+    if (OB_SUCC(ret) && OB_NOT_NULL(spec_content)) {
+      ObCStringStream spec_stream{package_name, spec_content};
+      OZ (read_and_exec_package_sql(sql_proxy, spec_stream, compa_mode), spec_stream);
+    }
+    OZ (get_syspack_source_file_content(body_file, body_content));
+    if (OB_SUCC(ret) && OB_NOT_NULL(body_content)) {
+      ObCStringStream body_stream{package_name, body_content};
+      OZ (read_and_exec_package_sql(sql_proxy, body_stream, compa_mode), body_stream);
+    }
   }
 
   const int64_t now = ObTimeUtility::current_time();
-  LOG_INFO("load sys package finish", "total_time_used", now - begin_time);
+  LOG_INFO("load sys package finish", K(ret), K(package_name), "total_time_used", now - begin_time);
   return ret;
 }
 
-static const char* sys_package_dir = "admin";
-static ObSysPackageFile oracle_sys_package_file_table[] = {
-#ifdef OB_BUILD_ORACLE_PL
-  {"dbms_standard", "dbms_standard.sql", "dbms_standard_body.sql"},
-  {"dbms_output", "dbms_output.sql", "dbms_output_body.sql"},
-  {"dbms_metadata", "dbms_metadata.sql", "dbms_metadata_body.sql"},
-  {"dbms_spm", "dbms_spm.sql", "dbms_spm_body.sql"},
-  {"utl_raw", "utl_raw.sql", "utl_raw_body.sql"},
-  {"dbms_lob", "dbms_lob.sql", "dbms_lob_body.sql"},
-  {"sa_components", "sa_components.sql", "sa_components_body.sql"},
-  {"sa_label_admin", "sa_label_admin.sql", "sa_label_admin_body.sql"},
-  {"sa_policy_admin", "sa_policy_admin.sql", "sa_policy_admin_body.sql"},
-  {"sa_session", "sa_session.sql", "sa_session_body.sql"},
-  {"sa_sysdba", "sa_sysdba.sql", "sa_sysdba_body.sql"},
-  {"sa_user_admin", "sa_user_admin.sql", "sa_user_admin_body.sql"},
-  {"utl_i18n", "utl_i18n.sql", "utl_i18n_body.sql"},
-  {"dbms_crypto", "dbms_crypto.sql","dbms_crypto_body.sql"},
-  {"dbms_random", "dbms_random.sql", "dbms_random_body.sql"},
-  {"dbms_debug", "dbms_debug.sql", "dbms_debug_body.sql"},
-  {"utl_inaddr", "utl_inaddr.sql", "utl_inaddr_body.sql"},
-  {"utl_encode", "dbms_utl_encode.sql", "dbms_utl_encode_body.sql"},
-  {"dbms_warning", "dbms_warning.sql", "dbms_warning_body.sql"},
-  {"dbms_errlog", "dbms_errlog.sql", "dbms_errlog_body.sql"},
-  {"dbms_lock", "dbms_lock.sql", "dbms_lock_body.sql"},
-  {"dbms_sql", "dbms_sql.sql", "dbms_sql_body.sql"},
-  {"dbms_xa", "dbms_xa.sql", "dbms_xa_body.sql"},
-  {"dbms_resource_manager", "dbms_resource_manager.sql", "dbms_resource_manager_body.sql"},
-  {"dbms_utility", "dbms_utility.sql", "dbms_utility_body.sql"},
-  {"odciconst", "odciconst.sql", "odciconst_body.sql"},
-  {"dbms_stats", "dbms_stats.sql", "dbms_stats_body.sql"},
-  {"dbms_any", "dbms_any.sql", "dbms_any_body.sql"},
-  {"xml_type", "xml_type.sql", "xml_type_body.sql"},
-  {"dbms_crypto", "dbms_crypto.sql", "dbms_crypto_body.sql"},
-  {"dbms_ijob", "dbms_ijob.sql", "dbms_ijob_body.sql"},
-  {"dbms_job", "dbms_job.sql", "dbms_job_body.sql"},
-  {"dbms_ischeduler", "dbms_ischeduler.sql", "dbms_ischeduler_body.sql"},
-  {"dbms_scheduler", "dbms_scheduler.sql", "dbms_scheduler_body.sql"},
-  {"catodci", "catodci.sql", "catodci_body.sql"},
-  {"dbms_describe", "dbms_describe.sql", "dbms_describe_body.sql"},
-  {"utl_file", "utl_file.sql", "utl_file_body.sql"},
-  {"dbms_plan_cache", "dbms_plancache.sql", "dbms_plancache_body.sql"},
-  {"dbms_sys_error", "dbms_sys_error.sql", "dbms_sys_error_body.sql"},
-  {"dbms_preprocessor", "dbms_preprocessor.sql", "dbms_preprocessor_body.sql"},
-  {"dbms_audit_mgmt", "dbms_audit_mgmt.sql", "dbms_audit_mgmt_body.sql"},
-  {"dbms_application", "dbms_application.sql", "dbms_application_body.sql"},
-  {"dbms_session", "dbms_session.sql", "dbms_session_body.sql"},
-  {"dbms_monitor", "dbms_monitor.sql", "dbms_monitor_body.sql"},
-  {"dbms_xplan", "dbms_xplan.sql", "dbms_xplan_body.sql"},
-  {"dbms_workload_repository", "dbms_workload_repository.sql", "dbms_workload_repository_body.sql"},
-  {"dbms_ash_internal", "dbms_ash_internal.sql", "dbms_ash_internal_body.sql"},
-  {"dbms_rls", "dbms_rls.sql", "dbms_rls_body.sql"},
-  {"dbms_udr", "dbms_udr.sql", "dbms_udr_body.sql"},
-  {"json_element_t", "json_element_type.sql", "json_element_type_body.sql"},
-  {"json_object_t", "json_object_type.sql", "json_object_type_body.sql"},
-  {"dbms_mview", "dbms_mview.sql", "dbms_mview_body.sql"},
-  {"dbms_mview_stats", "dbms_mview_stats.sql", "dbms_mview_stats_body.sql"},
-  {"json_array_t", "json_array_type.sql", "json_array_type_body.sql"},
-  {"xmlsequence", "xml_sequence_type.sql", "xml_sequence_type_body.sql"},
-  {"sdo_geometry", "sdo_geometry.sql", "sdo_geometry_body.sql"},
-  {"sdo_geom", "sdo_geom.sql", "sdo_geom_body.sql"},
-  {"dbms_external_table", "dbms_external_table.sql", "dbms_external_table_body.sql"},
-  {"dbms_profiler", "dbms_profiler.sql", "dbms_profiler_body.sql"},
-#endif
-};
-
-static ObSysPackageFile mysql_sys_package_file_table[] = {
-  {"dbms_stats", "dbms_stats_mysql.sql", "dbms_stats_body_mysql.sql"},
-  {"dbms_scheduler", "dbms_scheduler_mysql.sql", "dbms_scheduler_mysql_body.sql"},
-  {"dbms_ischeduler", "dbms_ischeduler_mysql.sql", "dbms_ischeduler_mysql_body.sql"},
-  {"dbms_application", "dbms_application_mysql.sql", "dbms_application_body_mysql.sql"},
-  {"dbms_session", "dbms_session_mysql.sql", "dbms_session_body_mysql.sql"},
-  {"dbms_monitor", "dbms_monitor_mysql.sql", "dbms_monitor_body_mysql.sql"},
-  {"dbms_resource_manager", "dbms_resource_manager_mysql.sql", "dbms_resource_manager_body_mysql.sql"},
-#ifdef OB_BUILD_ORACLE_PL
-  {"dbms_xplan", "dbms_xplan_mysql.sql", "dbms_xplan_mysql_body.sql"},
-  {"dbms_spm", "dbms_spm_mysql.sql", "dbms_spm_body_mysql.sql"},
-#endif
-  {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"},
-  {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"},
-  {"dbms_mview", "dbms_mview_mysql.sql", "dbms_mview_body_mysql.sql"},
-  {"dbms_mview_stats", "dbms_mview_stats_mysql.sql", "dbms_mview_stats_body_mysql.sql"},
-  {"dbms_trusted_certificate_manager", "dbms_trusted_certificate_manager_mysql.sql", "dbms_trusted_certificate_manager_body_mysql.sql"},
-  {"dbms_ob_limit_calculator", "dbms_ob_limit_calculator_mysql.sql", "dbms_ob_limit_calculator_body_mysql.sql"},
-  {"dbms_external_table", "dbms_external_table_mysql.sql", "dbms_external_table_body_mysql.sql"},
-  {"external_table_alert_log", "external_table_alert_log.sql", "none"}
-};
-
-int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy, ObString &package_name, ObCompatibilityMode compa_mode)
+int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy,
+                                         ObString &package_name,
+                                         ObCompatibilityMode compa_mode,
+                                         bool from_file)
 {
   int ret = OB_SUCCESS;
-  char package_spec_full_path[MAX_PATH_SIZE] = {};
-  char package_body_full_path[MAX_PATH_SIZE] = {};
-  bool dir_exists = false;
-  bool package_exists = false;
-  if (OB_FAIL(FileDirectoryUtils::is_exists(sys_package_dir, dir_exists))) {
-    LOG_WARN("check sys package dir whether exist failed", K(ret), K(sys_package_dir));
-  } else if (!dir_exists) {
-    ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("sys package dir not exist", K(ret), K(sys_package_dir));
-  }
+  const ObSysPackageFile *pack_file_info = nullptr;
+
+#define SEARCH_SYSPACK_FILE_BY_NAME(syspack_file_list)                                      \
+  do {                                                                                      \
+    if (pack_file_info == nullptr) {                                                        \
+      int sys_package_count = SIZE_OF_SYSPACK_LST(syspack_file_list);                       \
+      for (int64_t i = 0; OB_SUCC(ret) && i < sys_package_count; ++i) {                     \
+        if (package_name.case_compare_equal(ObString(syspack_file_list[i].package_name))) {  \
+          pack_file_info = &syspack_file_list[i];                                           \
+          break;                                                                            \
+        }                                                                                   \
+      }                                                                                     \
+    }                                                                                       \
+  } while (0)
+
   if (ObCompatibilityMode::ORACLE_MODE == compa_mode) {
-    int sys_package_count = ARRAYSIZEOF(oracle_sys_package_file_table);
-    for (int64_t i = 0; OB_SUCC(ret) && i < sys_package_count; ++i) {
-      if (0 == package_name.case_compare(ObString(oracle_sys_package_file_table[i].package_name))) {
-        const char *package_spec_name = oracle_sys_package_file_table[i].package_spec_file_name;
-        const char *package_body_name = oracle_sys_package_file_table[i].package_body_file_name;
-        OZ (databuff_printf(
-          package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_spec_name));
-        OZ (databuff_printf(
-          package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_body_name));
-        OX (package_exists = true);
-        break;
-      }
-    }
+    SEARCH_SYSPACK_FILE_BY_NAME(oracle_syspack_file_list);
+    SEARCH_SYSPACK_FILE_BY_NAME(oracle_special_syspack_file_list);
   } else if (ObCompatibilityMode::MYSQL_MODE == compa_mode) {
-    int sys_package_count = ARRAYSIZEOF(mysql_sys_package_file_table);
-    for (int64_t i = 0; OB_SUCC(ret) && i < sys_package_count; ++i) {
-      if (0 == package_name.case_compare(ObString(mysql_sys_package_file_table[i].package_name))) {
-        const char *package_spec_name = mysql_sys_package_file_table[i].package_spec_file_name;
-        const char *package_body_name = mysql_sys_package_file_table[i].package_body_file_name;
-        OZ (databuff_printf(
-          package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_spec_name));
-        OZ (databuff_printf(
-          package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_body_name));
-        OX (package_exists = true);
-        break;
-      }
-    }
+    SEARCH_SYSPACK_FILE_BY_NAME(mysql_syspack_file_list);
+    SEARCH_SYSPACK_FILE_BY_NAME(mysql_special_syspack_file_list);
   }
-  if (OB_SUCC(ret) && !package_exists) {
+#undef SEARCH_SYSPACK_FILE_BY_NAME
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(pack_file_info)) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
-    LOG_WARN("package not exists", K(ret), K(package_name));
+    LOG_WARN("package not exists", K(ret), K(package_name), K(compa_mode));
     LOG_USER_ERROR(OB_ERR_PACKAGE_DOSE_NOT_EXIST,
                    "PACKAGE",
                    ObString("oceanbase").length(), ObString("oceanbase").ptr(),
                    package_name.length(), package_name.ptr());
+  } else {
+    OZ (load_sys_package(sql_proxy, *pack_file_info, compa_mode, from_file));
   }
-  OZ (load_sys_package(sql_proxy, package_spec_full_path, package_body_full_path, compa_mode));
   return ret;
 }
 
-int ObPLPackageManager::load_all_common_sys_package(ObMySQLProxy &sql_proxy,
-                                                    const ObSysPackageFile *package_file,
-                                                    int sys_package_count,
-                                                    ObCompatibilityMode compa_mode)
+int ObPLPackageManager::load_sys_package_list(ObMySQLProxy &sql_proxy,
+                                              const ObSysPackageFile *sys_package_list,
+                                              int sys_package_count,
+                                              ObCompatibilityMode compa_mode,
+                                              bool from_file)
 {
   int ret = OB_SUCCESS;
-  char package_spec_full_path[MAX_PATH_SIZE] = {};
-  char package_body_full_path[MAX_PATH_SIZE] = {};
-  CK (OB_NOT_NULL(package_file));
-  LOG_INFO("load all sys package begin", "sys package total count", sys_package_count);
+  CK (OB_NOT_NULL(sys_package_list));
+  LOG_INFO("load sys package list begin", "sys package total count", sys_package_count);
   for (int i = 0; OB_SUCC(ret) && i < sys_package_count; ++i) {
-    const char *package_spec_name = package_file[i].package_spec_file_name;
-    const char *package_body_name = package_file[i].package_body_file_name;
-    OZ (databuff_printf(
-      package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_spec_name));
-    OZ (databuff_printf(
-      package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_body_name));
-    if (OB_SUCC(ret)) {
-      LOG_INFO("load sys package begin", K(package_spec_name));
-      if (OB_FAIL(load_sys_package(sql_proxy, package_spec_full_path, package_body_full_path, compa_mode))) {
-        LOG_WARN("load sys package failed",
-                  K(package_spec_full_path), K(package_body_full_path), K(compa_mode), K(ret));
-      } else {
-        LOG_INFO("load sys package success", K(ret), K(package_spec_name));
-      }
-    }
+    OZ (load_sys_package(sql_proxy, sys_package_list[i], compa_mode, from_file));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("load sys package list failed", K(ret), K(compa_mode));
+  } else {
+    LOG_INFO("load sys package list success", K(ret), K(compa_mode));
   }
   return ret;
 }
 
-int ObPLPackageManager::load_all_common_sys_package(ObMySQLProxy &sql_proxy, ObCompatibilityMode need_compa_mode)
-{
+int ObPLPackageManager::load_all_common_sys_package(
+    ObMySQLProxy &sql_proxy, ObCompatibilityMode compa_mode, bool from_file) {
   int ret = OB_SUCCESS;
-  bool exist = false;
-  if (OB_FAIL(FileDirectoryUtils::is_exists(sys_package_dir, exist))) {
-    LOG_WARN("check sys package dir whether exist failed", K(sys_package_dir), K(ret));
-  } else if (!exist) {
-    LOG_INFO("sys package dir not exist", K(sys_package_dir));
-  } else {
-    if (need_compa_mode == ObCompatibilityMode::OCEANBASE_MODE) {
-      OZ (load_all_common_sys_package(sql_proxy, oracle_sys_package_file_table,
-          ARRAYSIZEOF(oracle_sys_package_file_table), ObCompatibilityMode::ORACLE_MODE));
-      OZ (load_all_common_sys_package(sql_proxy, mysql_sys_package_file_table,
-          ARRAYSIZEOF(mysql_sys_package_file_table), ObCompatibilityMode::MYSQL_MODE));
-    } else if (need_compa_mode == ObCompatibilityMode::ORACLE_MODE) {
-      OZ (load_all_common_sys_package(sql_proxy, oracle_sys_package_file_table,
-          ARRAYSIZEOF(oracle_sys_package_file_table), ObCompatibilityMode::ORACLE_MODE));
-    } else if (need_compa_mode == ObCompatibilityMode::MYSQL_MODE) {
-      OZ (load_all_common_sys_package(sql_proxy, mysql_sys_package_file_table,
-          ARRAYSIZEOF(mysql_sys_package_file_table), ObCompatibilityMode::MYSQL_MODE));
-    }
+  if (compa_mode == ObCompatibilityMode::OCEANBASE_MODE) {
+    OZ (load_sys_package_list(sql_proxy, oracle_syspack_file_list,
+                              SIZE_OF_SYSPACK_LST(oracle_syspack_file_list),
+                              ObCompatibilityMode::ORACLE_MODE,
+                              from_file));
+    OZ (load_sys_package_list(sql_proxy, mysql_syspack_file_list,
+                              SIZE_OF_SYSPACK_LST(mysql_syspack_file_list),
+                              ObCompatibilityMode::MYSQL_MODE,
+                              from_file));
+  } else if (compa_mode == ObCompatibilityMode::ORACLE_MODE) {
+    OZ (load_sys_package_list(sql_proxy, oracle_syspack_file_list,
+                              SIZE_OF_SYSPACK_LST(oracle_syspack_file_list),
+                              ObCompatibilityMode::ORACLE_MODE,
+                              from_file));
+  } else if (compa_mode == ObCompatibilityMode::MYSQL_MODE) {
+    OZ (load_sys_package_list(sql_proxy, mysql_syspack_file_list,
+                              SIZE_OF_SYSPACK_LST(mysql_syspack_file_list),
+                              ObCompatibilityMode::MYSQL_MODE,
+                              from_file));
   }
+
   if (OB_SUCC(ret)) {
-    LOG_INFO("load all common sys package success!");
+    LOG_INFO("load all common sys package success!", K(ret), K(from_file));
   } else {
-    LOG_INFO("load all common sys package failed!");
+    LOG_WARN("load all common sys package failed!", K(ret), K(from_file));
   }
   return ret;
 }
@@ -422,39 +535,23 @@ int ObPLPackageManager::load_all_common_sys_package(ObMySQLProxy &sql_proxy, ObC
 int ObPLPackageManager::load_all_special_sys_package(ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
-  bool exist = false;
-  if (OB_FAIL(FileDirectoryUtils::is_exists(sys_package_dir, exist))) {
-    LOG_WARN("check sys package dir whether exist failed", K(sys_package_dir), K(ret));
-  } else if (!exist) {
-    LOG_INFO("sys package dir not exist", K(sys_package_dir));
-  } else {
-    // for now! we only have one special system package "__DBMS_UPGRADE"
-    char package_spec_full_path[MAX_PATH_SIZE] = {};
-    char package_body_full_path[MAX_PATH_SIZE] = {};
-
 #ifdef OB_BUILD_ORACLE_PL
-    OZ (databuff_printf(
-      package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, "__dbms_upgrade.sql"));
-    OZ (databuff_printf(
-      package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, "__dbms_upgrade_body.sql"));
-    OZ (load_sys_package(sql_proxy, package_spec_full_path, package_body_full_path, ObCompatibilityMode::ORACLE_MODE));
+  OZ (load_sys_package_list(sql_proxy, oracle_special_syspack_file_list,
+                            SIZE_OF_SYSPACK_LST(oracle_special_syspack_file_list),
+                            ObCompatibilityMode::ORACLE_MODE,
+                            false /* from_file */));
 #endif
-
-    memset(package_spec_full_path, 0, sizeof(package_spec_full_path));
-    memset(package_body_full_path, 0, sizeof(package_body_full_path));
-    OZ (databuff_printf(
-      package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, "__dbms_upgrade_mysql.sql"));
-    OZ (databuff_printf(
-      package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, "__dbms_upgrade_body_mysql.sql"));
-    OZ (load_sys_package(sql_proxy, package_spec_full_path, package_body_full_path, ObCompatibilityMode::MYSQL_MODE));
-  }
+  OZ (load_sys_package_list(sql_proxy, mysql_special_syspack_file_list,
+                            SIZE_OF_SYSPACK_LST(mysql_special_syspack_file_list),
+                            ObCompatibilityMode::MYSQL_MODE,
+                            false /* from_file */));
   return ret;
 }
 
 int ObPLPackageManager::load_all_sys_package(ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
-  OZ (load_all_common_sys_package(sql_proxy, ObCompatibilityMode::OCEANBASE_MODE));
+  OZ (load_all_common_sys_package(sql_proxy, ObCompatibilityMode::OCEANBASE_MODE, false /* from_file */));
   OZ (load_all_special_sys_package(sql_proxy));
   if (OB_SUCC(ret)) {
     LOG_INFO("load all sys package success!", K(ret));
@@ -635,6 +732,89 @@ int ObPLPackageManager::get_package_expr(const ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
+int ObPLPackageManager::get_package_expr(const ObPLResolveCtx &resolve_ctx,
+                                         ObRawExprFactory &expr_factory,
+                                         uint64_t package_id,
+                                         int64_t expr_idx,
+                                         ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  const ObPackageInfo *package_spec_info = NULL;
+  const ObPackageInfo *package_body_info = NULL;
+  bool is_wrap = false;
+  CK (package_id != OB_INVALID_ID);
+  CK (expr_idx != OB_INVALID_ID);
+  OZ (get_package_schema_info(
+    resolve_ctx.schema_guard_, package_id, package_spec_info, package_body_info));
+  CK (OB_NOT_NULL(package_spec_info));
+
+  if (OB_SUCC(ret)) {
+    ObArenaAllocator local_alloc("GetPKGRawExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObPLCompiler compiler(local_alloc,
+                          resolve_ctx.session_info_,
+                          resolve_ctx.schema_guard_,
+                          resolve_ctx.package_guard_,
+                          resolve_ctx.sql_proxy_);
+    const uint64_t tenant_id = package_spec_info->get_tenant_id();
+    uint64_t db_id = package_spec_info->get_database_id();
+    const ObDatabaseSchema *db_schema = NULL;
+
+    HEAP_VARS_2((ObPLPackageAST, package_spec_ast, local_alloc),
+                (ObPLPackageAST, package_body_ast, local_alloc)) {
+
+      OZ (resolve_ctx.schema_guard_.get_database_schema(tenant_id, db_id, db_schema));
+      CK (OB_NOT_NULL(db_schema));
+
+#define ANALYZE_PACKAGE(package_info, package_ast, package_type, parent_ns, parent_ast)       \
+if (OB_SUCC(ret)) {                                                                           \
+  ObString source;                                                                            \
+  if (package_info->is_for_trigger()) {                                                       \
+    OZ (ObTriggerInfo::gen_package_source(package_info->get_tenant_id(),                      \
+                                          package_info->get_package_id(),                     \
+                                          source,                                             \
+                                          PL_PACKAGE_SPEC == package_type,                    \
+                                          resolve_ctx.schema_guard_,                          \
+                                          local_alloc,                                        \
+                                          &resolve_ctx.session_info_));                       \
+  } else {                                                                                    \
+    source = package_info->get_source();                                                      \
+  }                                                                                           \
+  OZ (package_ast.init(db_schema->get_database_name_str(),                                    \
+                       package_info->get_package_name(),                                      \
+                       package_type,                                                          \
+                       package_info->get_database_id(),                                       \
+                       package_info->get_package_id(),                                        \
+                       package_info->get_schema_version(),                                    \
+                       parent_ast));                                                                \
+  OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(                                   \
+    local_alloc, resolve_ctx.session_info_.get_dtc_params(), source));                        \
+  {                                                                                           \
+    ObPLCompilerEnvGuard guard(                                                               \
+      *package_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_ast, ret); \
+    OZ (compiler.analyze_package(source, parent_ns,                                           \
+                                 package_ast, package_info->is_for_trigger(), is_wrap));               \
+  }                                                                                           \
+  if (OB_SUCC(ret) && package_id == package_info->get_package_id()) {                         \
+    OV (expr_idx >= 0 && package_ast.get_exprs().count() > expr_idx,                          \
+      OB_ERR_UNEXPECTED, K(expr_idx), K(package_ast.get_exprs().count()));                    \
+    CK (OB_NOT_NULL(package_ast.get_expr(expr_idx)));                                         \
+    OZ (ObPLExprCopier::copy_expr(expr_factory, package_ast.get_expr(expr_idx), expr));       \
+  }                                                                                           \
+}
+
+      ANALYZE_PACKAGE(package_spec_info, package_spec_ast, PL_PACKAGE_SPEC, NULL, NULL);
+      if (package_id != package_spec_info->get_package_id()) {
+        ANALYZE_PACKAGE(package_body_info, package_body_ast, PL_PACKAGE_BODY,
+                        &(package_spec_ast.get_body()->get_namespace()), &package_spec_ast);
+      }
+
+#undef ANALYZE_PACKAGE
+    }
+    CK (OB_NOT_NULL(expr));
+  }
+  return ret;
+}
+
 int ObPLPackageManager::get_package_cursor(const ObPLResolveCtx &resolve_ctx,
                                            uint64_t package_id,
                                            int64_t cursor_id,
@@ -657,6 +837,34 @@ int ObPLPackageManager::get_package_cursor(const ObPLResolveCtx &resolve_ctx,
     LOG_WARN("package spec does not exist", K(ret), K(package_id));
   }
   OZ (tmp_package->get_cursor(cursor_id, cursor));
+  return ret;
+}
+
+int ObPLPackageManager::get_package_spec_cursor(const ObPLResolveCtx &resolve_ctx,
+                                           uint64_t package_id,
+                                           const ObString &cursor_name,
+                                           const ObPLCursor *&cursor,
+                                           int64_t &cursor_idx)
+{
+  int ret = OB_SUCCESS;
+  cursor = NULL;
+  cursor_idx = OB_INVALID_INDEX;
+  if (OB_INVALID_ID == package_id || cursor_name.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("package id or var name invalid", K(package_id), K(cursor_name), K(ret));
+  } else {
+    ObPLPackage *package_spec = NULL;
+    if (OB_FAIL(get_cached_package_spec(resolve_ctx, package_id, package_spec))) {
+      LOG_WARN("get cached package spec failed", K(package_id), K(ret));
+    } else if (OB_ISNULL(package_spec)){
+      ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
+      LOG_WARN("package not exist", K(package_id), K(ret));
+    } else {
+      if (OB_FAIL(package_spec->get_cursor(cursor_name, cursor, cursor_idx))) {
+        LOG_WARN("package get var failed", K(package_id), K(cursor_name), K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -732,6 +940,8 @@ int ObPLPackageManager::get_package_routine(const ObPLResolveCtx &ctx,
   int ret = OB_SUCCESS;
   routine = NULL;
   bool is_overflow = false;
+  ObSQLSessionInfo *session = nullptr;
+  ObPLCodeCoverage *code_coverage = nullptr;
   if (OB_FAIL(check_stack_overflow(is_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_overflow) {
@@ -740,26 +950,43 @@ int ObPLPackageManager::get_package_routine(const ObPLResolveCtx &ctx,
   }
   CK (OB_LIKELY(OB_INVALID_ID != package_id));
   CK (OB_LIKELY(OB_INVALID_INDEX != routine_idx));
-
+  CK (OB_NOT_NULL(session = exec_ctx.get_my_session()));
   if (OB_SUCC(ret)) {
     ObPLPackage *package_spec = NULL;
     ObPLPackage *package_body = NULL;
-    OZ (get_cached_package(ctx, package_id, package_spec, package_body));
-    CK (OB_NOT_NULL(package_spec));
-    if (OB_SUCC(ret) && OB_ISNULL(package_body)){
-      ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
-      LOG_USER_ERROR(OB_ERR_PACKAGE_DOSE_NOT_EXIST, "PACKAGE BODY",
-                     package_spec->get_db_name().length(), package_spec->get_db_name().ptr(),
-                     package_spec->get_name().length(), package_spec->get_name().ptr());
+    if (!ObTriggerInfo::is_trigger_body_package_id(package_id)) {
+      OZ (get_cached_package(ctx, package_id, package_spec, package_body));
+      CK (OB_NOT_NULL(package_spec));
+      if (OB_SUCC(ret) && OB_ISNULL(package_body)){
+        ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
+        LOG_USER_ERROR(OB_ERR_PACKAGE_DOSE_NOT_EXIST, "PACKAGE BODY",
+                      package_spec->get_db_name().length(), package_spec->get_db_name().ptr(),
+                      package_spec->get_name().length(), package_spec->get_name().ptr());
+      }
+    } else {
+      OZ (get_cached_package_body(ctx, package_id, package_body));
+      CK (OB_NOT_NULL(package_body));
     }
     OZ (package_body->get_routine(routine_idx, routine));
+#ifdef OB_BUILD_ORACLE_PL
+    if (OB_SUCC(ret) && OB_NOT_NULL(code_coverage = session->get_pl_code_coverage())) {
+      OZ(code_coverage->add_vaild_rows_info_recursive(*package_body));
+      // ObPLFunction * tmp_routine = NULL;
+      // for(int i = 0; i < package_body->get_routine_table().count(); i++) {
+      //   OZ (package_body->get_routine(i, tmp_routine));
+      //   if (tmp_routine != NULL) {
+      //     OZ(code_coverage->add_vaild_rows_info_recursive(*tmp_routine));
+      //   }
+      // }
+    }
+#endif
     if (OB_SUCC(ret) && OB_ISNULL(routine)) {
       ret = OB_ERR_SP_DOES_NOT_EXIST;
       LOG_WARN("can not found package routine in package body", K(ret), K(routine_idx), K(routine));
     } else {
       ObPLPackageState *dummy_state = NULL;
       if (OB_SUCC(ret) && OB_NOT_NULL(package_body->get_init_routine())) {
-        // call一个pacakge 函数的时候，去执行package的init 函数
+        // call一个package 函数的时候，去执行package的init 函数
         OZ (get_package_state(ctx, exec_ctx, package_id, dummy_state));
       }
     }
@@ -770,27 +997,30 @@ int ObPLPackageManager::get_package_routine(const ObPLResolveCtx &ctx,
 int ObPLPackageManager::get_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                             sql::ObExecContext &exec_ctx,
                                             uint64_t package_id,
-                                            int64_t spec_version,
-                                            int64_t body_version,
                                             int64_t var_idx,
                                             ObObj &var_val)
 {
   int ret = OB_SUCCESS;
   const ObPLVar *var = NULL;
   ObPLPackageState *package_state = NULL;
-  ObPackageStateVersion version(spec_version, body_version);
   CK (package_id != OB_INVALID_ID);
   CK (var_idx != OB_INVALID_INDEX);
-  OZ (get_package_item_state(
-    resolve_ctx.session_info_, package_id, version, package_state));
+  OZ (try_get_package_state_direct(resolve_ctx, package_id, package_state));
   if (OB_SUCC(ret) && OB_ISNULL(package_state)) {
+    int64_t new_schema_version = OB_INVALID_VERSION;
+    OZ (resolve_ctx.schema_guard_.get_schema_version(resolve_ctx.session_info_.get_effective_tenant_id(),
+                                                     new_schema_version));
     OZ (get_package_var(resolve_ctx, package_id, var_idx, var),
         K(package_id), K(var_idx));
     CK (OB_NOT_NULL(var));
     OZ (get_package_state(
         resolve_ctx, exec_ctx, package_id, package_state, var->is_readonly()),
         K(package_id), K(var_idx), K(var->is_readonly()));
+    if (OB_SUCC(ret) && OB_NOT_NULL(package_state) && new_schema_version != package_state->get_tenant_schema_version()) {
+      package_state->set_tenant_schema_version(new_schema_version);
+    }
   }
+  CK (OB_NOT_NULL(package_state));
   OZ (package_state->get_package_var_val(var_idx, var_val),
       K(var_idx));
   return ret;
@@ -805,18 +1035,33 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                             bool from_proxy)
 {
   int ret = OB_SUCCESS;
+  bool need_free_new = false;
+  bool need_free_old = false;
   ObPLPackageState *package_state = NULL;
   ObObj old_var_val;
-  ObObj new_var_val = var_val;
+  ObObj new_var_val;
+  ObPLPackageVarMetaInfo meta_info;
   const ObPLVar *var = NULL;
   CK (package_id != OB_INVALID_ID);
   CK (var_idx != OB_INVALID_INDEX);
-  OZ (get_package_state(resolve_ctx, exec_ctx, package_id, package_state),
-                        K(package_id), K(var_idx), K(var_val));
+  OZ (try_get_package_state_direct(resolve_ctx, package_id, package_state));
+  if (OB_SUCC(ret) && OB_ISNULL(package_state)) {
+    int64_t new_schema_version = OB_INVALID_VERSION;
+    OZ (resolve_ctx.schema_guard_.get_schema_version(resolve_ctx.session_info_.get_effective_tenant_id(),
+                                                     new_schema_version));
+    OZ (get_package_state(resolve_ctx, exec_ctx, package_id, package_state),
+        K(package_id), K(var_idx), K(var_val));
+    if (OB_SUCC(ret) && OB_NOT_NULL(package_state) && new_schema_version != package_state->get_tenant_schema_version()) {
+      package_state->set_tenant_schema_version(new_schema_version);
+    }
+  }
+  CK (OB_NOT_NULL(package_state));
   OZ (package_state->get_package_var_val(var_idx, old_var_val), K(package_id), K(var_idx));
-  OZ (get_package_var(resolve_ctx, package_id, var_idx, var), K(package_id), K(var_idx));
-  OV (OB_NOT_NULL(var), OB_ERR_UNEXPECTED, K(package_id), K(var_idx));
+  OZ (package_state->get_package_var_meta_info(var_idx, meta_info), K(package_id), K(var_idx));
   if (need_deserialize) {
+    const ObPLVar *var = NULL;
+    OZ (get_package_var(resolve_ctx, package_id, var_idx, var), K(package_id), K(var_idx));
+    OV (OB_NOT_NULL(var), OB_ERR_UNEXPECTED, K(package_id), K(var_idx));
     OZ (var->get_type().init_session_var(resolve_ctx,
                                          var->get_type().is_cursor_type() ?
                                           package_state->get_pkg_cursor_allocator()
@@ -825,6 +1070,7 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                          NULL,
                                          false,
                                          new_var_val), K(package_id), K(var_idx), K(var_val));
+    OX (need_free_new = true);
     if (OB_FAIL(ret)) {
     } else if (var->get_type().is_cursor_type()) {
       OV (var_val.is_tinyint() || var_val.is_number() || var_val.is_decimal_int(), OB_ERR_UNEXPECTED, K(var_val));
@@ -859,21 +1105,34 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                       new_var_val), K(package_id), K(var_idx), K(var_val));
     }
     LOG_DEBUG("deserialize package var", K(package_id), K(var_idx), K(var_val), K(new_var_val));
+  } else {
+    new_var_val = var_val;
   }
-  if (OB_SUCC(ret) && var->is_not_null() && new_var_val.is_null()) {
+  if (OB_SUCC(ret) && meta_info.is_not_null_ && new_var_val.is_null()) {
     ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
-    LOG_WARN("not null check violated", K(var->is_not_null()), K(var_val.is_null()), K(ret));
+    LOG_WARN("not null check violated", K(meta_info.is_not_null_), K(var_val.is_null()), K(ret));
   }
   OZ (package_state->set_package_var_val(var_idx, new_var_val, !need_deserialize));
+  OX (need_free_old = true);
+  OX (need_free_new = false);
+  OZ (update_special_package_status(resolve_ctx.session_info_, package_id, *package_state, meta_info.is_run_status_, old_var_val, new_var_val));
 
-  OZ (update_special_package_status(resolve_ctx, package_id, *var, old_var_val, new_var_val));
-
-  if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
-    // package ref cursor variable, refrence outside, do not destruct it.
-  } else if (OB_FAIL(ret)) {
-    OZ (ObUserDefinedType::destruct_obj(new_var_val, &(resolve_ctx.session_info_)));
+  if (PL_REF_CURSOR_TYPE == meta_info.type_) {
+    // package ref cursor variable, refrence outside, do not destruct old var val.
   } else {
-    OZ (ObUserDefinedType::destruct_obj(old_var_val, &(resolve_ctx.session_info_)));
+    if (OB_FAIL(ret) && need_free_new) {
+      ObUserDefinedType::destruct_objparam(package_state->get_pkg_allocator(), new_var_val, &(resolve_ctx.session_info_));
+    }
+    if (need_free_old) {
+      if (new_var_val.is_null() &&
+          old_var_val.is_pl_extend() &&
+          meta_info.type_ != PL_CURSOR_TYPE &&
+          meta_info.type_ != PL_REF_CURSOR_TYPE) {
+        // do nothing
+      } else {
+        ObUserDefinedType::destruct_objparam(package_state->get_pkg_allocator(), old_var_val, &(resolve_ctx.session_info_));
+      }
+    }
   }
   if (!need_deserialize) {
     OZ (package_state->update_changed_vars(var_idx));
@@ -882,30 +1141,23 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
-int ObPLPackageManager::update_special_package_status(const ObPLResolveCtx &resolve_ctx,
+int ObPLPackageManager::update_special_package_status(ObSQLSessionInfo &session_info,
                                                       uint64_t package_id,
-                                                      const ObPLVar &var,
+                                                      ObPLPackageState &package_state,
+                                                      bool is_run_status,
                                                       const ObObj &old_val,
                                                       const ObObj &new_val)
 {
   int ret = OB_SUCCESS;
-
-  ObPLPackage *package_spec = nullptr;
-  ObPLPackage *package_body = nullptr;
-
-  OZ (get_cached_package(resolve_ctx, package_id, package_spec, package_body));
-
-  CK (OB_NOT_NULL(package_spec));
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (get_tenant_id_by_object_id(package_id) == OB_SYS_TENANT_ID &&
-               0 == package_spec->get_name().compare("DBMS_PROFILER")) {
 #ifdef OB_BUILD_ORACLE_PL
-    OZ (ObDBMSProfiler::notify_package_variable_change(resolve_ctx.session_info_, var, old_val, new_val));
-#endif // OB_BUILD_ORACLE_PL
+  if (get_tenant_id_by_object_id(package_id) == OB_SYS_TENANT_ID && is_run_status) {
+    if (package_state.is_dbms_profiler()) {
+      OZ (ObDBMSProfiler::notify_package_variable_change(session_info, old_val, new_val));
+    } else if (package_state.is_dbms_plsql_code_coverage()) {
+      OZ (ObDBMSPlsqlCodeCoverage::notify_package_variable_change(session_info, old_val, new_val));
+    }
   }
-
+#endif // OB_BUILD_ORACLE_PL
   return ret;
 }
 
@@ -917,14 +1169,15 @@ int ObPLPackageManager::load_package_spec(const ObPLResolveCtx &resolve_ctx,
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
   package_spec = NULL;
+  ObArenaAllocator tmp_alloc;
   const uint64_t tenant_id = package_spec_info.get_tenant_id();
   uint64_t db_id = package_spec_info.get_database_id();
   uint64_t package_id = package_spec_info.get_package_id();
   ObPLBlockNS *null_parent_ns = NULL;
   uint64_t effective_tenant_id = resolve_ctx.session_info_.get_effective_tenant_id();
-  HEAP_VAR(ObPLPackageAST, package_spec_ast, resolve_ctx.allocator_) {
+  HEAP_VAR(ObPLPackageAST, package_spec_ast, tmp_alloc) {
     const ObDatabaseSchema *db_schema = NULL;
-    ObPLCompiler compiler(resolve_ctx.allocator_,
+    ObPLCompiler compiler(tmp_alloc,
                           resolve_ctx.session_info_,
                           resolve_ctx.schema_guard_,
                           resolve_ctx.package_guard_,
@@ -957,7 +1210,7 @@ int ObPLPackageManager::load_package_spec(const ObPLResolveCtx &resolve_ctx,
                                   package_spec_ast,
                                   *package_spec));
       if (OB_SUCC(ret)) {
-        if (package_spec->get_can_cached()
+        if (package_spec->get_can_cached() && resolve_ctx.need_add_pl_cache_
             && OB_FAIL(add_package_to_plan_cache(resolve_ctx, package_spec))) {
           LOG_WARN("failed to add package spec to cached", K(ret));
           ret = OB_SUCCESS; // cache add failed, need not fail execute path
@@ -984,8 +1237,9 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
+  ObArenaAllocator tmp_alloc;
   package_body = NULL;
-  ObPLCompiler compiler(resolve_ctx.allocator_,
+  ObPLCompiler compiler(tmp_alloc,
                         resolve_ctx.session_info_,
                         resolve_ctx.schema_guard_,
                         resolve_ctx.package_guard_,
@@ -997,20 +1251,22 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
   ObPLBlockNS *null_parent_ns = NULL;
   const ObDatabaseSchema *db_schema = NULL;
   uint64_t effective_tenant_id = resolve_ctx.session_info_.get_effective_tenant_id();
-  HEAP_VARS_2((ObPLPackageAST, package_spec_ast, resolve_ctx.allocator_),
-              (ObPLPackageAST, package_body_ast, resolve_ctx.allocator_)) {
+  HEAP_VARS_2((ObPLPackageAST, package_spec_ast, tmp_alloc),
+              (ObPLPackageAST, package_body_ast, tmp_alloc)) {
     ObString source;
     if (package_spec_info.is_for_trigger()) {
       OZ (ObTriggerInfo::gen_package_source(package_spec_info.get_tenant_id(),
                                             package_spec_info.get_package_id(),
                                             source,
-                                            PACKAGE_TYPE,
+                                            share::schema::PACKAGE_TYPE,
                                             resolve_ctx.schema_guard_,
-                                            resolve_ctx.allocator_));
+                                            tmp_alloc,
+                                            &resolve_ctx.session_info_));
     } else {
       source = package_spec_info.get_source();
     }
     OZ (resolve_ctx.schema_guard_.get_database_schema(tenant_id, db_id, db_schema));
+    CK (OB_NOT_NULL(db_schema));
     OZ (package_spec_ast.init(db_schema->get_database_name_str(),
                               package_spec_info.get_package_name(),
                               PL_PACKAGE_SPEC,
@@ -1022,12 +1278,13 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
       OX (package_spec_ast.get_compile_flag().add_invoker_right());
     }
     OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
-          resolve_ctx.allocator_, resolve_ctx.session_info_.get_dtc_params(), source));
+          tmp_alloc, resolve_ctx.session_info_.get_dtc_params(), source));
     {
+      bool is_wrap = false;
       ObPLCompilerEnvGuard guard(
-        package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, ret);
+        package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_spec_ast, ret);
       OZ (compiler.analyze_package(source, null_parent_ns,
-                                   package_spec_ast, package_spec_info.is_for_trigger()));
+                                   package_spec_ast, package_spec_info.is_for_trigger(), is_wrap));
     }
 
     OZ (package_body_ast.init(db_schema->get_database_name_str(),
@@ -1041,7 +1298,8 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
     // destoried by map's destructor
     ObCacheObjGuard* cacheobj_guard = NULL;
     void* buf = NULL;
-    if (OB_ISNULL(buf = resolve_ctx.package_guard_.alloc_.alloc(sizeof(ObCacheObjGuard)))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(buf = resolve_ctx.package_guard_.alloc_.alloc(sizeof(ObCacheObjGuard)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory.", K(ret));
     } else if (FALSE_IT(cacheobj_guard = new (buf)ObCacheObjGuard(PACKAGE_BODY_HANDLE))) {
@@ -1053,15 +1311,13 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
       CK (OB_NOT_NULL(package_body));
       OZ (package_body->init(package_body_ast));
 
-      for (int64_t i = 0; OB_SUCC(ret) &&  i < package_spec_ast.get_dependency_table().count(); ++i) {
-        OZ (package_body_ast.add_dependency_object(package_spec_ast.get_dependency_table().at(i)));
-      }
+      OZ (ObPLDependencyUtil::add_dependency_objects(&package_body_ast.get_dependency_table(), package_spec_ast.get_dependency_table()));
       OZ (compiler.compile_package(package_body_info,
                                   &(package_spec_ast.get_body()->get_namespace()),
                                   package_body_ast,
                                   *package_body));
       if (OB_SUCC(ret)
-          && package_body->get_can_cached()
+          && package_body->get_can_cached() && resolve_ctx.need_add_pl_cache_
           && OB_FAIL(add_package_to_plan_cache(resolve_ctx, package_body))) {
         LOG_WARN("add package body to plan cache failed", K(package_body_id), K(ret));
         ret = OB_SUCCESS; //cache add failed, need not fail execute path
@@ -1077,8 +1333,11 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
-int ObPLPackageManager::check_version(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
-                                      const ObPackageStateVersion &state_version, bool &match)
+int ObPLPackageManager::check_version(const ObPLResolveCtx &resolve_ctx,
+                                      uint64_t package_id,
+                                      const ObPackageStateVersion &state_version,
+                                      bool old_encode_rule,
+                                      bool &match)
 {
   int ret = OB_SUCCESS;
   match = true;
@@ -1091,13 +1350,27 @@ int ObPLPackageManager::check_version(const ObPLResolveCtx &resolve_ctx, uint64_
     ObPLPackage *package_body = NULL;
     if (OB_FAIL(get_cached_package(resolve_ctx, package_id, package_spec, package_body))) {
       LOG_WARN("failed to get cached package", K(ret), K(package_id));
-    } else {
+    } else if (OB_ISNULL(package_spec)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("package spec is null", K(ret));
+    } else if (old_encode_rule) {
       if (state_version.package_version_ == package_spec->get_version()) {
         if (OB_NOT_NULL(package_body) && state_version.package_body_version_ != package_body->get_version()) {
           match = false;
         }
       } else {
         match = false;
+      }
+    } else {
+      ObPackageStateVersion new_state_version(package_spec->get_version(), NULL==package_body?OB_INVALID_VERSION:package_body->get_version());
+      new_state_version.set_merge_version_and_public_syn_cnt(*package_spec, package_body);
+      if (OB_FAIL(ObPLPackageState::check_version(new_state_version,
+                                                  state_version,
+                                                  resolve_ctx.schema_guard_,
+                                                  *package_spec,
+                                                  package_body,
+                                                  match))) {
+        LOG_WARN("fail to check version", K(ret));
       }
     }
   }
@@ -1123,12 +1396,12 @@ int ObPLPackageManager::get_package_schema_info(ObSchemaGetterGuard &schema_guar
       ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
       LOG_WARN("package info is NULL", K(package_id), K(ret));
     } else {
-      if (PACKAGE_TYPE == tmp_package_info->get_type()) {
+      if (share::schema::PACKAGE_TYPE == tmp_package_info->get_type()) {
         package_spec_info = tmp_package_info;
         if (OB_FAIL(schema_guard.get_package_info(tmp_package_info->get_tenant_id(),
                                                   tmp_package_info->get_database_id(),
                                                   tmp_package_info->get_package_name(),
-                                                  PACKAGE_BODY_TYPE,
+                                                  share::schema::PACKAGE_BODY_TYPE,
                                                   compatible_mode,
                                                   package_body_info))) {
           LOG_WARN("failed to get package body info", "package name", package_spec_info->get_package_name(), K(ret));
@@ -1138,7 +1411,7 @@ int ObPLPackageManager::get_package_schema_info(ObSchemaGetterGuard &schema_guar
         if (OB_FAIL(schema_guard.get_package_info(tmp_package_info->get_tenant_id(),
                                                   tmp_package_info->get_database_id(),
                                                   tmp_package_info->get_package_name(),
-                                                  PACKAGE_TYPE,
+                                                  share::schema::PACKAGE_TYPE,
                                                   compatible_mode,
                                                   package_spec_info))) {
           LOG_WARN("failed to get package info", "package name", package_body_info->get_package_name(), K(ret));
@@ -1217,6 +1490,53 @@ int ObPLPackageManager::get_cached_package_spec(const ObPLResolveCtx &resolve_ct
   return ret;
 }
 
+int ObPLPackageManager::get_cached_package_body(const ObPLResolveCtx &resolve_ctx,
+                                                uint64_t package_body_id,
+                                                ObPLPackage *&package_body,
+                                                bool for_static_member)
+{
+  int ret = OB_SUCCESS;
+  package_body = NULL;
+  bool is_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recusive", K(ret));
+  } else if (OB_INVALID_ID == package_body_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("body id is invalid", K(ret));
+  } else {
+    ObCacheObjGuard* guard = NULL;
+    OX (ret = resolve_ctx.package_guard_.get(package_body_id, guard));
+    if (OB_SUCC(ret) && OB_NOT_NULL(guard)) {
+      OX (package_body = static_cast<ObPLPackage*>(guard->get_cache_obj()));
+      CK (OB_NOT_NULL(package_body));
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      const ObPackageInfo *package_spec_info = NULL;
+      const ObPackageInfo *package_body_info = NULL;
+      const ObSimpleTriggerSchema *simple_trigger = NULL;
+      OZ (resolve_ctx.schema_guard_.get_simple_trigger_schema(MTL_ID(), ObTriggerInfo::get_package_trigger_id(package_body_id), simple_trigger));
+      OZ (get_package_from_plan_cache(resolve_ctx, package_body_id, package_body));
+      if (OB_SUCC(ret) && OB_ISNULL(package_body)) {
+        OZ (get_package_schema_info(resolve_ctx.schema_guard_, package_body_id, package_spec_info, package_body_info));
+        CK (OB_NOT_NULL(package_spec_info));
+        CK (OB_NOT_NULL(package_body_info));
+        OZ (load_package_body(resolve_ctx, *package_spec_info, *package_body_info, package_body));
+        CK (OB_NOT_NULL(package_body));
+      }
+      if (OB_SUCC(ret) && simple_trigger->get_schema_version() != package_body->get_version()) {
+        ret = OB_NEED_RETRY;
+        LOG_ERROR("package body version changed", K(package_body_id), K(ret));
+      }
+    } else {
+      LOG_WARN("failed to get package body from local cache", K(ret), K(package_body_id));
+    }
+  }
+  return ret;
+}
+
 int ObPLPackageManager::get_cached_package(const ObPLResolveCtx &resolve_ctx,
                                            uint64_t package_id,
                                            ObPLPackage *&package_spec,
@@ -1274,44 +1594,50 @@ int ObPLPackageManager::get_cached_package(const ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
-int ObPLPackageManager::get_package_item_state(ObSQLSessionInfo &session_info,
-                                               int64_t package_id,
-                                               const ObPackageStateVersion &state_version,
-                                               ObPLPackageState *&package_state)
-{
-  int ret = OB_SUCCESS;
-  int hash_ret = session_info.get_package_state(package_id, package_state);
-  if (OB_HASH_NOT_EXIST == hash_ret) {
-    package_state = NULL;
-  } else if (hash_ret != OB_SUCCESS) {
-    ret = hash_ret;
-    LOG_WARN("failed to get package state from session", K(hash_ret), K(ret));
-  } else if (OB_NOT_NULL(package_state) && !package_state->check_version(state_version)) {
-    package_state = NULL;
-  }
-  return ret;
-}
 
 int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx,
                                                ObExecContext &exec_ctx,
                                                ObPLPackage &package,
                                                const ObPackageStateVersion &state_version,
-                                               ObPLPackageState *&package_state)
+                                               ObPLPackageState *&package_state,
+                                               const ObPLPackage *package_for_verify)
 {
   int ret = OB_SUCCESS;
   package_state = NULL;
   ObIAllocator &session_allocator = resolve_ctx.session_info_.get_package_allocator();
   uint64_t package_id = package.get_id();
+  const ObPLPackage *spec = (ObPackageType::PL_PACKAGE_SPEC == package.get_package_type()) ? &package : package_for_verify;
+  const ObPLPackage *body = (ObPackageType::PL_PACKAGE_SPEC == package.get_package_type()) ? package_for_verify : &package;
   bool need_new = false;
+  bool valid = true;
   int hash_ret = resolve_ctx.session_info_.get_package_state(package_id, package_state);
   if (OB_HASH_NOT_EXIST == hash_ret) {
     need_new = true;
   } else if (OB_SUCCESS != hash_ret) {
     ret = hash_ret;
     LOG_WARN("get package state failed", K(package_id), K(ret));
-  } else if (!package_state->check_version(state_version)) {
+  } else if (OB_ISNULL(spec)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("package spec is null", K(ret));
+  } else if (OB_FAIL(package_state->check_version(state_version,
+                                                  package_state->get_state_version(),
+                                                  resolve_ctx.schema_guard_,
+                                                  *spec,
+                                                  body,
+                                                  valid))) {
+    LOG_WARN("fail to check version", K(ret));
+  } else if (!valid) {
     OZ (resolve_ctx.session_info_.del_package_state(package_id));
+    if (OB_SUCC(ret) && !resolve_ctx.is_sync_package_var_) {
+      ObString key;
+      if (OB_FAIL(package_state->encode_pkg_var_key(resolve_ctx.allocator_, key))) {
+        LOG_WARN("fail to encode pkg var key", K(ret));
+      } else if (OB_FAIL(ObPLPackageState::disable_expired_user_variables(resolve_ctx.session_info_, key))) {
+        LOG_WARN("fail to disable expired usr var", K(ret));
+      }
+    }
     if (OB_SUCC(ret)) {
+      LOG_INFO("PLPACKAGE:package state expired, try to reconstruct it", K(package_id), K(resolve_ctx.is_sync_package_var_));
       package_state->reset(&(resolve_ctx.session_info_));
       package_state->~ObPLPackageState();
       session_allocator.free(package_state);
@@ -1332,17 +1658,25 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
       ExecCtxBak exec_ctx_bak;
       sql::ObExecEnv exec_env_bak;
       ObArenaAllocator tmp_allocator;
-      OX (exec_ctx_bak.backup(exec_ctx));
-      OZ (exec_env_bak.load(resolve_ctx.session_info_, &tmp_allocator));
+      bool need_destruct_package_state = false;
+      int64_t new_schema_version = OB_INVALID_VERSION;
+      OZ (package_state->init());
+      OZ (resolve_ctx.schema_guard_.get_schema_version(resolve_ctx.session_info_.get_effective_tenant_id(),
+                                                        new_schema_version));
+      OX (package_state->set_tenant_schema_version(new_schema_version));
       if (OB_SUCC(ret)) {
-        OZ (package.get_exec_env().store(resolve_ctx.session_info_));
         sql::ObPhysicalPlanCtx phy_plan_ctx(exec_ctx.get_allocator());
+        need_destruct_package_state = true;
+        OX (exec_ctx_bak.backup(exec_ctx));
+        OZ (exec_env_bak.load(resolve_ctx.session_info_, &tmp_allocator));
+        OZ (package.get_exec_env().store(resolve_ctx.session_info_));
         OX (exec_ctx.set_physical_plan_ctx(&phy_plan_ctx));
         if (OB_SUCC(ret) && package.get_expr_op_size() > 0)  {
           OZ (exec_ctx.init_expr_op(package.get_expr_op_size()));
         }
         // 要先加到SESSION上然后在初始化, 反之会造成死循环
         OZ (resolve_ctx.session_info_.add_package_state(package_id, package_state));
+        OX (need_destruct_package_state = false);
         if (OB_SUCC(ret)) {
           // TODO bin.lb: how about the memory?
           //
@@ -1350,9 +1684,11 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
         }
         int tmp_ret = OB_SUCCESS;
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(package.instantiate_package_state(resolve_ctx, exec_ctx, *package_state))) {
+        } else if (OB_FAIL(package.instantiate_package_state(resolve_ctx, exec_ctx, *package_state, spec, body))) {
           if (OB_SUCCESS != (tmp_ret = resolve_ctx.session_info_.del_package_state(package_id))) {
             // 删除失败, 为了避免一个未知的状态, 重新初始化这段内存, 使之是无效状态
+            package_state->reset(&(resolve_ctx.session_info_));
+            package_state->~ObPLPackageState();
             new (package_state)
               ObPLPackageState(package_id, state_version, package.get_serially_reusable());
             LOG_WARN("failed to del package state", K(ret), K(package_id), K(tmp_ret));
@@ -1364,6 +1700,8 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
             package_state = NULL;
             LOG_WARN("failed to call instantiate_package_state", K(ret), K(package_id));
           }
+        } else {
+          package_state->set_has_instantiated(true);
         }
         if (package.get_expr_op_size() > 0) {
           //Memory leak
@@ -1376,7 +1714,40 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
           LOG_WARN("failed to restore package exec env", K(ret), K(tmp_ret));
           ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
+        if (need_destruct_package_state) {
+          package_state->reset(&(resolve_ctx.session_info_));
+          package_state->~ObPLPackageState();
+          session_allocator.free(package_state);
+          package_state = NULL;
+        }
+      } else {
+        session_allocator.free(package_state);
+        package_state = NULL;
       }
+    }
+  }
+  return ret;
+}
+
+int ObPLPackageManager::try_get_package_state_direct(const ObPLResolveCtx &resolve_ctx,
+                                                      uint64_t package_id,
+                                                      ObPLPackageState *&package_state)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+
+  int hash_ret = resolve_ctx.session_info_.get_package_state(package_id, package_state);
+  if (OB_HASH_NOT_EXIST == hash_ret) {
+    package_state = NULL;
+  } else if (hash_ret != OB_SUCCESS) {
+    ret = hash_ret;
+    LOG_WARN("failed to get package state from session", K(hash_ret), K(ret));
+  } else if (OB_NOT_NULL(package_state)) {
+    if (OB_FAIL(resolve_ctx.schema_guard_.get_schema_version(resolve_ctx.session_info_.get_effective_tenant_id(),
+                                                              new_schema_version))) {
+      LOG_WARN("failed to get tenant schema version", K(ret));
+    } else if (new_schema_version != package_state->get_tenant_schema_version()) {
+      package_state = NULL;
     }
   }
   return ret;
@@ -1406,17 +1777,31 @@ int ObPLPackageManager::get_package_state(const ObPLResolveCtx &resolve_ctx,
       ObPackageStateVersion state_version(package_spec->get_version(), NULL==package_body?OB_INVALID_VERSION:package_body->get_version());
       ObPLPackageState *package_spec_state = NULL;
       ObPLPackageState *package_body_state = NULL;
-      if (OB_FAIL(get_package_item_state(resolve_ctx, exec_ctx, *package_spec, state_version, package_spec_state))) {
+      state_version.set_merge_version_and_public_syn_cnt(*package_spec, package_body);
+      if (OB_FAIL(get_package_item_state(resolve_ctx, exec_ctx, *package_spec, state_version, package_spec_state, package_body))) {
         LOG_WARN("get pacakge spec state failed", K(ret));
-      } else if (!OB_ISNULL(package_body) && OB_FAIL(get_package_item_state(resolve_ctx, exec_ctx, *package_body, state_version, package_body_state))) {
+      } else if (OB_ISNULL(package_spec_state)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get package state", K(ret));
+      } else if (OB_NOT_NULL(package_body) &&
+                 package_spec_state->has_instantiated() &&
+                  OB_FAIL(get_package_item_state(resolve_ctx, exec_ctx, *package_body,
+                                                  state_version, package_body_state, package_spec))) {
         LOG_WARN("get pacakge body state failed", K(ret));
       } else {
+        /* if package body is serially reusable, then package spec state's tenant schema version is invalid,
+         * make sure get package state using long path which will init package body state, it may be execute init routine
+         */
+        if (OB_NOT_NULL(package_body_state) && package_body_state->get_serially_reusable()) {
+          package_spec_state->set_tenant_schema_version(OB_INVALID_VERSION);
+        }
         if (package_id == package_spec->get_id()) {
           package_state = package_spec_state;
         } else {
           package_state = package_body_state;
         }
       }
+      CK (OB_NOT_NULL(package_state));
     }
   }
   return ret;
@@ -1435,7 +1820,6 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
   } else {
     int64_t tenant_id = resolve_ctx.session_info_.get_effective_tenant_id();
     uint64_t package_id = package->get_id();
-    ObString sql("package");
     //ObArenaAllocator allocator(ObModIds::OB_PL_TEMP);
 
     //HEAP_VAR(ObExecContext, exec_ctx, allocator) {
@@ -1446,29 +1830,27 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
 
       pc_ctx.session_info_ = &resolve_ctx.session_info_;
       pc_ctx.schema_guard_ = &resolve_ctx.schema_guard_;
-      (void)ObSQLUtils::md5(sql,pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_));
-      int64_t sys_schema_version = OB_INVALID_VERSION;
-      int64_t tenant_schema_version = OB_INVALID_VERSION;
       pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PKG;
       pc_ctx.key_.db_id_ = database_id;
       pc_ctx.key_.key_id_ = package_id;
       pc_ctx.key_.sessid_ =
         (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
-          ? resolve_ctx.session_info_.get_sessid() : 0;
-      pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
-                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(resolve_ctx.schema_guard_.get_schema_version(tenant_id, tenant_schema_version))
-          || OB_FAIL(resolve_ctx.schema_guard_.get_schema_version(OB_SYS_TENANT_ID, sys_schema_version))) {
-        LOG_WARN("fail to get schema version", K(ret), K(tenant_id));
-      } else {
-        package->set_tenant_schema_version(tenant_schema_version);
-        package->set_sys_schema_version(sys_schema_version);
-        package->get_stat_for_update().name_ = package->get_name();
+          ? resolve_ctx.session_info_.get_server_sid() : 0;
+      pc_ctx.key_.mode_ = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
+      if (resolve_ctx.session_info_.get_pl_profiler() != nullptr) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
       }
-      if (OB_FAIL(ret)) {
-        // do nothing
+      if (resolve_ctx.session_info_.get_pl_code_coverage() != nullptr) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
+      }
+      if (resolve_ctx.session_info_.is_pl_debug_on()) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
+      }
+      ObString sql;
+      if (OB_FAIL(ObPLCacheCtx::assemble_format_routine_name (sql, package))) {
+        LOG_WARN("Failed to asseble format routine name!", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::md5(sql, pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_)))){
+        LOG_WARN("Failed to get sql_id for pl obj!", K(ret));
       } else if (OB_FAIL(ObPLCacheMgr::add_pl_cache(resolve_ctx.session_info_.get_plan_cache(), package, pc_ctx))) {
         if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
           LOG_INFO("package has been added by others, need not add again", K(package_id), K(ret));
@@ -1510,7 +1892,6 @@ int ObPLPackageManager::get_package_from_plan_cache(const ObPLResolveCtx &resolv
   if (OB_FAIL(ret)) {
     // do nothing
   } else {
-    ObString sql("package");
     //SMART_VAR(ObExecContext, exec_ctx, resolve_ctx.allocator_) {
 
       uint64_t database_id = OB_INVALID_ID;
@@ -1519,15 +1900,22 @@ int ObPLPackageManager::get_package_from_plan_cache(const ObPLResolveCtx &resolv
       ObPLCacheCtx pc_ctx;
       pc_ctx.session_info_ = &resolve_ctx.session_info_;
       pc_ctx.schema_guard_ = &resolve_ctx.schema_guard_;
-      (void)ObSQLUtils::md5(sql,pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_));
       pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PKG;
       pc_ctx.key_.db_id_ = database_id;
       pc_ctx.key_.key_id_ = package_id;
       pc_ctx.key_.sessid_ =
         (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
-          ? resolve_ctx.session_info_.get_sessid() : 0;
-      pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
-                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
+          ? resolve_ctx.session_info_.get_server_sid() : 0;
+      pc_ctx.key_.mode_ = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
+      if (resolve_ctx.session_info_.get_pl_profiler() != nullptr) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
+      }
+      if (resolve_ctx.session_info_.get_pl_code_coverage() != nullptr) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
+      }
+      if (resolve_ctx.session_info_.is_pl_debug_on()) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
+      }
 
       // get package from plan cache
       ObCacheObjGuard* cacheobj_guard = NULL;
@@ -1540,9 +1928,7 @@ int ObPLPackageManager::get_package_from_plan_cache(const ObPLResolveCtx &resolv
         // do nothing
       } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(resolve_ctx.session_info_.get_plan_cache(), *cacheobj_guard, pc_ctx))) {
         LOG_INFO("get pl package from plan cache failed", K(ret), K(package_id));
-        if (OB_ERR_UNEXPECTED != ret) {
-          ret = OB_SUCCESS;
-        }
+        HANDLE_PL_CACHE_RET_VALUE(ret);
       } else if (FALSE_IT(package = static_cast<ObPLPackage*>(cacheobj_guard->get_cache_obj()))) {
         // do nothing
       } else if (OB_NOT_NULL(package)) {
@@ -1592,37 +1978,150 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
 
   ObPackageVarSetName pkg_var_info;
   ObArenaAllocator allocator;
+  bool is_new_encode_method = false;
 
   CK (OB_NOT_NULL(session));
 
-  OZ (pkg_var_info.decode(allocator, name), name);
+  if (OB_FAIL(ret)) {
+  } else if (name.prefix_match(pl::package_key_prefix_v2)) {
+    OZ (pkg_var_info.decode_key(allocator, name));
+    CK (pkg_var_info.valid(true));
+    OX (is_new_encode_method = true);
+  } else {
+    OZ (pkg_var_info.decode(allocator, name), name);
+    CK (pkg_var_info.valid(false));
+  }
 
   if (OB_SUCC(ret) && OB_SYS_TENANT_ID == get_tenant_id_by_object_id(pkg_var_info.package_id_)) {
     ObSchemaGetterGuard schema_guard;
     const ObPackageInfo *package_info = nullptr;
 
-    if (OB_ISNULL(GCTX.schema_service_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected NULL GCTX.schema_service_", K(ret), K(GCTX.schema_service_));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-      LOG_WARN("failed to get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_package_info(OB_SYS_TENANT_ID, pkg_var_info.package_id_, package_info))) {
-      LOG_WARN("failed to get package info", K(ret), K(pkg_var_info), KPC(package_info));
-    } else if (OB_ISNULL(package_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected NULL package info", K(ret), K(pkg_var_info), KPC(package_info));
-    } else if (0 == package_info->get_package_name().compare("DBMS_PROFILER")) {
-      if (OB_FAIL(ObDBMSProfiler::set_profiler_by_user_var_deserialize(*static_cast<ObSQLSessionInfo*>(session),
-                                                                       pkg_var_info,
-                                                                       value))) {
-        LOG_WARN("[DBMS_PROFILER] failed to set session profiler status by package var deserialize",
-                 K(ret), K(pkg_var_info), K(value));
+    CK (OB_NOT_NULL(GCTX.schema_service_));
+    OZ (GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard));
+    OZ (schema_guard.get_package_info(OB_SYS_TENANT_ID, pkg_var_info.package_id_, package_info), pkg_var_info);
+
+    if (OB_SUCC(ret)
+          && OB_NOT_NULL(package_info)
+          && (0 == package_info->get_package_name().compare("DBMS_PROFILER") ||
+                         0 == package_info->get_package_name().compare("DBMS_PLSQL_CODE_COVERAGE"))) {
+      ObObj value_obj;
+      bool has_run_status_var = false;
+      hash::ObHashMap<int64_t, ObPackageVarEncodeInfo> value_map;
+      ObPackageStateVersion state_version(OB_INVALID_VERSION, OB_INVALID_VERSION);
+      if (is_new_encode_method) {
+        OZ (value_map.create(4, ObModIds::OB_PL_TEMP, ObModIds::OB_HASH_NODE, MTL_ID()));
+        OZ (ObPLPackageState::decode_pkg_var_value(value.value_, state_version, value_map));
+        for (hash::ObHashMap<int64_t, ObPackageVarEncodeInfo>::iterator it = value_map.begin();
+              OB_SUCC(ret) && !has_run_status_var && it != value_map.end(); ++it) {
+          if (0 == package_info->get_package_name().compare("DBMS_PROFILER")
+              && ObDBMSProfiler::RUN_STATUS_IDX == it->second.var_idx_) {
+            has_run_status_var = true;
+            value_obj = it->second.encode_value_;
+          }
+          if (0 == package_info->get_package_name().compare("DBMS_PLSQL_CODE_COVERAGE")
+              && ObDBMSPlsqlCodeCoverage::RUN_STATUS_IDX == it->second.var_idx_) {
+            has_run_status_var = true;
+            value_obj = it->second.encode_value_;
+          }
+        }
+      } else if (0 == package_info->get_package_name().compare("DBMS_PROFILER")
+                 && ObDBMSProfiler::RUN_STATUS_IDX == pkg_var_info.var_idx_) {
+        has_run_status_var = true;
+        value_obj = value.value_;
+      } else if (0 == package_info->get_package_name().compare("DBMS_PLSQL_CODE_COVERAGE")
+                 && ObDBMSPlsqlCodeCoverage::RUN_STATUS_IDX == pkg_var_info.var_idx_) {
+        has_run_status_var = true;
+        value_obj = value.value_;
+      }
+      if (has_run_status_var) {
+        if (0 == package_info->get_package_name().compare("DBMS_PROFILER")) {
+          OZ (ObDBMSProfiler::set_profiler_by_user_var_deserialize(*static_cast<ObSQLSessionInfo*>(session),
+                                                                   pkg_var_info,
+                                                                   value_obj), pkg_var_info, value_obj);
+        }
+        if (0 == package_info->get_package_name().compare("DBMS_PLSQL_CODE_COVERAGE")) {
+          OZ (ObDBMSPlsqlCodeCoverage::set_code_coverage_by_user_var_deserialize(*static_cast<ObSQLSessionInfo*>(session),
+                                                                                 pkg_var_info,
+                                                                                 value_obj), pkg_var_info, value_obj);
+        }
+      }
+      if (value_map.created()) {
+        int tmp_ret = value_map.destroy();
+        ret = OB_SUCCESS != ret ? ret : tmp_ret;
       }
     }
   }
 
 #endif // OB_BUILD_ORACLE_PL
 
+  return ret;
+}
+
+int ObPLPackageManager::get_cached_package_body_for_trigger(uint64_t tenant_id,
+                                                            uint64_t trigger_id,
+                                                            pl::ObPLPackageGuard &package_guard,
+                                                            common::ObIAllocator &allocator,
+                                                            ObSchemaGetterGuard &schema_guard,
+                                                            ObSQLSessionInfo &session_info,
+                                                            common::ObMySQLProxy &sql_proxy,
+                                                            ObPLPackage *&package_body)
+{
+  int ret = OB_SUCCESS;
+  package_body = nullptr;
+  const ObTriggerInfo *trigger_info = nullptr;
+  if (OB_FAIL(schema_guard.get_trigger_info(tenant_id, trigger_id, trigger_info))) {
+    OB_LOG(WARN, "get trigger info failed", K(ret), K(trigger_id));
+  } else if (OB_ISNULL(trigger_info)) {
+    ret = OB_ERR_TRIGGER_NOT_EXIST;
+    LOG_WARN("trigger not exist", K(ret), K(tenant_id), K(trigger_id));
+  } else {
+    ObPLPackage *tmp_package_spec = nullptr;
+    ObPLPackage *tmp_package_body = nullptr;
+    pl::ObPL *pl_engine = GCTX.pl_engine_;
+    pl::ObPLResolveCtx resolve_ctx(allocator, session_info, schema_guard, package_guard, sql_proxy, false);
+    if (OB_ISNULL(pl_engine)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pl engine is null", K(ret));
+    } else if (!package_guard.is_inited()
+               && OB_FAIL(package_guard.init())) {
+      LOG_WARN("failed to init package guard", K(ret));
+    } else if (OB_FAIL(pl_engine->get_package_manager().get_cached_package(resolve_ctx,
+                                                                   trigger_info->get_trigger_spec_package_id(trigger_id),
+                                                                   tmp_package_spec,
+                                                                   tmp_package_body))) {
+      LOG_WARN("get cached package failed", K(ret));
+    } else if (OB_ISNULL(tmp_package_spec) || OB_ISNULL(tmp_package_body)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("package spec or body is null", K(ret), K(tmp_package_spec), K(tmp_package_body));
+    } else {
+      package_body = tmp_package_body;
+    }
+    if (OB_FAIL(ret)) {
+      int tmp_ret = ret;
+      const ObDatabaseSchema *database_schema = NULL;
+      ret = OB_SUCCESS;
+      ObSqlString &err_msg = session_info.get_pl_exact_err_msg();
+      if (OB_FAIL(err_msg.append_fmt("\nerror during execution of trigger "))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,
+                                                          trigger_info->get_database_id(),
+                                                          database_schema))) {
+        LOG_WARN("get database schema failed", K(ret), K(tenant_id), K(trigger_info->get_database_id()));
+      } else if (OB_ISNULL(database_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("database schema is null", K(ret));
+      } else if (OB_FAIL(err_msg.append_fmt("%.*s.", database_schema->get_database_name_str().length(),
+                                            database_schema->get_database_name_str().ptr()))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      } else if (OB_FAIL(err_msg.append_fmt("%.*s", trigger_info->get_trigger_name().length(),
+                                                    trigger_info->get_trigger_name().ptr()))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
+    }
+  }
   return ret;
 }
 

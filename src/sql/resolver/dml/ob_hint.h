@@ -15,7 +15,9 @@
 #include "lib/string/ob_string.h"
 #include "lib/hash_func/ob_hash_func.h"
 #include "lib/container/ob_se_array.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
+#include "common/ob_version_def.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 
 namespace oceanbase
@@ -24,6 +26,13 @@ namespace sql
 {
 struct PlanText;
 struct TableItem;
+class ObRowExpr;
+class ObRawExpr;
+class ObWinFunRawExpr;
+class ObDMLStmt;
+class ObSelectStmt;
+
+#define OB_OUTLINE_DATA_END_STR          " END_OUTLINE_DATA*/"
 
 enum ObHintMergePolicy
 {
@@ -37,6 +46,21 @@ enum ObPlanCachePolicy
   OB_USE_PLAN_CACHE_INVALID = 0,//policy not set
   OB_USE_PLAN_CACHE_NONE,//do not use plan cache
   OB_USE_PLAN_CACHE_DEFAULT,//use plan cache
+};
+
+enum class ObPxNodePolicy
+{
+  INVALID,
+  DATA,
+  ZONE,
+  CLUSTER
+};
+
+enum class ObPxNodeSelectionMode
+{
+  DEFAULT,
+  SPECIFY_COUNT,
+  SPECIFY_NODE
 };
 
 struct ObAllocOpHint
@@ -106,11 +130,13 @@ public:
   ~ObDirectLoadHint() = default;
 
   void reset();
-  int assign(const ObDirectLoadHint &other);
+  void merge(const ObDirectLoadHint &other);
   int print_direct_load_hint(PlanText &plan_text) const;
-
-  OB_INLINE bool is_enable() const { return is_enable_; }
+  int print_direct_load_hint(char *buf, int64_t buf_len, int64_t &pos) const;
+  OB_INLINE bool is_enable() const { return !has_no_direct_ && has_direct_; }
+  OB_INLINE bool has_direct() const { return has_direct_; }
   OB_INLINE bool need_sort() const { return need_sort_; }
+  OB_INLINE bool has_no_direct() const { return has_no_direct_; }
   OB_INLINE int64_t get_max_error_row_count() const { return max_error_row_count_; }
   OB_INLINE bool is_full_load_method() const { return LoadMethod::FULL == load_method_; }
   OB_INLINE bool is_inc_load_method() const { return LoadMethod::INC == load_method_; }
@@ -118,17 +144,21 @@ public:
   OB_INLINE bool is_full_direct_load() const { return is_full_load_method(); }
   OB_INLINE bool is_inc_direct_load() const { return is_inc_load_method() || is_inc_replace_load_method(); }
 
-  TO_STRING_KV(K_(is_enable),
+  TO_STRING_KV(K_(has_direct),
                K_(need_sort),
+               K_(has_no_direct),
                K_(flags),
                K_(max_error_row_count),
                "load_method", get_load_method_string(load_method_));
+private:
+  int print_direct_load_hint_(char *buf, int64_t buf_len, int64_t &pos, const char *indent) const;
 public:
   union {
     struct {
-      uint64_t is_enable_ : 1;
+      uint64_t has_direct_ : 1; // FARM COMPAT WHITELIST
       uint64_t need_sort_ : 1;
-      uint64_t reserved_ : 62;
+      uint64_t has_no_direct_ : 1;
+      uint64_t reserved_ : 61;
     };
     uint64_t flags_;
   };
@@ -140,23 +170,78 @@ struct ObOptParamHint
 {
   ObOptParamHint() {};
 
-  #define OPT_PARAM_TYPE_DEF(DEF)         \
-    DEF(INVALID_OPT_PARAM_TYPE, = 0)      \
-    DEF(HIDDEN_COLUMN_VISIBLE,)           \
-    DEF(ROWSETS_ENABLED,)                 \
-    DEF(ROWSETS_MAX_ROWS,)                \
-    DEF(DDL_EXECUTION_ID,)                \
-    DEF(DDL_TASK_ID,)                     \
-    DEF(ENABLE_NEWSORT,)                  \
-    DEF(USE_PART_SORT_MGB,)               \
-    DEF(USE_DEFAULT_OPT_STAT,)            \
-    DEF(ENABLE_IN_RANGE_OPTIMIZATION,)    \
-    DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)    \
-    DEF(WORKAREA_SIZE_POLICY,)         \
-    DEF(ENABLE_RICH_VECTOR_FORMAT,)    \
-    DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)   \
-    DEF(PRESERVE_ORDER_FOR_PAGINATION,)   \
-    DEF(INLIST_REWRITE_THRESHOLD,)        \
+  #define OPT_PARAM_TYPE_DEF(DEF)                   \
+    DEF(INVALID_OPT_PARAM_TYPE, = 0)                \
+    DEF(HIDDEN_COLUMN_VISIBLE,)                     \
+    DEF(ROWSETS_ENABLED,)                           \
+    DEF(ROWSETS_MAX_ROWS,)                          \
+    DEF(DDL_EXECUTION_ID,)                          \
+    DEF(DDL_TASK_ID,)                               \
+    DEF(ENABLE_NEWSORT,)                            \
+    DEF(USE_PART_SORT_MGB,)                         \
+    DEF(USE_DEFAULT_OPT_STAT,)                      \
+    DEF(ENABLE_IN_RANGE_OPTIMIZATION,)              \
+    DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)              \
+    DEF(WORKAREA_SIZE_POLICY,)                      \
+    DEF(ENABLE_RICH_VECTOR_FORMAT,)                 \
+    DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)    \
+    DEF(PRESERVE_ORDER_FOR_PAGINATION,)             \
+    DEF(ENABLE_DAS_KEEP_ORDER,)                     \
+    DEF(SPILL_COMPRESSION_CODEC,)                   \
+    DEF(INLIST_REWRITE_THRESHOLD,)                  \
+    DEF(PUSHDOWN_STORAGE_LEVEL,)                    \
+    DEF(IO_READ_BATCH_SIZE,)                        \
+    DEF(IO_READ_REDUNDANT_LIMIT_PERCENTAGE,)        \
+    DEF(HASH_JOIN_ENABLED,)                         \
+    DEF(OPTIMIZER_SORTMERGE_JOIN_ENABLED,)          \
+    DEF(NESTED_LOOP_JOIN_ENABLED,)                  \
+    DEF(ENABLE_RANGE_EXTRACTION_FOR_NOT_IN,)        \
+    DEF(OPTIMIZER_INDEX_COST_ADJ,)                  \
+    DEF(OPTIMIZER_SKIP_SCAN_ENABLED,)               \
+    DEF(OPTIMIZER_BETTER_INLIST_COSTING,)           \
+    DEF(OPTIMIZER_GROUP_BY_PLACEMENT,)              \
+    DEF(WITH_SUBQUERY,)                             \
+    DEF(ENABLE_SPF_BATCH_RESCAN,)                   \
+    DEF(NLJ_BATCHING_ENABLED,)                      \
+    DEF(RUNTIME_FILTER_TYPE,)                       \
+    DEF(BLOOM_FILTER_RATIO,)                        \
+    DEF(OPTIMIZER_COST_BASED_TRANSFORMATION,)       \
+    DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,)    \
+    DEF(CARDINALITY_ESTIMATION_MODEL,)              \
+    DEF(_PUSH_JOIN_PREDICATE,)                      \
+    DEF(RANGE_INDEX_DIVE_LIMIT,)                    \
+    DEF(PARTITION_INDEX_DIVE_LIMIT,)                \
+    DEF(OB_TABLE_ACCESS_POLICY,)                    \
+    DEF(PARTITION_WISE_PLAN_ENABLED,)               \
+    DEF(USE_HASH_ROLLUP,)                           \
+    DEF(ENABLE_PX_ORDERED_COORD,)                   \
+    DEF(LOB_ROWSETS_MAX_ROWS,)                      \
+    DEF(ENABLE_ENUM_SET_SUBSCHEMA,)                 \
+    DEF(ENABLE_OPTIMIZER_ROWGOAL,)                  \
+    DEF(DAS_BATCH_RESCAN_FLAG,)                     \
+    DEF(DISABLE_GTT_SESSION_ISOLATION,)             \
+    DEF(ENABLE_CONSTANT_TYPE_DEMOTION,)             \
+    DEF(NON_STANDARD_COMPARISON_LEVEL,)             \
+    DEF(ENABLE_TOPN_RUNTIME_FILTER, )               \
+    DEF(PRESERVE_ORDER_FOR_GROUPBY,)                \
+    DEF(ENABLE_PDML_INSERT_UP,)                     \
+    DEF(ENABLE_PARTIAL_LIMIT_PUSHDOWN,)             \
+    DEF(PARQUET_FILTER_PUSHDOWN_LEVEL,)             \
+    DEF(ORC_FILTER_PUSHDOWN_LEVEL,)                 \
+    DEF(ENABLE_INDEX_MERGE,)                        \
+    DEF(ENABLE_PARTIAL_GROUP_BY_PUSHDOWN,)          \
+    DEF(ENABLE_PARTIAL_DISTINCT_PUSHDOWN,)          \
+    DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
+    DEF(ENABLE_GROUPING_SETS_EXPANSION,)            \
+    DEF(EXTENDED_SQL_PLAN_MONITOR_METRICS, )        \
+    DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
+    DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
+    DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
+    DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
+    DEF(ENABLE_MERGE_INTO,)                         \
+
+
+
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -168,11 +253,36 @@ struct ObOptParamHint
   int get_opt_param(const OptParamType param_type, ObObj &val) const;
   int has_enable_opt_param(const OptParamType param_type, bool &enabled) const;
   int print_opt_param_hint(PlanText &plan_text) const;
-  int get_bool_opt_param(const OptParamType param_type, bool &val, bool& is_exists) const;
+  int get_bool_opt_param(const OptParamType param_type, bool &val, bool &is_exists) const;
   // if the corresponding opt_param is specified, the `val` will be overwritten
   int get_bool_opt_param(const OptParamType param_type, bool &val) const;
+  int get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
+  int get_opt_param_runtime_filter_type(int64_t &rf_type) const;
+  int get_hash_rollup_param(ObObj &val, bool &has_opt_param) const;
+  int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
+  int get_disable_op_rich_format_flags(int64_t &disable_op_flags) const;
+
+  template<typename T>
+  using GET_PARAM_FUNC = int (ObOptParamHint::*)(const OptParamType, T&) const;
+  template<typename T, GET_PARAM_FUNC<T> PARAM_FUNC>
+  int inner_get_sys_var(const OptParamType param_type,
+                        const ObSQLSessionInfo *session,
+                        const share::ObSysVarClassType sys_var_id,
+                        T &val) const;
+  int get_sys_var(const OptParamType param_type,
+                  const ObSQLSessionInfo *session,
+                  const share::ObSysVarClassType sys_var_id,
+                  int64_t &val) const;
+  int get_sys_var(const OptParamType param_type,
+                  const ObSQLSessionInfo *session,
+                  const share::ObSysVarClassType sys_var_id,
+                  bool &val) const;
+  int get_enum_sys_var(const OptParamType param_type,
+                       const ObSQLSessionInfo *session,
+                       const share::ObSysVarClassType sys_var_id,
+                       int64_t &val) const;
   bool empty() const { return param_types_.empty();  }
   int check_and_get_bool_opt_param(const OptParamType param_type, bool &has_opt_param, bool &val) const;
   void reset();
@@ -201,6 +311,75 @@ struct ObDBLinkHit {
   bool hint_xa_trans_stop_check_lock_;
 };
 
+struct ObPxNodeHint {
+  static const int64_t UNSET_PX_NODE_COUNT = -1;
+  ObPxNodeHint() { reset(); }
+  void reset() {
+    px_node_policy_ = ObPxNodePolicy::INVALID;
+    px_node_addrs_.reset();
+    px_node_count_ = UNSET_PX_NODE_COUNT;
+  }
+  bool empty() const {
+    return ObPxNodePolicy::INVALID == px_node_policy_
+         && px_node_addrs_.empty()
+         && UNSET_PX_NODE_COUNT == px_node_count_;
+  }
+  int merge_px_node_hint(const ObPxNodeHint &other);
+  void merge_px_node_policy(ObPxNodePolicy px_node_policy);
+  int merge_px_node_addrs(const ObIArray<ObAddr> &px_node_addrs);
+  void merge_px_node_count(int64_t px_node_count);
+  int print_px_node_hint(PlanText &plan_text) const;
+  int print_px_node_addrs(PlanText &plan_text) const;
+
+  TO_STRING_KV(K_(px_node_policy),
+               K_(px_node_addrs),
+               K_(px_node_count));
+  ObPxNodePolicy px_node_policy_;
+  common::ObSArray<common::ObAddr> px_node_addrs_;
+  int64_t px_node_count_;
+};
+
+struct DisableOpRichFormatHint
+{
+  DisableOpRichFormatHint(): op_list_(), op_flags_(0) {}
+  int merge_op_list(const common::ObIArray<common::ObString> &op_list);
+  int merge_hint(const DisableOpRichFormatHint &other_hint)
+  {
+    return merge_op_list(other_hint.op_list_);
+  }
+  int print(PlanText &plan_text) const;
+  int64_t get_op_flags() const { return op_flags_; }
+  void reset()
+  {
+    op_list_.reset();
+    op_flags_ = 0;
+  }
+  TO_STRING_KV(K_(op_list), K_(op_flags));
+  common::ObSEArray<common::ObString, 8> op_list_;
+  int64_t op_flags_;
+};
+
+struct TriggerHint
+{
+  TriggerHint(): disable_all_(false), trigger_hints_() {}
+  void set_disable_all(bool disable) { disable_all_ = disable; }
+  bool get_disable_all() const { return disable_all_; }
+
+  int print_trigger_hint(PlanText &plan_text) const;
+  int add_trigger_hint(ObString trigger_name) { return trigger_hints_.push_back(trigger_name); }
+  const ObIArray<ObString> &get_trigger_hints() const { return trigger_hints_; }
+  void reset() {
+    disable_all_ = false;
+    trigger_hints_.reset();
+  }
+  int merge_trigger_hint(const TriggerHint &other);
+
+  TO_STRING_KV(K_(disable_all),
+               K_(trigger_hints));
+  bool disable_all_;
+  common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> trigger_hints_; // holds table hints whose triggers to disable
+};
+
 struct ObGlobalHint {
   ObGlobalHint() { reset(); }
   void reset();
@@ -214,25 +393,48 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_2_1_BP5  (oceanbase::common::cal_version(4, 2, 1, 5))
 #define COMPAT_VERSION_4_2_1_BP7  (oceanbase::common::cal_version(4, 2, 1, 7))
 #define COMPAT_VERSION_4_2_1_BP8  (oceanbase::common::cal_version(4, 2, 1, 8))
+#define COMPAT_VERSION_4_2_1_BP9  (oceanbase::common::cal_version(4, 2, 1, 9))
+#define COMPAT_VERSION_4_2_1_BP10 (oceanbase::common::cal_version(4, 2, 1, 10))
 #define COMPAT_VERSION_4_2_2      (oceanbase::common::cal_version(4, 2, 2, 0))
+#define COMPAT_VERSION_4_2_1_BP10 (oceanbase::common::cal_version(4, 2, 1, 10))
 #define COMPAT_VERSION_4_2_3      (oceanbase::common::cal_version(4, 2, 3, 0))
 #define COMPAT_VERSION_4_2_4      (oceanbase::common::cal_version(4, 2, 4, 0))
+#define COMPAT_VERSION_4_2_5      (oceanbase::common::cal_version(4, 2, 5, 0))
+#define COMPAT_VERSION_4_2_5_BP1  (oceanbase::common::cal_version(4, 2, 5, 1))
+#define COMPAT_VERSION_4_2_5_BP3  (oceanbase::common::cal_version(4, 2, 5, 3))
+#define COMPAT_VERSION_4_2_5_BP4  (oceanbase::common::cal_version(4, 2, 5, 4))
+#define COMPAT_VERSION_4_2_5_BP5  (oceanbase::common::cal_version(4, 2, 5, 5))
+#define COMPAT_VERSION_4_2_5_BP6  (oceanbase::common::cal_version(4, 2, 5, 6))
+#define COMPAT_VERSION_4_2_5_BP7  (oceanbase::common::cal_version(4, 2, 5, 7))
 #define COMPAT_VERSION_4_3_0      (oceanbase::common::cal_version(4, 3, 0, 0))
 #define COMPAT_VERSION_4_3_1      (oceanbase::common::cal_version(4, 3, 1, 0))
 #define COMPAT_VERSION_4_3_2      (oceanbase::common::cal_version(4, 3, 2, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_2
+#define COMPAT_VERSION_4_3_3      (oceanbase::common::cal_version(4, 3, 3, 0))
+#define COMPAT_VERSION_4_3_4      (oceanbase::common::cal_version(4, 3, 4, 0))
+#define COMPAT_VERSION_4_3_5      (oceanbase::common::cal_version(4, 3, 5, 0))
+#define COMPAT_VERSION_4_3_5_BP1  (oceanbase::common::cal_version(4, 3, 5, 1))
+#define COMPAT_VERSION_4_3_5_BP2  (oceanbase::common::cal_version(4, 3, 5, 2))
+#define COMPAT_VERSION_4_3_5_BP3  (oceanbase::common::cal_version(4, 3, 5, 3))
+#define COMPAT_VERSION_4_3_5_BP4  (oceanbase::common::cal_version(4, 3, 5, 4))
+#define COMPAT_VERSION_4_3_5_BP5  (oceanbase::common::cal_version(4, 3, 5, 5))
+#define COMPAT_VERSION_4_4_0      (oceanbase::common::cal_version(4, 4, 0, 0))
+#define COMPAT_VERSION_4_4_1      (oceanbase::common::cal_version(4, 4, 1, 0))
+#define COMPAT_VERSION_4_4_2      (oceanbase::common::cal_version(4, 4, 2, 0))
+#define COMPAT_VERSION_4_5_0      (oceanbase::common::cal_version(4, 5, 0, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_5_0
   static bool is_valid_opt_features_version(uint64_t version)
-  { return COMPAT_VERSION_4_0 <= version && LASTED_COMPAT_VERSION >= version; }
+  { return COMPAT_VERSION_4_0 <= version && (LASTED_COMPAT_VERSION >= version || CLUSTER_CURRENT_VERSION >= version); }
 
-  static const common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
-  static const int64_t UNSET_QUERY_TIMEOUT = -1;
-  static const int64_t UNSET_MAX_CONCURRENT = -1;
-  static const uint64_t UNSET_OPT_FEATURES_VERSION = 0;
-  static const int64_t DEFAULT_PARALLEL = 1;
-  static const int64_t UNSET_PARALLEL = 0;
-  static const int64_t SET_ENABLE_AUTO_DOP = -1;
-  static const int64_t SET_ENABLE_MANUAL_DOP = -2;
-  static const int64_t UNSET_DYNAMIC_SAMPLING = -1;
+  static constexpr common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
+  static constexpr int64_t UNSET_QUERY_TIMEOUT = -1;
+  static constexpr int64_t UNSET_MAX_CONCURRENT = -1;
+  static constexpr uint64_t UNSET_OPT_FEATURES_VERSION = 0;
+  static constexpr int64_t DEFAULT_PARALLEL = 1;
+  static constexpr int64_t UNSET_PARALLEL = 0;
+  static constexpr int64_t SET_ENABLE_AUTO_DOP = -1;
+  static constexpr int64_t SET_ENABLE_MANUAL_DOP = -2;
+  static constexpr int64_t UNSET_DYNAMIC_SAMPLING = -1;
+  static constexpr int64_t UNSET_PX_NODE_COUNT = -1;
 
   int merge_global_hint(const ObGlobalHint &other);
   int merge_dop_hint(uint64_t dfo, uint64_t dop);
@@ -246,18 +448,23 @@ struct ObGlobalHint {
   void reset_tm_sessid_tx_id_hint();
   void merge_max_concurrent_hint(int64_t max_concurrent);
   void merge_parallel_hint(int64_t parallel);
+  void merge_dml_parallel_hint(int64_t dml_parallel);
   void merge_parallel_dml_hint(ObPDMLOption pdml_option);
+  void merge_parallel_das_dml_hint(ObParallelDASOption parallel_das_option);
   void merge_param_option_hint(ObParamOption opt);
   void merge_topk_hint(int64_t precision, int64_t sharding_minimum_row_count);
   void merge_plan_cache_hint(ObPlanCachePolicy policy);
   void merge_log_level_hint(const ObString &log_level);
   void merge_read_consistency_hint(ObConsistencyLevel read_consistency, int64_t frozen_version);
+  void merge_table_lock_mode_hint(int64_t table_lock_mode);
   void merge_opt_features_version_hint(uint64_t opt_features_version);
   void merge_osg_hint(int8_t flag);
   void merge_dynamic_sampling_hint(int64_t dynamic_sampling);
   void merge_direct_load_hint(const ObDirectLoadHint &other);
+  void merge_resource_group_hint(const ObString &resource_group);
 
-  bool has_hint_exclude_concurrent() const;
+  void set_has_hint_exclude_concurrent()  { has_hint_exclude_concurrent_ = true;  }
+  bool has_hint_exclude_concurrent() const  { return has_hint_exclude_concurrent_;  }
   int print_global_hint(PlanText &plan_text) const;
   int print_alloc_op_hints(PlanText &plan_text) const;
 
@@ -266,8 +473,10 @@ struct ObGlobalHint {
   int64_t get_dblink_tx_id_hint() const { return dblink_hints_.tx_id_; }
   uint32_t get_dblink_tm_sessid_hint() const { return dblink_hints_.tm_sessid_; }
   int64_t get_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL ? parallel_ : UNSET_PARALLEL; }
+  int64_t get_dml_parallel_degree() const { return dml_parallel_; }
   bool has_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL; }
   bool has_parallel_hint() const { return UNSET_PARALLEL != parallel_; }
+  bool has_dml_parallel_hint() const { return UNSET_PARALLEL < dml_parallel_; }
   bool enable_auto_dop() const { return SET_ENABLE_AUTO_DOP == parallel_; }
   bool enable_manual_dop() const { return SET_ENABLE_MANUAL_DOP == parallel_; }
   bool is_topk_specified() const { return topk_precision_ > 0 || sharding_minimum_row_count_ > 0; }
@@ -278,8 +487,10 @@ struct ObGlobalHint {
   inline void set_dbms_stats() { has_dbms_stats_hint_ = true; }
   bool get_flashback_read_tx_uncommitted() const { return flashback_read_tx_uncommitted_; }
   void set_flashback_read_tx_uncommitted(bool v) { flashback_read_tx_uncommitted_ = v; }
+  ObParallelDASOption get_parallel_das_dml_option() const { return parallel_das_dml_option_; }
   bool get_xa_trans_stop_check_lock() const { return dblink_hints_.hint_xa_trans_stop_check_lock_; }
   void set_xa_trans_stop_check_lock(bool v) { dblink_hints_.hint_xa_trans_stop_check_lock_ = v; }
+  inline const common::ObString& get_resource_group() const { return resource_group_; }
   bool has_append() const {
     return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT) ? true : false;
   }
@@ -291,16 +502,9 @@ struct ObGlobalHint {
   }
   bool has_direct_load() const
   {
-    return (has_append() || direct_load_hint_.is_enable());
+    return !direct_load_hint_.has_no_direct() && (has_append() || direct_load_hint_.has_direct());
   }
-  bool has_inc_direct_load() const
-  {
-    return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_direct_load());
-  }
-  bool has_replace() const
-  {
-    return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_replace_load_method());
-  }
+  bool get_direct_load_need_sort() const;
 
   // wether should generate optimizer_statistics_operator.
   bool should_generate_osg_operator () const {
@@ -334,6 +538,7 @@ struct ObGlobalHint {
                K_(force_refresh_lc),
                K_(log_level),
                K_(parallel),
+               K_(dml_parallel),
                K_(monitor),
                K_(pdml_option),
                K_(param_option),
@@ -346,9 +551,13 @@ struct ObGlobalHint {
                K_(ob_ddl_schema_versions),
                K_(osg_hint),
                K_(has_dbms_stats_hint),
+               K_(parallel_das_dml_option),
                K_(dynamic_sampling),
                K_(alloc_op_hints),
-               K_(dblink_hints));
+               K_(dblink_hints),
+               K_(px_node_hint),
+               K_(disable_op_rich_format_hint),
+               K_(trigger_hint));
 
   int64_t frozen_version_;
   int64_t topk_precision_;
@@ -360,8 +569,10 @@ struct ObGlobalHint {
   int64_t max_concurrent_;
   bool enable_lock_early_release_;
   bool force_refresh_lc_;
+  int64_t table_lock_mode_;
   common::ObString log_level_;
   int64_t parallel_;
+  int64_t dml_parallel_;
   bool monitor_;
   ObPDMLOption pdml_option_;
   ObParamOption param_option_;
@@ -374,10 +585,17 @@ struct ObGlobalHint {
   ObOptimizerStatisticsGatheringHint osg_hint_;
   bool has_dbms_stats_hint_;
   bool flashback_read_tx_uncommitted_;
+  ObParallelDASOption parallel_das_dml_option_;
   int64_t dynamic_sampling_;
   common::ObSArray<ObAllocOpHint> alloc_op_hints_;
   ObDirectLoadHint direct_load_hint_;
   ObDBLinkHit dblink_hints_;
+  common::ObString resource_group_;
+  ObPxNodeHint px_node_hint_;
+  DisableOpRichFormatHint disable_op_rich_format_hint_;
+  TriggerHint trigger_hint_;
+private:
+  bool has_hint_exclude_concurrent_;  // not hint, used to mark weather exists hint exclude max_concurrent
 };
 
 // used in physical plan
@@ -392,7 +610,8 @@ public:
         force_trace_log_(false),
         log_level_(),
         parallel_(-1),
-        monitor_(false)
+        monitor_(false),
+        table_lock_mode_(0)
   {}
 
   ObPhyPlanHint(const ObGlobalHint &global_hint)
@@ -402,15 +621,22 @@ public:
         force_trace_log_(global_hint.force_trace_log_),
         log_level_(global_hint.log_level_),
         parallel_(global_hint.parallel_),
-        monitor_(global_hint.monitor_)
+        monitor_(global_hint.monitor_),
+        table_lock_mode_(global_hint.table_lock_mode_)
   {}
 
   int deep_copy(const ObPhyPlanHint &other, common::ObIAllocator &allocator);
 
   void reset();
 
-  TO_STRING_KV(K_(read_consistency), K_(query_timeout), K_(plan_cache_policy),
-               K_(force_trace_log), K_(log_level), K_(parallel), K_(monitor));
+  TO_STRING_KV(K_(read_consistency),
+               K_(query_timeout),
+               K_(plan_cache_policy),
+               K_(force_trace_log),
+               K_(log_level),
+               K_(parallel),
+               K_(monitor),
+               K_(table_lock_mode));
 
   common::ObConsistencyLevel read_consistency_;
   int64_t query_timeout_;
@@ -419,6 +645,7 @@ public:
   common::ObString log_level_;
   int64_t parallel_;
   bool monitor_;
+  int64_t table_lock_mode_;
 };
 
 struct ObTableInHint
@@ -429,6 +656,8 @@ struct ObTableInHint
                 const common::ObString &table_name)
       : qb_name_(qb_name), db_name_(db_name), table_name_(table_name)
   { }
+  ObTableInHint(const TableItem& table)
+  { set_table(table); }
   int assign(const ObTableInHint &other);
   bool is_match_table_item(ObCollationType cs_type, const TableItem &table_item) const;
   bool is_match_physical_table_item(ObCollationType cs_type, const TableItem &table_item) const;
@@ -438,6 +667,10 @@ struct ObTableInHint
   static bool is_match_table_items(ObCollationType cs_type,
                                   const ObIArray<ObTableInHint> &tables,
                                   ObIArray<TableItem *> &table_items);
+  static bool is_match_table_items(ObCollationType cs_type,
+                                   const ObIArray<ObTableInHint> &tables,
+                                   ObIArray<TableItem *> &table_items,
+                                   bool &is_all_not_match);
   int print_table_in_hint(PlanText &plan_text, bool ignore_qb_name = false) const;
   static int print_join_tables_in_hint(PlanText &plan_text,
                                        const ObIArray<ObTableInHint> &tables,
@@ -451,6 +684,7 @@ struct ObTableInHint
   DECLARE_TO_STRING;
 
   common::ObString qb_name_;
+  common::ObString catalog_name_;
   common::ObString db_name_;
   common::ObString table_name_;
 };
@@ -516,14 +750,16 @@ public:
       HINT_TABLE_PARALLEL,
       HINT_PQ_SET,
       HINT_JOIN_FILTER,
-      HINT_TABLE_DYNAMIC_SAMPLING
-    };
+      HINT_TABLE_DYNAMIC_SAMPLING,
+      HINT_PQ,
+      HINT_INDEX_MERGE,
+      HINT_TRIGGER    };
 
   static const int64_t MAX_EXPR_STR_LENGTH_IN_HINT = 1024;
 
   // basic/generated table: size = 1
   // joined table: size > 1
-  typedef ObSEArray<ObTableInHint, 4> TablesInHint;
+  typedef ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> TablesInHint;
 
   ObHint(ObItemType hint_type = T_INVALID)
     : hint_class_(HINT_INVALID_CLASS),
@@ -531,6 +767,7 @@ public:
       orig_hint_(NULL) {
         hint_type_ = get_hint_type(hint_type);
         is_enable_hint_ = (hint_type_ == hint_type);
+        is_trans_added_ = false;
       }
   virtual ~ObHint() {}
   int assign(const ObHint &other);
@@ -590,10 +827,14 @@ public:
   bool is_pq_subquery_hint() const { return T_PQ_SUBQUERY == hint_type_; }
   bool is_decorrelate_hint() const { return T_DECORRELATE == hint_type_; }
   bool is_coalesce_aggr_hint() const {return HINT_COALESCE_AGGR == hint_class_; }
+  bool is_trans_added() const { return is_trans_added_; }
+  bool set_trans_added(bool is_trans_added) { return is_trans_added_ = is_trans_added; }
+  bool is_index_merge_hint() const { return HINT_INDEX_MERGE == hint_class_; }
 
   VIRTUAL_TO_STRING_KV("hint_type", get_type_name(hint_type_),
                        K_(hint_class), K_(qb_name),
-                       K_(orig_hint), K_(is_enable_hint));
+                       K_(orig_hint), K_(is_enable_hint),
+                       K_(is_trans_added));
 
 private:
   // only used in create_push_down_hint
@@ -605,6 +846,7 @@ protected:
   ObString qb_name_;
   const ObHint *orig_hint_;
   bool is_enable_hint_;
+  bool is_trans_added_; // It means that hint is added by rewriter, and it needn't print the hint when explain extended
 };
 
 class ObTransHint : public ObHint
@@ -775,6 +1017,9 @@ public:
   const common::ObIArray<TablesInHint> & get_tb_name_list() const { return table_list_; }
   bool enable_groupby_placement(ObCollationType cs_type, const TableItem &table) const;
   bool enable_groupby_placement(ObCollationType cs_type, const ObIArray<TableItem *> &tables) const;
+  bool enable_groupby_placement(ObCollationType cs_type,
+                                const ObIArray<TableItem *> &tables,
+                                bool &is_all_not_match) const;
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table_list));
 
@@ -924,8 +1169,8 @@ public:
   common::ObIArray<ObTableInHint> &get_mv_list() { return mv_list_; }
   const common::ObIArray<ObTableInHint> &get_mv_list() const { return mv_list_; }
   int check_mv_match_hint(ObCollationType cs_type,
-                          const ObTableSchema *mv_schema,
-                          const ObDatabaseSchema *db_schema,
+                          const share::schema::ObTableSchema *mv_schema,
+                          const share::schema::ObDatabaseSchema *db_schema,
                           bool &is_match) const;
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(mv_list));
@@ -957,7 +1202,28 @@ public:
   int64_t &get_index_prefix() { return index_prefix_; }
   const int64_t &get_index_prefix() const { return index_prefix_; }
   bool is_use_index_hint()  const { return T_NO_INDEX_HINT != get_hint_type(); }
-  bool use_skip_scan()  const { return T_INDEX_SS_HINT == get_hint_type(); }
+  bool use_skip_scan()  const { return T_INDEX_SS_HINT == get_hint_type() ||
+                                       T_INDEX_SS_ASC_HINT == get_hint_type() ||
+                                       T_INDEX_SS_DESC_HINT == get_hint_type(); }
+  bool is_match_index(const ObCollationType cs_type,
+                      const TableItem &ref_table,
+                      const share::schema::ObTableSchema &index_schema) const;
+  bool is_asc_hint() const
+  {
+    return T_INDEX_ASC_HINT == get_hint_type() ||
+           T_INDEX_SS_ASC_HINT == get_hint_type();
+  }
+  bool is_desc_hint() const
+  {
+    return T_INDEX_DESC_HINT == get_hint_type() ||
+           T_INDEX_SS_DESC_HINT == get_hint_type();
+  }
+  bool is_unordered_hint() const
+  {
+    return T_INDEX_HINT == get_hint_type() ||
+           T_INDEX_SS_HINT == get_hint_type() ||
+           T_FULL_HINT == get_hint_type();
+  }
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name), K_(index_prefix));
 
@@ -965,6 +1231,29 @@ private:
   ObTableInHint table_;
   common::ObString index_name_;
   int64_t index_prefix_;
+};
+
+class ObIndexMergeHint : public ObOptHint
+{
+public:
+  ObIndexMergeHint(ObItemType hint_type = T_INDEX_MERGE_HINT)
+    : ObOptHint(hint_type)
+  {
+    set_hint_class(HINT_INDEX_MERGE);
+  }
+  int assign(const ObIndexMergeHint &other);
+  virtual ~ObIndexMergeHint() {}
+  virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return all_tables.push_back(&table_); }
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  inline ObTableInHint &get_table() { return table_; }
+  inline const ObTableInHint &get_table() const { return table_; }
+  inline common::ObIArray<common::ObString> &get_index_name_list() { return index_name_list_; }
+  inline const common::ObIArray<common::ObString> &get_index_name_list() const { return index_name_list_; }
+  inline int64_t get_index_list_count() const { return index_name_list_.count(); }
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name_list));
+private:
+  ObTableInHint table_;
+  common::ObSEArray<common::ObString, 2, common::ModulePageAllocator, true> index_name_list_;
 };
 
 class ObTableParallelHint : public ObOptHint
@@ -983,7 +1272,7 @@ public:
   const ObTableInHint &get_table() const { return table_; }
   int64_t get_parallel() const { return parallel_; }
   void set_parallel(int64_t parallel) { parallel_ = parallel; }
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(table), K_(parallel));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(parallel));
 
 private:
   ObTableInHint table_;
@@ -995,7 +1284,8 @@ class ObJoinHint : public ObOptHint
 public:
   ObJoinHint(ObItemType hint_type = T_INVALID)
     : ObOptHint(hint_type),
-      dist_algo_(DistAlgo::DIST_INVALID_METHOD)
+      dist_algo_(DistAlgo::DIST_INVALID_METHOD),
+      parallel_(ObGlobalHint::UNSET_PARALLEL)
   {
     set_hint_class(HINT_JOIN_METHOD);
   }
@@ -1010,14 +1300,19 @@ public:
 
   ObIArray<ObTableInHint> &get_tables() { return tables_; }
   const ObIArray<ObTableInHint> &get_tables() const { return tables_; }
-  DistAlgo get_dist_algo() const { return dist_algo_; }
+  uint64_t get_dist_algo() const { return DistAlgo::DIST_PARTITION_WISE == dist_algo_
+                                          ? DistAlgo::DIST_PARTITION_WISE | DistAlgo::DIST_EXT_PARTITION_WISE
+                                          : dist_algo_; }
   void set_dist_algo(DistAlgo dist_algo) { dist_algo_ = dist_algo; }
+  void set_parallel(int64_t parallel) { parallel_ = parallel; }
+  int64_t get_parallel() const { return parallel_; }
 
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo), K_(parallel));
 
 private:
   common::ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> tables_;
   DistAlgo dist_algo_;
+  int64_t parallel_;
 };
 
 class ObJoinFilterHint : public ObOptHint
@@ -1065,14 +1360,17 @@ class ObPQSetHint : public ObOptHint
   virtual ~ObPQSetHint() {}
   virtual int print_hint_desc(PlanText &plan_text) const override;
   static bool is_valid_dist_methods(const ObIArray<ObItemType> &dist_methods);
-  static DistAlgo get_dist_algo(const ObIArray<ObItemType> &dist_methods,
+  static uint64_t get_dist_algo(const ObIArray<ObItemType> &dist_methods,
                                 int64_t &random_none_idx);
   static const char* get_dist_method_str(const ObItemType dist_method);
 
   const ObIArray<ObItemType> &get_dist_methods() const { return dist_methods_; }
   ObIArray<ObItemType> &get_dist_methods() { return dist_methods_; }
-  int set_pq_set_hint(const DistAlgo dist_algo, const int64_t child_num, const int64_t random_none_idx);
-  DistAlgo get_dist_algo(int64_t &random_none_idx) const { return get_dist_algo(dist_methods_, random_none_idx); }
+  int set_pq_set_hint(const DistAlgo dist_algo,
+                      const int64_t child_num,
+                      const int64_t random_none_idx);
+  uint64_t get_dist_algo(int64_t &random_none_idx) const
+  { return get_dist_algo(dist_methods_, random_none_idx); }
   const ObString &get_left_branch() const { return left_branch_; }
   void set_left_branch(const ObString &left_branch) { return left_branch_.assign_ptr(left_branch.ptr(), left_branch.length()); }
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_methods), K_(left_branch));
@@ -1103,6 +1401,37 @@ class ObPQSubqueryHint : public ObOptHint
 private:
   DistAlgo dist_algo_;
   QbNameList sub_qb_names_;
+};
+
+// normal pq hint for single child op: group by/distinct
+class ObPQHint : public ObOptHint
+{
+  public:
+  ObPQHint(ObItemType hint_type)
+    : ObOptHint(hint_type),
+      dist_method_(T_INVALID),
+      parallel_(ObGlobalHint::UNSET_PARALLEL)
+  {
+    set_hint_class(HINT_PQ);
+  }
+  int assign(const ObPQHint &other);
+  virtual ~ObPQHint() {}
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  static const char* get_dist_method_str(ObItemType dist_method);
+  void set_dist_method(ObItemType dist_method) { dist_method_ = dist_method; }
+  inline bool is_dist_method_match(ObItemType dist_method)  const { return dist_method_ == dist_method; }
+  inline bool is_force_basic()  const { return T_DISTRIBUTE_BASIC == dist_method_; }
+  inline bool is_force_partition_wise()  const { return T_DISTRIBUTE_NONE == dist_method_; }
+  inline bool is_force_dist_hash()  const { return T_DISTRIBUTE_HASH == dist_method_; }
+  inline bool is_force_pull_to_local() const { return T_DISTRIBUTE_LOCAL == dist_method_; }
+  inline bool is_force_hash_local() const { return T_DISTRIBUTE_HASH_LOCAL == dist_method_; }
+  void set_parallel(int64_t parallel) { parallel_ = parallel; }
+  int64_t get_parallel() const { return parallel_; }
+
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_method), K_(parallel));
+private:
+  ObItemType dist_method_;
+  int64_t parallel_;
 };
 
 class ObJoinOrderHint : public ObOptHint {

@@ -55,14 +55,16 @@ double ObOptCostModelParameter::get_micro_block_rnd_cost(const OptSystemStat& st
 }
 
 double ObOptCostModelParameter::get_project_column_cost(const OptSystemStat& stat,
-                                                        PROJECT_TYPE type,
+                                                        int64_t type,
                                                         bool is_rnd,
                                                         bool use_column_store) const
 {
     if (stat.get_cpu_speed() <= 0) {
         return project_params_[use_column_store][is_rnd][type];
-    } else {
+    } else if (type >=0 && type <= ObMaxTC) {
         return project_params_[use_column_store][is_rnd][type] / stat.get_cpu_speed();
+    } else {
+        return project_params_[use_column_store][is_rnd][0] / stat.get_cpu_speed();
     }
 }
 
@@ -207,6 +209,24 @@ double ObOptCostModelParameter::get_px_batch_rescan_per_row_cost(const OptSystem
         return PX_BATCH_RESCAN_PER_ROW_COST;
     } else {
         return PX_BATCH_RESCAN_PER_ROW_COST / stat.get_cpu_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_das_rescan_per_row_rpc_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_network_speed() <= 0) {
+        return DAS_RESCAN_PER_ROW_RPC_COST;
+    } else {
+        return DAS_RESCAN_PER_ROW_RPC_COST / stat.get_network_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_das_batch_rescan_per_row_rpc_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_network_speed() <= 0) {
+        return DAS_BATCH_RESCAN_PER_ROW_RPC_COST;
+    } else {
+        return DAS_BATCH_RESCAN_PER_ROW_RPC_COST / stat.get_network_speed();
     }
 }
 
@@ -408,5 +428,15 @@ double ObOptCostModelParameter::get_cmp_err_handle_expr_cost(const OptSystemStat
         return CMP_ERR_HANDLE_EXPR_COST;
     } else {
         return CMP_ERR_HANDLE_EXPR_COST / stat.get_cpu_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_functional_lookup_per_row_cost(const OptSystemStat& stat) const
+{
+    // jinmao TODO: 这里需要再考虑一下
+    if (stat.get_cpu_speed() <= 0) {
+        return FUNCTIONAL_LOOKUP_PER_ROW_COST;
+    } else {
+        return FUNCTIONAL_LOOKUP_PER_ROW_COST / stat.get_cpu_speed();
     }
 }

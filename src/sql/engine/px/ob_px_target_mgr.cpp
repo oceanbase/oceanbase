@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #include "ob_px_target_mgr.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {
@@ -130,7 +129,8 @@ void ObPxTargetMgr::run1()
   lib::set_thread_name("PxTargetMgr", get_thread_idx());
   while (!has_set_stop()) {
     // sleep 100 * 1000 us
-    ob_usleep(PX_REFRESH_TARGET_INTERVEL_US);
+    ob_usleep(PX_REFRESH_TARGET_INTERVEL_US, true/*is_idle_sleep*/);
+
     refresh_times++;
 
     px_info_map_.for_each(px_res_refresh_funtor);

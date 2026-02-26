@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_sstable_scanner.h"
-#include "observer/table_load/ob_table_load_stat.h"
 
 namespace oceanbase
 {
@@ -97,8 +96,6 @@ int ObDirectLoadSSTableScanner::init(ObDirectLoadSSTable *sstable,
       if (OB_FAIL(datum_row_.init(column_count_))) {
         LOG_WARN("fail to init datum row", KR(ret));
       } else {
-        datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-        datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
         is_inited_ = true;
       }
     }
@@ -383,7 +380,7 @@ int ObDirectLoadSSTableScanner::read_buffer(uint64_t offset, uint64_t size)
   } else {
     int64_t read_size = size;
     if (large_buf_ == nullptr) {
-      int64_t large_buf_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      int64_t large_buf_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
       ObMemAttr attr(MTL_ID(), "TLD_LargeBuf");
       if (OB_ISNULL(large_buf_ = static_cast<char *>(ob_malloc(large_buf_size, attr)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -542,7 +539,7 @@ int ObDirectLoadSSTableScanner::get_next_row(const ObDirectLoadExternalRow *&ext
   return ret;
 }
 
-int ObDirectLoadSSTableScanner::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadSSTableScanner::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   datum_row = nullptr;
@@ -555,7 +552,7 @@ int ObDirectLoadSSTableScanner::get_next_row(const ObDatumRow *&datum_row)
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next row", KR(ret));
       }
-    } else if (OB_FAIL(external_row->to_datums(datum_row_.storage_datums_, datum_row_.count_))) {
+    } else if (OB_FAIL(external_row->to_datum_row(datum_row_))) {
       LOG_WARN("fail to transfer datum row", KR(ret));
     } else {
       datum_row = &datum_row_;
@@ -618,7 +615,7 @@ int ObDirectLoadIndexBlockMetaIterator::init(ObDirectLoadSSTable *sstable)
       }
     }
     if (OB_SUCC(ret)) {
-      int64_t buf_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      int64_t buf_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
       if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));

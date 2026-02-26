@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl_type.h"
 
 namespace oceanbase
 {
@@ -77,7 +75,7 @@ OB_SERIALIZE_MEMBER((ObExprPLGetCursorAttr, ObFuncExprOperator));
 
 ObExprPLGetCursorAttr::ObExprPLGetCursorAttr(ObIAllocator &alloc)
   : ObFuncExprOperator(
-      alloc, T_FUN_PL_GET_CURSOR_ATTR, N_PL_GET_CURSOR_ATTR, ZERO_OR_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
+      alloc, T_FUN_PL_GET_CURSOR_ATTR, N_PL_GET_CURSOR_ATTR, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
       false, INTERNAL_IN_ORACLE_MODE),
     pl_cursor_info_() {}
 
@@ -108,7 +106,7 @@ int ObExprPLGetCursorAttr::calc_result_typeN(ObExprResType &type,
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
   UNUSED(types);
-  if (param_num > 1) {
+  if (param_num > 2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid number of arguments", K(param_num), K(ret));
   } else if (!pl_cursor_info_.is_valid()) {
@@ -128,11 +126,14 @@ int ObExprPLGetCursorAttr::calc_result_typeN(ObExprResType &type,
       type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
       type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
     }
-    if (1 == param_num) {
+    if (param_num > 0) {
       if (pl_cursor_info_.is_explicit_cursor()) {
         types[0].set_calc_type(ObExtendType);
       } else {
         types[0].set_calc_type(ObIntType);
+      }
+      if (param_num == 2) {
+        types[1].set_calc_type(ObIntType);
       }
     }
   }
@@ -166,7 +167,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
   ExtraInfo *info = static_cast<ExtraInfo *>(expr.extra_info_);
   CK(OB_NOT_NULL(info));
   CK(OB_NOT_NULL(session));
-  CK(expr.arg_cnt_ <= 1);
+  CK(expr.arg_cnt_ <= 2);
   const pl::ObPLCursorInfo* cursor = NULL;
   const pl::ObPLCursorInfo implicit_cursor(false/*not explicit cursor*/);
   if (OB_FAIL(ret)) {
@@ -176,7 +177,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
   } else if (pl::ObPLGetCursorAttrInfo::PL_CURSOR_BULK_ROWCOUNT == info->pl_cursor_info_.get_type()
              || pl::ObPLGetCursorAttrInfo::PL_CURSOR_BULK_EXCEPTIONS == info->pl_cursor_info_.get_type()
              || info->pl_cursor_info_.is_explicit_cursor()) {
-    if (1 != expr.arg_cnt_) {
+    if (1 != expr.arg_cnt_ && 2 != expr.arg_cnt_) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(info->pl_cursor_info_), K(expr.arg_cnt_));
     }
@@ -186,7 +187,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
       LOG_WARN("invalid argument", K(ret), K(info->pl_cursor_info_), K(expr.arg_cnt_));
     }
   }
-  if (OB_SUCC(ret) && 1 == expr.arg_cnt_) {
+  if (OB_SUCC(ret) && expr.arg_cnt_ > 0) {
     datum_meta = expr.args_[0]->datum_meta_;
     if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
       LOG_WARN("eval arg failed", K(ret), K(expr));
@@ -194,6 +195,14 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
       if (datum_meta.type_ != ObExtendType) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument: expected extend type", K(ret));
+      } else if (info->pl_cursor_info_.is_bulk_rowcount()) {
+        ObDatum *index_datum = NULL;
+        CK (expr.arg_cnt_ == 2);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(expr.args_[1]->eval(ctx, index_datum))) {
+          LOG_WARN("eval arg failed", K(ret), K(expr));
+        }
+        //explicit cursor %bulk_rowcount index argument is useless, do nothing
       }
     } else {
       if (datum->is_null()) {
@@ -211,6 +220,16 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
     if (info->pl_cursor_info_.is_explicit_cursor()) {
       CK (ObExtendType == datum_meta.type_);
       OX (datum->to_obj(obj, obj_meta));
+      if (OB_SUCC(ret)) {
+        if (obj.is_null()) {
+          // do nothing, null cursor is legal...
+        } else if (!obj.is_ext()
+                    || (obj.get_meta().get_extend_type() != pl::PL_CURSOR_TYPE
+                        && obj.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE)) {
+          ret = OB_ERR_CURSOR_ATTR_APPLY;
+          LOG_WARN("cursor attribute may not applied to non-cursor", K(ret), K(obj.get_meta()));
+        }
+      }
       OX (cursor = reinterpret_cast<const pl::ObPLCursorInfo*>(obj.get_ext()));
     } else {
       if (OB_ISNULL(cursor = session->get_pl_implicit_cursor())) {
@@ -262,7 +281,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
       case pl::ObPLGetCursorAttrInfo::PL_CURSOR_ROWCOUNT: {
         if (OB_ISNULL(cursor)) {
           ret = OB_ERR_INVALID_CURSOR;
-          LOG_WARN("cursor is null", K(ret));;
+          LOG_WARN("cursor is null", K(ret));
         } else {
           int64_t rowcount = 0;
           bool isnull = false;
@@ -292,7 +311,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
           } else if (OB_UNLIKELY(rowid.empty())) {
             expr_datum.set_null();
           } else {
-            expr_datum.set_urowid(rowid.ptr(), rowid.length());
+            expr_datum.set_string(rowid.ptr(), rowid.length());
           }
         }
         break;
@@ -300,14 +319,26 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
       case pl::ObPLGetCursorAttrInfo::PL_CURSOR_BULK_ROWCOUNT: {
         if (OB_ISNULL(cursor)) {
           ret = OB_ERR_INVALID_CURSOR;
-          LOG_WARN("cursor is null", K(ret));;
+          LOG_WARN("cursor is null", K(ret));
         } else {
-          int64_t index = datum->get_int();
-          int64_t rowcount = 0;
-          if (OB_FAIL(cursor->get_bulk_rowcount(index - 1, rowcount))) {
-            LOG_WARN("failed to get cursor bulk rowcount attr", K(ret));
+          if (!info->pl_cursor_info_.is_explicit_cursor()) {
+            int64_t index = datum->get_int();
+            int64_t rowcount = 0;
+            if (OB_FAIL(cursor->get_bulk_rowcount(index - 1, rowcount))) {
+              LOG_WARN("failed to get cursor bulk rowcount attr", K(ret));
+            } else {
+              expr_datum.set_int(rowcount);
+            }
           } else {
-            expr_datum.set_int(rowcount);
+            int64_t rowcount = 0;
+            bool isnull = false;
+            if (OB_FAIL(cursor->get_rowcount(rowcount, isnull))) {
+              LOG_WARN("fail to get rowcount attr", K(ret));
+            } else if (isnull) {
+              expr_datum.set_null();
+            } else {
+              expr_datum.set_int(rowcount);
+            }
           }
         }
         break;

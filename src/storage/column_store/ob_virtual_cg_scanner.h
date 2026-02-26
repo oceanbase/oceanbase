@@ -12,12 +12,12 @@
 #ifndef OB_STORAGE_COLUMN_STORE_OB_VIRTUAL_CG_SCANNER_H_
 #define OB_STORAGE_COLUMN_STORE_OB_VIRTUAL_CG_SCANNER_H_
 #include "ob_i_cg_iterator.h"
-#include "storage/access/ob_aggregated_store.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+class ObAggGroupBase;
 // virtual cg scanner which handles SCAN without referenced column, such as
 // - RAND() < 2 filter
 // - COUNT(*) aggregation
@@ -49,31 +49,32 @@ public:
   virtual ObCGIterType get_type() override final
   { return OB_CG_VIRTUAL_SCANNER; }
   TO_STRING_KV(K_(is_inited), K_(is_reverse_scan), KP_(iter_param), KP_(access_ctx),
-               K_(current_group_size), KP_(cg_agg_cells));
+               K_(current_group_size), KP_(agg_group));
 private:
-  int init_agg_cells(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
+  int init_agg_group(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
   int64_t is_inited_;
   bool is_reverse_scan_;
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
   int64_t current_group_size_;
-  ObCGAggCells *cg_agg_cells_;
+  ObAggGroupBase *agg_group_;
 };
 
 class ObDefaultCGScanner : public ObICGIterator
 {
 public:
   ObDefaultCGScanner()
-		:	query_range_valid_row_count_(0),
+		:	iter_param_(nullptr),
+      access_ctx_(nullptr),
+      query_range_valid_row_count_(0),
       datum_infos_(),
 			default_row_(),
       stmt_allocator_(nullptr),
 			is_inited_(false),
       filter_result_(false),
 			total_row_count_(0),
-			iter_param_(nullptr),
       filter_(nullptr),
-			cg_agg_cells_(nullptr)
+      agg_group_(nullptr)
 	{}
   virtual ~ObDefaultCGScanner() { reset(); }
   virtual void reset() override;
@@ -100,17 +101,19 @@ public:
   virtual ObCGIterType get_type() override
   { return OB_CG_DEFAULT_SCANNER; }
   TO_STRING_KV(K_(is_inited), K_(total_row_count), K_(default_row), K_(query_range_valid_row_count),
-			KPC_(iter_param), K_(datum_infos), K_(default_row), KPC_(cg_agg_cells));
+			KPC_(iter_param), KPC_(access_ctx), K_(datum_infos), K_(default_row), KPC_(agg_group));
 
 private:
 	int init_datum_infos_and_default_row(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
-  int init_cg_agg_cells(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
+  int init_agg_group(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
   int do_filter(sql::ObPushdownFilterExecutor *filter, const sql::ObBitVector &skip_bit, bool &result);
   int add_lob_header_if_need(
       const share::schema::ObColumnParam &column_param,
       ObIAllocator &allocator,
       blocksstable::ObStorageDatum &datum);
 protected:
+  const ObTableIterParam *iter_param_;
+  const ObTableAccessContext *access_ctx_;
   uint64_t query_range_valid_row_count_;
   common::ObFixedArray<blocksstable::ObSqlDatumInfo, common::ObIAllocator> datum_infos_;
 	blocksstable::ObDatumRow default_row_;
@@ -119,10 +122,17 @@ private:
 	bool is_inited_;
   bool filter_result_;
 	int64_t total_row_count_;
-	const ObTableIterParam *iter_param_;
   sql::ObPushdownFilterExecutor *filter_;
-	ObCGAggCells *cg_agg_cells_;
+  ObAggGroupBase *agg_group_;
 };
+
+// ObDefaultCGSingleRowScanner is used for single row scan
+// keep this for cg iter pool
+class ObDefaultCGSingleRowScanner : public ObDefaultCGScanner{};
+
+// ObDefaultCGFilterScanner is used for filter
+// keep this for cg iter pool
+class ObDefaultCGFilterScanner : public ObDefaultCGScanner {};
 
 class ObDefaultCGGroupByScanner final : public ObDefaultCGScanner, public ObICGGroupByProcessor
 {
@@ -143,14 +153,17 @@ public:
       bool &can_group_by) override;
   virtual int read_distinct(const int32_t group_by_col) override;
   virtual int read_reference(const int32_t group_by_col) override;
+  virtual int fill_group_by_col_lob_locator() override;
   virtual int calc_aggregate(const bool is_group_by_col) override;
+  virtual int locate_micro_index(const ObCSRange &range) override
+  { return locate(range, nullptr); }
   INHERIT_TO_STRING_KV("ObDefaultCGScanner", ObDefaultCGScanner,
       KPC_(output_exprs), K_(group_by_agg_idxs), KP_(group_by_cell));
 private:
   typedef ObSEArray<int32_t, 2>  ObGroupByAggIdxArray;
   const sql::ObExprPtrIArray *output_exprs_;
   ObSEArray<ObGroupByAggIdxArray, 2> group_by_agg_idxs_;
-  ObGroupByCell *group_by_cell_;
+  ObGroupByCellBase *group_by_cell_;
 };
 
 }

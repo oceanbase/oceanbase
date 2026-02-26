@@ -48,7 +48,7 @@ public:
 class TestCreatePalfEnv : public ::testing::Test
 {
 public:
-	TestCreatePalfEnv() : self_(ObAddr::VER::IPV4, "127.0.0.1", 4096), palf_env_(), transport_(NULL, NULL), allocator_(500)
+	TestCreatePalfEnv() : self_(ObAddr::VER::IPV4, "127.0.0.1", 4096), palf_env_(NULL), transport_(NULL, NULL), allocator_(500)
 	{
 	}
 	~TestCreatePalfEnv() {palf::PalfEnv::destroy_palf_env(palf_env_);}

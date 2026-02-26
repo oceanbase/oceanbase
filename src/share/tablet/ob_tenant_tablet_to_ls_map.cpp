@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "common/ob_tablet_id.h"                    // ObTabletID
-#include "lib/mysqlclient/ob_mysql_proxy.h"         // ObMySQLProxy
-#include "share/tablet/ob_tablet_info.h"            // ObTabletLSPair
 #include "share/tablet/ob_tablet_to_ls_iterator.h" // ObTenantTabletToLSIterator
 
 #include "share/tablet/ob_tenant_tablet_to_ls_map.h"

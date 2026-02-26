@@ -14,16 +14,12 @@
 
 #include "ob_sync_cmd_driver.h"
 
-#include "lib/profile/ob_perf_event.h"
 #include "obsm_row.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "observer/mysql/obmp_query.h"
 #include "rpc/obmysql/packet/ompk_row.h"
-#include "rpc/obmysql/packet/ompk_eof.h"
-#include "share/ob_lob_access_utils.h"
-#include "observer/mysql/obmp_stmt_prexecute.h"
-#include "src/pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#include "observer/mysql/obmp_utils.h"
 
 namespace oceanbase
 {
@@ -48,52 +44,6 @@ ObSyncCmdDriver::~ObSyncCmdDriver()
 {
 }
 
-int ObSyncCmdDriver::send_eof_packet(bool has_more_result)
-{
-  int ret = OB_SUCCESS;
-  OMPKEOF eofp;
-
-  if (OB_FAIL(seal_eof_packet(has_more_result, eofp))) {
-    LOG_WARN("failed to seal eof packet", K(ret), K(has_more_result));
-  } else if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
-    LOG_WARN("response packet fail", K(ret), K(has_more_result));
-  }
-  return ret;
-}
-
-int ObSyncCmdDriver::seal_eof_packet(bool has_more_result, OMPKEOF& eofp)
-{
-  int ret = OB_SUCCESS;
-  const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
-  uint16_t warning_count = 0;
-  if (OB_ISNULL(warnings_buf)) {
-    // ignore ret
-    LOG_WARN("can not get thread warnings buffer", K(warnings_buf));
-  } else {
-    warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
-  }
-  eofp.set_warning_count(warning_count);
-  ObServerStatusFlags flags = eofp.get_server_status();
-  flags.status_flags_.OB_SERVER_STATUS_IN_TRANS
-    = (session_.is_server_status_in_transaction() ? 1 : 0);
-  flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (session_.get_local_autocommit() ? 1 : 0);
-  flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = has_more_result;
-  // flags.status_flags_.OB_SERVER_PS_OUT_PARAMS = 1;
-  if (!session_.is_obproxy_mode()) {
-    // in java client or others, use slow query bit to indicate partition hit or not
-    flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !session_.partition_hit().get_bool();
-  }
-
-  eofp.set_server_status(flags);
-
-  // for proxy
-  // in multi-stmt, send extra ok packet in the last stmt(has no more result)
-  if (!is_prexecute_ && !has_more_result
-        && OB_FAIL(sender_.update_last_pkt_pos())) {
-    LOG_WARN("failed to update last packet pos", K(ret));
-  }
-  return ret;
-}
 
 int ObSyncCmdDriver::response_query_result(sql::ObResultSet &result,
                                            bool is_ps_protocol,
@@ -153,8 +103,12 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
     if (!result.is_pl_stmt(result.get_stmt_type())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("Not SELECT, should not have any row!!!", K(ret));
-    } else if (is_mysql_mode() && session_.client_non_standard()) {
-      // do nothing
+    } else if (is_mysql_mode() && session_.client_non_standard() && result.no_ps_protocol()) {
+      // 1. no field data returned for such case in text protocol
+      //    PREPARE stmt FROM 'do MY_FUN4_4(?)';
+      //    SET @p1 = '10';
+      //    EXECUTE stmt using @p1;  -- no field data returned
+      // 2. for call proc(@var1, @var2) sent from standard client, return field data
     } else if (OB_FAIL(response_query_result(result))) {
       LOG_WARN("response query result fail", K(ret));
       free_output_row(result);
@@ -180,6 +134,12 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
       LOG_WARN("prexecute response query head fail. ", K(ret));
     }
   }
+  int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+  if (tmp_ret != OB_SUCCESS) {
+    LOG_WARN("failed to add changed package info", K(tmp_ret));
+  }
+  OX (session_.reset_top_query_string());
+  session_.set_top_trace_id(nullptr);
 
   if (OB_SUCC(ret)) {
     // for CRUD SQL
@@ -315,6 +275,10 @@ int ObSyncCmdDriver::check_and_refresh_schema(uint64_t tenant_id)
 int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
+  // for external consistency
+  transaction::ObTxReadSnapshot &tx_read_snapshot = DAS_CTX(result.get_exec_context()).get_snapshot();
+  tx_read_snapshot.wait_consistency();
+
   const common::ObNewRow *row = NULL;
   if (OB_FAIL(result.next_row(row)) ) {
     LOG_WARN("fail to get next row", K(ret));
@@ -324,25 +288,23 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
   } else {
+    ObCharsetType charset_type = CHARSET_INVALID;
+    ObCharsetType nchar = CHARSET_INVALID;
+
+    if (OB_SUCC(ret)) {
+      const ObSQLSessionInfo &my_session = result.get_session();
+      if (OB_FAIL(my_session.get_ncharacter_set_connection(nchar))) {
+        LOG_WARN("get ncharacter set connection failed", K(ret));
+      } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
+        LOG_WARN("fail to get result charset", K(ret));
+      }
+    }
+
     ObNewRow *tmp_row = const_cast<ObNewRow*>(row);
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row->get_count(); i++) {
       ObObj& value = tmp_row->get_cell(i);
-      if (ob_is_string_tc(value.get_type()) && CS_TYPE_INVALID != value.get_collation_type()) {
-        OZ(convert_string_value_charset(value, result));
-      } else if (value.is_clob_locator()
-                && OB_FAIL(convert_lob_value_charset(value, result))) {
-        LOG_WARN("convert lob value charset failed", K(ret));
-      } else if (ob_is_text_tc(value.get_type())
-                && OB_FAIL(convert_text_value_charset(value, result))) {
-        LOG_WARN("convert text value charset failed", K(ret));
-      }
-      if (OB_FAIL(ret)) {
-      } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
-                  && OB_FAIL(process_lob_locator_results(value, result))) {
-        LOG_WARN("convert lob locator to longtext failed", K(ret));
-      } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type() || value.is_geometry()) &&
-                 OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value, result))) {
-        LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
+      if (OB_FAIL(convert_value_charset(value, result, charset_type, nchar ))) {
+        LOG_WARN("fail to convert value charset", K(ret), K(value));
       }
     }
 
@@ -353,6 +315,7 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
       ObSMRow sm_row(protocol_type,
                      *row,
                      dtc_params,
+                     *tmp_session,
                      result.get_field_columns(),
                      ctx_.schema_guard_,
                      tmp_session->get_effective_tenant_id());
@@ -360,7 +323,7 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
       if (OB_FAIL(sender_.response_packet(rp, const_cast<ObSQLSessionInfo *>(tmp_session)))) {
         LOG_WARN("response packet fail", K(ret), KP(row));
       } else {
-        ObArenaAllocator *allocator = NULL;
+        ObIAllocator *allocator = NULL;
         if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
           LOG_WARN("fail to get lob fake allocator", K(ret));
         } else if (OB_NOT_NULL(allocator)) {

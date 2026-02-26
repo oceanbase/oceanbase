@@ -33,6 +33,7 @@ public:
 public:
   int init(const uint64_t bucket_lock_bucket_cnt, const uint64_t tenant_id);
   int set(const common::ObTabletID &tablet_id);
+  int exist(const common::ObTabletID &tablet_id);
   int erase(const common::ObTabletID &tablet_id);
   int clear() { return id_set_.clear(); }
   int64_t size() const { return id_set_.size(); }

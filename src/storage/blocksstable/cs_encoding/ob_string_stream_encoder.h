@@ -106,7 +106,7 @@ int ObStringStreamEncoder::do_convert_datum_to_stream_(ObIDatumIter &iter)
   int64_t i = 0;
   T *offset_arr = static_cast<T*>(offset_arr_);
   while (OB_SUCC(ret) && OB_SUCC(iter.get_next(datum))) {
-    if (datum->is_null()) {
+    if (datum->is_null_or_nop()) {
       if (is_fixed_len) {
         // if fixed len, fill 0 for placeholders
         tmp_len = ctx_->meta_.get_fixed_string_len();
@@ -144,7 +144,7 @@ int ObStringStreamEncoder::do_convert_datum_to_stream_(ObIDatumIter &iter)
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(i != iter.size() || pos != umcompress_len)) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected datum count and bytes len", K(ret), K(i), K(iter.size()), K(pos), K(umcompress_len));
+      STORAGE_LOG(WARN, "unexpected datum count and bytes len", K(ret), K(i), K(iter.size()), K(pos), K(umcompress_len), K(is_fixed_len));
     } else if (OB_FAIL(all_string_writer_->advance(umcompress_len))) {
       STORAGE_LOG(WARN, "fail to advance all_string_writer_", K(ret), K(umcompress_len));
     }
@@ -167,7 +167,7 @@ int ObStringStreamEncoder::do_encode_offset_stream_(ObIArray<uint32_t> &stream_o
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "max string offset must equal to total_bytes_len_", K(ret), K(end_offset), KPC_(ctx));
     } else if (OB_FAIL(int_ctx_.build_offset_array_stream_meta(
-        end_offset, ctx_->info_.raw_encoding_str_offset_))) {
+        end_offset, ctx_->info_.raw_encoding_str_offset_, ctx_->info_.major_working_cluster_version_))) {
       STORAGE_LOG(WARN, "fail to build_offset_array_stream_meta", KR(ret));
     } else if (OB_FAIL(int_ctx_.build_stream_encoder_info(
                                 false/*has_null*/,

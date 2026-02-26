@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_common_id_utils.h"
-#include "share/ob_share_util.h"
 #include "storage/tx/ob_unique_id_service.h" // ObUniqueIDService
 
 namespace oceanbase

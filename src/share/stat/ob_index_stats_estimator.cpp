@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "share/stat/ob_index_stats_estimator.h"
-#include "share/stat/ob_opt_table_stat.h"
-#include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_opt_stat_manager.h"
 namespace oceanbase
@@ -30,7 +28,8 @@ int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObColumnStatParam> &column_params = param.column_params_;
-  ObString no_rewrite("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS OPT_PARAM('ROWSETS_MAX_ROWS', 256)");
+  ObString no_rewrite(
+    "NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS OPT_PARAM('ROWSETS_MAX_ROWS', 256) OPT_PARAM('APPROX_COUNT_DISTINCT_PRECISION', 10)");
   ObString calc_part_id_str;
   ObOptTableStat tab_stat;
   ObOptStat src_opt_stat;
@@ -48,18 +47,21 @@ int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
   if (OB_UNLIKELY(dst_opt_stats.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected empty", K(ret), K(dst_opt_stats.empty()));
+  } else if (OB_FAIL(init_escape_char_names(ctx_.get_allocator(), param))) {
+    LOG_WARN("failed to add init escape char names", K(ret));
+  } else if (OB_FALSE_IT(set_from_table(data_table_name_))) {
   } else if (OB_FAIL(ObDbmsStatsUtils::init_col_stats(allocator,
                                                       column_params.count(),
                                                       src_col_stats))) {
     LOG_WARN("failed init col stats", K(ret));
   } else if (OB_FAIL(add_hint(no_rewrite, ctx_.get_allocator()))) {
     LOG_WARN("failed to add no_rewrite", K(ret));
-  } else if (OB_FAIL(add_from_table(param.db_name_, param.data_table_name_))) {
-    LOG_WARN("failed to add from table", K(ret));
+  } else if (OB_FAIL(add_no_use_das_hint(ctx_.get_allocator(), from_table_))) {
+    LOG_WARN("failed to no use das hint", K(ret));
   } else if (OB_FAIL(fill_index_info(ctx_.get_allocator(),
-                                     param.data_table_name_,
-                                     param.tab_name_))) {
-    LOG_WARN("failed to add from table", K(ret));
+                                     data_table_name_,
+                                     tab_name_))) {
+    LOG_WARN("failed to fill index info", K(ret));
   } else if (OB_FAIL(fill_parallel_info(ctx_.get_allocator(), param.degree_))) {
     LOG_WARN("failed to add query sql parallel info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
@@ -68,6 +70,8 @@ int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
     LOG_WARN("failed to get valid duration time", K(ret));
   } else if (OB_FAIL(fill_query_timeout_info(ctx_.get_allocator(), duration_time))) {
     LOG_WARN("failed to fill query timeout info", K(ret));
+  } else if (OB_FAIL(fill_sample_info(allocator, param.sample_info_))) {
+    LOG_WARN("failed to fill sample info", K(ret));
   } else if (dst_opt_stats.count() > 1 &&
              OB_FAIL(fill_index_group_by_info(ctx_.get_allocator(), param, calc_part_id_str))) {
     LOG_WARN("failed to group by info", K(ret));
@@ -91,14 +95,22 @@ int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
     const ObColumnStatParam *col_param = &column_params.at(i);
     if (OB_FAIL(add_stat_item(ObStatAvgLen(col_param, src_col_stats.at(i))))) {
       LOG_WARN("failed to add statistic item", K(ret));
-    } else {/*do nothing*/}
+    } else if (!col_param->need_basic_stat()) {
+      // do nothing
+    } else if (OB_FAIL(add_stat_item(ObStatMaxValue(col_param, src_col_stats.at(i)))) ||
+               OB_FAIL(add_stat_item(ObStatMinValue(col_param, src_col_stats.at(i)))) ||
+               OB_FAIL(add_stat_item(ObStatNumNull(col_param, src_tab_stat, src_col_stats.at(i)))) ||
+               OB_FAIL(add_stat_item(ObStatNumDistinct(col_param, src_col_stats.at(i), param.need_approx_ndv_))) ||
+               OB_FAIL(add_stat_item(ObStatLlcBitmap(col_param, src_col_stats.at(i))))) {
+      LOG_WARN("failed to add statistic item", K(ret));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(add_stat_item(ObStatAvgRowLen(src_tab_stat, src_col_stats)))) {
       LOG_WARN("failed to add avg row size estimator", K(ret));
     } else if (OB_FAIL(pack(raw_sql))) {
       LOG_WARN("failed to pack raw sql", K(ret));
-    } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), true, src_opt_stat, dst_opt_stats))) {
+    } else if (OB_FAIL(do_estimate(param, raw_sql.string(), true, src_opt_stat, dst_opt_stats))) {
       LOG_WARN("failed to evaluate basic stats", K(ret));
     } else {
       LOG_TRACE("index stats is collected", K(dst_opt_stats.count()));
@@ -162,16 +174,16 @@ int ObIndexStatsEstimator::fill_index_group_by_info(ObIAllocator &allocator,
   }
   if (OB_SUCC(ret)) {
     const int64_t len = strlen(fmt_str) +
-                        param.data_table_name_.length() +
-                        param.tab_name_.length() +
+                        data_table_name_.length() +
+                        tab_name_.length() +
                         type_str.length() ;
     int32_t real_len = -1;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), K(len));
     } else {
-      real_len = sprintf(buf, fmt_str, param.data_table_name_.length(),param.data_table_name_.ptr(),
-                                       param.tab_name_.length(), param.tab_name_.ptr(),
+      real_len = sprintf(buf, fmt_str, data_table_name_.length(),data_table_name_.ptr(),
+                                       tab_name_.length(), tab_name_.ptr(),
                                        type_str.length(), type_str.ptr());
       if (OB_UNLIKELY(real_len < 0 || real_len > len)) {
         ret = OB_ERR_UNEXPECTED;
@@ -206,16 +218,16 @@ int ObIndexStatsEstimator::fill_partition_condition(ObIAllocator &allocator,
       type_str = ObString(7, "SUBPART");
     }
     const int64_t len = strlen(fmt_str) +
-                        param.data_table_name_.length() +
-                        param.tab_name_.length() +
+                        data_table_name_.length() +
+                        tab_name_.length() +
                         type_str.length() + 30;
     int32_t real_len = -1;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), K(len));
     } else {
-      real_len = sprintf(buf, fmt_str, param.data_table_name_.length(),param.data_table_name_.ptr(),
-                                       param.tab_name_.length(), param.tab_name_.ptr(),
+      real_len = sprintf(buf, fmt_str, data_table_name_.length(),data_table_name_.ptr(),
+                                       tab_name_.length(), tab_name_.ptr(),
                                        type_str.length(), type_str.ptr(),
                                        dst_partition_id);
       if (OB_UNLIKELY(real_len < 0 || real_len > len)) {
@@ -249,7 +261,7 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
   if (OB_FAIL(get_all_need_gather_partition_ids(data_param, index_param, gather_part_ids))) {
     LOG_WARN("failed to get all need gather partition ids", K(ret));
   } else if (gather_part_ids.empty()) {
-    //do nothing
+    is_fast_gather = true;
   } else if (OB_UNLIKELY(index_param.is_global_index_ && gather_part_ids.count() != 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(index_param.is_global_index_), K(gather_part_ids.count()));
@@ -264,8 +276,8 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
   } else if (index_param.need_estimate_block_ &&
              OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, index_param,
                                                                  partition_id_block_map,
-                                                                 use_column_store,
-                                                                 use_split_part))) {
+                                                                 use_column_store
+                                                                 ))) {
     LOG_WARN("failed to estimate block count", K(ret));
   } else {
     bool is_continued = true;
@@ -491,6 +503,37 @@ int ObIndexStatsEstimator::get_index_part_id(const int64_t data_tab_partition_id
   return ret;
 }
 
+int ObIndexStatsEstimator::add_no_use_das_hint(common::ObIAllocator &alloc, const ObString &table_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(table_name.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_name));
+  } else {
+    const char *fmt_str = "NO_USE_DAS(%.*s)";
+    char *buf = NULL;
+    int64_t buf_len = table_name.length() + 16;
+    if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory", K(ret), K(buf), K(buf_len));
+    } else {
+      int64_t real_len = snprintf(buf, buf_len, fmt_str, table_name.length(), table_name.ptr());
+      if (OB_UNLIKELY(real_len < 0 || real_len > buf_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(real_len));
+      } else {
+        ObString hint;
+        hint.assign_ptr(buf, real_len);
+        if (OB_FAIL(add_hint(hint, alloc))) {
+          LOG_WARN("failed to add hint", K(ret));
+        } else {
+          LOG_TRACE("succeed to fill no_use_das hint", K(hint));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 } // end of common
 } // end of oceanbase

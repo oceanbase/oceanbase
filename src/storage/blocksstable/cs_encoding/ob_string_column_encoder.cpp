@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_string_column_encoder.h"
-#include "storage/blocksstable/encoding/ob_encoding_hash_util.h"
-#include "ob_column_datum_iter.h"
-#include "ob_cs_encoding_util.h"
-#include "lib/codec/ob_codecs.h"
+#include "ob_dict_encoding_hash_table.h"
 
 namespace oceanbase
 {
@@ -70,9 +67,9 @@ int ObStringColumnEncoder::do_init_()
   // use zero len as null if datum has no zero len and is not fixed length.
   // if all datums are null, the ctx_->fix_data_size_ equal -1,
   // so it also use zero len as null.
-  if (ctx_->null_cnt_ > 0) {
+  if (ctx_->null_or_nop_cnt_ > 0) {
     if (ctx_->has_zero_length_datum_) {
-      column_header_.set_has_null_bitmap();
+      column_header_.set_has_null_or_nop_bitmap();
       if (ctx_->fix_data_size_ >= 0) {
         column_header_.set_is_fixed_length();
         fixed_len = ctx_->fix_data_size_;
@@ -80,7 +77,7 @@ int ObStringColumnEncoder::do_init_()
         // not USE_ZERO_LEN_AS_NULL and not IS_FIXED_LENGTH_STRING
       }
     } else if (ctx_->fix_data_size_ >= 0) { // fixed length string
-      int64_t fix_padding_size = ctx_->fix_data_size_ * ctx_->null_cnt_;
+      int64_t fix_padding_size = ctx_->fix_data_size_ * ctx_->null_or_nop_cnt_;
       int64_t bitmap_size = ObCSEncodingUtil::get_bitmap_byte_size(row_count_);
       int64_t offset_size_arr_size = 0;
       if (is_force_raw_) {
@@ -95,7 +92,7 @@ int ObStringColumnEncoder::do_init_()
       if (fix_padding_size + bitmap_size < offset_size_arr_size) {
         column_header_.set_is_fixed_length();
         fixed_len = ctx_->fix_data_size_;
-        column_header_.set_has_null_bitmap();
+        column_header_.set_has_null_or_nop_bitmap();
       } else {
         is_use_zero_len_as_null = true;
       }
@@ -103,6 +100,12 @@ int ObStringColumnEncoder::do_init_()
           K(fix_padding_size), K(bitmap_size), K(offset_size_arr_size), KPC_(ctx));
     } else { // variable length string
       is_use_zero_len_as_null = true;
+    }
+    if (ctx_->nop_cnt_ > 0) {
+      column_header_.set_has_nop();
+      if (ctx_->nop_cnt_ < ctx_->null_or_nop_cnt_) {
+        column_header_.set_has_nop_bitmap();
+      }
     }
   } else { // has no null
     if (ctx_->fix_data_size_ >= 0) {
@@ -120,14 +123,19 @@ int ObStringColumnEncoder::do_init_()
   } else {
     uncompress_len = fixed_len * row_count_;
   }
+  ObPreviousColumnEncoding *pre_col_encoding = nullptr;
   if (OB_FAIL(enc_ctx_.build_string_stream_meta(
       fixed_len, is_use_zero_len_as_null, uncompress_len))) {
     LOG_WARN("fail to build_string_stream_meta", K(ret));
+  } else if (OB_FAIL(get_previous_cs_encoding(pre_col_encoding))) {
+    LOG_WARN("get_previous_cs_encoding fail", K(ret));
   } else if (OB_FAIL(enc_ctx_.build_string_stream_encoder_info(
       ctx_->encoding_ctx_->compressor_type_,
       is_force_raw_, &ctx_->encoding_ctx_->cs_encoding_opt_,
-      ctx_->encoding_ctx_->previous_cs_encoding_.get_column_encoding(column_index_),
-      int_stream_idx, ctx_->allocator_))) {
+      pre_col_encoding,
+      int_stream_idx,
+      ctx_->encoding_ctx_->major_working_cluster_version_,
+      ctx_->allocator_))) {
     LOG_WARN("fail to build_string_stream_encoder_info", K(ret));
   }
 
@@ -145,7 +153,7 @@ int ObStringColumnEncoder::store_column(ObMicroBufferWriter &buf_writer)
     LOG_WARN("not init", K(ret));
   } else {
     // first stream offset include the column optional meta
-    if (OB_FAIL(store_column_meta_(buf_writer))) {
+    if (! ctx_->has_stored_meta_ && OB_FAIL(store_column_meta(buf_writer))) {
       LOG_WARN("fail to store column optional meta", K(ret));
     } else {
       ObColumnDatumIter iter(*ctx_->col_datums_);
@@ -173,11 +181,13 @@ int ObStringColumnEncoder::store_column(ObMicroBufferWriter &buf_writer)
   return ret;
 }
 
-int ObStringColumnEncoder::store_column_meta_(ObMicroBufferWriter &buf_writer)
+int ObStringColumnEncoder::store_column_meta(ObMicroBufferWriter &buf_writer)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(store_null_bitamp(buf_writer))) {
     LOG_WARN("fail to store null bitmap", K(ret));
+  } else if (OB_FAIL(store_nop_bitmap(buf_writer))) {
+    LOG_WARN("fail to store nop bitmap", K(ret));
   }
   return ret;
 }
@@ -195,8 +205,12 @@ int64_t ObStringColumnEncoder::estimate_store_size() const
       int64_t length_byte_size = ObCSEncodingUtil::get_bit_size(avg_length) * row_count_ / CHAR_BIT;
       size = ctx_->var_data_size_ + length_byte_size;
     }
-    if (column_header_.has_null_bitmap()) {
-      size += ObCSEncodingUtil::get_bitmap_byte_size(row_count_);
+    int64_t bitmap_byte_size = ObCSEncodingUtil::get_bitmap_byte_size(row_count_);
+    if (column_header_.has_null_or_nop_bitmap()) {
+      size += bitmap_byte_size;
+    }
+    if (column_header_.has_nop_bitmap()) {
+      size += bitmap_byte_size;
     }
   }
 
@@ -232,7 +246,7 @@ int ObStringColumnEncoder::get_maximal_encoding_store_size(int64_t &size) const
       size += sizeof(ObIntegerStreamMeta);
       size += common::ObCodec::get_moderate_encoding_size(offset_arry_orig_size);
     }
-    if (column_header_.has_null_bitmap()) {
+    if (column_header_.has_null_or_nop_bitmap()) {
       size += ObCSEncodingUtil::get_bitmap_byte_size(row_count_);
     }
     size = std::min(size, ObCSEncodingUtil::MAX_COLUMN_ENCODING_STORE_SIZE);

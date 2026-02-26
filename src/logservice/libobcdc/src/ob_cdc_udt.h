@@ -119,7 +119,7 @@ public:
 
 private:
   // used to build_xmltype
-  static int build_xmltype(
+  static int build_xmltype_(
       const ColumnSchemaInfo &column_schema_info,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool is_new_value,

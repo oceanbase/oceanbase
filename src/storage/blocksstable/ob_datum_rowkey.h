@@ -13,17 +13,20 @@
 #ifndef OB_STORAGE_BLOCKSSTABLE_DATUM_ROWKEY_H
 #define OB_STORAGE_BLOCKSSTABLE_DATUM_ROWKEY_H
 
-#include "ob_datum_row.h"
+#include "ob_storage_datum.h"
 #include "lib/utility/ob_print_kv.h"
 //to be removed
 #include "common/rowkey/ob_store_rowkey.h"
-#include "share/schema/ob_table_param.h"
 
 namespace oceanbase
 {
 namespace blocksstable
 {
 struct ObDatumRange;
+class ObRowkeyVector;
+struct ObDiscreteDatumRowkey;
+struct ObCommonDatumRowkey;
+struct ObDatumRow;
 
 struct ObDatumRowkey
 {
@@ -44,6 +47,11 @@ public:
   OB_INLINE int64_t get_deep_copy_size() const;
   OB_INLINE int deep_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const;
   OB_INLINE int deep_copy(ObDatumRowkey &dest, char *buf, const int64_t buf_len) const;
+  int deep_copy(ObStoreRowkey &dest,
+                common::ObIAllocator &allocator,
+                const common::ObIArray<share::schema::ObColDesc> &col_descs,
+                const int64_t datum_cnt /* datum count needed to by copy */,
+                const uint64_t extra_rowkey_cnt = 0 /* default set max value */) const;
   OB_INLINE int shallow_copy(ObDatumRowkey &dest) const;
   OB_INLINE int semi_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const;
   int murmurhash(const uint64_t seed, const ObStorageDatumUtils &datum_utils, uint64_t &hash) const;
@@ -53,7 +61,7 @@ public:
   OB_INLINE void set_max_rowkey() { *this = MAX_ROWKEY; store_rowkey_.set_max(); }
   OB_INLINE void set_min_rowkey() { *this = MIN_ROWKEY; store_rowkey_.set_min(); }
   OB_INLINE bool is_static_rowkey() const { return datums_ == &MIN_DATUM || datums_ == &MAX_DATUM; }
-  OB_INLINE void set_group_idx(const int32_t group_idx) { group_idx_ = group_idx; }
+  OB_INLINE void set_group_idx(const int64_t group_idx) { group_idx_ = group_idx; }
   OB_INLINE int64_t get_group_idx() const { return group_idx_; }
   OB_INLINE const common::ObStoreRowkey &get_store_rowkey() const { return store_rowkey_; }
   //only for unittest
@@ -75,8 +83,23 @@ public:
 
   int equal(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, bool &is_equal) const;
   int compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+              const bool compare_datum_cnt = true, int64_t *not_eq_ptr = nullptr) const;
+  int compare(const ObDiscreteDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+              const bool compare_datum_cnt = true) const;
+  int compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+              const bool compare_datum_cnt = true) const;
+  int compare(const ObDatumRowkey &rhs,
+              const ObStorageDatumUtils &datum_utils,
+              const bool compare_scan_idx,
+              int &cmp_ret,
+              const bool compare_datum_cnt = true) const;
+  int compare(const ObCommonDatumRowkey &rhs,
+              const ObStorageDatumUtils &datum_utils,
+              const bool compare_scan_idx,
+              int &cmp_ret,
               const bool compare_datum_cnt = true) const;
   int from_rowkey(const ObRowkey &rowkey, common::ObIAllocator &allocator);
+  int to_rowkey(ObRowkey &rowkey, const ObObjMeta* obj_metas, common::ObIAllocator &allocator) const;
   int from_rowkey(const ObRowkey &rowkey, ObStorageDatumBuffer &datum_buffer);
   int to_store_rowkey(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                       common::ObIAllocator &allocator,
@@ -89,8 +112,10 @@ public:
   void reuse();
   DECLARE_TO_STRING;
 public:
+  bool is_skip_prefetch_;
   int32_t datum_cnt_;
-  int32_t group_idx_;
+  int32_t scan_index_;
+  int64_t group_idx_;
   mutable uint64_t hash_;
   ObStorageDatum *datums_;
   common::ObStoreRowkey store_rowkey_;
@@ -116,6 +141,10 @@ public:
   int convert_store_rowkey(const ObDatumRowkey &datum_rowkey,
                            const common::ObIArray<share::schema::ObColDesc> &col_descs,
                            common::ObStoreRowkey &rowkey);
+  int prepare_datum_rowkey(const ObDatumRow &datum_row,
+                           const int key_datum_cnt,
+                           const ObIArray<share::schema::ObColDesc> &col_descs,
+                           ObDatumRowkey &datum_rowkey);
   int reserve(const int64_t rowkey_cnt);
   OB_INLINE ObStorageDatum *get_datums() { return datum_buffer_.get_datums(); }
   OB_INLINE int64_t get_capacity() const { return datum_buffer_.get_capacity(); }
@@ -139,7 +168,6 @@ public:
   const ObDatumRowkey *get_rowkey() const { return rowkey_; }
   int compare(const ObDatumRowkeyWrapper &other, int &cmp) const { return rowkey_->compare(*(other.get_rowkey()), *datum_utils_, cmp); }
   const ObStorageDatum *get_ptr() const { return rowkey_->get_datum_ptr(); }
-  const char *repr() const { return to_cstring(rowkey_); }
   TO_STRING_KV(KPC_(rowkey), KPC_(datum_utils));
   const ObDatumRowkey *rowkey_;
   const ObStorageDatumUtils *datum_utils_;
@@ -168,6 +196,10 @@ public:
   {
     return checked_;
   }
+  inline bool is_row_duplicate() const
+  {
+    return is_row_duplicate_;
+  }
   inline bool is_row_bf_checked() const
   {
     return row_bf_checked_;
@@ -182,6 +214,10 @@ public:
   {
     row_lock_checked_ = 1;
   };
+  inline void mark_row_duplicate()
+  {
+    is_row_duplicate_ = 1;
+  }
   inline void mark_row_exist_checked()
   {
     row_exist_checked_ = 1;
@@ -209,19 +245,86 @@ public:
   }
   TO_STRING_KV(K_(row_mark), K_(rowkey));
 private:
-  union {
+  union { // FARM COMPAT WHITELIST
     struct {
       uint8_t row_lock_checked_  : 1;
       uint8_t row_exist_checked_ : 1;
       uint8_t row_bf_checked_    : 1;
       uint8_t skipped_this_time_ : 1;
       uint8_t checked_           : 1;
-      uint8_t reserved_          : 3;
+      uint8_t is_row_duplicate_  : 1;
+      uint8_t reserved_          : 2;
     };
     uint8_t row_mark_;
   };
   ObDatumRowkey rowkey_;
 };
+
+struct ObDiscreteDatumRowkey
+{
+  ObDiscreteDatumRowkey() : row_idx_(-1), rowkey_vector_(nullptr) {}
+  ~ObDiscreteDatumRowkey() = default;
+  OB_INLINE bool is_valid() const { return row_idx_ >= 0 && nullptr != rowkey_vector_; }
+  int compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+              const bool compare_datum_cnt = true, int64_t *not_eq_ptr = nullptr) const;
+  int compare(const ObDiscreteDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+              const bool compare_datum_cnt = true) const;
+  int compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+              const bool compare_datum_cnt = true) const;
+  int deep_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const;
+  int get_column_int(const int64_t col_idx, int64_t &int_val) const;
+  DECLARE_TO_STRING;
+  int64_t row_idx_;
+  const ObRowkeyVector *rowkey_vector_;
+};
+
+struct ObCommonDatumRowkey
+{
+  enum RowkeyType {
+    NONE,
+    COMPACT,
+    DISCRETE,
+  };
+  ObCommonDatumRowkey() : type_(NONE), scan_index_(-1), key_ptr_(nullptr) {}
+  ~ObCommonDatumRowkey() = default;
+  OB_INLINE void reset() { type_ = NONE; key_ptr_ = nullptr; }
+  OB_INLINE bool is_valid() const { return (COMPACT == type_ || DISCRETE == type_) && (nullptr != key_ptr_); }
+  OB_INLINE bool is_compact_rowkey() const { return COMPACT == type_; }
+  OB_INLINE bool is_discrete_rowkey() const { return DISCRETE == type_; }
+  OB_INLINE void set_compact_rowkey(const ObDatumRowkey *rowkey)
+  {
+    type_ = COMPACT;
+    rowkey_ = rowkey;
+  }
+  OB_INLINE const ObDatumRowkey *get_compact_rowkey() const { return rowkey_; }
+  OB_INLINE void set_discrete_rowkey(const ObDiscreteDatumRowkey *discrete_rowkey)
+  {
+    type_ = DISCRETE;
+    discrete_rowkey_ = discrete_rowkey;
+  }
+  OB_INLINE const ObDiscreteDatumRowkey *get_discrete_rowkey() const { return discrete_rowkey_; }
+  int compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+              const bool compare_datum_cnt = true, int64_t *not_eq_ptr = nullptr) const;
+  int compare(const ObDiscreteDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+              const bool compare_datum_cnt = true) const;
+  int compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+              const bool compare_datum_cnt = true) const;
+  int compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, bool compare_scan_index, int &cmp_ret,
+              const bool compare_datum_cnt = true) const;
+  int deep_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const;
+  int get_column_int(const int64_t col_idx, int64_t &int_val) const;
+  void set_scan_index(int64_t scan_index);
+  int64_t get_scan_index() const;
+  DECLARE_TO_STRING;
+  RowkeyType type_;
+  int32_t scan_index_;
+  union {
+    const void *key_ptr_;
+    const ObDatumRowkey *rowkey_;
+    const ObDiscreteDatumRowkey *discrete_rowkey_;
+  };
+};
+
 
 /*
  *ObDatumRowkey
@@ -278,6 +381,7 @@ OB_INLINE int ObDatumRowkey::deep_copy(ObDatumRowkey &dest, char *buf, const int
     if (OB_SUCC(ret)) {
       dest.datums_ = datums;
       dest.hash_ = hash_;
+      dest.scan_index_ = scan_index_;
       dest.group_idx_ = group_idx_;
       dest.datum_cnt_ = datum_cnt_;
       dest.store_rowkey_.reset();

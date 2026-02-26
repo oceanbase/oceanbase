@@ -20,6 +20,7 @@
 #include "observer/virtual_table/ob_all_virtual_diag_index_scan.h"
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
+#include "share/resource_manager/ob_tenant_thread_group_statistic.h"
 
 namespace oceanbase
 {
@@ -36,11 +37,11 @@ public:
   virtual void reset();
   inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
   virtual int set_ip(common::ObAddr *addr);
-  static int update_all_stats(const int64_t tenant_id, ObStatEventSetStatArray &stat_events);
+  static int update_all_stats(const int64_t tenant_id, common::ObDiagnoseTenantInfo &diag_info);
 protected:
   virtual int get_the_diag_info(const uint64_t tenant_id, common::ObDiagnoseTenantInfo &diag_info);
 private:
-  static int update_all_stats_(const int64_t tenant_id, ObStatEventSetStatArray &stat_events);
+  static int update_all_stats_(const int64_t tenant_id, common::ObDiagnoseTenantInfo &diag_info);
   static int get_cache_size_(const int64_t tenant_id, ObStatEventSetStatArray &stat_events);
 
   // omt::ObMultiTenantOperator interface

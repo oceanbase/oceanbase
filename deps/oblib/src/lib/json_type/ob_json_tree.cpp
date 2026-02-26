@@ -14,11 +14,6 @@
 #define USING_LOG_PREFIX SQL
 #include "ob_json_tree.h"
 #include "ob_json_bin.h"
-#include "lib/encode/ob_base64_encode.h" // for ObBase64Encoder
-#include "lib/utility/ob_fast_convert.h" // ObFastFormatInt::format_unsigned
-#include "lib/charset/ob_dtoa.h" // ob_gcvt_opt
-#include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
-#include "lib/charset/ob_charset.h" // for strntod
 
 namespace oceanbase {
 namespace common {
@@ -64,6 +59,7 @@ const char *ObJsonNode::get_data() const
   const char* data;
   ObJsonNodeType type = json_type();
   bool is_string_type = (type == ObJsonNodeType::J_STRING ||
+                         type == ObJsonNodeType::J_SEMI_BIN ||
                          type == ObJsonNodeType::J_OBINARY ||
                          type == ObJsonNodeType::J_OOID ||
                          type == ObJsonNodeType::J_ORAWHEX ||
@@ -83,6 +79,7 @@ uint64_t ObJsonNode::get_data_length() const
   size_t len;
   ObJsonNodeType type = json_type();
   bool is_string_type = (type == ObJsonNodeType::J_STRING ||
+                         type == ObJsonNodeType::J_SEMI_BIN ||
                          type == ObJsonNodeType::J_OBINARY ||
                          type == ObJsonNodeType::J_OOID ||
                          type == ObJsonNodeType::J_ORAWHEX ||
@@ -144,7 +141,7 @@ int ObJsonNode::check_valid_array_op(ObIJsonBase *value) const
   if (OB_ISNULL(value)) { // check param
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param value is NULL", K(ret));
-  } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
+  } else if (json_type() != ObJsonNodeType::J_ARRAY && json_type() != ObJsonNodeType::J_SEMI_HETE_COL) { // check json node type
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected json type", K(ret), K(json_type()));
   } else if (value->is_bin()) {
@@ -181,6 +178,22 @@ int ObJsonNode::check_valid_array_op(uint64_t index) const
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid json node type", K(ret), K(json_type()));
   } 
+
+  return ret;
+}
+
+int ObJsonNode::object_add_v0(const common::ObString &key, ObIJsonBase *value, bool with_unique_key, bool is_lazy_sort, bool need_overwrite, bool is_schema)
+{
+  INIT_SUCC(ret);
+
+  if (OB_FAIL(check_valid_object_op(value))) {
+    LOG_WARN("invalid json object operation", K(ret), K(key));
+  } else {
+    ObJsonObject *j_obj = static_cast<ObJsonObject *>(this);
+    if (OB_FAIL(j_obj->add(key, static_cast<ObJsonNode *>(value), with_unique_key, is_lazy_sort, need_overwrite, is_schema))) {
+      LOG_WARN("fail to add value to object by key", K(ret), K(key));
+    }
+  }
 
   return ret;
 }
@@ -279,7 +292,7 @@ int ObJsonNode::merge_tree(ObIAllocator *allocator, ObIJsonBase *other, ObIJsonB
     }
     
     if (OB_SUCC(ret)) {
-      if (this_arr->consume(allocator, other_arr)) {
+      if (OB_FAIL(this_arr->consume(allocator, other_arr))) {
         LOG_WARN("fail to consume array", K(ret), K(*this_arr), K(*other_arr));
       } else {
         result = this_arr;
@@ -623,7 +636,7 @@ ObJsonNode *ObJsonObject::get_value(const common::ObString &key) const
 {
   ObJsonNode *j_node = NULL;
   ObJsonObjectPair pair(key, NULL);
-  ObJsonKeyCompare cmp;
+  ObJsonKeyCompare cmp(use_lexicographical_order_);
 
   ObJsonObjectArray::const_iterator low_iter = std::lower_bound(object_array_.begin(),
                                                                 object_array_.end(),
@@ -675,7 +688,7 @@ int ObJsonObject::remove(const common::ObString &key)
 {
   INIT_SUCC(ret);
   const ObJsonObjectPair pair(key, NULL);
-  ObJsonKeyCompare cmp;
+  ObJsonKeyCompare cmp(use_lexicographical_order_);
   ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                           object_array_.end(), pair, cmp);
   if (low_iter != object_array_.end() && low_iter->get_key() == key) {
@@ -683,6 +696,7 @@ int ObJsonObject::remove(const common::ObString &key)
     if (OB_FAIL(object_array_.remove(low_iter - object_array_.begin()))) {
       LOG_WARN("fail to remove json node", K(ret), K(key));
     } else {
+      children_serialize_size_ -= delta_size;
       set_serialize_delta_size(-1 * delta_size);
     }
   }
@@ -732,7 +746,7 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_
 
     if (is_schema) {
       // if is schema, keep the first value, don't raise error or overwrite
-      ObJsonKeyCompare cmp;
+      ObJsonKeyCompare cmp(use_lexicographical_order_);
       ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                               object_array_.end(), pair, cmp);
       if (low_iter != object_array_.end() && low_iter->get_key() == key) { // Found and covered
@@ -743,7 +757,7 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_
         sort();
       }
     } else if (need_overwrite) {
-      ObJsonKeyCompare cmp;
+      ObJsonKeyCompare cmp(use_lexicographical_order_);
       ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                               object_array_.end(), pair, cmp);
       if (low_iter != object_array_.end() && low_iter->get_key() == key) { // Found and covered
@@ -763,7 +777,11 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_
     } else if (!is_lazy_sort) {
       sort();
     }
-    set_serialize_delta_size(value->get_serialize_size());
+    if (OB_SUCC(ret)) {
+      uint64_t child_serialize_size = value->get_serialize_size();
+      children_serialize_size_ += child_serialize_size;
+      set_serialize_delta_size(child_serialize_size);
+    }
   }
 
   return ret;
@@ -777,7 +795,7 @@ int ObJsonObject::rename_key(const common::ObString &old_key, const common::ObSt
     LOG_WARN("key is NULL", K(ret), K(new_key), K(old_key));
   } else {
     ObJsonObjectPair pair(old_key, NULL);
-    ObJsonKeyCompare cmp;
+    ObJsonKeyCompare cmp(use_lexicographical_order_);
     ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                             object_array_.end(), pair, cmp);
     if (low_iter != object_array_.end() && low_iter->get_key() == old_key) { // Found and covered
@@ -799,13 +817,13 @@ int ObJsonObject::rename_key(const common::ObString &old_key, const common::ObSt
 
 void ObJsonObject::sort()
 {
-  ObJsonKeyCompare cmp;
-  std::sort(object_array_.begin(), object_array_.end(), cmp);
+  ObJsonKeyCompare cmp(use_lexicographical_order_);
+  lib::ob_sort(object_array_.begin(), object_array_.end(), cmp);
 }
 
 void ObJsonObject::stable_sort()
 {
-  ObJsonKeyCompare cmp;
+  ObJsonKeyCompare cmp(use_lexicographical_order_);
   std::stable_sort(object_array_.begin(), object_array_.end(), cmp);
 }
 
@@ -1020,6 +1038,7 @@ int ObJsonArray::remove(uint64_t index)
     if (OB_FAIL(node_vector_.remove(index))) {
       LOG_WARN("fail to remove json node from array", K(ret), K(index));
     } else {
+      children_serialize_size_ -= delta_size;
       set_serialize_delta_size(-1 * delta_size);
       ret = OB_SUCCESS;
     } 
@@ -1079,7 +1098,9 @@ int ObJsonArray::append(ObJsonNode *value)
     if (OB_FAIL(node_vector_.push_back(value))) {
       LOG_WARN("fail to push back value", K(ret));
     } else {
-      value->update_serialize_size_cascade(value->get_serialize_size());
+      uint64_t child_serialize_size = value->get_serialize_size();
+      children_serialize_size_ += child_serialize_size;
+      value->update_serialize_size_cascade(child_serialize_size);
     }
   }
 
@@ -1100,7 +1121,9 @@ int ObJsonArray::insert(uint64_t index, ObJsonNode *value)
     if (OB_FAIL(node_vector_.insert(pos, value))) {
       LOG_WARN("fail to insert node to json array", K(ret), K(pos));
     } else {
-      value->update_serialize_size_cascade(value->get_serialize_size());
+      uint64_t child_serialize_size = value->get_serialize_size();
+      children_serialize_size_ += child_serialize_size;
+      value->update_serialize_size_cascade(child_serialize_size);
     }
   }
 
@@ -1133,6 +1156,15 @@ int ObJsonArray::consume(ObIAllocator *allocator, ObJsonArray *other)
   return ret;
 }
 
+ObJsonNode *ObJsonArray::get_value(uint64_t index) const
+{
+  ObJsonNode *j_node = NULL;
+  if (index < node_vector_.size()) {
+    j_node = node_vector_[index];
+  }
+  return j_node;
+}
+
 ObJsonDatetime::ObJsonDatetime(const ObTime &time, ObObjType field_type)
       : ObJsonScalar(),
         value_(time)
@@ -1141,8 +1173,12 @@ ObJsonDatetime::ObJsonDatetime(const ObTime &time, ObObjType field_type)
   json_type_ = ObJsonNodeType::J_ERROR;
   if (field_type == ObDateType) {
     json_type_ = lib::is_mysql_mode() ? ObJsonNodeType::J_DATE : ObJsonNodeType::J_ORACLEDATE;
+  } else if (field_type == ObMySQLDateType) {
+    json_type_ = ObJsonNodeType::J_MYSQL_DATE;
   } else if (field_type == ObDateTimeType) {
     json_type_ = ObJsonNodeType::J_DATETIME;
+  } else if (field_type == ObMySQLDateTimeType) {
+    json_type_ = ObJsonNodeType::J_MYSQL_DATETIME;
   } else if (field_type == ObTimestampType) {
     json_type_ = lib::is_mysql_mode() ? ObJsonNodeType::J_TIMESTAMP : ObJsonNodeType::J_OTIMESTAMP;
   } else if (field_type == ObTimestampTZType) {

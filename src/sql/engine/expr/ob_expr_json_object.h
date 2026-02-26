@@ -60,9 +60,6 @@ private:
                                       uint8_t &type,
                                       int64_t size_para);
 
-  static int get_ora_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
-                          uint16_t index, ObDatum*& j_datum,
-                          bool &is_null);
 
 private:  
     DISALLOW_COPY_AND_ASSIGN(ObExprJsonObject);

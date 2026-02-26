@@ -14,13 +14,7 @@
 
 #include "ob_root_service_monitor.h"
 
-#include "share/ob_rpc_struct.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "rootserver/ob_root_service.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_server_status.h"
-#include "lib/thread/ob_thread_name.h"
 #include "logservice/ob_log_service.h"
 namespace oceanbase
 {
@@ -76,7 +70,7 @@ void ObRootServiceMonitor::run1()
         FLOG_WARN("monitor root service failed", KR(ret));
       }
       if (!has_set_stop()) {
-        ob_usleep(MONITOR_ROOT_SERVICE_INTERVAL_US);
+        ob_usleep(MONITOR_ROOT_SERVICE_INTERVAL_US, true/*is_idle_sleep*/);
       }
     }
     FLOG_INFO("root service monitor thread exit");
@@ -208,7 +202,7 @@ int ObRootServiceMonitor::try_start_root_service()
   } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     FLOG_WARN("GCTX.srv_rpc_proxy_ is null", KR(ret));
-  } else if (OB_FAIL(rs_mgr_.construct_initial_server_list(check_ls_service, rs_list))) {
+  } else if (OB_FAIL(rs_mgr_.construct_initial_server_list(check_ls_service, SYS_LS, rs_list))) {
     FLOG_WARN("fail to construct initial server list", KR(ret));
   } else if (rs_list.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;

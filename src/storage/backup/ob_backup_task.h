@@ -34,6 +34,8 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "storage/backup/ob_backup_extern_info_mgr.h"
 #include "share/backup/ob_archive_store.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "storage/backup/ob_backup_device_wrapper.h"
 
 namespace oceanbase {
 namespace share
@@ -117,7 +119,7 @@ public:
   virtual int start_running() override;
   virtual bool operator==(const share::ObIDagNet &other) const override;
   virtual bool is_valid() const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   share::ObBackupDataType get_backup_data_type() const
@@ -170,7 +172,7 @@ public:
   virtual int start_running() override;
   virtual bool operator==(const share::ObIDagNet &other) const override;
   virtual bool is_valid() const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(param));
@@ -183,29 +185,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupBuildTenantIndexDagNet);
 };
 
-class ObLSBackupComplementLogDagNet : public ObBackupDagNet {
-public:
-  ObLSBackupComplementLogDagNet();
-  virtual ~ObLSBackupComplementLogDagNet();
-  virtual int init_by_param(const share::ObIDagInitParam *param) override;
-  virtual int start_running() override;
-  virtual bool operator==(const share::ObIDagNet &other) const override;
-  virtual bool is_valid() const override;
-  virtual int64_t hash() const override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
-  virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
-  INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(param), K_(compl_start_scn), K_(compl_end_scn));
-
-private:
-  bool is_inited_;
-  ObLSBackupDagInitParam param_;
-  ObBackupReportCtx report_ctx_;
-  share::SCN compl_start_scn_;
-  share::SCN compl_end_scn_;
-  bool is_only_calc_stat_;
-  DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogDagNet);
-};
-
 class ObLSBackupMetaDag : public share::ObIDag {
 public:
   ObLSBackupMetaDag();
@@ -216,8 +195,8 @@ public:
   virtual bool operator==(const ObIDag &other) const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int64_t hash() const override;
-  virtual lib::Worker::CompatMode get_compat_mode() const override;
+  virtual uint64_t hash() const override;
+  virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited));
@@ -228,6 +207,7 @@ private:
   ObLSBackupDagInitParam param_;
   ObBackupReportCtx report_ctx_;
   ObLSBackupCtx *ls_backup_ctx_;
+  lib::Worker::CompatMode compat_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupMetaDag);
 };
 
@@ -242,8 +222,8 @@ public:
   virtual bool operator==(const ObIDag &other) const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int64_t hash() const override;
-  virtual lib::Worker::CompatMode get_compat_mode() const override;
+  virtual uint64_t hash() const override;
+  virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited));
@@ -260,6 +240,7 @@ private:
   ObBackupMacroBlockTaskMgr *task_mgr_;
   ObBackupIndexKVCache *index_kv_cache_;
   ObBackupReportCtx report_ctx_;
+  lib::Worker::CompatMode compat_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupPrepareDag);
 };
 
@@ -273,9 +254,9 @@ public:
   virtual bool operator==(const ObIDag &other) const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual bool check_can_schedule() override;
-  virtual lib::Worker::CompatMode get_compat_mode() const override;
+  virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited));
@@ -286,6 +267,7 @@ private:
   ObBackupReportCtx report_ctx_;
   ObLSBackupCtx *ls_backup_ctx_;
   ObBackupIndexKVCache *index_kv_cache_;
+  lib::Worker::CompatMode compat_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupFinishDag);
 };
 
@@ -300,10 +282,10 @@ public:
   int provide(const common::ObIArray<ObBackupProviderItem> &items);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual lib::Worker::CompatMode get_compat_mode() const override;
+  virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(param));
@@ -320,6 +302,7 @@ protected:
   ObBackupReportCtx report_ctx_;
   ObArray<ObBackupProviderItem> backup_items_;
   share::ObIDag *index_rebuild_dag_;
+  lib::Worker::CompatMode compat_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupDataDag);
 };
 
@@ -329,7 +312,7 @@ public:
   virtual ~ObPrefetchBackupInfoDag();
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
 
 private:
@@ -347,13 +330,16 @@ public:
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool operator==(const ObIDag &other) const override;
-  virtual int64_t hash() const override;
-  virtual lib::Worker::CompatMode get_compat_mode() const override;
+  virtual uint64_t hash() const override;
+  virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return true; }
 
 private:
   int get_file_id_list_(common::ObIArray<int64_t> &file_id_list);
+
+private:
+  static const ObCompressorType DEFAULT_COMPRESSOR_TYPE;
 
 private:
   bool is_inited_;
@@ -365,42 +351,8 @@ private:
   ObBackupMacroBlockTaskMgr *task_mgr_;
   ObIBackupTabletProvider *provider_;
   ObBackupIndexKVCache *index_kv_cache_;
+  lib::Worker::CompatMode compat_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupIndexRebuildDag);
-};
-
-class ObLSBackupComplementLogDag : public share::ObIDag {
-public:
-  ObLSBackupComplementLogDag();
-  virtual ~ObLSBackupComplementLogDag();
-  int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
-      const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t turn_id,
-      const int64_t retry_id, const share::SCN &start_scn, const share::SCN &end_scn,
-      const bool is_only_calc_stat, const ObBackupReportCtx &report_ctx);
-  virtual int create_first_task() override;
-  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
-  virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual bool operator==(const ObIDag &other) const override;
-  virtual int64_t hash() const override;
-  virtual lib::Worker::CompatMode get_compat_mode() const override;
-  virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
-  virtual bool is_ha_dag() const override { return true; }
-
-private:
-  bool is_inited_;
-  ObBackupJobDesc job_desc_;
-  share::ObBackupDest backup_dest_;
-  uint64_t tenant_id_;
-  int64_t dest_id_;
-  share::ObBackupSetDesc backup_set_desc_;
-  share::ObLSID ls_id_;
-  int64_t turn_id_;
-  int64_t retry_id_;
-  share::SCN compl_start_scn_;
-  share::SCN compl_end_scn_;
-  bool is_only_calc_stat_;
-  ObBackupReportCtx report_ctx_;
-
-  DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogDag);
 };
 
 class ObLSBackupMetaTask : public share::ObITask {
@@ -479,32 +431,34 @@ public:
 private:
   int setup_macro_index_store_(const ObLSBackupDagInitParam &param,
       const share::ObBackupDataType &backup_data_type, const ObBackupSetDesc &backup_set_desc,
-      const ObBackupReportCtx &report_ctx,  ObBackupIndexStoreParam &index_store_param, ObBackupMacroBlockIndexStore &index_store);
+      const ObBackupReportCtx &report_ctx, ObBackupIndexStoreParam &index_store_param,
+      ObBackupOrderedMacroBlockIndexStore &index_store);
   int inner_init_macro_index_store_for_inc_(const ObLSBackupDagInitParam &param,
       const share::ObBackupDataType &backup_data_type, const ObBackupReportCtx &report_ctx);
   int inner_init_macro_index_store_for_turn_(const ObLSBackupDagInitParam &param,
       const share::ObBackupDataType &backup_data_type, const ObBackupReportCtx &report_ctx);
   int64_t get_prev_turn_id_(const int64_t cur_turn_id);
-  int inner_process_();
+  int inner_process_(int64_t &task_id);
   int check_backup_items_valid_(const common::ObIArray<ObBackupProviderItem> &items);
   int get_prev_backup_set_desc_(const uint64_t tenant_id, const int64_t dest_id, const share::ObBackupSetDesc &cur_backup_set_desc,
       share::ObBackupSetFileDesc &prev_backup_set_info);
   int get_tenant_macro_index_retry_id_(const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &prev_backup_set_desc,
       const share::ObBackupDataType &backup_data_type, const int64_t turn_id, int64_t &retry_id);
-  int get_need_copy_item_list_(const common::ObIArray<ObBackupProviderItem> &list,
+  int get_need_copy_item_list_(common::ObIArray<ObBackupProviderItem> &list,
       common::ObIArray<ObBackupProviderItem> &need_copy_list, common::ObIArray<ObBackupProviderItem> &no_need_copy_list,
-      common::ObIArray<ObBackupPhysicalID> &no_need_copy_macro_index_list);
+      common::ObIArray<ObBackupDeviceMacroBlockId> &no_need_copy_macro_index_list);
   int check_backup_item_need_copy_(
+      const ObBackupProviderItem &item, bool &need_copy, ObBackupMacroBlockIndex &macro_index);
+  int inner_check_backup_item_need_copy_when_change_retry_(
       const ObBackupProviderItem &item, bool &need_copy, ObBackupMacroBlockIndex &macro_index);
   int inner_check_backup_item_need_copy_when_change_turn_(
       const ObBackupProviderItem &item, bool &need_copy, ObBackupMacroBlockIndex &macro_index);
   int generate_next_prefetch_dag_();
   int generate_backup_dag_(const int64_t task_id, const common::ObIArray<ObBackupProviderItem> &items);
-  void record_server_event_(const int64_t cost_us);
+  void record_server_event_(const int64_t task_id, const int64_t cost_us) const;
 
 private:
   bool is_inited_;
-  int64_t prefetch_task_id_;
   ObLSBackupDagInitParam param_;
   ObBackupReportCtx report_ctx_;
   share::ObBackupDataType backup_data_type_;
@@ -512,11 +466,9 @@ private:
   ObIBackupTabletProvider *provider_;
   ObBackupMacroBlockTaskMgr *task_mgr_;
   ObBackupIndexKVCache *index_kv_cache_;
-  ObBackupMacroBlockIndexStore macro_index_store_for_inc_;
-  ObBackupMacroBlockIndexStore macro_index_store_for_turn_;
+  ObBackupOrderedMacroBlockIndexStore macro_index_store_for_inc_;
+  ObBackupOrderedMacroBlockIndexStore macro_index_store_for_turn_;
   share::ObIDag *index_rebuild_dag_;
-  int64_t next_prefetch_task_id_;
-  int64_t next_backup_task_id_;
   DISALLOW_COPY_AND_ASSIGN(ObPrefetchBackupInfoTask);
 };
 
@@ -536,12 +488,24 @@ private:
 private:
   int build_backup_file_header_(ObBackupFileHeader &file_header);
   int do_write_file_header_();
-  int get_check_tablet_list_(common::ObIArray<ObBackupProviderItem> &tablet_list);
-  int do_check_tablet_valid_();
-  int do_backup_macro_block_data_();
-  int do_backup_meta_data_();
-  int get_tablet_meta_info_(
-      const ObBackupProviderItem &item, ObTabletMetaReaderType &reader_type, ObBackupMetaType &meta_type);
+  int prepare_macro_block_readers_(ObMultiMacroBlockBackupReader *&macro_reader,
+                                   ObMultiMacroBlockBackupReader *&ddl_macro_reader,
+                                   common::ObIArray<ObIODevice *> &device_handle_array);
+  int deal_with_backup_data_(common::ObIArray<ObIODevice *> &device_handle);
+  int deal_with_backup_meta_(common::ObIArray<ObIODevice *> &device_handle);
+  int do_backup_single_ddl_other_block_(ObMultiMacroBlockBackupReader *reader, const ObBackupProviderItem &item);
+  int do_wait_index_builder_ready_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key);
+  int do_backup_single_macro_block_data_(ObMultiMacroBlockBackupReader *macro_reader,
+      const ObBackupProviderItem &item, common::ObIArray<ObIODevice *> &device_handle);
+  int check_tx_data_can_explain_user_data_(const storage::ObTabletHandle &tablet_handle, bool &can_explain);
+  int check_and_prepare_sstable_index_builders_(const common::ObTabletID &tablet_id);
+  int do_backup_single_meta_data_(const ObBackupProviderItem &item, ObIODevice *device_handle);
+  int do_wait_sstable_index_builder_ready_(ObTabletHandle &tablet_handle);
+  int open_tablet_sstable_index_builder_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
+      const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable);
+  int do_backup_tablet_meta_(const ObTabletMetaReaderType reader_type, const ObBackupMetaType meta_type,
+      const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id,
+      ObTabletHandle &tablet_handle, ObIODevice *device_handle);
   int finish_task_in_order_();
   int report_ls_backup_task_info_(const ObLSBackupStat &stat);
   int update_task_stat_(const share::ObBackupStats &old_backup_stat, const ObLSBackupStat &ls_stat,
@@ -551,17 +515,29 @@ private:
   int update_ls_task_info_stat_(const ObBackupLSTaskInfo &task_info, const ObLSBackupStat &stat, ObLSBackupStat &new_stat);
   int do_generate_next_task_();
   int check_disk_space_();
-  int get_macro_block_id_list_(common::ObIArray<ObBackupMacroBlockId> &list);
+  int get_macro_block_id_list_(common::ObIArray<ObBackupMacroBlockId> &macro_list,
+      common::ObIArray<ObBackupProviderItem> &item_list);
+  int get_need_copy_macro_block_id_list_(common::ObIArray<ObBackupMacroBlockId> &list);
   int get_meta_item_list_(common::ObIArray<ObBackupProviderItem> &list);
+  int get_ddl_block_id_list_(common::ObIArray<ObBackupMacroBlockId> &list);
+  int get_sstable_meta_item_list_(common::ObIArray<ObBackupProviderItem> &list);
+  int get_tablet_id_for_macro_id_(const blocksstable::MacroBlockId &macro_id, common::ObTabletID &tablet_id);
+  int get_other_block_mgr_for_tablet_(const common::ObTabletID &tablet_id,
+      ObBackupOtherBlocksMgr *&other_block_mgr, ObBackupLinkedBlockItemWriter *&linked_writer);
+  int write_ddl_other_block_(const blocksstable::ObBufferReader &buffer_reader, ObBackupLinkedBlockAddr &physical_id);
+  int add_item_to_other_block_mgr_(const blocksstable::MacroBlockId &macro_id,
+      const ObBackupLinkedBlockAddr &physical_id, ObBackupOtherBlocksMgr *other_block_mgr);
+  int deal_with_sstable_other_block_root_blocks_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key);
   int prepare_macro_block_reader_(const uint64_t tenant_id,
       const common::ObIArray<ObBackupMacroBlockId> &list, ObMultiMacroBlockBackupReader *&reader);
   int prepare_tablet_meta_reader_(const common::ObTabletID &tablet_id, const ObTabletMetaReaderType &reader_type,
-      storage::ObTabletHandle &tablet_handle, ObITabletMetaBackupReader *&reader);
+      const share::ObBackupDataType &backup_data_type, storage::ObTabletHandle &tablet_handle,
+      ObIODevice *device_handle, ObITabletMetaBackupReader *&reader);
   int get_next_macro_block_data_(ObMultiMacroBlockBackupReader *reader, blocksstable::ObBufferReader &buffer_reader,
-      blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator);
+      storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id, blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator);
   int check_macro_block_data_(const blocksstable::ObBufferReader &data);
-  int write_macro_block_data_(const blocksstable::ObBufferReader &data, const blocksstable::ObLogicMacroBlockId &logic_id,
-      ObBackupMacroBlockIndex &macro_index);
+  int write_macro_block_data_(const blocksstable::ObBufferReader &data, const storage::ObITable::TableKey &table_key,
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
   int write_backup_meta_(const blocksstable::ObBufferReader &data, const common::ObTabletID &tablet_id,
       const ObBackupMetaType &meta_type, ObBackupMetaIndex &meta_index);
   int get_tablet_handle_(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_handle);
@@ -571,8 +547,8 @@ private:
   int get_max_file_id_(int64_t &max_file_id);
   bool is_change_turn_error_(const int64_t error_code) const;
   void record_server_event_(const int64_t cost_us) const;
-  int mark_backup_item_finished_(const ObBackupProviderItem &item, const ObBackupPhysicalID &physical_id);
-  int get_backup_item_(const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupProviderItem &item);
+  int mark_backup_item_finished_(const ObBackupProviderItem &item, const ObBackupDeviceMacroBlockId &physical_id);
+  int get_backup_item_(const storage::ObITable::TableKey &table_key, const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupProviderItem &item);
   int finish_backup_items_();
   int backup_secondary_metas_(ObBackupTabletStat *tablet_stat);
   int may_fill_reused_backup_items_(
@@ -581,12 +557,34 @@ private:
       storage::ObITable *table_ptr,
       storage::ObTabletHandle &tablet_handle,
       ObBackupTabletStat *tablet_stat);
-  int check_macro_block_need_reuse_when_recover_(const blocksstable::ObLogicMacroBlockId &logic_id,
-      const common::ObArray<blocksstable::ObLogicMacroBlockId> &logic_id_list, bool &need_reuse);
-  int release_tablet_handles_(ObBackupTabletStat *tablet_stat);
+  int get_companion_index_file_path_(const ObBackupIntermediateTreeType &tree_type, const int64_t task_id, ObBackupPath &backup_path);
+  int prepare_companion_index_file_handle_(const int64_t task_id, const ObBackupIntermediateTreeType &tree_type,
+      const ObStorageIdMod &mod, common::ObIOFd &io_fd, ObBackupWrapperIODevice *&device_handle);
+  int setup_io_storage_info_(const share::ObBackupDest &backup_dest, char *buf, const int64_t len, common::ObIODOpts *iod_opts);
+  int setup_io_device_opts_(const int64_t task_id, const ObBackupIntermediateTreeType &tree_type, common::ObIODOpts *iod_opts);
+  int get_index_block_rebuilder_ptr_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
+      ObIndexBlockRebuilder *&index_block_rebuilder);
+  int prepare_index_block_rebuilder_if_need_(const ObBackupProviderItem &item, const int64_t *task_idx);
+  int append_macro_row_to_rebuilder_(const ObBackupProviderItem &item,
+      const blocksstable::ObBufferReader &buffer_reader, const ObBackupDeviceMacroBlockId &physical_id);
+  int close_index_block_rebuilder_if_need_(const ObBackupProviderItem &item);
+  int convert_macro_block_id_(const ObBackupDeviceMacroBlockId &physical_id, MacroBlockId &macro_id);
+  int close_index_builders_(ObIODevice *device_handle);
+  int remove_index_builders_();
+  int remove_sstable_index_builder_(const common::ObTabletID &tablet_id);
+  int close_tree_device_handle_(ObBackupWrapperIODevice *&index_tree_device_handle, ObBackupWrapperIODevice *&meta_tree_device_handle);
+  int update_logic_id_to_macro_index_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
+      const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupMacroBlockIndex &macro_index);
+  int wait_reuse_other_block_ready_(const common::ObTabletID &tablet_id,
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
+  int inner_check_reuse_block_ready_(const common::ObTabletID &tablet_id,
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index, bool &is_ready);
+  int check_need_reuse_sstable_macro_block_for_mv_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
+      const blocksstable::ObLogicMacroBlockId &logic_id, bool &need_reuse_for_mv);
 
 private:
   static const int64_t CHECK_DISK_SPACE_INTERVAL = 5 * 1000 * 1000;  // 5s;
+  static const int64_t CHECK_MERGE_ERROR_INTERVAL = 30_s;
 
 private:
   bool is_inited_;
@@ -600,12 +598,15 @@ private:
   ObIBackupTabletProvider *provider_;
   ObBackupMacroBlockTaskMgr *task_mgr_;
   ObBackupIndexKVCache *index_kv_cache_;
+  ObBackupTabletIndexBlockBuilderMgr *index_builder_mgr_;
   ObBackupDiskChecker disk_checker_;
   common::ObArenaAllocator allocator_;
   common::ObArray<ObBackupProviderItem> backup_items_;
   common::ObArray<common::ObTabletID> finished_tablet_list_;
   share::ObIDag *index_rebuild_dag_;
-  int64_t next_prefetch_task_id_;
+  common::ObIOFd index_tree_io_fd_;
+  common::ObIOFd meta_tree_io_fd_;
+  ObBackupTaskIndexRebuilderMgr rebuilder_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupDataTask);
 };
 
@@ -615,15 +616,15 @@ public:
   virtual ~ObBackupIndexRebuildTask();
   int init(const ObLSBackupDataParam &param, const ObBackupIndexLevel &index_level, ObLSBackupCtx *ls_backup_ctx,
       ObIBackupTabletProvider *provider, ObBackupMacroBlockTaskMgr *task_mgr, ObBackupIndexKVCache *kv_cache,
-      const ObBackupReportCtx &report_ctx);
+      const ObBackupReportCtx &report_ctx, const ObCompressorType &compressor_type);
   virtual int process() override;
 
 private:
   int check_all_tablet_released_();
   int mark_ls_task_final_();
-  bool need_build_index_() const;
+  bool need_build_index_(const bool is_build_macro_index) const;
   int merge_macro_index_();
-  int merge_meta_index_(const bool is_sec_meta);
+  int merge_meta_index_();
   int generate_next_phase_dag_();
   void record_server_event_(const int64_t cost_us) const;
   int report_check_tablet_info_event_();
@@ -637,6 +638,7 @@ private:
   ObBackupMacroBlockTaskMgr *task_mgr_;
   ObBackupIndexKVCache *index_kv_cache_;
   ObBackupReportCtx report_ctx_;
+  ObCompressorType compressor_type_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupIndexRebuildTask);
 };
 
@@ -655,119 +657,6 @@ private:
   ObLSBackupCtx *ls_backup_ctx_;
   ObBackupIndexKVCache *index_kv_cache_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupFinishTask);
-};
-
-class ObLSBackupComplementLogTask : public share::ObITask {
-  struct BackupPieceFile {
-    BackupPieceFile();
-    void reset();
-    int set(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
-        const int64_t file_id, const share::SCN &start_scn, const ObBackupPathString &path);
-    TO_STRING_KV(K_(dest_id), K_(round_id), K_(piece_id), K_(ls_id), K_(file_id), K_(path));
-    int64_t dest_id_;
-    int64_t round_id_;
-    int64_t piece_id_;
-    share::ObLSID ls_id_;
-    int64_t file_id_;
-    share::SCN start_scn_;
-    ObBackupPathString path_;
-  };
-
-  class BackupPieceOp : public ObBaseDirEntryOperator {
-  public:
-    BackupPieceOp();
-    virtual int func(const dirent *entry) override;
-    int get_file_id_list(common::ObIArray<int64_t> &files) const;
-    TO_STRING_KV(K_(file_id_list));
-
-  private:
-    ObArray<int64_t> file_id_list_;
-  };
-
-  struct CompareArchivePiece {
-    bool operator()(const share::ObTenantArchivePieceAttr &lhs, const share::ObTenantArchivePieceAttr &rhs) const;
-  };
-
-public:
-  ObLSBackupComplementLogTask();
-  virtual ~ObLSBackupComplementLogTask();
-  int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id, const int64_t dest_id,
-      const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const share::SCN &start_scn,
-      const share::SCN &end_scn, const int64_t turn_id, const int64_t retry_id,
-      const bool is_only_calc_stat, const ObBackupReportCtx &report_ctx);
-  virtual int process() override;
-
-private:
-  int get_newly_created_ls_in_piece_(const int64_t dest_id, const uint64_t tenant_id,
-      const share::SCN &start_scn, const share::SCN &end_scn, common::ObIArray<share::ObLSID> &ls_array);
-  int inner_process_(const int64_t archive_dest_id, const share::ObLSID &ls_id);
-  int get_complement_log_dir_path_(share::ObBackupPath &backup_path);
-  int write_format_file_();
-  int generate_format_desc_(share::ObBackupFormatDesc &format_desc);
-  int calc_backup_file_range_(const int64_t dest_id, const share::ObLSID &ls_id, common::ObIArray<BackupPieceFile> &file_list);
-  int get_active_round_dest_id_(const uint64_t tenant_id, int64_t &dest_id);
-  int get_piece_id_by_scn_(const uint64_t tenant_id, const int64_t dest_id, const share::SCN &scn, int64_t &piece_id);
-  int get_all_pieces_(const uint64_t tenant_id, const int64_t dest_id, const int64_t start_piece_id, const int64_t end_piece_id,
-      common::ObArray<share::ObTenantArchivePieceAttr> &piece_list);
-  int wait_pieces_frozen_(const common::ObArray<share::ObTenantArchivePieceAttr> &piece_list);
-  int wait_piece_frozen_(const share::ObTenantArchivePieceAttr &piece);
-  int check_piece_frozen_(const share::ObTenantArchivePieceAttr &piece, bool &is_frozen);
-  int get_all_piece_file_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const common::ObIArray<share::ObTenantArchivePieceAttr> &piece_list, const share::SCN &start_scn, const share::SCN &end_scn,
-      common::ObIArray<BackupPieceFile> &piece_file_list);
-  int inner_get_piece_file_list_(const share::ObLSID &ls_id, const ObTenantArchivePieceAttr &piece_attr, common::ObIArray<BackupPieceFile> &piece_file_list);
-  int locate_archive_file_id_by_scn_(const ObTenantArchivePieceAttr &piece_attr, const share::ObLSID &ls_id, const SCN &scn, int64_t &file_id);
-  int get_file_in_between_(const int64_t start_file_id, const int64_t end_file_id, common::ObIArray<BackupPieceFile> &list);
-  int filter_file_id_smaller_than_(const int64_t file_id, common::ObIArray<BackupPieceFile> &list);
-  int filter_file_id_larger_than_(const int64_t file_id, common::ObIArray<BackupPieceFile> &list);
-  int get_src_backup_piece_dir_(const share::ObLSID &ls_id, const ObTenantArchivePieceAttr &piece_attr, share::ObBackupPath &backup_path);
-  int get_src_backup_file_path_(const BackupPieceFile &piece_file, share::ObBackupPath &backup_path);
-  int get_dst_backup_file_path_(const BackupPieceFile &piece_file, share::ObBackupPath &backup_path);
-  int update_ls_task_stat_(const share::ObBackupStats &old_backup_stat,
-      const int64_t compl_log_file_count, share::ObBackupStats &new_backup_stat);
-  int report_progress_();
-  int report_complement_log_stat_(const common::ObIArray<BackupPieceFile> &list);
-  int backup_complement_log_(const common::ObIArray<BackupPieceFile> &path);
-  int inner_backup_complement_log_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path);
-  int transfer_clog_file_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path);
-  int inner_transfer_clog_file_(const ObBackupPath &src_path, const ObBackupPath &dst_path,
-      ObIODevice *&device_handle, ObIOFd &fd, const int64_t dst_len, int64_t &transfer_len);
-  int get_transfer_length_(const int64_t delta_len, int64_t &transfer_len);
-  int get_file_length_(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, int64_t &length);
-  int get_copy_src_and_dest_(const BackupPieceFile &piece_file, share::ObBackupDest &src, share::ObBackupDest &dest);
-  int transform_and_copy_meta_file_(const BackupPieceFile &piece_file);
-  // ls_file_info
-  int copy_ls_file_info_(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
-  // piece_file_info
-  int copy_piece_file_info_(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
-  // single_piece_info
-  int copy_single_piece_info_(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
-  // tenant_archive_piece_infos
-  int copy_tenant_archive_piece_infos(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
-  // checkpoint_info
-  int copy_checkpoint_info(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
-  // round_start
-  int copy_round_start_file(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
-  // piece_start
-  int copy_piece_start_file(const BackupPieceFile &piece_file, const share::ObBackupDest &src, const share::ObBackupDest &dest);
-  int get_archive_backup_dest_(const ObBackupPathString &path, share::ObBackupDest &archive_dest);
-
-private:
-  bool is_inited_;
-  ObBackupJobDesc job_desc_;
-  share::ObBackupDest backup_dest_;
-  uint64_t tenant_id_;
-  int64_t dest_id_;
-  share::ObBackupSetDesc backup_set_desc_;
-  share::ObLSID ls_id_;
-  share::SCN compl_start_scn_;
-  share::SCN compl_end_scn_;
-  int64_t turn_id_;
-  int64_t retry_id_;
-  share::ObBackupDest archive_dest_;
-  bool is_only_calc_stat_;
-  ObBackupReportCtx report_ctx_;
-  DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogTask);
 };
 
 }  // namespace backup

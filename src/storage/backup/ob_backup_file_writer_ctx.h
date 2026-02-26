@@ -14,6 +14,7 @@
 #define STORAGE_LOG_STREAM_BACKUP_FILE_WRITER_CTX_H_
 #include "common/storage/ob_io_device.h"
 #include "storage/blocksstable/ob_data_buffer.h"
+#include "lib/utility/utility.h"
 namespace oceanbase {
 
 namespace backup {
@@ -22,7 +23,8 @@ struct ObBackupFileWriteCtx {
 public:
   ObBackupFileWriteCtx();
   virtual ~ObBackupFileWriteCtx();
-  int open(const int64_t max_file_size, const common::ObIOFd &io_fd, common::ObIODevice &device_handle);
+  int open(const int64_t max_file_size, const common::ObIOFd &io_fd, common::ObIODevice &device_handle,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   bool is_opened() const
   {
     return is_inited_;
@@ -47,6 +49,8 @@ private:
   common::ObIOFd io_fd_;
   common::ObIODevice *dev_handle_;
   blocksstable::ObSelfBufferWriter data_buffer_;
+  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
+  int64_t last_active_time_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupFileWriteCtx);
 };
 

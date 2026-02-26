@@ -200,7 +200,8 @@ public:
     int64_t pos = 0;
     const_iterator iter;
     for (iter = begin(); iter != end(); iter++) {
-      databuff_printf(buffer, length, pos, "%s,", to_cstring(iter->first));
+      databuff_printf(buffer, length, pos, iter->first);
+      databuff_printf(buffer, length, pos, ",");
     }
     return pos;
   }

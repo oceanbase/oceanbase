@@ -25,17 +25,11 @@ def do_special_upgrade(conn, cur, timeout, user, passwd):
 #这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
   current_version = actions.fetch_observer_version(cur)
   target_version = actions.get_current_cluster_version()
-  # when upgrade across version, disable enable_ddl/major_freeze
+  # when upgrade across version, disable enable_ddl/major_freeze/direct_load
   if current_version != target_version:
     actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
     actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
-    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
-    # wait scheduler in storage to notice adaptive_compaction is switched to false
-    time.sleep(60 * 2)
-    query_cur = actions.QueryCursor(cur)
-    wait_major_timeout = 600
-    upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
-    actions.do_suspend_merge(cur, timeout)
+    actions.set_parameter(cur, '_ob_enable_direct_load', 'False', timeout)
   # When upgrading from a version prior to 4.2 to version 4.2, the bloom_filter should be disabled.
   # The param _bloom_filter_enabled is no longer in use as of version 4.2, there is no need to enable it again.
   if actions.get_version(current_version) < actions.get_version('4.2.0.0')\
@@ -49,6 +43,14 @@ def do_special_upgrade(conn, cur, timeout, user, passwd):
   else:
     only_sys_tenant = True
     actions.set_tenant_parameter(cur, 'enable_rebalance', 'False', timeout, only_sys_tenant)
+
+  if actions.get_version(current_version) < actions.get_version('4.5.0.0'):
+    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+    # wait scheduler in storage to notice adaptive_compaction is switched to false
+    time.sleep(60 * 2)
+    query_cur = actions.QueryCursor(cur)
+    wait_major_timeout = 600
+    upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
 
 ####========******####======== actions begin ========####******========####
   return

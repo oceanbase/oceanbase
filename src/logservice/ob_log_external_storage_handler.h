@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEABASE_LOGSERVICE_OB_LOG_EXTERNAL_STORAGE_HANDLER_H_
-#define OCEABASE_LOGSERVICE_OB_LOG_EXTERNAL_STORAGE_HANDLER_H_
+#ifndef OCEABASE_LOGSERVICE_OB_LOG_EXTERNAL_STORAGE_H_
+#define OCEABASE_LOGSERVICE_OB_LOG_EXTERNAL_STORAGE_H_
 #include <stdint.h>                                         // int64_t
 #include "lib/utility/ob_macro_utils.h"                     // DISALLOW_COPY_AND_ASSIGN
 #include "lib/utility/ob_print_utils.h"                     // TO_STRING_KV
@@ -19,19 +19,25 @@
 #include "lib/lock/ob_spin_lock.h"                          // ObSpinLock
 #include "lib/lock/ob_tc_rwlock.h"                          // ObRWLock
 #include "share/ob_errno.h"                                 // errno
+#include "logservice/palf/log_define.h"                     // block_id_t
+#include "logservice/palf/log_iterator_storage.h"           // LogIOUser
 namespace oceanbase
 {
 namespace common
 {
 class ObString;
+class ObIOFd;
+}
+namespace share
+{
+class ObBackupStorageInfo;
 }
 namespace logservice
 {
-class ObLogExternalStorageIOTaskHandleIAdapter;
-class ObLogExternalStorageIOTask;
-class ObLogExternalStoragePreadTask;
-class ObLogExternalStorageIOTaskCtx;
-class ObLogExternalStorageHandler : public ObSimpleThreadPool {
+class ObLogExternalStorageHandleAdapter;
+class ObLogExternalStorageCtx;
+class ObLogExternalStorageCtxItem;
+class ObLogExternalStorageHandler {
 public:
   ObLogExternalStorageHandler();
   ~ObLogExternalStorageHandler();
@@ -89,9 +95,9 @@ public:
   //   OB_SUCCESS, read successfully.
   //   OB_INVALID_ARGUMENT, invalid argument.
   //   OB_ALLOCATE_MEMORY_FAILED, allocate memory failed.
-  //   OB_BACKUP_PERMISSION_DENIED, permission denied.
-  //   OB_BACKUP_FILE_NOT_EXIST, uri not exist.
-  //   OB_OSS_ERROR, oss error.
+  //   OB_OBJECT_STORAGE_PERMISSION_DENIED, permission denied.
+  //   OB_OBJECT_NOT_EXIST, uri not exist.
+  //   OB_OBJECT_STORAGE_IO_ERROR, oss error.
   //   OB_FILE_LENGTH_INVALID, read offset is greater than file size.
   //   OB_NOT_INIT
   //   OB_NOT_RUNNING
@@ -108,12 +114,12 @@ public:
   //
   int pread(const common::ObString &uri,
             const common::ObString &storage_info,
+            const uint64_t storage_id,
             const int64_t offset,
-			      char *read_buf,
-			      const int64_t read_buf_size,
-			      int64_t &real_read_size);
-
-	void handle(void *task) override final;
+            char *read_buf,
+            const int64_t read_buf_size,
+            int64_t &real_read_size,
+            palf::LogIOContext &io_ctx);
 
 	int64_t get_recommend_concurrency_in_single_file() const;
 
@@ -127,35 +133,24 @@ private:
   static const int64_t DEFAULT_PREAD_TIME_GUARD_THRESHOLD;
   static const int64_t DEFAULT_RESIZE_TIME_GUARD_THRESHOLD;
   static const int64_t CAPACITY_COEFFICIENT;
-  static const int64_t SINGLE_TASK_MINIMUM_SIZE;
+  static int64_t SINGLE_TASK_MINIMUM_SIZE;
+  static const int64_t DEFAULT_PRINT_INTERVAL;
+  int convert_ret_code_(const int ret);
 
 private:
 
   bool is_valid_concurrency_(const int64_t concurrency) const;
 
   int64_t get_async_task_count_(const int64_t total_size) const;
-  int construct_async_tasks_and_push_them_into_thread_pool_(
+
+  int construct_async_pread_tasks_(
     const common::ObString &uri,
     const common::ObString &storage_info,
+    const uint64_t storage_id,
     const int64_t offset,
     char *read_buf,
     const int64_t read_buf_size,
-    int64_t &real_read_size,
-    ObLogExternalStorageIOTaskCtx *&async_task_ctx);
-
-  int wait_async_tasks_finished_(ObLogExternalStorageIOTaskCtx *async_task_ctx);
-
-  void construct_async_read_task_(const common::ObString &uri,
-                                  const common::ObString &storage_info,
-                                  const int64_t offset,
-                                  char *read_buf,
-                                  const int64_t read_buf_size,
-                                  int64_t &real_read_size,
-                                  const int64_t task_idx,
-                                  ObLogExternalStorageIOTaskCtx *async_task_ctx,
-                                  ObLogExternalStoragePreadTask *&pread_task);
-
-  void push_async_task_into_thread_pool_(ObLogExternalStorageIOTask *io_task);
+    ObLogExternalStorageCtx &run_ctx);
 
   int resize_(const int64_t concurrency);
 
@@ -170,7 +165,9 @@ private:
   int64_t capacity_;
   mutable RWLock resize_rw_lock_;
   ObSpinLock construct_async_task_lock_;
-  ObLogExternalStorageIOTaskHandleIAdapter *handle_adapter_;
+  ObLogExternalStorageHandleAdapter *handle_adapter_;
+  ObMiniStat::ObStatItem read_size_;
+  ObMiniStat::ObStatItem read_cost_;
   bool is_running_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObLogExternalStorageHandler);

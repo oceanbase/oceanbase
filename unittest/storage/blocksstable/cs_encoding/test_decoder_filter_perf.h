@@ -572,7 +572,6 @@ protected:
   ObArenaAllocator cs_allocator_;
   ObArenaAllocator common_allocator_;
   share::ObTenantBase tenant_ctx_;
-  ObDecodeResourcePool *decode_res_pool_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
   common::ObArray<share::schema::ObColDesc> cs_col_descs_;
   int64_t rowkey_cnt_;
@@ -588,8 +587,6 @@ protected:
 
 void TestDecoderFilterPerf::SetUp()
 {
-  decode_res_pool_ = new(common_allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-  tenant_ctx_.set(decode_res_pool_);
   share::ObTenantEnv::set_tenant(&tenant_ctx_);
   encoder_.data_buffer_.allocator_.set_tenant_id(500);
   encoder_.row_buf_holder_.allocator_.set_tenant_id(500);
@@ -598,7 +595,6 @@ void TestDecoderFilterPerf::SetUp()
   cs_encoder_.all_string_data_buffer_.allocator_.set_tenant_id(500);
   raw_encoder_.data_buffer_.allocator_.set_tenant_id(500);
   raw_encoder_.row_buf_holder_.allocator_.set_tenant_id(500);
-  decode_res_pool_->init();
 }
 
 void TestDecoderFilterPerf::TearDown()
@@ -700,10 +696,6 @@ void TestDecoderFilterPerf::reset()
   }
   if (OB_NOT_NULL(cs_ctx_.column_encodings_)) {
     cs_allocator_.free(cs_ctx_.column_encodings_);
-  }
-  if (OB_NOT_NULL(decode_res_pool_)) {
-    common_allocator_.free(decode_res_pool_);
-    decode_res_pool_ = nullptr;
   }
   is_raw_encoder_ = true;
   need_compress_ = false;
@@ -1126,8 +1118,8 @@ void TestDecoderFilterPerf::init_encoding_ctx(
       } \
     } else { \
       const int64_t cur_column_cnt = full_column_cnt_; \
-      int64_t row_ids[SIMPLE_ROW_CNT]; \
-      for (int64_t i = 0; i < SIMPLE_ROW_CNT; ++i) { \
+      int32_t row_ids[SIMPLE_ROW_CNT]; \
+      for (int32_t i = 0; i < SIMPLE_ROW_CNT; ++i) { \
         row_ids[i] = i; \
       } \
       ObSEArray<int32_t, OB_DEFAULT_SE_ARRAY_COUNT> cols; \
@@ -1160,7 +1152,7 @@ void TestDecoderFilterPerf::init_encoding_ctx(
       int64_t round = execute_round_; \
       while (round > 0) { \
         decode_start_ns = ObTimeUtility::current_time_ns(); \
-        ret = cur_decoder->get_rows(cols, col_params, row_ids, cell_datas, SIMPLE_ROW_CNT, datum_arr); \
+        ret = cur_decoder->get_rows(cols, col_params, true, row_ids, cell_datas, SIMPLE_ROW_CNT, datum_arr); \
         decode_cost_ns = ObTimeUtility::current_time_ns() - decode_start_ns; \
         ASSERT_EQ(OB_SUCCESS, ret); \
         perf_ctx_.decoder_time_ctx_.add_decode_cost(is_column_store, op_idx, decode_cost_ns); \
@@ -1980,8 +1972,7 @@ void TestDecoderFilterPerf::init_in_filter(
                 return cmp_ret < 0;
             });
   filter.cmp_func_ = cmp_func;
-  filter.cmp_func_rev_ = cmp_func;
-  filter.param_set_.set_hash_and_cmp_func(basic_funcs->murmur_hash_v2_, filter.cmp_func_rev_);
+  filter.param_set_.set_hash_and_cmp_func(basic_funcs->murmur_hash_v2_, filter.cmp_func_);
 }
 
 int TestDecoderFilterPerf::test_filter_pushdown(

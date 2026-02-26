@@ -12,6 +12,7 @@
 
 #ifndef OCEANBASE_LOG_MINER_LOGGER_H_
 #define OCEANBASE_LOG_MINER_LOGGER_H_
+#include <cstdint>
 
 namespace oceanbase
 {
@@ -43,6 +44,9 @@ private:
   static const int MAX_SCREEN_WIDTH = 4096;
   bool verbose_;
   char pb_str_[MAX_SCREEN_WIDTH];
+  int64_t begin_ts_;
+  int64_t last_ts_;
+  int64_t last_record_num_;
 };
 
 }

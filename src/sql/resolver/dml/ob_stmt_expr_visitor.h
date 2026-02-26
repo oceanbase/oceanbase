@@ -159,17 +159,24 @@ int ObStmtExprVisitor::visit(common::ObIArray<T *> &exprs,
 class ObStmtExprGetter : public ObStmtExprVisitor
 {
 public:
-  ObStmtExprGetter() : checker_(NULL)
+  ObStmtExprGetter() : checker_(NULL), match_any_(true), expr_flags_(NULL)
   {}
-  ObStmtExprGetter(const ObIArray<DmlStmtScope> &scopes) : checker_(NULL)
+  ObStmtExprGetter(const ObIArray<DmlStmtScope> &scopes) : checker_(NULL), match_any_(true), expr_flags_(NULL)
   {
     remove_all();
     add_scope(scopes);
   }
-
   int do_visit(ObRawExpr *&expr) override;
-
+  void set_expr_flags_required(const ObExprInfo &expr_flags, bool match_any = true)
+  {
+    expr_flags_ = &expr_flags;
+    match_any_ = match_any;
+  }
   RelExprCheckerBase *checker_;
+private:
+  bool match_any_;  // set the matching mode, where true indicates that an intersection is sufficient,
+                    // and false means that it is necessary to completely contain the required flags.
+  const ObExprInfo *expr_flags_;  // retrieve expressions that contain required flags.
 };
 
 class ObStmtExprReplacer : public ObStmtExprVisitor
@@ -187,14 +194,14 @@ public:
   int add_replace_exprs(const ObIArray<ObRawExpr *> &from_exprs,
                         const ObIArray<ObRawExpr *> &to_exprs,
                         const ObIArray<ObRawExpr *> *skip_exprs = NULL);
+  inline int add_replace_expr(ObRawExpr *from_expr, ObRawExpr *to_expr) { return replacer_.add_replace_expr(from_expr, to_expr); }
   void set_skip_bool_param_mysql(bool skip) { replacer_.set_skip_bool_param_mysql(skip); }
   bool is_skip_bool_param_mysql() { return replacer_.is_skip_bool_param_mysql(); }
+  inline bool is_existed(const ObRawExpr *target) const { return replacer_.is_existed(target); }
 private:
   int add_skip_expr(const ObRawExpr *skip_expr);
-  int check_expr_need_skip(const ObRawExpr *skip_expr, bool &need_skip);
 private:
   ObRawExprReplacer replacer_;
-  hash::ObHashSet<uint64_t> skip_exprs_;
 };
 
 class ObStmtExprCopier : public ObStmtExprVisitor

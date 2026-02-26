@@ -21,6 +21,12 @@
 #include "rpc/obrpc/ob_rpc_packet.h"
 
 namespace oceanbase {
+
+namespace common
+{
+class ObTimerService;
+}
+
 namespace lib {
 class ObPThread;
 
@@ -41,6 +47,7 @@ public:
     return ret;
   }
   virtual uint64_t id() const = 0;
+  virtual common::ObTimerService *get_timer_service() = 0;
 };
 
 /// \class
@@ -49,7 +56,9 @@ class Thread {
 public:
   friend class ObPThread;
   static constexpr int PATH_SIZE = 128;
-  Thread(Threads *threads, int64_t idx, int64_t stack_size);
+  Thread(Threads *threads, int64_t idx, int64_t stack_size,
+        int32_t numa_node = OB_NUMA_SHARED_INDEX,
+        uint64_t thread_group_id = OB_INVALID_GROUP_ID);
   ~Thread();
 
   int start();
@@ -59,6 +68,7 @@ public:
   void destroy();
   void dump_pth();
   pthread_t get_pthread() { return pth_; }
+  int try_wait();
 
   /// \brief Get current thread object.
   ///
@@ -70,7 +80,10 @@ public:
   uint64_t get_tenant_id() const;
   using ThreadListNode = common::ObDLinkNode<lib::Thread *>;
   ThreadListNode *get_thread_list_node() { return &thread_list_node_; }
+  ThreadListNode *get_group_thread_list_node() { return &group_list_node_; }
+  uint64_t get_thread_group_id() const { return thread_group_id_; }
   int get_cpu_time_inc(int64_t &cpu_time_inc);
+  int get_group_cpu_time_inc(int64_t &cpu_time_inc);
   int64_t get_tid() { return tid_; }
 
   OB_INLINE static int64_t update_loop_ts(int64_t t)
@@ -85,6 +98,7 @@ public:
   {
     return update_loop_ts(common::ObTimeUtility::fast_current_time());
   }
+  OB_INLINE static void set_doing_ddl(const bool v) { is_doing_ddl_ = v; }
 public:
   class BaseWaitGuard
   {
@@ -163,9 +177,10 @@ public:
   static thread_local ObAddr rpc_dest_addr_;
   static thread_local obrpc::ObRpcPacketCode pcode_;
   static thread_local uint8_t wait_event_;
+  static thread_local int64_t event_no_;
+  static thread_local bool is_doing_ddl_;
 private:
   static void* __th_start(void *th);
-  int try_wait();
   void destroy_stack();
   static thread_local Thread* current_thread_;
 
@@ -185,8 +200,12 @@ private:
   pid_t tid_before_stop_;
   int64_t tid_;
   ThreadListNode thread_list_node_;
+  ThreadListNode group_list_node_;
   int64_t cpu_time_;
+  int64_t group_cpu_time_;
   int create_ret_;
+  int32_t numa_node_;
+  uint64_t thread_group_id_;
 };
 
 OB_INLINE bool Thread::has_set_stop() const

@@ -71,7 +71,8 @@ public:
   void set_epoch(int64_t epoch) { epoch_ = epoch; }
   int64_t get_epoch() const { return epoch_; }
   int before_append_cb(const bool is_replay);
-  void after_append_cb(const bool is_replay);
+  void after_append_fail_cb(const bool is_replay);
+  // interface for redo log generator
   bool need_submit_log() const { return need_submit_log_; }
   virtual bool is_logging_blocked() const { return false; }
   virtual bool on_frozen_memtable(storage::ObIMemtable *&last_frozen_mt) const { return true; }
@@ -79,12 +80,13 @@ public:
   int log_sync_fail_cb(const share::SCN scn);
   // interface should be implement by subclasses
   virtual int before_append(const bool is_replay) { return common::OB_SUCCESS; }
-  virtual void after_append(const bool is_replay) {}
+  virtual void after_append_fail(const bool is_replay) {}
   virtual int log_submitted(const share::SCN scn, storage::ObIMemtable *&last_mt)
   { UNUSED(scn); return common::OB_SUCCESS; }
   virtual int log_sync_fail(const share::SCN max_committed_scn)
   { return common::OB_SUCCESS; }
   virtual int64_t get_data_size() { return 0; }
+  virtual int64_t get_old_row_data_size() { return 0; }
   virtual MutatorType get_mutator_type() const; 
   virtual int get_cluster_version(uint64_t &cluster_version) const
   {
@@ -98,6 +100,7 @@ public:
   void set_next(ObITransCallback *node) { ATOMIC_STORE(&next_, node); }
   void set_prev(ObITransCallback *node) { ATOMIC_STORE(&prev_, node); }
   void append(ObITransCallback *node);
+  void append(ObITransCallback *head, ObITransCallback *tail);
 
 public:
   // trans_commit is called when txn commit. And you need to let the data know
@@ -125,6 +128,8 @@ public:
   // the lock after proposing the commit log and even before the commit log
   // successfully synced for single ls txn.
   virtual int elr_trans_preparing() { return OB_SUCCESS; }
+  // elr_trans_revoke is used to revoke elr after commit failed
+  virtual void elr_trans_revoke() { }
 
   // print_callback is used for debug only, and it is implemented to display
   // your callback.

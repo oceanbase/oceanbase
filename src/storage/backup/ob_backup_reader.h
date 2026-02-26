@@ -28,6 +28,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "storage/backup/ob_backup_linked_block_writer.h"
 
 namespace oceanbase {
 namespace backup {
@@ -131,6 +132,7 @@ private:
   ObArenaAllocator allocator_;
   blocksstable::ObDatumRange datum_range_;
   blocksstable::ObSSTableSecMetaIterator meta_iter_;
+  int64_t cur_total_row_count_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletLogicMacroIdReader);
 };
 
@@ -146,7 +148,8 @@ public:
   virtual ~ObIMacroBlockBackupReader();
   virtual int init(const ObBackupMacroBlockId &macro_id) = 0;
   virtual int get_macro_block_data(
-      blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator) = 0;
+      blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id,
+      blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator) = 0;
   virtual void reset() = 0;
   virtual ObMacroBlockReaderType get_type() const = 0;
   TO_STRING_KV(K_(logic_id));
@@ -164,7 +167,8 @@ public:
   virtual ~ObMacroBlockBackupReader();
   int init(const ObBackupMacroBlockId &macro_id);
   virtual int get_macro_block_data(
-      blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator) override;
+      blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id,
+      blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator) override;
   virtual void reset() override;
   virtual ObMacroBlockReaderType get_type() const override
   {
@@ -174,13 +178,18 @@ public:
 
 private:
   int process_(ObIAllocator *io_allocator);
-  int get_macro_read_info_(const blocksstable::ObLogicMacroBlockId &logic_id, blocksstable::ObMacroBlockReadInfo &read_info);
+  int get_macro_read_info_(blocksstable::ObStorageObjectReadInfo &read_info);
+  int try_peek_magic_(const blocksstable::ObBufferReader &buffer, uint16_t &magic);
   int get_macro_block_size_(const blocksstable::ObBufferReader &buffer, int64_t &size);
+  int get_normal_macro_block_size_(const blocksstable::ObBufferReader &buffer, int64_t &size);
+  int get_other_macro_block_size_(const blocksstable::ObBufferReader &buffer, int64_t &size);
 
 private:
   bool is_data_ready_;
+  bool is_delimiter_;
   int64_t result_code_;
-  blocksstable::ObMacroBlockHandle macro_handle_;
+  ObBackupMacroBlockId macro_id_;
+  blocksstable::ObStorageObjectHandle macro_handle_;
   blocksstable::ObBufferReader buffer_reader_;
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlockBackupReader);
 };
@@ -190,15 +199,18 @@ public:
   ObMultiMacroBlockBackupReader();
   virtual ~ObMultiMacroBlockBackupReader();
   int init(const uint64_t tenant_id, const ObMacroBlockReaderType &reader_type, const common::ObIArray<ObBackupMacroBlockId> &list);
-  int get_next_macro_block(blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator);
+  int get_next_macro_block(blocksstable::ObBufferReader &data, storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id,
+      blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator);
   void reset();
 
 private:
   int alloc_macro_block_reader_(const uint64_t tenant_id, const ObMacroBlockReaderType &reader_type, ObIMacroBlockBackupReader *&reader);
   int prepare_macro_block_reader_(const int64_t idx);
   void reset_prev_macro_block_reader_(const int64_t idx);
-  int fetch_macro_block_with_retry_(blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator);
-  int fetch_macro_block_(blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator);
+  int fetch_macro_block_with_retry_(blocksstable::ObBufferReader &data, storage::ObITable::TableKey &table_key,
+      blocksstable::ObLogicMacroBlockId &logic_id, blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator);
+  int fetch_macro_block_(blocksstable::ObBufferReader &data, storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id,
+      blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator);
 
 private:
   static const int64_t FETCH_MACRO_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000L;  // 1s
@@ -224,15 +236,18 @@ public:
   ObITabletMetaBackupReader();
   virtual ~ObITabletMetaBackupReader();
   virtual int init(const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
-      storage::ObTabletHandle &tablet_handle) = 0;
+      storage::ObTabletHandle &tablet_handle, ObBackupTabletIndexBlockBuilderMgr &index_block_builder_mgr,
+      ObLSBackupCtx &ls_backup_ctx, ObIODevice *device_handle, ObBackupLinkedBlockItemWriter *linked_writer) = 0;
   virtual int get_meta_data(blocksstable::ObBufferReader &buffer_reader) = 0;
   virtual ObTabletMetaReaderType get_type() const = 0;
 
 protected:
   bool is_inited_;
   common::ObTabletID tablet_id_;
-  share::ObBackupDataType backup_data_type_;
   storage::ObTabletHandle *tablet_handle_;
+  ObBackupTabletIndexBlockBuilderMgr *builder_mgr_;
+  ObLSBackupCtx *ls_backup_ctx_;
+  ObIODevice *device_handle_;
   DISALLOW_COPY_AND_ASSIGN(ObITabletMetaBackupReader);
 };
 
@@ -241,7 +256,8 @@ public:
   ObTabletMetaBackupReader();
   virtual ~ObTabletMetaBackupReader();
   virtual int init(const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
-      storage::ObTabletHandle &tablet_handle) override;
+      storage::ObTabletHandle &tablet_handle, ObBackupTabletIndexBlockBuilderMgr &index_block_builder_mgr,
+      ObLSBackupCtx &ls_backup_ctx, ObIODevice *device_handle, ObBackupLinkedBlockItemWriter *linked_writer) override;
   virtual int get_meta_data(blocksstable::ObBufferReader &buffer_reader) override;
   virtual ObTabletMetaReaderType get_type() const
   {
@@ -258,7 +274,8 @@ public:
   ObSSTableMetaBackupReader();
   virtual ~ObSSTableMetaBackupReader();
   virtual int init(const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
-      storage::ObTabletHandle &tablet_handle) override;
+      storage::ObTabletHandle &tablet_handle, ObBackupTabletIndexBlockBuilderMgr &index_block_builder_mgr,
+      ObLSBackupCtx &ls_backup_ctxm, ObIODevice *device_handle, ObBackupLinkedBlockItemWriter *linked_writer) override;
   virtual int get_meta_data(blocksstable::ObBufferReader &buffer_reader) override;
   virtual ObTabletMetaReaderType get_type() const
   {
@@ -266,33 +283,25 @@ public:
   }
 
 private:
+  int check_all_sstable_macro_block_ready_();
+  int inner_check_all_sstable_macro_block_ready_(bool &finished);
+  int close_sstable_index_builder_(const storage::ObITable::TableKey &table_key);
+  int free_sstable_index_builder_(const storage::ObITable::TableKey &table_key);
+  int remove_sstable_index_builder_();
   int get_macro_block_id_list_(const blocksstable::ObSSTable &sstable, ObBackupSSTableMeta &sstable_meta);
+  int deal_with_ddl_sstable_(const storage::ObITable::TableKey &table_key,
+      ObBackupLinkedBlockItemWriter *linked_writer, ObBackupSSTableMeta &sstable_meta);
+  int get_sstable_merge_results_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
+      blocksstable::ObSSTableMergeRes *&merge_res);
 
 private:
+  common::ObThreadCond cond_;
   common::ObArray<storage::ObSSTableWrapper> sstable_array_;
   blocksstable::ObSelfBufferWriter buffer_writer_;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper_;
+  ObBackupLinkedBlockItemWriter *linked_writer_;
+  bool is_major_compaction_mview_dep_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMetaBackupReader);
-};
-
-class ObBackupTabletCtx;
-
-class ObTabletPhysicalIDMetaBackupReader {
-public:
-  ObTabletPhysicalIDMetaBackupReader();
-  virtual ~ObTabletPhysicalIDMetaBackupReader();
-  int init(const common::ObTabletID &tablet_id, ObBackupTabletCtx *ctx);
-  int get_meta_data(blocksstable::ObBufferReader &buffer_reader);
-
-private:
-  int check_ctx_completed_();
-
-private:
-  bool is_inited_;
-  ObBackupTabletCtx *ctx_;
-  common::ObTabletID tablet_id_;
-  blocksstable::ObSelfBufferWriter buffer_writer_;
-  DISALLOW_COPY_AND_ASSIGN(ObTabletPhysicalIDMetaBackupReader);
 };
 
 }  // namespace backup

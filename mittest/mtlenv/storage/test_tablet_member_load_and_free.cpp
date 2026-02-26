@@ -1,3 +1,6 @@
+// owner: gaishun.gs
+// owner group: storage
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,26 +13,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 
 #define USING_LOG_PREFIX STORAGE
 
 #define private public
 #define protected public
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/time/ob_time_utility.h"
-#include "share/ob_ls_id.h"
-#include "common/ob_tablet_id.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_get_mod.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_persister.h"
-#include "mtlenv/mock_tenant_module_env.h"
 #include "unittest/storage/test_tablet_helper.h"
 #include "unittest/storage/test_dml_common.h"
-#include "unittest/storage/schema_utils.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -80,7 +72,7 @@ void TestTabletMemberLoadAndFree::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 
   // create ls
   ObLSHandle ls_handle;
@@ -168,7 +160,13 @@ TEST_F(TestTabletMemberLoadAndFree, storage_schema)
 
   // tablet persist
   ObTabletHandle new_tablet_handle;
-  ret = ObTabletPersister::persist_and_transform_tablet(*tablet, new_tablet_handle);
+  ObLSHandle ls_handle;
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD));
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const int64_t tablet_meta_version = 0;
+  ObTabletPersisterParam  persister_param(
+      data_version, ls_handle.get_ls()->get_ls_id(), ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
+  ret = ObTabletPersister::persist_and_transform_tablet(persister_param, *tablet, new_tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTablet *new_tablet = new_tablet_handle.get_obj();
   ASSERT_NE(nullptr, new_tablet);

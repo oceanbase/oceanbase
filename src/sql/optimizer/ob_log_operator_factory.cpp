@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "ob_log_operator_factory.h"
 #include "ob_log_table_scan.h"
-#include "ob_log_join.h"
 #include "ob_log_join_filter.h"
 #include "ob_log_sort.h"
 #include "ob_log_group_by.h"
@@ -21,10 +19,8 @@
 #include "ob_log_limit.h"
 #include "ob_log_subplan_scan.h"
 #include "ob_log_subplan_filter.h"
-#include "ob_log_insert.h"
 #include "ob_log_update.h"
 #include "ob_log_delete.h"
-#include "ob_log_set.h"
 #include "ob_log_distinct.h"
 #include "ob_log_expr_values.h"
 #include "ob_log_function_table.h"
@@ -34,7 +30,6 @@
 #include "ob_log_window_function.h"
 #include "ob_log_select_into.h"
 #include "ob_log_topk.h"
-#include "ob_optimizer_context.h"
 #include "ob_log_count.h"
 #include "ob_log_sequence.h"
 #include "ob_log_merge.h"
@@ -51,8 +46,8 @@
 #include "ob_log_stat_collector.h"
 #include "ob_del_upd_log_plan.h"
 #include "ob_log_link_dml.h"
-#include "ob_log_optimizer_stats_gathering.h"
 #include "ob_log_values_table_access.h"
+#include "ob_log_expand.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::log_op_def;
@@ -364,6 +359,13 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     if (NULL != ptr) {
       ret_op = new (ptr) ObLogValuesTableAccess(plan);
     } else { /* do nothing */ }
+    break;
+  }
+  case LOG_EXPAND: {
+    ptr = allocator_.alloc(sizeof(ObLogExpand));
+    if (NULL != ptr) {
+      ret_op = new (ptr) ObLogExpand(plan);
+    }
     break;
   }
   default: {

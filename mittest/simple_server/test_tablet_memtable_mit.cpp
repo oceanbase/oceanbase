@@ -163,7 +163,9 @@ void TestTabletMemtable::basic_test() {
   ASSERT_NE(nullptr, tablet = tablet_handle.get_obj());
 
   // *********** CREATE DATA METMABLE ************
-  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(1, SCN::min_scn(), false /*for_direct_load*/, false /*for_replay*/));
+  CreateMemtableArg arg;
+  arg.schema_version_ = 1;
+  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(arg));
   ObProtectedMemtableMgrHandle *protected_handle = nullptr;
   ASSERT_EQ(OB_SUCCESS, tablet->get_protected_memtable_mgr_handle(protected_handle));
   ASSERT_NE(nullptr, protected_handle);
@@ -179,14 +181,21 @@ void TestTabletMemtable::basic_test() {
   // *********** DO TABLET FREEZE ************
   ObFreezer *freezer = nullptr;
   ASSERT_NE(nullptr, freezer = ls->get_freezer());
-  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID, false /* need_rewrite_meta */, true /* is_sync */, 0));
+  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID,
+                                          true,
+                                          0,
+                                          false, /* need_rewrite_meta */
+                                          ObFreezeSourceFlag::TEST_MODE));
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, protected_handle->get_active_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_boundary_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, memtable_handle.get_tablet_memtable(memtable));
   STORAGE_LOG(INFO, "finish freeze data memtable", KPC(memtable));
 
   // *********** CREATE DIRECT LOAD MEMTABLE ************
-  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(1, SCN::min_scn(), true /*for_direct_load*/, false /*for_replay*/));
+  arg.reset();
+  arg.schema_version_ = 1;
+  arg.for_inc_direct_load_ = true;
+  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(arg));
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_active_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, memtable_handle.get_tablet_memtable(memtable));
   ASSERT_EQ(ObITable::TableType::DIRECT_LOAD_MEMTABLE, memtable->get_table_type());
@@ -197,7 +206,11 @@ void TestTabletMemtable::basic_test() {
 
   // *********** CONCURRENT TABLET FREEZE ************
   int64_t freeze_start_time = ObClockGenerator::getClock();
-  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID, false /*need_rewrite_meta*/, false /*is_sync*/, INT64_MAX));
+  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID,
+                                          false /*is_sync*/,
+                                          0,
+                                          false, /*need_rewrite_meta*/
+                                          ObFreezeSourceFlag::TEST_MODE));
 
   sleep(2);
   ASSERT_EQ(TabletMemtableFreezeState::ACTIVE, memtable->get_freeze_state());
@@ -219,7 +232,10 @@ void TestTabletMemtable::basic_test() {
   ASSERT_EQ(true, memtable->is_in_prepare_list_of_data_checkpoint());
 
   // *********** CREATE ANOTHER DIRECT LOAD MEMTABLE ************
-  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(1, SCN::min_scn(), true /*for_direct_load*/, false /*for_replay*/));
+  arg.reset();
+  arg.schema_version_ = 1;
+  arg.for_inc_direct_load_ = true;
+  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(arg));
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_active_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, memtable_handle.get_tablet_memtable(memtable));
   STORAGE_LOG(INFO, "create a new direct load memtable", KPC(memtable));
@@ -239,7 +255,10 @@ void TestTabletMemtable::basic_test() {
   ASSERT_EQ(0, memtable_for_direct_load->get_write_ref());
 
   // *********** DO LOGSTREAM FREEZE ************
-  ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(checkpoint::INVALID_TRACE_ID, true /* is_sync */));
+  ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(checkpoint::INVALID_TRACE_ID,
+                                             true, /* is_sync */
+                                             0,
+                                             ObFreezeSourceFlag::TEST_MODE));
   STORAGE_LOG(INFO, "finish logstream freeze");
 
   // *********** CHECK LOGSTREAM FREEZE RESULT ************

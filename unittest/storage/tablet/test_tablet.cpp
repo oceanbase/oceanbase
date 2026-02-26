@@ -17,16 +17,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/scn.h"
-#include "share/ob_tablet_autoincrement_param.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/tablet/ob_tablet_meta.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_multi_source_data.h"
-#include "storage/high_availability/ob_tablet_ha_status.h"
-#include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/tablet/ob_tablet_binding_info.h"
-#include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
@@ -416,6 +407,19 @@ TestTablet::~TestTablet()
 
 void TestTablet::SetUp()
 {
+  OB_LOG(INFO, "ObTabletMeta", K(sizeof(ObTabletMeta)),
+        K(sizeof(ObTabletHAStatus)), K(sizeof(ObTabletReportStatus)), K(sizeof(ObTabletTableStoreFlag)),
+        K(sizeof(ObTabletSpaceUsage)), K(sizeof(lib::Worker::CompatMode)));
+
+  const int64_t tablet_size = sizeof(ObTablet);
+  const int64_t rowkey_size = sizeof(ObRowkeyReadInfo);
+  const int64_t assert_size = tablet_size + rowkey_size;
+
+  OB_LOG(INFO, "ObTablet", K(assert_size), K(tablet_size), K(rowkey_size),
+        K(sizeof(ObTabletMdsData)), K(sizeof(ObTabletHandle)),
+        K(sizeof(ObTabletComplexAddr<ObTabletMacroInfo>)), K(sizeof(ObTabletPointerHandle)),
+        K(sizeof(ObMetaDiskAddr)), K(sizeof(common::SpinRWLock)), K(sizeof(ObTabletStatusCache)),
+        K(sizeof(ObDDLInfoCache)), K(sizeof(ObTableStoreCache)));
 }
 
 void TestTablet::TearDown()
@@ -594,6 +598,13 @@ TEST_F(TestTablet, reproducing_bug_53174886)
   TestTableStore table_store;
   table_store.reproducing_bug(allocator_);
   reproducing_bug();
+}
+
+TEST_F(TestTablet, test_ddl_replay_status_compat)
+{
+  ObITable::TableType ddl_table_type;
+  ObCSReplicaDDLReplayStatus ddl_replay_status;
+  ASSERT_EQ(serialization::encoded_length(ddl_table_type), serialization::encoded_length(ddl_replay_status));
 }
 
 }  // end namespace unittest

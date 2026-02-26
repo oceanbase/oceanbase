@@ -9,42 +9,24 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SERVER
 
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "observer/ob_srv_xlator.h"
 
-#include "share/ob_tenant_mgr.h"
 #include "share/schema/ob_schema_service_rpc_proxy.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
 #include "share/rpc/ob_batch_processor.h"
 #include "share/rpc/ob_blacklist_req_processor.h"
 #include "share/rpc/ob_blacklist_resp_processor.h"
-#include "sql/executor/ob_executor_rpc_processor.h"
 #include "sql/executor/ob_remote_executor_processor.h"
 #include "sql/engine/cmd/ob_kill_executor.h"
 #include "sql/engine/cmd/ob_load_data_rpc.h"
-#include "sql/engine/px/ob_px_rpc_processor.h"
 #include "sql/dtl/ob_dtl_rpc_processor.h"
 #include "sql/das/ob_das_rpc_processor.h"
-#include "storage/tx/ob_trans_rpc.h"
-#include "storage/tx/ob_gts_rpc.h"
-// #include "storage/tx/ob_dup_table_rpc.h"
-#include "storage/tx/ob_dup_table_base.h"
-#include "storage/tx/ob_ts_response_handler.h"
-#include "storage/tx/wrs/ob_weak_read_service_rpc_define.h"  // weak_read_service
-#include "observer/ob_rpc_processor_simple.h"
 #include "observer/ob_inner_sql_rpc_processor.h"
-#include "observer/ob_srv_task.h"
 #include "logservice/palf/log_rpc_processor.h"
 #include "logservice/logrpc/ob_log_rpc_processor.h"
 #include "logservice/cdcservice/ob_cdc_rpc_processor.h"
 
-#include "observer/table/ob_table_rpc_processor.h"
-#include "observer/table/ob_table_execute_processor.h"
-#include "observer/table/ob_table_batch_execute_processor.h"
-#include "observer/table/ob_table_query_processor.h"
-#include "observer/table/ob_table_query_and_mutate_processor.h"
 #include "observer/net/ob_rpc_reverse_keepalive.h"
 
 #include "observer/dbms_job/ob_dbms_job_rpc_processor.h"
@@ -53,6 +35,15 @@
 #include "share/detect/ob_detect_rpc_processor.h"
 
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
+
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_sswriter_rpc.h"
+#include "storage/incremental/ob_shared_meta_rpc_common.h"
+#include "storage/incremental/sslog/ob_sslog_uid_rpc.h"
+#include "storage/incremental/garbage_collector/ob_ss_garbage_collector_rpc.h"
+#include "storage/incremental/ob_ss_checkpoint_rpc.h"
+#include "storage/tx_table/ob_ss_tx_table_rpc.h"
+#endif
 
 using namespace oceanbase;
 using namespace oceanbase::observer;
@@ -67,6 +58,7 @@ using namespace oceanbase::obmysql;
 void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObRpcGetRoleP, gctx_);
   RPC_PROCESSOR(ObRpcDetectMasterRsLSP, gctx_);
+  RPC_PROCESSOR(ObRpcDetectSSlogLSP, gctx_);
   RPC_PROCESSOR(ObRpcSetConfigP, gctx_);
   RPC_PROCESSOR(ObRpcGetConfigP, gctx_);
   RPC_PROCESSOR(ObRpcSetTenantConfigP, gctx_);
@@ -117,6 +109,8 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
 
   //dbms_scheduler
   RPC_PROCESSOR(ObRpcRunDBMSSchedJobP, gctx_);
+  RPC_PROCESSOR(ObRpcStopDBMSSchedJobP, gctx_);
+  RPC_PROCESSOR(ObRpcDBMSSchedPurgeP, gctx_);
 
   RPC_PROCESSOR(ObRpcGetServerResourceInfoP, gctx_);
   RPC_PROCESSOR(ObRpcReverseKeepaliveP, gctx_);
@@ -167,6 +161,24 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxFreeRoutePushStateP);
   // for tx state check of 4377
   RPC_PROCESSOR(ObAskTxStateFor4377P);
+  // for lock wait mgr
+  // RPC_PROCESSOR(ObLockWaitMgrDstEnqueueP);
+  // RPC_PROCESSOR(ObLockWaitMgrDstEnqueueRespP);
+  // RPC_PROCESSOR(ObLockWaitMgrLockReleaseP);
+  // RPC_PROCESSOR(ObLockWaitMgrWakeUpP);
+#ifdef OB_BUILD_SHARED_STORAGE
+  RPC_PROCESSOR(ObSSWriterGrantP);
+  RPC_PROCESSOR(ObSSWriterLeaseReqP);
+  RPC_PROCESSOR(ObSSWriterLeaseAsyncReqP);
+  RPC_PROCESSOR(ObSSWriterLeaseAsyncRespP);
+  RPC_PROCESSOR(ObSSWriterLocationReqP);
+  RPC_PROCESSOR(ObSSWriterLocationRespP);
+  RPC_PROCESSOR(ObSharedRpcP, gctx_);
+  RPC_PROCESSOR(ObSSLogUIDP);
+  RPC_PROCESSOR(ObSSPreciseGCP);
+  RPC_PROCESSOR(ObSSCkptRpcP);
+  RPC_PROCESSOR(ObSSTxTableRpcP);
+#endif
 }
 
 void oceanbase::observer::init_srv_xlator_for_clog(ObSrvRpcXlator *xlator) {
@@ -197,6 +209,10 @@ void oceanbase::observer::init_srv_xlator_for_logservice(ObSrvRpcXlator *xlator)
 #endif
   RPC_PROCESSOR(logservice::LogChangeAccessModeP);
   RPC_PROCESSOR(logservice::LogFlashbackMsgP);
+#ifdef OB_BUILD_ARBITRATION
+  RPC_PROCESSOR(logservice::LogProbeRsP);
+#endif
+  RPC_PROCESSOR(logservice::LogGetCkptReqP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_palfenv(ObSrvRpcXlator *xlator)

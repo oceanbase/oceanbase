@@ -11,7 +11,6 @@
  */
 
 #include "ob_zstd_wrapper.h"
-#include <stdio.h>
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd_src/zstd.h"
@@ -153,6 +152,12 @@ void ObZstdWrapper::free_cctx(void *&ctx)
   ZSTD_freeCCtx(cctx);
 }
 
+void ObZstdWrapper::reset_cctx(void *&ctx, int reset_directive)
+{
+  ZSTD_CCtx *cctx = static_cast<ZSTD_CCtx *>(ctx);
+  ZSTD_CCtx_reset(cctx, static_cast<ZSTD_ResetDirective>(reset_directive));
+}
+
 int ObZstdWrapper::compress_block(void *ctx, const char *src, const size_t src_size,
     char *dest, const size_t dest_capacity, size_t &compressed_size)
 {
@@ -241,6 +246,86 @@ int ObZstdWrapper::insert_block(void *ctx, const void *block, const size_t block
   return ret;
 }
 
+int ObZstdWrapper::create_stream_dctx(const OB_ZSTD_customMem &ob_zstd_mem, void *&ctx)
+{
+  int ret = OB_SUCCESS;
+  size_t ret_code = 0;
+  ZSTD_DStream *dctx = NULL;
+  ZSTD_customMem zstd_mem;
 
+  zstd_mem.customAlloc = ob_zstd_mem.customAlloc;
+  zstd_mem.customFree  = ob_zstd_mem.customFree;
+  zstd_mem.opaque      = ob_zstd_mem.opaque;
 
+  ctx = NULL;
 
+  if (NULL == (dctx = ZSTD_createDStream_advanced(zstd_mem))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    ctx = dctx;
+  }
+  return ret;
+}
+
+void ObZstdWrapper::free_stream_dctx(void *&ctx)
+{
+  ZSTD_DStream *dctx = static_cast<ZSTD_DStream *>(ctx);
+  ZSTD_freeDStream(dctx);
+}
+
+int ObZstdWrapper::decompress_stream(void *ctx, const char *src, const size_t src_size, size_t &consumed_size,
+                                        char *dest, const size_t dest_capacity, size_t &decompressed_size)
+{
+  int ret = OB_SUCCESS;
+
+  if (NULL == ctx
+      || NULL == src
+      || NULL == dest
+      || src_size <= 0
+      || dest_capacity <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    consumed_size = 0;
+    decompressed_size = 0;
+
+    ZSTD_DStream *dctx = static_cast<ZSTD_DStream *>(ctx);
+    ZSTD_outBuffer output = { dest, dest_capacity, 0 };
+    ZSTD_inBuffer  input  = { src, src_size, 0 };
+    int zstd_err = ZSTD_decompressStream(dctx, &output, &input);
+    if (0 != ZSTD_isError(zstd_err)) {
+      ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
+    } else {
+      consumed_size = input.pos;
+      decompressed_size = output.pos;
+    }
+  }
+  return ret;
+}
+
+int ObZstdWrapper::compress_stream(void *ctx, const char *src, const size_t src_size, size_t &consumed_size,
+                                   char *dest, const size_t dest_capacity, size_t &compressed_size,
+                                   bool is_file_end, bool &compress_ended)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == ctx
+      || NULL == dest
+      || dest_capacity <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    compressed_size = 0;
+    ZSTD_CCtx *cctx = static_cast<ZSTD_CCtx *>(ctx);
+    ZSTD_outBuffer output = { dest, dest_capacity, 0 };
+    ZSTD_inBuffer input  = { src, src_size, consumed_size };
+    ZSTD_EndDirective flush_flag = is_file_end ? ZSTD_e_end : ZSTD_e_continue;
+    int compr_ret = ZSTD_compressStream2(cctx, &output, &input, flush_flag);
+    if (0 != ZSTD_isError(compr_ret)) {
+      ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
+    } else {
+      compressed_size = output.pos;
+      bool everything_was_compressed = (input.pos == input.size);
+      bool everything_was_flushed = compr_ret == 0;
+      compress_ended = (everything_was_compressed && everything_was_flushed);
+    }
+  }
+  return ret;
+}

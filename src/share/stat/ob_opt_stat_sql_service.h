@@ -98,11 +98,15 @@ public:
                        const ObOptTableStat::Key &key,
                        ObIArray<ObOptTableStat> &all_part_stats);
 
-  int batch_fetch_table_stats(sqlclient::ObISQLConnection *conn,
-                              const uint64_t tenant_id,
+  int fetch_table_stat(const uint64_t tenant_id,
+                       const ObIArray<const ObOptTableStat::Key *> &keys,
+                       ObIArray<ObOptTableStat *> &all_part_stats);
+
+  int batch_fetch_table_stats(const uint64_t tenant_id,
                               const uint64_t table_id,
                               const ObIArray<int64_t> &part_ids,
-                              ObIArray<ObOptTableStat*> &all_part_stats);
+                              ObIArray<ObOptTableStat *> &all_part_stats,
+                              sqlclient::ObISQLConnection *conn = NULL);
 
   int fill_table_stat(sqlclient::ObMySQLResult &result, ObOptTableStat &stat);
 
@@ -110,12 +114,13 @@ public:
                        common::sqlclient::ObMySQLResult &result,
                        hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map,
                        ObIArray<ObOptKeyColumnStat> &key_col_stats,
-                       bool need_cg_info);
+                       const uint64_t tenant_id);
   int fetch_column_stat(const uint64_t tenant_id,
                         ObIAllocator &allocator,
                         ObIArray<ObOptKeyColumnStat> &key_col_stats,
                         bool is_accross_tenant_query = false,
-                        sqlclient::ObISQLConnection *conn = NULL);
+                        sqlclient::ObISQLConnection *conn = NULL,
+                        bool fetch_internal_stat = false);
 
   int update_table_stat(const uint64_t tenant_id,
                         sqlclient::ObISQLConnection *conn,
@@ -126,6 +131,17 @@ public:
                         const common::ObIArray<ObOptTableStat*> &table_stats,
                         const int64_t current_time,
                         const bool is_index_stat);
+
+  int update_table_stat_failed_count(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const ObIArray<int64_t> &part_ids,
+                                     int64_t &affected_rows);
+
+  int get_update_fail_count_value_list(const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       const uint64_t data_version,
+                                       const ObIArray<int64_t> &part_ids,
+                                       ObSqlString &value_str);
   int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t exec_tenant_id,
                          ObIAllocator &allocator,
@@ -134,6 +150,11 @@ public:
                          const int64_t current_time,
                          bool only_update_col_stat = false,
                          const ObObjPrintParams &print_params = ObObjPrintParams());
+
+  int update_stats_internal_stat(const uint64_t tenant_id,
+                                sqlclient::ObISQLConnection *conn,
+                                uint64_t table_id,
+                                int64_t global_partition_id);
 
   int delete_table_stat(const uint64_t exec_tenant_id,
                         const uint64_t table_id,
@@ -241,10 +262,13 @@ private:
                                             const ObIArray<ObOptColumnStat*> &column_stats,
                                             ObSqlString &delete_histogram_sql);
 
+  int check_column_histogram_valid(const uint64_t tenant_id,
+                                   const ObIArray<ObOptColumnStat *> &column_stats,
+                                   sqlclient::ObISQLConnection *conn);
   int construct_histogram_insert_sql(share::schema::ObSchemaGetterGuard *schema_guard,
                                      const uint64_t tenant_id,
                                      ObIAllocator &allocator,
-                                     const ObIArray<ObOptColumnStat*> &column_stats,
+                                     const ObIArray<ObOptColumnStat *> &column_stats,
                                      const int64_t current_time,
                                      ObSqlString &insert_histogram_sql,
                                      bool &need_histogram,

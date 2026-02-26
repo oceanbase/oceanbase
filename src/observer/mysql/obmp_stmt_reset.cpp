@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "obmp_stmt_reset.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
 #include "sql/plan_cache/ob_ps_cache.h"
-#include "sql/plan_cache/ob_prepare_stmt_struct.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/mysql/obmp_utils.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 
 namespace oceanbase
@@ -82,7 +76,7 @@ int ObMPStmtReset::process()
     int64_t param_num = 0;
     THIS_WORKER.set_session(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-    LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_sessid()));
+    LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_server_sid()));
     session->init_use_rich_format();
 
     // get stmt info
@@ -120,7 +114,7 @@ int ObMPStmtReset::process()
     // close cursor
     if (OB_NOT_NULL(session->get_cursor(stmt_id_))) {
       if (OB_FAIL(session->close_cursor(stmt_id_))) {
-        LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_sessid()));
+        LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_server_sid()));
       }
     }
 

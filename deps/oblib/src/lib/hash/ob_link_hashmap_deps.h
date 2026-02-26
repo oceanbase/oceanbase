@@ -91,8 +91,8 @@ struct LinkHashValue
 {
   LinkHashValue(): hash_node_(nullptr) {}
   ~LinkHashValue() {}
-  int32_t get_uref() const { return hash_node_->uref_; }
-  int32_t get_href() const { return hash_node_->href_; }
+  int32_t get_uref() const { return hash_node_ ? hash_node_->uref_ : 0; }
+  int32_t get_href() const { return hash_node_ ? hash_node_->href_ : 0; }
   LinkHashNode<key_t> *hash_node_;
 private:
   DISALLOW_COPY_AND_ASSIGN(LinkHashValue);

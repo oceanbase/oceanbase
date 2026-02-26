@@ -11,15 +11,7 @@
  */
 #define USING_LOG_PREFIX PALF
 
-#include "logservice/palf/log_io_task.h"
-#include "lib/ob_errno.h"
-#include "lib/alloc/alloc_assist.h" // MEMCPY
-#include "share/ob_thread_define.h" // TGDefIDS
-#include "share/ob_thread_mgr.h"    // TG_START
-#include "share/rc/ob_tenant_base.h"// mtl_free
-#include "log_io_task_cb_utils.h"   // LogFlushCbCtx...
-#include "palf_handle_impl.h"       // PalfHandleImpl
-#include "log_engine.h"             // LogEngine
+#include "log_io_task.h"
 #include "palf_handle_impl_guard.h" // PalfHandleImplGuard
 #include "palf_env_impl.h"          // IPalfEnvImpl
 

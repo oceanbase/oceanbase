@@ -146,7 +146,7 @@ int ObCDCUdtValueMap::add_hidden_column_value_(
     cv_node->value_ = value;
     cv_node->column_id_ = column_schema_info.get_column_id();
     cv_node->is_out_row_ = is_out_row;
-    column_cast(cv_node->value_, column_schema_info);
+    column_cast(cv_node->value_, column_schema_info, is_out_row);
     if (OB_FAIL(udt_val.add_child(cv_node))) {
       LOG_ERROR("add value to udt fail", KR(ret), K(udt_val), KP(cv_node));
     }
@@ -198,7 +198,7 @@ int ObCDCUdtValueMap::create_udt_value_(uint64_t udt_set_id, ColValue *&cv_node)
     cv_node->reset();
     cv_node->column_id_ = column_schema_info->get_column_id();
     cv_node->is_out_row_ = 0;
-    column_cast(cv_node->value_, *column_schema_info);
+    column_cast(cv_node->value_, *column_schema_info, false);
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(cv_node)) {
@@ -224,7 +224,7 @@ int ObCDCUdtValueBuilder::build(
         "table_id", dml_stmt_task.get_table_id(),
         "column_id", column_schema_info.get_column_id());
   } else if (column_schema_info.is_xmltype()) {
-    if (OB_FAIL(build_xmltype(
+    if (OB_FAIL(build_xmltype_(
         column_schema_info,
         tz_info_wrap,
         is_new_value,
@@ -232,7 +232,13 @@ int ObCDCUdtValueBuilder::build(
         obj2str_helper,
         lob_ctx_cols,
         cv))) {
-      LOG_ERROR("build xmltype fail", KR(ret));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        cv.is_col_nop_ = true;
+        LOG_DEBUG("can't find xml value, mark value nop", KR(ret), K(cv), K(column_schema_info), K(dml_stmt_task));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_ERROR("build xmltype fail", KR(ret));
+      }
     }
   } else {
     ret = OB_NOT_SUPPORTED;
@@ -244,7 +250,7 @@ int ObCDCUdtValueBuilder::build(
   return ret;
 }
 
-int ObCDCUdtValueBuilder::build_xmltype(
+int ObCDCUdtValueBuilder::build_xmltype_(
     const ColumnSchemaInfo &column_schema_info,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool is_new_value,
@@ -275,7 +281,6 @@ int ObCDCUdtValueBuilder::build_xmltype(
           LOG_ERROR("get_lob_column_value fail", KR(ret), K(value->column_id_));
         } else {
           LOG_DEBUG("get_lob_column_value not exist", KR(ret), K(value->column_id_));
-          ret = OB_SUCCESS;
         }
       }
     }

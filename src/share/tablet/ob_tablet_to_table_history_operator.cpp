@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/tablet/ob_tablet_to_table_history_operator.h"
-#include "share/ob_errno.h"                          // KR(ret)
-#include "share/inner_table/ob_inner_table_schema.h" // OB_ALL_TABLET_TO_TABLE_HISTORY_TNAME
-#include "share/schema/ob_schema_utils.h"            // ObSchemaUtils
+#include "src/share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_dml_sql_splicer.h"                // ObDMLSqlSplicer
-#include "lib/string/ob_sql_string.h"                // ObSqlString
-#include "lib/mysqlclient/ob_mysql_proxy.h"          // ObISQLClient
 #include "share/schema/ob_schema_service.h"
 
 namespace oceanbase

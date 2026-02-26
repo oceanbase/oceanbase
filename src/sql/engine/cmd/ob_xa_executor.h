@@ -23,6 +23,14 @@ namespace sql
 {
 class ObExecContext;
 class ObXaStartStmt;
+class ObXaExecutorUtil
+{
+public:
+  static int get_org_cluster_id(ObSQLSessionInfo *session, int64_t &org_cluster_id);
+  static int build_tx_param(ObSQLSessionInfo *session, transaction::ObTxParam &param);
+  static int64_t get_query_timeout(ObSQLSessionInfo *session);
+};
+
 class ObXaStartExecutor
 {
 public:
@@ -89,23 +97,25 @@ private:
 
 class ObXaCommitStmt;
 class ObXaRollBackStmt;
-class ObXaEndTransExecutor
+
+class ObXaCommitExecutor
 {
 public:
-  ObXaEndTransExecutor() {}
-  ~ObXaEndTransExecutor() {}
-  int execute(ObExecContext &ctx, ObXaCommitStmt &stmt)
-  {
-    return execute_(stmt.get_xa_string(), false, ctx);
-  }
-  int execute(ObExecContext &ctx, ObXaRollBackStmt &stmt)
-  {
-    return execute_(stmt.get_xa_string(), true, ctx);
-  }
+  ObXaCommitExecutor() {}
+  ~ObXaCommitExecutor() {}
+  int execute(ObExecContext &ctx, ObXaCommitStmt &stmt);
 private:
-  int execute_(const common::ObString& xid, const bool is_rollback,
-      ObExecContext &ctx);
-  DISALLOW_COPY_AND_ASSIGN(ObXaEndTransExecutor);
+  DISALLOW_COPY_AND_ASSIGN(ObXaCommitExecutor);
+};
+
+class ObXaRollbackExecutor
+{
+public:
+  ObXaRollbackExecutor() {}
+  ~ObXaRollbackExecutor() {}
+  int execute(ObExecContext &ctx, ObXaRollBackStmt &stmt);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObXaRollbackExecutor);
 };
 
 class ObPlXaEndTransExecutor

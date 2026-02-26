@@ -67,7 +67,8 @@ public:
     ObArray<share::ObTabletLSPair> &finish_tablet_ls_pair_array,
     ObArray<share::ObTabletChecksumItem> &finish_tablet_ckm_array,
     compaction::ObUncompactInfo &uncompact_info,
-    ObFTSGroupArray &fts_group_array)
+    ObFTSGroupArray &fts_group_array,
+    share::ObCompactionLocalityCache  &ls_locality_cache)
     : is_inited_(false),
       is_primary_service_(false),
       need_validate_index_ckm_(false),
@@ -77,7 +78,7 @@ public:
       tenant_id_(tenant_id),
       expected_epoch_(OB_INVALID_ID),
       table_id_(OB_INVALID_ID),
-      compaction_scn_(),
+      freeze_info_(),
       major_merge_start_us_(0),
       statistics_(statistics),
       sql_proxy_(nullptr),
@@ -92,8 +93,9 @@ public:
       schema_guard_(nullptr),
       simple_schema_(nullptr),
       table_compaction_info_(),
-      replica_ckm_items_(),
-      last_table_ckm_items_(tenant_id)
+      replica_ckm_items_(false/*need_map*/),
+      last_table_ckm_items_(tenant_id),
+      ls_locality_cache_(ls_locality_cache)
   {}
   ~ObChecksumValidator() {}
   int init(
@@ -101,7 +103,7 @@ public:
     ObMySQLProxy &sql_proxy);
 
   int set_basic_info(
-    const share::SCN &frozen_scn,
+    const share::ObFreezeInfo &freeze_info,
     const int64_t expected_epoch);
   const compaction::ObTableCompactionInfo &get_table_compaction_info() const
   {
@@ -122,12 +124,17 @@ public:
     const common::ObIArray<share::ObTabletLSPair> &tablet_ls_pairs);
   int batch_write_tablet_ckm();
   int batch_update_report_scn();
+  static int check_column_checksum(
+    const share::ObReplicaCkmArray &tablet_replica_checksum_items,
+    const ObArray<share::ObTabletChecksumItem> &tablet_checksum_items);
   int handle_fts_checksum(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const ObFTSGroupArray &fts_group_array);
   static const int64_t SPECIAL_TABLE_ID = 1;
-  TO_STRING_KV(K_(tenant_id), K_(is_primary_service), K_(table_id), K_(compaction_scn));
+  TO_STRING_KV(K_(tenant_id), K_(is_primary_service), K_(table_id), "compaction_scn", get_compaction_scn());
 private:
+  share::SCN get_compaction_scn() const { return freeze_info_.frozen_scn_; }
+  int64_t get_compaction_scn_val() const { return get_compaction_scn().get_val_for_tx(); }
   int check_inner_status();
   int get_table_compaction_info(const uint64_t table_id, compaction::ObTableCompactionInfo &table_compaction_info);
   int set_need_validate();
@@ -152,9 +159,6 @@ private:
   int validate_cross_cluster_checksum();
   int check_tablet_checksum_sync_finish(const bool force_check);
   int validate_replica_and_tablet_checksum();
-  int check_column_checksum(
-    const ObArray<share::ObTabletReplicaChecksumItem> &tablet_replica_checksum_items,
-    const ObArray<share::ObTabletChecksumItem> &tablet_checksum_items);
   bool check_waiting_tablet_checksum_timeout() const;
   int try_update_tablet_checksum_items();
   /* FTS Checksum Section */
@@ -168,6 +172,7 @@ private:
   static const int64_t PRINT_CROSS_CLUSTER_LOG_INVERVAL = 10 * 60 * 1000 * 1000; // 10 mins
   static const int64_t MAX_TABLET_CHECKSUM_WAIT_TIME_US = 36 * 3600 * 1000 * 1000L;  // 36 hours
   static const int64_t MAX_BATCH_INSERT_COUNT = 1500;
+  static const int64_t DEFAULT_TABLET_CNT = 32;
   bool is_inited_;
   bool is_primary_service_;
   bool need_validate_index_ckm_;
@@ -177,7 +182,7 @@ private:
   uint64_t tenant_id_;
   int64_t expected_epoch_;
   uint64_t table_id_;
-  share::SCN compaction_scn_;
+  share::ObFreezeInfo freeze_info_;
   int64_t major_merge_start_us_;
   compaction::ObCkmValidatorStatistics &statistics_;
   common::ObMySQLProxy *sql_proxy_;
@@ -196,8 +201,9 @@ private:
   const share::schema::ObSimpleTableSchemaV2 *simple_schema_;
   compaction::ObTableCompactionInfo table_compaction_info_;
   ObArray<share::ObTabletLSPair> cur_tablet_ls_pair_array_;
-  ObReplicaCkmItems replica_ckm_items_;
+  share::ObReplicaCkmArray replica_ckm_items_;
   compaction::ObTableCkmItems last_table_ckm_items_; // only cached last data table with index
+  share::ObCompactionLocalityCache  &ls_locality_cache_;
 };
 
 } // end namespace rootserver

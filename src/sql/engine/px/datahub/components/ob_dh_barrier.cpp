@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/datahub/components/ob_dh_barrier.h"
-#include "sql/engine/px/datahub/ob_dh_msg_ctx.h"
-#include "sql/engine/px/ob_dfo.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/datahub/ob_dh_msg.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -28,7 +25,7 @@ using namespace oceanbase::sql;
 
 int ObBarrierPieceMsgListener::on_message(
     ObBarrierPieceMsgCtx &ctx,
-    common::ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<ObPxSqcMeta> &sqcs,
     const ObBarrierPieceMsg &pkt)
 {
   int ret = OB_SUCCESS;
@@ -55,13 +52,13 @@ int ObBarrierPieceMsgListener::on_message(
   return ret;
 }
 
-int ObBarrierPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
+int ObBarrierPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs)
 {
   int ret = OB_SUCCESS;
   ObBarrierWholeMsg whole;
   whole.op_id_ = op_id_;
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-    dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
+    dtl::ObDtlChannel *ch = sqcs.at(idx).get_qc_channel();
     if (OB_ISNULL(ch)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null expected", K(ret));

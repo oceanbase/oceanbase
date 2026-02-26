@@ -29,6 +29,8 @@ public:
 
   virtual int open_op() override;
   virtual int release_op() override;
+  virtual int record_task_result_to_rtdef() override;
+  virtual int assign_task_result(ObIDASTaskOp *other) override;
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   virtual int init_task_info(uint32_t row_extend_size) override;
@@ -37,13 +39,13 @@ public:
   virtual ObDASBaseRtDef *get_rtdef() override { return upd_rtdef_; }
   int write_row(const ExprFixedArray &row,
                 ObEvalCtx &eval_ctx,
-                ObChunkDatumStore::StoredRow *&stored_row,
-                bool &buffer_full);
+                ObChunkDatumStore::StoredRow *&stored_row);
   int64_t get_row_cnt() const { return write_buffer_.get_row_cnt(); }
   void set_das_ctdef(const ObDASUpdCtDef *upd_ctdef) { upd_ctdef_ = upd_ctdef; }
   void set_das_rtdef(ObDASUpdRtDef *upd_rtdef) { upd_rtdef_ = upd_rtdef; }
   virtual int dump_data() const override
   { return write_buffer_.dump_data(*upd_ctdef_); }
+  int64_t get_affected_rows() { return affected_rows_; }
 
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,
                        KPC_(upd_ctdef),

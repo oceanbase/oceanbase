@@ -23,6 +23,17 @@ namespace pl
 class ObDBMSMViewMysql
 {
 public:
+enum ObDBMSMViewRefreshParam
+{
+  MV_LIST = 0,
+  METHOD = 1,
+  REFRESH_PARALLEL = 2,
+  NESTED = 3,
+  NESTED_REFRESH_MODE = 4,
+  MAX_PARAM
+};
+
+public:
   ObDBMSMViewMysql() {}
   virtual ~ObDBMSMViewMysql() {}
 
@@ -33,6 +44,7 @@ public:
   DECLARE_FUNC(refresh);
 
 #undef DECLARE_FUNC
+
 };
 
 } // namespace pl

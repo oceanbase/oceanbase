@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "ob_encoding_query_util.h"
 #include "ob_dict_decoder.h"
 
 namespace oceanbase {
@@ -167,8 +166,10 @@ struct DictCmpRefAVX512ArrayInit
 {
   bool operator()()
   {
-    dict_cmp_ref_funcs[REF_LEN][CMP_TYPE]
-        = &(DictCmpRefAVX512Func_T<REF_LEN, CMP_TYPE>::dict_cmp_ref_func);
+    if (REF_LEN != 0) {
+      dict_cmp_ref_funcs[REF_LEN][CMP_TYPE]
+          = &(DictCmpRefAVX512Func_T<REF_LEN, CMP_TYPE>::dict_cmp_ref_func);
+    }
     return true;
   }
 };

@@ -16,6 +16,7 @@
 #include "lib/container/ob_array.h"
 #include "share/ob_unit_table_operator.h"
 #include "share/ob_unit_stat.h"
+#include "share/ob_share_util.h"
 #include "share/ob_check_stop_provider.h"
 #include "share/rc/ob_tenant_base.h"
 
@@ -72,7 +73,10 @@ public:
              lib::Worker::CompatMode compat_mode,
              const int64_t create_timestamp,
              const bool has_memstore,
-             const bool is_remove);
+             const bool is_remove,
+             const int64_t hidden_sys_data_disk_config_size,
+             const int64_t actual_data_disk_size,
+             const common::ObReplicaType &replica_type);
 
     int divide_meta_tenant(ObTenantConfig& meta_tenant_config);
 
@@ -82,15 +86,27 @@ public:
 
     TO_STRING_KV(K_(tenant_id), K_(unit_id), K_(has_memstore),
                  "unit_status", get_unit_status_str(unit_status_),
-                 K_(config), K_(mode), K_(create_timestamp), K_(is_removed));
+                 K_(config), K_(mode), K_(create_timestamp), K_(is_removed),
+                 K_(hidden_sys_data_disk_config_size),
+                 K_(actual_data_disk_size), K_(replica_type));
 
     bool is_valid() const
     {
       return tenant_id_ != common::OB_INVALID_TENANT_ID &&
           unit_id_ != common::OB_INVALID_ID && 
           unit_status_ != UNIT_ERROR_STAT &&
-          config_.is_valid() && mode_ != lib::Worker::CompatMode::INVALID;
+          config_.is_valid() && mode_ != lib::Worker::CompatMode::INVALID &&
+          hidden_sys_data_disk_config_size_ >= 0 &&
+          actual_data_disk_size_ >= 0;
+          ObShareUtil::is_valid_replica_type_for_unit(replica_type_);
     }
+
+    int64_t get_effective_actual_data_disk_size() const
+    {
+      return 0 == config_.data_disk_size() ? actual_data_disk_size_ : config_.data_disk_size();
+    }
+
+    int64_t gen_init_actual_data_disk_size(const share::ObUnitConfig &config) const;
 
     uint64_t tenant_id_;
     uint64_t unit_id_;
@@ -100,6 +116,16 @@ public:
     int64_t create_timestamp_;
     bool has_memstore_;  // make if the unit contains replicas have memstore(Logonly replicas have no memstore)
     bool is_removed_;
+    int64_t hidden_sys_data_disk_config_size_;  // In shared storage mode, the value set hidden_sys_memory in sys tenant config.
+                                                // Shared nothing ignore this value and Other tenant ignore this value.
+    // In SS mode,
+    //   If config_.data_disk_size() is 0, then actual_data_disk_size_ > 0, meaning actual data_disk_size of tenant;
+    //   If config_.data_disk_size() is not 0, then actual_data_disk_size_ = 0 and not used;
+    //      (Mainly for compatibility. actual_data_disk_size_ from low version is default value 0)
+    //   For sys tenant, config_.data_disk_size() can not be 0, and actual_data_disk_size_ is always 0.
+    // In SN mode, actual_data_disk_size_ is always 0.
+    int64_t actual_data_disk_size_;
+    common::ObReplicaType replica_type_;
   };
 
   struct ObServerConfig

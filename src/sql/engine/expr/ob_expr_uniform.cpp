@@ -14,7 +14,6 @@
 
 #include "sql/engine/expr/ob_expr_uniform.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/json_type/ob_json_base.h"
 
 namespace oceanbase
 {
@@ -105,6 +104,8 @@ int ObExprUniform::calc_result_type3(ObExprResType &result_type,
     min_type.set_calc_type(ObIntType);
     max_type.set_calc_type(ObIntType);
     result_type.set_int();
+    ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY[result_type.get_type()];
+    result_type.set_accuracy(acc);
   } else {
     min_type.set_calc_type(ObDoubleType);
     max_type.set_calc_type(ObDoubleType);

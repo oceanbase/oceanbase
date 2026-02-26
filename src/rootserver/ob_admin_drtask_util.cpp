@@ -13,15 +13,16 @@
 #define USING_LOG_PREFIX RS
 #include "ob_admin_drtask_util.h"
 #include "logservice/ob_log_service.h" // for ObLogService
-#include "share/ob_locality_parser.h" // for ObLocalityParser
-#include "storage/tx_storage/ob_ls_service.h" // for ObLSService
-#include "storage/ls/ob_ls.h" // for ObLS
 #include "observer/ob_server_event_history_table_operator.h" // for SERVER_EVENT_ADD
+#include "rootserver/ob_disaster_recovery_task.h"
+#include "src/share/ls/ob_ls_table_operator.h"
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
+using namespace drtasklog;
 static const char* obadmin_drtask_ret_comment_strs[] = {
   "succeed to send ob_admin command",
   "invalid tenant_id or ls_id in command",
@@ -75,12 +76,13 @@ int ObAdminDRTaskUtil::handle_obadmin_command(const ObAdminCommandArg &command_a
   if (OB_SUCCESS != (tmp_ret = try_construct_result_comment_(ret, ret_comment, result_comment))) {
     LOG_WARN("fail to construct result comment", K(tmp_ret), KR(ret), K(ret_comment));
   }
+  char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
   SERVER_EVENT_ADD("ob_admin", command_arg.get_type_str(),
                    "tenant_id", tenant_id,
                    "ls_id", ls_id.id(),
                    "arg", command_arg,
                    "result", result_comment,
-                   "trace_id", ObCurTraceId::get_trace_id_str(),
+                   "trace_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                    "comment", command_arg.get_comment());
 
   int64_t cost = ObTimeUtility::current_time() - check_begin_time;
@@ -132,6 +134,7 @@ int ObAdminDRTaskUtil::construct_arg_for_add_command_(
   common::ObAddr target_server;
   int64_t orig_paxos_replica_number = 0;
   int64_t new_paxos_replica_number = 0;
+  common::ObReplicaType force_data_source_type = REPLICA_TYPE_FULL;
 
   if (OB_UNLIKELY(!command_arg.is_valid())
       || OB_UNLIKELY(!command_arg.is_add_task())) {
@@ -146,27 +149,35 @@ int ObAdminDRTaskUtil::construct_arg_for_add_command_(
     ret = OB_INVALID_ARGUMENT;
     ret_comment = ObAdminDRTaskRetComment::TENANT_ID_OR_LS_ID_NOT_VALID;
     LOG_WARN("invalid tenant_id or ls_id", KR(ret), K(command_arg), K(tenant_id), K(ls_id));
-  } else if (OB_UNLIKELY(!target_server.is_valid())
-             || OB_UNLIKELY(REPLICA_TYPE_FULL != replica_type && REPLICA_TYPE_READONLY != replica_type)) {
+  } else if (OB_UNLIKELY(!target_server.is_valid()
+             || !ObReplicaTypeCheck::is_replica_type_valid(replica_type))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(replica_type), K(target_server));
+    LOG_WARN("invalid argument", KR(ret), K(target_server), K(replica_type));
+  } else if (OB_FAIL(ObShareUtil::check_replica_type_with_version(replica_type, false/*check_for_unit*/))) {
+    LOG_WARN("fail to check replica type", KR(ret), K(replica_type));
   // STEP 2: construct orig_paxos_replica_number and leader_server if not specified by ob_admin command
   } else if (OB_FAIL(construct_default_params_for_add_command_(
                     tenant_id,
                     ls_id,
                     orig_paxos_replica_number,
-                    leader_server))) {
+                    leader_server,
+                    force_data_source_server,
+                    force_data_source_type))) {
     LOG_WARN("fail to fetch ls info and construct related parameters", KR(ret), K(tenant_id),
-               K(ls_id), K(orig_paxos_replica_number), K(leader_server));
+               K(ls_id), K(orig_paxos_replica_number), K(leader_server), K(force_data_source_server),
+               K(force_data_source_type));
   }
 
   if (OB_SUCC(ret)) {
     new_paxos_replica_number = 0 == new_paxos_replica_number
                                ? orig_paxos_replica_number
                                : new_paxos_replica_number;
-    ObReplicaMember data_source_member(leader_server, 0/*timstamp*/);
-    ObReplicaMember force_data_source_member(force_data_source_server, 0/*timstamp*/);
+    ObReplicaMember data_source_member(leader_server, 0/*timstamp*/, REPLICA_TYPE_FULL/*dummy_replica_type*/);
+    ObReplicaMember force_data_source_member(force_data_source_server, 0/*timstamp*/, force_data_source_type);
     ObReplicaMember add_member(target_server, ObTimeUtility::current_time(), replica_type);
+    ObReplicaType data_source_replica_type = force_data_source_server.is_valid()
+                                           ? force_data_source_type
+                                           : REPLICA_TYPE_FULL/*leader's replica type*/;
     // STEP 3: construct arg
     if (OB_ISNULL(ObCurTraceId::get_trace_id())) {
       ret = OB_INVALID_ARGUMENT;
@@ -192,11 +203,15 @@ int ObAdminDRTaskUtil::construct_default_params_for_add_command_(
     const uint64_t &tenant_id,
     const share::ObLSID &ls_id,
     int64_t &orig_paxos_replica_number,
-    common::ObAddr &leader_server)
+    common::ObAddr &leader_server,
+    const common::ObAddr &data_source_server,
+    ObReplicaType &data_source_type)
 {
   int ret = OB_SUCCESS;
   share::ObLSInfo ls_info;
   const share::ObLSReplica *leader_replica = nullptr;
+  const share::ObLSReplica *data_source_replica = nullptr;
+  data_source_type = REPLICA_TYPE_FULL;
 
   if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
@@ -212,6 +227,17 @@ int ObAdminDRTaskUtil::construct_default_params_for_add_command_(
   } else if (OB_ISNULL(leader_replica)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid leader replica", KR(ret), K(ls_info));
+  } else if (data_source_server.is_valid()) {
+    if (OB_FAIL(ls_info.find(data_source_server, data_source_replica))) {
+      LOG_WARN("fail to find replica", KR(ret), K(data_source_server));
+    } else if (OB_ISNULL(data_source_replica)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid data source replica", KR(ret), KP(data_source_replica));
+    } else {
+      data_source_type = data_source_replica->get_replica_type();
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else {
     //   If [orig_paxos_replica_number] not specified in obadmin command,
     //   need to construct from leader_replica, use leader replica as default
@@ -237,6 +263,9 @@ int ObAdminDRTaskUtil::execute_task_for_add_command_(
       || OB_UNLIKELY(!command_arg.is_add_task())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(arg), K(command_arg));
+  } else if (GCTX.is_shared_storage_mode() && REPLICA_TYPE_COLUMNSTORE == arg.dst_.get_replica_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("C-replica not supported in shared-storage mode", KR(ret));
   } else if (GCTX.self_addr() == arg.dst_.get_server()) {
     // do not need to send rpc, execute locally
     MTL_SWITCH(arg.tenant_id_) {
@@ -254,10 +283,11 @@ int ObAdminDRTaskUtil::execute_task_for_add_command_(
 
   if (OB_SUCC(ret)) {
     // local execute or rpc is send, log task start, task finish will be recorded later
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_ADD_LS_REPLICA_STR,
                           "tenant_id", arg.tenant_id_,
                           "ls_id", arg.ls_id_.id(),
-                          "task_id", ObCurTraceId::get_trace_id_str(),
+                          "task_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                           "destination", arg.dst_,
                           "comment", command_arg.get_comment());
   }
@@ -292,30 +322,30 @@ int ObAdminDRTaskUtil::handle_remove_command_(
     ret = OB_INVALID_ARGUMENT;
     ret_comment = ObAdminDRTaskRetComment::TENANT_ID_OR_LS_ID_NOT_VALID;
     LOG_WARN("invalid tenant_id or ls_id", KR(ret), K(command_arg), K(tenant_id), K(ls_id));
-  } else if (OB_UNLIKELY(!target_server.is_valid())
-             || OB_UNLIKELY(REPLICA_TYPE_FULL != replica_type && REPLICA_TYPE_READONLY != replica_type)) {
+  } else if (OB_UNLIKELY(!target_server.is_valid()
+             || !ObReplicaTypeCheck::is_replica_type_valid(replica_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica_type), K(target_server));
   } else {
     // STEP 2: construct args and execute
-    if (REPLICA_TYPE_FULL == replica_type) {
+    if (ObReplicaTypeCheck::is_paxos_replica(replica_type)) {
       ObLSDropPaxosReplicaArg remove_paxos_arg;
       if (OB_FAIL(construct_remove_paxos_task_arg_(
                       tenant_id, ls_id, target_server, orig_paxos_replica_number,
-                      new_paxos_replica_number, ret_comment, remove_paxos_arg))) {
+                      new_paxos_replica_number, ret_comment, remove_paxos_arg, replica_type))) {
         LOG_WARN("fail to construct remove paxos task arg", KR(ret), K(tenant_id), K(ls_id),
                  K(target_server), K(orig_paxos_replica_number), K(new_paxos_replica_number),
-                 K(ret_comment), K(remove_paxos_arg));
+                 K(ret_comment), K(remove_paxos_arg), K(replica_type));
       } else if (OB_FAIL(execute_remove_paxos_task_(command_arg, remove_paxos_arg))) {
         LOG_WARN("fail to execute remove paxos replica task", KR(ret), K(command_arg), K(remove_paxos_arg));
       } else {
         ret_comment = SUCCEED_TO_SEND_COMMAND;
       }
-    } else if (REPLICA_TYPE_READONLY == replica_type) {
+    } else if (ObReplicaTypeCheck::is_non_paxos_replica(replica_type)) {
       ObLSDropNonPaxosReplicaArg remove_nonpaxos_arg;
       if (OB_FAIL(construct_remove_nonpaxos_task_arg_(
-                      tenant_id, ls_id, target_server, ret_comment, remove_nonpaxos_arg))) {
-        LOG_WARN("fail to construct remove non-paxos replica task arg", KR(ret), K(tenant_id),
+                      tenant_id, ls_id, target_server, replica_type, ret_comment, remove_nonpaxos_arg))) {
+        LOG_WARN("fail to construct remove non-paxos replica task arg", KR(ret), K(tenant_id), K(replica_type),
                  K(ls_id), K(target_server), K(ret_comment), K(remove_nonpaxos_arg));
       } else if (OB_FAIL(execute_remove_nonpaxos_task_(command_arg, remove_nonpaxos_arg))) {
         LOG_WARN("fail to execute remove nonpaxos replica task", KR(ret), K(command_arg), K(remove_nonpaxos_arg));
@@ -337,18 +367,22 @@ int ObAdminDRTaskUtil::construct_remove_paxos_task_arg_(
     int64_t &orig_paxos_replica_number,
     int64_t &new_paxos_replica_number,
     ObAdminDRTaskRetComment &ret_comment,
-    ObLSDropPaxosReplicaArg &remove_paxos_arg)
+    ObLSDropPaxosReplicaArg &remove_paxos_arg,
+    const ObReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
   ret_comment = FAIL_TO_EXECUTE_COMMAND;
   common::ObMember member;
   ObReplicaMember member_to_remove;
   palf::PalfStat palf_stat;
+  int64_t full_replica_number = 0;
 
   if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id))
-      || OB_UNLIKELY(!target_server.is_valid())) {
+      || OB_UNLIKELY(!target_server.is_valid())
+      || OB_UNLIKELY(!ObReplicaTypeCheck::is_paxos_replica(replica_type))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id or ls_id", KR(ret), K(tenant_id), K(ls_id), K(target_server));
+    LOG_WARN("invalid tenant_id or ls_id", KR(ret), K(tenant_id), K(ls_id),
+             K(target_server), K(replica_type));
   } else if (OB_FAIL(get_local_palf_stat_(tenant_id, ls_id, palf_stat, ret_comment))) {
     LOG_WARN("fail to get local palf stat", KR(ret), K(tenant_id), K(ls_id));
   } else if (OB_UNLIKELY(!palf_stat.is_valid())) {
@@ -359,20 +393,24 @@ int ObAdminDRTaskUtil::construct_remove_paxos_task_arg_(
     LOG_WARN("replica not found in member_list", KR(ret), K(target_server), K(palf_stat));
   } else if (OB_FAIL(palf_stat.paxos_member_list_.get_member_by_addr(target_server, member))) {
     LOG_WARN("fail to get member from paxos_member_list", KR(ret), K(palf_stat), K(target_server));
+  } else if (OB_FAIL(check_replica_type_matched_with_flag_(replica_type, member))) {
+    LOG_WARN("fail to check replica type matched with flag", KR(ret), K(replica_type), K(member));
+  } else if (OB_FAIL(ObShareUtil::get_full_replica_number(
+                         palf_stat.paxos_member_list_, full_replica_number))) {
+    LOG_WARN("fail to get full replica number in member_list", KR(ret));
+  } else if (1 == full_replica_number && REPLICA_TYPE_FULL == replica_type) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("remove the only F-replica not allowed", KR(ret), K(replica_type));
   } else {
-    member_to_remove = ObReplicaMember(member);
-    if (OB_FAIL(member_to_remove.set_replica_type(REPLICA_TYPE_FULL))) {
-      LOG_WARN("fail to set replica type for member to remove", KR(ret));
-    } else {
-      //  If [orig_paxos_replica_number] not specified in obadmin command,
-      //  use leader replica's info as default
-      orig_paxos_replica_number = 0 == orig_paxos_replica_number
-                                ? palf_stat.paxos_replica_num_
-                                : orig_paxos_replica_number;
-      new_paxos_replica_number = 0 == new_paxos_replica_number
-                               ? orig_paxos_replica_number
-                               : new_paxos_replica_number;
-    }
+    member_to_remove = ObReplicaMember(member.get_server(), member.get_timestamp(), replica_type);
+    //  If [orig_paxos_replica_number] not specified in obadmin command,
+    //  use leader replica's info as default
+    orig_paxos_replica_number = 0 == orig_paxos_replica_number
+                              ? palf_stat.paxos_replica_num_
+                              : orig_paxos_replica_number;
+    new_paxos_replica_number = 0 == new_paxos_replica_number
+                             ? orig_paxos_replica_number
+                             : new_paxos_replica_number;
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(ObCurTraceId::get_trace_id())) {
@@ -387,10 +425,32 @@ int ObAdminDRTaskUtil::construct_remove_paxos_task_arg_(
   return ret;
 }
 
+int ObAdminDRTaskUtil::check_replica_type_matched_with_flag_(
+    const ObReplicaType &replica_type,
+    const common::ObMember &member)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(REPLICA_TYPE_MAX == replica_type)
+      || OB_UNLIKELY(!member.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(replica_type), K(member));
+  } else {
+    bool is_logonly_replica = REPLICA_TYPE_LOGONLY == replica_type;
+    bool is_logonly_flag = member.is_logonly();
+    if (is_logonly_replica != is_logonly_flag) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(is_logonly_replica), K(is_logonly_flag),
+               K(replica_type), K(member));
+    }
+  }
+  return ret;
+}
+
 int ObAdminDRTaskUtil::construct_remove_nonpaxos_task_arg_(
     const uint64_t &tenant_id,
     const share::ObLSID &ls_id,
     const common::ObAddr &target_server,
+    const ObReplicaType &replica_type,
     ObAdminDRTaskRetComment &ret_comment,
     ObLSDropNonPaxosReplicaArg &remove_nonpaxos_arg)
 {
@@ -401,9 +461,11 @@ int ObAdminDRTaskUtil::construct_remove_nonpaxos_task_arg_(
   palf::PalfStat palf_stat;
 
   if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id))
-      || OB_UNLIKELY(!target_server.is_valid())) {
+      || OB_UNLIKELY(!target_server.is_valid())
+      || OB_UNLIKELY(!ObReplicaTypeCheck::is_non_paxos_replica(replica_type))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id or ls_id", KR(ret), K(tenant_id), K(ls_id), K(target_server));
+    LOG_WARN("invalid arguments for remove_non_paxos_task", KR(ret), K(tenant_id), K(ls_id),
+             K(target_server), K(replica_type));
   } else if (OB_FAIL(get_local_palf_stat_(tenant_id, ls_id, palf_stat, ret_comment))) {
     LOG_WARN("fail to get local palf stat", KR(ret), K(tenant_id), K(ls_id));
   } else if (OB_UNLIKELY(!palf_stat.is_valid())) {
@@ -414,18 +476,17 @@ int ObAdminDRTaskUtil::construct_remove_nonpaxos_task_arg_(
     LOG_WARN("replica not found in learner_list", KR(ret), K(target_server), K(palf_stat));
   } else if (OB_FAIL(palf_stat.learner_list_.get_learner_by_addr(target_server, member))) {
     LOG_WARN("fail to get member from learner_list", KR(ret), K(palf_stat), K(target_server));
-  } else {
-    member_to_remove = ObReplicaMember(member);
-    if (OB_FAIL(member_to_remove.set_replica_type(REPLICA_TYPE_READONLY))) {
-      LOG_WARN("fail to set replica type for member to remove", KR(ret));
-    } else if (OB_ISNULL(ObCurTraceId::get_trace_id())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", KR(ret));
-    } else if (OB_FAIL(remove_nonpaxos_arg.init(
-                           *ObCurTraceId::get_trace_id()/*task_id*/, tenant_id,
-                           ls_id, member_to_remove))) {
-      LOG_WARN("fail to init arg", KR(ret), K(tenant_id), K(ls_id), K(member_to_remove));
-    }
+  } else if (OB_FAIL(check_replica_type_matched_with_flag_(replica_type, member))) {
+    LOG_WARN("fail to check replica type matched with flag", KR(ret), K(member));
+  } else if (OB_FAIL(member_to_remove.init(member, replica_type))) {
+    LOG_WARN("fail to init member_to_remove", KR(ret), K(member), K(replica_type));
+  } else if (OB_ISNULL(ObCurTraceId::get_trace_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(remove_nonpaxos_arg.init(
+                        *ObCurTraceId::get_trace_id()/*task_id*/, tenant_id,
+                        ls_id, member_to_remove))) {
+    LOG_WARN("fail to init arg", KR(ret), K(tenant_id), K(ls_id), K(member_to_remove));
   }
   return ret;
 }
@@ -445,14 +506,23 @@ int ObAdminDRTaskUtil::get_local_palf_stat_(
     LOG_WARN("invalid tenant_id or ls_id", KR(ret), K(tenant_id), K(ls_id));
   } else {
     MTL_SWITCH(tenant_id) {
-      logservice::ObLogService *log_service = NULL;
-      palf::PalfHandleGuard palf_handle_guard;
-      if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+      storage::ObLSHandle ls_handle;
+      logservice::ObLogHandler *log_handler = nullptr;
+      storage::ObLSService *ls_svr = nullptr;
+      storage::ObLS *ls = nullptr;
+
+      if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
-        LOG_WARN("failed to open palf", KR(ret), K(tenant_id), K(ls_id));
-      } else if (OB_FAIL(palf_handle_guard.stat(palf_stat))) {
+        LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
+        LOG_WARN("failed to get_ls", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls should not be null", KR(ret));
+      } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("log_handler is null", KR(ret), K(ls_id));
+      } else if (OB_FAIL(log_handler->stat(palf_stat))) {
         LOG_WARN("get palf_stat failed", KR(ret), K(tenant_id), K(ls_id));
       } else if (LEADER != palf_stat.role_) {
         ret = OB_STATE_NOT_MATCH;
@@ -486,10 +556,11 @@ int ObAdminDRTaskUtil::execute_remove_paxos_task_(
   }
   if (OB_SUCC(ret)) {
     // rpc is send, log task start, task finish will be recorded later
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_REMOVE_LS_PAXOS_REPLICA_STR,
                           "tenant_id", remove_paxos_arg.tenant_id_,
                           "ls_id", remove_paxos_arg.ls_id_.id(),
-                          "task_id", ObCurTraceId::get_trace_id_str(),
+                          "task_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                           "remove_server", remove_paxos_arg.remove_member_,
                           "comment", command_arg.get_comment());
   }
@@ -517,10 +588,11 @@ int ObAdminDRTaskUtil::execute_remove_nonpaxos_task_(
   }
   if (OB_SUCC(ret)) {
     // rpc is send, log task start, task finish will be recorded later
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_REMOVE_LS_PAXOS_REPLICA_STR,
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+    ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_REMOVE_LS_NON_PAXOS_REPLICA_STR,
                           "tenant_id", remove_non_paxos_arg.tenant_id_,
                           "ls_id", remove_non_paxos_arg.ls_id_.id(),
-                          "task_id", ObCurTraceId::get_trace_id_str(),
+                          "task_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                           "remove_server", remove_non_paxos_arg.remove_member_,
                           "comment", command_arg.get_comment());
   }
@@ -594,11 +666,10 @@ int ObAdminDRTaskUtil::parse_params_from_obadmin_command_arg(
           ls_id = share::ObLSID(ls_id_to_set);
         }
       } else if (0 == param_name.string().case_compare("replica_type")) {
-        if (OB_FAIL(share::ObLocalityParser::parse_type(
-                        param_value.ptr(),
-                        param_value.length(),
-                        replica_type))) {
-          LOG_WARN("fail to parse replica type", KR(ret), K(param_name_with_value), K(replica_type));
+        replica_type = share::ObShareUtil::string_to_replica_type(param_value.ptr());
+        if (! ObReplicaTypeCheck::is_replica_type_valid(replica_type)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid replica_type", KR(ret), K(param_name_with_value), K(replica_type));
         }
       } else if (0 == param_name.string().case_compare("orig_paxos_replica_number")) {
         if (OB_FAIL(extract_int(param_value.string(), 0, pos, orig_paxos_replica_number))) {

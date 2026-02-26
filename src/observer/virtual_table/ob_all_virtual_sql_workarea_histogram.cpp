@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_all_virtual_sql_workarea_histogram.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/rc/ob_context.h"
-#include "observer/ob_server_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

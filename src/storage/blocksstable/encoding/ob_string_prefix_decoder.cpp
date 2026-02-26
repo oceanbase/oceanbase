@@ -14,9 +14,6 @@
 
 #include "ob_string_prefix_decoder.h"
 
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "ob_bit_stream.h"
-#include "ob_integer_array.h"
 #include "ob_raw_decoder.h"
 
 namespace oceanbase
@@ -139,7 +136,7 @@ int ObStringPrefixDecoder::update_pointer(const char *old_block, const char *cur
 int ObStringPrefixDecoder::batch_decode(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const
@@ -341,7 +338,7 @@ int ObStringPrefixDecoder::fill_vector(
 int ObStringPrefixDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {

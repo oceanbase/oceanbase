@@ -12,11 +12,8 @@
 
 #include "lib/queue/ob_lighty_queue.h"
 
-#include <sys/syscall.h>
-#include <unistd.h>
 
 #include "lib/utility/utility.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {
@@ -150,6 +147,7 @@ uint64_t ObLightyQueue::wait_push(uint64_t seq, int64_t timeout)
   uint32_t wait_id = get_cond(seq).get_seq();
   uint64_t push_idx = ATOMIC_LOAD(&push_);
   if (push_idx <= seq) {
+    ObBKGDSessInActiveGuard inactive_guard;
     get_cond(seq).wait(wait_id, timeout);
   }
   return push_idx;

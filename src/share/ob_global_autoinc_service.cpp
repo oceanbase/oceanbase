@@ -12,22 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_srv_network_frame.h"
-#include "share/ob_autoincrement_service.h"
-#include "share/ob_define.h"
 #include "share/ob_global_autoinc_service.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/slog/ob_storage_logger.h"
-#include "storage/slog/ob_storage_log.h"
-#include "storage/slog/ob_storage_log_replayer.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "src/share/sequence/ob_sequence_cache.h"
 
 namespace oceanbase
@@ -433,7 +418,8 @@ int ObGlobalAutoIncService::handle_next_sequence_request(
   int ret = OB_SUCCESS;
   ObSequenceCache *sequence_cache = &share::ObSequenceCache::get_instance();
   ObArenaAllocator allocator;
-  return sequence_cache->nextval(request.schema_, allocator ,result.nextval_);
+  // only order mode sequence will use this function, which does not need clean cache in cycle mode
+  return sequence_cache->nextval(request.schema_, allocator ,result.nextval_, nullptr /*session*/);
 }
 
 int ObGlobalAutoIncService::check_leader_(const uint64_t tenant_id, bool &is_leader)
@@ -688,9 +674,10 @@ int ObGlobalAutoIncService::deserialize_autoinc_cache(DESERIAL_PARAMS)
 int ObGlobalAutoIncService::wait_all_requests_to_finish()
 {
   int ret = OB_SUCCESS;
+  const int64_t abs_timeout_us = ObTimeUtility::current_time() + BROADCAST_OP_TIMEOUT;
   for (int64_t i = 0; OB_SUCC(ret) && i < MUTEX_NUM; i++) {
     // wait for all working threads to finish
-    if (OB_FAIL(op_mutex_[i].lock(BROADCAST_OP_TIMEOUT))) {
+    if (OB_FAIL(op_mutex_[i].lock(abs_timeout_us))) {
       LOG_WARN("fail to lock mutex", K(ret), K(i));
     } else {
       op_mutex_[i].unlock();

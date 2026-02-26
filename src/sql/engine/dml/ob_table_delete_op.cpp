@@ -11,13 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "common/ob_smart_call.h"
 #include "sql/engine/dml/ob_table_delete_op.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/executor/ob_task_executor_ctx.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/dml/ob_trigger_handler.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
 
 namespace oceanbase
 {
@@ -289,7 +284,7 @@ OB_INLINE int ObTableDeleteOp::delete_row_to_das()
     }
     if (OB_SUCC(ret)) {
       int64_t delete_rows = is_skipped ? 0 : 1;
-      if (OB_FAIL(merge_implict_cursor(0, 0, delete_rows, 0))) {
+      if (OB_FAIL(merge_implict_cursor(delete_rows, 0, 0, 0))) {
         LOG_WARN("merge implict cursor failed", K(ret));
       }
     }

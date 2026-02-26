@@ -11,9 +11,6 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_tx_lock_stat.h"
-#include "observer/ob_server.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 
@@ -100,6 +97,11 @@ int ObGVTxLockStat::get_next_tx_ctx_(transaction::ObPartTransCtx *&tx_ctx)
       if (OB_ISNULL(ls_)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "ls is null", K(ret), K(ls_id_));
+      } else if (ObReplicaTypeCheck::is_log_replica(ls_->get_replica_type())) {
+        ls_tx_ctx_iter_.reset();
+        if (OB_FAIL(get_next_ls_(ls_))) {
+          SERVER_LOG(WARN, "get next ls failed", K(ret));
+        }
       } else if (OB_FAIL(ls_->iterate_tx_ctx(ls_tx_ctx_iter_))) {
         SERVER_LOG(WARN, "fail to get ls_tx_ctx_iter", K(ret), K(ls_id_));
       }
@@ -287,7 +289,7 @@ int ObGVTxLockStat::process_curr_tenant(ObNewRow *&row)
         break;
       case OB_APP_MIN_COLUMN_ID + 8:
         // session_id
-        cur_row_.cells_[i].set_int(tx_lock_stat.get_session_id());
+        cur_row_.cells_[i].set_int(tx_lock_stat.get_client_sid());
         break;
       case OB_APP_MIN_COLUMN_ID + 9:
         // proxy_session_id

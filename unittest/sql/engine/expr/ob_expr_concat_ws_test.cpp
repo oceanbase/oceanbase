@@ -81,7 +81,8 @@ void ObExprConcatWsTest::TearDown()
 	param[3].set_##t2(v2);\
 	param[4].set_##t3(v3);\
 	int ret = obj.func(res,param,5,str_buf);\
-	_OB_LOG(INFO, "res=%s", to_cstring(res)); \
+    ObCStringHelper helper; \
+	_OB_LOG(INFO, "res=%s", helper.convert(res)); \
 	ASSERT_EQ(OB_SUCCESS, ret);   \
 }while(0)
 #define EXCEPT_NULL_RESULT2(obj,str_buf,func,rt,rv)\
@@ -91,7 +92,8 @@ void ObExprConcatWsTest::TearDown()
 	param[0].set_null();\
 	param[1].set_null();\
 	int ret = obj.func(res,param,2,str_buf);\
-	_OB_LOG(INFO, "res=%s", to_cstring(res)); \
+	ObCStringHelper helper; \
+	_OB_LOG(INFO, "res=%s", helper.convert(res)); \
 	ASSERT_EQ(OB_SUCCESS, ret);   \
 }while(0)
 #define EXCEPT_NULL_RESULT3(obj,str_buf,func,rt,rv)\

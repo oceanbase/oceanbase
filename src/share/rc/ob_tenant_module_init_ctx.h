@@ -33,6 +33,11 @@ public:
   palf::PalfOptions palf_options_;
   char tenant_clog_dir_[common::MAX_PATH_SIZE] = {'\0'};
 
+#ifdef OB_BUILD_SHARED_STORAGE
+  // for SS mode ObTenantDiskSpaceManager
+  int64_t init_data_disk_size_ = 0;
+#endif
+
   // TODO init DagSchedulerConfig, which will be used to config the params in ObTenantDagScheduler
   // share::DagSchedulerConfig *scheduler_config_;
 };

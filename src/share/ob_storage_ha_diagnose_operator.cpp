@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "lib/mysqlclient/ob_mysql_proxy.h" // ObISqlClient, SMART_VAR
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_storage_ha_diagnose_operator.h"
 #include "share/ob_dml_sql_splicer.h" // ObDMLSqlSplicer
@@ -188,8 +187,13 @@ int ObStorageHADiagOperator::insert_row(
     } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("fail to execute sql", K(sql), K(ret), K(tenant_id));
     } else {
-      LOG_DEBUG("insert storage ha diagnose info history success",
-          K(tenant_id), K(affected_rows), K(info));
+      if (REACH_TIME_INTERVAL(10_s)) {
+        LOG_INFO("insert storage ha diagnose info history success",
+            K(tenant_id), K(affected_rows), K(info));
+      } else {
+        LOG_DEBUG("insert storage ha diagnose info history success",
+            K(tenant_id), K(affected_rows), K(info));
+      }
     }
   }
   return ret;

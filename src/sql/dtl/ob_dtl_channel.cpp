@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_channel.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/lock/ob_thread_cond.h"
-#include "share/config/ob_server_config.h"
-#include "common/row/ob_row.h"
 #include "sql/dtl/ob_dtl_flow_control.h"
 
 using namespace oceanbase::common;
@@ -25,8 +21,7 @@ namespace sql {
 namespace dtl {
 
 ObDtlChannel::ObDtlChannel(uint64_t id, const common::ObAddr &peer, DtlChannelType type)
-    : cond_(),
-      pins_(0),
+    : pins_(0),
       id_(id),
       done_(false),
       send_buffer_size_(GCONF.dtl_buffer_size),
@@ -50,10 +45,10 @@ ObDtlChannel::ObDtlChannel(uint64_t id, const common::ObAddr &peer, DtlChannelTy
       thread_id_(0),
       enable_channel_sync_(false),
       channel_type_(type),
+      send_by_tenant_(false),
       prev_link_(nullptr),
       next_link_(nullptr)
 {
-  cond_.init(common::ObLatchIds::DTL_CHANNEL_WAIT);
 }
 
 int64_t ObDtlChannel::get_op_id()

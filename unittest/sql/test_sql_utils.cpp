@@ -12,16 +12,8 @@
 
 #define USING_LOG_PREFIX SQL
 #include "test_sql_utils.h"
-#include "lib/stat/ob_session_stat.h"
-#include "share/ob_cluster_version.h"
 #include "observer/ob_server.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/plan_cache/ob_sql_parameterization.h"
-#include "share/ob_tenant_mgr.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "optimizer/ob_mock_opt_stat_manager.h"
-#include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #define CLUSTER_VERSION_2100 (oceanbase::common::cal_version(2, 1, 0, 0))
@@ -174,13 +166,16 @@ TestSqlUtils::TestSqlUtils()
     memset(schema_file_path_, '\0', 128);
     exec_ctx_.set_sql_ctx(&sql_ctx_);
 
+    static ObTimerService timer_service(sys_tenant_id_);
     static ObTenantBase tenant_ctx(sys_tenant_id_);
+    tenant_ctx.set(&timer_service);
     ObTenantEnv::set_tenant(&tenant_ctx);
 
     auto& cluster_version = ObClusterVersion::get_instance();
     cluster_version.init(&common::ObServerConfig::get_instance(), &oceanbase::omt::ObTenantConfigMgr::get_instance());
     oceanbase::omt::ObTenantConfigMgr::get_instance().add_tenant_config(sys_tenant_id_);
     cluster_version.refresh_cluster_version("4.3.0.0");
+    ODV_MGR.init(true);
 
     ObServer &observer = ObServer::get_instance();
     int ret = OB_SUCCESS;
@@ -436,7 +431,7 @@ void TestSqlUtils::do_resolve(
   resolver_ctx.expr_factory_ = &expr_factory_;
   resolver_ctx.stmt_factory_ = &stmt_factory_;
   resolver_ctx.query_ctx_ = stmt_factory_.get_query_ctx();
-  resolver_ctx.query_ctx_->question_marks_count_ = param_store.count();
+  resolver_ctx.query_ctx_->set_questionmark_count(param_store.count());
   ObResolver resolver(resolver_ctx);
   ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
   if (OB_SUCC(ret)) {
@@ -496,6 +491,7 @@ int TestSqlUtils::create_system_table()
   const schema_init_func *creator_ptr_array[] = { core_table_schema_creators,
     sys_table_schema_creators,
     virtual_table_schema_creators,
+    virtual_table_index_schema_creators,
     NULL };
   const ObTenantSchema *tenant_schema = NULL;
   if (OB_FAIL(schema_guard_.get_tenant_info(sys_tenant_id_, tenant_schema))) {
@@ -901,7 +897,8 @@ void TestSqlUtils::generate_index_schema(ObCreateIndexStmt &stmt)
   }else{
     _OB_LOG_RET(ERROR, OB_ERROR, "no data table found for tid=%lu", data_table_schema->get_table_id());
   }
-  _OB_LOG(DEBUG, "index_schema: %s", to_cstring(index_schema));
+  ObCStringHelper helper;
+  _OB_LOG(DEBUG, "index_schema: %s", helper.convert(index_schema));
 }
 
 int TestSqlUtils::get_hidden_column_value(

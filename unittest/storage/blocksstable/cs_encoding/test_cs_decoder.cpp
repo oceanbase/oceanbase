@@ -16,9 +16,7 @@
 #define protected public
 #define private public
 #include "ob_cs_encoding_test_base.h"
-#include "storage/blocksstable/cs_encoding/ob_cs_encoding_util.h"
-#include "storage/blocksstable/cs_encoding/ob_micro_block_cs_decoder.h"
-#include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
+#include "common/ob_version_def.h"
 
 namespace oceanbase
 {
@@ -32,7 +30,7 @@ using namespace share::schema;
 using ::testing::Bool;
 using ::testing::Combine;
 
-class TestCSDecoder : public ObCSEncodingTestBase, public ::testing::TestWithParam<std::tuple<bool, bool>>
+class TestCSDecoder : public ObCSEncodingTestBase, public ::testing::TestWithParam<std::tuple<bool, bool, bool>>
 {
 public:
   TestCSDecoder() {}
@@ -46,6 +44,7 @@ TEST_P(TestCSDecoder, test_integer_decoder)
 {
   const bool has_null = std::get<0>(GetParam());
   const bool is_force_raw = std::get<1>(GetParam());
+  const bool has_nop = std::get<2>(GetParam());
   const int64_t rowkey_cnt = 1;
   const int64_t col_cnt = 3;
   ObObjType col_types[col_cnt] = {ObIntType, ObUInt64Type, ObIntType};
@@ -63,16 +62,29 @@ TEST_P(TestCSDecoder, test_integer_decoder)
   }
   int64_t row_cnt_without_null[col_cnt] = {row_cnt, row_cnt, row_cnt};
 
-  // <1> integer range is -50 to 49 and has null
+  // <1> integer range is -50 to 49 and has null or nop
   for (int64_t i = 0; i < row_cnt - 20; ++i) {
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i - 50, row_arr[i]));
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  for (int64_t i = row_cnt - 20; i < row_cnt; ++i) {
+  for (int64_t i = row_cnt - 20; i < row_cnt - 10; ++i) {
     row_arr[i].storage_datums_[0].set_int(i);
     if (has_null) {
       row_arr[i].storage_datums_[1].set_null();
       row_arr[i].storage_datums_[2].set_null();
+      row_cnt_without_null[1]--;
+      row_cnt_without_null[2]--;
+    } else {
+      row_arr[i].storage_datums_[1].set_uint(UINT64_MAX - i);
+      row_arr[i].storage_datums_[2].set_uint(INT64_MAX - i);
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+  }
+  for (int64_t i = row_cnt - 10; i < row_cnt; ++i) {
+    row_arr[i].storage_datums_[0].set_int(i);
+    if (has_nop) {
+      row_arr[i].storage_datums_[1].set_nop();
+      row_arr[i].storage_datums_[2].set_nop();
       row_cnt_without_null[1]--;
       row_cnt_without_null[2]--;
     } else {
@@ -99,7 +111,7 @@ TEST_P(TestCSDecoder, test_integer_decoder)
     row_arr[i].storage_datums_[2].set_int(INT64_MAX - i);
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  for (int64_t i = row_cnt - 20; i < row_cnt; ++i) {
+  for (int64_t i = row_cnt - 20; i < row_cnt - 10; ++i) {
     row_arr[i].storage_datums_[0].set_int(INT32_MAX + i);
     if (has_null) {
       row_arr[i].storage_datums_[1].set_null();
@@ -112,19 +124,40 @@ TEST_P(TestCSDecoder, test_integer_decoder)
     }
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
+  for (int64_t i = row_cnt - 10; i < row_cnt; ++i) {
+    row_arr[i].storage_datums_[0].set_int(INT32_MAX + i);
+    if (has_nop) {
+      row_arr[i].storage_datums_[1].set_nop();
+      row_arr[i].storage_datums_[2].set_nop();
+      row_cnt_without_null_1[1]--;
+      row_cnt_without_null_1[2]--;
+    } else {
+      row_arr[i].storage_datums_[1].set_uint(UINT64_MAX - i);
+      row_arr[i].storage_datums_[2].set_uint(INT64_MAX - i);
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+  }
   ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
   ASSERT_EQ(OB_SUCCESS, check_get_row_count(header, micro_block_desc, row_cnt_without_null_1, col_cnt, false));
 
-  // <3> all null integer
+  // <3> all null / nop / normal integer
   encoder.reuse();
   encoder.is_all_column_force_raw_ = is_force_raw;
   int64_t row_cnt_without_null_2[col_cnt] = {row_cnt, 0, 0};
   for (int64_t i = 0; i < row_cnt ; ++i) {
     row_arr[i].storage_datums_[0].set_int(i);
-    row_arr[i].storage_datums_[1].set_null();
-    row_arr[i].storage_datums_[2].set_null();
+    if (has_null) {
+      row_arr[i].storage_datums_[1].set_null();
+      row_arr[i].storage_datums_[2].set_null();
+    } else if (has_nop) {
+      row_arr[i].storage_datums_[1].set_nop();
+      row_arr[i].storage_datums_[2].set_nop();
+    } else {
+      row_arr[i].storage_datums_[1].set_int(i);
+      row_arr[i].storage_datums_[2].set_int(i);
+    }
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
   ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
@@ -137,6 +170,7 @@ TEST_P(TestCSDecoder, test_string_decoder)
 {
   const bool has_null = std::get<0>(GetParam());
   const bool is_force_raw = std::get<1>(GetParam());
+  const bool has_nop = std::get<2>(GetParam());
   const int64_t rowkey_cnt = 1;
   const int64_t col_cnt = 3;
   ObObjType col_types[col_cnt] = {ObInt32Type, ObVarcharType, ObCharType};
@@ -164,11 +198,24 @@ TEST_P(TestCSDecoder, test_string_decoder)
     row_arr[i].storage_datums_[2].set_string(char_data, 100);
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  for (int64_t i = row_cnt - 20; i < row_cnt; ++i) {
+  for (int64_t i = row_cnt - 20; i < row_cnt - 10; ++i) {
     row_arr[i].storage_datums_[0].set_int32(i);
     if (has_null) {
       row_arr[i].storage_datums_[1].set_null();
       row_arr[i].storage_datums_[2].set_null();
+      row_cnt_without_null[1]--;
+      row_cnt_without_null[2]--;
+    } else {
+      row_arr[i].storage_datums_[1].set_string(char_data, i % 100);
+      row_arr[i].storage_datums_[2].set_string(char_data, 100);
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+  }
+  for (int64_t i = row_cnt - 10; i < row_cnt; ++i) {
+    row_arr[i].storage_datums_[0].set_int32(i);
+    if (has_nop) {
+      row_arr[i].storage_datums_[1].set_nop();
+      row_arr[i].storage_datums_[2].set_nop();
       row_cnt_without_null[1]--;
       row_cnt_without_null[2]--;
     } else {
@@ -196,16 +243,25 @@ TEST_P(TestCSDecoder, test_string_decoder)
       row_arr[i].storage_datums_[1].set_string(char_data, 0);
       row_arr[i].storage_datums_[2].set_null();
       row_cnt_without_null_1[2]--;
+    } else if (has_nop) {
+      row_arr[i].storage_datums_[1].set_string(char_data, 0);
+      row_arr[i].storage_datums_[2].set_nop();
+      row_cnt_without_null_1[2]--;
     } else {
-      // mix zero_length_string and null in one column
-      if (i < row_cnt / 2) {
+      // mix zero_length_string and null nop in one column
+      if (i < row_cnt / 3) {
         row_arr[i].storage_datums_[1].set_string(char_data, 0);
         row_arr[i].storage_datums_[2].set_null();
         row_cnt_without_null_1[2]--;
-      } else {
+      } else if (i < row_cnt * 2 / 3) {
         row_arr[i].storage_datums_[1].set_null();
         row_arr[i].storage_datums_[2].set_string(char_data, 0);
         row_cnt_without_null_1[1]--;
+      } else {
+        row_arr[i].storage_datums_[1].set_nop();
+        row_arr[i].storage_datums_[2].set_nop();
+        row_cnt_without_null_1[1]--;
+        row_cnt_without_null_1[2]--;
       }
     }
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
@@ -225,6 +281,7 @@ TEST_P(TestCSDecoder, test_dict_decoder)
   const int64_t col_cnt = 4;
   const bool has_null = std::get<0>(GetParam());
   const bool is_force_raw = std::get<1>(GetParam());
+  const bool has_nop = std::get<2>(GetParam());
   ObObjType col_types[col_cnt] = {ObInt32Type, ObIntType, ObVarcharType, ObCharType};
   ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
   ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INT_DICT; // integer dict
@@ -252,7 +309,7 @@ TEST_P(TestCSDecoder, test_dict_decoder)
     row_arr[i].storage_datums_[3].set_string(char_data, 100);
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  for (int64_t i = row_cnt - 20; i < row_cnt; ++i) {
+  for (int64_t i = row_cnt - 20; i < row_cnt - 10; ++i) {
     row_arr[i].storage_datums_[0].set_int32(i);
     row_arr[i].storage_datums_[2].set_string(char_data, i % distint_cnt);
     if (has_null) {
@@ -265,6 +322,20 @@ TEST_P(TestCSDecoder, test_dict_decoder)
       row_arr[i].storage_datums_[3].set_string(char_data, 100);
     }
 
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+  }
+  for (int64_t i = row_cnt - 10; i < row_cnt; ++i) {
+    row_arr[i].storage_datums_[0].set_int32(i);
+    row_arr[i].storage_datums_[2].set_string(char_data, i % distint_cnt);
+    if (has_nop) {
+      row_arr[i].storage_datums_[1].set_nop();
+      row_arr[i].storage_datums_[3].set_nop();
+      row_cnt_without_null[1]--;
+      row_cnt_without_null[3]--;
+    } else {
+      row_arr[i].storage_datums_[1].set_int(i % distint_cnt + INT32_MAX);
+      row_arr[i].storage_datums_[3].set_string(char_data, 100);
+    }
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
 
@@ -367,6 +438,7 @@ TEST_P(TestCSDecoder, test_all_object_type_decoder)
   const int64_t col_cnt = ObExtendType - 1 + 7;
   const bool specify_dict = std::get<0>(GetParam());
   const bool is_force_raw = std::get<1>(GetParam());
+  const bool has_nop = std::get<2>(GetParam());
   ObObjType col_types[ObObjType::ObMaxType];
   for (int64_t i = 0; i < col_cnt; ++i) {
     ObObjType type = static_cast<ObObjType>(i + 1);  // from ObTinyIntType
@@ -417,10 +489,24 @@ TEST_P(TestCSDecoder, test_all_object_type_decoder)
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row_arr[i]));
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  for (int64_t i = row_cnt - 2; i < row_cnt; ++i) {
+  {
+    int64_t i = row_cnt - 2;
     for (int64_t j = 0; j < col_cnt; j++) {
       if (j < rowkey_cnt) {
         row_arr[i].storage_datums_[j].set_int32(i);
+      } else {
+        row_arr[i].storage_datums_[j].set_null();
+      }
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
+  }
+  {
+    int64_t i = row_cnt - 1;
+    for (int64_t j = 0; j < col_cnt; j++) {
+      if (j < rowkey_cnt) {
+        row_arr[i].storage_datums_[j].set_int32(i);
+      } else if (has_nop) {
+        row_arr[i].storage_datums_[j].set_nop();
       } else {
         row_arr[i].storage_datums_[j].set_null();
       }
@@ -442,6 +528,7 @@ TEST_P(TestCSDecoder, test_decoder_with_all_stream_encoding_types)
   ObObjType col_types[col_cnt] = {ObIntType, ObVarcharType, ObVarcharType, ObIntType, ObIntType};
   const bool has_null = std::get<0>(GetParam());
   const bool row_cnt_flag = std::get<1>(GetParam());
+  const bool has_nop = std::get<2>(GetParam());
   int64_t row_cnt = 0;
   if (row_cnt_flag && has_null) {
     row_cnt = 20;
@@ -480,7 +567,7 @@ TEST_P(TestCSDecoder, test_decoder_with_all_stream_encoding_types)
     row_arr[i].storage_datums_[3].set_int(i / repeat_cnt - 100);
     row_arr[i].storage_datums_[4].set_int(i / repeat_cnt - 100);
   }
-  for (int64_t i = row_cnt - 10; i < row_cnt; ++i) {
+  for (int64_t i = row_cnt - 10; i < row_cnt - 5; ++i) {
     row_arr[i].storage_datums_[0].set_int(i);
     if (has_null) {
       row_arr[i].storage_datums_[1].set_null();
@@ -498,21 +585,39 @@ TEST_P(TestCSDecoder, test_decoder_with_all_stream_encoding_types)
       row_arr[i].storage_datums_[4].set_int(i / repeat_cnt - 100);
     }
   }
+  for (int64_t i = row_cnt - 5; i < row_cnt; ++i) {
+    row_arr[i].storage_datums_[0].set_int(i);
+    if (has_nop) {
+      row_arr[i].storage_datums_[1].set_nop();
+      row_arr[i].storage_datums_[2].set_nop();
+      row_arr[i].storage_datums_[3].set_nop();
+      row_arr[i].storage_datums_[4].set_nop();
+      row_cnt_without_null[1]--;
+      row_cnt_without_null[2]--;
+      row_cnt_without_null[3]--;
+      row_cnt_without_null[4]--;
+    } else {
+      row_arr[i].storage_datums_[1].set_string(varchar_data, i / repeat_cnt);
+      row_arr[i].storage_datums_[2].set_string(varchar_data, i / repeat_cnt);
+      row_arr[i].storage_datums_[3].set_int(i / repeat_cnt - 100);
+      row_arr[i].storage_datums_[4].set_int(i / repeat_cnt - 100);
+    }
+  }
   ObIntegerStream::EncodingType stream_types_[ObCSColumnHeader::MAX_INT_STREAM_COUNT_OF_COLUMN];
   for (int type = 1; type < ObIntegerStream::EncodingType::MAX_TYPE; type++) {
     stream_types_[0] = {ObIntegerStream::EncodingType(type)};
     stream_types_[1] = {ObIntegerStream::EncodingType(type)};
     LOG_INFO("test stream ecoding type", K(type));
-    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_column_encoding_types(
-      0, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INTEGER, 1, 0), stream_types_, true));
-    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_column_encoding_types(
-      1, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::STRING, 1, 0), stream_types_, true));
-    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_column_encoding_types(
-      2, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::STR_DICT, 2, 0), stream_types_, true)); // string dict
-    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_column_encoding_types(
-      3, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INTEGER, 1, 0), stream_types_, true));
-    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_column_encoding_types(
-      4, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INT_DICT, 2, 0), stream_types_, true)); //integer dict
+    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_stream_detect_info(
+      0, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INTEGER, 1, 0), stream_types_, DATA_VERSION_4_3_5_0, true));
+    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_stream_detect_info(
+      1, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::STRING, 1, 0), stream_types_, DATA_VERSION_4_3_5_0, true));
+    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_stream_detect_info(
+      2, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::STR_DICT, 2, 0), stream_types_, DATA_VERSION_4_3_5_0, true)); // string dict
+    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_stream_detect_info(
+      3, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INTEGER, 1, 0), stream_types_, DATA_VERSION_4_3_5_0, true));
+    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_stream_detect_info(
+      4, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INT_DICT, 2, 0), stream_types_, DATA_VERSION_4_3_5_0, true)); //integer dict
 
     for (int64_t i = 0; i < row_cnt; ++i) {
       ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
@@ -689,7 +794,7 @@ TEST_F(TestCSDecoder, test_decimal_int_decoder)
   ASSERT_EQ(OB_SUCCESS, check_get_row_count(header, micro_block_desc, row_cnt_without_null, col_cnt, false));
 }
 
-INSTANTIATE_TEST_CASE_P(TestDecoder, TestCSDecoder, Combine(Bool(), Bool()));
+INSTANTIATE_TEST_CASE_P(TestDecoder, TestCSDecoder, Combine(Bool(), Bool(), Bool()));
 
 }  // namespace blocksstable
 }  // namespace oceanbase

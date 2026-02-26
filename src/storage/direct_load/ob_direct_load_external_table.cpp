@@ -67,6 +67,7 @@ void ObDirectLoadExternalTableMeta::reset()
 ObDirectLoadExternalTable::ObDirectLoadExternalTable()
   : is_inited_(false)
 {
+  table_type_ = ObDirectLoadTableType::EXTERNAL_TABLE;
 }
 
 ObDirectLoadExternalTable::~ObDirectLoadExternalTable()
@@ -101,11 +102,6 @@ int ObDirectLoadExternalTable::init(const ObDirectLoadExternalTableCreateParam &
     }
   }
   return ret;
-}
-
-void ObDirectLoadExternalTable::release_data()
-{
-  fragments_.reset();
 }
 
 int ObDirectLoadExternalTable::copy(const ObDirectLoadExternalTable &other)

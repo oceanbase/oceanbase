@@ -15,8 +15,6 @@
 #include "rootserver/mview/ob_mlog_maintenance_task.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/ob_errno.h"
 #include "share/schema/ob_mlog_info.h"
 
 namespace oceanbase
@@ -196,7 +194,21 @@ int ObMLogMaintenanceTask::gc_mlog()
   } else { // gc current batch
     ObSchemaGetterGuard schema_guard;
     int64_t tenant_schema_version = OB_INVALID_VERSION;
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    // We must check tenant schema is refreshed first. Because tenant schema may not be fully refreshed when observer restarts.
+    //
+    // For example, latest tenant schema version is 200, and MLOG schema version is 100.
+    // When observer restarts, tenant schema refresh progress is as follows:
+    // core schema refreshed(version=198) -> system schema refreshed(version=199) -> all user table schema refreshed(version=200)
+    // Only when all user table schema are refreshed, schema version is formal, and tenant schema is fully refreshed.
+    //
+    // Here is the bad case:
+    // 1. When observer restarts, only system schema is refreshed, tenant schema version is 199, and MLOG schema is not refreshed.
+    // 2. Now, we check tenant_schema_version(199) > MLOG schema version(100),
+    //    and we can not get MLOG schema from schema guard. So we GC the MLOG wrongly.
+    if (!GCTX.schema_service_->is_tenant_refreshed(tenant_id_)) {
+      ret = OB_EAGAIN;
+      LOG_INFO("tenant schema is not refreshed, need retry", K(tenant_id_));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, tenant_schema_version))) {
       LOG_WARN("fail to get schema version", KR(ret), K(tenant_id_));
@@ -213,7 +225,20 @@ int ObMLogMaintenanceTask::gc_mlog()
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, mlog_id, table_schema))) {
         LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_), K(mlog_id));
       } else {
-        is_exist = (nullptr != table_schema);
+        if (OB_ISNULL(table_schema)) {
+          is_exist = false;
+          int tmp_ret = OB_SUCCESS;
+          int64_t schema_count = 0;
+          if (OB_TMP_FAIL(schema_guard.get_schema_count(tenant_id_, schema_count))) {
+            LOG_WARN("fail to get schema count", KR(tmp_ret), K(tenant_id_), K(mlog_id));
+          }
+          FLOG_INFO("get null table schema, need gc this mlog", K(ret), K(tmp_ret),
+                    K(tenant_id_), K(mlog_id), K(mlog_info),
+                    K(tenant_schema_version), KP(table_schema), K(schema_count), K(is_exist));
+        } else {
+          // get table schema
+          is_exist = true;
+        }
       }
       if (OB_SUCC(ret) && !is_exist) {
         LOG_INFO("gc one mlog", K_(tenant_id), K(mlog_id));

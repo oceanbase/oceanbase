@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_restore_service.h"
-#include "ob_recover_table_job_scheduler.h"
-#include "share/restore/ob_import_table_struct.h"
-#include "share/restore/ob_recover_table_persist_helper.h"
 
 using namespace oceanbase;
 using namespace rootserver;
@@ -93,11 +90,12 @@ int ObRestoreService::idle()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!has_set_stop() && 0 < ATOMIC_LOAD(&wakeup_cnt_)) {
-    ATOMIC_SET(&wakeup_cnt_, 0); // wake up immediately
+     // skip next idle
   } else {
     ObTenantThreadHelper::idle(idle_time_us_);
     idle_time_us_ = GCONF._restore_idle_time;
   }
+  ATOMIC_SET(&wakeup_cnt_, 0);
   return ret;
 }
 
@@ -109,6 +107,12 @@ int ObRestoreService::check_stop() const
     LOG_WARN("restore service stopped", K(ret));
   }
   return ret;
+}
+
+void ObRestoreService::wakeup()
+{
+  ATOMIC_INC(&wakeup_cnt_);
+  ObTenantThreadHelper::wakeup();
 }
 
 void ObRestoreService::do_work()

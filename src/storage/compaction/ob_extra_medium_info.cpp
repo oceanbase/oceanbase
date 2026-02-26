@@ -11,8 +11,6 @@
  */
 
 #include "storage/compaction/ob_extra_medium_info.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
 
 using namespace oceanbase::common;
 
@@ -21,7 +19,7 @@ namespace oceanbase
 namespace compaction
 {
 ObExtraMediumInfo::ObExtraMediumInfo()
-  : compat_(MEDIUM_LIST_VERSION),
+  : compat_(MEDIUM_LIST_VERSION_V1),
     last_compaction_type_(0),
     wait_check_flag_(0),
     reserved_(0),
@@ -54,7 +52,7 @@ ObExtraMediumInfo &ObExtraMediumInfo::operator=(const ObExtraMediumInfo &other)
 
 void ObExtraMediumInfo::reset()
 {
-  compat_ = MEDIUM_LIST_VERSION;
+  compat_ = MEDIUM_LIST_VERSION_V1;
   last_compaction_type_ = 0;
   wait_check_flag_ = 0;
   reserved_ = 0;
@@ -67,7 +65,6 @@ int ObExtraMediumInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos)
   LST_DO_CODE(OB_UNIS_ENCODE,
       info_,
       last_medium_scn_);
-
   return ret;
 }
 
@@ -77,7 +74,6 @@ int ObExtraMediumInfo::deserialize(const char *buf, const int64_t data_len, int6
   LST_DO_CODE(OB_UNIS_DECODE,
       info_,
       last_medium_scn_);
-
   return ret;
 }
 
@@ -87,7 +83,6 @@ int64_t ObExtraMediumInfo::get_serialize_size() const
   LST_DO_CODE(OB_UNIS_ADD_LEN,
       info_,
       last_medium_scn_);
-
   return len;
 }
 } // namespace compaction

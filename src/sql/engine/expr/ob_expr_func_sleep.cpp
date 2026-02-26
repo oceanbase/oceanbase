@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_func_sleep.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -56,9 +53,8 @@ int ObExprSleep::sleep(int64_t usec)
   int64_t dead_line = ObTimeUtility::current_time() + usec;
   int64_t usec_rem = usec;
   useconds_t usec_req = static_cast<useconds_t>(MIN(CHECK_INTERVAL_IN_US, usec_rem));
-  ObWaitEventGuard wait_guard(ObWaitEventIds::DEFAULT_SLEEP, 0, usec);
   while(usec_req > 0) {
-    ob_usleep(usec_req);
+    ob_usleep<ObWaitEventIds::EXPR_FUNC_SLEEP>(usec_req);
     if (OB_FAIL(THIS_WORKER.check_status())) {
       break;
     } else {

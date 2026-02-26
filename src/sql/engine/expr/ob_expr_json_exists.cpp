@@ -12,15 +12,7 @@
  */
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_exists.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/object/ob_obj_cast_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/engine/expr/ob_expr_cast.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "lib/oblog/ob_log_module.h"
+#include "src/sql/resolver/ob_resolver_utils.h"
 #include "ob_expr_json_func_helper.h"
 
 namespace oceanbase
@@ -135,7 +127,7 @@ int ObExprJsonExists::calc_result_typeN(ObExprResType& type,
 }
 
 int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx,
-                              ObJsonPath* &j_path, common::ObArenaAllocator &allocator,
+                              ObJsonPath* &j_path, common::ObIAllocator &allocator,
                               ObJsonPathCache &ctx_cache, ObJsonPathCache* &path_cache)
 {
   INIT_SUCC(ret);
@@ -158,6 +150,7 @@ int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx,
   } else {
     ObString j_path_text;
     bool is_null = false;
+    bool is_const = json_arg->is_const_expr();
     if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, allocator, j_path_text, is_null))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
     } else if (is_null || j_path_text.length() == 0) {
@@ -167,7 +160,7 @@ int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx,
       path_cache = ObJsonExprHelper::get_path_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
       path_cache = ((path_cache != NULL) ? path_cache : &ctx_cache);
 
-      if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 1, true))) {
+      if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(allocator, path_cache, j_path, j_path_text, 1, true, is_const))) {
         ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;
         LOG_USER_ERROR(OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR, j_path_text.length(), j_path_text.ptr());
       }
@@ -177,7 +170,7 @@ int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::ObArenaAllocator &allocator,
+int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &allocator,
                                     uint16_t index, ObIJsonBase*& j_base)
 {
   INIT_SUCC(ret);
@@ -242,7 +235,7 @@ int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::O
 }
 
 int ObExprJsonExists::get_passing(const ObExpr &expr, ObEvalCtx &ctx, PassingMap &pass_map,
-                                  uint32_t param_num, ObArenaAllocator& temp_allocator)
+                                  uint32_t param_num, ObIAllocator& temp_allocator)
 {
   INIT_SUCC(ret);
   ObExpr *json_arg = nullptr;
@@ -415,7 +408,8 @@ int ObExprJsonExists::eval_json_exists(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObIJsonBase *json_data = NULL;
   bool is_null_json = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObJsonPathCache ctx_cache(&temp_allocator);
   ObJsonPathCache* path_cache = nullptr;
   ObJsonPath* j_path = nullptr;

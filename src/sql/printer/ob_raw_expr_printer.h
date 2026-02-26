@@ -29,7 +29,6 @@ namespace sql
 class ObRawExprPrinter
 {
 #define LEN_AND_PTR(str) (str.length()), (str.ptr())
-#define SQL_ESCAPE_STR(str) (to_cstring(ObHexEscapeSqlStr(str)))
 #define _DATA_PRINTF(...) databuff_printf(buf_, buf_len_, *pos_, __VA_ARGS__)
 #define DATA_PRINTF(...)                                           \
   do {                                                              \
@@ -67,6 +66,13 @@ class ObRawExprPrinter
 #define PRINT_EXPR(expr)                              \
   do {                                                 \
     if (OB_SUCCESS == ret && OB_FAIL(SMART_CALL(print(expr)))) {    \
+      LOG_WARN("fail to print expr", K(ret));            \
+    }                                                     \
+  } while(0)                                               \
+
+#define PRINT_BOOL_EXPR(expr)                              \
+  do {                                                 \
+    if (OB_SUCCESS == ret && OB_FAIL(SMART_CALL(print_bool_expr(expr)))) {    \
       LOG_WARN("fail to print expr", K(ret));            \
     }                                                     \
   } while(0)                                               \
@@ -117,6 +123,8 @@ public:
   int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false, bool print_cte = false);
   int pre_check_treat_opt(ObRawExpr *expr, bool &is_treat);
 private:
+  int print_bool_expr(ObRawExpr *expr);
+  int print_select_expr(ObRawExpr *expr);
   int print(ObRawExpr *expr);
 
   int print(ObConstRawExpr *expr);
@@ -132,6 +140,7 @@ private:
   int print(ObWinFunRawExpr *expr);
   int print(ObPseudoColumnRawExpr *expr);
   int print(ObMatchFunRawExpr *expr);
+  int print(ObUnpivotRawExpr *expr);
 
   int print_date_unit(ObRawExpr *expr);
   int print_get_format_unit(ObRawExpr *expr);
@@ -155,14 +164,16 @@ private:
   int print_window_clause(ObWinFunRawExpr *expr);
   int print_xml_parse_expr(ObSysFunRawExpr *expr);
   int print_xml_element_expr(ObSysFunRawExpr *expr);
+  int print_xml_forest_expr(ObSysFunRawExpr *expr);
   int print_xml_attributes_expr(ObSysFunRawExpr *expr);
   int print_xml_agg_expr(ObAggFunRawExpr *expr);
   int print_xml_serialize_expr(ObSysFunRawExpr *expr);
   int print_sql_udt_attr_access(ObSysFunRawExpr *expr);
   int print_sql_udt_construct(ObSysFunRawExpr *expr);
   int print_st_asmvt(ObAggFunRawExpr *expr);
-
-  int print_type(const ObExprResType &dst_type);
+  int print_array_agg_expr(ObAggFunRawExpr *expr);
+  int print_array_map(ObSysFunRawExpr *expr, const char *func_name);
+  int print_type(const ObRawExprResType &dst_type);
 
   int inner_print_fun_params(ObSysFunRawExpr &expr);
 

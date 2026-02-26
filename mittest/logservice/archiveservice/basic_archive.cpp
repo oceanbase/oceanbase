@@ -10,31 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_smart_var.h"
-#include "lib/string/ob_sql_string.h"
-#include "logservice/palf/lsn.h"
-#include "share/scn.h"
-#include "observer/ob_server_struct.h"
-#include "share/backup/ob_archive_struct.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_ls_id.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include <unistd.h>
 #define protected public
 #define private public
 
 #include "logservice/archiveservice/ob_archive_service.h"
-#include "logservice/archiveservice/ob_ls_task.h"
 #undef private
 #undef protected
 #include "basic_archive.h"
-#include "share/rc/ob_tenant_base.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/ob_errno.h"
-#include <cstdint>
-#include <gtest/gtest.h>
 
 namespace oceanbase
 {

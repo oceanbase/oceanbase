@@ -11,13 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/cmd/ob_variable_set_resolver.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/cmd/ob_set_names_resolver.h"
 #include "sql/resolver/dml/ob_inlist_resolver.h"
 namespace oceanbase
@@ -194,10 +190,6 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "Not support oracle mode");
               }
 #endif
-              if (OB_SUCC(ret) &&
-                  OB_FAIL(ObResolverUtils::resolve_const_expr(params_, value_node, var_node.value_expr_, NULL))) {
-                LOG_WARN("resolve variable value failed", K(ret));
-              }
             }
             if (OB_SUCC(ret)) {
               if (0 == var_node.variable_name_.case_compare("_enable_mysql_pl_priv_check")) {
@@ -208,6 +200,11 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
                   ret = OB_NOT_SUPPORTED;
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "turn _enable_mysql_pl_priv_check without on");
                 }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(resolve_value_expr(value_node, var_node.value_expr_))) {
+                LOG_WARN("failed to resolve value expr", K(ret));
               }
             }
           } else {
@@ -231,6 +228,12 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
             if (OB_NOT_NULL(var_node.value_expr_) && var_node.value_expr_->has_flag(CNT_AGG)) {
               ret = OB_ERR_INVALID_GROUP_FUNC_USE;
               LOG_WARN("invalid scope for agg function", K(ret));
+            } else if (OB_NOT_NULL(var_node.value_expr_)
+                      && var_node.value_expr_->get_result_type().get_type() == ObCollectionSQLType) {
+              // set 系统变量 = array type isn't supported
+             ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("Variable value type is not supported", K(ret), K(set_node->children_[1]->type_));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable value type");
             } else if (OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
               LOG_WARN("Add set entry failed", K(ret));
             }
@@ -374,7 +377,7 @@ int ObVariableSetResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("target expr is null", K(ret));
         } else {
-          const ObExprResType &column_type = target_expr->get_result_type();
+          const ObRawExprResType &column_type = target_expr->get_result_type();
           if (OB_FAIL(info.ref_expr_->add_column_type(column_type))) {
             LOG_WARN("add column type to subquery ref expr failed", K(ret));
           }

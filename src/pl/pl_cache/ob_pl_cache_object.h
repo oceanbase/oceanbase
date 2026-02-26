@@ -48,13 +48,14 @@ struct ObPlParamInfo : public sql::ObParamInfo
                K_(scale),
                K_(type),
                K_(ext_real_type),
-               K_(is_oracle_empty_string),
+               K_(is_oracle_null_value),
                K_(col_type),
                K_(pl_type),
                K_(udt_id));
 
   uint8_t pl_type_;
   uint64_t udt_id_;
+  static const int64_t MAX_STR_DES_LEN_PL = 96;
 
   OB_UNIS_VERSION_V(1);
 };
@@ -63,10 +64,11 @@ enum ObPLCacheObjectType
 {
   INVALID_PL_OBJECT_TYPE = 5, // start with OB_PHY_PLAN_UNCERTAIN, distict ObPhyPlanType
   STANDALONE_ROUTINE_TYPE,
-  PACKAGE_ROUTINE_TYPE,
-  UDT_ROUTINE_TYPE,
+  PACKAGE_TYPE,
+  PACKAGE_BODY_TYPE,
   ANONYMOUS_BLOCK_TYPE,
   CALL_STMT_TYPE,
+  UDF_RESULT_TYPE,
   MAX_TYPE_NUM
 };
 
@@ -74,6 +76,7 @@ struct PLCacheObjStat
 {
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   int64_t pl_schema_id_;
+  uint64_t db_id_;
   common::ObString raw_sql_; // sql txt for anonymous block
   common::ObString name_;
   common::ObCollationType sql_cs_type_;
@@ -86,12 +89,19 @@ struct PLCacheObjStat
   int64_t execute_times_;        //SUCC下执行次数
   int64_t  slowest_exec_time_;    // execution slowest time
   uint64_t slowest_exec_usec_;    // execution slowest usec
+  int64_t pl_evict_version_;
   int64_t schema_version_;
   int64_t ps_stmt_id_;//prepare stmt id
+  int64_t pl_cg_mem_hold_;
   common::ObString sys_vars_str_;
+  common::ObString param_infos_;
+  ObSchemaObjVersion out_of_date_dependcy_version_; // out_of_date dependcy version
+  ObSchemaObjVersion outline_version_;
+  int64_t cg_time_; // pl object cost time of code gen
 
   PLCacheObjStat()
     : pl_schema_id_(OB_INVALID_ID),
+      db_id_(OB_INVALID_ID),
       raw_sql_(),
       name_(),
       sql_cs_type_(common::CS_TYPE_INVALID),
@@ -104,9 +114,15 @@ struct PLCacheObjStat
       execute_times_(0),
       slowest_exec_time_(0),
       slowest_exec_usec_(0),
+      pl_evict_version_(OB_INVALID_ID),
       schema_version_(OB_INVALID_ID),
       ps_stmt_id_(OB_INVALID_ID),
-      sys_vars_str_()
+      pl_cg_mem_hold_(0),
+      sys_vars_str_(),
+      param_infos_(),
+      out_of_date_dependcy_version_(),
+      outline_version_(),
+      cg_time_(0)
   {
     sql_id_[0] = '\0';
   }
@@ -120,6 +136,7 @@ struct PLCacheObjStat
   {
     sql_id_[0] = '\0';
     pl_schema_id_ = OB_INVALID_ID;
+    db_id_ = OB_INVALID_ID;
     sql_cs_type_ = common::CS_TYPE_INVALID;
     raw_sql_.reset();
     name_.reset();
@@ -131,12 +148,19 @@ struct PLCacheObjStat
     execute_times_ = 0;
     slowest_exec_time_ = 0;
     slowest_exec_usec_ = 0;
+    pl_evict_version_ = OB_INVALID_ID;
     schema_version_ = OB_INVALID_ID;
     ps_stmt_id_ = OB_INVALID_ID;
+    pl_cg_mem_hold_ = 0;
     sys_vars_str_.reset();
+    param_infos_.reset();
+    out_of_date_dependcy_version_.reset();
+    outline_version_.reset();
+    cg_time_ = 0;
   }
 
   TO_STRING_KV(K_(pl_schema_id),
+               K_(db_id),
                K_(gen_time),
                K_(last_active_time),
                K_(hit_count),
@@ -144,8 +168,14 @@ struct PLCacheObjStat
                K_(name),
                K_(compile_time),
                K_(type),
+               K_(pl_evict_version),
                K_(schema_version),
-               K_(sys_vars_str));
+               K_(pl_cg_mem_hold),
+               K_(sys_vars_str),
+               K_(param_infos),
+               K_(out_of_date_dependcy_version),
+               K_(outline_version),
+               K_(cg_time));
 };
 
 class ObPLCacheObject : public sql::ObILibCacheObject
@@ -163,7 +193,9 @@ public:
     expressions_(allocator_),
     expr_op_size_(0),
     frame_info_(allocator_),
-    stat_()
+    stat_(),
+    concurrent_num_(0),
+    max_concurrent_num_(ObMaxConcurrentParam::UNLIMITED)
     {}
 
   virtual ~ObPLCacheObject() {}
@@ -174,7 +206,7 @@ public:
   inline void set_tenant_schema_version(int64_t schema_version) { tenant_schema_version_ = schema_version; }
   inline int64_t get_tenant_schema_version() const { return tenant_schema_version_; }
   inline int64_t get_sys_schema_version() const { return sys_schema_version_; }
-
+  int set_tenant_sys_schema_version(share::schema::ObSchemaGetterGuard &schema_guard, int64_t tenant_id);
   inline int64_t get_dependency_table_size() const { return dependency_tables_.count(); }
   inline const sql::DependenyTableStore &get_dependency_table() const { return dependency_tables_; }
   int init_dependency_table_store(int64_t dependency_table_cnt) { return dependency_tables_.init(dependency_table_cnt); }
@@ -198,12 +230,23 @@ public:
   inline PLCacheObjStat &get_stat_for_update() { return stat_; }
 
   virtual int update_cache_obj_stat(sql::ObILibCacheCtx &ctx);
+  int init_params_info_str();
   int update_execute_time(int64_t exec_time);
+  static int get_times(const ObPLCacheObject *pl_object, int64_t& execute_times, int64_t& elapsed_time);
+  inline bool is_limited_concurrent_num() const { return max_concurrent_num_ != share::schema::ObMaxConcurrentParam::UNLIMITED; }
+  inline int64_t get_max_concurrent_num() const { return ATOMIC_LOAD(&max_concurrent_num_); }
+  inline int64_t get_concurrent_num() const { return ATOMIC_LOAD(&concurrent_num_); }
+  inline void set_max_concurrent_num(int64_t max_concurrent_num) { ATOMIC_STORE(&max_concurrent_num_, max_concurrent_num); }
+  int inc_concurrent_num();
+  inline void dec_concurrent_num() { ATOMIC_DEC(&concurrent_num_); }
 
   TO_STRING_KV(K_(expr_op_size),
                K_(tenant_schema_version),
                K_(sys_schema_version),
-               K_(dependency_tables));
+               K_(dependency_tables),
+               K_(stat),
+               K_(concurrent_num),
+               K_(max_concurrent_num));
 
 protected:
   int64_t tenant_schema_version_;
@@ -221,6 +264,8 @@ protected:
   sql::ObExprFrameInfo frame_info_;
   // stat info
   PLCacheObjStat stat_;
+  int64_t concurrent_num_;
+  int64_t max_concurrent_num_;
 };
 
 } // namespace pl end

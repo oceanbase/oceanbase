@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_query_common.h"
 #include "ob_htable_filter_operator.h"
+#include "observer/table/redis/ob_redis_iterator.h"
+#include "src/share/table/ob_table_util.h"
 
 namespace oceanbase
 {
@@ -25,7 +27,7 @@ int ObTableQueryUtils::check_htable_query_args(const ObTableQuery &query,
   int ret = OB_SUCCESS;
   const ObIArray<ObString> &select_columns = tb_ctx.get_query_col_names();
   int64_t N = select_columns.count();
-  if (N != 4 && N != 5) { // htable maybe has prefix generated column
+  if (N < 4) { // htable maybe has prefix generated column or TTL column
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("TableQuery with htable_filter should select 4 columns", K(ret), K(N));
   }
@@ -57,6 +59,78 @@ int ObTableQueryUtils::check_htable_query_args(const ObTableQuery &query,
   return ret;
 }
 
+template<typename ResultType>
+int ObTableQueryUtils::generate_htable_result_iterator(ObIAllocator &allocator,
+                                                       const ObTableQuery &query,
+                                                       ResultType &one_result,
+                                                       const ObTableCtx &tb_ctx,
+                                                       ObTableQueryResultIterator *&result_iter)
+{
+  int ret = OB_SUCCESS;
+  bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
+  ObKVAttr kv_attributes;
+
+  ObHTableFilterOperator *htable_result_iter = nullptr;
+  ObKvSchemaCacheGuard *schema_cache_guard = tb_ctx.get_schema_cache_guard();
+  if (OB_ISNULL(schema_cache_guard) || !schema_cache_guard->is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_cache_cache is NULL or not inited", K(ret));
+  } else if (OB_FAIL(schema_cache_guard->get_kv_attributes(kv_attributes))) {
+    LOG_WARN("get kv attributes failed", K(ret));
+  } else if (OB_FAIL(check_htable_query_args(query, tb_ctx))) {
+    LOG_WARN("fail to check htable query args", K(ret), K(tb_ctx));
+  } else if (OB_ISNULL(htable_result_iter = OB_NEWx(ObHTableFilterOperator,
+                                                    (&allocator),
+                                                    query,
+                                                    one_result))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc htable query result iterator", K(ret));
+  } else if (OB_FAIL(htable_result_iter->init(&allocator))) {
+    LOG_WARN("fail to init row htable_result_iter", K(ret));
+  } else {
+    ObHColumnDescriptor desc;
+    desc.from_kv_attribute(kv_attributes);
+    if (desc.get_time_to_live() > 0) {
+      htable_result_iter->set_ttl(desc.get_time_to_live());
+    }
+    if (desc.get_max_version() > 0) {
+      htable_result_iter->set_max_version(desc.get_max_version());
+    }
+    const ObIArray<ObString> &select_columns = query.get_select_columns();
+    if ((select_columns.empty() ||
+            ObTableUtils::has_exist_in_columns(select_columns, ObHTableConstants::TTL_CNAME_STR)) &&
+        schema_cache_guard->get_schema_flags().has_hbase_ttl_column_) {
+      htable_result_iter->set_need_verify_cell_ttl(true);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    result_iter = htable_result_iter;
+  } else if (OB_NOT_NULL(htable_result_iter)) {
+    htable_result_iter->~ObHTableFilterOperator();
+    allocator.free(htable_result_iter);
+  }
+
+  return ret;
+}
+
+// explicit specialization for ObTableQueryIterableResult
+template int ObTableQueryUtils::generate_htable_result_iterator(ObIAllocator &allocator,
+                                                                const ObTableQuery &query,
+                                                                ObTableQueryIterableResult &one_result,
+                                                                const ObTableCtx &tb_ctx,
+                                                                ObTableQueryResultIterator *&result_iter);
+template int ObTableQueryUtils::generate_htable_result_iterator(ObIAllocator &allocator,
+                                                                const ObTableQuery &query,
+                                                                ObTableQueryResult &one_result,
+                                                                const ObTableCtx &tb_ctx,
+                                                                ObTableQueryResultIterator *&result_iter);
+template int ObTableQueryUtils::generate_htable_result_iterator(ObIAllocator &allocator,
+                                                                const ObTableQuery &query,
+                                                                ObTableQueryAsyncResult &one_result,
+                                                                const ObTableCtx &tb_ctx,
+                                                                ObTableQueryResultIterator *&result_iter);
+
 int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
                                                       const ObTableQuery &query,
                                                       bool is_hkv,
@@ -67,36 +141,13 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObTableQueryResultIterator *tmp_result_iter = nullptr;
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
-  const ObString &kv_attributes = tb_ctx.get_table_schema()->get_kv_attributes();
 
   if (OB_FAIL(one_result.deep_copy_property_names(tb_ctx.get_query_col_names()))) {
     LOG_WARN("fail to deep copy property names to one result", K(ret), K(tb_ctx));
   } else if (has_filter) {
     if (is_hkv) {
-      ObHTableFilterOperator *htable_result_iter = nullptr;
-      if (OB_FAIL(check_htable_query_args(query, tb_ctx))) {
-        LOG_WARN("fail to check htable query args", K(ret), K(tb_ctx));
-      } else if (OB_ISNULL(htable_result_iter = OB_NEWx(ObHTableFilterOperator,
-                                                        (&allocator),
-                                                        query,
-                                                        one_result))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc htable query result iterator", K(ret));
-      } else if (OB_FAIL(htable_result_iter->parse_filter_string(&allocator))) {
-        LOG_WARN("fail to parse htable filter string", K(ret));
-      } else {
-        tmp_result_iter = htable_result_iter;
-        ObHColumnDescriptor desc;
-        if (OB_FAIL(desc.from_string(kv_attributes))) {
-          LOG_WARN("fail to parse hcolumn_desc from kv attributes", K(ret), K(kv_attributes));
-        } else {
-          if (desc.get_time_to_live() > 0) {
-            htable_result_iter->set_ttl(desc.get_time_to_live());
-          }
-          if (desc.get_max_version() > 0) {
-            htable_result_iter->set_max_version(desc.get_max_version());
-          }
-        }
+      if (OB_FAIL(generate_htable_result_iterator(allocator, query, one_result, tb_ctx, tmp_result_iter))) {
+        LOG_WARN("fail to generate htable result iterator", K(ret), K(query));
       }
     } else { // tableapi
       ObTableFilterOperator *table_result_iter = nullptr;
@@ -115,8 +166,8 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
           table_result_iter->init_aggregation();
           table_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
         }
-        tmp_result_iter = table_result_iter;
       }
+      tmp_result_iter = table_result_iter;
     }
   } else { // no filter
     ObNormalTableQueryResultIterator *normal_result_iter = nullptr;
@@ -137,63 +188,177 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
         normal_result_iter->init_aggregation();
         normal_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
       }
-      tmp_result_iter = normal_result_iter;
     }
+    tmp_result_iter = normal_result_iter;
   }
 
   if (OB_SUCC(ret)) {
     result_iter = tmp_result_iter;
+  } else if (OB_NOT_NULL(tmp_result_iter)) {
+    destroy_result_iterator(tmp_result_iter);
   }
 
   return ret;
 }
 
-void ObTableQueryUtils::destroy_result_iterator(ObTableQueryResultIterator *result_iter)
+void ObTableQueryUtils::destroy_result_iterator(ObTableQueryResultIterator *&result_iter)
 {
   if (OB_NOT_NULL(result_iter)) {
     result_iter->~ObTableQueryResultIterator();
+    result_iter = nullptr;
   }
 }
 
-int ObTableQueryUtils::get_rowkey_column_names(const ObTableSchema &table_schema, ObIArray<ObString> &names)
+int ObTableQueryUtils::get_rowkey_column_names(ObKvSchemaCacheGuard &schema_cache_guard, ObIArray<ObString> &names)
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *column_schema = nullptr;
-  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
-  const int64_t N = rowkey_info.get_size();
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+  int64_t N = 0;
+  if (OB_FAIL(schema_cache_guard.get_rowkey_column_num(N))) {
+    LOG_WARN("failed to get rowkey column num", K(ret));
+  } else {
     uint64_t column_id = OB_INVALID_ID;
-    if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
-      LOG_WARN("fail to get column id", K(ret), K(i), K(rowkey_info));
-    } else if (NULL == (column_schema = table_schema.get_column_schema(column_id))){
-      ret = OB_ERR_COLUMN_NOT_FOUND;
-      LOG_WARN("column not exists", K(ret), K(column_id));
-    } else if (OB_FAIL(names.push_back(column_schema->get_column_name_str()))) {
-      LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      const ObTableColumnInfo *column_info = nullptr;
+      if (OB_FAIL(schema_cache_guard.get_rowkey_column_id(i, column_id))) {
+        LOG_WARN("failed to get column id", K(ret), K(i));
+      } else if (OB_FAIL(schema_cache_guard.get_column_info(column_id, column_info))) {
+        LOG_WARN("fail to get column info", K(ret), K(column_id));
+      } else if (OB_ISNULL(column_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column info is NULL", K(ret), K(i));
+      } else if (OB_FAIL(names.push_back(column_info->column_name_))) {
+        LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
+      }
     }
   }
 
   return ret;
 }
 
-int ObTableQueryUtils::get_full_column_names(const ObTableSchema &table_schema, ObIArray<ObString> &names)
+int ObTableQueryUtils::get_full_column_names(ObKvSchemaCacheGuard &schema_cache_guard, ObIArray<ObString> &names)
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *column_schema = nullptr;
-  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
-  const int64_t N = rowkey_info.get_size();
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+  int64_t N = 0;
+  if (OB_FAIL(schema_cache_guard.get_rowkey_column_num(N))) {
+    LOG_WARN("failed to get rowkey column num", K(ret));
+  } else {
     uint64_t column_id = OB_INVALID_ID;
-    if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
-      LOG_WARN("fail to get column id", K(ret), K(i), K(rowkey_info));
-    } else if (NULL == (column_schema = table_schema.get_column_schema(column_id))){
-      ret = OB_ERR_COLUMN_NOT_FOUND;
-      LOG_WARN("column not exists", K(ret), K(column_id));
-    } else if (OB_FAIL(names.push_back(column_schema->get_column_name_str()))) {
-      LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      const ObTableColumnInfo *column_info = nullptr;
+      if (OB_FAIL(schema_cache_guard.get_rowkey_column_id(i, column_id))) {
+        LOG_WARN("failed to get column id", K(ret), K(i));
+      } else if (OB_FAIL(schema_cache_guard.get_column_info(column_id, column_info))) {
+        LOG_WARN("fail to get column info", K(ret), K(column_id));
+      } else if (OB_ISNULL(column_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column info is NULL", K(ret), K(i));
+      } else if (OB_FAIL(names.push_back(column_info->column_name_))) {
+        LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
+      }
     }
+  }
+  return ret;
+}
+
+int ObTableQueryUtils::get_scan_row_interator(const ObTableCtx &tb_ctx,
+                                              ObTableApiScanRowIterator *&scan_iter)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator &allocator = tb_ctx.get_allocator();
+  ObKvSchemaCacheGuard *cache_guard = tb_ctx.get_schema_cache_guard();
+  ObKVAttr kv_attributes;
+  if (OB_ISNULL(cache_guard)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null schema cache guard", K(ret));
+  } else if (OB_FAIL(cache_guard->get_kv_attributes(kv_attributes))) {
+    LOG_WARN("fail to get kv attributes", K(ret), K(*cache_guard));
+  } else if (kv_attributes.is_redis_ttl_) {
+    ObRedisRowIterator *redis_row_iter = nullptr;
+    if (OB_ISNULL(redis_row_iter = OB_NEWx(ObRedisRowIterator, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc ObTableTTLDeleteRowIterator", K(ret));
+    } else if (OB_FAIL(redis_row_iter->init_scan(kv_attributes, tb_ctx.redis_ttl_ctx()))) {
+      LOG_WARN("fail to init redis row iterator", KR(ret));
+    } else {
+      scan_iter = redis_row_iter;
+    }
+  } else {
+    if (OB_ISNULL(scan_iter = OB_NEWx(ObTableApiScanRowIterator, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc ObTableTTLDeleteRowIterator", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableQueryUtils::get_table_schemas(ObMultiVersionSchemaService *schema_service,
+                                         ObSchemaGetterGuard& schema_guard,
+                                         const ObString &arg_table_name,
+                                         bool is_tablegroup_name,
+                                         uint64_t arg_tenant_id,
+                                         uint64_t arg_database_id,
+                                         common::ObIArray<const schema::ObSimpleTableSchemaV2*> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tablegroup_id = OB_INVALID_ID;
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid shcema service", K(ret));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(arg_tenant_id, schema_guard))) {
+    LOG_WARN("Failed to get schema guard", K(ret), K(arg_tenant_id));
+  } else if (OB_FAIL(get_table_schemas(schema_guard, arg_table_name, is_tablegroup_name, arg_tenant_id,
+                        arg_database_id, table_schemas))) {
+    LOG_WARN("fail to get table schemas", K(ret), K(arg_table_name), K(is_tablegroup_name), K(arg_tenant_id),
+             K(arg_database_id));
+  }
+
+  return ret;
+}
+
+int ObTableQueryUtils::get_table_schemas(ObSchemaGetterGuard& schema_guard,
+                                         const ObString &arg_table_name,
+                                         bool is_tablegroup_name,
+                                         uint64_t arg_tenant_id,
+                                         uint64_t arg_database_id,
+                                         common::ObIArray<const schema::ObSimpleTableSchemaV2*> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tablegroup_id = OB_INVALID_ID;
+
+  if (!schema_guard.is_inited()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema guard is not inited", K(ret));
+  } else if (is_tablegroup_name) {
+    // Handle table group case
+    if (OB_FAIL(schema_guard.get_tablegroup_id(arg_tenant_id, arg_table_name, tablegroup_id))) {
+      LOG_WARN("Failed to get table group ID", K(ret), K(arg_tenant_id), K(arg_table_name));
+    } else if (tablegroup_id == OB_INVALID_ID) {
+      ret = OB_KV_HBASE_TABLE_NOT_FOUND;
+      LOG_WARN("the table group for hbase table not found", KR(ret), K(arg_table_name));
+      LOG_USER_ERROR(OB_KV_HBASE_TABLE_NOT_FOUND, arg_table_name.length(), arg_table_name.ptr());
+    } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(arg_tenant_id, tablegroup_id, table_schemas))) {
+      LOG_WARN("Failed to get table schemas from table group", K(ret), K(arg_tenant_id), K(tablegroup_id));
+    } else {
+      // Proceed to initialize multi_cf_infos_ with the tables in the table group
+      // The table_schemas array now contains the schemas of all tables in the table group
+    }
+  } else { // handle table name case
+    const schema::ObSimpleTableSchemaV2* simple_table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_simple_table_schema(arg_tenant_id,
+                                                      arg_database_id,
+                                                      arg_table_name,
+                                                      false, /* is_index */
+                                                      simple_table_schema))) {
+      LOG_WARN("Failed to get simple table schema", K(ret), K(arg_tenant_id),
+                K(arg_database_id), K(arg_table_name));
+    } else if (OB_ISNULL(simple_table_schema) || simple_table_schema->get_table_id() == OB_INVALID_ID) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Invalid table schema", K(ret), K(arg_table_name), KP(simple_table_schema));
+    } else if (OB_FAIL(table_schemas.push_back(simple_table_schema))) {
+      LOG_WARN("Failed to add table schema to array", K(ret));
+    }
+    // The table_schemas array now contains only the schema of the single table
   }
 
   return ret;

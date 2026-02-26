@@ -11,9 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <iostream>
-#include "lib/thread/thread_pool.h"
-#include "lib/time/ob_time_utility.h"
 #include "../coro/testing.h"
 
 using namespace oceanbase::lib;

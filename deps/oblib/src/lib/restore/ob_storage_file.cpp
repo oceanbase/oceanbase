@@ -10,17 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <utime.h>
-#include <dirent.h>
 
 #include "ob_storage_file.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/utility/utility.h"
+#include "lib/utility/ob_sort.h"
 
 namespace oceanbase
 {
@@ -30,11 +22,13 @@ namespace common
 static void convert_io_error(const int sys_err, int &ob_error_code)
 {
   if (ENOENT == sys_err) {
-    ob_error_code = OB_BACKUP_FILE_NOT_EXIST;
+    ob_error_code = OB_OBJECT_NOT_EXIST;
   } else if (EPERM == sys_err || EACCES == sys_err) {
-    ob_error_code = OB_BACKUP_PERMISSION_DENIED;
+    ob_error_code = OB_OBJECT_STORAGE_PERMISSION_DENIED;
   } else if (ENOSPC == sys_err || EDQUOT == sys_err) {
     ob_error_code = OB_BACKUP_DEVICE_OUT_OF_SPACE;
+  } else if (ENAMETOOLONG == sys_err) {
+    ob_error_code = OB_INVALID_ARGUMENT;
   } else {
     ob_error_code = OB_IO_ERROR;
   }
@@ -143,26 +137,20 @@ int ObStorageFileUtil::is_exist(const common::ObString &uri, bool &exist)
 int ObStorageFileUtil::get_file_length(const common::ObString &uri, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
-  char path[OB_MAX_URI_LENGTH];
-  char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
-  struct stat64 file_info;
+  ObStorageObjectMetaBase obj_meta;
 
   file_length = -1;
 
-  if (uri.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", K(ret), K(uri));
-  } else if (OB_FAIL(get_file_path(uri, path, sizeof(path)))) {
-    STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
-  } else if (0 != ::stat64(path, &file_info)) {
-    convert_io_error(errno, ret);
-    STORAGE_LOG(WARN, "file not exist",
-        K(ret), K(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
-  } else if (S_ISDIR(file_info.st_mode)) {
-    ret = OB_IO_ERROR;
-    STORAGE_LOG(WARN, "uri is a dir", K(ret), KCSTRING(path));
+  if (OB_FAIL(head_object_meta(uri, obj_meta))) {
+    STORAGE_LOG(WARN, "failed to get object meta", K(ret), K(uri));
+  } else if (!obj_meta.is_exist_) {
+    ret = OB_OBJECT_NOT_EXIST;
+    STORAGE_LOG(WARN, "file not exist", K(ret), K(uri));
+  } else if (ObStorageObjectMetaType::OB_FS_DIR == obj_meta.type_) {
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
+    STORAGE_LOG(WARN, "uri is a dir", K(ret), K(uri));
   } else {
-    file_length = file_info.st_size;
+    file_length = obj_meta.length_;
   }
 
   return ret;
@@ -174,6 +162,7 @@ int ObStorageFileUtil::head_object_meta(const common::ObString &uri, ObStorageOb
   char path[OB_MAX_URI_LENGTH];
   char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
   struct stat64 file_info;
+  int fd = -1;
   obj_meta.reset();
 
   if (uri.empty()) {
@@ -192,10 +181,45 @@ int ObStorageFileUtil::head_object_meta(const common::ObString &uri, ObStorageOb
     obj_meta.is_exist_ = true;
     obj_meta.length_ = -1;
     obj_meta.type_ = ObStorageObjectMetaType::OB_FS_DIR;
+    obj_meta.mtime_s_ = static_cast<int64_t>(file_info.st_mtime);
   } else {
-    obj_meta.is_exist_ = true;
-    obj_meta.length_ = file_info.st_size;
-    obj_meta.type_ = ObStorageObjectMetaType::OB_FS_FILE;
+    // If not directory, use fstat64 again to get the file attr to avoid reading old attr due to NFS attr cache.
+    if (-1 == (fd = ::open(path, O_RDONLY))) {
+      convert_io_error(errno, ret);
+      STORAGE_LOG(WARN, "failed to open read file",
+          K(ret), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+    } else {
+      if (0 != ::fstat64(fd, &file_info)) {
+        convert_io_error(errno, ret);
+        STORAGE_LOG(WARN, "failed to stat file",
+            K(ret), K(fd), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+      } else {
+        obj_meta.is_exist_ = true;
+        obj_meta.length_ = file_info.st_size;
+        obj_meta.type_ = ObStorageObjectMetaType::OB_FS_FILE;
+        obj_meta.mtime_s_ = static_cast<int64_t>(file_info.st_mtime);
+
+        int tmp_ret = OB_SUCCESS;
+        const int64_t last_modified_time_ns =
+            file_info.st_mtim.tv_sec * 1000LL * 1000LL * 1000LL + file_info.st_mtim.tv_nsec;
+        char digest_buf[32] = {0};
+        if (OB_TMP_FAIL(databuff_printf(digest_buf, sizeof(digest_buf), "%ld", last_modified_time_ns))) {
+          OB_LOG(WARN, "fail to convert last modified time to string",
+              K(ret), K(tmp_ret), K(uri), K(obj_meta), K(last_modified_time_ns));
+        } else if (OB_TMP_FAIL(obj_meta.digest_.set(digest_buf))) {
+          OB_LOG(WARN, "fail to set digest", K(ret), K(tmp_ret),
+              K(uri), K(obj_meta), K(last_modified_time_ns));
+        }
+      }
+
+      if (0 != ::close(fd)) {
+        int tmp_ret = OB_SUCCESS;
+        convert_io_error(errno, tmp_ret);
+        ret = COVER_SUCC(tmp_ret);
+        STORAGE_LOG(WARN, "failed to close read file", K(ret), K(tmp_ret), KCSTRING(path),
+            K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+      }
+    }
   }
 
   return ret;
@@ -214,10 +238,27 @@ int ObStorageFileUtil::del_file(const common::ObString &uri)
     STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
   } else if (0 != ::unlink(path)) {
     convert_io_error(errno, ret);
-    STORAGE_LOG(WARN, "failed to del file",
-        K(ret), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+    if (OB_OBJECT_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      STORAGE_LOG(WARN, "failed to del file",
+          K(ret), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+    }
   }
 
+  return ret;
+}
+
+int ObStorageFileUtil::batch_del_files(
+    const ObString &uri,
+    hash::ObHashMap<ObString, int64_t> &files_to_delete,
+    ObIArray<int64_t> &failed_files_idx)
+{
+  UNUSED(uri);
+  UNUSED(files_to_delete);
+  UNUSED(failed_files_idx);
+  int ret = OB_NOT_SUPPORTED;
+  OB_LOG(WARN, "NFS does not support batch del files", K(ret));
   return ret;
 }
 
@@ -225,7 +266,7 @@ int ObStorageFileUtil::write_single_file(const common::ObString &uri, const char
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObStorageFileWriter writer;
+  ObStorageFileSingleWriter writer;
 
   if (OB_FAIL(writer.open(uri))) {
     STORAGE_LOG(WARN, "failed to open writer", K(ret), K(uri));
@@ -358,9 +399,9 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, common::ObBaseDir
     } else if (NULL != result) {
       if (0 == strcmp(entry.d_name, ".") || 0 == strcmp(entry.d_name, "..")) {
         is_file = false;
-      } else if (DT_REG == entry.d_type && !op.need_get_file_size()) {
+      } else if (DT_REG == entry.d_type && !op.need_get_file_meta()) {
         is_file = true;
-      } else if ((DT_REG == entry.d_type && op.need_get_file_size()) || DT_UNKNOWN == entry.d_type) {
+      } else if ((DT_REG == entry.d_type && op.need_get_file_meta()) || DT_UNKNOWN == entry.d_type) {
         int pret = snprintf(sub_dir_path, OB_MAX_URI_LENGTH, "%s/%s", dir_path, entry.d_name);
         if (pret < 0 || pret >= OB_MAX_URI_LENGTH) {
           ret = OB_BUF_NOT_ENOUGH;
@@ -376,13 +417,18 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, common::ObBaseDir
           } else {
             is_file = true;
             size = static_cast<int64_t>(sb.st_size);
+            if (op.need_get_file_meta()) {
+              const int64_t last_modified_time_ns =
+                  sb.st_mtim.tv_sec * 1000LL * 1000LL * 1000LL + sb.st_mtim.tv_nsec;
+              ObFileExtraInfo file_extra_info;
+              file_extra_info.last_modified_time_ms_ = last_modified_time_ns / 1000LL / 1000LL;
+              op.set_extra_info(file_extra_info);
+              op.set_size(size);
+            }
           }
         }
       }
       if (OB_SUCC(ret) && is_file) {
-        if (op.need_get_file_size()) {
-          op.set_size(size);
-        }
         if (OB_FAIL(op.func(&entry))) {
           SHARE_LOG(WARN, "fail to operate dir entry", K(ret), KCSTRING(entry.d_name));
         }
@@ -457,9 +503,9 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, ObStorageListCtxB
           } else if (is_appendable_file) {
             is_file = true;
           }
-        } else if (DT_REG == list_ctx.next_entry_.d_type && !list_ctx.need_size_) {
+        } else if (DT_REG == list_ctx.next_entry_.d_type && !list_ctx.need_meta_) {
           is_file = true;
-        } else if ((DT_REG == list_ctx.next_entry_.d_type && list_ctx.need_size_) || DT_UNKNOWN == list_ctx.next_entry_.d_type) {
+        } else if ((DT_REG == list_ctx.next_entry_.d_type && list_ctx.need_meta_) || DT_UNKNOWN == list_ctx.next_entry_.d_type) {
           int pret = snprintf(sub_dir_path, OB_MAX_URI_LENGTH, "%s/%s", dir_path, list_ctx.next_entry_.d_name);
           if (pret < 0 || pret >= OB_MAX_URI_LENGTH) {
             ret = OB_BUF_NOT_ENOUGH;
@@ -491,7 +537,7 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, ObStorageListCtxB
             } else {
               list_ctx.name_arr_[list_ctx.rsp_num_][name_len] = '\0';
             }
-            if (list_ctx.need_size_) {
+            if (list_ctx.need_meta_) {
               list_ctx.size_arr_[list_ctx.rsp_num_] = size;
             }
             ++list_ctx.rsp_num_;
@@ -518,13 +564,13 @@ int ObStorageFileUtil::check_is_appendable(
 {
   int ret = OB_SUCCESS;
   ObStorageObjectMetaBase obj_meta;
-  char logic_apendable_obj_name[OB_MAX_URI_LENGTH] = { 0 };
+  char logic_appendable_obj_name[OB_MAX_URI_LENGTH] = { 0 };
   char tmp_uri_buf[OB_MAX_URI_LENGTH] = "";
-  if (OB_FAIL(databuff_printf(logic_apendable_obj_name, sizeof(logic_apendable_obj_name), "%s/%s",
+  if (OB_FAIL(databuff_printf(logic_appendable_obj_name, sizeof(logic_appendable_obj_name), "%s/%s",
                               uri.ptr(), cur_entry.d_name))) {
-    OB_LOG(WARN, "fail to construct logic_apendable_obj_name", K(ret), K(uri), K(cur_entry.d_name));
-  } else if (OB_FAIL(construct_fragment_full_name(logic_apendable_obj_name,
-                                                  OB_S3_APPENDABLE_FORMAT_META,
+    OB_LOG(WARN, "fail to construct logic_appendable_obj_name", K(ret), K(uri), K(cur_entry.d_name));
+  } else if (OB_FAIL(construct_fragment_full_name(logic_appendable_obj_name,
+                                                  OB_ADAPTIVELY_APPENDABLE_FORMAT_META,
                                                   tmp_uri_buf, sizeof(tmp_uri_buf)))) {
     OB_LOG(WARN, "fail to construct fragment full name", K(ret), K(uri), K(cur_entry.d_name));
   } else {
@@ -835,7 +881,6 @@ int ObStorageFileBaseWriter::open(const int flags)
 {
   int ret = OB_SUCCESS;
   char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
-  ObStorageFileUtil util;
 
   if (is_opened_) {
     ret = OB_INIT_TWICE;
@@ -859,95 +904,20 @@ int ObStorageFileBaseWriter::open(const int flags)
   return ret;
 }
 
-int ObStorageFileBaseWriter::write(const char *buf,const int64_t buf_size)
+int ObStorageFileBaseWriter::write(const char *buf, const int64_t buf_size)
 {
-  int ret = OB_SUCCESS;
-  char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
-  int64_t write_size = 0;
-
-#ifdef ERRSIM
-  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
-#endif
-  if (OB_FAIL(ret)) {
-  } else if (!is_opened_) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "not opened", K(ret));
-  } else if (OB_ISNULL(buf) || buf_size < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", K(ret), KP(buf), K(buf_size));
-  } else {
-    int64_t one_write_size = 0;
-    while (OB_SUCC(ret) && write_size < buf_size) {
-      one_write_size = ::write(fd_, buf + write_size, buf_size - write_size);
-      if (one_write_size < 0) {
-        convert_io_error(errno, ret);
-        STORAGE_LOG(WARN, "failed to write file",
-            K(ret), K(one_write_size), K(errno), KCSTRING(path_),
-            "errno_str", strerror_r(errno, errno_buf, sizeof(errno_buf)));
-      } else {
-        write_size += one_write_size;
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (write_size != buf_size) {
-        ret = OB_IO_ERROR;
-        STORAGE_LOG(ERROR, "write size not match buf size", K(ret), KCSTRING(path_));
-      } else {
-        file_length_ += write_size;
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    has_error_ = true;
-  }
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(buf);
+  UNUSED(buf_size);
   return ret;
 }
 
 int ObStorageFileBaseWriter::pwrite(const char *buf, const int64_t buf_size, const int64_t offset)
 {
-  int ret = OB_SUCCESS;
-  char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
-  int64_t write_size = 0;
-
-#ifdef ERRSIM
-  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
-#endif
-  if (OB_FAIL(ret)) {
-  } else if (!is_opened_) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "not opened", K(ret));
-  } else if (OB_ISNULL(buf) || buf_size < 0 || offset < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", K(ret), KP(buf), K(buf_size), K(offset));
-  } else {
-    int64_t one_write_size = 0;
-    while (OB_SUCC(ret) && write_size < buf_size) {
-      one_write_size = ::pwrite(fd_, buf + write_size, buf_size - write_size, offset + write_size);
-      if (one_write_size < 0) {
-        convert_io_error(errno, ret);
-        STORAGE_LOG(WARN, "failed to write file",
-            K(ret), K(one_write_size), K(errno), KCSTRING(path_),
-            "errno_str", strerror_r(errno, errno_buf, sizeof(errno_buf)));
-      } else {
-        write_size += one_write_size;
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (write_size != buf_size) {
-        ret = OB_IO_ERROR;
-        STORAGE_LOG(ERROR, "write size not match buf size", K(ret), KCSTRING(path_));
-      } else {
-        file_length_ += write_size;
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    has_error_ = true;
-  }
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(buf);
+  UNUSED(buf_size);
+  UNUSED(offset);
   return ret;
 }
 
@@ -971,41 +941,73 @@ int ObStorageFileBaseWriter::close()
   return ret;
 }
 
-ObStorageFileWriter::ObStorageFileWriter()
+int ObStorageFileBaseWriter::inner_pwrite(
+    const char *buf,
+    const int64_t buf_size,
+    const int64_t offset)
+{
+  int ret = OB_SUCCESS;
+  char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
+  int64_t write_size = 0;
+  int64_t one_write_size = 0;
+  while (OB_SUCC(ret) && write_size < buf_size) {
+    one_write_size = ::pwrite(fd_, buf + write_size, buf_size - write_size, offset + write_size);
+    if (one_write_size < 0) {
+      convert_io_error(errno, ret);
+      STORAGE_LOG(WARN, "failed to write file",
+          K(ret), K(one_write_size), K(errno), KCSTRING(path_),
+          "errno_str", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+    } else {
+      write_size += one_write_size;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (write_size != buf_size) {
+      ret = OB_IO_ERROR;
+      STORAGE_LOG(ERROR, "write size not match buf size", K(ret), KCSTRING(path_));
+    } else {
+      file_length_ += write_size;
+    }
+  }
+  return ret;
+}
+
+ObStorageFileSingleWriter::ObStorageFileSingleWriter()
+  : is_file_path_obtained_(false), is_written_(false)
 {
   real_path_[0] = '\0';
 }
 
-ObStorageFileWriter::~ObStorageFileWriter()
+ObStorageFileSingleWriter::~ObStorageFileSingleWriter()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_opened_) {
-    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "wrtier is not closed", KCSTRING(path_), K(fd_));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "writer is not closed", KCSTRING(path_), K(fd_));
     has_error_ = true;
-    if (OB_SUCCESS != (tmp_ret = close())) {
-      STORAGE_LOG_RET(WARN, tmp_ret, "failed to close wrtier", K(tmp_ret), KCSTRING(path_), K(fd_));
+    if (OB_SUCCESS != (tmp_ret = close_and_rename())) {
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to close and rename", K(tmp_ret), KCSTRING(path_), K(fd_));
     }
   }
 }
 
-int ObStorageFileWriter::open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info)
+// Note: do not open fd, just obtain file path according to uri
+int ObStorageFileSingleWriter::open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info)
 {
   UNUSED(storage_info);
   int ret = OB_SUCCESS;
   const char *TMP_NAME_FORMAT = "%s.tmp.%ld";
-  ObStorageFileUtil util;
   const int64_t cur_ts = ObTimeUtil::current_time();
-  int flags = O_CREAT | O_WRONLY | O_TRUNC | O_EXCL | O_SYNC;
 
-  if (is_opened_) {
+  if (is_file_path_obtained_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
   } else if (OB_FAIL(get_file_path(uri, real_path_, sizeof(real_path_)))) {
     STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
   } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), TMP_NAME_FORMAT, real_path_, cur_ts))) {
     STORAGE_LOG(WARN, "failed to fill tmp_path", K(ret), K(uri));
-  } else if (OB_FAIL(ObStorageFileBaseWriter::open(flags))) {
-    STORAGE_LOG(WARN, "failed to do_open", K(ret), K(uri), K(flags));
+  } else {
+    is_file_path_obtained_ = true;
   }
 
   if (OB_FAIL(ret)) {
@@ -1014,7 +1016,56 @@ int ObStorageFileWriter::open(const common::ObString &uri, common::ObObjectStora
   return ret;
 }
 
-int ObStorageFileWriter::close()
+// open fd, write data, close fd and rename/remove
+int ObStorageFileSingleWriter::write(const char *buf, const int64_t buf_size)
+{
+  int ret = OB_SUCCESS;
+  int flags = O_CREAT | O_WRONLY | O_TRUNC | O_EXCL | O_SYNC;
+
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(is_written_)) {
+    ret = OB_NOT_SUPPORTED;
+    STORAGE_LOG(WARN, "single writer does not support write multiple times", K(ret), KP(buf), K(buf_size));
+  } else if (OB_UNLIKELY(!is_file_path_obtained_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not opened", K(ret));
+  } else if (OB_FAIL(ObStorageFileBaseWriter::open(flags))) {
+    STORAGE_LOG(WARN, "fail to open", K(ret), K(flags));
+  } else if (OB_ISNULL(buf) || buf_size < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(ret), KP(buf), K(buf_size));
+  } else if (OB_FAIL(inner_pwrite(buf, buf_size, 0/*offset*/))) {
+    STORAGE_LOG(WARN, "fail to inner pwrite", K(ret), KP(buf), K(buf_size));
+  }
+
+  if (OB_FAIL(ret)) {
+    has_error_ = true;
+  }
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(close_and_rename())) {
+    ret = (OB_SUCC(ret) ? tmp_ret : ret);
+    STORAGE_LOG(WARN, "fail to close and rename", K(ret), K(tmp_ret));
+  }
+
+  // mark has already written once, and no further writing is allowed
+  is_written_ = true;
+  return ret;
+}
+
+int ObStorageFileSingleWriter::close()
+{
+  is_file_path_obtained_ = false;
+  is_written_ = false;
+  is_opened_ = false;
+  // do nothing, write() is responsible to close fd
+  return OB_SUCCESS;
+}
+
+int ObStorageFileSingleWriter::close_and_rename()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1061,6 +1112,71 @@ int ObStorageFileWriter::close()
   return ret;
 }
 
+int ObStorageFileMultipleWriter::open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info)
+{
+  UNUSED(storage_info);
+  int ret = OB_SUCCESS;
+  const char *TMP_NAME_FORMAT = "%s.tmp.%ld";
+  const int64_t cur_ts = ObTimeUtil::current_time();
+  int flags = O_CREAT | O_WRONLY | O_TRUNC | O_EXCL | O_SYNC;
+
+  if (is_opened_) {
+    ret = OB_INIT_TWICE;
+    STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
+  } else if (OB_FAIL(get_file_path(uri, real_path_, sizeof(real_path_)))) {
+    STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), TMP_NAME_FORMAT, real_path_, cur_ts))) {
+    STORAGE_LOG(WARN, "failed to fill tmp_path", K(ret), K(uri));
+  } else if (OB_FAIL(ObStorageFileBaseWriter::open(flags))) {
+    STORAGE_LOG(WARN, "failed to do_open", K(ret), K(uri), K(flags));
+  }
+
+  if (OB_FAIL(ret)) {
+    has_error_ = true;
+  }
+  return ret;
+}
+
+int ObStorageFileMultipleWriter::write(const char *buf, const int64_t buf_size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t offset = file_length_; // each write start from file_length_
+
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (!is_opened_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not opened", K(ret));
+  } else if (OB_ISNULL(buf) || buf_size < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(ret), KP(buf), K(buf_size));
+  } else if (OB_FAIL(inner_pwrite(buf, buf_size, offset))) {
+    STORAGE_LOG(WARN, "fail to inner pwrite", K(ret), KP(buf), K(buf_size), K(offset));
+  }
+
+  if (OB_FAIL(ret)) {
+    has_error_ = true;
+  }
+
+  return ret;
+}
+
+int ObStorageFileMultipleWriter::close()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(close_and_rename())) {
+    STORAGE_LOG(WARN, "fail to close and rename", K(ret));
+  }
+  return ret;
+}
+
+void ObStorageFileMultipleWriter::set_error()
+{
+  has_error_ = true;
+}
+
 ObStorageFileAppender::ObStorageFileAppender()
   : need_unlock_(false),
     open_mode_(StorageOpenMode::CREATE_OPEN_LOCK)
@@ -1089,7 +1205,6 @@ int ObStorageFileAppender::open(const common::ObString &uri, common::ObObjectSto
   UNUSED(storage_info);
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObStorageFileUtil util;
   int flags = 0;
   bool need_lock = false;
 
@@ -1114,6 +1229,30 @@ int ObStorageFileAppender::open(const common::ObString &uri, common::ObObjectSto
     if (OB_SUCCESS != (tmp_ret = close())) {
       STORAGE_LOG(WARN, "failed to close appender", K(tmp_ret), K(uri));
     }
+  }
+  return ret;
+}
+
+int ObStorageFileAppender::pwrite(const char *buf, const int64_t buf_size, const int64_t offset)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (!is_opened_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not opened", K(ret));
+  } else if (OB_ISNULL(buf) || buf_size <= 0 || offset < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(ret), KP(buf), K(buf_size), K(offset));
+  } else if (OB_FAIL(inner_pwrite(buf, buf_size, offset))) {
+    STORAGE_LOG(WARN, "fail to inner pwrite", K(ret), KP(buf), K(buf_size), K(offset));
+  }
+
+  if (OB_FAIL(ret)) {
+    has_error_ = true;
   }
   return ret;
 }
@@ -1169,17 +1308,10 @@ int ObStorageFileAppender::get_open_flag_and_mode_(int &flag, bool &need_lock)
   return ret;
 }
 
-int ObStorageFileMultiPartWriter::pwrite(const char *buf, const int64_t size, const int64_t offset)
-{
-  UNUSED(offset);
-  return write(buf, size);
-}
-
 int ObStorageFileMultiPartWriter::complete()
 {
   int ret = OB_SUCCESS;
   char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
-  struct stat64 file_info;
 
   if (!is_opened_) {
     ret = OB_NOT_INIT;
@@ -1193,16 +1325,10 @@ int ObStorageFileMultiPartWriter::complete()
     has_error_ = true;
   }
 #endif
+    // if total uploaded file size == 0, write an empty object
     if (has_error_) {
       STORAGE_LOG(WARN, "multipart writer has error, skip complete",
           KCSTRING(path_), KCSTRING(real_path_));
-    } else if (0 != ::stat64(path_, &file_info)) {
-      convert_io_error(errno, ret);
-      STORAGE_LOG(WARN, "fail to get file length",
-          K(ret), K_(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
-    } else if (OB_UNLIKELY(file_info.st_size == 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(file_info.st_size), K_(path));
     } else if (0 != ::rename(path_, real_path_)) {
       convert_io_error(errno, ret);
       STORAGE_LOG(WARN, "failed to complete", K(ret), KCSTRING(real_path_),
@@ -1234,12 +1360,203 @@ int ObStorageFileMultiPartWriter::abort()
 int ObStorageFileMultiPartWriter::close()
 {
   int ret = OB_SUCCESS;
-  if (!is_opened_) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "not opened", K(ret), K_(fd));
-  } else if (OB_FAIL(ObStorageFileBaseWriter::close())) {
-    STORAGE_LOG(WARN, "failed to do close", K(ret), KCSTRING(path_), KCSTRING(real_path_));
+  if (OB_FAIL(ObStorageFileBaseWriter::close())) {
+    STORAGE_LOG(WARN, "fail to close fd", K(ret));
   }
+  return ret;
+}
+
+ObStorageParallelFileMultiPartWriter::ObStorageParallelFileMultiPartWriter()
+    : lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
+      is_opened_(false),
+      max_part_size_(0),
+      uploaded_part_id_list_()
+{
+  real_path_[0] = '\0';
+  path_[0] = '\0';
+}
+
+ObStorageParallelFileMultiPartWriter::~ObStorageParallelFileMultiPartWriter()
+{
+}
+
+void ObStorageParallelFileMultiPartWriter::reset()
+{
+  is_opened_ = false;
+  real_path_[0] = '\0';
+  path_[0] = '\0';
+  max_part_size_ = 0;
+  uploaded_part_id_list_.reset();
+}
+
+int ObStorageParallelFileMultiPartWriter::open(const ObString &uri, ObObjectStorageInfo *storage_info)
+{
+  UNUSED(storage_info);
+
+  int ret = OB_SUCCESS;
+  const int64_t cur_ts = ObTimeUtil::current_time();
+  if (OB_UNLIKELY(is_opened_)) {
+    ret = OB_INIT_TWICE;
+    OB_LOG(WARN, "nfs multipart writer already opened, cannot open again", K(ret), K(uri));
+  } else if (OB_FAIL(get_file_path(uri, real_path_, sizeof(real_path_)))) {
+    OB_LOG(WARN, "failed to fill path", K(ret), K(uri));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), TMP_NAME_FORMAT,
+                                     OB_FILE_PREFIX, real_path_, cur_ts))) {
+    OB_LOG(WARN, "failed to fill tmp_path", K(ret), K(uri));
+  } else {
+    MEMCPY(real_path_, uri.ptr(), uri.length());
+    real_path_[uri.length()] = '\0';
+    is_opened_ = true;
+  }
+  return ret;
+}
+
+int ObStorageParallelFileMultiPartWriter::upload_part(
+    const char *buf, const int64_t size, const int64_t part_id)
+{
+  int ret = OB_SUCCESS;
+  char part_file_path[OB_MAX_URI_LENGTH] = { 0 };
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "nfs multipart writer not opened", K(ret));
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size));
+  } else if (OB_FAIL(databuff_printf(part_file_path, sizeof(part_file_path),
+                                     "%s##%ld", path_, part_id))) {
+    OB_LOG(WARN, "failed to fill part_file_path", K(ret), K(part_id), K_(path));
+  } else {
+    {
+      SpinWLockGuard guard(lock_);
+      if (OB_FAIL(uploaded_part_id_list_.push_back(part_id))) {
+        OB_LOG(WARN, "fail to push cur part id into list",
+            K(ret), K(part_id), K(uploaded_part_id_list_.count()));
+      } else {
+        max_part_size_ = MAX(max_part_size_, size);
+      }
+    }
+
+    ObStorageFileUtil util;
+    if (FAILEDx(util.write_single_file(part_file_path, buf, size))) {
+      OB_LOG(WARN, "fail to write part file", K(ret), K(part_id), K(part_file_path), K(size));
+    }
+  }
+
+  return ret;
+}
+
+int ObStorageParallelFileMultiPartWriter::complete()
+{
+  int ret = OB_SUCCESS;
+  char *part_file_path = nullptr;
+  ObArenaAllocator allocator(OB_STORAGE_NFS_ALLOCATOR);
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "nfs multipart writer not opened", K(ret));
+  } else {
+    // allow to be empty parts
+    // in order to make real file unreadable until succ to complete, use ObStorageFileMultipleWriter,
+    // which write tmp file and rename tmp file to real file on close.
+    ObStorageFileMultipleWriter writer;
+    ObStorageFileReader reader;
+    ObStorageFileUtil util;
+    char *read_buf = nullptr;
+    int64_t cur_part_id = 0;
+    int64_t cur_part_file_size = 0;
+    int64_t read_size = -1;
+    int64_t cur_written_size = 0;
+    lib::ob_sort(uploaded_part_id_list_.begin(), uploaded_part_id_list_.end());
+
+    if (OB_ISNULL(part_file_path = static_cast<char *>(allocator.alloc(OB_MAX_URI_LENGTH)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, " fail to alloc memory for part_file_path", K(ret), K(OB_MAX_URI_LENGTH));
+    } else if (!uploaded_part_id_list_.empty() &&
+        OB_ISNULL(read_buf = static_cast<char *>(allocator.alloc(max_part_size_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, " fail to alloc memory for read buffer", K(ret), K_(max_part_size));
+    } else if (OB_FAIL(writer.open(real_path_))) {
+      OB_LOG(WARN, "fail to open writer for final file", K(ret), K_(real_path));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < uploaded_part_id_list_.count(); i++) {
+      cur_part_id = uploaded_part_id_list_[i];
+      if (OB_FAIL(databuff_printf(part_file_path, OB_MAX_URI_LENGTH,
+                                  "%s##%ld", path_, cur_part_id))) {
+        OB_LOG(WARN, "failed to fill part_file_path", K(ret), K(cur_part_id), K_(path));
+      } else if (OB_FAIL(reader.open(part_file_path))) {
+        OB_LOG(WARN, "fail to open reader for part file", K(ret), K(cur_part_id), K(part_file_path));
+      } else {
+        cur_part_file_size = reader.get_length();
+        read_size = -1;
+        if (FAILEDx(reader.pread(read_buf, cur_part_file_size, 0, read_size))) {
+          OB_LOG(WARN, "fail to read part file content",
+              K(ret), K(cur_part_file_size), K(part_file_path));
+        } else if (OB_UNLIKELY(cur_part_file_size != read_size)) {
+          ret = OB_ERR_UNEXPECTED;
+          OB_LOG(ERROR, "unexpected error, read size is not equal to expected size",
+              K(ret), K(cur_part_file_size), K(read_size), K(part_file_path));
+        } else if (OB_FAIL(writer.write(read_buf, cur_part_file_size))) {
+          OB_LOG(WARN, "fail to write part file data",
+              K(ret), K(cur_part_file_size), K(part_file_path));
+        } else if (OB_FAIL(reader.close())) {
+          OB_LOG(WARN, "fail to close part file reader",
+              K(ret), K(cur_part_file_size), K(part_file_path));
+        } else if (OB_FAIL(util.del_file(part_file_path))) {
+          OB_LOG(WARN, "fail to delete part file", K(ret), K(part_file_path));
+        } else {
+          cur_written_size += cur_part_file_size;
+        }
+      }
+
+    } // end for
+
+    if (OB_FAIL(ret)) {
+      writer.set_error();
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(writer.close())) {
+      ret = (OB_SUCC(ret) ? tmp_ret : ret);
+      OB_LOG(WARN, "fail to close writer for final file", K(ret), K(tmp_ret), K_(real_path));
+    }
+  }
+  return ret;
+}
+
+int ObStorageParallelFileMultiPartWriter::abort()
+{
+  int ret = OB_SUCCESS;
+  char part_file_path[OB_MAX_URI_LENGTH] = { 0 };
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "nfs multipart writer not opened", K(ret));
+  } else if (OB_LIKELY(!uploaded_part_id_list_.empty())) {
+    ObStorageFileUtil util;
+    int64_t cur_part_id = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < uploaded_part_id_list_.count(); i++) {
+      cur_part_id = uploaded_part_id_list_[i];
+      if (OB_FAIL(databuff_printf(part_file_path, sizeof(part_file_path),
+                                  "%s##%ld", path_, cur_part_id))) {
+        OB_LOG(WARN, "failed to fill part_file_path", K(ret), K(cur_part_id), K_(path));
+      } else if (OB_FAIL(util.del_file(part_file_path))) {
+        if (OB_OBJECT_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          OB_LOG(WARN, "fail to delete part file", K(ret), K(part_file_path));
+        }
+      }
+    } // end for
+
+    if (OB_SUCC(ret)) {
+      uploaded_part_id_list_.reset();
+    }
+  }
+  return ret;
+}
+
+int ObStorageParallelFileMultiPartWriter::close()
+{
+  int ret = OB_SUCCESS;
+  reset();
   return ret;
 }
 

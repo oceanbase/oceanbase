@@ -11,8 +11,6 @@
  */
 
 #include  <gtest/gtest.h>
-#include "lib/oblog/ob_log_print_kv.h"
-#include "lib/ob_errno.h"
 #include "common/ob_range.h"
 using namespace std;
 namespace oceanbase

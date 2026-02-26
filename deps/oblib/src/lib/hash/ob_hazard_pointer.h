@@ -55,7 +55,7 @@ private:
   struct ThreadLocalNodeList
   {
     ThreadLocalNodeList() { }
-    Node head[OB_MAX_THREAD_NUM] CACHE_ALIGNED;
+    Node head[OB_MAX_THREAD_NUM_DO_NOT_USE] CACHE_ALIGNED;
   };
 private:
   ThreadLocalNodeList *hazard_list_;
@@ -123,7 +123,7 @@ int ObHazardPointer::protect(uintptr_t ptr)
   } else {
     bool is_set = false;
     int64_t tid = get_itid();
-    if (tid >= OB_MAX_THREAD_NUM) {
+    if (tid >= OB_MAX_THREAD_NUM_DO_NOT_USE) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "thread num is beyond the max thread num limit", K(ret), K(tid));
     } else {
@@ -166,7 +166,7 @@ int ObHazardPointer::release(uintptr_t ptr)
     ret = OB_INVALID_ARGUMENT;
   } else {
     int64_t tid = get_itid();
-    if (tid >= OB_MAX_THREAD_NUM) {
+    if (tid >= OB_MAX_THREAD_NUM_DO_NOT_USE) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "thread num is beyond the max thread num limit", K(ret), K(tid));
     } else {
@@ -203,7 +203,7 @@ int ObHazardPointer::retire(uintptr_t ptr)
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       int64_t tid = get_itid();
-      if (tid >= OB_MAX_THREAD_NUM) {
+      if (tid >= OB_MAX_THREAD_NUM_DO_NOT_USE) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(ERROR, "thread num is beyond the max thread num limit", K(ret), K(tid));
       } else {

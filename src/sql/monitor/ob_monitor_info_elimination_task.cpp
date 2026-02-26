@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "sql/monitor/ob_monitor_info_elimination_task.h"
+#include "ob_monitor_info_elimination_task.h"
 #include "sql/monitor/ob_monitor_info_manager.h"
 namespace oceanbase
 {

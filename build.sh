@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TOPDIR=`readlink -f \`dirname $0\``
+TOPDIR=$(cd "$(dirname "$0")" && pwd)
 BUILD_SH=$TOPDIR/build.sh
 
 DEP_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/deps/devel
@@ -18,6 +18,8 @@ NEED_INIT=false
 LLD_OPTION=ON
 ASAN_OPTION=ON
 STATIC_LINK_LGPL_DEPS_OPTION=ON
+ENABLE_BOLT_OPTION=ON
+BUILD_STAND_ALONE=OFF
 
 echo "$0 ${ALL_ARGS[@]}"
 
@@ -62,6 +64,10 @@ function parse_args
         elif [[ "$i" == "--make" ]]
         then
             NEED_MAKE=make
+        elif [[ "$i" == "-DBUILD_CDC_ONLY=ON" ]]
+        then
+            ENABLE_BOLT_OPTION=OFF
+            BUILD_ARGS+=("$i")
         elif [[ $NEED_MAKE == false ]]
         then
             BUILD_ARGS+=("$i")
@@ -145,14 +151,14 @@ function do_clean
 
 function build_package
 {
-   STATIC_LINK_LGPL_DEPS_OPTION=OFF
-    do_build "$@" -DOB_BUILD_PACKAGE=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_FATAL_ERROR_HANG=OFF -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DENABLE_HOTFUNC=ON -DOB_STATIC_LINK_LGPL_DEPS=$STATIC_LINK_LGPL_DEPS_OPTION
+   STATIC_LINK_LGPL_DEPS_OPTION=ON
+   ENABLE_BOLT_OPTION=OFF
+    do_build "$@" -DOB_BUILD_PACKAGE=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_FATAL_ERROR_HANG=OFF -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DENABLE_HOTFUNC=ON -DENABLE_BOLT=$ENABLE_BOLT_OPTION -DOB_STATIC_LINK_LGPL_DEPS=$STATIC_LINK_LGPL_DEPS_OPTION
 }
 
 # build - configurate project and prepare to compile, by calling make
 function build
 {
-
     set -- "${BUILD_ARGS[@]}"
     case "x$1" in
       xrelease)
@@ -162,7 +168,7 @@ function build
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DOB_ENABLE_UNITY=OFF
         ;;
       xrelease_asan)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DOB_USE_ASAN=$ASAN_OPTION
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DOB_USE_ASAN=$ASAN_OPTION -DOB_ENABLE_MCMODEL=OFF
         ;;
       xrelease_coverage)
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DWITH_COVERAGE=ON
@@ -179,12 +185,12 @@ function build
         ln -sf ${TOPDIR}/build_ccls/compile_commands.json ${TOPDIR}/compile_commands.json
         ;;
       xclangd)
-        do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DOB_ENABLE_UNITY=OFF
+        do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DOB_ENABLE_UNITY=OFF -DOB_INCLUDE_UNITTEST=OFF -DOB_BUILD_UNITTEST=OFF
         # build soft link for clangd
         ln -sf ${TOPDIR}/build_clangd/compile_commands.json ${TOPDIR}/compile_commands.json
         ;;
       xperf)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_USE_LLD=$LLD_OPTION -DENABLE_HOTFUNC=ON
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_USE_LLD=$LLD_OPTION -DENABLE_HOTFUNC=ON -DENABLE_BOLT_AUTO=ON -DENABLE_FATAL_ERROR_HANG=OFF
         ;;
       xdebug_asan)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DOB_USE_ASAN=$ASAN_OPTION
@@ -230,7 +236,7 @@ function build
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DWITH_COVERAGE=ON
         ;;
       xsanity)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_SANITY=ON
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_SANITY=ON -DOB_ENABLE_MCMODEL=ON
         ;;
       xerrsim_sanity)
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_ERRSIM=ON -DOB_USE_LLD=$LLD_OPTION -DENABLE_SANITY=ON

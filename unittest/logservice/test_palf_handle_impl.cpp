@@ -109,7 +109,7 @@ void TestLogService::SetUp()
 //   const int64_t tenant_id = 1;
 //   ASSERT_EQ(OB_SUCCESS, TMA_MGR_INSTANCE.init());
 //   ObILogAllocator *tenant_allocator = NULL;
-//   EXPECT_EQ(OB_SUCCESS, OB_FILE_SYSTEM_ROUTER.get_instance().init("dummy", "dummy", 1, "dummy", self));
+//   EXPECT_EQ(OB_SUCCESS, OB_FILE_SYSTEM_ROUTER.get_instance().init("dummy"));
 //   EXPECT_EQ(OB_SUCCESS, ObTenantMutilAllocatorMgr::get_instance().get_tenant_log_allocator(tenant_id, tenant_allocator));
 //   std::snprintf(log_dir_, OB_MAX_FILE_NAME_LENGTH, "%s_%ld", "unittest", ob_gettid());
 //   common::FileDirectoryUtils::delete_directory_rec(log_dir_);

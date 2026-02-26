@@ -24,35 +24,32 @@
 #include "meta_programming/ob_type_traits.h"
 namespace oceanbase
 {
-namespace share
-{
-class ObLSID;
-}
-namespace common
-{
-class ObTabletID;
-}
 namespace storage
 {
 namespace mds
 {
 class MdsTableHandle;
+
 class MdsCtx : public BufferCtx
 {
   friend class MdsNode;
   OB_UNIS_VERSION(1);
 public:
   MdsCtx();
-  explicit MdsCtx(const MdsWriter &writer);
+  explicit MdsCtx(const MdsWriter &writer,
+                  const transaction::ObTxSEQ start_seq = transaction::ObTxSEQ::MIN_VAL());
   virtual ~MdsCtx();
   MdsCtx(const MdsCtx &) = delete;
   MdsCtx(MdsCtx &&) = delete;
   MdsCtx &operator=(const MdsCtx &) = delete;
   MdsCtx &operator=(MdsCtx &&) = delete;
   int assign(const MdsCtx &);
-  void set_writer(const MdsWriter &writer);
+  int set_writer(const MdsWriter &writer);
+  void set_seq_no(const transaction::ObTxSEQ seq_no);
+  int inc_seq_no();
+  transaction::ObTxSEQ get_seq_no() const;
   bool can_write() const;
-  TO_STRING_KV(K_(writer), K_(write_list), K(obj_to_string(state_)));
+  VIRTUAL_TO_STRING_KV(K_(writer), K_(write_list), K(obj_to_string(state_)), K_(seq_no));
   void record_written_node(ListNode<MdsNode> *node);
   virtual const MdsWriter get_writer() const override;
   virtual void before_prepare() override;
@@ -70,8 +67,7 @@ private:
     int64_t try_times = 0;
     do {
       MdsWLockGuard lg(lock_);
-      if (state_ == TwoPhaseCommitState::ON_PREPARE && new_state == TwoPhaseCommitState::BEFORE_PREPARE) {// due to force majeure
-        // do nothing, just accept it
+      if (state_ >= new_state) {
         operate_all_nodes_succeed = true;
       } else {
         operate_all_nodes_succeed = op();
@@ -114,8 +110,9 @@ private:
   List<MdsNode> write_list_;
   TwoPhaseCommitState state_;
   MdsLock lock_;
-protected: // for serialize in derived class
+protected:
   MdsWriter writer_;
+  transaction::ObTxSEQ seq_no_;
 };
 OB_SERIALIZE_MEMBER_TEMP(inline, MdsCtx, writer_);
 }

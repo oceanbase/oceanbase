@@ -18,7 +18,6 @@
 
 #include "storage/ob_partition_range_spliter.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 
 namespace oceanbase
 {
@@ -99,7 +98,6 @@ int ObMockSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
     meta.val_.logic_id_.tablet_id_ = 1;
     meta.val_.logic_id_.logic_version_ = 1;
     meta.val_.macro_id_.set_block_index(100);
-    meta.val_.version_ = ObDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION;
     meta.val_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
     meta.val_.row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
     ++macro_block_idx_;
@@ -258,7 +256,7 @@ void TestPartitionMajorSSTableRangeSliter::SetUp()
 {
   oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   if (!is_inited_) {
-    OB_SERVER_BLOCK_MGR.super_block_.body_.macro_block_size_ = 1;
+    OB_STORAGE_OBJECT_MGR.super_block_.body_.macro_block_size_ = 1;
 
     // major sstable
     major_sstable_.set_table_type(ObITable::MAJOR_SSTABLE);
@@ -359,7 +357,7 @@ void TestPartitionMajorSSTableRangeSliter::inner_test_split_ranges(
   ObMockPartitionMajorSSTableRangeSpliter range_spliter;
 
   // set macro block meta
-  int64_t occupy_size = macro_block_count * OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  int64_t occupy_size = macro_block_count * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   set_major_sstable_meta(macro_block_count, occupy_size, row_count);
   if (macro_block_count > 0) {
     ASSERT_EQ(OB_SUCCESS, set_major_sstable_macro_blocks(macro_block_str));

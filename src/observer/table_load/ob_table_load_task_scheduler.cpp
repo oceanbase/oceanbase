@@ -14,13 +14,9 @@
 
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "common/ob_timeout_ctx.h"
-#include "lib/stat/ob_session_stat.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_task.h"
-#include "share/ob_share_util.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/direct_load/ob_direct_load_table_builder_allocator.h"
 
 namespace oceanbase
 {
@@ -28,22 +24,37 @@ namespace observer
 {
 using namespace common;
 using namespace share;
+using namespace sql;
 using namespace storage;
+
+int ObTableLoadTaskThreadPoolScheduler::MyThreadPool::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(pool_cond_.init(1/*default_event_id*/))) {
+    LOG_WARN("init pool condition failed", K(ret));
+  }
+  return ret;
+}
 
 void ObTableLoadTaskThreadPoolScheduler::MyThreadPool::run1()
 {
   OB_ASSERT(OB_NOT_NULL(scheduler_));
-  ObTenantStatEstGuard stat_est_guard(MTL_ID());
   const int64_t thread_count = get_thread_count();
   // LOG_INFO("table load task thread start", KP(this), "pid", get_tid_cache(), "thread_idx", get_thread_idx());
   // 启动成功的线程数+1
   if (thread_count == ATOMIC_AAF(&running_thread_count_, 1)) {
     scheduler_->before_running();
+    ObThreadCondGuard guard(pool_cond_);
+    (void) pool_cond_.broadcast();
+  } else {
+    const int64_t DEFAULT_TIMEOUT_MS = 5000L; // 5s
+    ObThreadCondGuard guard(pool_cond_);
+    (void) pool_cond_.wait(DEFAULT_TIMEOUT_MS);
   }
   while (!has_set_stop()) {
     // 等待所有线程起来
     if (!scheduler_->is_running()) {
-      PAUSE();
+      usleep(100);
     } else {
       scheduler_->run(get_thread_idx());
       break;
@@ -58,10 +69,12 @@ void ObTableLoadTaskThreadPoolScheduler::MyThreadPool::run1()
 ObTableLoadTaskThreadPoolScheduler::ObTableLoadTaskThreadPoolScheduler(int64_t thread_count,
                                                                        uint64_t table_id,
                                                                        const char *label,
+                                                                       ObSQLSessionInfo *session_info,
                                                                        int64_t session_queue_size)
   : allocator_("TLD_ThreadPool"),
     thread_count_(thread_count),
     session_queue_size_(session_queue_size),
+    session_info_(session_info),
     timeout_ts_(INT64_MAX),
     thread_pool_(this),
     worker_ctx_array_(nullptr),
@@ -112,6 +125,8 @@ int ObTableLoadTaskThreadPoolScheduler::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTaskThreadPoolScheduler init twice", KR(ret), KP(this));
+  } else if (OB_FAIL(thread_pool_.init())) {
+    LOG_WARN("init thread pool failed", K(ret));
   } else {
     thread_pool_.set_thread_count(thread_count_);
     thread_pool_.set_run_wrapper(MTL_CTX());
@@ -232,6 +247,8 @@ void ObTableLoadTaskThreadPoolScheduler::after_running()
 void ObTableLoadTaskThreadPoolScheduler::run(uint64_t thread_idx)
 {
   int ret = OB_SUCCESS;
+  // set session info
+  THIS_WORKER.set_session(session_info_);
   // set thread name
   lib::set_thread_name(name_);
   // set trace id
@@ -242,6 +259,8 @@ void ObTableLoadTaskThreadPoolScheduler::run(uint64_t thread_idx)
   share::ObTenantBase *tenant_base = MTL_CTX();
   lib::Worker::CompatMode mode = ((omt::ObTenant *)tenant_base)->get_compat_mode();
   lib::Worker::set_compatibility_mode(mode);
+  common::ob_setup_default_tsi_warning_buffer();
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_IMPORT);
 
   LOG_INFO("table load task thread run", KP(this), "pid", get_tid_cache(), K(thread_idx));
 
@@ -268,9 +287,6 @@ void ObTableLoadTaskThreadPoolScheduler::run(uint64_t thread_idx)
   if (STATE_RUNNING == state_) {
     state_ = STATE_STOPPING;
   }
-
-  // clear thread local variables
-  get_table_builder_allocator()->reset();
 
   LOG_INFO("table load task thread stopped", KP(this), "pid", get_tid_cache(), K(thread_idx));
 }

@@ -13,24 +13,23 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr.h"
-#include "share/vector/ob_fixed_length_vector.h"
-#include "share/vector/ob_continuous_vector.h"
-#include "share/vector/ob_uniform_vector.h"
-#include "share/vector/ob_discrete_vector.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-
+#include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/expr/ob_expr_column_conv.h"
 
 namespace oceanbase
 {
 using namespace common;
 namespace sql
 {
+// index number for args_ in ObExpr
+const int64_t ARGS_IDX_ZERO  = 0;
+const int64_t ARGS_IDX_ONE   = 1;
+const int64_t ARGS_IDX_TWO   = 2;
+const int64_t ARGS_IDX_THREE = 3;
+const int64_t ARGS_IDX_FOUE  = 4;
+const int64_t ARGS_IDX_FIVE  = 5;
 
 // ObPrecision and ObLengthSemantics are union field in ObDatumMeta,
 // need to be same size to make sure serialization works.
@@ -40,7 +39,7 @@ STATIC_ASSERT(sizeof(ObPrecision) == sizeof(ObLengthSemantics),
 OB_SERIALIZE_MEMBER(ObDatumMeta, type_, cs_type_, scale_, precision_);
 
 
-ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator)
+ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator, bool is_pl_expr_eval)
   : frames_(exec_ctx.get_frames()),
     max_batch_size_(0),
     exec_ctx_(exec_ctx),
@@ -49,7 +48,10 @@ ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator)
     tmp_alloc_used_(exec_ctx.get_tmp_alloc_used()),
     batch_idx_(0),
     batch_size_(0),
-    expr_res_alloc_((dynamic_cast<ObArenaAllocator*>(allocator) != NULL) ? (*(dynamic_cast<ObArenaAllocator*>(allocator))) : exec_ctx.get_eval_res_allocator())
+    expr_res_alloc_((dynamic_cast<ObArenaAllocator*>(allocator) != NULL) ?
+                      (*(dynamic_cast<ObArenaAllocator*>(allocator))) : exec_ctx.get_eval_res_allocator()),
+    pvt_skip_for_eval_row_(nullptr),
+    is_pl_expr_eval_(is_pl_expr_eval)
 {
 }
 
@@ -62,7 +64,8 @@ ObEvalCtx::ObEvalCtx(ObEvalCtx &eval_ctx)
     tmp_alloc_used_(eval_ctx.tmp_alloc_used_),
     batch_idx_(eval_ctx.get_batch_idx()),
     batch_size_(eval_ctx.get_batch_size()),
-    expr_res_alloc_(eval_ctx.expr_res_alloc_)
+    expr_res_alloc_(eval_ctx.expr_res_alloc_),
+    pvt_skip_for_eval_row_(eval_ctx.pvt_skip_for_eval_row_)
 {
 }
 
@@ -72,6 +75,7 @@ ObEvalCtx::~ObEvalCtx()
     datum_caster_->destroy();
     datum_caster_ = NULL;
   }
+  pvt_skip_for_eval_row_ = nullptr;
 }
 
 int ObEvalCtx::init_datum_caster()
@@ -93,6 +97,30 @@ int ObEvalCtx::init_datum_caster()
   return ret;
 }
 
+int ObEvalCtx::get_pvt_skip_for_eval_row(ObBitVector *&skip)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pvt_skip_for_eval_row_)) {
+    int64_t batch_size = MAX(max_batch_size_, batch_size_);
+    batch_size = MAX(1, batch_size);
+    int64_t skip_buf_size = ObBitVector::memory_size(batch_size);
+    void *skip_buf = exec_ctx_.get_allocator().alloc(skip_buf_size);
+    if (OB_ISNULL(skip_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(max_batch_size_), K(batch_size_));
+    } else {
+      MEMSET(skip_buf, 0, skip_buf_size);
+      pvt_skip_for_eval_row_ = to_bit_vector(skip_buf);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    skip = pvt_skip_for_eval_row_;
+  } else {
+    skip = nullptr;
+  }
+  return ret;
+}
+
 DEF_TO_STRING(ObEvalInfo)
 {
   int64_t pos = 0;
@@ -102,7 +130,36 @@ DEF_TO_STRING(ObEvalInfo)
   return pos;
 }
 
-OB_DEF_SERIALIZE(ObExpr)
+int ObExpr::serialize(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 &&
+      GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    const int64_t compat_version = 1;
+    OB_UNIS_ENCODE(compat_version);
+  } else {
+    OB_UNIS_ENCODE(UNIS_VERSION);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = common::serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+        RPC_WARN("serialize fail", K(ret));
+      }
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    if (OB_SUCC(ret)) {
+      CHECK_SERIALIZE_SIZE(CLS, serial_size);
+      ret = common::serialization::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes,
+        size_nbytes, tmp_pos, serial_size);
+    }
+  }
+  return ret;
+}
+
+int ObExpr::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
@@ -150,76 +207,113 @@ OB_DEF_SERIALIZE(ObExpr)
                 vec_value_tc_,
                 ser_eval_vector_func_);
     OB_UNIS_ENCODE(local_session_var_id_);
+    LST_DO_CODE(OB_UNIS_ENCODE, serialization::make_ser_carray(attrs_, attrs_cnt_));
   }
 
   return ret;
 }
 
-OB_DEF_DESERIALIZE(ObExpr)
+int ObExpr::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_DECODE,
-              type_,
-              datum_meta_,
-              obj_meta_,
-              max_length_,
-              obj_datum_map_,
-              ser_eval_func_,
-              serialization::make_ser_carray(ser_inner_functions_, inner_func_cnt_),
-              serialization::make_ser_carray(args_, arg_cnt_),
-              serialization::make_ser_carray(parents_, parent_cnt_),
-              frame_idx_,
-              datum_off_,
-              res_buf_off_,
-              res_buf_len_,
-              expr_ctx_id_,
-              extra_);
+  int64_t version = 0;
+  int64_t len = 0;
 
-  LST_DO_CODE(OB_UNIS_DECODE,
-              eval_info_off_,
-              flag_,
-              ser_eval_batch_func_,
-              eval_flags_off_,
-              pvt_skip_off_);
-  if (0 == eval_info_off_ && OB_SUCC(ret)) {
-    // compatible with 3.0, ObExprDatum::flag_ is ObEvalInfo
-    eval_info_off_ = datum_off_ + sizeof(ObDatum);
-  }
-
+  OB_UNIS_DECODE(version);
+  OB_UNIS_DECODE(len);
   if (OB_SUCC(ret)) {
-    ObExprOperatorType type = T_INVALID;
-    // Add a type before extra_info to determine whether extra_info is empty
-    OB_UNIS_DECODE(type);
-    if (OB_FAIL(ret)) {
-    } else if (T_INVALID != type) {
-      OZ (ObExprExtraInfoFactory::alloc(CURRENT_CONTEXT->get_arena_allocator(),
-                                        type, extra_info_));
-      CK (OB_NOT_NULL(extra_info_));
-      OB_UNIS_DECODE(*extra_info_);
+    if (len < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("can't decode object with negative length", K(len));
+    } else if (data_len < len + pos) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("buf length not enough", K(len), K(pos), K(data_len));
     }
   }
-
   if (OB_SUCC(ret)) {
-    basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_,
-                                                datum_meta_.scale_, lib::is_oracle_mode(),
-                                                obj_meta_.has_lob_header(), datum_meta_.precision_);
-    CK(NULL != basic_funcs_);
-  }
-  if (is_batch_result()) {
-    batch_idx_mask_ = UINT64_MAX;
-  }
-  OB_UNIS_DECODE(dyn_buf_header_offset_);
-  LST_DO_CODE(OB_UNIS_DECODE,
-              vector_header_off_,
-              offset_off_,
-              len_arr_off_,
-              cont_buf_off_,
-              null_bitmap_off_,
-              vec_value_tc_,
-              ser_eval_vector_func_);
+    const_cast<int64_t&>(data_len) = len;
+    int64_t pos_orig = pos;
+    buf = buf + pos_orig;
+    pos = 0;
 
-  OB_UNIS_DECODE(local_session_var_id_);
+    LST_DO_CODE(OB_UNIS_DECODE,
+                type_,
+                datum_meta_,
+                obj_meta_,
+                max_length_,
+                obj_datum_map_,
+                ser_eval_func_,
+                serialization::make_ser_carray(ser_inner_functions_, inner_func_cnt_),
+                serialization::make_ser_carray(args_, arg_cnt_),
+                serialization::make_ser_carray(parents_, parent_cnt_),
+                frame_idx_,
+                datum_off_,
+                res_buf_off_,
+                res_buf_len_,
+                expr_ctx_id_,
+                extra_);
+
+    LST_DO_CODE(OB_UNIS_DECODE,
+                eval_info_off_,
+                flag_,
+                ser_eval_batch_func_,
+                eval_flags_off_,
+                pvt_skip_off_);
+    if (0 == eval_info_off_ && OB_SUCC(ret)) {
+      // compatible with 3.0, ObExprDatum::flag_ is ObEvalInfo
+      eval_info_off_ = datum_off_ + sizeof(ObDatum);
+    }
+
+    if (OB_SUCC(ret)) {
+      ObExprOperatorType type = T_INVALID;
+      // Add a type before extra_info to determine whether extra_info is empty
+      OB_UNIS_DECODE(type);
+      if (OB_FAIL(ret)) {
+      } else if (T_INVALID != type) {
+        OZ (ObExprExtraInfoFactory::alloc(CURRENT_CONTEXT->get_arena_allocator(),
+                                          type, extra_info_));
+        CK (OB_NOT_NULL(extra_info_));
+        OB_UNIS_DECODE(*extra_info_);
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_,
+                                                  datum_meta_.scale_, lib::is_oracle_mode(),
+                                                  obj_meta_.has_lob_header(), datum_meta_.precision_);
+      CK(NULL != basic_funcs_);
+    }
+    if (is_batch_result()) {
+      batch_idx_mask_ = UINT64_MAX;
+    }
+    OB_UNIS_DECODE(dyn_buf_header_offset_);
+
+    if (version == 2) {
+      vector_header_off_ = UINT32_MAX;
+      offset_off_ = UINT32_MAX;
+      len_arr_off_ = UINT32_MAX;
+      cont_buf_off_ = UINT32_MAX;
+      null_bitmap_off_ = UINT32_MAX;
+      vec_value_tc_ = VecValueTypeClass::MAX_VEC_TC;
+      ser_eval_vector_func_ = nullptr;
+    } else {
+      LST_DO_CODE(OB_UNIS_DECODE,
+                  vector_header_off_,
+                  offset_off_,
+                  len_arr_off_,
+                  cont_buf_off_,
+                  null_bitmap_off_,
+                  vec_value_tc_,
+                  ser_eval_vector_func_);
+    }
+
+    OB_UNIS_DECODE(local_session_var_id_);
+    LST_DO_CODE(OB_UNIS_DECODE, serialization::make_ser_carray(attrs_, attrs_cnt_));
+
+    pos = pos_orig + len;
+  }
   return ret;
+
 }
 
 OB_DEF_SERIALIZE_SIZE(ObExpr)
@@ -268,6 +362,7 @@ OB_DEF_SERIALIZE_SIZE(ObExpr)
               ser_eval_vector_func_);
 
   OB_UNIS_ADD_LEN(local_session_var_id_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, serialization::make_ser_carray(attrs_, attrs_cnt_));
   return len;
 }
 
@@ -307,7 +402,9 @@ ObExpr::ObExpr()
     cont_buf_off_(UINT32_MAX),
     null_bitmap_off_(UINT32_MAX),
     vec_value_tc_(MAX_VEC_TC),
-    local_session_var_id_(OB_INVALID_INDEX_INT64)
+    local_session_var_id_(OB_INVALID_INDEX_INT64),
+    attrs_(NULL),
+    attrs_cnt_(0)
 {
   is_called_in_sql_ = 1;
 }
@@ -365,17 +462,17 @@ int ObExpr::eval_enumset(ObEvalCtx &ctx,
   if (is_batch_result()) {
     // Evaluate one datum within a batch.
     bool need_evaluate = false;
-    if (eval_info->projected_) {
+    if (eval_info->is_projected()) {
       datum = datum + ctx.get_batch_idx();
     } else {
       ObBitVector* evaluated_flags = to_bit_vector(frame + eval_flags_off_);
-      if (!eval_info->evaluated_) {
+      if (!eval_info->is_evaluated(ctx)) {
         evaluated_flags->reset(ctx.get_batch_size());
         reset_datums_ptr(frame, ctx.get_batch_size());
-        eval_info->evaluated_ = true;
+        eval_info->set_evaluated(true);
         eval_info->cnt_ = ctx.get_batch_size();
-        eval_info->point_to_frame_ = true;
-        eval_info->notnull_ = true;
+        eval_info->set_point_to_frame(true);
+        eval_info->set_notnull(true);
         if (enable_rich_format()) {
           ret = init_vector(ctx, VEC_UNIFORM, ctx.get_batch_size());
         }
@@ -396,12 +493,12 @@ int ObExpr::eval_enumset(ObEvalCtx &ctx,
           datum->set_null();
         }
         if (datum->is_null()) {
-          eval_info->notnull_ = false;
+          eval_info->set_notnull(false);
         }
       }
     }
   } else {
-    if (!eval_info->evaluated_) {
+    if (!eval_info->is_evaluated(ctx)) {
       if (datum->ptr_ != frame + res_buf_off_) {
         datum->ptr_ = frame + res_buf_off_;
       }
@@ -412,7 +509,7 @@ int ObExpr::eval_enumset(ObEvalCtx &ctx,
       }
 
       if (OB_LIKELY(common::OB_SUCCESS == ret)) {
-        eval_info->evaluated_ = true;
+        eval_info->set_evaluated(true);
       } else {
         datum->set_null();
       }
@@ -588,9 +685,29 @@ DEF_TO_STRING(ObToStringExpr)
     J_OBJ_END();
   } else {
     ObDatum *datum = NULL;
-    int ret = e_.eval(c_, datum);
-    UNUSED(ret);
-    pos = ObToStringDatum(e_, *datum).to_string(buf, buf_len);
+    // avoid casting the vec2.0 format.
+    if (c_.is_vectorized() && e_.enable_rich_format()) {
+      // mock skip to use eval_vector
+      int64_t batch_size = c_.get_batch_size();
+      ObArenaAllocator tmp_allocator;
+      char *tmp_mem = (char *)tmp_allocator.alloc(ObBitVector::memory_size(batch_size));
+      if (NULL == tmp_mem) {
+        J_OBJ_START();
+        J_KV("Expr print ERROR", "alloc memory failed");
+        J_OBJ_END();
+      } else {
+        ObBitVector *skip = to_bit_vector(tmp_mem);
+        skip->set_all(batch_size);
+        skip->unset(c_.get_batch_idx());
+        pos = sql::ToStrVectorHeader(
+            e_, c_, skip, sql::EvalBound(1, c_.get_batch_idx(), c_.get_batch_idx() + 1, false))
+                  .to_string(buf, buf_len);
+      }
+    } else {
+      int ret = e_.eval(c_, datum);
+      UNUSED(ret);
+      pos = ObToStringDatum(e_, *datum).to_string(buf, buf_len);
+    }
   }
   return pos;
 }
@@ -638,6 +755,7 @@ DEF_TO_STRING(ObExprArrayVecStringer)
         expr->get_vector(ctx_)->get_payload(ctx_.get_batch_idx(), payload, payload_len);
         d.ptr_ = payload;
         d.len_ = payload_len;
+        d.null_ = 0;
       }
       pos += ObToStringDatum(*expr, d).to_string(buf + pos, buf_len - pos);
       J_OBJ_END();
@@ -691,29 +809,31 @@ void ObExpr::reset_discretes_ptr(char *frame, const int64_t size, char** ptrs) c
 
 int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) const
 {
+#define INNER_BATCH_SIZE() MAX(1, ctx.get_batch_size())
   int ret = OB_SUCCESS;
   char *frame = ctx.frames_[frame_idx_];
   ObEvalInfo *info = reinterpret_cast<ObEvalInfo *>(frame + eval_info_off_);
   bool need_evaluate = false;
 
-  if (info->projected_ || NULL == eval_func_ || info->evaluated_) {
+  if (info->is_projected() || NULL == eval_func_ || info->is_evaluated(ctx)) {
     if (UINT32_MAX != vector_header_off_) {
-      ret = cast_to_uniform(ctx.get_batch_size(), ctx);
+      ret = cast_to_uniform(INNER_BATCH_SIZE(), ctx);
     }
   }
   if (OB_FAIL(ret)) {
-  } else if ((info->projected_ || NULL == eval_func_)) {
+  } else if ((info->is_projected() || NULL == eval_func_)) {
     // do nothing
-  } else if (!info->evaluated_) {
+  } else if (!info->is_evaluated(ctx)) {
     need_evaluate = true;
     to_bit_vector(frame + eval_flags_off_)->reset(ctx.get_batch_size());
     reset_datums_ptr(frame, ctx.get_batch_size());
-    info->evaluated_ = true;
+    reset_attrs_datums(ctx);
+    info->set_evaluated(true);
     info->cnt_ = ctx.get_batch_size();
-    info->point_to_frame_ = true;
-    info->notnull_ = true;
+    info->set_point_to_frame(true);
+    info->set_notnull(true);
     if (enable_rich_format()) {
-      ret = init_vector(ctx, VEC_UNIFORM, ctx.get_batch_size());
+      ret = init_vector(ctx, VEC_UNIFORM, INNER_BATCH_SIZE());
     } else if (UINT32_MAX != vector_header_off_) {
       get_vector_header(ctx).format_ = VEC_INVALID;
     }
@@ -728,8 +848,30 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
     if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else {
-      reset_datum_ptr(frame, ctx.get_batch_size(), ctx.get_batch_idx());
-      ret = eval_func_(*this, ctx, *datum);
+      reset_datum_ptr(frame, INNER_BATCH_SIZE(), ctx.get_batch_idx());
+      if (enable_rich_format() && eval_vector_func_ != expr_default_eval_vector_func) {
+        ObBitVector *tmp_skip = nullptr;
+        if (OB_FAIL(ctx.get_pvt_skip_for_eval_row(tmp_skip))) {
+          LOG_WARN("get tmp skip failed", K(ret));
+        } else if (OB_ISNULL(tmp_skip)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null skip", K(ret));
+        } else {
+          tmp_skip->unset(ctx.get_batch_idx());
+          // we may have non-vectorized with vectorized expr
+          // in this case, set batch_size to 1 to avoid unexpected errors
+          int64_t tmp_batch_size = INNER_BATCH_SIZE();
+          int64_t tmp_max_batch_size = MAX(ctx.max_batch_size_, 1);
+          ObEvalCtx::BatchInfoScopeGuard batch_guard(ctx);
+          batch_guard.set_batch_size(tmp_batch_size);
+          batch_guard.set_max_batch_size(tmp_max_batch_size);
+          EvalBound tmp_bound(tmp_batch_size, ctx.get_batch_idx(), ctx.get_batch_idx() + 1, true);
+          ret = eval_vector_func_(*this, ctx, *tmp_skip, tmp_bound);
+          datum = &locate_expr_datum(ctx);
+        }
+      } else {
+        ret = eval_func_(*this, ctx, *datum);
+      }
       CHECK_STRING_LENGTH((*this), (*datum));
       if (OB_SUCC(ret)) {
         ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
@@ -738,12 +880,13 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
         datum->set_null();
       }
       if (datum->is_null()) {
-        info->notnull_ = false;
+        info->set_notnull(false);
       }
     }
   }
 
   return ret;
+#undef INNER_BATCH_SIZE
 }
 
 int ObExpr::do_eval_batch(ObEvalCtx &ctx,
@@ -754,9 +897,9 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
   char *frame = ctx.frames_[frame_idx_];
   ObEvalInfo *info = reinterpret_cast<ObEvalInfo *>(frame + eval_info_off_);
   bool need_evaluate = false;
-  if (info->projected_ || NULL == eval_batch_func_) {
+  if (info->is_projected() || NULL == eval_batch_func_) {
     // expr values is projected by child or has no evaluate func, do nothing.
-  } else if (!info->evaluated_) {
+  } else if (!info->is_evaluated(ctx)) {
     need_evaluate = true;
     to_bit_vector(frame + eval_flags_off_)->reset(size);
   } else {
@@ -770,11 +913,12 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
   if (need_evaluate) {
     // Set ObDatum::ptr_ point to reserved buffer in the first evaluation.
     // FIXME bin.lb: maybe we can optimize this by ObEvalInfo::point_to_frame_
-    if (!info->evaluated_) {
+    if (!info->is_evaluated(ctx)) {
       reset_datums_ptr(frame, size);
-      info->notnull_ = false;
-      info->point_to_frame_ = true;
-      info->evaluated_ = true;
+      reset_attrs_datums(ctx);
+      info->set_notnull(false);
+      info->set_point_to_frame(true);
+      info->set_evaluated(true);
       info->cnt_ = size;
       if (enable_rich_format()) {
         ret = init_vector(ctx, VEC_UNIFORM, size);
@@ -791,7 +935,7 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
         // for shared expr, may be not use uniform format when first time eval expr
         // so, we should cast to uniform here
         if (OB_SUCC(ret)) {
-          ret = cast_to_uniform(size, ctx);
+          ret = cast_to_uniform(size, ctx, &skip);
         }
       } else {
         ret = (*eval_batch_func_)(*this, ctx, skip, size);
@@ -819,13 +963,13 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
     // no need evaluate more, cast to uniform for use rich format,
     // because this expr may calc by eval_vector
     if (UINT32_MAX != vector_header_off_) {
-      ret = cast_to_uniform(size, ctx);
+      ret = cast_to_uniform(size, ctx, &skip);
     }
   }
   return ret;
 }
 
-int ObExpr::cast_to_uniform(const int64_t size, ObEvalCtx &ctx) const
+int ObExpr::cast_to_uniform(const int64_t size, ObEvalCtx &ctx, const ObBitVector *skip) const
 {
   int ret = OB_SUCCESS;
   VectorHeader &vec_header = get_vector_header(ctx);
@@ -947,6 +1091,8 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
       FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT128);
       FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT256);
       FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT512);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATETIME);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATE);
       #undef FIXED_VECTOR_INIT_SWITCH
       default:
         ret = OB_INVALID_ARGUMENT;
@@ -975,6 +1121,8 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
       CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_JSON);
       CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_GEO);
       CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_UDT);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_COLLECTION);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_ROARINGBITMAP);
       #undef CONTINUOUS_VECTOR_INIT_SWITCH
       default:
         ret = OB_INVALID_ARGUMENT;
@@ -985,7 +1133,8 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
     int32_t *lens = get_discrete_vector_lens(ctx);
     ObBitVector &nulls = get_nulls(ctx);
     nulls.reset(size);
-    if (use_reserve_buf) {
+    // for collection expr, we need reset ptr to frame, so that we can write collection cells
+    if (use_reserve_buf || is_nested_expr()) {
       reset_discretes_ptr(ctx.frames_[frame_idx_], size, get_discrete_vector_ptrs(ctx));
     }
     switch(value_tc) {
@@ -1006,6 +1155,8 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
       DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_JSON);
       DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_GEO);
       DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_UDT);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_COLLECTION);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_ROARINGBITMAP);
       #undef DISCRETE_VECTOR_INIT_SWITCH
       default:
         ret = OB_INVALID_ARGUMENT;
@@ -1055,6 +1206,10 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
       UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_JSON);
       UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_GEO);
       UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_UDT);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_COLLECTION);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATETIME);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATE);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_ROARINGBITMAP);
       #undef UNIFORM_VECTOR_INIT_SWITCH
       default:
         ret = OB_INVALID_ARGUMENT;
@@ -1073,7 +1228,42 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
   }
   if (OB_SUCC(ret)) {
     ObVectorBase *vector = reinterpret_cast<ObVectorBase *> (vector_buf);
+    OB_ASSERT(size <= INT32_MAX);
     vector->set_max_row_cnt(size);
+    if (is_nested_expr()) {
+      vector->is_collection_expr_ = true;
+      vector->set_expr_and_ctx(const_cast<ObExpr *>(this), &ctx);
+    }
+    for (uint32_t i = 0; i < attrs_cnt_ && OB_SUCC(ret); ++i) {
+      VectorFormat attr_format = format;
+      if (OB_ISNULL(attrs_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "Unexpected null attr", K(ret), K(i));
+      } else {
+        attr_format = i == 0 ? attrs_[i]->get_default_res_format() : format;
+        if (OB_FAIL(attrs_[i]->init_vector(ctx, attr_format, size, use_reserve_buf))) {
+          SQL_LOG(WARN, "Failed to init vector", K(ret), K(i), K(format), K(size));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void ObExpr::reset_attrs_datums(ObEvalCtx &ctx) const
+{
+  int64_t size = ctx.get_batch_size();
+  for (uint32_t idx = 0; idx < attrs_cnt_; ++idx) {
+    char *frame = ctx.frames_[attrs_[idx]->frame_idx_];
+    attrs_[idx]->reset_datums_ptr(frame, size);
+  }
+}
+
+int ObExpr::nested_cast_to_uniform(const int64_t size, ObEvalCtx &ctx, const ObBitVector *skip) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObArrayExprUtils::transform_coll_to_uniform(ctx, *this, size, skip))) {
+    SQL_LOG(WARN, "failed to cast array to uniform", K(ret), K(size));
   }
   return ret;
 }
@@ -1121,6 +1311,10 @@ int VectorHeader::init_uniform_const_vector(VecValueTypeClass vec_value_tc,
     UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_JSON);
     UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_GEO);
     UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_UDT);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_COLLECTION);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATETIME);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATE);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_ROARINGBITMAP);
     #undef UNIFORM_CONST_VECTOR_INIT_SWITCH
     default:
       ret = OB_INVALID_ARGUMENT;
@@ -1136,33 +1330,45 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
 {
   int ret = common::OB_SUCCESS;
   #define BATCH_SIZE() batch_result_ ? bound.batch_size() : 1
-  //TODO shengle CHECK_BOUND(bound); check skip and all_rows_active wheth match
+  bool need_check = false;
+  int tmp_ret = common::OB_SUCCESS;
+  tmp_ret = OB_E(EventTable::EN_ENABLE_ENGINE_CHECK) tmp_ret;
+  if (OB_FAIL(tmp_ret)) {
+    need_check = true;
+  }
+  if (need_check) {
+    // check all_rows_active flag
+    if (OB_UNLIKELY((skip.accumulate_bit_cnt(bound) != 0 && bound.get_all_rows_active()))) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "all_rows_active check failed", K(ret), K(skip.accumulate_bit_cnt(bound)),
+                                                    K(bound.get_all_rows_active()), K(BATCH_SIZE()));
+    }
+  }
+
   ObEvalInfo &info = get_eval_info(ctx);
   char *frame = ctx.frames_[frame_idx_];
-  int64_t const_skip = 1;
-  if (skip.accumulate_bit_cnt(bound) < bound.range_size()) {
-    const_skip = 0;
-  }
+  int64_t const_skip = 0;
+  bool const_dry_run = (!batch_result_ && skip.accumulate_bit_cnt(bound) >= bound.range_size());
   const ObBitVector *rt_skip = batch_result_ ? &skip : to_bit_vector(&const_skip);
   bool need_evaluate = false;
   // in old operator, rowset_v2 expr eval param use eval_vector,
   // the param expr has been evaluated by old eval_batch interface,
   // and not init vector, here we should init vector
   if (VEC_INVALID == get_format(ctx)
-      && (info.projected_ || true == info.evaluated_ || NULL == eval_vector_func_)) {
+      && (info.is_projected() || true == info.is_evaluated(ctx) || NULL == eval_vector_func_)) {
     ret = init_vector(ctx, batch_result_ ? VEC_UNIFORM : VEC_UNIFORM_CONST, BATCH_SIZE());
   }
   if (OB_FAIL(ret)) {
-  } else if ((batch_result_ && info.projected_) || NULL == eval_batch_func_
-             || (!batch_result_ && info.evaluated_)) {
+  } else if ((batch_result_ && info.is_projected()) || NULL == eval_batch_func_
+             || (!batch_result_ && info.is_evaluated(ctx))) {
     // expr values is projected by child or has no evaluate func, do nothing.
-  } else if (!info.evaluated_) {
+  } else if (!info.is_evaluated(ctx)) {
     // if const_skip == 1, no need to evaluated expr, just `init_vector`
-    need_evaluate = batch_result_ || (const_skip == 0);
+    need_evaluate = true;
     get_evaluated_flags(ctx).reset(BATCH_SIZE());
-    info.notnull_ = false;
-    info.point_to_frame_ = true;
-    info.evaluated_ = batch_result_ ? true : false;
+    info.set_notnull(false);
+    info.set_point_to_frame(true);
+    info.set_evaluated(batch_result_ ? true : false);
     VectorFormat format = (expr_default_eval_vector_func == eval_vector_func_ && is_batch_result())
                           ? VEC_UNIFORM
                           : get_default_res_format();
@@ -1174,15 +1380,48 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
         *rt_skip, evaluated_vec, BATCH_SIZE(),
         [](const uint64_t l, const uint64_t r) { return ~(l | r); });
   }
-  LOG_DEBUG("need evaluate", K(need_evaluate));
+
+  if (need_check && need_evaluate) {
+    // check has_null flag
+    ObIVector *vector = get_vector(ctx);
+    if (OB_UNLIKELY(NULL == vector)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "Unexpected null vector", K(ret));
+    } else {
+      VectorFormat format = vector->get_format();
+      if (is_uniform_format(format)) {
+        // do_nothing
+      } else {
+        ObBitVector *null_bitmap = static_cast<ObBitmapNullVectorBase *>(vector)->get_nulls();
+        for (int64_t i = 0; OB_SUCC(ret) && i < bound.batch_size(); i++) {
+          if (skip.at(i)) {
+            continue;
+          }
+          if (null_bitmap->at(i) && !vector->has_null()) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "has_null check failed", K(ret), K(vector->has_null()),
+                    "null bitmap", ObLogPrintHex(reinterpret_cast<char *>(null_bitmap),
+                                                 ObBitVector::memory_size(bound.batch_size())),
+                    K(BATCH_SIZE()));
+          }
+        }
+      }
+    }
+  }
+
+  LOG_DEBUG("need evaluate", K(need_evaluate), KP(this));
   if (OB_SUCC(ret) && need_evaluate) {
     if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else if (OB_FAIL(
                  (*eval_vector_func_)(*this, ctx, *rt_skip, batch_result_ ? bound : EvalBound(1)))) {
-      set_all_null(ctx, BATCH_SIZE());
+      if (const_dry_run) {
+        ret = OB_SUCCESS;
+      } else {
+        set_all_null(ctx, BATCH_SIZE());
+      }
     } else {
-      info.evaluated_ = true;
+      info.set_evaluated(true);
     }
   }
 
@@ -1226,11 +1465,26 @@ int expr_default_eval_batch_func(const ObExpr &expr,
       if (datum[i].is_null()) {
         got_null = true;
       }
+
+      if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+        // overwrite ret on diagnosis node
+        if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+          LOG_WARN("failed to add warning info", K(ret), K(i));
+        } else if (OB_FAIL(ObExprColumnConv::calc_column_name_for_diagnosis(expr, ctx,
+                                                          ctx.exec_ctx_.get_diagnosis_manager()))) {
+          LOG_WARN("fail to calculate column name for diagnosis", K(ret), K(expr));
+        } else {
+          // set null to avoid accessing invalid data before setting skip
+          // in ObTableScanOp::do_diagnosis
+          datum[i].set_null();
+          got_null = true;
+        }
+      }
     }
   }
   // reset evaluate index
   if (got_null) {
-    expr.get_eval_info(ctx).notnull_ = false;
+    expr.get_eval_info(ctx).set_notnull(false);
   }
   return ret;
 }
@@ -1327,6 +1581,12 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         res_acc.precision_ = expr.datum_meta_.precision_;
         cast_ctx.res_accuracy_ = &res_acc;
       }
+      if (ob_is_string_tc(dst_meta.get_type())) {
+        cast_ctx.dest_max_length_ = expr.max_length_;
+      }
+      if (dst_meta.is_collection_sql_type()) {
+        dst_obj.meta_.set_meta(dst_meta);
+      }
       cast_ctx.exec_ctx_ = &ctx.exec_ctx_;
       if (OB_FAIL(ObObjCaster::to_type(dst_meta.get_type(), cast_ctx, v, dst_obj))) {
         LOG_WARN("failed to cast obj to dst type", K(ret), K(v), K(dst_meta));
@@ -1344,10 +1604,10 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
 }
 
 template <typename VectorType>
-int ToStrVectorHeader::to_string_helper(char *buf, const int64_t buf_len) const
+int ToStrVectorHeader::to_string_helper(const VectorHeader &header, char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  const VectorType *vector = reinterpret_cast<const VectorType *>(header_.vector_buf_);
+  const VectorType *vector = reinterpret_cast<const VectorType *>(header.vector_buf_);
   J_COMMA();
   BUF_PRINTF("meta: ");
   pos += vector->to_string(buf + pos, buf_len - pos);
@@ -1372,7 +1632,7 @@ int ToStrVectorHeader::to_string_helper(char *buf, const int64_t buf_len) const
       }
     }
     J_OBJ_END();
-    if (VEC_UNIFORM_CONST == header_.format_) {
+    if (VEC_UNIFORM_CONST == header.format_) {
       break;
     }
     if (i != bound_.end() - 1) {
@@ -1383,38 +1643,298 @@ int ToStrVectorHeader::to_string_helper(char *buf, const int64_t buf_len) const
   return pos;
 }
 
-DEF_TO_STRING(ToStrVectorHeader)
+template <typename VectorType>
+int ToStringExprRowVec::data_to_string_helper(
+    const VectorHeader &header, const int64_t index, char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
+  const VectorType *vector = reinterpret_cast<const VectorType *>(header.vector_buf_);
   J_OBJ_START();
-  switch (header_.format_) {
-    case VEC_FIXED: {
-      J_KV("format", "VEC_FIXED");
-      pos += to_string_helper<ObFixedLengthBase>(buf + pos, buf_len - pos);
-      break;
+  if (nullptr != skip_ && skip_->at(index)) {
+    BUF_PRINTF("skipped");
+  } else {
+    BUF_PRINTF("null: %d", vector->is_null(index));
+    if (!vector->is_null(index)) {
+      ObLength length = vector->get_length(index);
+      BUF_PRINTF(", len: %d, ptr: %p, hex: ", length, vector->get_payload(index));
+      hex_print(vector->get_payload(index), length, buf, buf_len, pos);
     }
-    case VEC_DISCRETE: {
-      J_KV("format", "VEC_DISCRETE");
-      pos += to_string_helper<ObDiscreteBase>(buf + pos, buf_len - pos);
-      break;
-    }
-    case VEC_UNIFORM: {
-      J_KV("format", "VEC_UNIFORM");
-      ObDatum d;
-      pos += to_string_helper<UniformFormat>(buf + pos, buf_len - pos);
-      break;
-    }
-    case VEC_UNIFORM_CONST: {
-      J_KV("format", "VEC_UNIFORM_CONST");
-      pos += to_string_helper<ConstUniformFormat>(buf + pos, buf_len - pos);
-      break;
-    }
-    default:
-      J_KV(K_(header_.format));
   }
   J_OBJ_END();
   return pos;
 }
 
+template <typename VectorType>
+int ToStringExprRowVec::value_to_string_helper(const VectorHeader &header, const ObExpr &expr,
+    const int64_t index, char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  const VectorType *vector = reinterpret_cast<const VectorType *>(header.vector_buf_);
+  if (nullptr != skip_ && skip_->at(index)) {
+    J_OBJ_START();
+    BUF_PRINTF("skipped");
+    J_OBJ_END();
+  } else {
+    if (!vector->is_null(index)) {
+      ObLength length = vector->get_length(index);
+      ObDatum tmp_datum(vector->get_payload(index), length, vector->is_null(index));
+      ObObj tmp_obj;
+      if (OB_SUCCESS == tmp_datum.to_obj(tmp_obj, expr.obj_meta_, expr.obj_datum_map_)) {
+        pos += tmp_obj.to_string(buf + pos, buf_len - pos);
+      }
+    } else {
+      J_OBJ_START();
+      BUF_PRINTF("null");
+      J_OBJ_END();
+    }
+  }
+  return pos;
+}
+
+int ToStringExprRowVec::meta_to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  J_OBJ_START();
+  // output skip bitmap
+  BUF_PRINTF("skip: ");
+  J_ARRAY_START();
+  if (NULL == skip_) {
+    BUF_PRINTF("null");
+  } else {
+    for (int64_t i = 0; i < batch_size_; i++) {
+      if (skip_->at(i)) {
+        BUF_PRINTF("1");
+      } else {
+        BUF_PRINTF("0");
+      }
+      if ((i + 1) % 16 == 0) {
+        J_COMMA();
+      }
+    }
+  }
+  J_ARRAY_END();
+  J_COMMA();
+  J_ARRAY_START();
+  for (int64_t i = 0; i < exprs_.count(); i++) {
+    const ObExpr *expr = exprs_.at(i);
+    if (OB_LIKELY(expr != NULL)) {
+      J_OBJ_START();
+      J_KV(KP(expr));
+      J_COMMA();
+      if (expr->enable_rich_format()) {
+        if (NULL != skip_ && OB_FAIL(expr->eval_vector(ctx_, *skip_, bound_))) {
+          LOG_WARN("fail to eval_vector", K(ret));
+        } else {
+          const VectorHeader &header = expr->get_vector_header(ctx_);
+          switch (header.format_) {
+            case VEC_FIXED: {
+              J_KV("format", "VEC_FIXED");
+              const ObFixedLengthBase *vector =
+                  reinterpret_cast<const ObFixedLengthBase *>(header.vector_buf_);
+              J_COMMA();
+              BUF_PRINTF("meta: ");
+              pos += vector->to_string(buf + pos, buf_len - pos);
+              break;
+            }
+            case VEC_DISCRETE: {
+              J_KV("format", "VEC_DISCRETE");
+              const ObDiscreteBase *vector =
+                  reinterpret_cast<const ObDiscreteBase *>(header.vector_buf_);
+              J_COMMA();
+              BUF_PRINTF("meta: ");
+              pos += vector->to_string(buf + pos, buf_len - pos);
+              break;
+            }
+            case VEC_CONTINUOUS: {
+              J_KV("format", "VEC_CONTINUOUS");
+              const ObContinuousBase *vector =
+                  reinterpret_cast<const ObContinuousBase *>(header.vector_buf_);
+              J_COMMA();
+              BUF_PRINTF("meta: ");
+              pos += vector->to_string(buf + pos, buf_len - pos);
+              break;
+            }
+            case VEC_UNIFORM: {
+              J_KV("format", "VEC_UNIFORM");
+              const UniformFormat *vector =
+                  reinterpret_cast<const UniformFormat *>(header.vector_buf_);
+              J_COMMA();
+              BUF_PRINTF("meta: ");
+              pos += vector->to_string(buf + pos, buf_len - pos);
+              break;
+            }
+            case VEC_UNIFORM_CONST: {
+              J_KV("format", "VEC_UNIFORM_CONST");
+              const ConstUniformFormat *vector =
+                  reinterpret_cast<const ConstUniformFormat *>(header.vector_buf_);
+              J_COMMA();
+              BUF_PRINTF("meta: ");
+              pos += vector->to_string(buf + pos, buf_len - pos);
+              break;
+            }
+            default: {
+              J_KV("format", "VEC_INVAILD");
+            }
+          }
+        }
+      } else {
+        J_KV("format", "UNIFORM");
+      }
+      J_OBJ_END();
+    } else {
+      J_OBJ_START();
+      J_OBJ_END();
+    }
+    if (i != exprs_.count() - 1) {
+      J_COMMA();
+    }
+  }
+  J_ARRAY_END();
+  J_OBJ_END();
+  return pos;
+}
+
+DEF_TO_STRING(ToStrVectorHeader)
+{
+  int64_t pos = 0;
+  int ret = OB_SUCCESS;
+  if (NULL != skip_ && OB_FAIL(expr_.eval_vector(ctx_, *skip_, bound_))) {
+    LOG_WARN("fail to eval_vector", K(ret));
+  } else {
+    const VectorHeader &header = expr_.get_vector_header(ctx_);
+    J_OBJ_START();
+    switch (header.format_) {
+    case VEC_FIXED: {
+      J_KV("format", "VEC_FIXED");
+      pos += to_string_helper<ObFixedLengthBase>(header, buf + pos, buf_len - pos);
+      break;
+    }
+    case VEC_DISCRETE: {
+      J_KV("format", "VEC_DISCRETE");
+      pos += to_string_helper<ObDiscreteBase>(header, buf + pos, buf_len - pos);
+      break;
+    }
+    case VEC_UNIFORM: {
+      J_KV("format", "VEC_UNIFORM");
+      ObDatum d;
+      pos += to_string_helper<UniformFormat>(header, buf + pos, buf_len - pos);
+      break;
+    }
+    case VEC_UNIFORM_CONST: {
+      J_KV("format", "VEC_UNIFORM_CONST");
+      pos += to_string_helper<ConstUniformFormat>(header, buf + pos, buf_len - pos);
+      break;
+    }
+    default: J_KV(K_(header.format));
+    }
+    J_OBJ_END();
+  }
+  return pos;
+}
+
+DEF_TO_STRING(ToStringExprRowVec)
+{
+  int64_t pos = 0;
+  int ret = OB_SUCCESS;
+  int64_t index = ctx_.get_batch_idx();
+  J_OBJ_START();
+  BUF_PRINTF("data: ");
+  J_ARRAY_START();
+  for (int64_t i = 0; i < exprs_.count(); i++) {
+    const ObExpr *expr = exprs_.at(i);
+    if (OB_LIKELY(expr != NULL)) {
+      if (expr->enable_rich_format()) {
+        const VectorHeader &header = expr->get_vector_header(ctx_);
+        switch (header.format_) {
+          case VEC_FIXED: {
+            pos +=
+                data_to_string_helper<ObFixedLengthBase>(header, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_DISCRETE: {
+            pos += data_to_string_helper<ObDiscreteBase>(header, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_CONTINUOUS: {
+            pos += data_to_string_helper<ObContinuousBase>(header, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_UNIFORM: {
+            pos += data_to_string_helper<UniformFormat>(header, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_UNIFORM_CONST: {
+            pos +=
+                data_to_string_helper<ConstUniformFormat>(header, index, buf + pos, buf_len - pos);
+            break;
+          }
+          default:
+            break;
+        }
+      } else {
+        pos += ObToStringExpr(ctx_, *expr).to_string(buf + pos, buf_len - pos);
+      }
+    } else {
+      J_OBJ_START();
+      J_OBJ_END();
+    }
+    if (i != exprs_.count() - 1) {
+      J_COMMA();
+    }
+  }
+  J_ARRAY_END();
+  J_COMMA();
+  BUF_PRINTF("value: ");
+  J_ARRAY_START();
+  for (int64_t i = 0; i < exprs_.count(); i++) {
+    const ObExpr *expr = exprs_.at(i);
+    if (OB_LIKELY(expr != NULL)) {
+      if (expr->enable_rich_format()) {
+        const VectorHeader &header = expr->get_vector_header(ctx_);
+        switch (header.format_) {
+          case VEC_FIXED: {
+            pos += value_to_string_helper<ObFixedLengthBase>(
+                header, *expr, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_DISCRETE: {
+            pos += value_to_string_helper<ObDiscreteBase>(
+                header, *expr, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_CONTINUOUS: {
+            pos += value_to_string_helper<ObContinuousBase>(
+                header, *expr, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_UNIFORM: {
+            pos += value_to_string_helper<UniformFormat>(
+                header, *expr, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_UNIFORM_CONST: {
+            pos += value_to_string_helper<ConstUniformFormat>(
+                header, *expr, index, buf + pos, buf_len - pos);
+            break;
+          }
+          default:
+            break;
+        }
+      } else {
+        pos += ObToStringExpr(ctx_, *expr).to_string(buf + pos, buf_len - pos);
+      }
+    } else {
+      J_OBJ_START();
+      J_OBJ_END();
+    }
+    if (i != exprs_.count() - 1) {
+      J_COMMA();
+    }
+  }
+  J_ARRAY_END();
+  J_OBJ_END();
+  return pos;
+}
 } // end namespace sql
 } // end namespace oceanbase

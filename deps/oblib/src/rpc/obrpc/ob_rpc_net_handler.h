@@ -50,6 +50,12 @@ public:
 public:
   static int64_t CLUSTER_ID;
   static uint64_t CLUSTER_NAME_HASH;
+  static bool is_self_cluster(int64_t cluster_id)
+  {
+    return ObRpcNetHandler::CLUSTER_ID == cluster_id &&
+           ObRpcNetHandler::CLUSTER_ID != OB_INVALID_CLUSTER_ID &&
+           cluster_id != OB_INVALID_CLUSTER_ID;
+  }
 protected:
   char *easy_alloc(easy_pool_t *pool, int64_t size) const;
 private:

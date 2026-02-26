@@ -12,7 +12,6 @@
 
 #include "ob_mock_tx_log_adapter.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
-#include "storage/tx/ob_tx_ls_log_writer.h"
 #include <gtest/gtest.h>
 
 namespace oceanbase

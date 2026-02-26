@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdint>
-#include "lib/time/ob_time_utility.h"
 #include "ob_ls_meta_record_task.h"
 #include "observer/ob_server_struct.h"
 #include "logservice/data_dictionary/ob_data_dict_meta_info.h"

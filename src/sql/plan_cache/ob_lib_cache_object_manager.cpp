@@ -11,10 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_PC
-#include "sql/plan_cache/ob_lib_cache_register.h"
-#include "sql/plan_cache/ob_lib_cache_object_manager.h"
+#include "ob_lib_cache_object_manager.h"
 #include "sql/plan_cache/ob_plan_cache.h"
-#include "observer/ob_req_time_service.h"
 
 namespace oceanbase
 {

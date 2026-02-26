@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/backup/ob_backup_index_cache.h"
-#include "lib/oblog/ob_log_module.h"
 
 using namespace oceanbase::share;
 
@@ -55,6 +54,18 @@ bool ObBackupBlockDesc::operator==(const ObBackupBlockDesc &other) const
 {
   return turn_id_ == other.turn_id_ && retry_id_ == other.retry_id_ && file_type_ == other.file_type_ &&
          file_id_ == other.file_id_ && offset_ == other.offset_ && length_ == other.length_;
+}
+
+uint64_t ObBackupBlockDesc::calc_hash(uint64_t seed) const
+{
+  uint64_t hash_code = 0;
+  hash_code = murmurhash(&turn_id_, sizeof(turn_id_), seed);
+  hash_code = murmurhash(&retry_id_, sizeof(retry_id_), hash_code);
+  hash_code = murmurhash(&file_type_, sizeof(file_type_), hash_code);
+  hash_code = murmurhash(&file_id_, sizeof(file_id_), hash_code);
+  hash_code = murmurhash(&offset_, sizeof(offset_), hash_code);
+  hash_code = murmurhash(&length_, sizeof(length_), hash_code);
+  return hash_code;
 }
 
 /* ObBackupIndexCacheKey */
@@ -111,7 +122,12 @@ uint64_t ObBackupIndexCacheKey::get_tenant_id() const
 
 uint64_t ObBackupIndexCacheKey::hash() const
 {
-  return murmurhash(this, sizeof(ObBackupIndexCacheKey), 0);
+  uint64_t hash_code = 0;
+  hash_code = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_code);
+  hash_code = murmurhash(&backup_set_id_, sizeof(backup_set_id_), hash_code);
+  hash_code = murmurhash(&ls_id_, sizeof(ls_id_), hash_code);
+  hash_code = block_desc_.calc_hash(hash_code);
+  return hash_code;
 }
 
 int64_t ObBackupIndexCacheKey::size() const

@@ -13,16 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/table/ob_link_scan_op.h"
-#include "sql/engine/ob_exec_context.h"
-#include "observer/ob_server_struct.h"
-#include "share/schema/ob_dblink_mgr.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_connection_pool.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/dblink/ob_tm_service.h"
-#include "sql/dblink/ob_dblink_utils.h"
-#include "lib/string/ob_hex_utils_base.h"
-#include "sql/session/ob_sql_session_mgr.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #ifdef OB_BUILD_DBLINK
 #include "lib/oracleclient/ob_oci_connection.h"
@@ -145,7 +136,7 @@ int ObLinkScanOp::free_snapshot()
   return ret;
 }
 #endif
-int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
+int ObLinkScanOp::inner_execute_link_stmt(const ObString &link_stmt)
 {
   int ret = OB_SUCCESS;
   uint16_t charset_id = 0;
@@ -155,20 +146,20 @@ int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
   bool have_lob = false;
   res_.set_enable_use_result(true);
   bool new_snapshot = false;
-  if (OB_ISNULL(link_stmt)) {
+  if (link_stmt.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), KP(link_stmt));
+    LOG_WARN("unexpected NULL", K(ret), K(link_stmt));
   } else if (sql::DblinkGetConnType::TM_CONN == conn_type_) {
     if (OB_FAIL(tm_rm_connection_->execute_read(OB_INVALID_TENANT_ID, link_stmt, res_))) {
       LOG_WARN("failed to read table data by tm_rm_connection", K(ret), K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
     } else {
-      LOG_DEBUG("succ to read table data by tm_rm_connection", K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
+      LOG_TRACE("succ to read table data by tm_rm_connection", K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
     }
   } else if (sql::DblinkGetConnType::TEMP_CONN == conn_type_) {
     if (OB_FAIL(reverse_link_->read(link_stmt, res_))) {
       LOG_WARN("failed to read table data by reverse_link", K(ret));
     } else {
-      LOG_DEBUG("succ to read table data by reverse_link");
+      LOG_TRACE("succ to read table data by reverse_link");
     }
   } else if (OB_ISNULL(dblink_proxy_) || OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -209,7 +200,7 @@ int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
   } else if (OB_FAIL(result_->set_expected_charset_id(charset_id, ncharset_id))) {// for oci dblink set expected result charset, actually useless...
     LOG_WARN("failed to set result set expected charset", K(ret), K(charset_id), K(ncharset_id));
   } else {
-    LOG_DEBUG("succ to dblink read", K(link_stmt), KP(dblink_conn_));
+    LOG_TRACE("succ to dblink read", K(link_stmt), KP(dblink_conn_), K(charset_id), K(ncharset_id));
   }
   return ret;
 }
@@ -294,7 +285,7 @@ int ObLinkScanOp::inner_open()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session or plan_ctx or dblink_proxy_ or dblink_proxy_ is NULL", K(ret), KP(session), KP(plan_ctx), KP(phy_plan), KP(dblink_proxy_));
   } else if (FALSE_IT(tenant_id_ = session->get_effective_tenant_id())) {
-  } else if (FALSE_IT(sessid_ = session->get_sessid())) {
+  } else if (FALSE_IT(sessid_ = session->get_server_sid())) {
   } else if (FALSE_IT(tm_sessid_ = plan_ctx->get_tm_sessid())) {
   } else if (OB_FAIL(set_next_sql_req_level())) {
     LOG_WARN("failed to set next sql req level", K(ret));
@@ -311,7 +302,7 @@ int ObLinkScanOp::inner_open()
       LOG_WARN("fail to get reverse_link", K(ret));
     } else if (NULL == reverse_link_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("reverse_link_ is NULL", K(ret), KP(reverse_link_), K(session->get_sessid()));
+      LOG_WARN("reverse_link_ is NULL", K(ret), KP(reverse_link_), K(session->get_server_sid()));
     } else if (OB_FAIL(reverse_link_->open(next_sql_req_level_))) {
       LOG_WARN("failed to open reverse_link", K(ret));
     }

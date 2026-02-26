@@ -128,13 +128,6 @@ struct ObTxDataValueHandle {
   common::ObKVCacheHandle handle_;
 
   ObTxDataValueHandle() : value_(nullptr), handle_() {}
-  ObTxDataValueHandle(const ObTxDataValueHandle &rhs) { *this = rhs; }
-  ObTxDataValueHandle &operator=(const ObTxDataValueHandle &rhs)
-  {
-    value_ = rhs.value_;
-    handle_ = rhs.handle_;
-    return *this;
-  }
   ~ObTxDataValueHandle() {}
 
   OB_INLINE bool is_valid() const { return OB_NOT_NULL(value_) && value_->is_valid() && handle_.is_valid(); }

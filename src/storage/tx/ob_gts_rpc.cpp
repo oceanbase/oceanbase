@@ -10,17 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_srv_task.h"
-#include "observer/omt/ob_tenant.h"
 #include "ob_gts_rpc.h"
-#include "ob_ts_worker.h"
-#include "ob_ts_mgr.h"
 #include "ob_timestamp_access.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
 
 namespace oceanbase
 {
@@ -76,12 +67,15 @@ int ObGtsP::process()
 {
   int ret = OB_SUCCESS;
   ObTimeGuard timeguard("gts_request", 100000);
-  if (arg_.get_tenant_id() != MTL_ID()) {
+  if (!arg_.is_sslog_request() && arg_.get_tenant_id() != MTL_ID()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tenant is not match", K(ret), K(arg_));
   }
   if (OB_SUCC(ret)) {
     ObTimestampAccess *timestamp_access = MTL(ObTimestampAccess *);
+    if (arg_.is_sslog_request()) {
+      TRANS_LOG(INFO, "sslog request", K(arg_), K(arg_.is_sslog_request()), K(arg_.get_tenant_id()), K(arg_.get_real_tenant_id()));
+    }
     if (OB_ISNULL(timestamp_access)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "timestamp access is null", KR(ret), KP(timestamp_access));

@@ -57,8 +57,8 @@ typedef const std::function<int(share::ObBackupDest &dest)> RefreshStorageInfoFu
 template<class LogEntryType>
 class ObRemoteLogIterator
 {
-  static const int64_t DEFAULT_SINGLE_READ_SIZE = 1L << 24; // 16MB
 public:
+  static const int64_t DEFAULT_SINGLE_READ_SIZE = 1L << 24; // 16MB
   // @param[in] get_source_func, an function to get the input log restore source
   // @param[in] update_source_func, an function to update location info the the log restore source,
   //            which eliminates the location of a single log if the log restore source is used to init
@@ -85,7 +85,12 @@ public:
       const LSN &end_lsn,
       archive::LargeBufferPool *buffer_pool,
       logservice::ObLogExternalStorageHandler *log_ext_handler,
-      const int64_t single_read_size = DEFAULT_SINGLE_READ_SIZE);
+      const int64_t single_read_size = DEFAULT_SINGLE_READ_SIZE,
+      const bool enable_logservice = false);
+
+  // set user of the remote log iterator
+  // @param[in] user_type
+  int set_io_context(const palf::LogIOContext &io_ctx);
   // @brief used as local iterator, get one entry if not to end
   // @param[out] entry LogGroupEntry or LogEntry
   // @param[out] lsn entry start lsn
@@ -100,6 +105,7 @@ public:
   // support read buffer in parallel, iterator can read data only
   // @param[out] empty, if data read or not
   int pre_read(bool &empty);
+  int pre_read(bool &empty, int64_t &read_size);
 
   // @brief call update_source_func explicitly
   void update_source_cb();
@@ -121,6 +127,7 @@ private:
       const std::function<int(share::ObBackupDest &dest)> &refresh_storage_info_func);
   int next_entry_(LogEntryType &entry, LSN &lsn, const char *&buf, int64_t &buf_size);
   int prepare_buf_();
+  int prepare_buf_(int64_t &read_size);
   int get_entry_(LogEntryType &entry, LSN &lsn, const char *&buf, int64_t &buf_size);
   void update_data_gen_max_lsn_();
   void advance_data_gen_lsn_();
@@ -153,8 +160,8 @@ private:
 
 #include "ob_remote_log_iterator.ipp"
 
-typedef ObRemoteLogIterator< palf::LogGroupEntry > ObRemoteLogGroupEntryIterator;
-typedef ObRemoteLogIterator< palf::LogEntry > ObRemoteLogpEntryIterator;
+typedef ObRemoteLogIterator< ipalf::IGroupEntry > ObRemoteIGroupEntryIterator;
+typedef ObRemoteLogIterator< ipalf::ILogEntry > ObRemoteILogEntryIterator;
 
 } // namespace logservice
 } // namespace oceanbase

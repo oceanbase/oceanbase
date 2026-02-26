@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/ob_mview_transaction.h"
-#include "observer/ob_inner_sql_connection.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 
 namespace oceanbase
@@ -30,8 +29,14 @@ using namespace common::sqlclient;
  */
 
 ObMViewTransaction::ObSessionParamSaved::ObSessionParamSaved()
-  : session_info_(nullptr), is_inner_(false), autocommit_(false)
+  : allocator_("MVSessionSaved"),
+    session_info_(nullptr),
+    is_inner_(false),
+    autocommit_(false),
+    database_id_(OB_INVALID_ID),
+    database_name_(nullptr)
 {
+  cur_session_vars_.reset();
 }
 
 ObMViewTransaction::ObSessionParamSaved::~ObSessionParamSaved()
@@ -42,9 +47,12 @@ ObMViewTransaction::ObSessionParamSaved::~ObSessionParamSaved()
       LOG_WARN("fail to restore session param", KR(ret));
     }
   }
+  cur_session_vars_.reset();
 }
 
-int ObMViewTransaction::ObSessionParamSaved::save(ObSQLSessionInfo *session_info)
+int ObMViewTransaction::ObSessionParamSaved::save(
+                        ObSQLSessionInfo *session_info,
+                        const sql::ObLocalSessionVar *mv_solidified_session_var)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(session_info_)) {
@@ -58,12 +66,67 @@ int ObMViewTransaction::ObSessionParamSaved::save(ObSQLSessionInfo *session_info
     if (OB_FAIL(session_info->get_autocommit(autocommit))) {
       LOG_WARN("fail to get autocommit", KR(ret));
     } else {
-      session_info_ = session_info;
-      is_inner_ = session_info->is_inner();
-      autocommit_ = autocommit;
-      session_info->set_inner_session();
-      session_info->set_autocommit(false);
-      session_info_->get_ddl_info().set_refreshing_mview(true);
+      const int64_t max_database_name_len = OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN;
+      const ObString database_name = session_info->get_database_name();
+      char *database_name_buf = nullptr;
+      allocator_.reuse();
+      if (OB_ISNULL(database_name_buf =
+                            static_cast<char *>(allocator_.alloc(max_database_name_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory", KR(ret));
+      } else {
+        MEMCPY(database_name_buf, database_name.ptr(), database_name.length());
+        database_name_buf[database_name.length()] = '\0';
+        database_name_ = database_name_buf;
+        session_info_ = session_info;
+        is_inner_ = session_info->is_inner();
+        autocommit_ = autocommit;
+        database_id_ = session_info->get_database_id();
+        session_info->set_inner_session();
+        session_info->set_autocommit(false);
+        session_info_->get_ddl_info().set_refreshing_mview(true);
+      }
+      if (OB_SUCC(ret) && nullptr != mv_solidified_session_var) {
+        ObSEArray<const ObSessionSysVar*, 8> mv_solidified_diff_vars;
+        ObSEArray<ObObj, 8> cur_var_vals;
+        if (OB_FAIL(mv_solidified_session_var->get_different_vars_from_session(session_info_,
+                                               mv_solidified_diff_vars, cur_var_vals))) {
+          LOG_WARN("fail to get different vars from session", KR(ret), KP(mv_solidified_session_var));
+        } else if (mv_solidified_diff_vars.count() > 0) {
+          if (cur_var_vals.count() != mv_solidified_diff_vars.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected array size", K(ret), K(cur_var_vals.count()), K(mv_solidified_diff_vars.count()));
+          } else {
+            ARRAY_FOREACH(mv_solidified_diff_vars, i) {
+              const ObSessionSysVar *var = mv_solidified_diff_vars.at(i);
+              if (OB_ISNULL(var)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("var is NULL", KR(ret));
+              } else {
+                ObSessionSysVar tmp_var;
+                tmp_var.type_ = var->type_;
+                if (OB_FAIL(cur_session_vars_.push_back(tmp_var))) {
+                  LOG_WARN("fail to push back sys var", KR(ret));
+                } else {
+                  // Deep copy the old variable value after push_back to avoid dangling pointer issues
+                  ObSessionSysVar &pushed_var = cur_session_vars_.at(cur_session_vars_.count() - 1);
+                  if (OB_FAIL(deep_copy_obj(allocator_, cur_var_vals.at(i), pushed_var.val_))) {
+                    LOG_WARN("fail to deep copy old var val", KR(ret));
+                    cur_session_vars_.pop_back();
+                  } else if (OB_FAIL(session_info_->update_sys_variable(var->type_, var->val_))) {
+                    LOG_WARN("fail to update sys var", KR(ret), K(var->type_));
+                  }
+                }
+              }
+              // for debug
+              if (OB_SUCC(ret)) {
+                LOG_INFO("use solidified var to update sys var", K(var->type_), K(var->val_));
+              }
+            }
+          }
+        }
+        LOG_DEBUG("update sys var", K(mv_solidified_diff_vars), K(mv_solidified_diff_vars.count()));
+      }
     }
   }
   return ret;
@@ -72,14 +135,37 @@ int ObMViewTransaction::ObSessionParamSaved::save(ObSQLSessionInfo *session_info
 int ObMViewTransaction::ObSessionParamSaved::restore()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(session_info_)) {
     if (is_inner_) {
       session_info_->set_inner_session();
     } else {
       session_info_->set_user_session();
     }
+    if (OB_NOT_NULL(database_name_)) {
+      if (OB_TMP_FAIL(session_info_->set_default_database(database_name_))) {
+        LOG_WARN("fail to set default database", KR(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
+      } else {
+        allocator_.free(database_name_);
+        database_name_ = nullptr;
+      }
+    }
     session_info_->set_autocommit(autocommit_);
-    session_info_->get_ddl_info().set_refreshing_mview(false);
+    session_info_->set_database_id(database_id_);
+    database_id_ = OB_INVALID_ID;
+    session_info_->get_ddl_info().reset();
+    // restore cur session vars
+    if (cur_session_vars_.count() > 0) {
+      ARRAY_FOREACH(cur_session_vars_, i) {
+        const ObSessionSysVar &var = cur_session_vars_.at(i);
+        if (OB_FAIL(session_info_->update_sys_variable(var.type_, var.val_))) {
+          LOG_WARN("fail to update sys var", KR(ret), K(var.type_));
+        }
+        // for debug
+        LOG_INFO("restore sys var", K(var.type_), K(var.val_));
+      }
+    }
     session_info_ = nullptr;
   }
   return ret;
@@ -327,7 +413,12 @@ int ObMViewTransaction::end_transaction(const bool commit)
   return ret;
 }
 
-int ObMViewTransaction::start(ObSQLSessionInfo *session_info, ObISQLClient *sql_client)
+int ObMViewTransaction::start(
+    ObSQLSessionInfo *session_info,
+    ObISQLClient *sql_client,
+    const uint64_t database_id,
+    const ObString &database_name,
+    const sql::ObLocalSessionVar *mv_solidified_session_var)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(in_trans_)) {
@@ -339,8 +430,10 @@ int ObMViewTransaction::start(ObSQLSessionInfo *session_info, ObISQLClient *sql_
   } else if (OB_UNLIKELY(session_info->is_in_transaction())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected session is in trans", KR(ret));
-  } else if (OB_FAIL(session_param_saved_.save(session_info))) {
-    LOG_WARN("fail to save session param", KR(ret));
+  } else if (OB_FAIL(session_param_saved_.save(session_info, mv_solidified_session_var))) {
+    LOG_WARN("fail to save session param", KR(ret), KP(mv_solidified_session_var));
+  } else if (OB_FALSE_IT(session_info->set_database_id(database_id))) {
+  } else if (OB_FALSE_IT(session_info->set_default_database(database_name))) {
   } else if (OB_FAIL(connect(session_info, sql_client))) {
     LOG_WARN("fail to connect", KR(ret));
   } else {

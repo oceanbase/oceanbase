@@ -34,13 +34,11 @@ public:
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
 
-  TO_STRING_KV(K_(info),
-               K_(compat),
-               K_(last_compaction_type),
-               K_(wait_check_flag),
-               K_(last_medium_scn));
+  TO_STRING_KV(K_(info), K_(compat), K_(last_compaction_type),
+               K_(wait_check_flag), K_(last_medium_scn));
+
 public:
-  static constexpr int64_t MEDIUM_LIST_VERSION = 1;
+  static constexpr int64_t MEDIUM_LIST_VERSION_V1 = 1;
   static constexpr int32_t MEDIUM_LIST_INFO_RESERVED_BITS = 51;
 public:
   union

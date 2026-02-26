@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "sql/printer/ob_insert_all_stmt_printer.h"
-#include "sql/ob_sql_context.h"
-#include "sql/printer/ob_select_stmt_printer.h"
 
 namespace oceanbase
 {

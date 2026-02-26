@@ -11,8 +11,6 @@
  */
 
 #include "ob_trans_timer.h"
-#include "ob_trans_ctx.h"
-#include "ob_trans_ctx_mgr.h"
 #include "ob_trans_service.h"
 
 namespace oceanbase

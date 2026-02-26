@@ -26,7 +26,7 @@ namespace common {
 #define STRICTJSON_FLAG rapidjson::kParseObjectKeyNoQuotesFlag
 
 int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJsonNode *&j_tree,
-                           uint32_t parse_flag)
+                           uint32_t parse_flag, uint32_t max_depth_config)
 {
   INIT_SUCC(ret);
   char buf[PARSE_SYNTAXERR_MESSAGE_LENGTH] = {0};
@@ -34,8 +34,8 @@ int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJson
   uint64_t offset = 0;
 
   if (OB_FAIL(parse_json_text(allocator, text.ptr(), text.length(),
-                              syntaxerr, &offset, j_tree, parse_flag))) {
-    LOG_WARN("fail to parse json text", K(ret), K(text), KCSTRING(syntaxerr));
+                              syntaxerr, &offset, j_tree, parse_flag, max_depth_config))) {
+    LOG_WARN("fail to parse json text", K(ret), K(text), K(offset), KCSTRING(syntaxerr));
   }
 
   return ret;
@@ -43,7 +43,8 @@ int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJson
 
 int ObJsonParser::get_tree(ObIAllocator *allocator, const char *text,
                            uint64_t length, ObJsonNode *&j_tree,
-                           uint32_t parse_flag)
+                           uint32_t parse_flag,
+                           uint32_t max_depth_config)
 {
   INIT_SUCC(ret);
   char buf[PARSE_SYNTAXERR_MESSAGE_LENGTH] = {0};
@@ -52,7 +53,7 @@ int ObJsonParser::get_tree(ObIAllocator *allocator, const char *text,
 
   if (OB_FAIL(parse_json_text(allocator, text, length,
                               syntaxerr, &offset, j_tree,
-                              parse_flag))) {
+                              parse_flag, max_depth_config))) {
     LOG_WARN("fail to parse json text", K(ret), K(length), KCSTRING(syntaxerr));
   }
 
@@ -66,7 +67,8 @@ int ObJsonParser::get_tree(ObIAllocator *allocator, const char *text,
 int ObJsonParser::parse_json_text(ObIAllocator *allocator, 
                                   const char *text, uint64_t length,
                                   const char *&syntaxerr, uint64_t *offset,
-                                  ObJsonNode *&j_tree, uint32_t parse_flag)
+                                  ObJsonNode *&j_tree, uint32_t parse_flag,
+                                  uint32_t max_depth_config)
 {
   INIT_SUCC(ret);
 
@@ -83,7 +85,7 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
     bool with_unique_key = HAS_FLAG(parse_flag, JSN_UNIQUE_FLAG);
     bool is_schema = HAS_FLAG(parse_flag, JSN_SCHEMA_FLAG);
     bool preserve_dup = HAS_FLAG(parse_flag, JSN_PRESERVE_DUP_FLAG);
-    ObRapidJsonHandler handler(allocator, with_unique_key, is_schema, preserve_dup);
+    ObRapidJsonHandler handler(allocator, with_unique_key, is_schema, preserve_dup, max_depth_config);
     ObRapidJsonAllocator parse_allocator(allocator);
     rapidjson::InsituStringStream ss(static_cast<char *>(buf));
     ObRapidJsonReader reader(&parse_allocator);
@@ -135,19 +137,8 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
   return ret;
 }
 
-bool ObJsonParser::is_json_doc_over_depth(uint64_t depth)
-{
-  bool is_over = false;
-
-  if (depth > JSON_DOCUMENT_MAX_DEPTH) {
-    is_over = true;
-  }
-
-  return is_over;
-}
-
 int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocator,
-                                    uint32_t parse_flag)
+                                    uint32_t parse_flag, uint32_t max_depth_config)
 {
   INIT_SUCC(ret);
   char syntax_buf[PARSE_SYNTAXERR_MESSAGE_LENGTH] = {0};
@@ -168,7 +159,7 @@ int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocat
     MEMCPY(alloc_buf, j_doc.ptr(), length);
     alloc_buf[length] = '\0';
     if (!HAS_FLAG(parse_flag, JSN_UNIQUE_FLAG)) {
-      ObJsonSyntaxCheckHandler handler(allocator);
+      ObJsonSyntaxCheckHandler handler(allocator, max_depth_config);
       ObRapidJsonAllocator parse_allocator(allocator);
       rapidjson::InsituStringStream ss(static_cast<char *>(alloc_buf));
       ObRapidJsonReader reader(&parse_allocator);
@@ -200,7 +191,7 @@ int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocat
         LOG_DEBUG("fail to parse json text", K(ret), K(r.Code()), KCSTRING(syntaxerr), K(offset));
       }
     } else {
-      ObRapidJsonHandler handler(allocator, true);
+      ObRapidJsonHandler handler(allocator, true, false, false, max_depth_config);
       ObRapidJsonAllocator parse_allocator(allocator);
       rapidjson::InsituStringStream ss(static_cast<char *>(alloc_buf));
       ObRapidJsonReader reader(&parse_allocator);
@@ -299,7 +290,7 @@ bool ObRapidJsonHandler::is_start_object_or_array(ObJsonNode *value, ObJsonExpec
 {
   bool is_continue = false;
 
-  if (ObJsonParser::is_json_doc_over_depth(depth_)) {
+  if (depth_ > config_json_max_depth_) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "current json doc is over depth", K(OB_ERR_JSON_OUT_OF_DEPTH));
   } else {
     depth_++;
@@ -334,8 +325,8 @@ bool ObRapidJsonHandler::is_end_object_or_array()
     if (current_element_->json_type() == ObJsonNodeType::J_OBJECT) { // current is object
       // Sort the key-value pairs of the ObJsonObject at the current level.
       ObJsonObject *obj = static_cast<ObJsonObject *>(current_element_);
-      obj->update_serialize_size();
       obj->stable_sort();
+      obj->update_serialize_size();
       int64_t origin_num = obj->element_count();
       if (!preserve_dup_key_) {
         obj->unique();
@@ -600,6 +591,7 @@ bool ObRapidJsonHandler::Key(const char *str, rapidjson::SizeType length, bool c
 
   return is_continue;
 }
+
 #undef TEST_RELAXJSON_FLAG
 
 } // namespace common

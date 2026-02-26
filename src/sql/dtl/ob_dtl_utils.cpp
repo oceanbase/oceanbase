@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_DTL
 
 #include "ob_dtl_utils.h"
-#include "sql/engine/px/ob_px_row_store.h"
 #include "ob_dtl_flow_control.h"
 
 using namespace oceanbase::common;

@@ -11,9 +11,7 @@
  */
 
 #include "lib/signal/ob_signal_worker.h"
-#include <poll.h>
 #include <sys/prctl.h>
-#include "lib/allocator/ob_malloc.h"
 #include "lib/signal/ob_signal_processor.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/utility/ob_defer.h"
@@ -221,7 +219,6 @@ void ObSignalWorker::run1()
             );
             ObMemAttr attr;
             attr.label_ = "TraceProcessor";
-            attr.prio_ = lib::OB_HIGH_ALLOC;
             switch (req->code_)
             {
               case VERB_LEVEL_1:

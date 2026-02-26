@@ -12,11 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_neg.h"
-#include "share/object/ob_obj_cast.h"
 #include "share/datum/ob_datum_util.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "lib/json_type/ob_json_base.h"
 
 namespace oceanbase
 {
@@ -246,14 +244,22 @@ int ObExprNeg::calc_result_type1(ObExprResType &type, ObExprResType &type1, ObEx
         type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][type.get_type()].
             get_precision());
       } else {
-        // scale
-        type.set_scale(type1.get_scale());
-        if (OB_LIKELY(0 < type1.get_precision())) {
-          if (type1.get_type() == ObUNumberType) {
-            type.set_precision(static_cast<int16_t>(type1.get_precision()));
+        if (type.get_type() == ObDoubleType && !ob_is_numeric_tc(type1.get_type_class())) {
+          // In this case, the parameter's precision has no effect on the result precision,
+          // and should be consistent with the deduction logic in ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type
+          type.set_scale(SCALE_UNKNOWN_YET);
+          type.set_precision(PRECISION_UNKNOWN_YET);
+        } else {
+          type.set_scale(type1.get_scale());
+          if (OB_LIKELY(0 < type1.get_precision())) {
+            if (type1.get_type() == ObUNumberType) {
+              type.set_precision(static_cast<int16_t>(type1.get_precision()));
+            } else {
+              type.set_precision(static_cast<int16_t>(
+                MIN(type1.get_precision() + NEG_PRECISION_OFFSET, OB_MAX_INTEGER_DISPLAY_WIDTH)));
+            }
           } else {
-            type.set_precision(static_cast<int16_t>(
-              MIN(type1.get_precision() + NEG_PRECISION_OFFSET, OB_MAX_INTEGER_DISPLAY_WIDTH)));
+            type.set_precision(type1.get_precision());
           }
         }
       }
@@ -351,7 +357,9 @@ int ObExprNeg::calc_param_type(const ObExprResType &param_type,
   case ObDateTimeTC:
   case ObTimeTC:
   case ObTextTC:
-  case ObStringTC: {
+  case ObStringTC:
+  case ObMySQLDateTC:
+  case ObMySQLDateTimeTC: {
     if (lib::is_oracle_mode()) {
       result_type = calc_type = ObNumberType;
     } else {

@@ -19,13 +19,19 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_unify_serialize.h"
 #include "share/ob_define.h"
-#include "storage/access/ob_table_read_info.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
+#include "src/storage/meta_mem/ob_fixed_meta_obj_array.h"
+#include "src/storage/access/ob_table_read_info.h"
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObTableReadInfo;
+}
 namespace share
 {
+class ObAggrParamProperty;
 namespace schema
 {
 // A customized hash map to store schema information in plan
@@ -236,6 +242,8 @@ public:
 
   inline void set_lob_chunk_size(int64_t chunk_size) { lob_chunk_size_ = chunk_size; }
   inline int64_t get_lob_chunk_size() const { return lob_chunk_size_; }
+  inline void set_is_data_table_rowkey(const bool is_data_table_rowkey) { is_data_table_rowkey_ = is_data_table_rowkey; }
+  inline bool is_data_table_rowkey() const { return is_data_table_rowkey_; }
 
   TO_STRING_KV(K_(column_id),
                K_(meta_type),
@@ -249,7 +257,8 @@ public:
                K_(is_virtual_gen_col),
                K_(is_gen_col_udf_expr),
                K_(is_hidden),
-               K_(lob_chunk_size));
+               K_(lob_chunk_size),
+               K_(is_data_table_rowkey));
 private:
   int deep_copy_obj(const common::ObObj &src, common::ObObj &dest);
 private:
@@ -267,6 +276,7 @@ private:
   bool is_gen_col_udf_expr_;
   bool is_hidden_;
   int64_t lob_chunk_size_;
+  bool is_data_table_rowkey_; // So far only used for DML
 };
 
 typedef common::ObFixedArray<ObColumnParam *, common::ObIAllocator> Columns;
@@ -292,7 +302,8 @@ public:
               const common::ObIArray<uint64_t> &output_column_ids,
               const sql::ObStoragePushdownFlag &pd_pushdown_flag,
               const common::ObIArray<uint64_t> *tsc_out_cols = NULL,
-              const bool force_mysql_mode = false);
+              const bool force_mysql_mode = false,
+              const bool query_cs_replica = false);
 
   // convert aggregate column projector from 'aggregate_column_ids' and 'output_projector_'
   // convert group by column projector from 'group_by_column_ids' and 'output_projector_'
@@ -301,6 +312,7 @@ public:
                   const common::ObIArray<uint64_t> &output_column_ids,
                   const common::ObIArray<uint64_t> &aggregate_column_ids,
                   const common::ObIArray<uint64_t> &group_by_column_ids,
+                  const common::ObIArray<ObAggrParamProperty> &aggregate_param_props,
                   const sql::ObStoragePushdownFlag &pd_pushdown_flag);
   // convert right table scan parameter of join MV scan.
   // (right table index back not supported)
@@ -311,23 +323,38 @@ public:
   inline void set_is_fts_index(const bool is_fts_index) { is_fts_index_ = is_fts_index; }
   inline int64_t is_multivalue_index() const { return is_multivalue_index_; }
   inline void set_is_multivalue_index(bool is_multivalue_index) { is_multivalue_index_ = is_multivalue_index; }
+  inline bool is_vec_index() const { return is_vec_index_; }
+  inline void set_is_vec_index(const bool is_vec_index) { is_vec_index_ = is_vec_index; }
+  inline bool is_mlog_table() const { return is_mlog_table_; }
+  inline void set_is_mlog_table(const bool is_mlog_table) { is_mlog_table_ = is_mlog_table; }
+  inline int64_t is_partition_table() const { return is_partition_table_; }
+  inline void set_is_partition_table(bool is_partition_table) { is_partition_table_ = is_partition_table; }
   inline bool use_lob_locator() const { return use_lob_locator_; }
   inline bool enable_lob_locator_v2() const { return enable_lob_locator_v2_; }
   inline bool &get_enable_lob_locator_v2() { return enable_lob_locator_v2_; }
   inline bool has_virtual_column() const { return has_virtual_column_; }
   inline int64_t get_rowid_version() const { return rowid_version_; }
+  inline bool is_column_replica_table() const { return is_column_replica_table_; }
+  inline bool is_normal_cgs_at_the_end() const { return is_normal_cgs_at_the_end_; }
+  inline bool is_enable_semistruct_encoding() const { return is_enable_semistruct_encoding_; }
+  inline void set_is_enable_semistruct_encoding(const bool v) { is_enable_semistruct_encoding_ = v; }
+  inline void set_plan_enable_rich_format(const bool enable) { plan_enable_rich_format_ = enable; }
+  inline bool plan_enable_rich_format() const { return plan_enable_rich_format_; }
   inline const common::ObIArray<int32_t> &get_rowid_projector() const { return rowid_projector_; }
   inline const common::ObIArray<int32_t> &get_output_projector() const { return output_projector_; }
   inline const common::ObIArray<int32_t> &get_aggregate_projector() const { return aggregate_projector_; }
   inline const common::ObIArray<int32_t> &get_group_by_projector() const { return group_by_projector_; }
   inline const common::ObIArray<bool> &get_output_sel_mask() const { return output_sel_mask_; }
   inline const common::ObIArray<int32_t> &get_pad_col_projector() const { return pad_col_projector_; }
+  inline const common::ObIArray<ObAggrParamProperty> &get_aggr_param_props() const { return aggregate_param_props_; }
   inline void disable_padding() { pad_col_projector_.reset(); }
   inline const storage::ObTableReadInfo &get_read_info() const { return main_read_info_; }
   inline const ObString &get_parser_name() const { return parser_name_; }
+  inline const ObString &get_parser_property() const { return parser_properties_; }
   inline const common::ObIArray<storage::ObTableReadInfo *> *get_cg_read_infos() const
   { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
-
+  inline bool is_safe_filter_with_di() const { return is_safe_filter_with_di_; }
+  inline int8_t get_access_virtual_col_cnt() const { return access_virtual_col_cnt_; }
   DECLARE_TO_STRING;
 
   static int convert_column_schema_to_param(const ObColumnSchemaV2 &column_schema,
@@ -338,12 +365,15 @@ public:
   static int deserialize_columns(const char *buf, const int64_t data_len,
                                  int64_t &pos, Columns &columns, common::ObIAllocator &allocator);
   static int alloc_column(common::ObIAllocator &allocator, ObColumnParam *& col_ptr);
+  int check_is_safe_filter_with_di(common::ObIArray<sql::ObRawExpr *> &exprs,
+                                   sql::ObPushdownFilterNode &pushdown_filters);
 private:
   int construct_columns_and_projector(const ObTableSchema &table_schema,
                                       const common::ObIArray<uint64_t> &output_column_ids,
                                       const common::ObIArray<uint64_t> *tsc_out_cols,
                                       const bool force_mysql_mode,
-                                      const sql::ObStoragePushdownFlag &pd_pushdown_flag);
+                                      const sql::ObStoragePushdownFlag &pd_pushdown_flag,
+                                      const bool query_cs_replica = false);
 
   int filter_common_columns(const common::ObIArray<const ObColumnSchemaV2 *> &columns,
                             common::ObIArray<const ObColumnSchemaV2 *> &new_columns);
@@ -368,7 +398,6 @@ private:
                                   Projector &rowid_projector,
                                   bool is_use_lob_locator_v2);
   int convert_fulltext_index_info(const ObTableSchema &table_schema);
-
 private:
   const static int64_t DEFAULT_COLUMN_MAP_BUCKET_NUM = 4;
   common::ObIAllocator &allocator_;
@@ -398,12 +427,27 @@ private:
   int64_t rowid_version_;
   Projector rowid_projector_;
   ObString parser_name_;
+  ObString parser_properties_;
   // if min cluster version < 4.1 use lob locator v1, else use lob locator v2.
   // use enable_lob_locator_v2_ to avoid locator type sudden change while table scan is running
   bool enable_lob_locator_v2_;
   bool is_spatial_index_;
   bool is_fts_index_;
   bool is_multivalue_index_;
+  bool is_column_replica_table_;
+  bool is_vec_index_;
+  bool is_partition_table_;
+  // column storage tables created after v435 will place the rowkey/all cg at the start of the table schema column group array
+  bool is_normal_cgs_at_the_end_;
+  // for read time query check of mview
+  bool is_mlog_table_;
+  bool is_enable_semistruct_encoding_;
+  bool is_safe_filter_with_di_;
+  int8_t access_virtual_col_cnt_;
+  common::ObFixedArray<ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
+  // whether the whole plan use rich format, table scan may not use new format, but the whole plan uses new format
+  bool plan_enable_rich_format_;
+  ObMergeEngineType merge_engine_type_;
 };
 } //namespace schema
 } //namespace share

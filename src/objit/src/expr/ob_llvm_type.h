@@ -57,6 +57,7 @@ typedef ::llvm::DIExpression ObDIExpression;
 typedef ::llvm::DebugLoc ObDebugLoc;
 typedef ::llvm::DIType ObDIType;
 typedef ::llvm::DISubroutineType ObDISubroutineType;
+typedef ::llvm::DILocation ObDILocation;
 
 /*static ObIRType *get_ir_type(ObLLVMContext &ctx,*/
                              //const ::oceanbase::common::ObObjType &type)

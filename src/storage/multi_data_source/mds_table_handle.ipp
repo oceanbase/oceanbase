@@ -124,7 +124,8 @@ template <typename MdsTableType>
 int MdsTableHandle::init(ObIAllocator &allocator,
                          const ObTabletID tablet_id,
                          const share::ObLSID ls_id,
-                         ObTabletPointer *pointer,
+                         const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
+                         ObTabletBasePointer *pointer,
                          ObMdsTableMgr *p_mgr)
 {
   int ret = OB_SUCCESS;
@@ -141,7 +142,7 @@ int MdsTableHandle::init(ObIAllocator &allocator,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(p_mds_table.construct(allocator))) {
       MDS_LOG(WARN, "construct mds table impl failed", KP(this), K(lbt()));
-    } else if (OB_FAIL(p_mds_table->init(tablet_id, ls_id, pointer, p_mgr))) {
+    } else if (OB_FAIL(p_mds_table->init(tablet_id, ls_id, mds_ckpt_scn_from_tablet, pointer, p_mgr))) {
       MDS_LOG(WARN, "init mds table failed", KR(ret), K(mds_table_id_),
                     K(typeid(MdsTableType).name()));
     } else {
@@ -163,12 +164,12 @@ int MdsTableHandle::set(T &&data, MdsCtx &ctx, const int64_t lock_timeout_us)
   DummyKey dummy_key;
   if (OB_SUCC(ret)) {
     int64_t converted_timeout = 0;
-    if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::UNKNOWN) { // no restrict
+    if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::UNKNOWN) { // no restrict
       converted_timeout = lock_timeout_us;
-    } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
+    } else if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::REGISTER_SUCC) {
       if (lock_timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version",
-                      KR(ret), K(unit_id), K(data), K(ctx), K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                      KR(ret), K(unit_id), K(data), K(ctx), K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
         converted_timeout = 30_s;
       } else {
         converted_timeout = lock_timeout_us;
@@ -177,7 +178,7 @@ int MdsTableHandle::set(T &&data, MdsCtx &ctx, const int64_t lock_timeout_us)
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort",
-                     KR(ret), K(unit_id), K(data), K(ctx), K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                     KR(ret), K(unit_id), K(data), K(ctx), K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -217,7 +218,11 @@ int MdsTableHandle::replay(T &&data, MdsCtx &ctx, const share::SCN &scn)
 
 template <typename T, typename OP,
           typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
-int MdsTableHandle::get_latest(OP &&read_op, bool &is_committed, const int64_t read_seq) const
+int MdsTableHandle::get_latest(OP &&read_op,
+                               MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                               TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                               share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
+                               const int64_t read_seq) const
 {
   int ret = OB_SUCCESS;
   CHECK_MDS_TABLE_INIT();
@@ -231,10 +236,12 @@ int MdsTableHandle::get_latest(OP &&read_op, bool &is_committed, const int64_t r
     if (OB_FAIL(p_mds_table_base_->get_latest(unit_id,
                                               (void*)&dummy_key,
                                               function,
-                                              is_committed,
+                                              writer,
+                                              trans_stat,
+                                              trans_version,
                                               read_seq))) {
       if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
-        MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id), K(read_seq));
+        MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id));
       }
     }
   }
@@ -265,11 +272,33 @@ int MdsTableHandle::get_tablet_status_node(OP &&read_op, const int64_t read_seq)
   return ret;
 }
 
+template <typename T, typename OP, typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
+int MdsTableHandle::get_latest_committed(OP &&read_op) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_MDS_TABLE_INIT();
+  uint8_t unit_id = INT8_MAX;
+  ret = MdsTableHandleHelper<DummyKey, T>::template get_unit_id<0>(mds_table_id_, unit_id);
+  DummyKey dummy_key;
+  ObFunction<int(void *)> function = [&read_op](void *data) -> int {
+    return read_op(*reinterpret_cast<const T*>(data));
+  };
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(p_mds_table_base_->get_latest_committed(unit_id,
+                                                        (void*)&dummy_key,
+                                                        function))) {
+      if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+        MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id));
+      }
+    }
+  }
+  return ret;
+}
+
 template <typename T, typename OP,
           typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
 int MdsTableHandle::get_snapshot(OP &&read_op,
                                  const share::SCN snapshot,
-                                 const int64_t read_seq,
                                  const int64_t timeout_us) const
 {
   int ret = OB_SUCCESS;
@@ -282,12 +311,12 @@ int MdsTableHandle::get_snapshot(OP &&read_op,
   };
   if (OB_SUCC(ret)) {
     int64_t converted_timeout = 0;
-    if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::UNKNOWN) { // no restrict
+    if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::UNKNOWN) { // no restrict
       converted_timeout = timeout_us;
-    } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
+    } else if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::REGISTER_SUCC) {
       if (timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(snapshot),
-                      K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                      K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
         converted_timeout = 30_s;
       } else {
         converted_timeout = timeout_us;
@@ -296,7 +325,7 @@ int MdsTableHandle::get_snapshot(OP &&read_op,
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(snapshot),
-                     K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                     K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -304,11 +333,10 @@ int MdsTableHandle::get_snapshot(OP &&read_op,
                                                   (void*)&dummy_key,
                                                   function,
                                                   snapshot,
-                                                  read_seq,
                                                   converted_timeout))) {
         if (OB_SNAPSHOT_DISCARDED != ret) {
           MDS_LOG(WARN, "fail to call get_snapshot", KR(ret), K(unit_id), K(snapshot),
-                  K(read_seq), K(timeout_us), K(converted_timeout));
+                  K(timeout_us), K(converted_timeout));
         }
       }
     }
@@ -321,7 +349,7 @@ template <typename T, typename OP,
 int MdsTableHandle::get_by_writer(OP &&read_op,
                                   const MdsWriter &writer,
                                   const share::SCN snapshot,
-                                  const int64_t read_seq,
+                                  const transaction::ObTxSEQ read_seq,
                                   const int64_t timeout_us) const
 {
   int ret = OB_SUCCESS;
@@ -334,12 +362,12 @@ int MdsTableHandle::get_by_writer(OP &&read_op,
   };
   if (OB_SUCC(ret)) {
     int64_t converted_timeout = 0;
-    if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::UNKNOWN) { // no restrict
+    if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::UNKNOWN) { // no restrict
       converted_timeout = timeout_us;
-    } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
+    } else if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::REGISTER_SUCC) {
       if (timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(writer),
-                      K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                      K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
         converted_timeout = 30_s;
       } else {
         converted_timeout = timeout_us;
@@ -348,7 +376,7 @@ int MdsTableHandle::get_by_writer(OP &&read_op,
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(writer),
-                     K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                     K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -400,12 +428,12 @@ int MdsTableHandle::set(const Key &key, Value &&data, MdsCtx &ctx, const int64_t
   ret = MdsTableHandleHelper<Key, Value>::template get_unit_id<0>(mds_table_id_, unit_id);
   if (OB_SUCC(ret)) {
     int64_t converted_timeout = 0;
-    if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::UNKNOWN) { // no restrict
+    if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::UNKNOWN) { // no restrict
       converted_timeout = lock_timeout_us;
-    } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
+    } else if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::REGISTER_SUCC) {
       if (lock_timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(key), K(data), K(ctx),
-                      K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                      K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
         converted_timeout = 30_s;
       } else {
         converted_timeout = lock_timeout_us;
@@ -414,7 +442,7 @@ int MdsTableHandle::set(const Key &key, Value &&data, MdsCtx &ctx, const int64_t
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(key), K(data),
-                     K(ctx), K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                     K(ctx), K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -461,12 +489,12 @@ int MdsTableHandle::remove(const Key &key, MdsCtx &ctx, const int64_t lock_timeo
   ret = MdsTableHandleHelper<Key, Value>::template get_unit_id<0>(mds_table_id_, unit_id);
   if (OB_SUCC(ret)) {
     int64_t converted_timeout = 0;
-    if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::UNKNOWN) { // no restrict
+    if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::UNKNOWN) { // no restrict
       converted_timeout = lock_timeout_us;
-    } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
+    } else if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::REGISTER_SUCC) {
       if (lock_timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(key), K(ctx),
-                      K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                      K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
         converted_timeout = 30_s;
       } else {
         converted_timeout = lock_timeout_us;
@@ -475,7 +503,7 @@ int MdsTableHandle::remove(const Key &key, MdsCtx &ctx, const int64_t lock_timeo
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(key), K(ctx),
-                      K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                      K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -512,7 +540,9 @@ int MdsTableHandle::replay_remove(const Key &key, MdsCtx &ctx, share::SCN &scn)
 template <typename Key, typename Value, typename OP>
 int MdsTableHandle::get_latest(const Key &key,
                                OP &&read_op,
-                               bool &is_committed,
+                               MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                               TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                               share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                                const int64_t read_seq) const
 {
   int ret = OB_SUCCESS;
@@ -526,10 +556,34 @@ int MdsTableHandle::get_latest(const Key &key,
     if (OB_FAIL(p_mds_table_base_->get_latest(unit_id,
                                               (void*)&key,
                                               function,
-                                              is_committed,
+                                              writer,
+                                              trans_stat,
+                                              trans_version,
                                               read_seq))) {
       if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
-        MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id), K(key), K(read_seq));
+        MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id), K(key));
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename Key, typename Value, typename OP>
+int MdsTableHandle::get_latest_committed(const Key &key, OP &&read_op) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_MDS_TABLE_INIT();
+  uint8_t unit_id = INT8_MAX;
+  ret = MdsTableHandleHelper<Key, Value>::template get_unit_id<0>(mds_table_id_, unit_id);
+  ObFunction<int(void *)> function = [&read_op](void *data) -> int {
+    return read_op(*reinterpret_cast<const Value*>(data));
+  };
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(p_mds_table_base_->get_latest_committed(unit_id,
+                                                        (void*)&key,
+                                                        function))) {
+      if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+        MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id));
       }
     }
   }
@@ -540,7 +594,6 @@ template <typename Key, typename Value, typename OP>
 int MdsTableHandle::get_snapshot(const Key &key,
                                  OP &&read_op,
                                  const share::SCN snapshot,
-                                 const int64_t read_seq,
                                  const int64_t timeout_us) const
 {
   int ret = OB_SUCCESS;
@@ -552,12 +605,12 @@ int MdsTableHandle::get_snapshot(const Key &key,
   };
   if (OB_SUCC(ret)) {
     int64_t converted_timeout = 0;
-    if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::UNKNOWN) { // no restrict
+    if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::UNKNOWN) { // no restrict
       converted_timeout = timeout_us;
-    } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
+    } else if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::REGISTER_SUCC) {
       if (timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(key), K(snapshot),
-                      K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                      K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
         converted_timeout = 30_s;
       } else {
         converted_timeout = timeout_us;
@@ -566,7 +619,7 @@ int MdsTableHandle::get_snapshot(const Key &key,
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(key), K(snapshot),
-                     K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                     K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -574,11 +627,10 @@ int MdsTableHandle::get_snapshot(const Key &key,
                                                   (void*)&key,
                                                   function,
                                                   snapshot,
-                                                  read_seq,
                                                   converted_timeout))) {
         if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
           MDS_LOG(WARN, "fail to call get_snapshot", KR(ret), K(unit_id), K(key), K(snapshot),
-                        K(read_seq), K(timeout_us), K(converted_timeout));
+                        K(timeout_us), K(converted_timeout));
         }
       }
     }
@@ -591,7 +643,7 @@ int MdsTableHandle::get_by_writer(const Key &key,
                                   OP &&read_op,
                                   const MdsWriter &writer,
                                   const share::SCN snapshot,
-                                  const int64_t read_seq,
+                                  const transaction::ObTxSEQ read_seq,
                                   const int64_t timeout_us) const
 {
   int ret = OB_SUCCESS;
@@ -603,12 +655,12 @@ int MdsTableHandle::get_by_writer(const Key &key,
   };
   if (OB_SUCC(ret)) {
     int64_t converted_timeout = 0;
-    if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::UNKNOWN) { // no restrict
+    if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::UNKNOWN) { // no restrict
       converted_timeout = timeout_us;
-    } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
+    } else if (TLOCAL_MDS_INFO.notify_type_ == transaction::NotifyType::REGISTER_SUCC) {
       if (timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(key), K(writer),
-                       K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                       K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
         converted_timeout = 30_s;
       } else {
         converted_timeout = timeout_us;
@@ -617,7 +669,7 @@ int MdsTableHandle::get_by_writer(const Key &key,
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(key), K(writer),
-                     K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
+                     K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_INFO));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -659,20 +711,25 @@ int MdsTableHandle::is_locked_by_others(const Key &key,
   return ret;
 }
 
-template <typename DUMP_OP,
+template <ScanRowOrder SCAN_ROW_ORDER,
+          ScanNodeOrder SCAN_NODE_ORDER,
+          typename DUMP_OP,
           typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(DUMP_OP,
                                                             int(const MdsDumpKV &)), bool>::type>
-int MdsTableHandle::for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op,
-                                                                                     const int64_t mds_construct_sequence,
-                                                                                     const bool for_flush) const
+int MdsTableHandle::scan_all_nodes_to_dump(DUMP_OP &&for_each_op,
+                                           const int64_t mds_construct_sequence,
+                                           const bool for_flush) const
 {
   int ret = OB_SUCCESS;
   CHECK_MDS_TABLE_INIT();
   ObFunction<int(const MdsDumpKV &)> op = [&for_each_op](const MdsDumpKV &kv) -> int {
     return for_each_op(kv);
   };
-  if (OB_FAIL(p_mds_table_base_->
-              for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(op, mds_construct_sequence, for_flush))) {
+  if (OB_FAIL(p_mds_table_base_->scan_all_nodes_to_dump(op,
+                                                        mds_construct_sequence,
+                                                        for_flush,
+                                                        SCAN_ROW_ORDER,
+                                                        SCAN_NODE_ORDER))) {
     MDS_LOG(WARN, "fail to do for_each dump op", KR(ret), K(*this));
   }
   return ret;
@@ -850,7 +907,7 @@ inline int MdsTableHandle::fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable
   return ret;
 }
 
-inline int MdsTableHandle::mark_removed_from_t3m(ObTabletPointer *pointer) const
+inline int MdsTableHandle::mark_removed_from_t3m(ObTabletBasePointer *pointer) const
 {
   int ret = OB_SUCCESS;
   CHECK_MDS_TABLE_INIT();
@@ -877,7 +934,7 @@ inline int MdsTableHandle::mark_switched_to_empty_shell() const
 }
 
 template <int N>
-inline int MdsTableHandle::forcely_reset_mds_table(const char (&reason)[N])
+inline int MdsTableHandle::forcely_remove_nodes(const char (&reason)[N], share::SCN redo_scn_limit)
 {
   int ret = OB_SUCCESS;
   CHECK_MDS_TABLE_INIT();
@@ -885,7 +942,7 @@ inline int MdsTableHandle::forcely_reset_mds_table(const char (&reason)[N])
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(WARN, "p_mds_table_base_ is invalid", K(*this));
   } else {
-    p_mds_table_base_->forcely_reset_mds_table(reason);
+    p_mds_table_base_->forcely_remove_nodes(reason, redo_scn_limit);
   }
   return ret;
 }

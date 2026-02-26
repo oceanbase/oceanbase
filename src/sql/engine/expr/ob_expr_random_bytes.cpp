@@ -14,7 +14,6 @@
 
 #include "sql/engine/expr/ob_expr_random_bytes.h"
 
-#include <openssl/rand.h>
 
 namespace oceanbase
 {

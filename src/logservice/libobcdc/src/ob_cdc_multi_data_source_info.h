@@ -15,12 +15,11 @@
 #ifndef OCEANBASE_LIBOBCDC_MULTI_DATA_SOURCE_INFO_H_
 #define OCEANBASE_LIBOBCDC_MULTI_DATA_SOURCE_INFO_H_
 
-#include "logservice/palf/lsn.h"                // palf::LSN
-#include "share/ls/ob_ls_operator.h"            // share::ObLSAttr
-#include "storage/tx/ob_multi_data_source.h"    // transaction::ObTxBufferNode
-
-#include "ob_cdc_tablet_to_table_info.h"        // CDCTabletChangeInfo
-#include "logservice/data_dictionary/ob_data_dict_struct.h" // ObDictTenantMeta
+#include "logservice/palf/lsn.h"                               // palf::LSN
+#include "share/ls/ob_ls_operator.h"                           // share::ObLSAttr
+#include "storage/tx/ob_multi_data_source_tx_buffer_node.h"    // transaction::ObTxBufferNode
+#include "ob_cdc_tablet_to_table_info.h"                       // CDCTabletChangeInfo
+#include "logservice/data_dictionary/ob_data_dict_struct.h"    // ObDictTenantMeta
 
 namespace oceanbase
 {

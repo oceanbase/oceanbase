@@ -36,6 +36,7 @@ struct ObSysVarFlag
   const static int64_t WITH_CREATE = (1LL << 10);
   const static int64_t WITH_UPGRADE = (1LL << 11);
   const static int64_t MYSQL_ONLY = (1LL << 12);
+  const static int64_t INFLUENCE_PL = (1LL << 13);
 };
 struct ObSysVarFromJson{
   ObSysVarClassType id_;

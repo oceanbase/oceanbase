@@ -17,9 +17,7 @@
 #include "storage/blocksstable/ob_micro_block_writer.h"
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/ob_row_cache.h"
-#include "storage/ob_i_store.h"
 #include "ob_row_generate.h"
-#include "common/rowkey/ob_rowkey.h"
 #include "share/ob_simple_mem_limit_getter.h"
 
 namespace oceanbase
@@ -49,6 +47,16 @@ public:
   TestMicroBlockReader() : allocator_(ObModIds::TEST), read_info_() { }
   void SetUp();
   virtual void TearDown() {}
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 
 protected:
   ObRowGenerate row_generate_;
@@ -123,7 +131,7 @@ TEST_F(TestMicroBlockReader, test_success)
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, column_num));
   ObDatumRow multi_version_row;
   ASSERT_EQ(OB_SUCCESS, multi_version_row.init(allocator_, column_num +2));
-  ObMicroBlockWriter writer;
+  ObMicroBlockWriter<> writer;
   writer.data_buffer_.allocator_.set_tenant_id(500);
   writer.index_buffer_.allocator_.set_tenant_id(500);
   ret = writer.init(macro_block_size, rowkey_column_count, column_num + 2);
@@ -144,7 +152,7 @@ TEST_F(TestMicroBlockReader, test_success)
   ASSERT_EQ(OB_SUCCESS, read_info_.init(
           allocator_, 16000, row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(), columns, nullptr/*storage_cols_index*/));
   /*** init reader ***/
-  ObMicroBlockReader reader;
+  ObMicroBlockReader<> reader;
   ObMicroBlockData block(buf, size);
   ASSERT_EQ(OB_SUCCESS, reader.init(block, read_info_));
 
@@ -178,10 +186,11 @@ TEST_F(TestMicroBlockReader, test_success)
     // check obj equal: every obj should be same except not exist row
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
     for (int64_t j = 0; j < column_num; ++j){
+      ObCStringHelper helper;
       ASSERT_TRUE(block_row.storage_datums_[j] == row.storage_datums_[j])
         << "\n i: " << i << " j: " << j
-        << "\n reader:  "<< to_cstring(block_row.storage_datums_[j])
-        << "\n writer:  " << to_cstring(row.storage_datums_[j]);
+        << "\n reader:  "<< helper.convert(block_row.storage_datums_[j])
+        << "\n writer:  " << helper.convert(row.storage_datums_[j]);
     }
   }
 
@@ -207,10 +216,11 @@ TEST_F(TestMicroBlockReader, test_success)
   //   //every obj should equal
   //   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
   //   for (int64_t j = 0; j < column_num ; ++ j){
+  //     ObCStringHelper helper;
   //     ASSERT_TRUE(row.row_val_.cells_[j] == cur_row.row_val_.cells_[j])
   //       << "\n i: " << i << " j: " << j
-  //       << "\n writer:  "<< to_cstring(row.row_val_.cells_[j])
-  //       << "\n reader:  " << to_cstring(cur_row.row_val_.cells_[j]);
+  //       << "\n writer:  "<< helper.convert(row.row_val_.cells_[j])
+  //       << "\n reader:  " << helper.convert(cur_row.row_val_.cells_[j]);
   //   }
   // }
   ObKVGlobalCache::get_instance().destroy();
@@ -272,9 +282,10 @@ TEST_F(TestMicroBlockReader, test_success)
   //init twice
   ASSERT_EQ(OB_INIT_TWICE, reader.init(block, column_map_));
 
-  //BlockData to_cstring
+  //BlockData convert to cstring
   ObMicroBlockData  block_data;
-  const char *out = to_cstring(block_data);
+  ObCStringHelper helper;
+  const char *out = helper.convert(block_data);
   ASSERT_TRUE(NULL != out);
   //index is NULL
   ObStoreRowkey rowkey;

@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include <math.h>
 #include "sql/engine/expr/ob_expr_mod.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
 
@@ -494,7 +491,16 @@ int ObExprMod::mod_decimalint(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datum
       ObDecimalIntBuilder res_val;
       switch (int_bytes) {
         CALC_DECIMAL_INT_MOD(int32)
-        CALC_DECIMAL_INT_MOD(int64)
+        case sizeof(int64_t): {
+          const int64_t l = *(l_decint->int64_v_);
+          const int64_t r = *(r_decint->int64_v_);
+          if (INT64_MIN == l && -1 == r) {
+            res_val.from(0); //INT64_MIN % -1 --> FPE
+          } else {
+            res_val.from(l % r);
+          }
+          break;
+        }
         CALC_DECIMAL_INT_MOD(int128)
         CALC_DECIMAL_INT_MOD(int256)
         CALC_DECIMAL_INT_MOD(int512)
@@ -525,8 +531,6 @@ int ObExprMod::cg_expr(ObExprCGCtx &op_cg_ctx,
   const common::ObObjType left = rt_expr.args_[0]->datum_meta_.type_;
   const common::ObObjType right = rt_expr.args_[1]->datum_meta_.type_;
   const ObObjTypeClass right_tc = ob_obj_type_class(right);
-  OB_ASSERT(left == input_types_[0].get_calc_type());
-  OB_ASSERT(right == input_types_[1].get_calc_type());
 
   rt_expr.inner_functions_ = NULL;
   LOG_DEBUG("arrive here cg_expr", K(ret), K(rt_expr));

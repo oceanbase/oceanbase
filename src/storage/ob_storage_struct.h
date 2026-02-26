@@ -28,6 +28,9 @@
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
+#include "storage/blocksstable/ob_major_checksum_info.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
+#include "storage/column_store/ob_column_store_replica_ddl_helper.h"
 
 namespace oceanbase
 {
@@ -45,6 +48,7 @@ namespace storage
 {
 class ObStorageSchema;
 struct ObMigrationTabletParam;
+class ObSSTransferSrcTabletBlockInfo;
 
 typedef common::ObSEArray<common::ObStoreRowkey, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> GetRowkeyArray;
 typedef common::ObSEArray<common::ObStoreRange, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> ScanRangeArray;
@@ -309,6 +313,14 @@ struct ObGetMergeTablesResult
   share::ObScnRange scn_range_;
   share::ObDiagnoseLocation *error_location_;
   ObStorageSnapshotInfo snapshot_info_;
+  //for backfill
+  bool is_backfill_;
+  share::SCN backfill_scn_;
+  int32_t private_transfer_epoch_; // is_used for write_macro_block in ss, used for all compaction.
+
+  // for sstorage
+  share::SCN rec_scn_;
+
   ObGetMergeTablesResult();
   bool is_valid() const;
   void reset_handle_and_range();
@@ -316,8 +328,9 @@ struct ObGetMergeTablesResult
   void reset();
   int assign(const ObGetMergeTablesResult &src);
   int copy_basic_info(const ObGetMergeTablesResult &src);
-  TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version),
-      K_(handle), K_(update_tablet_directly), K_(schedule_major));
+  share::SCN get_merge_scn() const;
+  TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version), K_(is_simplified),
+      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn), K_(private_transfer_epoch));
 };
 
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)
@@ -331,90 +344,180 @@ public:
   ObDDLTableStoreParam();
   ~ObDDLTableStoreParam() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(keep_old_ddl_sstable), K_(ddl_start_scn), K_(ddl_commit_scn), K_(ddl_checkpoint_scn),
-      K_(ddl_snapshot_version), K_(ddl_execution_id), K_(data_format_version));
+  TO_STRING_KV(K_(keep_old_ddl_sstable), K_(update_with_major_flag),
+               K_(ddl_start_scn), K_(ddl_commit_scn), K_(ddl_checkpoint_scn),
+               K_(ddl_snapshot_version), K_(ddl_execution_id),
+               K_(data_format_version), KP_(ddl_redo_callback),
+               KP_(ddl_finish_callback), K_(ddl_replay_status), K_(slice_sstables));
+
 public:
   bool keep_old_ddl_sstable_;
+  bool update_with_major_flag_; // when ddl first create major sstable, set TRUE
   share::SCN ddl_start_scn_;
   share::SCN ddl_commit_scn_;
   share::SCN ddl_checkpoint_scn_;
   int64_t ddl_snapshot_version_;
   int64_t ddl_execution_id_;
   int64_t data_format_version_;
+  blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback_;
+  blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback_;
+  // used to decide storage type for replaying ddl clog in cs replica, see ObTabletMeta::ddl_replay_status_ for more detail
+  ObCSReplicaDDLReplayStatus ddl_replay_status_;
+  ObArray<const blocksstable::ObSSTable *> slice_sstables_;
+};
+
+struct ObHATableStoreParam final
+{
+public:
+  ObHATableStoreParam();
+  ObHATableStoreParam(
+    const int64_t transfer_seq,
+    const bool need_check_transfer_seq,
+    const bool need_replace_remote_sstable = false,
+    const bool is_only_replace_major = false);
+  ~ObHATableStoreParam() = default;
+  bool is_valid() const;
+  TO_STRING_KV(K_(transfer_seq), K_(need_check_transfer_seq), K_(need_replace_remote_sstable), K_(is_only_replace_major));
+public:
+  /// NOTE: transfer_seq_ here to be used for
+  /// validation only and doesn't affect the private data's storage path.
+  /// DON'T USE IT to generate private data's storage path in SS mode.
+  /// For more detail please see:
+  int64_t transfer_seq_;
+  bool need_check_transfer_seq_;
+  bool need_replace_remote_sstable_; // only true for restore replace sstable.
+  bool is_only_replace_major_;
+};
+
+struct ObCompactionTableStoreParam final
+{
+public:
+  ObCompactionTableStoreParam();
+  ObCompactionTableStoreParam(
+    const compaction::ObMergeType merge_type,
+    const share::SCN clog_checkpoint_scn,
+    const bool need_report,
+    const bool has_truncate_info);
+  ~ObCompactionTableStoreParam() = default;
+  bool is_valid() const;
+  bool is_valid_with_sstable(const bool have_sstable) const;
+  int assign(const ObCompactionTableStoreParam &other, ObArenaAllocator *allocator = nullptr);
+  int64_t get_report_scn() const;
+  TO_STRING_KV(K_(clog_checkpoint_scn), K_(need_report),
+    "merge_type", merge_type_to_str(merge_type_),  K_(major_ckm_info), K_(has_truncate_info));
+public:
+  compaction::ObMergeType merge_type_;
+  share::SCN clog_checkpoint_scn_;
+  blocksstable::ObMajorChecksumInfo major_ckm_info_;
+  bool need_report_;
+  bool has_truncate_info_;
 };
 
 struct UpdateUpperTransParam final
 {
 public:
+  struct SCNAndVersion {
+    SCNAndVersion(): scn_(), upper_trans_version_(0) {}
+    SCNAndVersion(const share::SCN &scn, const int64_t upper_trans_version)
+    : scn_(scn), upper_trans_version_(upper_trans_version) {}
+    TO_STRING_KV(K_(scn), K_(upper_trans_version));
+    share::SCN scn_;
+    int64_t upper_trans_version_;
+  };
   UpdateUpperTransParam();
   ~UpdateUpperTransParam();
   void reset();
-  TO_STRING_KV(K_(new_upper_trans), K_(last_minor_end_scn));
+  TO_STRING_KV(K_(new_upper_trans), K_(last_minor_end_scn), KPC_(ss_new_upper_trans), K_(gc_inc_major_ddl_scns));
 public:
   ObIArray<int64_t> *new_upper_trans_;
   share::SCN last_minor_end_scn_;
+  ObIArray<SCNAndVersion> *ss_new_upper_trans_;
+  ObIArray<int64_t> *gc_inc_major_ddl_scns_; // record the end scn of inc major ddl sstables which should be recycled
 };
 
 struct ObUpdateTableStoreParam
 {
-  ObUpdateTableStoreParam() = default;
+  ObUpdateTableStoreParam(); // for compaction task only
   ObUpdateTableStoreParam(
     const int64_t snapshot_version,
     const int64_t multi_version_start,
     const ObStorageSchema *storage_schema,
-    const int64_t rebuild_seq);
+    const int64_t rebuild_seq,
+    const blocksstable::ObSSTable *sstable = NULL,
+    const bool allow_duplicate_sstable = false,
+    const bool need_wait_check_flag = true);
   ObUpdateTableStoreParam(
     const int64_t snapshot_version,
     const int64_t multi_version_start,
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
     const UpdateUpperTransParam upper_trans_param);
-  ObUpdateTableStoreParam(
-    const blocksstable::ObSSTable *sstable,
-    const int64_t snapshot_version,
-    const int64_t multi_version_start,
-    const ObStorageSchema *storage_schema,
-    const int64_t rebuild_seq,
-    const bool need_check_transfer_seq,
-    const int64_t transfer_seq,
-    const bool need_report = false,
-    const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
-    const bool need_check_sstable = false,
-    const bool allow_duplicate_sstable = false,
-    const compaction::ObMergeType merge_type = compaction::MERGE_TYPE_MAX);
-
-  ObUpdateTableStoreParam( // for ddl merge task only
-    const blocksstable::ObSSTable *sstable,
-    const int64_t snapshot_version,
-    const int64_t multi_version_start,
-    const int64_t rebuild_seq,
-    const ObStorageSchema *storage_schema,
-    const bool update_with_major_flag,
-    const compaction::ObMergeType merge_type,
-    const bool need_report);
-
+  int init_with_compaction_info(
+    const ObCompactionTableStoreParam &comp_param,
+    ObArenaAllocator *allocator = NULL);
+  int init_with_ha_info(const ObHATableStoreParam &ha_param);
+  void set_upper_trans_param(const UpdateUpperTransParam upper_trans_param) { upper_trans_param_ = upper_trans_param; }
   bool is_valid() const;
-  TO_STRING_KV(KP_(sstable), K_(snapshot_version), K_(clog_checkpoint_scn), K_(multi_version_start),
-               K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
-               K_(need_check_sstable), K_(ddl_info), K_(allow_duplicate_sstable),
-               "merge_type", merge_type_to_str(merge_type_),
-               K_(need_check_transfer_seq), K_(transfer_seq), K_(upper_trans_param));
+  bool need_report_major() const;
+  int64_t get_report_scn() const;
+  bool is_ha_replace_table() const { return ha_info_.is_only_replace_major_ || ha_info_.need_replace_remote_sstable_; }
+  bool get_need_check_sstable() const { return is_minor_merge_type(compaction_info_.merge_type_); }
+  #define PARAM_DEFINE_FUNC(var_type, param, var_name) \
+    OB_INLINE var_type get_##var_name() const { return param. var_name##_; }
+  #define HA_PARAM_FUNC(var_type, var_name) \
+    PARAM_DEFINE_FUNC(var_type, ha_info_, var_name)
+  #define COMP_PARAM_FUNC(var_type, var_name) \
+    PARAM_DEFINE_FUNC(var_type, compaction_info_, var_name)
+  HA_PARAM_FUNC(bool, need_check_transfer_seq);
+  HA_PARAM_FUNC(int64_t, transfer_seq);
+  COMP_PARAM_FUNC(compaction::ObMergeType, merge_type);
+  COMP_PARAM_FUNC(const blocksstable::ObMajorChecksumInfo&, major_ckm_info);
+  COMP_PARAM_FUNC(share::SCN, clog_checkpoint_scn);
+  PARAM_DEFINE_FUNC(bool, ddl_info_, update_with_major_flag);
+  #undef COMP_PARAM_FUNC
+  #undef HA_PARAM_FUNC
+  #undef PARAM_DEFINE_FUNC
+  TO_STRING_KV(KP_(sstable), K_(snapshot_version), K_(multi_version_start),
+               KPC_(storage_schema), K_(rebuild_seq),
+               K_(compaction_info), K_(ha_info),
+               K_(ddl_info), K_(allow_duplicate_sstable),
+               K_(allow_adjust_next_start_scn),
+               K_(update_tablet_ss_change_version),
+               K_(tablet_ss_change_fully_applied),
+               K_(upper_trans_param),
+               K_(need_wait_check_flag));
+  ObCompactionTableStoreParam compaction_info_;
+  ObDDLTableStoreParam ddl_info_;
+  ObHATableStoreParam ha_info_;
 
-  const blocksstable::ObSSTable *sstable_;
   int64_t snapshot_version_;
-  share::SCN clog_checkpoint_scn_;
   int64_t multi_version_start_;
-  bool need_report_;
   const ObStorageSchema *storage_schema_;
   int64_t rebuild_seq_;
-  bool update_with_major_flag_;
-  bool need_check_sstable_;
-  ObDDLTableStoreParam ddl_info_;
+  const blocksstable::ObSSTable *sstable_;
   bool allow_duplicate_sstable_;
-  bool need_check_transfer_seq_;
-  int64_t transfer_seq_;
-  compaction::ObMergeType merge_type_; // set merge_type only when update tablet in compaction
-  UpdateUpperTransParam upper_trans_param_; // set upper_trans_param_ only when update upper_trans_version
+  bool allow_adjust_next_start_scn_;           // wheter can adjust start_scn of next sibling sstable
+  share::SCN update_tablet_ss_change_version_; // for shared storage tablet change sync
+  bool tablet_ss_change_fully_applied_;        // wheter the specified version is fully applied
+  UpdateUpperTransParam upper_trans_param_;    // set upper_trans_param_ only when update upper_trans_version
+  bool need_wait_check_flag_;                  // A flag used to skip the checksum verification between replicas
+};
+
+struct ObSplitTableStoreParam final
+{
+public:
+  ObSplitTableStoreParam();
+  ~ObSplitTableStoreParam();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(snapshot_version), K_(multi_version_start), K_(merge_type),
+    K_(skip_split_keys));
+
+public:
+  int64_t snapshot_version_;
+  int64_t multi_version_start_;
+  compaction::ObMergeType merge_type_;
+  ObSEArray<ObITable::TableKey, MAX_SSTABLE_CNT_IN_STORAGE> skip_split_keys_;
 };
 
 struct ObBatchUpdateTableStoreParam final
@@ -427,7 +530,8 @@ struct ObBatchUpdateTableStoreParam final
   int get_max_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn) const;
 
   TO_STRING_KV(K_(tables_handle), K_(rebuild_seq), K_(is_transfer_replace),
-      K_(start_scn), KP_(tablet_meta), K_(update_ddl_sstable), K_(restore_status));
+      K_(start_scn), KP_(tablet_meta), K_(restore_status), K_(tablet_split_param),
+      K_(need_replace_remote_sstable), K_(release_mds_scn), K_(reorg_scn));
 
   ObTablesHandleArray tables_handle_;
 #ifdef ERRSIM
@@ -437,8 +541,12 @@ struct ObBatchUpdateTableStoreParam final
   bool is_transfer_replace_;
   share::SCN start_scn_;
   const ObMigrationTabletParam *tablet_meta_;
-  bool update_ddl_sstable_;
   ObTabletRestoreStatus::STATUS restore_status_;
+  ObSplitTableStoreParam tablet_split_param_;
+  bool need_replace_remote_sstable_;
+  share::SCN release_mds_scn_;
+  share::SCN reorg_scn_;
+  const ObSSTransferSrcTabletBlockInfo *src_tablet_block_info_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);
 };
@@ -543,6 +651,46 @@ public:
   bool on_partition_rebuild();
 private:
   transaction::ObLSTxCtxMgr& ls_tx_ctx_mgr_;
+};
+
+
+enum class ObTabletSplitType : int64_t {
+  RANGE,
+  NONE_RANGE,
+  MAX_TYPE,
+};
+
+struct ObTabletSplitTscInfo final
+{
+public:
+  ObTabletSplitTscInfo();
+  ~ObTabletSplitTscInfo() = default;
+
+  bool is_split_dst_with_partkey() const;
+  bool is_split_dst_without_partkey() const;
+  void reset();
+
+  int assign (const ObTabletSplitTscInfo &other) {
+    int ret = OB_SUCCESS;
+    start_partkey_ = other.start_partkey_;
+    end_partkey_ = other.end_partkey_;
+    is_split_dst_ = other.is_split_dst_;
+    split_cnt_ = other.split_cnt_;
+    split_type_ = other.split_type_;
+    partkey_is_rowkey_prefix_ = other.partkey_is_rowkey_prefix_;
+    return ret;
+  }
+
+  TO_STRING_KV(K_(start_partkey),
+    K_(end_partkey), K_(is_split_dst), K_(split_type), K_(split_cnt), K_(partkey_is_rowkey_prefix));
+
+public:
+  blocksstable::ObDatumRowkey start_partkey_;
+  blocksstable::ObDatumRowkey end_partkey_;
+  bool is_split_dst_;
+  int64_t split_cnt_;
+  ObTabletSplitType split_type_;
+  bool partkey_is_rowkey_prefix_;
 };
 
 

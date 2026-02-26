@@ -53,6 +53,10 @@ public:
       const ObIVector &vector,
       const int64_t vec_idx,
       const ObDatum &datum);
+  static bool verify_vector_and_datum_match_nop(
+      const ObIVector &vector,
+      const int64_t vec_idx,
+      const ObDatum &datum);
   static bool need_test_vec_with_type(
       const VectorFormat &format,
       const VecValueTypeClass &vec_tc);
@@ -79,32 +83,23 @@ public:
   TestColumnDecoder()
       : is_retro_(false), tenant_ctx_(OB_SERVER_TENANT_ID)
   {
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
     encoder_.data_buffer_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     encoder_.row_buf_holder_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
-    decode_res_pool_->init();
   }
   TestColumnDecoder(ObColumnHeader::Type column_encoding_type)
       : is_retro_(false), column_encoding_type_(column_encoding_type), tenant_ctx_(OB_SERVER_TENANT_ID)
   {
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
     encoder_.data_buffer_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     encoder_.row_buf_holder_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
-    decode_res_pool_->init();
   }
   TestColumnDecoder(bool is_retro)
       : is_retro_(is_retro), tenant_ctx_(OB_SERVER_TENANT_ID)
  {
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
     encoder_.data_buffer_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     encoder_.row_buf_holder_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
-    decode_res_pool_->init();
   }
   virtual ~TestColumnDecoder() {}
 
@@ -195,7 +190,6 @@ protected:
   ObColumnHeader::Type column_encoding_type_;
   ObObjType *col_obj_types_;
   share::ObTenantBase tenant_ctx_;
-  ObDecodeResourcePool *decode_res_pool_;
   int64_t extra_rowkey_cnt_;
   int64_t column_cnt_;
   int64_t full_column_cnt_;
@@ -544,8 +538,7 @@ void TestColumnDecoder::init_in_filter(
                 return cmp_ret < 0;
             });
   filter.cmp_func_ = cmp_func;
-  filter.cmp_func_rev_ = cmp_func;
-  filter.param_set_.set_hash_and_cmp_func(basic_funcs->murmur_hash_v2_, filter.cmp_func_rev_);
+  filter.param_set_.set_hash_and_cmp_func(basic_funcs->murmur_hash_v2_, filter.cmp_func_);
 }
 
 int TestColumnDecoder::test_filter_pushdown(
@@ -1383,8 +1376,8 @@ void TestColumnDecoder::batch_decode_to_datum_test(bool is_condensed)
     STORAGE_LOG(INFO, "Current col: ", K(i), K(col_descs_.at(i)),
         K(row.storage_datums_[i]), K(*decoder.decoders_[col_offset].ctx_));
     ObDatum datums[ROW_CNT];
-    int64_t row_ids[ROW_CNT];
-    for (int64_t j = 0; j < ROW_CNT; ++j) {
+    int32_t row_ids[ROW_CNT];
+    for (int32_t j = 0; j < ROW_CNT; ++j) {
       datums[j].ptr_ = reinterpret_cast<char *>(datum_buf) + j * 128;
       row_ids[j] = j;
     }
@@ -1889,8 +1882,8 @@ void TestColumnDecoder::batch_decode_to_vector_test(
     int32_t col_offset = i;
     LOG_INFO("Current col: ", K(i), K(col_meta),  K(*decoder.decoders_[col_offset].ctx_), K(precision), K(vec_tc));
 
-    int64_t row_ids[test_row_cnt];
-    int64_t row_id_idx = 0;
+    int32_t row_ids[test_row_cnt];
+    int32_t row_id_idx = 0;
     for (int64_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
       if (!align_row_id && 0 == datum_idx % 2) {
         // skip
@@ -2001,8 +1994,8 @@ void TestColumnDecoder::col_equal_batch_decode_to_vector_test(const VectorFormat
     int32_t col_offset = i;
     LOG_INFO("Current col: ", K(i), K(col_meta),  K(*decoder.decoders_[col_offset].ctx_), K(precision), K(vec_tc));
 
-    int64_t row_ids[ROW_CNT];
-    for (int64_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
+    int32_t row_ids[ROW_CNT];
+    for (int32_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
       row_ids[datum_idx] = datum_idx;
     }
 
@@ -2124,8 +2117,8 @@ void TestColumnDecoder::col_substr_batch_decode_to_vector_test(const VectorForma
     int32_t col_offset = i;
     LOG_INFO("Current col: ", K(i), K(col_meta),  K(*decoder.decoders_[col_offset].ctx_), K(precision), K(vec_tc));
 
-    int64_t row_ids[ROW_CNT];
-    for (int64_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
+    int32_t row_ids[ROW_CNT];
+    for (int32_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
       row_ids[datum_idx] = datum_idx;
     }
 
@@ -2241,6 +2234,27 @@ bool VectorDecodeTestUtil::verify_vector_and_datum_match(
   return bret;
 }
 
+bool VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+    const ObIVector &vector,
+    const int64_t vec_idx,
+    const ObDatum &datum)
+{
+  int bret = false;
+  ObDatum vec_datum;
+  if (datum.is_null_or_nop()) {
+    bret = vector.is_null(vec_idx);
+  } else {
+    ObLength length = vector.get_length(vec_idx);
+    vec_datum.len_ = length;
+    vec_datum.ptr_ = vector.get_payload(vec_idx);
+    bret = ObDatum::binary_equal(vec_datum, datum);
+  }
+  if (!bret) {
+    LOG_INFO("datum not match with datum from vector", K(vec_idx), K(datum), K(vec_datum));
+  }
+  return bret;
+}
+
 bool VectorDecodeTestUtil::need_test_vec_with_type(
     const VectorFormat &vector_format,
     const VecValueTypeClass &vec_tc)
@@ -2251,14 +2265,14 @@ bool VectorDecodeTestUtil::need_test_vec_with_type(
         VEC_TC_FIXED_DOUBLE, VEC_TC_DATETIME, VEC_TC_DATE, VEC_TC_TIME, VEC_TC_YEAR, VEC_TC_UNKNOWN,
         VEC_TC_BIT, VEC_TC_ENUM_SET, VEC_TC_TIMESTAMP_TZ, VEC_TC_TIMESTAMP_TINY, VEC_TC_INTERVAL_YM,
         VEC_TC_INTERVAL_DS, VEC_TC_DEC_INT32, VEC_TC_DEC_INT64, VEC_TC_DEC_INT128, VEC_TC_DEC_INT256,
-        VEC_TC_DEC_INT512};
+        VEC_TC_DEC_INT512, VEC_TC_MYSQL_DATETIME, VEC_TC_MYSQL_DATE};
     VecValueTypeClass *vec = std::find(std::begin(fixed_tc_arr), std::end(fixed_tc_arr), vec_tc);
     if (vec == std::end(fixed_tc_arr)) {
       need_test_column = false;
     }
   } else if (vector_format == VEC_DISCRETE) {
     VecValueTypeClass var_tc_arr[] = {VEC_TC_NUMBER, VEC_TC_EXTEND, VEC_TC_STRING, VEC_TC_ENUM_SET_INNER,
-        VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT};
+        VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT, VEC_TC_COLLECTION, VEC_TC_ROARINGBITMAP};
     VecValueTypeClass *vec = std::find(std::begin(var_tc_arr), std::end(var_tc_arr), vec_tc);
     if (vec == std::end(var_tc_arr)) {
       need_test_column = false;
@@ -2304,8 +2318,8 @@ int VectorDecodeTestUtil::test_batch_decode_perf(
     // decode to vector
     const char *ptr_arr[row_cnt];
     uint32_t len_arr[row_cnt];
-    int64_t row_ids[row_cnt];
-    for (int64_t datum_idx = 0; datum_idx < row_cnt; ++datum_idx) {
+    int32_t row_ids[row_cnt];
+    for (int32_t datum_idx = 0; datum_idx < row_cnt; ++datum_idx) {
       row_ids[datum_idx] = datum_idx;
     }
     ObVectorDecodeCtx decode_ctx(ptr_arr, len_arr, row_ids, row_cnt, 0, col_expr.get_vector_header(eval_ctx));

@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX RS
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
 #include "observer/net/ob_ingress_bw_alloc_service.h"

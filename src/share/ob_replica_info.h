@@ -72,22 +72,26 @@ public:
   virtual const common::ObIArray<ReplicaAttr> &get_logonly_replica_attr_array() const = 0;
   virtual const common::ObIArray<ReplicaAttr> &get_readonly_replica_attr_array() const = 0;
   virtual const common::ObIArray<ReplicaAttr> &get_encryption_logonly_replica_attr_array() const = 0;
+  virtual const common::ObIArray<ReplicaAttr> &get_columnstore_replica_attr_array() const = 0;
   virtual common::ObIArray<ReplicaAttr> &get_full_replica_attr_array() = 0;
   virtual common::ObIArray<ReplicaAttr> &get_logonly_replica_attr_array() = 0;
   virtual common::ObIArray<ReplicaAttr> &get_readonly_replica_attr_array() = 0;
   virtual common::ObIArray<ReplicaAttr> &get_encryption_logonly_replica_attr_array() = 0;
+  virtual common::ObIArray<ReplicaAttr> &get_columnstore_replica_attr_array() = 0;
 
   int64_t get_full_replica_num() const;
   int64_t get_logonly_replica_num() const;
   int64_t get_readonly_replica_num() const;
   int64_t get_encryption_logonly_replica_num() const;
+  int64_t get_columnstore_replica_num() const;
   int64_t get_paxos_replica_num() const;
   int64_t get_specific_replica_num() const;
 
   TO_STRING_KV("full_replica_attr_array", get_full_replica_attr_array(),
                "logonly_replica_attr_array", get_logonly_replica_attr_array(),
                "readonly_replica_attr_array", get_readonly_replica_attr_array(),
-               "encryption_logonly_replica_attr_array", get_encryption_logonly_replica_attr_array());
+               "encryption_logonly_replica_attr_array", get_encryption_logonly_replica_attr_array(),
+               "columnstore_replica_attr_array", get_columnstore_replica_attr_array());
 };
 
 typedef common::ObArrayHelper<share::ReplicaAttr> SchemaReplicaAttrArray;
@@ -100,7 +104,8 @@ public:
                            full_replica_attr_array_(),
                            logonly_replica_attr_array_(),
                            readonly_replica_attr_array_(),
-                           encryption_logonly_replica_attr_array_() {}
+                           encryption_logonly_replica_attr_array_(),
+                           columnstore_replica_attr_array_() {}
   virtual ~SchemaReplicaAttrSet() {}
   int64_t get_convert_size() const;
 public:
@@ -116,6 +121,9 @@ public:
   virtual const common::ObIArray<ReplicaAttr> &get_encryption_logonly_replica_attr_array() const override {
     return encryption_logonly_replica_attr_array_;
   }
+  virtual const common::ObIArray<ReplicaAttr> &get_columnstore_replica_attr_array() const override {
+    return columnstore_replica_attr_array_;
+  }
   virtual common::ObIArray<ReplicaAttr> &get_full_replica_attr_array() override {
     return full_replica_attr_array_;
   }
@@ -128,18 +136,23 @@ public:
   virtual common::ObIArray<ReplicaAttr> &get_encryption_logonly_replica_attr_array() override {
     return encryption_logonly_replica_attr_array_;
   }
+  virtual common::ObIArray<ReplicaAttr> &get_columnstore_replica_attr_array() override {
+    return columnstore_replica_attr_array_;
+  }
 public:
   void reset() {
     full_replica_attr_array_.reset();
     logonly_replica_attr_array_.reset();
     readonly_replica_attr_array_.reset();
     encryption_logonly_replica_attr_array_.reset();
+    columnstore_replica_attr_array_.reset();
   }
 private:
   SchemaReplicaAttrArray full_replica_attr_array_;
   SchemaReplicaAttrArray logonly_replica_attr_array_;
   SchemaReplicaAttrArray readonly_replica_attr_array_;
   SchemaReplicaAttrArray encryption_logonly_replica_attr_array_;
+  SchemaReplicaAttrArray columnstore_replica_attr_array_;
 };
 
 class ObReplicaAttrSet : public BaseReplicaAttrSet
@@ -160,21 +173,20 @@ public:
     logonly_replica_attr_array_.reset();
     readonly_replica_attr_array_.reset();
     encryption_logonly_replica_attr_array_.reset();
+    columnstore_replica_attr_array_.reset();
   }
 
   int add_full_replica_num(const ReplicaAttr &replica_attr);
   int add_logonly_replica_num(const ReplicaAttr &replica_attr);
   int add_readonly_replica_num(const ReplicaAttr &replica_attr);
   int add_encryption_logonly_replica_num(const ReplicaAttr &replica_attr);
+  int add_columnstore_replica_num(const ReplicaAttr &replica_attr);
   
   int sub_full_replica_num(const ReplicaAttr &replica_attr);
   int sub_logonly_replica_num(const ReplicaAttr &replica_attr);
   int sub_readonly_replica_num(const ReplicaAttr &replica_attr);
   int sub_encryption_logonly_replica_num(const ReplicaAttr &replica_attr);
-  
-  bool has_this_replica(
-       const common::ObReplicaType replica_type,
-       const int64_t memstore_percent);
+  int sub_columnstore_replica_num(const ReplicaAttr &replica_attr);
   
   virtual const common::ObIArray<ReplicaAttr> &get_full_replica_attr_array() const override {
     return full_replica_attr_array_;
@@ -188,6 +200,9 @@ public:
   virtual const common::ObIArray<ReplicaAttr> &get_encryption_logonly_replica_attr_array() const override {
     return encryption_logonly_replica_attr_array_;
   }
+  virtual const common::ObIArray<ReplicaAttr> &get_columnstore_replica_attr_array() const override {
+    return columnstore_replica_attr_array_;
+  }
   virtual common::ObIArray<ReplicaAttr> &get_full_replica_attr_array() override {
     return full_replica_attr_array_;
   }
@@ -199,6 +214,9 @@ public:
   }
   virtual common::ObIArray<ReplicaAttr> &get_encryption_logonly_replica_attr_array() override {
     return encryption_logonly_replica_attr_array_;
+  }
+  virtual common::ObIArray<ReplicaAttr> &get_columnstore_replica_attr_array() override {
+    return columnstore_replica_attr_array_;
   }
 
   ReplicaAttrArray &get_full_replica_attr_array_for_sort() {
@@ -213,22 +231,25 @@ public:
   ReplicaAttrArray &get_encryption_logonly_replica_attr_array_for_sort() {
     return encryption_logonly_replica_attr_array_;
   }
+  ReplicaAttrArray &get_columnstore_replica_attr_array_for_sort() {
+    return columnstore_replica_attr_array_;
+  }
 
   int set_replica_attr_array(
       const common::ObIArray<share::ReplicaAttr> &full_replica_attr_array,
       const common::ObIArray<share::ReplicaAttr> &logonly_replica_attr_array,
       const common::ObIArray<share::ReplicaAttr> &readonly_replica_attr_array,
-      const common::ObIArray<share::ReplicaAttr> &encryption_logonly_replica_attr_array);
+      const common::ObIArray<share::ReplicaAttr> &encryption_logonly_replica_attr_array,
+      const common::ObIArray<share::ReplicaAttr> &columnstore_replica_attr_array);
 
   int set_paxos_replica_attr_array(
       const common::ObIArray<share::ReplicaAttr> &full_replica_attr_array,
       const common::ObIArray<share::ReplicaAttr> &logonly_replica_attr_array,
       const common::ObIArray<share::ReplicaAttr> &encryption_logonly_replica_attr_array);
 
-  int set_readonly_replica_attr_array(
-      const common::ObIArray<share::ReplicaAttr> &readonly_replica_attr_array);
-
-  int get_readonly_memstore_percent(int64_t &memstore_percent) const;
+  int set_non_paxos_replica_attr_array(
+      const common::ObIArray<share::ReplicaAttr> &readonly_replica_attr_array,
+      const common::ObIArray<share::ReplicaAttr> &columnstore_replica_attr_array);
 
   bool has_paxos_replica() const;
   bool is_specific_readonly_replica() const;
@@ -240,6 +261,7 @@ private:
   ReplicaAttrArray logonly_replica_attr_array_;
   ReplicaAttrArray readonly_replica_attr_array_;
   ReplicaAttrArray encryption_logonly_replica_attr_array_;
+  ReplicaAttrArray columnstore_replica_attr_array_;
 };
 
 struct SchemaZoneReplicaAttrSet
@@ -253,6 +275,7 @@ struct SchemaZoneReplicaAttrSet
   int64_t get_logonly_replica_num() const {return replica_attr_set_.get_logonly_replica_num();}
   int64_t get_readonly_replica_num() const {return replica_attr_set_.get_readonly_replica_num();}
   int64_t get_encryption_logonly_replica_num() const {return replica_attr_set_.get_encryption_logonly_replica_num();}
+  int64_t get_columnstore_replica_num() const {return replica_attr_set_.get_columnstore_replica_num();}
   int64_t get_paxos_replica_num() const {
     return get_full_replica_num() + get_logonly_replica_num() + get_encryption_logonly_replica_num();
   }
@@ -291,33 +314,8 @@ struct ObZoneReplicaAttrSet
   int64_t get_encryption_logonly_replica_num() const {
     return replica_attr_set_.get_encryption_logonly_replica_num();
   }
+  int64_t get_columnstore_replica_num() const {return replica_attr_set_.get_columnstore_replica_num();}
   const common::ObIArray<common::ObZone> &get_zone_set() const { return zone_set_; }
-
-  int add_full_replica_num(const ReplicaAttr &replica_attr) {
-    return replica_attr_set_.add_full_replica_num(replica_attr);
-  }
-  int add_logonly_replica_num(const ReplicaAttr &replica_attr) {
-    return replica_attr_set_.add_logonly_replica_num(replica_attr);
-  }
-  int add_readonly_replica_num(const ReplicaAttr &replica_attr) {
-    return replica_attr_set_.add_readonly_replica_num(replica_attr);
-  }
-  int add_encryption_logonly_replica_num(const ReplicaAttr &replica_attr) {
-    return replica_attr_set_.add_encryption_logonly_replica_num(replica_attr);
-  }
-
-  int sub_full_replica_num(const ReplicaAttr &replica_attr) {
-    return replica_attr_set_.sub_full_replica_num(replica_attr);
-  }
-  int sub_logonly_replica_num(const ReplicaAttr &replica_attr) {
-    return replica_attr_set_.sub_logonly_replica_num(replica_attr);
-  }
-  int sub_readonly_replica_num(const ReplicaAttr &replica_attr) {
-    return replica_attr_set_.sub_readonly_replica_num(replica_attr);
-  }
-  int sub_encryption_logonly_replica_num(const ReplicaAttr &replica_attr) {
-    return replica_attr_set_.sub_encryption_logonly_replica_num(replica_attr);
-  }
 
   int64_t get_paxos_replica_num() const {
     return get_full_replica_num() + get_logonly_replica_num() + get_encryption_logonly_replica_num();
@@ -358,57 +356,6 @@ struct ObZoneReplicaAttrSet
 };
 
 typedef ObZoneReplicaAttrSet ObZoneReplicaNumSet;
-
-struct ObReplicaNumSet
-{
-  ObReplicaNumSet() : full_replica_num_(0),
-                      logonly_replica_num_(0),
-                      readonly_replica_num_(0),
-                      encryption_logonly_replica_num_(0)
-  { reset(); }
-  virtual ~ObReplicaNumSet() {}
-  bool operator==(const ObReplicaNumSet &that) {
-    return full_replica_num_ == that.full_replica_num_
-           && logonly_replica_num_ == that.logonly_replica_num_
-           && readonly_replica_num_ == that.readonly_replica_num_
-           && encryption_logonly_replica_num_ == that.encryption_logonly_replica_num_;
-  }
-  bool operator!=(const ObReplicaNumSet &that) {
-    return (!(*this == that));
-  }
-  void reset() {
-    full_replica_num_ = 0;
-    logonly_replica_num_ = 0;
-    readonly_replica_num_ = 0;
-    encryption_logonly_replica_num_ = 0;
-  }
-  ObReplicaNumSet &operator=(const ObReplicaNumSet &that) {
-    if (this != &that) {
-      full_replica_num_ = that.full_replica_num_;
-      logonly_replica_num_ = that.logonly_replica_num_;
-      readonly_replica_num_ = that.readonly_replica_num_;
-      encryption_logonly_replica_num_ = that.encryption_logonly_replica_num_;
-    }
-    return *this;
-  }
-  void set_replica_num(
-      int64_t full_replica_num,
-      int64_t logonly_replica_num,
-      int64_t readonly_replica_num,
-      int64_t encryption_logonly_replica_num);
-
-  int64_t get_specific_replica_num() const;
-
-  TO_STRING_KV(K(full_replica_num_),
-               K(logonly_replica_num_),
-               K(readonly_replica_num_),
-               K(logonly_replica_num_));
-
-  int64_t full_replica_num_;
-  int64_t logonly_replica_num_;
-  int64_t readonly_replica_num_;
-  int64_t encryption_logonly_replica_num_;
-};
 
 } // end namespace share
 } // end namespace oceanbase

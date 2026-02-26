@@ -12,16 +12,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "lib/xml/ob_xpath.h"
+#include "ob_xpath.h"
 #include "lib/xml/ob_path_parser.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string.h"
 #include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
-#include "common/data_buffer.h"
-#include <rapidjson/encodings.h>
-#include <rapidjson/memorystream.h>
 
 namespace oceanbase {
 namespace common {
@@ -874,7 +868,7 @@ int ObPathFuncNode::check_is_all_location_without_filter(ObPathNode* arg_root)
           LOG_WARN("Given XPATH expression not supported", K(ret));
         } // check if without filter
       } else if (node->node_type_.is_func()) {
-        ret = OB_ERR_PARSER_SYNTAX; // ORA-31011: XML parsing failed
+        ret = OB_ERR_PARSER_SYNTAX; // OBE-31011: XML parsing failed
         LOG_WARN("Function call with invalid number of arguments", K(ret), K(node->node_type_.node_class_));
       }
     } // end for
@@ -888,7 +882,7 @@ int ObPathFuncNode::check_is_legal_count_arg()
   // after size check, size must be 1
   ObPathNode* func_arg = static_cast<ObPathNode*>(member(0));
   if (OB_ISNULL(func_arg) || func_arg->node_type_.is_location()) {
-    ret = OB_ERR_PARSER_SYNTAX; // ORA-31011: XML parsing failed
+    ret = OB_ERR_PARSER_SYNTAX; // OBE-31011: XML parsing failed
     LOG_WARN("Function call with invalid arguments", K(ret), K(func_arg->node_type_.node_class_));
   }
 
@@ -963,7 +957,7 @@ int ObPathFuncNode::check_is_legal_arg()
 {
   INIT_SUCC(ret);
   if (min_arg_num_ > size() || max_arg_num_ < size()) { // check_arg_num
-    ret = OB_ERR_PARSER_SYNTAX; // ORA-31011: XML parsing failed
+    ret = OB_ERR_PARSER_SYNTAX; // OBE-31011: XML parsing failed
     LOG_WARN("Function call with invalid number of arguments", K(ret), K(min_arg_num_), K(max_arg_num_));
   } else { // check arg type
     switch (node_type_.get_func_type()) {
@@ -1973,7 +1967,7 @@ int ObPathVarObject::add(const common::ObString &key, ObDatum *value, bool with_
       LOG_WARN("fail to push back", K(ret));
     } else { // sort again.
       ObPathKeyCompare cmp;
-      std::sort(object_array_.begin(), object_array_.end(), cmp);
+      lib::ob_sort(object_array_.begin(), object_array_.end(), cmp);
     }
   }
   return ret;
@@ -2155,6 +2149,41 @@ int ObPathExprIter::get_first_seektype(ObSeekType& first_seektype)
 ObIMulModeBase* ObPathExprIter::get_cur_res_parent()
 {
   return path_ctx_.ancestor_record_.size() > 0 ? path_ctx_.ancestor_record_.top() : nullptr;
+}
+
+int ObPathExprIter::get_node_exists(bool &is_exists)
+{
+  INIT_SUCC(ret);
+  is_exists = false;
+  if (!is_inited_ || OB_ISNULL(path_node_)) {
+    ret = OB_INIT_FAIL;
+    LOG_WARN("should be inited", K(ret));
+  } else {
+    ObSeekResult path_res;
+    while (OB_SUCC(ret) && !is_exists) {
+      if (OB_FAIL(path_node_->eval_node(path_ctx_, path_res))) {
+        if (ret != OB_ITER_END) {
+          LOG_WARN("fail to seek", K(ret));
+        }
+      } else if (path_res.is_scalar_) {
+        if (OB_ISNULL(path_res.result_.scalar_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("xpath result scalar is null", K(ret));
+        } else if (path_res.result_.scalar_->node_type_.get_arg_type() == ObArgType::PN_BOOLEAN
+                    && !path_res.result_.scalar_->arg_.boolean_) {
+          // do nothing, keep seeking
+        } else {
+          is_exists = true;
+        }
+      } else {
+        is_exists = true;
+      }
+    }  // end while
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
 }
 
 int ObPathExprIter::get_next_node(ObIMulModeBase*& res)

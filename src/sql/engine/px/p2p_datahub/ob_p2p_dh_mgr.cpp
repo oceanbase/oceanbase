@@ -15,7 +15,7 @@
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_vec_msg.h"
-#include "lib/rc/context.h"
+#include "sql/engine/px/p2p_datahub/ob_pushdown_topn_filter_msg.h"
 #include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "share/ob_rpc_share.h"
 #include "share/detect/ob_detect_manager_utils.h"
@@ -103,59 +103,27 @@ int ObP2PDatahubManager::alloc_msg(
     ObP2PDatahubMsgBase::ObP2PDatahubMsgType type,
     ObP2PDatahubMsgBase *&msg_ptr)
 {
+#define ALLOC_MSG_HELPER(msg_type, detail_class, label)                                            \
+  case ObP2PDatahubMsgBase::msg_type: {                                                            \
+    detail_class *new_msg = nullptr;                                                               \
+    ObMemAttr attr(ob_get_tenant_id(), label);                                                     \
+    if (OB_FAIL(alloc_msg<detail_class>(allocator, new_msg, attr))) {                              \
+      LOG_WARN("fail to alloc msg", K(ret));                                                       \
+    } else {                                                                                       \
+      msg_ptr = new_msg;                                                                           \
+    }                                                                                              \
+    break;                                                                                         \
+  }
+
   int ret = OB_SUCCESS;
   switch(type) {
-    case ObP2PDatahubMsgBase::BLOOM_FILTER_VEC_MSG:
-    case ObP2PDatahubMsgBase::BLOOM_FILTER_MSG: {
-      ObRFBloomFilterMsg *bf_ptr = nullptr;
-      ObMemAttr attr(ob_get_tenant_id(), "PxBfMsg");
-      if (OB_FAIL(alloc_msg<ObRFBloomFilterMsg>(allocator, bf_ptr, attr))) {
-        LOG_WARN("fail to alloc msg", K(ret));
-      } else {
-        msg_ptr = bf_ptr;
-      }
-      break;
-    }
-    case ObP2PDatahubMsgBase::RANGE_FILTER_MSG: {
-      ObRFRangeFilterMsg *range_ptr = nullptr;
-      ObMemAttr attr(ob_get_tenant_id(), "PxRangeMsg");
-      if (OB_FAIL(alloc_msg<ObRFRangeFilterMsg>(allocator, range_ptr, attr))) {
-        LOG_WARN("fail to alloc msg", K(ret));
-      } else {
-        msg_ptr = range_ptr;
-      }
-      break;
-    }
-    case ObP2PDatahubMsgBase::RANGE_FILTER_VEC_MSG: {
-      ObRFRangeFilterVecMsg *range_ptr = nullptr;
-      ObMemAttr attr(ob_get_tenant_id(), "PxRangeVecMsg");
-      if (OB_FAIL(alloc_msg<ObRFRangeFilterVecMsg>(allocator, range_ptr, attr))) {
-        LOG_WARN("fail to alloc msg", K(ret));
-      } else {
-        msg_ptr = range_ptr;
-      }
-      break;
-    }
-    case ObP2PDatahubMsgBase::IN_FILTER_MSG: {
-      ObRFInFilterMsg *in_ptr = nullptr;
-      ObMemAttr attr(ob_get_tenant_id(), "PxInMsg");
-      if (OB_FAIL(alloc_msg<ObRFInFilterMsg>(allocator, in_ptr, attr))) {
-        LOG_WARN("fail to alloc msg", K(ret));
-      } else {
-        msg_ptr = in_ptr;
-      }
-      break;
-    }
-    case ObP2PDatahubMsgBase::IN_FILTER_VEC_MSG: {
-      ObRFInFilterVecMsg *in_ptr = nullptr;
-      ObMemAttr attr(ob_get_tenant_id(), "PxInVecMsg");
-      if (OB_FAIL(alloc_msg<ObRFInFilterVecMsg>(allocator, in_ptr, attr))) {
-        LOG_WARN("fail to alloc msg", K(ret));
-      } else {
-        msg_ptr = in_ptr;
-      }
-      break;
-    }
+    ALLOC_MSG_HELPER(BLOOM_FILTER_MSG, ObRFBloomFilterMsg, "PxBfMsg")
+    ALLOC_MSG_HELPER(BLOOM_FILTER_VEC_MSG, ObRFBloomFilterMsg, "PxBfVecMsg")
+    ALLOC_MSG_HELPER(RANGE_FILTER_MSG, ObRFRangeFilterMsg, "PxRangeMsg")
+    ALLOC_MSG_HELPER(RANGE_FILTER_VEC_MSG, ObRFRangeFilterVecMsg, "PxRangeVecMsg")
+    ALLOC_MSG_HELPER(IN_FILTER_MSG, ObRFInFilterMsg, "PxInMsg")
+    ALLOC_MSG_HELPER(IN_FILTER_VEC_MSG, ObRFInFilterVecMsg,  "PxInVecMsg")
+    ALLOC_MSG_HELPER(PD_TOPN_FILTER_MSG, ObPushDownTopNFilterMsg,  "PxTopNMsg")
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected type", K(type), K(ret));
@@ -280,14 +248,14 @@ int ObP2PDatahubManager::generate_p2p_dh_id(int64_t &p2p_dh_id)
   // generate p2p dh id
   // |    <16>     |      <28>     |     20
   //    server_id       timestamp     sequence
-  if (!is_valid_server_id(GCTX.server_id_)) {
+  const uint64_t server_index = GCTX.get_server_index();
+  if (OB_UNLIKELY(!is_valid_server_index(server_index))) {
     ret = OB_SERVER_IS_INIT;
-    LOG_WARN("server id is unexpected", K(ret));
+    LOG_WARN("server index is unexpected", KR(ret), K(server_index));
   } else {
-    const uint64_t svr_id = GCTX.server_id_;
     int64_t ts = (common::ObTimeUtility::current_time() / 1000000) << 20;
     int64_t seq_id = ATOMIC_AAF(&p2p_dh_id_, 1);
-    p2p_dh_id = (ts & 0x0000FFFFFFFFFFFF) | (svr_id << 48) | seq_id;
+    p2p_dh_id = (ts & 0x0000FFFFFFFFFFFF) | (server_index << 48) | seq_id;
   }
   return ret;
 }
@@ -313,7 +281,7 @@ int ObP2PDatahubManager::send_p2p_msg(
       LOG_WARN("fail to copy msg", K(ret));
     } else if (OB_ISNULL(new_msg)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpeceted new msg", K(ret));
+      LOG_WARN("unexpected new msg", K(ret));
     }
     if (OB_SUCC(ret)) {
       ObP2PDatahubMsgGuard guard(new_msg);

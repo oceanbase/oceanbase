@@ -129,6 +129,7 @@ private:
       const int64_t piece_id, GeneratedPiece &piece) const;
   
   int fill_generated_pieces_(const Result &result, common::ObIArray<ObTenantArchivePieceAttr> &pieces) const;
+  void fill_force_stop_msg_(ObTenantArchiveRoundAttr &new_round_info, const int ret_code) const;
 
   bool is_inited_;
   bool allow_force_stop_;

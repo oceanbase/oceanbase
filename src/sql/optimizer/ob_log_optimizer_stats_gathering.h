@@ -29,7 +29,8 @@ struct OSGShareInfo {
   part_level_(share::schema::PARTITION_LEVEL_ZERO),
   col_conv_exprs_(),
   generated_column_exprs_(),
-  column_ids_() {};
+  column_ids_(),
+  online_sample_rate_(1.) {}
   ~OSGShareInfo()
   {
     col_conv_exprs_.reset();
@@ -43,6 +44,7 @@ struct OSGShareInfo {
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> col_conv_exprs_;
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> generated_column_exprs_;
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> column_ids_;
+  double online_sample_rate_;
 };
 
 class ObLogOptimizerStatsGathering : public ObLogicalOperator
@@ -56,7 +58,8 @@ public:
   osg_type_(OSG_TYPE::GATHER_OSG),
   col_conv_exprs_(),
   generated_column_exprs_(),
-  column_ids_()
+  column_ids_(),
+  online_sample_percent_(1.)
   {}
 
   virtual ~ObLogOptimizerStatsGathering() = default;
@@ -94,6 +97,8 @@ public:
   common::ObIArray<ObRawExpr*>& get_col_conv_exprs() { return col_conv_exprs_; };
   common::ObIArray<ObRawExpr*>& get_generated_column_exprs() { return generated_column_exprs_; };
   common::ObIArray<uint64_t>& get_column_ids() { return column_ids_; };
+  double get_online_sample_percent() const { return online_sample_percent_; }
+  void set_online_sample_percent(double sample_percent) { online_sample_percent_ = sample_percent; }
 private:
   int inner_get_table_schema(const ObTableSchema *&table_schema);
   int inner_get_stat_part_cnt(const ObTableSchema *table_schema, uint64_t &part_num);
@@ -104,7 +109,7 @@ private:
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> col_conv_exprs_;
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> generated_column_exprs_;
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> column_ids_;
-
+  double online_sample_percent_;
   DISALLOW_COPY_AND_ASSIGN(ObLogOptimizerStatsGathering);
 };
 

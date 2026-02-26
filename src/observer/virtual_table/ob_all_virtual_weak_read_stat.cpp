@@ -11,11 +11,6 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_weak_read_stat.h"
-#include "observer/omt/ob_multi_tenant.h"     // TenantIdList
-#include "share/rc/ob_context.h"              // WITH_CONTEXT  ObWithTenantContext
-#include "share/rc/ob_tenant_base.h"          // MTL
-#include "lib/container/ob_array.h"           // ObArray
-#include "observer/ob_server_struct.h"
 
 
 using namespace oceanbase::common;

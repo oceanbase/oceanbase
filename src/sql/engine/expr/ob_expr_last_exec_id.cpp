@@ -11,7 +11,6 @@
  */
 
 #include "sql/engine/expr/ob_expr_last_exec_id.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;

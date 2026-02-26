@@ -15,8 +15,6 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/allocator/ob_mod_define.h"
-#include "objit/expr/ob_column_index_provider.h"
-#include "objit/expr/ob_iraw_expr.h"
 
 namespace oceanbase
 {
@@ -24,7 +22,7 @@ namespace sql
 {
 
 class ObRawExpr;
-class RowDesc: public jit::expr::ObColumnIndexProvider
+class RowDesc
 {
 public:
   RowDesc() {}
@@ -43,7 +41,7 @@ public:
   ObRawExpr *get_column(int64_t idx) const;
   const common::ObIArray<ObRawExpr*> &get_columns() const;
   int get_column(int64_t idx, ObRawExpr *&raw_expr) const;
-  int get_idx(const jit::expr::ObIRawExpr *raw_expr, int64_t &idx) const override;
+  int get_idx(const ObRawExpr *raw_expr, int64_t &idx) const;
   TO_STRING_KV(N_EXPR, exprs_);
 private:
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> ExprIdxMap;

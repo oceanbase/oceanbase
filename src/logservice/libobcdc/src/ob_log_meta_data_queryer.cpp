@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX DATA_DICT
 
 #include "ob_log_instance.h"                  // TCTX
 #include "ob_log_meta_data_queryer.h"
@@ -40,10 +40,9 @@ int ObLogMetaDataSQLQueryer::get_data_dict_in_log_info(
   int ret = OB_SUCCESS;
   const static int64_t QUERY_TIMEOUT = 1 * _MIN_;
   ObCDCQueryResult<logfetcher::DataDictionaryInLogInfo> query_result(data_dict_in_log_info);
-  const uint64_t query_tenant_id = TCTX.is_tenant_sync_mode() ? OB_SYS_TENANT_ID : tenant_id;
 
-  if (OB_FAIL(query(query_tenant_id, query_result, QUERY_TIMEOUT))) {
-    LOG_ERROR("query data dict meta info failed", KR(ret), K(tenant_id), K(query_tenant_id));
+  if (OB_FAIL(query(tenant_id, query_result, QUERY_TIMEOUT))) {
+    LOG_ERROR("query data dict meta info failed", KR(ret), K(tenant_id));
   } else if (query_result.is_empty()) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("can't find datadict snapshot_scn older than start_timestamp_ns", KR(ret), K(tenant_id), K(start_timestamp_ns));
@@ -58,13 +57,24 @@ int ObLogMetaDataSQLQueryer::build_sql_statement_(const uint64_t tenant_id, ObSq
 {
   int ret = OB_SUCCESS;
   const bool is_oracle_mode = TCTX.mysql_proxy_.is_oracle_mode();
+  const uint64_t cur_cluster_version = GET_MIN_CLUSTER_VERSION();
+  const bool is_real_agent_available = (cur_cluster_version >= MOCK_CLUSTER_VERSION_4_2_5_0 && cur_cluster_version < CLUSTER_VERSION_4_3_0_0) || cur_cluster_version >= CLUSTER_VERSION_4_4_1_0;
   const char* limit_expr = is_oracle_mode ? "FETCH FIRST 1 ROWS ONLY" : "LIMIT 1";
-  const char* end_scn = is_oracle_mode ? "TIMESTAMP_TO_SCN(REPORT_TIME)" : "ORA_ROWSCN";
-  const char* table_name = is_oracle_mode ? share::OB_DBA_OB_DATA_DICTIONARY_IN_LOG_TNAME : share::OB_ALL_DATA_DICTIONARY_IN_LOG_TNAME;
+  const char *end_scn = nullptr;
+  const char *table_name = nullptr;
+
+  if (is_real_agent_available) {
+    end_scn = "ORA_ROWSCN";
+    table_name = is_oracle_mode ? share::OB_ALL_VIRTUAL_DATA_DICTIONARY_IN_LOG_REAL_AGENT_ORA_TNAME : share::OB_ALL_DATA_DICTIONARY_IN_LOG_TNAME;
+  } else {
+    end_scn = is_oracle_mode ? "TIMESTAMP_TO_SCN(REPORT_TIME)" : "ORA_ROWSCN";
+    table_name = is_oracle_mode ? share::OB_DBA_OB_DATA_DICTIONARY_IN_LOG_TNAME : share::OB_ALL_DATA_DICTIONARY_IN_LOG_TNAME;
+  }
 
   if (OB_FAIL(sql.assign_fmt(QUERY_SQL_FORMAT, end_scn, table_name, start_timstamp_ns_, limit_expr))) {
     LOG_ERROR("format sql failed", KR(ret), K(tenant_id), K(is_oracle_mode), KCSTRING(limit_expr), KCSTRING(table_name));
   }
+  LOG_INFO("build_sql_statement_ succ for meta_data_queryer", K(tenant_id), K(is_oracle_mode), K(sql));
 
   return ret;
 }

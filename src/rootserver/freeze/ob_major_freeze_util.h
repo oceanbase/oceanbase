@@ -66,6 +66,15 @@ private:
   const char * const log_mod_;
 };
 
+enum ObMajorFreezeReason : uint8_t {
+  MF_DAILY_MERGE = 0,
+  MF_USER_REQUEST,
+  MF_MAJOR_COMPACT_TRIGGER,
+  MF_REASON_MAX,
+};
+
+const char *major_freeze_reason_to_str(const int64_t freeze_reason);
+bool is_valid_major_freeze_reason(const ObMajorFreezeReason &freeze_reason);
 
 } // end namespace rootserver
 } // end namespace oceanbase

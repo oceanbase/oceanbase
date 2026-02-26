@@ -120,7 +120,7 @@ int ObGVTxSchedulerStat::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(tx_scheduler_stat.addr_.get_port());
           break;
         case SESSION_ID:
-          cur_row_.cells_[i].set_int(tx_scheduler_stat.sess_id_);
+          cur_row_.cells_[i].set_int(tx_scheduler_stat.client_sid_);
           break;
         case TX_ID:
           cur_row_.cells_[i].set_int(tx_scheduler_stat.tx_id_.get_id());

@@ -24,8 +24,12 @@
 #include "share/stat/ob_opt_ds_stat.h"
 #include "share/stat/ob_stat_item.h"
 #include "share/stat/ob_opt_system_stat.h"
+#include "share/stat/ob_lake_table_stat.h"
 
 namespace oceanbase {
+namespace sql {
+class ObSqlSchemaGuard;
+}
 namespace common {
 class ObOptColumnStatHandle;
 
@@ -70,16 +74,23 @@ public:
                         sqlclient::ObISQLConnection *conn,
                         const ObIArray<ObOptTableStat*> &table_stats,
                         const bool is_index_stat);
+  int batch_get_column_stats(const uint64_t tenant_id,
+                             const uint64_t table_id,
+                             const ObIArray<int64_t> &part_ids,
+                             const ObIArray<uint64_t> &column_ids,
+                             const int64_t row_cnt,
+                             const double scale_ratio,
+                             ObIArray<ObGlobalColumnStat> &stat,
+                             ObIAllocator *alloc);
 
   int get_column_stat(const uint64_t tenant_id,
-                      const uint64_t tab_ref_id,
+                      const uint64_t table_id,
                       const ObIArray<int64_t> &part_ids,
                       const uint64_t column_id,
-                      const ObIArray<int64_t> &global_part_ids,
                       const int64_t row_cnt,
                       const double scale_ratio,
                       ObGlobalColumnStat &stat,
-                      ObIAllocator *alloc = NULL);
+                      ObIAllocator *alloc);
 
   int get_column_stat(const uint64_t tenant_id,
                       const uint64_t table_id,
@@ -102,7 +113,6 @@ public:
   int get_table_stat(const uint64_t tenant_id,
                      const uint64_t tab_ref_id,
                      const ObIArray<int64_t> &part_ids,
-                     const ObIArray<int64_t> &global_part_ids,
                      const double scale_ratio,
                      ObGlobalTableStat &stat);
 
@@ -182,6 +192,11 @@ public:
 
   int handle_refresh_system_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
 
+  int update_stats_internal_stat(const uint64_t tenant_id,
+                                sqlclient::ObISQLConnection *conn,
+                                uint64_t table_id,
+                                int64_t global_partition_id);
+
   int get_table_rowcnt(const uint64_t tenant_id,
                        const uint64_t table_id,
                        const ObIArray<ObTabletID> &all_tablet_ids,
@@ -207,6 +222,11 @@ public:
                         const ObOptDSStat &value,
                         ObOptDSStatHandle &ds_stat_handle);
   int update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat);
+
+  int update_table_stat_failed_count(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const ObIArray<int64_t> &part_ids,
+                                     int64_t &affected_rows);
   int update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info);
   ObOptStatService &get_stat_service() { return stat_service_; }
 
@@ -215,6 +235,39 @@ public:
   int update_system_stats(const uint64_t tenant_id,
                         const ObOptSystemStat *system_stats);
   int delete_system_stats(const uint64_t tenant_id);
+
+  int get_external_table_stat(const uint64_t tenant_id,
+                              const uint64_t ref_table_id,
+                              const ObIArray<ObString> &partition_names,
+                              sql::ObSqlSchemaGuard &schema_guard,
+                              ObLakeTableStat &stat);
+  int get_external_column_stat(ObIAllocator &alloc,
+                               const uint64_t tenant_id,
+                               const uint64_t ref_table_id,
+                               const ObIArray<ObString> &column_names,
+                               const ObIArray<ObString> &partition_names,
+                               sql::ObSqlSchemaGuard &schema_guard,
+                               const int64_t row_cnt,
+                               const double scale_ratio,
+                               ObIArray<ObLakeColumnStat*> &column_stats);
+
+private:
+  int trans_col_handle_to_evals(const ObArray<ObOptColumnStatHandle> &new_handles,
+                                hash::ObHashMap<uint64_t, ObGlobalAllColEvals *> &column_id_col_evals);
+
+  int update_all_eval_to_stats(const int64_t row_cnt,
+                               const double scale_ratio,
+                               ObIAllocator *alloc,
+                               const ObIArray<uint64_t> &column_ids,
+                               const hash::ObHashMap<uint64_t, ObGlobalAllColEvals *> &column_id_col_evals,
+                               ObIArray<ObGlobalColumnStat> &column_stats);
+
+  int flush_evals(ObIAllocator *alloc,
+                  const int64_t start_pos,
+                  const int64_t end_pos,
+                  const ObIArray<uint64_t> &column_ids,
+                  const hash::ObHashMap<uint64_t, ObGlobalAllColEvals *> &column_id_col_evals);
+
 protected:
   static const int64_t REFRESH_STAT_TASK_NUM = 5;
   bool inited_;

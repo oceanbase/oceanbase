@@ -221,6 +221,9 @@ public:
     if (d_.len_ > OB_MAX_DECIMAL_DIGIT) {
       ret = OB_ERR_UNEXPECTED;
       _OB_LOG(WARN, "Invalid digit len %u", d_.len_);
+    } else if (OB_UNLIKELY(0 != d_.reserved_)) {
+      ret = OB_ERR_UNEXPECTED;
+      _OB_LOG(WARN, "Invalid reserved %u", d_.reserved_);
     } else if (d_.len_ > 0 && digits_ != nullptr) {
       for (auto i = 0;  OB_SUCC(ret) && i < d_.len_; i++) {
         if (digits_[i] >= BASE) {
@@ -255,7 +258,8 @@ public:
   int from(const int16_t precision, const int16_t scale, const char *str, const int64_t length,
            T &allocator);
   template <class T>
-  int from_sci(const char *str, const int64_t length, T &allocator, int16_t *precision, int16_t *scale, const bool do_rounding = true);
+  int from_sci(const char *str, const int64_t length, T &allocator, int16_t *precision,
+               int16_t *scale, const bool do_rounding = true, const bool catch_trunc_err = false);
   template <class T>
   int from(const uint32_t desc, const ObCalcVector &vector, T &allocator);
   template <class T>
@@ -277,7 +281,8 @@ public:
   template <class T>
   int from_sci_opt(const char *str, const int64_t length, T &allocator,
                    int16_t *precision = NULL, int16_t *scale = NULL,
-                   const bool do_rounding = true);
+                   const bool do_rounding = true,
+                   const bool catch_trunc_err = false);
   inline int round_v3(const int64_t scale, const bool for_oracle_to_char = false);
   // used when cast number to string in oracle mode
   inline int round_for_sci(const int64_t scale, const bool for_oracle_to_char = false);
@@ -602,7 +607,9 @@ protected:
   int from_v2_(const uint32_t desc, const ObCalcVector &vector, IAllocator &allocator);
   int from_(const ObNumber &other, IAllocator &allocator);
   int from_(const ObNumber &other, uint32_t *digits);
-  int from_sci_(const char *str, const int64_t length, IAllocator &allocator, int &warning, int16_t *precision, int16_t *scale, const bool do_rounding);
+  int from_sci_(const char *str, const int64_t length, IAllocator &allocator, int &warning,
+                int16_t *precision, int16_t *scale, const bool do_rounding,
+                const bool catch_trunc_err = false);
   int deep_copy_to_allocator_(ObIAllocator &allocator);
   int add_(const ObNumber &other, ObNumber &value, IAllocator &allocator) const;
   template <typename T>
@@ -1612,12 +1619,13 @@ int ObNumber::from_sci(const char *str,
                    T &allocator,
                    int16_t *precision,
                    int16_t *scale,
-                   const bool do_rounding)
+                   const bool do_rounding,
+                   const bool catch_trunc_err)
 {
   int ret = OB_SUCCESS;
   int warning = OB_SUCCESS;
   TAllocator<T> ta(allocator);
-  ret = from_sci_(str, length, ta, warning, precision, scale, do_rounding);
+  ret = from_sci_(str, length, ta, warning, precision, scale, do_rounding, catch_trunc_err);
   if (OB_SUCCESS == ret && OB_SUCCESS != warning) {
     ret = warning;
   }
@@ -1630,12 +1638,13 @@ int ObNumber::from_sci_opt(const char *str,
                            T &allocator,
                            int16_t *precision,
                            int16_t *scale,
-                           const bool do_rounding)
+                           const bool do_rounding,
+                           const bool catch_trunc_err)
 {
   int ret = OB_SUCCESS;
   const common::ObString tmp_string(length, str);
   if (!tmp_string.empty() && (NULL != tmp_string.find('e') || NULL != tmp_string.find('E'))) {
-    ret = from_sci(str, length, allocator, precision, scale, do_rounding);
+    ret = from_sci(str, length, allocator, precision, scale, do_rounding, catch_trunc_err);
   } else {
     ret = from(str, length, allocator, precision, scale, do_rounding);
   }
@@ -2940,16 +2949,19 @@ int knuth_probe_quotient(
   if (OB_FAIL(qq_mul_v.ensure(v.size() + 1))) {
     _OB_LOG(WARN, "ensure qq_mul_v fail, ret=%d size=%ld", ret, v.size() + 1);
   } else if (OB_FAIL(poly_mono_mul(v, qq, qq_mul_v))) {
-    _OB_LOG(WARN, "%lu mul %s u=%s fail, ret=%d", qq, to_cstring(v), to_cstring(u), ret);
+    ObCStringHelper helper;
+    _OB_LOG(WARN, "%lu mul %s u=%s fail, ret=%d", qq, helper.convert(v), helper.convert(u), ret);
   } else if (OB_FAIL(u_sub.ensure(n + 1))) {
     _OB_LOG(WARN, "ensure u_sub fail, ret=%d size=%ld", ret, n + 1);
   } else if (OB_FAIL(poly_poly_sub(u.ref(j, j + n), qq_mul_v.ref(1, n + 1), u_sub,
                                                 negative, truevalue))) {
-    _OB_LOG(WARN, "%s sub %s fail, ret=%d", to_cstring(u.ref(j, j + n)),
-            to_cstring(qq_mul_v), ret);
+    ObCStringHelper helper;
+    _OB_LOG(WARN, "%s sub %s fail, ret=%d", helper.convert(u.ref(j, j + n)),
+            helper.convert(qq_mul_v), ret);
   } else if (!negative
              && OB_FAIL(u.assign(u_sub, j, j + n))) {
-    _OB_LOG(WARN, "assign %s to u[%ld,%ld] fail, ret=%d", to_cstring(u_sub), j, j + n, ret);
+    ObCStringHelper helper;
+    _OB_LOG(WARN, "assign %s to u[%ld,%ld] fail, ret=%d", helper.convert(u_sub), j, j + n, ret);
   } else {
     // do nothing
   }
@@ -2967,10 +2979,12 @@ int knuth_probe_quotient(
     if (OB_FAIL(u_add.ensure(n + 2))) {
       _OB_LOG(WARN, "ensure u_add fail, ret=%d size=%ld", ret, n + 2);
     } else if (OB_FAIL(poly_poly_add(u_sub, v, u_add))) {
-      _OB_LOG(WARN, "%s add %s fail, ret=%d", to_cstring(u_sub), to_cstring(v), ret);
+      ObCStringHelper helper;
+      _OB_LOG(WARN, "%s add %s fail, ret=%d", helper.convert(u_sub), helper.convert(v), ret);
     } else if (OB_FAIL(u.assign(u_add.ref(1, n + 1), j, j + n))) {
+      ObCStringHelper helper;
       _OB_LOG(WARN, "assign %s to u[%ld,%ld] fail, ret=%d",
-              to_cstring(u_add.ref(1, n + 1)), j, j + n, ret);
+              helper.convert(u_add.ref(1, n + 1)), j, j + n, ret);
     } else {
       // do nothing
     }
@@ -3026,9 +3040,11 @@ int knuth_probe_quotient(
 //      _OB_LOG(WARN, "ensure divisor fail ret=%d size=%ld", ret, divisor_size + 1);
 //    }
 //    if (OB_FAIL(poly_mono_mul(dividend, d, u))) {
-//      _OB_LOG(WARN, "%s mul %lu fail, ret=%d", to_cstring(dividend), d, ret);
+//      ObCStringHelper helper;
+//      _OB_LOG(WARN, "%s mul %lu fail, ret=%d", helper.convert(dividend), d, ret);
 //    } else if (OB_FAIL(poly_mono_mul(divisor, d, v))) {
-//      _OB_LOG(WARN, "%s mul %lu fail, ret=%d", to_cstring(divisor), d, ret);
+//      ObCStringHelper helper;
+//      _OB_LOG(WARN, "%s mul %lu fail, ret=%d", helper.convert(divisor), d, ret);
 //    } else {
 //      LIB_LOG(DEBUG, "Knuth Algo start",
 //              K(dividend), K(divisor), K(d), K(u), K(v), K(n), K(m));
@@ -3059,13 +3075,15 @@ int knuth_probe_quotient(
 //      if (OB_SUCC(ret)) {
 //        uint64_t r = 0;
 //        if (OB_FAIL(poly_mono_div(u.ref(m + 1, m + n), d, remainder, r))) {
-//          _OB_LOG(WARN, "%s div %lu fail, ret=%d", to_cstring(u.ref(m + 1, m + n)), d, ret);
+//          ObCStringHelper helper;
+//          _OB_LOG(WARN, "%s div %lu fail, ret=%d", helper.convert(u.ref(m + 1, m + n)), d, ret);
 //        }
 //      }
 //
+//      ObCStringHelper helper;
 //      _OB_LOG(DEBUG, "Knuth Algo end, %s / %s = %s ... %s",
-//              to_cstring(dividend), to_cstring(divisor),
-//              to_cstring(quotient), to_cstring(remainder));
+//              helper.convert(dividend), helper.convert(divisor),
+//              helper.convert(quotient), helper.convert(remainder));
 //    }
 //  }
 //  return ret;

@@ -44,7 +44,6 @@ public:
 public:
   int init(
       ObUnitManager &unit_mgr,
-      ObZoneManager &zone_mgr,
       share::schema::ObMultiVersionSchemaService &schema_service,
       common::ObMySQLProxy &sql_proxy,
       share::ObLSTableOperator &lst_operator);
@@ -66,7 +65,6 @@ private:
   // data members
   bool inited_;
   ObUnitManager *unit_mgr_;
-  ObZoneManager *zone_mgr_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   common::ObMySQLProxy *sql_proxy_;
   share::ObLSTableOperator *lst_operator_;

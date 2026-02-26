@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "ob_px_coord_msg_proc.h"
 #include "sql/engine/px/ob_sqc_ctx.h"
-#include "sql/engine/px/ob_px_coord_msg_proc.h"
-#include "sql/engine/px/datahub/ob_dh_msg_provider.h"
-#include "sql/engine/px/datahub/ob_dh_msg.h"
-#include "sql/dtl/ob_dtl_msg_type.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -146,4 +143,22 @@ int ObPxSubCoordMsgProc::on_whole_msg(
 {
   ObDhWholeeMsgProc<ObOptStatsGatherWholeMsg> proc;
   return proc.on_whole_msg(sqc_ctx_, dtl::DH_OPT_STATS_GATHER_WHOLE_MSG, pkt);
+}
+
+int ObPxSubCoordMsgProc::on_whole_msg(const SPWinFuncPXWholeMsg &pkt) const
+{
+  ObDhWholeeMsgProc<SPWinFuncPXWholeMsg> proc;
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_SP_WINFUNC_PX_WHOLE_MSG, pkt);
+}
+
+int ObPxSubCoordMsgProc::on_whole_msg(const RDWinFuncPXWholeMsg &pkt) const
+{
+  ObDhWholeeMsgProc<RDWinFuncPXWholeMsg> proc;
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_RD_WINFUNC_PX_WHOLE_MSG, pkt);
+}
+
+int ObPxSubCoordMsgProc::on_whole_msg(const ObJoinFilterCountRowWholeMsg &pkt) const
+{
+  ObDhWholeeMsgProc<ObJoinFilterCountRowWholeMsg> proc;
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_JOIN_FILTER_COUNT_ROW_WHOLE_MSG, pkt);
 }

@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/ob_px_admission.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/ob_sql.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
-#include "sql/optimizer/ob_storage_estimator.h"
-#include "sql/ob_sql_trans_control.h"
-#include "storage/tx/ob_trans_service.h"
 #include "share/detect/ob_detect_manager_utils.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -207,6 +201,15 @@ int ObPxSqcHandler::init()
   } else {
     exec_ctx_->set_sqc_handler(this);
   }
+
+#ifdef ERRSIM
+  int errsim_code = EventTable::EN_PX_SQC_HANDLER_INIT_FAILED;
+  if (OB_SUCC(ret) && errsim_code != OB_SUCCESS) {
+    ret = errsim_code;
+    LOG_TRACE("Force sqc hanler init failed", K(ret));
+  }
+#endif
+
   return ret;
 }
 
@@ -218,6 +221,7 @@ void ObPxSqcHandler::reset()
   process_flags_ = 0;
   end_ret_ = OB_SUCCESS;
   reference_count_ = 1;
+  is_session_query_locked_ = false;
   part_ranges_.reset();
   call_dtor(sub_coord_);
   call_dtor(sqc_init_args_);
@@ -254,16 +258,33 @@ int ObPxSqcHandler::init_env()
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *phy_plan_ctx = nullptr;
+  ObSQLSessionInfo *session = NULL;
+  int tmp_ret = OB_SUCCESS;
   if (OB_ISNULL(sqc_init_args_->exec_ctx_)
       || OB_ISNULL(sqc_init_args_->op_spec_root_)
       || OB_ISNULL(sqc_init_args_->des_phy_plan_)
       || OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(*sqc_init_args_->exec_ctx_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sqc args should not be NULL", K(ret));
+  } else if (OB_ISNULL(session = GET_MY_SESSION(*sqc_init_args_->exec_ctx_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("deserialized exec ctx without phy plan session set. Unexpected", K(ret));
   } else if (OB_FAIL(sub_coord_->init_exec_env(*sqc_init_args_->exec_ctx_))) {
     LOG_WARN("Failed to init env", K(ret));
+  } else if (OB_UNLIKELY(common::OB_SUCCESS != (tmp_ret = session->get_query_lock().lock()))) {
+    LOG_ERROR("Fail to lock, ", K(tmp_ret));
   } else {
+    is_session_query_locked_ = true;
     init_flt_content();
+  }
+
+  if (OB_SUCC(ret) && OB_UNLIKELY(session->is_zombie())) {
+    // session has been killed some moment ago
+    // we don't need explicitly cll unlock() here, we do it in
+    // ObPxSqcHandler::destroy_sqc()
+    ret = OB_ERR_SESSION_INTERRUPTED;
+    LOG_WARN("session has been killed", K(session->get_session_state()), K(session->get_server_sid()),
+             "proxy_sessid", session->get_proxy_sessid(), K(ret));
   }
   return ret;
 }
@@ -326,7 +347,7 @@ int ObPxSqcHandler::destroy_sqc(int &report_ret)
 
   // clean up ddl context if needed
   int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = sub_coord_->end_ddl(all_task_success()))) {
+  if (OB_SUCCESS != (tmp_ret = sub_coord_->end_ddl(false))) { //for ddl px, don't call close() again in close_direct_load()
     LOG_WARN("end ddl failed", K(tmp_ret));
     end_ret = OB_SUCCESS == end_ret ? tmp_ret : end_ret;
   }
@@ -363,6 +384,18 @@ int ObPxSqcHandler::destroy_sqc(int &report_ret)
     // 没有走正常收尾流程时则依赖于这里来进行释放.
     if (OB_NOT_NULL(ch) && OB_FAIL(dtl::ObDtlChannelGroup::unlink_channel(ci))) {
       LOG_WARN("Failed to unlink channel", K(ret));
+    }
+  }
+
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(sqc_init_args_->exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (OB_ISNULL(session = GET_MY_SESSION(*sqc_init_args_->exec_ctx_))) {
+    LOG_WARN("session is null, which is unexpected!", K(ret));
+  } else if (is_session_query_locked_) {
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = session->get_query_lock().unlock()))) {
+      LOG_ERROR("Fail to unlock, ", K(tmp_ret));
     }
   }
   return ret;
@@ -471,6 +504,18 @@ int ObPxSqcHandler::set_partition_ranges(const Ob2DArray<ObPxTabletRange> &part_
       }
     }
   }
+  return ret;
+}
+
+int ObPxSqcHandler::prepare_tablets_info()
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObPxTabletInfo> &px_tablets_info = sqc_init_args_->sqc_.get_px_tablets_info();
+  if (OB_FAIL(sub_coord_->set_tablets_info(px_tablets_info))) {
+    LOG_WARN("Failed to set partitions info");
+  }
+  LOG_TRACE("[Dop Assign]sqc handler get all partition rows info",
+            K(sqc_init_args_->sqc_.get_dfo_id()), K(px_tablets_info.count()), K(px_tablets_info));
   return ret;
 }
 

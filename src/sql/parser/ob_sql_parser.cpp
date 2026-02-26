@@ -21,6 +21,7 @@
 #include "lib/ash/ob_active_session_guard.h"
 #endif
 #include "sql/parser/parser_utility.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 #include <openssl/md5.h>
 
 
@@ -34,7 +35,7 @@ int ObSQLParser::parse(const char * str_ptr, const int64_t str_len, ParseResult 
   int ret = OB_SUCCESS;
 #ifndef SQL_PARSER_COMPILATION
   // proxy don't need this, only for observer
-  ObActiveSessionGuard::get_stat().in_parse_ = true;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_parse_ = true;
 #endif
   if (OB_FAIL(parse_init(&result))) {
     // do nothing
@@ -42,7 +43,7 @@ int ObSQLParser::parse(const char * str_ptr, const int64_t str_len, ParseResult 
     // do nothing
   }
 #ifndef SQL_PARSER_COMPILATION
-  ObActiveSessionGuard::get_stat().in_parse_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_parse_ = false;
 #endif
   return ret;
 }
@@ -74,6 +75,7 @@ int ObSQLParser::parse_and_gen_sqlid(void *malloc_pool,
     parse_result->is_batched_multi_enabled_split_ = false;
     parse_result->may_bool_value_ = false;
     parse_result->is_external_table_ = false;
+    parse_result->sql_mode_ = sql_mode_;
 
     int64_t new_length = str_len + 1;
     char *buf = (char *)parse_malloc(new_length, parse_result->malloc_pool_);

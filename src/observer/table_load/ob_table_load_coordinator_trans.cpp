@@ -15,7 +15,6 @@
 #include "observer/table_load/ob_table_load_coordinator_trans.h"
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_trans_bucket_writer.h"
-#include "sql/engine/cmd/ob_load_data_utils.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase
@@ -99,94 +98,6 @@ int ObTableLoadCoordinatorTrans::set_trans_status_abort()
   } else {
     table_load_trans_status_to_string(ObTableLoadTransStatusType::ABORT,
                                       trans_ctx_->ctx_->job_stat_->coordinator_.trans_status_);
-  }
-  return ret;
-}
-
-int ObTableLoadCoordinatorTrans::get_bucket_writer_for_write(
-  ObTableLoadTransBucketWriter *&bucket_writer) const
-{
-  int ret = OB_SUCCESS;
-  bucket_writer = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinatorTrans not init", KR(ret), KP(this));
-  } else if (OB_FAIL(check_trans_status(ObTableLoadTransStatusType::RUNNING))) {
-    LOG_WARN("fail to check trans status", KR(ret));
-  } else {
-    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
-    if (OB_ISNULL(trans_bucket_writer_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null bucket writer", KR(ret));
-    } else if (OB_UNLIKELY(trans_bucket_writer_->is_flush())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("trans bucket writer has flush", KR(ret));
-    } else {
-      bucket_writer = trans_bucket_writer_;
-      bucket_writer->inc_ref_count();
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadCoordinatorTrans::get_bucket_writer_for_flush(
-  ObTableLoadTransBucketWriter *&bucket_writer) const
-{
-  int ret = OB_SUCCESS;
-  bucket_writer = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinatorTrans not init", KR(ret), KP(this));
-  } else {
-    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
-    if (OB_ISNULL(trans_bucket_writer_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null bucket writer", KR(ret));
-    } else if (OB_UNLIKELY(trans_bucket_writer_->is_flush())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("trans bucket writer has flush", KR(ret));
-    } else {
-      trans_bucket_writer_->set_is_flush();
-      bucket_writer = trans_bucket_writer_;
-      bucket_writer->inc_ref_count();
-    }
-  }
-  return ret;
-}
-
-void ObTableLoadCoordinatorTrans::put_bucket_writer(ObTableLoadTransBucketWriter *bucket_writer)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinatorTrans not init", KR(ret));
-  } else if (OB_ISNULL(bucket_writer)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid null bucket writer", KR(ret));
-  } else {
-    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
-    OB_ASSERT(trans_bucket_writer_ == bucket_writer);
-  }
-  if (OB_SUCC(ret)) {
-    if (0 == bucket_writer->dec_ref_count() && OB_FAIL(handle_write_done())) {
-      LOG_WARN("fail to handle coordinator write done", KR(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    set_trans_status_error(ret);
-  }
-}
-
-int ObTableLoadCoordinatorTrans::handle_write_done()
-{
-  int ret = OB_SUCCESS;
-  if (ObTableLoadTransStatusType::FROZEN == trans_ctx_->get_trans_status()) {
-    ObTableLoadCoordinator coordinator(trans_ctx_->ctx_);
-    if (OB_FAIL(coordinator.init())) {
-      LOG_WARN("fail to init coordinator", KR(ret));
-    } else if (OB_FAIL(coordinator.finish_trans_peers(this))) {
-      LOG_WARN("fail to finish trans peers", KR(ret));
-    }
   }
   return ret;
 }

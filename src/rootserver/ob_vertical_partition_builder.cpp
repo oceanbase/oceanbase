@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_vertical_partition_builder.h"
-#include "share/schema/ob_table_schema.h"
 #include "share/ob_index_builder_util.h"
 
 namespace oceanbase
@@ -66,6 +65,10 @@ int ObVertialPartitionBuilder::generate_aux_vp_table_schema(
       aux_vp_table_schema.set_table_type(AUX_VERTIAL_PARTITION_TABLE);
       if (OB_FAIL(aux_vp_table_schema.set_table_name(aux_vp_table_name))) {
         LOG_WARN("set_table_name failed", K(aux_vp_table_name), K(ret));
+      } else {
+        aux_vp_table_schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
+        aux_vp_table_schema.set_enable_macro_block_bloom_filter(data_schema.get_enable_macro_block_bloom_filter());
+        aux_vp_table_schema.set_micro_block_format_version(data_schema.get_micro_block_format_version());
       }
     }
   }
@@ -132,7 +135,7 @@ int ObVertialPartitionBuilder::set_basic_infos(
   }
   aux_vp_table_schema.set_autoinc_column_id(0);
   aux_vp_table_schema.set_progressive_merge_num(data_schema.get_progressive_merge_num());
-  aux_vp_table_schema.set_table_mode(data_schema.get_table_mode());
+  aux_vp_table_schema.set_table_mode_struct(data_schema.get_table_mode_struct());
   aux_vp_table_schema.set_block_size(data_schema.get_block_size());
   aux_vp_table_schema.set_pctfree(data_schema.get_pctfree());
   aux_vp_table_schema.set_storage_format_version(data_schema.get_storage_format_version());

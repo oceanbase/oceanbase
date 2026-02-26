@@ -48,7 +48,8 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
     const LSN &end_lsn,
     archive::LargeBufferPool *buffer_pool,
     logservice::ObLogExternalStorageHandler *log_ext_handler,
-    const int64_t single_read_size)
+    const int64_t single_read_size,
+    const bool enable_logservice)
 {
   int ret = OB_SUCCESS;
   ObRemoteLogParent *source = NULL;
@@ -89,10 +90,23 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
     ret = build_data_generator_(pre_scn, source, refresh_storage_info_func_);
     CLOG_LOG(INFO, "ObRemoteLogIterator init", K(ret), K(tenant_id), K(id), K(pre_scn), K(start_lsn), K(end_lsn));
   }
-
+  data_buffer_.iter_.set_logservice_mode(enable_logservice);
   if (OB_SUCC(ret)) {
     inited_ = true;
   }
+  return ret;
+}
+
+template<class LogEntryType>
+int ObRemoteLogIterator<LogEntryType>::set_io_context(const palf::LogIOContext &io_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(gen_)) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObRemoteLogIterator not init", K(ret), K(inited_));
+  } else if (OB_FAIL(gen_->set_io_context(io_ctx))) {
+    CLOG_LOG(WARN, "set_io_context failed", K(ret), K(io_ctx));
+  } else { }
   return ret;
 }
 
@@ -145,12 +159,19 @@ void ObRemoteLogIterator<LogEntryType>::reset()
 template<class LogEntryType>
 int ObRemoteLogIterator<LogEntryType>::pre_read(bool &empty)
 {
+  int64_t read_size = 0;
+  return pre_read(empty, read_size);
+}
+
+template<class LogEntryType>
+int ObRemoteLogIterator<LogEntryType>::pre_read(bool &empty, int64_t &read_size)
+{
   int ret = OB_SUCCESS;
   empty = true;
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObRemoteLogIterator not init", K(ret), K(inited_));
-  } else if (OB_FAIL(prepare_buf_())) {
+  } else if (OB_FAIL(prepare_buf_(read_size))) {
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     } else {
@@ -246,7 +267,7 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
         CLOG_LOG(WARN, "get entry failed", K(ret), KPC(this));
       }
     } else {
-      cur_lsn_ = lsn + entry.get_serialize_size();
+      cur_lsn_ = lsn + entry.get_serialize_size(lsn);
       cur_scn_ = entry.get_scn();
       advance_data_gen_lsn_();
       if (lsn < start_lsn_) {
@@ -283,11 +304,18 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
 template<class LogEntryType>
 bool ObRemoteLogIterator<LogEntryType>::need_prepare_buf_(const int ret_code) const
 {
-  return OB_BUF_NOT_ENOUGH == ret_code || OB_NEED_RETRY == ret_code;
+  return OB_BUF_NOT_ENOUGH == ret_code;
 }
 
 template<class LogEntryType>
 int ObRemoteLogIterator<LogEntryType>::prepare_buf_()
+{
+  int64_t read_size = 0;
+  return prepare_buf_(read_size);
+}
+
+template<class LogEntryType>
+int ObRemoteLogIterator<LogEntryType>::prepare_buf_(int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   palf::LSN lsn;
@@ -304,6 +332,7 @@ int ObRemoteLogIterator<LogEntryType>::prepare_buf_()
   } else if (OB_FAIL(data_buffer_.set(lsn, buf, buf_size))) {
     CLOG_LOG(WARN, "data buffer set failed", K(ret), K(lsn), K(buf), K(buf_size), KPC(this));
   } else {
+    read_size = buf_size;
     EVENT_TENANT_ADD(ObStatEventIds::RESTORE_READ_LOG_SIZE, buf_size, tenant_id_);
     CLOG_LOG(INFO, "data buffer init succ", K(ret), K_(data_buffer), KPC(this));
   }

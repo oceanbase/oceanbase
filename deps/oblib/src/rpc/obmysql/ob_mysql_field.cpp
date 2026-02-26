@@ -14,7 +14,6 @@
 
 #include "rpc/obmysql/ob_mysql_field.h"
 
-#include "rpc/obmysql/ob_mysql_util.h"
 
 namespace oceanbase
 {

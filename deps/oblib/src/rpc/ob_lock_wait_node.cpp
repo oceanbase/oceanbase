@@ -18,7 +18,7 @@ namespace rpc
 {
 
 ObLockWaitNode::ObLockWaitNode() :
-  hold_key_(0), need_wait_(false), addr_(NULL), recv_ts_(0), lock_ts_(0), lock_seq_(0),
+  hold_key_(0), need_wait_(false), request_stat_(), addr_(NULL), recv_ts_(0), lock_ts_(0), lock_seq_(0),
   abs_timeout_(0), tablet_id_(common::OB_INVALID_ID), try_lock_times_(0), sessid_(0),
   holder_sessid_(0), block_sessid_(0), tx_id_(0), holder_tx_id_(0), run_ts_(0),
   is_standalone_task_(false), last_compact_cnt_(0), total_update_cnt_(0) {}
@@ -32,6 +32,7 @@ void ObLockWaitNode::set(void *addr,
                          const int64_t total_trans_node_cnt,
                          const char *key,
                          const uint32_t sess_id,
+                         const uint32_t client_sid,
                          const uint32_t holder_sess_id,
                          int64_t tx_id,
                          int64_t holder_tx_id,
@@ -44,6 +45,7 @@ void ObLockWaitNode::set(void *addr,
   abs_timeout_ = timeout;
   tablet_id_ = tablet_id;//used for gv$lock_wait_stat
   sessid_ = sess_id;
+  client_sid_ = client_sid;
   holder_sessid_ = holder_sess_id;
   tx_id_ = tx_id;//requester used for deadlock detection
   holder_tx_id_ = holder_tx_id; // txn id of lock holder

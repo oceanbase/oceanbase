@@ -11,21 +11,11 @@
  */
 
 #define USING_LOG_PREFIX CLOG
-#include "lib/ob_errno.h"
-#include "share/ob_errno.h"
 #include "ob_remote_data_generator.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "logservice/ob_log_service.h"                    // ObLogService
-#include "logservice/palf/log_group_entry.h"              // LogGroupEntry
 #include "logservice/archiveservice/ob_archive_file_utils.h"     // ObArchiveFileUtils
 #include "share/backup/ob_archive_path.h"           // ObArchivePathUtil
-#include "logservice/archiveservice/ob_archive_define.h"         // ObArchiveFileHeader
-#include "logservice/archiveservice/ob_archive_util.h"       // ObArchiveFileUtils
-#include "share/backup/ob_backup_path.h"                // ObBackupPath
-#include "ob_log_restore_rpc.h"                           // proxy
-#include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_archive_path.h"           // ObArchivePathUtil
-#include "src/share/backup/ob_archive_store.h"      // ObArchiveStore
 
 namespace oceanbase
 {
@@ -48,7 +38,8 @@ RemoteDataGenerator::RemoteDataGenerator(const uint64_t tenant_id,
   end_scn_(end_scn),
   end_lsn_(end_lsn),
   to_end_(false),
-  log_ext_handler_(log_ext_handler)
+  log_ext_handler_(log_ext_handler),
+  io_ctx_()
 {}
 
 RemoteDataGenerator::~RemoteDataGenerator()
@@ -116,7 +107,11 @@ int RemoteDataGenerator::read_file_(const ObString &base,
       LOG_WARN("get_storage_info_str failed", K(ret), K(uri), K(storage_info));
     } else {
       ObString storage_info_ob_str(storage_info_cstr);
-      if (OB_FAIL(log_ext_handler_->pread(uri, storage_info_ob_str, offset, data, data_len, real_size))) {
+      // get dest_id from __all_log_restore_source is difficult,
+      // so set dest_id of restore as OB_INVALID_ID
+      const uint64_t dest_id = OB_INVALID_ID;
+      CONSUMER_GROUP_FUNC_GUARD(io_ctx_.get_function_type());
+      if (OB_FAIL(log_ext_handler_->pread(uri, storage_info_ob_str, dest_id, offset, data, data_len, real_size, io_ctx_))) {
         LOG_WARN("read file failed", K(ret), K(uri), K(storage_info));
       } else if (0 == real_size) {
         ret = OB_ITER_END;
@@ -462,7 +457,7 @@ int LocationDataGenerator::get_precise_file_and_offset_(int64_t &dest_id,
     if (OB_ARCHIVE_LOG_TO_END == ret) {
       ret = OB_ITER_END;
     } else {
-      LOG_WARN("get cur piece failed", K(ret), KPC(piece_context_));
+      LOG_WARN("get cur piece failed", K(ret), KPC(piece_context_), K(next_fetch_lsn_));
     }
   } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_dir_path(*dest_,
           dest_id, round_id, piece_id, piece_path))) {
@@ -727,7 +722,9 @@ int RawPathDataGenerator::read_file_(const ObString &base,
     } else if (0 == file_length) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("file_length is empty", K(ret), K(uri), KP(storage_info), K(file_length));
-    } else if (OB_FAIL(ObArchiveFileUtils::read_file(uri, storage_info, data_, file_length, real_size))) {
+    } else if (OB_FAIL(ObArchiveFileUtils::read_file(uri, storage_info,
+        common::ObStorageIdMod(OB_INVALID_ID/*storage_id*/, ObStorageUsedMod::STORAGE_USED_RESTORE),
+        data_, file_length, real_size))) {
       LOG_WARN("read file failed", K(ret), K_(id), K(file_id));
     } else if (0 == real_size) {
       ret = OB_ITER_END;

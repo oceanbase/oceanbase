@@ -72,6 +72,7 @@ public:
 
   virtual void reuse() override ;
   virtual int store_fix_data(ObBufferWriter &buf_writer) override;
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, K_(count), K_(row_id_byte), KPC_(const_meta_header), K_(dict_encoder));
 private:
   int store_meta_without_dict(ObBufferWriter &buf_writer);
   int get_cell_len(const common::ObDatum &datum, int64_t &length) const;

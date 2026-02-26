@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_encryption_struct.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {

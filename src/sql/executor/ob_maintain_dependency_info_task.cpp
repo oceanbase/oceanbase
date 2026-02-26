@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_EXE
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "share/ob_common_rpc_proxy.h"
-#include "share/schema/ob_schema_getter_guard.h"
 
 namespace oceanbase
 {
@@ -212,6 +211,7 @@ void ObMaintainDepInfoTaskQueue::run2()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
+    ObDIActionGuard ag("AsyncTaskThreadPool", "MaintainDepInfoTaskQueue", "detect task");
     ObAddr zero_addr;
     while (!stop_) {
       IGNORE_RETURN lib::Thread::update_loop_ts();
@@ -234,7 +234,7 @@ void ObMaintainDepInfoTaskQueue::run2()
           int64_t sleep_time =
           last_execute_time_ + GCONF._ob_obj_dep_maint_task_interval - now;
           if (sleep_time > 0) {
-            ob_usleep(static_cast<int32_t>(MIN(sleep_time, SLEEP_INTERVAL)));
+            ob_throttle_usleep(static_cast<int32_t>(MIN(sleep_time, SLEEP_INTERVAL)), 0);
           } else {
             break;
           }
@@ -256,7 +256,7 @@ void ObMaintainDepInfoTaskQueue::run2()
             int64_t now = ObTimeUtility::current_time();
             int64_t sleep_time = task->get_last_execute_time() + task->get_retry_interval() - now;
             if (sleep_time > 0) {
-              ob_usleep(static_cast<int32_t>(MIN(sleep_time, SLEEP_INTERVAL)));
+              ob_throttle_usleep(static_cast<int32_t>(MIN(sleep_time, SLEEP_INTERVAL)), 0);
             } else {
               break;
             }
@@ -265,6 +265,7 @@ void ObMaintainDepInfoTaskQueue::run2()
         // generate trace id
         ObCurTraceId::init(zero_addr);
         // just do it
+        ObDIActionGuard ag1("MaintainObjDepInfoTask");
         ret = task->process();
         if (OB_FAIL(ret)) {
           LOG_WARN("task process failed, start retry", "max retry time",

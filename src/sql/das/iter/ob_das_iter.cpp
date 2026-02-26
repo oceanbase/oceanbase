@@ -12,8 +12,9 @@
 
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/iter/ob_das_iter.h"
-
+#include "ob_das_iter.h"
+#include "sql/das/iter/ob_das_domain_id_merge_iter.h"
+#include "src/sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -24,9 +25,11 @@ namespace sql
 int ObDASIter::set_merge_status(MergeType merge_type)
 {
   int ret = OB_SUCCESS;
-  ObDASIter *child = child_;
-  for (; child != nullptr && OB_SUCC(ret); child = child->right_) {
-    if (OB_FAIL(child->set_merge_status(merge_type))) {
+  for (uint32_t i = 0; i < children_cnt_; i++) {
+    if (OB_ISNULL(children_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr das iter child", K(i), K_(children_cnt), K(ret));
+    } else if (OB_FAIL(children_[i]->set_merge_status(merge_type))) {
       LOG_WARN("failed to set merge status", K(ret));
     }
   }
@@ -50,8 +53,6 @@ int ObDASIter::init(ObDASIterParam &param)
     exec_ctx_ = param.exec_ctx_;
     output_ = param.output_;
     group_id_expr_ = param.group_id_expr_;
-    child_ = param.child_;
-    right_ = param.right_;
     if (OB_FAIL(inner_init(param))) {
       LOG_WARN("failed to inner init das iter", K(param), K(ret));
     }
@@ -60,6 +61,7 @@ int ObDASIter::init(ObDASIterParam &param)
   return ret;
 }
 
+// NOTE: unlike release(), reuse() does not recursively call the reuse() of its children.
 int ObDASIter::reuse()
 {
   int ret = OB_SUCCESS;
@@ -68,6 +70,8 @@ int ObDASIter::reuse()
     LOG_WARN("reuse das iter before init", K(ret));
   } else if (OB_FAIL(inner_reuse())) {
     LOG_WARN("failed to inner reuse das iter", K(ret), KPC(this));
+  } else {
+    output_row_cnt_ = 0;
   }
   return ret;
 }
@@ -76,15 +80,15 @@ int ObDASIter::release()
 {
   int ret = OB_SUCCESS;
   int child_ret = OB_SUCCESS;
-  ObDASIter *child = child_;
   int tmp_ret = OB_SUCCESS;
-  while (child != nullptr) {
-    ObDASIter *right = child->right_;
-    if (OB_TMP_FAIL(child->release())) {
-      LOG_WARN("failed to release child iter", K(tmp_ret), KPC(child));
-      child_ret = tmp_ret;
+  for (uint32_t i = 0; i < children_cnt_; i++) {
+    if (OB_ISNULL(children_[i])) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr das iter child", K(i), K_(children_cnt), K(tmp_ret));
+    } else if (OB_TMP_FAIL(children_[i]->release())) {
+      LOG_WARN("failed to release child iter", K(tmp_ret), KPC(children_[i]));
     }
-    child = right;
+    child_ret = tmp_ret;
   }
   if (OB_FAIL(inner_release())) {
     LOG_WARN("failed to inner release das iter", K(ret), KPC(this));
@@ -92,8 +96,8 @@ int ObDASIter::release()
     ret = child_ret;
   }
   inited_ = false;
-  right_ = nullptr;
-  child_ = nullptr;
+  children_cnt_ = 0;
+  children_ = nullptr;
   group_id_expr_ = nullptr;
   output_ = nullptr;
   exec_ctx_ = nullptr;
@@ -110,7 +114,18 @@ int ObDASIter::get_next_row()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("das iter get next row before init", K(ret));
   } else {
-    ret = inner_get_next_row();
+    if (limit_param_.is_valid()) {
+      const int64_t offset = limit_param_.offset_;
+      const int64_t limit = limit_param_.limit_;
+      if (limit == 0 || output_row_cnt_ >= offset + limit) {
+        ret = OB_ITER_END;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ret = inner_get_next_row();
+       ++ output_row_cnt_;
+    }
   }
   return ret;
 }
@@ -123,7 +138,66 @@ int ObDASIter::get_next_rows(int64_t &count, int64_t capacity)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("das iter get next rows before init", K(ret));
   } else {
-    ret = inner_get_next_rows(count, capacity);
+    if (limit_param_.is_valid()) {
+      const int64_t offset = limit_param_.offset_;
+      const int64_t limit = limit_param_.limit_;
+      if (limit == 0 || output_row_cnt_ >= offset + limit) {
+        ret = OB_ITER_END;
+      } else if (output_row_cnt_ < offset) {
+        const int64_t remaining_offset = offset - output_row_cnt_;
+        capacity = capacity > remaining_offset ?
+                   std::min(capacity - remaining_offset, limit) + remaining_offset :
+                   capacity;
+      } else {
+        capacity = std::min(capacity, limit + offset - output_row_cnt_ );
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ret = inner_get_next_rows(count, capacity);
+      output_row_cnt_ += count;
+    }
+  }
+  return ret;
+}
+
+int ObDASIter::get_domain_id_merge_iter(ObDASDomainIdMergeIter *&domain_id_merge_iter)
+{
+  int ret = OB_SUCCESS;
+  domain_id_merge_iter = nullptr;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("das iter get next rows before init", K(ret));
+  } else if (ObDASIterType::DAS_ITER_DOMAIN_ID_MERGE == type_) {
+    domain_id_merge_iter = static_cast<ObDASDomainIdMergeIter *>(this);
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && nullptr == domain_id_merge_iter && i < children_cnt_; ++i) {
+      ObDASIter *iter = children_[i];
+      if (OB_ISNULL(iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("das iter is nullptr", K(ret), KPC(iter));
+      } else if (OB_FAIL(iter->get_domain_id_merge_iter(domain_id_merge_iter))) {
+        LOG_WARN("fail to get doc id merge iter", K(ret), KPC(iter));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASIter::prepare_limit_pushdown_param(const ObDASPushDownTopN &push_down_topn, const ObLimitParam &limit_param)
+{
+  int ret = OB_SUCCESS;
+  push_down_topn_ = push_down_topn;
+  limit_param_ = limit_param;
+  if (can_limit_pushdown(push_down_topn)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt_; ++ i) {
+      if (OB_UNLIKELY(nullptr == children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("das iter is nullptr", K(ret), KPC(children_[i]));
+      } else if (OB_FAIL(children_[i]->prepare_limit_pushdown_param(push_down_topn, limit_param))) {
+        LOG_WARN("fail to prepare limit pushdown param", K(ret), KPC(children_[i]));
+      }
+    }
   }
   return ret;
 }

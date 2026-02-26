@@ -116,6 +116,9 @@ public:
     }
     return common::OB_SUCCESS;
   }
+
+  TO_STRING_KV(K(size_), K(cnt_), K(nop_cnt_), K(rowkey_cnt_), K(bitmap_));
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNopBitMap);
   inline int64_t round_up(int64_t n)

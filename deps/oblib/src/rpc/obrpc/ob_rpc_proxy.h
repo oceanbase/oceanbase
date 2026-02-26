@@ -27,6 +27,7 @@
 #include "rpc/obrpc/ob_rpc_proxy_macros.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "rpc/obrpc/ob_rpc_opts.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -119,7 +120,8 @@ public:
         max_process_handler_time_(0), compressor_type_(common::INVALID_COMPRESSOR),
         src_cluster_id_(common::OB_INVALID_CLUSTER_ID),
         dst_cluster_id_(common::OB_INVALID_CLUSTER_ID), init_(false),
-        active_(true), is_trace_time_(false), do_ratelimit_(false), is_bg_flow_(0), rcode_() {}
+        active_(true), is_trace_time_(false), do_ratelimit_(false),
+        do_detect_session_killed_(false), is_bg_flow_(0), rcode_() {}
   virtual ~ObRpcProxy() = default;
 
   int init(const rpc::frame::ObReqTransport *transport,
@@ -133,6 +135,8 @@ public:
   int64_t get_timeout() const                   { return timeout_; }
   void set_trace_time(const bool is_trace_time) { is_trace_time_ = is_trace_time; }
   void set_ratelimit(const bool do_ratelimit)   { do_ratelimit_ = do_ratelimit; }
+  void set_detect_session_killed(const bool do_detect)   { do_detect_session_killed_ = do_detect; }
+  bool is_detect_session_killed() const  { return do_detect_session_killed_; }
   void set_bg_flow(const int8_t is_bg_flow)    { is_bg_flow_ = is_bg_flow;}
   void set_max_process_handler_time(const uint32_t max_process_handler_time)
   { max_process_handler_time_ = max_process_handler_time; }
@@ -160,13 +164,13 @@ public:
             || pcode == OB_OUT_TRANS_LOCK_TABLE || pcode == OB_OUT_TRANS_UNLOCK_TABLE
             || pcode == OB_TABLE_LOCK_TASK
             || pcode == OB_HIGH_PRIORITY_TABLE_LOCK_TASK || pcode == OB_BATCH_TABLE_LOCK_TASK
-            || pcode == OB_HIGH_PRIORITY_BATCH_TABLE_LOCK_TASK
+            || pcode == OB_HIGH_PRIORITY_BATCH_TABLE_LOCK_TASK || pcode == OB_BATCH_REPLACE_TABLE_LOCK_TASK
             || pcode == OB_REGISTER_TX_DATA
             || pcode == OB_REFRESH_SYNC_VALUE || pcode == OB_CLEAR_AUTOINC_CACHE
             || pcode == OB_CLEAN_SEQUENCE_CACHE || pcode == OB_FETCH_TABLET_AUTOINC_SEQ_CACHE
             || pcode == OB_BATCH_GET_TABLET_AUTOINC_SEQ || pcode == OB_BATCH_SET_TABLET_AUTOINC_SEQ
             || pcode == OB_CALC_COLUMN_CHECKSUM_REQUEST || pcode == OB_REMOTE_WRITE_DDL_REDO_LOG
-            || pcode == OB_REMOTE_WRITE_DDL_COMMIT_LOG || pcode == OB_REMOTE_WRITE_DDL_INC_COMMIT_LOG);
+            || pcode == OB_REMOTE_WRITE_DDL_COMMIT_LOG || pcode == OB_REMOTE_WRITE_DDL_FINISH_LOG || pcode == OB_REMOTE_WRITE_DDL_INC_COMMIT_LOG);
   }
 
   // when active is set as false, all RPC calls will simply return OB_INACTIVE_RPC_PROXY.
@@ -261,6 +265,7 @@ protected:
   bool active_;
   bool is_trace_time_;
   bool do_ratelimit_;
+  bool do_detect_session_killed_;
   int8_t is_bg_flow_;
   ObRpcResultCode rcode_;
 };
@@ -288,6 +293,7 @@ class Handle {
 public:
   Handle();
   const common::ObAddr &get_dst_addr() const { return dst_; }
+  void reset_timeout();
 
 protected:
   bool has_more_;
@@ -300,6 +306,7 @@ protected:
   bool do_ratelimit_;
   int8_t is_bg_flow_;
   int64_t first_pkt_id_;
+  int64_t abs_timeout_ts_;
 private:
   DISALLOW_COPY_AND_ASSIGN(Handle);
 };
@@ -315,7 +322,7 @@ public:
   int get_more(typename pcodeStruct::Response &result);
   int abort();
   const ObRpcResultCode &get_result_code() const;
-
+  ~SSHandle();
 protected:
   ObRpcResultCode rcode_;
 };
@@ -389,6 +396,11 @@ extern ObRpcProxy::NoneT None;
   inline CLS& ratelimit(const bool do_ratelimit)                        \
   {                                                                     \
     set_ratelimit(do_ratelimit);                                        \
+    return *this;                                                       \
+  }                                                                     \
+  inline CLS& detect_session_killed(const bool do_detect)               \
+  {                                                                     \
+    set_detect_session_killed(do_detect);                               \
     return *this;                                                       \
   }                                                                     \
   inline CLS& bg_flow(const uint32_t is_bg_flow)                        \

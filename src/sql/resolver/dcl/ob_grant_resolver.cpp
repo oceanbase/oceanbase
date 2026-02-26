@@ -13,11 +13,11 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dcl/ob_grant_resolver.h"
 
-#include "sql/resolver/dcl/ob_grant_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
-#include "share/schema/ob_obj_priv_type.h"
 #include "sql/engine/ob_exec_context.h"
+#include "share/ob_table_lock_compat_versions.h"
+#include "lib/encrypt/ob_encrypted_helper.h"
+#include "sql/parser/parse_node.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -119,16 +119,22 @@ int ObGrantResolver::resolve_grant_user(
         }
         if (lib::is_mysql_mode() && NULL != grant_user->children_[4]) {
           /* here code is to mock a auth plugin check. */
-          ObString auth_plugin(static_cast<int32_t>(grant_user->children_[4]->str_len_),
-                                grant_user->children_[4]->str_value_);
-          ObString default_auth_plugin;
-          if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
-                                                     default_auth_plugin))) {
-            LOG_WARN("fail to get block encryption variable", K(ret));
-          } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+          ObString auth_plugin;
+          auth_plugin.assign_ptr(str_tolower(const_cast<char *>(grant_user->children_[4]->str_value_),
+                                             static_cast<int32_t>(grant_user->children_[4]->str_len_)),
+                                             static_cast<int32_t>(grant_user->children_[4]->str_len_));
+          if (auth_plugin.empty()) {
             ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
-            LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
-          } else {/* do nothing */}
+            LOG_WARN("invalid auth plugin", K(auth_plugin), K(ret));
+          }
+          bool is_plugin_supported = true;
+          if (FAILEDx(ObEncryptedHelper::check_data_version_for_auth_plugin(auth_plugin,
+            session_info->get_effective_tenant_id(), is_plugin_supported))) {
+            LOG_WARN("failed to check data version for auth plugin", K(ret));
+          } else if (OB_UNLIKELY(!is_plugin_supported)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+          }
         }
       }
     } else {
@@ -322,7 +328,8 @@ int ObGrantResolver::priv_exists(
     if (sys_privs.count() != 1) {
       exists = FALSE;
     } else if (sys_privs.at(0) != PRIV_ID_SELECT_ANY_DICTIONARY
-               && sys_privs.at(0) != PRIV_ID_EXEMPT_ACCESS_POLICY) {
+               && sys_privs.at(0) != PRIV_ID_EXEMPT_ACCESS_POLICY
+               && sys_privs.at(0) != PRIV_ID_PLAINACCESS_ANY_SENSITIVE_RULE) {
       exists = FALSE;  
     } else {
       exists = TRUE;
@@ -345,7 +352,9 @@ int ObGrantResolver::push_pack_sys_priv(
   } else {
     for (int i = PRIV_ID_NONE + 1; 
              OB_SUCC(ret) &&  i < PRIV_ID_MAX; i++) {
-      if (i != PRIV_ID_SELECT_ANY_DICTIONARY && i != PRIV_ID_EXEMPT_ACCESS_POLICY) {
+      if (i != PRIV_ID_SELECT_ANY_DICTIONARY
+          && i != PRIV_ID_EXEMPT_ACCESS_POLICY
+          && i != PRIV_ID_PLAINACCESS_ANY_SENSITIVE_RULE) {
         OZ (sys_privs.push_back(i));
       }
     }
@@ -755,54 +764,6 @@ int ObGrantResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
-template<class T>
-int ObGrantResolver::resolve_col_names_mysql(
-    T *grant_stmt,
-    const ObPrivType priv_type,
-    ParseNode *column_list,
-    ObSchemaChecker *schema_checker,
-    ObSQLSessionInfo *session_info,
-    ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-
-  ObString db_name = grant_stmt->get_database_name();
-  ObString table_name = grant_stmt->get_table_name();
-
-  ObObjectType object_type = grant_stmt->get_object_type();
-  uint64_t obj_id = grant_stmt->get_object_id();
-  ObArray<ObString> column_names;
-  if (OB_ISNULL(grant_stmt) || OB_ISNULL(column_list)
-      || OB_ISNULL(schema_checker) || OB_ISNULL(session_info)
-      || OB_ISNULL(schema_checker->get_schema_guard())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret));
-  } else if (priv_type == OB_PRIV_REFERENCES) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("reference is not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "references privilege");
-  } else {
-    ObString column_name;
-    for (int32_t i = 0; OB_SUCCESS == ret && i < column_list->num_child_; ++i) {
-      const ParseNode *child_node = NULL;
-      if (OB_ISNULL(child_node = column_list->children_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("child node is null");
-      } else {
-        const share::schema::ObColumnSchemaV2 *column_schema = NULL;
-        const ObSimpleTableSchemaV2 *table_schema = NULL;
-        if (OB_FAIL(ob_write_string(allocator, ObString(static_cast<int32_t>(child_node->str_len_),
-                                            const_cast<char *>(child_node->str_value_)), column_name))) {
-          LOG_WARN("ob write string failed", K(ret));
-        } else if (OB_FAIL(grant_stmt->add_column_privs(column_name, priv_type))) {
-          LOG_WARN("push back failed", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 /* 1. check raw_obj_priv是否为insert，update， references。
    2. check dup col_name, resolve col_name --> col_id */
 int ObGrantResolver::resolve_col_names(
@@ -867,7 +828,8 @@ int ObGrantResolver::resolve_col_names(
               for (int64_t j = 0; j < col_ids.count() && OB_SUCC(ret); j++) {
                 if (col_ids.at(j) == column_schema->get_column_id()) {
                   ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-                  LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(column_name));
+                  ObCStringHelper helper;
+                  LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, helper.convert(column_name));
                 }
               }
               OZ (col_ids.push_back(column_schema->get_column_id()));
@@ -927,7 +889,7 @@ int ObGrantResolver::check_user_dup(
     } else if (OB_FAIL(guard->get_user_info(tenant_id, user_name, host_name, user_info))) {
       LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_name), K(host_name));
     } else if (OB_ISNULL(user_info)) {
-      ret = OB_USER_NOT_EXIST;
+      ret = OB_ERR_USER_NOT_EXIST;
       LOG_WARN("user is not exist", K(ret), K(tenant_id), K(user_name), K(host_name));
     } else {
       contain_role |= user_info->is_role();
@@ -1010,6 +972,9 @@ int ObGrantResolver::resolve_grant_obj_privileges(
   ParseNode *priv_level_node = node->children_[1];
   ParseNode *users_node = node->children_[2];
   bool is_directory = false;
+  bool is_catalog = false;
+  bool is_location = false;
+  bool is_sensitive_rule = false;
   bool is_owner = false;
   bool explicit_db = false;
   ObPrivLevel grant_level = OB_PRIV_INVALID_LEVEL;
@@ -1039,11 +1004,14 @@ int ObGrantResolver::resolve_grant_obj_privileges(
     ObString table = ObString::make_string("");
     if (OB_FAIL(resolve_obj_ora(priv_level_node,
                                 params_.session_info_->get_database_name(),
-                                db, 
-                                table, 
+                                db,
+                                table,
                                 grant_level,
                                 is_directory,
-                                explicit_db))) {
+                                explicit_db,
+                                is_catalog,
+                                is_location,
+                                is_sensitive_rule))) {
       LOG_WARN("Resolve priv_level_node error", K(ret));
     } else if (OB_FAIL(check_and_convert_name(db, table))) {
       LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
@@ -1065,7 +1033,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
           ObSynonymChecker synonym_checker;
           OZ (params_.schema_checker_->get_object_type_with_view_info(allocator_, 
               &params_, tenant_id, db, table, object_type, object_id, view_query, 
-              is_directory, obj_db_name, explicit_db, ObString(""), synonym_checker));
+              is_directory, obj_db_name, explicit_db, ObString(""), synonym_checker,
+              is_catalog, is_location, is_sensitive_rule));
           OX (grant_stmt->set_ref_query(static_cast<ObSelectStmt*>(view_query)));
           OX (grant_stmt->set_object_type(object_type));
           OX (grant_stmt->set_object_id(object_id));
@@ -1139,6 +1108,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
         ObString host_name;
         ObString pwd;
         ObString need_enc = ObString::make_string("NO");
+        ObString plugin;
+        bool is_plugin_supported = true;
         if (OB_ISNULL(user_node)) {
           ret = OB_ERR_PARSE_SQL;
           LOG_WARN("Parse SQL error, user node should not be NULL", K(user_node), K(ret));
@@ -1165,19 +1136,18 @@ int ObGrantResolver::resolve_grant_obj_privileges(
             host_name.assign_ptr(user_node->children_[3]->str_value_,
                 static_cast<int32_t>(user_node->children_[3]->str_len_));
           }
-          if (lib::is_mysql_mode() && NULL != user_node->children_[4]) {
-            /* here code is to mock a auth plugin check. */
-            ObString auth_plugin(static_cast<int32_t>(user_node->children_[4]->str_len_),
-                                 user_node->children_[4]->str_value_);
-            ObString default_auth_plugin;
-            if (OB_FAIL(params_.session_info_->get_sys_variable(
-                                                       share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
-                                                       default_auth_plugin))) {
-              LOG_WARN("fail to get block encryption variable", K(ret));
-            } else if (0 != auth_plugin.compare(default_auth_plugin)) {
-              ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
-              LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
-            } else {/* do nothing */}
+          if (lib::is_mysql_mode()) {
+            if (NULL != user_node->children_[4]) {
+              ObString auth_plugin(static_cast<int32_t>(user_node->children_[4]->str_len_),
+                                   user_node->children_[4]->str_value_);
+              plugin = auth_plugin;
+            } else {
+              // Use default_authentication_plugin system variable as default
+              if (OB_FAIL(session_info_->get_sys_variable(
+                      share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN, plugin))) {
+                LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
+              }
+            }
           }
           if (OB_SUCC(ret) && user_node->children_[1] != NULL) {
             if (0 != user_name.compare(session_info_->get_user_name())) {
@@ -1189,7 +1159,7 @@ int ObGrantResolver::resolve_grant_obj_privileges(
               ret = OB_ERR_PARSE_SQL;
               LOG_WARN("The child 2 of user_node should not be NULL", K(ret));
             } else if (0 == user_node->children_[2]->value_) {
-              if (!ObSetPasswordResolver::is_valid_mysql41_passwd(pwd)) {
+              if (!ObSetPasswordResolver::is_valid_encrypted_passwd(pwd, plugin)) {
                 ret = OB_ERR_PASSWORD_FORMAT;
                 LOG_WARN("Wrong password hash format");
               }
@@ -1204,6 +1174,12 @@ int ObGrantResolver::resolve_grant_obj_privileges(
           if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
             ret = OB_WRONG_USER_NAME_LENGTH;
             LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+          } else if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
+            params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
+            LOG_WARN("failed to check data version for auth plugin", K(ret));
+          } else if (OB_UNLIKELY(!is_plugin_supported)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
           } else if (OB_FAIL(check_dcl_on_inner_user(node->type_,
                                                      session_info_->get_priv_user_id(),
                                                      user_name,
@@ -1212,8 +1188,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
                      K(ret), K(session_info_->get_user_name()), K(user_name));
           } else if (OB_FAIL(grant_stmt->add_grantee(user_name))) {
             LOG_WARN("Add grantee error", K(user_name), K(ret));
-          } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc))) {
-            LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(ret));
+          } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc, plugin))) {
+            LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(plugin), K(ret));
           } else {
             //do nothing
           }
@@ -1309,93 +1285,50 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
         if (OB_SUCC(ret)) {
           ObString db = ObString::make_string("");
           ObString table = ObString::make_string("");
-          if (OB_FAIL(resolve_priv_level(params_.schema_checker_->get_schema_guard(),
-                                         session_info_,
-                                         priv_level_node,
-                                         params_.session_info_->get_database_name(),
-                                         db, 
-                                         table, 
-                                         grant_level,
-                                         *allocator_))) {
+          ObString catalog = ObString::make_string("");
+          ObString sensitive_rule = ObString::make_string("");
+          if (priv_object_node != NULL
+              && OB_FAIL(resolve_priv_level_with_object_type(session_info_,
+                                                             priv_object_node,
+                                                             grant_level))) {
+            LOG_WARN("failed to resolve priv level with object", K(ret));
+          } else if (OB_FAIL(resolve_priv_level(params_.schema_checker_->get_schema_guard(),
+                                                session_info_,
+                                                priv_level_node,
+                                                params_.session_info_->get_database_name(),
+                                                db,
+                                                table,
+                                                grant_level,
+                                                *allocator_,
+                                                catalog,
+                                                sensitive_rule))) {
             LOG_WARN("Resolve priv_level node error", K(ret));
-          } else if (priv_object_node != NULL) {
-            const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
-            uint64_t compat_version = 0;
-            if (grant_level != OB_PRIV_TABLE_LEVEL) {
-              ret = OB_ILLEGAL_GRANT_FOR_TABLE;
-              LOG_WARN("illegal grant", K(ret));
-            } else if (priv_object_node->value_ == 1) {
-              grant_level = OB_PRIV_TABLE_LEVEL;
-            } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-              LOG_WARN("fail to get data version", K(tenant_id));
-            } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or 4_2_2_0", K(ret));
-            } else if (priv_object_node->value_ == 2) {
-              grant_level = OB_PRIV_ROUTINE_LEVEL;
-            } else if (priv_object_node->value_ == 3) {
-              grant_level = OB_PRIV_ROUTINE_LEVEL;
-            } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected obj type", K(ret), K(priv_object_node->value_));
+          } else {
+            grant_stmt->set_grant_level(grant_level);
+          }
+
+          if (OB_SUCC(ret)
+              && grant_level != OB_PRIV_CATALOG_LEVEL
+              && grant_level != OB_PRIV_SENSITIVE_RULE_LEVEL) {
+            if (OB_FAIL(check_and_convert_name(db, table))) {
+              LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
+            } else if (OB_FAIL(grant_stmt->set_database_name(db))) {
+              LOG_WARN("Failed to set database_name to grant_stmt", K(ret));
+            } else if (OB_FAIL(grant_stmt->set_table_name(table))) {
+              LOG_WARN("Failed to set table_name to grant_stmt", K(ret));
             }
           }
 
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(check_and_convert_name(db, table))) {
-            LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
-          } else {
-            share::schema::ObObjectType object_type = share::schema::ObObjectType::INVALID;
-            uint64_t object_id = OB_INVALID_ID;
-            grant_stmt->set_grant_level(grant_level);
-            if (OB_FAIL(grant_stmt->set_database_name(db))) {
-            LOG_WARN("Failed to set database_name to grant_stmt", K(ret));
-            } else if (OB_FAIL(grant_stmt->set_table_name(table))) {
-              LOG_WARN("Failed to set table_name to grant_stmt", K(ret));
-            } else if (priv_object_node != NULL) {
-              if (priv_object_node->value_ == 1) {
-                const share::schema::ObTableSchema *table_schema = NULL;
-                if (OB_FAIL(params_.schema_checker_->get_table_schema(tenant_id, db, table, false, table_schema))) {
-                  LOG_WARN("get table schema failed", K(ret));
-                } else if (table_schema != NULL) {
-                  if (table_schema->is_index_table()) {
-                    object_type = ObObjectType::INDEX;
-                  } else {
-                    object_type = ObObjectType::TABLE;
-                  }
-                  object_id = table_schema->get_table_id();
-                }
-              } else {
-                uint64_t routine_id = 0;
-                bool is_proc = false;
-                if (OB_FAIL(params_.schema_checker_->get_routine_id(tenant_id, db, table, routine_id, is_proc))) {
-                  if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
-                    ret = OB_ERR_SP_DOES_NOT_EXIST;
-                  }
-                } else {
-                  if (is_proc) {
-                    object_type = ObObjectType::PROCEDURE;
-                  } else {
-                    object_type = ObObjectType::FUNCTION;
-                  }
-                  object_id = routine_id;
-                }
-              }
-            } else {
-              ObString object_db_name;
-              if (db.empty() || table.empty()) {
-                object_type = share::schema::ObObjectType::MAX_TYPE;
-              } else {
-                ObSynonymChecker synonym_checker;
-                (void)params_.schema_checker_->get_object_type(tenant_id, db, table,
-                                                               object_type, object_id,
-                                                               object_db_name, false, 
-                                                               false, ObString(""),
-                                                               synonym_checker);
-              }
-            }
-            grant_stmt->set_object_type(object_type);
-            grant_stmt->set_object_id(object_id);
+          if (OB_SUCC(ret) && OB_FAIL(resolve_priv_object(priv_object_node,
+                                                          grant_stmt,
+                                                          params_.schema_checker_,
+                                                          db,
+                                                          table,
+                                                          catalog,
+                                                          sensitive_rule,
+                                                          tenant_id,
+                                                          allocator_))) {
+            LOG_WARN("failed to resolve priv object", K(ret));
           }
         }
 
@@ -1427,6 +1360,51 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_3_0 or 4_3_2_0", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create tablespace/shutdown/reload privilege");
+          } else if (!sql::ObSQLUtils::is_data_version_ge_424_or_433(compat_version)
+                     && ((priv_set & OB_PRIV_REFERENCES) != 0 ||
+                         (priv_set & OB_PRIV_CREATE_ROLE) != 0 ||
+                         (priv_set & OB_PRIV_DROP_ROLE) != 0 ||
+                         (priv_set & OB_PRIV_TRIGGER) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0 or 4_3_3_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant references/create role/drop role/trigger");
+          } else if (!transaction::tablelock::is_mysql_lock_table_data_version(compat_version)
+                     && (priv_set & OB_PRIV_LOCK_TABLE)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support this data version", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant lock tables privilege");
+          } else if (!((MOCK_DATA_VERSION_4_2_5_1 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_1)
+                     && ((priv_set & OB_PRIV_ENCRYPT) != 0 || (priv_set & OB_PRIV_DECRYPT) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_1 or 4_3_5_1", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant encrypt/decrypt privilege");
+          } else if (!((MOCK_DATA_VERSION_4_2_5_2 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_2)
+                     &&((priv_set & OB_PRIV_EVENT) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_2 or 4_3_5_2", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant event");
+          } else if (compat_version < DATA_VERSION_4_3_5_2
+                     && ((priv_set & OB_PRIV_CREATE_CATALOG) != 0 ||
+                         (priv_set & OB_PRIV_USE_CATALOG) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_5_2", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create catalog/use catalog privilege");
+          } else if (compat_version < DATA_VERSION_4_4_1_0
+                     && ((priv_set & OB_PRIV_CREATE_AI_MODEL) != 0 ||
+                         (priv_set & OB_PRIV_ALTER_AI_MODEL) != 0 ||
+                         (priv_set & OB_PRIV_DROP_AI_MODEL) != 0 ||
+                         (priv_set & OB_PRIV_ACCESS_AI_MODEL) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_4_1_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create/alter/drop/access ai model privilege");
+          } else if (!((compat_version >= MOCK_DATA_VERSION_4_3_5_3 && compat_version < DATA_VERSION_4_4_0_0) ||
+                       (compat_version >= MOCK_DATA_VERSION_4_4_2_0 && compat_version < DATA_VERSION_4_5_0_0) ||
+                       (compat_version >= DATA_VERSION_4_5_1_0))
+                     && ((priv_set & OB_PRIV_CREATE_SENSITIVE_RULE) != 0
+                         || (priv_set & OB_PRIV_PLAINACCESS) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_3_5_3 or MOCK_DATA_VERSION_4_4_2_0 or DATA_VERSION_4_5_1_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create sensitive rule/plainaccess privilege");
           }
           if (OB_FAIL(ret)) {
           } else {
@@ -1450,7 +1428,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                   && !params_.is_ddl_from_primary_) {
                 ret = OB_TABLE_NOT_EXIST;
                 LOG_WARN("table not exist", K(ret), K(table), K(db));
-                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db),to_cstring(table));
+                ObCStringHelper helper;
+                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db),helper.convert(table));
               }
             } else {
               //do nothing
@@ -1483,6 +1462,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
               ObString host_name;
               ObString pwd;
               ObString need_enc = ObString::make_string("NO");
+              ObString plugin;
+              bool is_plugin_supported = true;
               if (OB_ISNULL(user_node)) {
                 ret = OB_ERR_PARSE_SQL;
                 LOG_WARN("Parse SQL error, user node should not be NULL", K(user_node), K(ret));
@@ -1511,19 +1492,22 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                   host_name.assign_ptr(user_node->children_[3]->str_value_,
                       static_cast<int32_t>(user_node->children_[3]->str_len_));
                 }
-                if (lib::is_mysql_mode() && NULL != user_node->children_[4]) {
-                  /* here code is to mock a auth plugin check. */
-                  ObString auth_plugin(static_cast<int32_t>(user_node->children_[4]->str_len_),
-                                      user_node->children_[4]->str_value_);
-                  ObString default_auth_plugin;
-                  if (OB_FAIL(params_.session_info_->get_sys_variable(
-                                                       share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
-                                                       default_auth_plugin))) {
-                    LOG_WARN("fail to get block encryption variable", K(ret));
-                  } else if (0 != auth_plugin.compare(default_auth_plugin)) {
-                    ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
-                    LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
-                  } else {/* do nothing */}
+                if (lib::is_mysql_mode()) {
+                  if (NULL != user_node->children_[4]) {
+                    plugin.assign_ptr(str_tolower(const_cast<char *>(user_node->children_[4]->str_value_),
+                                                  static_cast<int32_t>(user_node->children_[4]->str_len_)),
+                                                  static_cast<int32_t>(user_node->children_[4]->str_len_));
+                    if (plugin.empty()) {
+                      ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+                      LOG_WARN("invalid auth plugin", K(plugin), K(ret));
+                    }
+                  } else {
+                    // Use default_authentication_plugin system variable as default
+                    if (OB_FAIL(session_info_->get_sys_variable(
+                            share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN, plugin))) {
+                      LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
+                    }
+                  }
                 }
                 if (OB_SUCC(ret) && user_node->children_[1] != NULL) {
                   if (0 != user_name.compare(session_info_->get_user_name())) {
@@ -1534,13 +1518,13 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                   if (OB_ISNULL(user_node->children_[2])) {
                     ret = OB_ERR_PARSE_SQL;
                     LOG_WARN("The child 2 of user_node should not be NULL", K(ret));
+                  } else if (0 == user_node->children_[2]->value_) {
+                    if (!ObSetPasswordResolver::is_valid_encrypted_passwd(pwd, plugin)) {
+                      ret = OB_ERR_PASSWORD_FORMAT;
+                      LOG_WARN("Wrong password hash format", K(pwd), K(plugin), K(ret));
+                    }
                   } else if (OB_FAIL(check_password_strength(pwd))) {
                     LOG_WARN("fail to check password strength", K(ret));
-                  } else if (0 == user_node->children_[2]->value_) {
-                    if (!ObSetPasswordResolver::is_valid_mysql41_passwd(pwd)) {
-                      ret = OB_ERR_PASSWORD_FORMAT;
-                      LOG_WARN("Wrong password hash format");
-                    }
                   } else {
                     need_enc = ObString::make_string("YES");
                   }
@@ -1552,6 +1536,12 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                 if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
                   ret = OB_WRONG_USER_NAME_LENGTH;
                   LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+                } else if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
+                  params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
+                  LOG_WARN("failed to check data version for auth plugin", K(ret));
+                } else if (OB_UNLIKELY(!is_plugin_supported)) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
                 } else if (OB_FAIL(check_dcl_on_inner_user(node->type_,
                                                            session_info_->get_priv_user_id(),
                                                            user_name,
@@ -1560,8 +1550,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                            K(ret), K(session_info_->get_user_name()), K(user_name));
                 } else if (OB_FAIL(grant_stmt->add_grantee(user_name))) {
                   LOG_WARN("Add grantee error", K(user_name), K(ret));
-                } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc))) {
-                  LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(ret));
+                } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc, plugin))) {
+                  LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(plugin), K(ret));
                 } else {
                   //do nothing
                 }
@@ -1575,8 +1565,64 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObGrantResolver::resolve_priv_level_with_object_type(const ObSQLSessionInfo *session_info,
+                                                         const ParseNode *priv_object_node,
+                                                         ObPrivLevel &grant_level)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session_info not inited", K(ret));
+  } else if (OB_ISNULL(priv_object_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parse node", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), compat_version))) {
+    LOG_WARN("fail to get data version", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (priv_object_node->value_ == 1) {
+      // do nothing, compat with mysql
+    } else if (priv_object_node->value_ == 2 || priv_object_node->value_ == 3) {
+      if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or 4_2_2_0", K(ret));
+      } else {
+        grant_level = OB_PRIV_ROUTINE_LEVEL;
+      }
+    } else if (priv_object_node->value_ == 4) {
+      if (compat_version < DATA_VERSION_4_3_5_2) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("grant on catalog is not support below DATA_VERSION_4_3_5_2", K(ret));
+      } else {
+        grant_level = OB_PRIV_CATALOG_LEVEL;
+      }
+    } else if (priv_object_node->value_ == 5) {
+      if (compat_version < DATA_VERSION_4_4_0_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("grant on object level is not support below DATA_VERSION_4_4_0_0", K(ret));
+      } else {
+        grant_level = OB_PRIV_OBJECT_LEVEL;
+      }
+    } else if (priv_object_node->value_ == 6) {
+      if (!((compat_version >= MOCK_DATA_VERSION_4_3_5_3 && compat_version < DATA_VERSION_4_4_0_0) ||
+            (compat_version >= MOCK_DATA_VERSION_4_4_2_0 && compat_version < DATA_VERSION_4_5_0_0) ||
+            (compat_version >= DATA_VERSION_4_5_1_0))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("grant on sensitive rule is not support below MOCK_DATA_VERSION_4_3_5_3 or MOCK_DATA_VERSION_4_4_2_0 or DATA_VERSION_4_5_1_0", K(ret));
+      } else {
+        grant_level = OB_PRIV_SENSITIVE_RULE_LEVEL;
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected obj type", K(ret), K(priv_object_node->value_));
+    }
+  }
+  return ret;
+}
+
 //0 == priv_level_node->num_child_ -> grant priv on * to user
-//1 == priv_level_node->num_child_ -> grant priv on table to user
+//0 == priv_level_node->num_child_ -> grant priv on table to user
 //2 == priv_level_node->num_child_ -> grant priv on db.table to user
 int ObGrantResolver::resolve_priv_level(
     ObSchemaGetterGuard *guard,
@@ -1586,12 +1632,50 @@ int ObGrantResolver::resolve_priv_level(
     ObString &db,
     ObString &table,
     ObPrivLevel &grant_level,
-    ObIAllocator &allocator)
+    ObIAllocator &allocator,
+    ObString &catalog,
+    ObString &sensitive_rule)
 {
   int ret = OB_SUCCESS;
+  bool is_grant_routine = (grant_level == OB_PRIV_ROUTINE_LEVEL);
+  bool is_grant_object = (grant_level == OB_PRIV_OBJECT_LEVEL);
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(node), K(ret));
+  } else if (grant_level == OB_PRIV_CATALOG_LEVEL) {
+    if (0 != node->num_child_ || T_IDENT != node->type_) {
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("sql_parser error", K(ret));
+    } else {
+      catalog.assign_ptr(node->str_value_, static_cast<const int32_t>(node->str_len_));
+    }
+  } else if (OB_PRIV_SENSITIVE_RULE_LEVEL == grant_level) {
+    sensitive_rule = ObString::make_string("");
+    if (0 == node->num_child_) {
+      // grant plainaccess on sensitive rule <rule_name> to user
+      if (T_IDENT == node->type_) {
+        sensitive_rule.assign_ptr(node->str_value_, static_cast<const int32_t>(node->str_len_));
+      } else {
+        ret = OB_ERR_PARSE_SQL;
+        LOG_WARN("sql_parser error", K(ret));
+      }
+    } else if (T_PRIV_LEVEL == node->type_ && 2 == node->num_child_) {
+      // grant plainaccess on sensitive rule *.* to user
+      if (OB_ISNULL(node->children_[0]) || OB_ISNULL(node->children_[1])) {
+        ret = OB_ERR_PARSE_SQL;
+        LOG_WARN("Parse priv level error", K(ret),
+                 "child 0", node->children_[0],
+                 "child 1", node->children_[1]);
+      } else if (T_STAR == node->children_[0]->type_ && T_STAR == node->children_[1]->type_) {
+        grant_level = OB_PRIV_USER_LEVEL;
+      } else {
+        ret = OB_ERR_PARSE_SQL;
+        LOG_WARN("sql_parser error", K(ret));
+      }
+    } else {
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("sql_parser parse grant_stmt error", K(ret));
+    }
   } else {
     CK (guard != NULL);
     db = ObString::make_string("");
@@ -1628,14 +1712,14 @@ int ObGrantResolver::resolve_priv_level(
         grant_level = OB_PRIV_DB_LEVEL;
         db.assign_ptr(node->children_[0]->str_value_,
                       static_cast<const int32_t>(node->children_[0]->str_len_));
-	    OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db, &allocator));
+        OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db, &allocator));
       } else if (T_IDENT == node->children_[0]->type_ && T_IDENT == node->children_[1]->type_) {
         grant_level = OB_PRIV_TABLE_LEVEL;
         db.assign_ptr(node->children_[0]->str_value_,
                       static_cast<const int32_t>(node->children_[0]->str_len_));
         table.assign_ptr(node->children_[1]->str_value_,
                          static_cast<const int32_t>(node->children_[1]->str_len_));
-	    OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db, &allocator));
+        OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db, &allocator));
       } else {
         ret = OB_ERR_PARSE_SQL;
         LOG_WARN("sql_parser error", K(ret));
@@ -1656,12 +1740,24 @@ int ObGrantResolver::resolve_priv_level(
         //do nothing
       }
     }
+    if (OB_SUCC(ret) && (is_grant_routine || is_grant_object)) {
+      if (grant_level != OB_PRIV_TABLE_LEVEL) {
+        // tmp_grant_level == OB_PRIV_TABLE_LEVEL means sql is like:
+        // grant priv on [object type] ident to user
+        // or
+        // grant priv on [object type] ident1.ident2 to user
+        ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+        LOG_WARN("illegal grant", K(ret));
+      } else {
+        grant_level = is_grant_routine ? OB_PRIV_ROUTINE_LEVEL : OB_PRIV_OBJECT_LEVEL;
+      }
+    }
   }
   return ret;
 }
 
 //0 == priv_level_node->num_child_ -> grant priv on * to user
-//1 == priv_level_node->num_child_ -> grant priv on table to user
+//0 == priv_level_node->num_child_ -> grant priv on table to user
 //2 == priv_level_node->num_child_ -> grant priv on db.table to user
 /* 解析oracle grant objauth里面的obj 部分
    暂时保持对mysql功能的支持。*/
@@ -1672,11 +1768,17 @@ int ObGrantResolver::resolve_obj_ora(
     ObString &table,
     ObPrivLevel &grant_level,
     bool &is_directory,
-    bool &explicit_db)
+    bool &explicit_db,
+    bool &is_catalog,
+    bool &is_location,
+    bool &is_sensitive_rule)
 {
   int ret = OB_SUCCESS;
   is_directory = false;
+  is_catalog = false;
+  is_location = false;
   explicit_db = false;
+  is_sensitive_rule = false;
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(node), K(ret));
@@ -1707,29 +1809,36 @@ int ObGrantResolver::resolve_obj_ora(
     } else if (T_PRIV_LEVEL == node->type_ && 2 == node->num_child_) {
       if (OB_ISNULL(node->children_[0]) || OB_ISNULL(node->children_[1])) {
         ret = OB_ERR_PARSE_SQL;
-        LOG_WARN("Parse priv level error",
-            K(ret), "child 0", node->children_[0], "child 1", node->children_[1]);
+        LOG_WARN("Parse priv level error", K(ret), "child 0", node->children_[0], "child 1", node->children_[1]);
       } else if (T_STAR == node->children_[0]->type_ && T_STAR == node->children_[1]->type_) {
+        // *.*
         grant_level = OB_PRIV_USER_LEVEL;
       } else if (T_IDENT == node->children_[0]->type_ && T_STAR == node->children_[1]->type_) {
+        // db.*
         grant_level = OB_PRIV_DB_LEVEL;
-        db.assign_ptr(node->children_[0]->str_value_,
-                      static_cast<const int32_t>(node->children_[0]->str_len_));
+        db.assign_ptr(node->children_[0]->str_value_, static_cast<const int32_t>(node->children_[0]->str_len_));
         explicit_db = true;
       } else if (T_IDENT == node->children_[0]->type_ && T_IDENT == node->children_[1]->type_) {
+        // db.table
         grant_level = OB_PRIV_TABLE_LEVEL;
-        db.assign_ptr(node->children_[0]->str_value_,
-                      static_cast<const int32_t>(node->children_[0]->str_len_));
-        table.assign_ptr(node->children_[1]->str_value_,
-                         static_cast<const int32_t>(node->children_[1]->str_len_));
+        db.assign_ptr(node->children_[0]->str_value_, static_cast<const int32_t>(node->children_[0]->str_len_));
+        table.assign_ptr(node->children_[1]->str_value_, static_cast<const int32_t>(node->children_[1]->str_len_));
         explicit_db = true;
-      } else if (T_PRIV_TYPE == node->children_[0]->type_ 
-                 && T_IDENT == node->children_[1]->type_) {
-        grant_level = OB_PRIV_TABLE_LEVEL;
+      } else if (T_PRIV_TYPE == node->children_[0]->type_ && T_IDENT == node->children_[1]->type_) {
+        // < directory | catalog | location | sensitive rule > <ident_name>
+        grant_level = OB_PRIV_TABLE_LEVEL;  // for unified handling
         db = ObString::make_string("SYS");
-        table.assign_ptr(node->children_[1]->str_value_,
-                         static_cast<const int32_t>(node->children_[1]->str_len_));
-        is_directory = true;
+        table.assign_ptr(node->children_[1]->str_value_, static_cast<const int32_t>(node->children_[1]->str_len_));
+        switch (node->children_[0]->value_) {
+          case 1: is_directory = true; break;
+          case 2: is_catalog = true; break;
+          case 3: is_location = true; break;
+          case 4: is_sensitive_rule = true; break;
+          default:
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("Unimplemented object type", K(ret), K(node->children_[0]->value_));
+            break;
+        }
       } else {
         ret = OB_ERR_PARSE_SQL;
         LOG_WARN("sql_parser error", K(ret));
@@ -1748,83 +1857,6 @@ int ObGrantResolver::resolve_obj_ora(
         LOG_USER_ERROR(OB_WRONG_DB_NAME, db.length(), db.ptr());
       } else {
         //do nothing
-      }
-    }
-  }
-  return ret;
-}
-
-template<class T>
-int ObGrantResolver::resolve_priv_set(
-    const uint64_t tenant_id,
-    const ParseNode *privs_node,
-    ObPrivLevel grant_level,
-    ObPrivSet &priv_set,
-    T *grant_stmt,
-    ObSchemaChecker *schema_checker,
-    ObSQLSessionInfo *session_info,
-    ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(privs_node)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument, priv_node_list should not be NULL", K(privs_node), K(ret));
-  } else if (OB_PRIV_INVALID_LEVEL == grant_level) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument, grant_level should not be invalid", K(grant_level), K(ret));
-  } else if (OB_ISNULL(grant_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("grant stmt is null", K(ret));
-  } else {
-    for (int i = 0; i < privs_node->num_child_ && OB_SUCCESS == ret; ++i) {
-      if (OB_NOT_NULL(privs_node->children_[i]) && T_PRIV_TYPE == privs_node->children_[i]->type_) {
-        const ObPrivType priv_type = privs_node->children_[i]->value_;
-        if (OB_PRIV_USER_LEVEL == grant_level) {
-          priv_set |= priv_type;
-        } else if (OB_PRIV_DB_LEVEL == grant_level) {
-          if (OB_PRIV_ALL == priv_type) {
-            priv_set |= OB_PRIV_DB_ACC;
-          } else if (priv_type & (~(OB_PRIV_DB_ACC | OB_PRIV_GRANT))) {
-            ret = OB_ERR_PRIV_USAGE;
-            LOG_WARN("Grant/Revoke privilege than can not be used",
-                      "priv_type", ObPrintPrivSet(priv_type), K(ret));
-          } else {
-            priv_set |= priv_type;
-          }
-        } else if (OB_PRIV_TABLE_LEVEL == grant_level) {
-          if (OB_PRIV_ALL == priv_type) {
-            priv_set |= OB_PRIV_TABLE_ACC;
-          } else if (priv_type & (~(OB_PRIV_TABLE_ACC | OB_PRIV_GRANT))) {
-            ret = OB_ILLEGAL_GRANT_FOR_TABLE;
-            LOG_WARN("Grant/Revoke privilege than can not be used",
-                      "priv_type", ObPrintPrivSet(priv_type), K(ret));
-          } else if (privs_node->children_[i]->num_child_ == 1) {
-            if (OB_FAIL(ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(tenant_id))) {
-              LOG_WARN("grant or revoke column priv is not suppported", KR(ret));
-            } else if (OB_FAIL(resolve_col_names_mysql(grant_stmt, priv_type,
-                                                privs_node->children_[i]->children_[0],
-                                                schema_checker, session_info, allocator))) {
-              LOG_WARN("resolve col names failed", K(ret));
-            }
-          } else {
-            priv_set |= priv_type;
-          }
-        } else if (OB_PRIV_ROUTINE_LEVEL == grant_level) {
-          if (OB_PRIV_ALL == priv_type) {
-            priv_set |= OB_PRIV_ROUTINE_ACC;
-          } else if (priv_type & (~(OB_PRIV_ROUTINE_ACC | OB_PRIV_GRANT))) {
-            ret = OB_ILLEGAL_GRANT_FOR_TABLE;
-            LOG_WARN("Grant/Revoke privilege than can not be used",
-                      "priv_type", ObPrintPrivSet(priv_type), K(ret));
-          } else {
-            priv_set |= priv_type;
-          }
-        } else {
-          //do nothing
-        }
-      } else {
-        ret = OB_ERR_PARSER_SYNTAX;
-        LOG_WARN("sql_parser parse privileges error", K(ret));
       }
     }
   }
@@ -1881,6 +1913,12 @@ int ObGrantResolver::map_mysql_priv_type_to_ora_type(
     case OB_PRIV_WRITE:
       ora_obj_priv = OBJ_PRIV_ID_WRITE;
       break;
+    case OB_PRIV_USE_CATALOG:
+      ora_obj_priv = OBJ_PRIV_ID_USE_CATALOG;
+      break;
+    case OB_PRIV_PLAINACCESS:
+      ora_obj_priv = OBJ_PRIV_ID_PLAINACCESS;
+      break;
     case OB_PRIV_COMMENT:
     case OB_PRIV_AUDIT:
     case OB_PRIV_RENAME:
@@ -1894,6 +1932,9 @@ int ObGrantResolver::map_mysql_priv_type_to_ora_type(
     case OB_PRIV_PROCESS:
     case 0:
     case OB_PRIV_CREATE_SYNONYM:
+    case OB_PRIV_ENCRYPT:
+    case OB_PRIV_DECRYPT:
+    case OB_PRIV_CREATE_SENSITIVE_RULE:
       can_map = false;
       break;
     default:
@@ -1934,7 +1975,11 @@ int ObGrantResolver::check_obj_priv_valid(
         ret = OB_ERR_ALTER_INDEX_AND_EXECUTE_NOT_ALLOWED_FOR_VIEWS;
       }
       break;
-
+    case (ObObjectType::CATALOG):
+      if (ora_obj_priv != OBJ_PRIV_ID_USE_CATALOG) {
+        ret = OB_ERR_PRIVILEGE_NOT_ALLOWED_FOR_CATALOGS;
+      }
+      break;
     case (ObObjectType::SEQUENCE):
       if (ora_obj_priv != OBJ_PRIV_ID_ALTER
           && ora_obj_priv != OBJ_PRIV_ID_SELECT) {
@@ -1968,6 +2013,16 @@ int ObGrantResolver::check_obj_priv_valid(
     case (ObObjectType::INDEX):
       ret = OB_ERR_BAD_TABLE;
       break;
+    case (ObObjectType::LOCATION):
+      if (ora_obj_priv != OBJ_PRIV_ID_READ && ora_obj_priv != OBJ_PRIV_ID_WRITE) {
+        ret = OB_ERR_INVALID_PRIVILEGE_ON_DIRECTORIES;
+      }
+      break;
+    case (ObObjectType::SENSITIVE_RULE):
+      if (ora_obj_priv != OBJ_PRIV_ID_PLAINACCESS) {
+        ret = OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES;
+      }
+      break;
     /* xinqi.zlm to do: */
     default:
       ret = OB_NOT_SUPPORTED;
@@ -1989,7 +2044,9 @@ bool ObGrantResolver::is_ora_obj_priv_type(
      || priv_type == OB_PRIV_FLASHBACK
      || priv_type == OB_PRIV_READ
      || priv_type == OB_PRIV_WRITE
-     || priv_type == OB_PRIV_DEBUG) {
+     || priv_type == OB_PRIV_DEBUG
+     || priv_type == OB_PRIV_USE_CATALOG
+     || priv_type == OB_PRIV_PLAINACCESS) {
     return true;
   } else {
     return false;
@@ -2085,6 +2142,16 @@ int ObGrantResolver::build_table_priv_arary_for_all(
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_READ));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_WRITE));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_EXECUTE));
+              break;
+            }
+          case share::schema::ObObjectType::CATALOG:
+            {
+              OZ (table_priv_array.push_back(OBJ_PRIV_ID_USE_CATALOG));
+              break;
+            }
+          case share::schema::ObObjectType::SENSITIVE_RULE:
+            {
+              OZ(table_priv_array.push_back(OBJ_PRIV_ID_PLAINACCESS));
               break;
             }
           default:

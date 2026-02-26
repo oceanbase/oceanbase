@@ -25,11 +25,10 @@ namespace sql
 {
 class ObAlterRoutineResolver: public ObDDLResolver
 {
-public:
-  explicit ObAlterRoutineResolver(
-    ObResolverParams &params, ObCreateRoutineResolver *crt_resolver = NULL)
-      : ObDDLResolver(params), crt_resolver_(crt_resolver) {}
+protected:
+  explicit ObAlterRoutineResolver(ObResolverParams &params) : ObDDLResolver(params) {}
 
+public:
   virtual int resolve(const ParseNode &parse_tree);
 
 protected:
@@ -56,18 +55,18 @@ protected:
   int register_debug_info(const share::schema::ObRoutineInfo &routine_info);
 
 private:
-  ObCreateRoutineResolver *crt_resolver_;
+  int mock_create_parse_node(const ParseNode *source_tree,
+                             const bool need_recreate,
+                             const bool is_noneditionable,
+                             ParseNode *&crt_tree);
 };
 
 class ObAlterProcedureResolver: public ObAlterRoutineResolver
 {
 public:
-  explicit ObAlterProcedureResolver(ObResolverParams &params)
-    : ObAlterRoutineResolver(params, &resolver_), resolver_(params) {}
+  explicit ObAlterProcedureResolver(ObResolverParams &params) : ObAlterRoutineResolver(params) {}
   virtual ~ObAlterProcedureResolver() {}
 
-private:
-  ObCreateProcedureResolver resolver_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterProcedureResolver);
 };
@@ -75,14 +74,11 @@ private:
 class ObAlterFunctionResolver: public ObAlterRoutineResolver
 {
 public:
-  explicit ObAlterFunctionResolver(ObResolverParams &params)
-    : ObAlterRoutineResolver(params, &resolver_), resolver_(params) {}
-  virtual ~ObAlterFunctionResolver() { }
+  explicit ObAlterFunctionResolver(ObResolverParams &params) : ObAlterRoutineResolver(params) {}
+  virtual ~ObAlterFunctionResolver() {}
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterFunctionResolver);
-private:
-  ObCreateFunctionResolver resolver_;
 };
 
 } // end namespace sql

@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/container/ob_array.h"
 #include "lib/container/ob_array_serialization.h"
 using namespace oceanbase::common;
 

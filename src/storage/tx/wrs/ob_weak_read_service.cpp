@@ -14,17 +14,7 @@
 
 #include "ob_weak_read_service.h"
 
-#include "share/rc/ob_context.h"                             // WITH_CONTEXT
-#include "share/rc/ob_tenant_base.h"                         // MTL
-#include "share/config/ob_server_config.h"                   // ObServerConfig
-#include "lib/container/ob_array.h"                          // ObArray
-#include "lib/thread/ob_thread_name.h"
-#include "observer/omt/ob_multi_tenant.h"                    // TenantIdList
-#include "ob_weak_read_util.h"                               //ObWeakReadUtil
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_ts_mgr.h"
-#include "logservice/ob_log_service.h"
 
 namespace oceanbase
 {

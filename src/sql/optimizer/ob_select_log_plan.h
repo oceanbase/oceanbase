@@ -49,7 +49,15 @@ public:
 
   int perform_late_materialization(ObSelectStmt *stmt,
                                    ObLogicalOperator *&op);
-
+  int allocate_distinct_as_top(ObLogicalOperator *&top,
+                               const AggregateAlgo algo,
+                               const DistAlgo dist_algo,
+                               const ObIArray<ObRawExpr*> &distinct_exprs,
+                               const double total_ndv,
+                               const bool is_partition_wise = false,
+                               const bool is_pushed_down = false,
+                               const bool is_partition_gi = false,
+                               const AggregatePathType step = AggregatePathType::SINGLE);
 protected:
   virtual int generate_normal_raw_plan() override;
   virtual int generate_dblink_raw_plan() override;
@@ -72,54 +80,126 @@ private:
                                common::ObIArray<ObOrderDirection> &group_directions,
                                common::ObIArray<ObOrderDirection> &rollup_directions);
 
-  int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
+  int get_groupby_groupset_exprs(const ObLogicalOperator *op,
+                                 const bool is_pruned_sets,
+                                 common::ObIArray<ObGroupbyExpr> &groupby_sets);
+
+  int candi_allocate_groupingset_group_by(ObLogicalOperator &top,
+                                          const ObIArray<ObGroupbyExpr> &groupset_exprs,
+                                          const ObIArray<ObGroupbyExpr> &pruned_groupset_exprs,
+                                          const ObIArray<ObAggFunRawExpr *> &agg_items,
+                                          const ObIArray<ObRawExpr *> &having_exprs,
+                                          const bool is_from_pivot,
+                                          ObIArray<CandidatePlan> &groupby_plans);
+
+  int can_transform_distinct_agg(GroupingOpHelper &groupby_helper,
+                                 const ObIArray<ObAggFunRawExpr *> &agg_items,
+                                 ObIArray<ObRawExpr *> &distinct_params,
+                                 bool &can_trans_distinct_agg);
+
+  int create_transform_distinct_agg_plan(GroupingOpHelper &groupby_helper,
+                                         const ObIArray<ObAggFunRawExpr *> &agg_items,
+                                         const ObIArray<ObRawExpr *> &distinct_params,
+                                         const ObIArray<ObRawExpr *> &reduce_exprs,
+                                         const ObIArray<ObRawExpr *> &groupby_exprs,
+                                         const ObIArray<ObOrderDirection> &group_directions,
+                                         const ObIArray<ObRawExpr *> &having_exprs,
+                                         ObIArray<CandidatePlan> &candi_plans,
+                                         ObIArray<CandidatePlan> &groupby_plans);
+
+  int generate_new_agg_items_for_distinct_pushdown(const ObIArray<ObAggFunRawExpr *> &org_agg_items,
+                                              const bool remove_param_distinct,
+                                              const bool final_non_distinct,
+                                              ObRawExprFactory &expr_factory,
+                                              ObSQLSessionInfo &session_info,
+                                              ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &distinct_pairs,
+                                              ObIArray<ObAggFunRawExpr *> &new_all_agg_items,
+                                              ObIArray<ObAggFunRawExpr *> &new_non_distinct_agg_items);
+
+  int candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
                                      const ObIArray<ObRawExpr*> &group_by_exprs,
                                      const ObIArray<ObOrderDirection> &group_directions,
                                      const ObIArray<ObRawExpr*> &rollup_exprs,
                                      const ObIArray<ObOrderDirection> &rollup_directions,
                                      const ObIArray<ObRawExpr*> &having_exprs,
                                      const ObIArray<ObAggFunRawExpr*> &agg_items,
-                                     const bool is_from_povit);
+                                     const bool is_from_povit,
+                                     ObIArray<CandidatePlan> &groupby_plans);
+
+  int candi_allocate_merge_rollup(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                  const ObIArray<ObRawExpr*> &group_by_exprs,
+                                  const ObIArray<ObOrderDirection> &group_directions,
+                                  const ObIArray<ObRawExpr*> &rollup_exprs,
+                                  const ObIArray<ObOrderDirection> &rollup_directions,
+                                  const ObIArray<ObRawExpr*> &having_exprs,
+                                  const ObIArray<ObAggFunRawExpr*> &agg_items,
+                                  const bool is_from_povit,
+                                  GroupingOpHelper &groupby_helper,
+                                  ObIArray<CandidatePlan> &groupby_plans);
+
+  int create_merge_rollup_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
+                              const ObIArray<ObRawExpr*> &group_by_exprs,
+                              const ObIArray<ObOrderDirection> &group_directions,
+                              const ObIArray<ObRawExpr*> &rollup_exprs,
+                              const ObIArray<ObOrderDirection> &rollup_directions,
+                              const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                              const ObIArray<ObRawExpr*> &having_exprs,
+                              GroupingOpHelper &groupby_helper,
+                              CandidatePlan &candidate_plan,
+                              ObIArray<CandidatePlan> &candidate_plans,
+                              bool part_sort_valid,
+                              bool normal_sort_valid,
+                              const DistAlgo algo,
+                              bool can_ignore_merge_plan);
+
+  int inner_create_merge_rollup_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                    const ObIArray<ObRawExpr*> &group_by_exprs,
+                                    const ObIArray<ObOrderDirection> &group_directions,
+                                    const ObIArray<ObRawExpr*> &rollup_exprs,
+                                    const ObIArray<ObOrderDirection> &rollup_directions,
+                                    const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                    const ObIArray<ObRawExpr*> &having_exprs,
+                                    GroupingOpHelper &groupby_helper,
+                                    ObLogicalOperator *&top,
+                                    bool use_part_sort,
+                                    const DistAlgo algo,
+                                    bool &ignore_plan,
+                                    bool can_ignore_merge);
+
+  int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                     const ObIArray<ObRawExpr*> &group_by_exprs,
+                                     const ObIArray<ObOrderDirection> &group_directions,
+                                     const ObIArray<ObRawExpr*> &having_exprs,
+                                     const ObIArray<ObAggFunRawExpr*> &agg_items,
+                                     const bool is_from_povit,
+                                     ObIArray<CandidatePlan> &candi_plans,
+                                     ObIArray<CandidatePlan> &groupby_plans);
 
   int get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_exprs,
+                          const ObIArray<ObRawExpr *> &rollup_exprs,
                           const GroupingOpHelper &groupby_helper,
-                          const bool ignore_hint,
                           bool &use_hash_valid,
                           bool &use_merge_valid,
                           bool &part_sort_valid,
                           bool &normal_sort_valid);
   int update_part_sort_method(bool &part_sort_valid, bool &normal_sort_valid);
-  int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
+  int candi_allocate_normal_group_by(const bool ignore_transform_distinct_agg,
+                                     const ObIArray<ObRawExpr*> &reduce_exprs,
                                      const ObIArray<ObRawExpr*> &group_by_exprs,
                                      const ObIArray<ObOrderDirection> &group_directions,
-                                     const ObIArray<ObRawExpr*> &rollup_exprs,
-                                     const ObIArray<ObOrderDirection> &rollup_directions,
                                      const ObIArray<ObRawExpr*> &having_exprs,
                                      const ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                     const bool is_from_povit,
                                      GroupingOpHelper &groupby_helper,
-                                     const bool ignore_hint,
+                                     ObIArray<CandidatePlan> &candi_plans,
                                      ObIArray<CandidatePlan> &groupby_plans);
-
-  int candi_allocate_three_stage_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
-                                          const ObIArray<ObRawExpr*> &group_by_exprs,
-                                          const ObIArray<ObOrderDirection> &group_directions,
-                                          const ObIArray<ObRawExpr*> &rollup_exprs,
-                                          const ObIArray<ObOrderDirection> &rollup_directions,
-                                          const ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                          const ObIArray<ObRawExpr*> &having_exprs,
-                                          const bool is_from_povit,
-                                          GroupingOpHelper &groupby_helper,
-                                          ObIArray<CandidatePlan> &groupby_plans);
 
   int create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
                              const ObIArray<ObRawExpr*> &group_by_exprs,
-                             const ObIArray<ObRawExpr*> &rollup_exprs,
                              const ObIArray<ObAggFunRawExpr*> &aggr_items,
                              const ObIArray<ObRawExpr*> &having_exprs,
-                             const bool is_from_povit,
                              GroupingOpHelper &groupby_helper,
-                             ObLogicalOperator *&top);
+                             ObLogicalOperator *&top,
+                             const DistAlgo algo);
 
   int allocate_topk_for_hash_group_plan(ObLogicalOperator *&top);
 
@@ -139,32 +219,17 @@ private:
                            int64_t minimum_row_count,
                            int64_t topk_precision);
 
-  int should_create_rollup_pushdown_plan(ObLogicalOperator *top,
-                                         const ObIArray<ObRawExpr *> &reduce_exprs,
-                                         const ObIArray<ObRawExpr *> &rollup_exprs,
-                                         GroupingOpHelper &groupby_helper,
-                                         bool &is_needed);
-
-  int create_rollup_pushdown_plan(const ObIArray<ObRawExpr*> &group_by_exprs,
-                                  const ObIArray<ObRawExpr*> &rollup_exprs,
-                                  const ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                  const ObIArray<ObRawExpr*> &having_exprs,
-                                  GroupingOpHelper &groupby_helper,
-                                  ObLogicalOperator *&top);
-
   int create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
                               const ObIArray<ObRawExpr*> &group_by_exprs,
                               const ObIArray<ObOrderDirection> &group_directions,
-                              const ObIArray<ObRawExpr*> &rollup_exprs,
-                              const ObIArray<ObOrderDirection> &rollup_directions,
                               const ObIArray<ObAggFunRawExpr*> &aggr_items,
                               const ObIArray<ObRawExpr*> &having_exprs,
-                              const bool is_from_povit,
                               GroupingOpHelper &groupby_helper,
                               CandidatePlan &candidate_plan,
                               ObIArray<CandidatePlan> &candidate_plans,
                               bool part_sort_valid,
                               bool normal_sort_valid,
+                              const DistAlgo algo,
                               bool can_ignore_merge = false);
 
   int generate_merge_group_sort_keys(ObLogicalOperator *top,
@@ -180,32 +245,47 @@ private:
   // @brief Allocate DISTINCT by on top of plan candidates
   int candi_allocate_distinct();
 
-  // @brief Get all the distinct exprs
+  int candi_allocate_distinct(ObIArray<ObRawExpr *> &distinct_exprs, ObIArray<ObRawExpr *> &reduce_exprs);
 
+  // @brief Get all the distinct exprs
+  int set_distinct_final(ObLogicalOperator *&top);
   int get_distinct_exprs(const ObLogicalOperator *top,
                          common::ObIArray <ObRawExpr *> &reduce_exprs,
                          common::ObIArray <ObRawExpr *> &distinct_exprs);
 
+  int inner_candi_allocate_distinct(const GroupingOpHelper &distinct_helper,
+                                    const ObIArray<ObRawExpr*> &reduce_exprs,
+                                    const ObIArray<ObRawExpr*> &distinct_exprs,
+                                    ObIArray<CandidatePlan> &distinct_plans);
+
+  int check_need_merge_distinct_plan(const ObLogicalOperator *top,
+                                     const ObIArray<ObRawExpr*> &ori_distinct_exprs,
+                                     bool can_ignore_merge_plan,
+                                     bool &need_sort,
+                                     int64_t &prefix_pos,
+                                     ObIArray<OrderItem> &sort_keys,
+                                     ObIArray<ObRawExpr*> &new_distinct_exprs,
+                                     bool &ignore_merge_plan);
+
+  int get_distribute_distinct_method(ObLogicalOperator *top,
+                                     const GroupingOpHelper &distinct_helper,
+                                     const ObIArray<ObRawExpr*> &reduce_exprs,
+                                     bool is_merge_without_sort,
+                                     uint64_t &distinct_dist_methods);
+
   int create_hash_distinct_plan(ObLogicalOperator *&top,
-                                GroupingOpHelper &distinct_helper,
-                                ObIArray<ObRawExpr*> &reduce_exprs,
-                                ObIArray<ObRawExpr*> &distinct_exprs);
+                                const GroupingOpHelper &distinct_helper,
+                                const ObIArray<ObRawExpr*> &distinct_exprs,
+                                const DistAlgo algo);
 
   int create_merge_distinct_plan(ObLogicalOperator *&top,
-                                 GroupingOpHelper &distinct_helper,
-                                 ObIArray<ObRawExpr*> &reduce_exprs,
-                                 ObIArray<ObRawExpr*> &distinct_exprs,
-                                 ObIArray<ObOrderDirection> &directions,
-                                 bool &is_plan_valid,
-                                 bool can_ignore_merge_plan = false);
+                                 const GroupingOpHelper &distinct_helper,
+                                 const ObIArray<ObRawExpr*> &distinct_exprs,
+                                 bool need_sort,
+                                 int64_t prefix_pos,
+                                 ObIArray<OrderItem> &sort_keys,
+                                 const DistAlgo algo);
 
-  int allocate_distinct_as_top(ObLogicalOperator *&top,
-                               const AggregateAlgo algo,
-                               const ObIArray<ObRawExpr*> &distinct_exprs,
-                               const double total_ndv,
-                               const bool is_partition_wise = false,
-                               const bool is_pushed_down = false,
-                               const bool is_partition_gi = false);
   /**
    *  @brief  GENERATE the PLAN tree FOR "SET" operator (UNION/INTERSECT/EXCEPT)
    *  Warning:
@@ -224,9 +304,23 @@ private:
   int generate_union_all_plans(const ObIArray<ObSelectLogPlan*> &child_plans,
                                const bool ignore_hint,
                                ObIArray<CandidatePlan> &all_plans);
+  int get_best_child_candidate_plans(const ObIArray<ObSelectLogPlan*> &child_plans,
+                                     ObIArray<ObLogicalOperator*> &best_child_ops,
+                                     ObIArray<ObLogicalOperator*> &best_das_child_ops,
+                                     ObIArray<ObLogicalOperator*> &best_px_child_ops);
 
-  int create_union_all_plan(const ObIArray<ObLogicalOperator*> &child_plans,
-                            const bool ignore_hint,
+  int inner_generate_union_all_plan(const ObIArray<ObLogicalOperator*> &child_ops,
+                                    const bool ignore_hint,
+                                    ObIArray<CandidatePlan> &all_plans);
+
+  int get_distibute_union_all_method(const ObIArray<ObLogicalOperator*> &child_ops,
+                                    const bool ignore_hint,
+                                    uint64_t &set_dist_methods,
+                                    ObLogicalOperator* &largest_op);
+
+  int create_union_all_plan(const ObIArray<ObLogicalOperator*> &child_ops,
+                            const DistAlgo dist_set_method,
+                            ObLogicalOperator* largest_op,
                             ObLogicalOperator *&top);
 
   int check_if_union_all_match_partition_wise(const ObIArray<ObLogicalOperator*> &child_ops,
@@ -246,7 +340,8 @@ private:
 
   int allocate_union_all_as_top(const ObIArray<ObLogicalOperator*> &child_plans,
                                 DistAlgo dist_set_method,
-                                ObLogicalOperator *&top);
+                                ObLogicalOperator *&top,
+                                bool is_distinct_pushed_down = false);
 
   int allocate_set_distinct_as_top(ObLogicalOperator *&top);
 
@@ -257,10 +352,14 @@ private:
                                       const ObIArray<OrderItem> &order_items,
                                       const bool ignore_hint,
                                       ObIArray<CandidatePlan> &all_plans);
+  int get_recursive_union_all_distribute_method(ObLogicalOperator *left_child,
+                                                ObLogicalOperator *right_child,
+                                                const bool ignore_hint,
+                                                DistAlgo &dist_set_method);
   int create_recursive_union_all_plan(ObLogicalOperator *left_child,
                                       ObLogicalOperator *right_child,
                                       const ObIArray<OrderItem> &candi_order_items,
-                                      const bool ignore_hint,
+                                      DistAlgo dist_set_method,
                                       ObLogicalOperator *&top);
 
   int allocate_recursive_union_all_as_top(ObLogicalOperator *left_child,
@@ -386,12 +485,31 @@ private:
                             const ObIArray<ObOrderDirection> &order_directions,
                             const ObIArray<int64_t> &map_array,
                             const ObIArray<OrderItem> &left_sort_keys,
-                            const bool left_need_sort,
-                            const int64_t left_prefix_pos,
+                            bool left_need_sort,
+                            int64_t left_prefix_pos,
                             const ObIArray<OrderItem> &right_sort_keys,
-                            const bool right_need_sort,
-                            const int64_t right_prefix_pos,
+                            bool right_need_sort,
+                            int64_t right_prefix_pos,
                             CandidatePlan &merge_plan);
+
+  int check_need_pushdown_set_distinct(ObLogicalOperator *&child,
+                                       const ObIArray<ObRawExpr*> &set_keys,
+                                       bool is_set_op_parallel,
+                                       bool &is_valid);
+
+  int allocate_pushdown_set_distinct_as_top(ObLogicalOperator *&child,
+                                            const ObIArray<ObRawExpr*> &set_keys,
+                                            AggregateAlgo algo,
+                                            const OptTableMeta *table_meta,
+                                            bool is_partition_wise = false,
+                                            bool is_partition_gi = false);
+
+  int allocate_pushdown_merge_set_distinct_as_top(ObLogicalOperator *&child,
+                                                  const ObIArray<ObRawExpr*> &set_keys,
+                                                  const ObIArray<OrderItem> &sort_keys,
+                                                  const OptTableMeta *table_meta,
+                                                  bool &need_sort,
+                                                  int64_t &prefix_pos);
 
   int allocate_distinct_set_as_top(ObLogicalOperator *left_child,
                                    ObLogicalOperator *right_child,
@@ -399,7 +517,8 @@ private:
                                    DistAlgo dist_set_method,
                                    ObLogicalOperator *&top,
                                    const ObIArray<ObOrderDirection> *order_directions = NULL,
-                                   const ObIArray<int64_t> *map_array = NULL);
+                                   const ObIArray<int64_t> *map_array = NULL,
+                                   bool is_distinct_pushed_down = false);
 
   int get_distributed_set_methods(const EqualSets &equal_sets,
                                   const ObIArray<ObRawExpr*> &left_set_keys,
@@ -439,6 +558,7 @@ private:
                                   ObIArray<ObRawExpr*> &pushdown_filters,
                                   const uint64_t child_offset,
                                   const bool is_set_distinct,
+                                  const bool need_accurate_cardinality,
                                   ObSelectLogPlan *nonrecursive_plan);
 
   /**
@@ -485,7 +605,8 @@ private:
                     const ObIArray<ObRawExpr*> &const_exprs,
                     const double card,
                     const bool is_at_most_one_row,
-                    const ObIArray<ObRawExpr*> &qualify_filters)
+                    const ObIArray<ObRawExpr*> &qualify_filters,
+                    const ObIArray<double> &ambient_card)
       : all_win_func_exprs_(all_win_func_exprs),
         win_dist_hint_(win_dist_hint),
         explicit_hint_(explicit_hint),
@@ -507,7 +628,13 @@ private:
         enable_topn_(false),
         topn_const_(NULL),
         is_fetch_with_ties_(false),
-        origin_sort_card_(0.0)
+        origin_sort_card_(0.0),
+        ambient_card_(ambient_card),
+        is_set_(false),
+        need_normal_sort_(false),
+        use_topn_(false),
+        need_hash_sort_(false),
+        use_part_topn_(false)
     {
     }
     virtual ~WinFuncOpHelper() {}
@@ -545,7 +672,35 @@ private:
     ObRawExpr* topn_const_;
     bool is_fetch_with_ties_;
     double origin_sort_card_;
-
+    const ObIArray<double> &ambient_card_;
+    bool is_set_;
+    bool need_normal_sort_;
+    bool use_topn_;
+    bool need_hash_sort_;
+    bool use_part_topn_;
+    void reset_plan_options()
+    {
+      is_set_ = false;
+    }
+    int set_plan_options(const bool need_normal_sort,
+                          const bool use_topn,
+                          const bool need_hash_sort,
+                          const bool use_part_topn)
+    {
+      int ret = OB_SUCCESS;
+      if (is_set_) {
+        // unexpected
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("win plan options already set", K(ret));
+      } else {
+        need_normal_sort_ = need_normal_sort;
+        use_topn_ = use_topn;
+        need_hash_sort_ = need_hash_sort;
+        use_part_topn_ = use_part_topn;
+        is_set_ = true;
+      }
+      return ret;
+    }
     TO_STRING_KV(K_(win_dist_method),
                  K_(win_op_idx),
                  K_(force_normal_sort),
@@ -557,10 +712,15 @@ private:
                  K_(ordered_win_func_exprs),
                  K_(win_dist_hint),
                  K_(explicit_hint),
+                 K_(ambient_card),
                  K_(enable_topn),
                  K_(topn_const),
                  K_(is_fetch_with_ties),
-                 K_(qualify_filters));
+                 K_(qualify_filters),
+                 K_(need_normal_sort),
+                 K_(use_topn),
+                 K_(need_hash_sort),
+                 K_(use_part_topn));
   };
 
 private:
@@ -580,17 +740,49 @@ private:
                                      const ObIArray<ObRawExpr*> &qualify_filters,
                                      ObIArray<CandidatePlan> &total_plans);
   int create_one_window_function(CandidatePlan &candidate_plan,
-                                 const WinFuncOpHelper &win_func_helper,
+                                 WinFuncOpHelper &win_func_helper,
                                  ObIArray<CandidatePlan> &all_plans);
+  int get_distribute_window_method(ObLogicalOperator *top,
+                                  const WinFuncOpHelper &win_func_helper,
+                                  uint64_t &win_dist_methods,
+                                  bool &single_part_parallel,
+                                  bool &is_partition_wise);
+  bool supported_wf_dist_list_func(ObWinFunRawExpr &win_expr);
+  int create_dist_win_func(ObLogicalOperator *&top,
+                           const WinFuncOpHelper &win_func_helper,
+                           const ObExchangeInfo &exch_info,
+                           const bool need_sort,
+                           const int64_t prefix_pos,
+                           const bool is_local_order,
+                           ObRawExpr *topn_expr,
+                           bool is_fetch_with_ties,
+                           const OrderItem *hash_sortkey,
+                           const WinDistAlgo dist_algo,
+                           const bool match_parallel,
+                           const bool is_partition_wise,
+                           const bool use_hash_sort,
+                           const bool use_topn_sort,
+                           double origin_sort_card,
+                           ObLogicalOperator *&new_top);
+  int create_dist_win_func_no_pushdown(WinDistAlgo win_dist_algo,
+                                       ObLogicalOperator *top,
+                                       const WinFuncOpHelper &win_func_helper,
+                                       const bool need_sort,
+                                       const bool single_part_parallel,
+                                       const bool is_partition_wise,
+                                       const int64_t prefix_pos,
+                                       const bool is_local_order,
+                                       ObExchangeInfo * exch_info,
+                                       ObIArray<CandidatePlan> &all_plans);
   int create_none_dist_win_func(ObLogicalOperator *top,
                                 const WinFuncOpHelper &win_func_helper,
-                                const int64_t need_sort,
+                                const bool need_sort,
+                                const bool single_part_parallel,
+                                const bool is_partition_wise,
                                 const int64_t prefix_pos,
-                                const int64_t part_cnt,
                                 ObIArray<CandidatePlan> &all_plans);
   int create_range_list_dist_win_func(ObLogicalOperator *top,
                                       const WinFuncOpHelper &win_func_helper,
-                                      const int64_t part_cnt,
                                       ObIArray<CandidatePlan> &all_plans);
   int get_range_dist_keys(const WinFuncOpHelper &win_func_helper,
                           const ObWinFunRawExpr *win_func,
@@ -604,10 +796,16 @@ private:
 
   int create_hash_dist_win_func(ObLogicalOperator *top,
                                 const WinFuncOpHelper &win_func_helper,
-                                const int64_t need_sort,
+                                const bool need_sort,
                                 const int64_t prefix_pos,
-                                const int64_t part_cnt,
                                 ObIArray<CandidatePlan> &all_plans);
+
+  int create_hash_local_dist_win_func(ObLogicalOperator *top,
+                                      const WinFuncOpHelper &win_func_helper,
+                                      const bool need_sort,
+                                      const int64_t prefix_pos,
+                                      ObIArray<CandidatePlan> &all_plans);
+
   int create_normal_hash_dist_win_func(ObLogicalOperator *&top,
                                        const ObIArray<ObWinFunRawExpr*> &win_func_exprs,
                                        const ObIArray<ObRawExpr*> &partition_exprs,
@@ -638,18 +836,12 @@ private:
   int calc_win_func_helper_with_hint(const ObLogicalOperator *op,
                                      WinFuncOpHelper &win_func_helper,
                                      bool &is_valid);
-  int check_win_dist_method_valid(const WinFuncOpHelper &win_func_helper,
-                                  bool &is_valid);
-
 int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
                                    ObIArray<ObOpPseudoColumnRawExpr*> &status_exprs,
                                    ObIArray<CandidatePlan> &total_plans,
                                    CandidatePlan &orig_candidate_plan);
-  int check_win_func_need_sort(const ObLogicalOperator &top,
-                               const WinFuncOpHelper &win_func_helper,
-                               bool &need_sort,
-                               int64_t &prefix_pos,
-                               int64_t &part_cnt);
+  int prune_win_func_plan_by_sort_method(ObIArray<CandidatePlan> &candi_plans,
+                                         ObIArray<CandidatePlan> &final_plans);
   int prepare_next_group_win_funcs(const bool distributed,
                                    const ObIArray<OrderItem> &op_ordering,
                                    const int64_t dop,
@@ -757,23 +949,6 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
                                   const EqualSets &equal_sets,
                                   ObIArray<ObOrderDirection> &directions);
 
-  /**
-   * @brief allocate_window_function_group
-   * 为一组窗口函数表达式分配 ObLogWindowFunction 算子
-   */
-  int create_merge_window_function_plan(ObLogicalOperator *&top,
-                                        const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-                                        const ObRawExpr *limit_expr,
-                                        const ObIArray<OrderItem> &sort_keys,
-                                        const ObIArray<ObRawExpr*> &partition_exprs,
-                                        WinDistAlgo dist_method,
-                                        const bool is_pushdown,
-                                        ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
-                                        const ObIArray<bool> &pushdown_info,
-                                        bool need_sort,
-                                        int64_t prefix_pos,
-                                        int64_t part_cnt);
-
   //init topn_filter,topn_const and is_fetch_with_ties flag
   int init_wf_topn_option(WinFuncOpHelper &win_func_helper, bool wf_topn_hint);
 
@@ -788,11 +963,10 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
                                        ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
                                        const ObIArray<bool> &pushdown_info);
 
-  int sort_window_functions(const ObFdItemSet &fd_item_set,
-                            const EqualSets &equal_sets,
-                            const ObIArray<ObRawExpr *> &const_exprs,
-                            const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-                            ObIArray<ObWinFunRawExpr *> &adjusted_winfunc_exprs,
+  int sort_window_functions(const ObIArray<ObWinFunRawExpr *> &win_func_exprs,
+                            ObIArray<ObWinFunRawExpr *> &ordered_win_func_exprs,
+                            const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
+                            ObIArray<std::pair<int64_t, int64_t>> &ordered_pby_oby_prefixes,
                             bool &ordering_changed);
 
   int match_window_function_parallel(const ObIArray<ObWinFunRawExpr *> &win_exprs,
@@ -916,14 +1090,13 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
   int inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
                                     const ObIArray<ObRawExpr*> &group_by_exprs,
                                     const ObIArray<ObOrderDirection> &group_directions,
-                                    const ObIArray<ObRawExpr*> &rollup_exprs,
-                                    const ObIArray<ObOrderDirection> &rollup_directions,
                                     const ObIArray<ObAggFunRawExpr*> &aggr_items,
                                     const ObIArray<ObRawExpr*> &having_exprs,
-                                    const bool is_from_povit,
                                     GroupingOpHelper &groupby_helper,
                                     ObLogicalOperator *&top,
                                     bool use_part_sort,
+                                    const DistAlgo algo,
+                                    bool &ignore_plan,
                                     bool can_ignore_merge = false);
 
   int check_external_table_scan(ObSelectStmt *stmt, bool &has_external_table);

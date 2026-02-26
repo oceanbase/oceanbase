@@ -26,11 +26,21 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
-#include "storage/tablet/ob_tablet_slog_helper.h"
 #include "storage/init_basic_struct.h"
+#include "share/ob_upgrade_utils.h"
+#include "common/ob_version_def.h"
 
 namespace oceanbase
 {
+namespace common
+{
+// for unittest, return the current data version
+int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
+{
+  data_version = DATA_CURRENT_VERSION;
+  return OB_SUCCESS;
+}
+}
 namespace storage
 {
 class TestTabletHelper
@@ -65,6 +75,7 @@ inline void TestTabletHelper::prepare_sstable_param(
     const share::schema::ObTableSchema &table_schema,
     ObTabletCreateSSTableParam &param)
 {
+  param.set_init_value_for_column_store_();
   const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   param.table_key_.tablet_id_ = tablet_id;
@@ -92,10 +103,20 @@ inline void TestTabletHelper::prepare_sstable_param(
   param.occupy_size_ = 0;
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
+  param.tx_data_recycle_scn_.set_min();
+  param.rec_scn_.set_min();
   param.original_size_ = 0;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
+  param.table_backup_flag_.reset();
+  param.table_shared_flag_.reset();
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.row_count_ = 0;
+  param.sstable_logic_seq_ = 0;
+  param.nested_offset_ = 0;
+  param.nested_size_ = 0;
 }
 
 inline int TestTabletHelper::create_tablet(
@@ -118,7 +139,7 @@ inline int TestTabletHelper::create_tablet(
   prepare_sstable_param(tablet_id, table_schema, param);
   void *buff = nullptr;
   if (OB_FAIL(create_tablet_schema.init(schema_allocator, table_schema, compat_mode,
-        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+      false/*skip_column_info*/, DATA_VERSION_4_3_0_0))) {
     STORAGE_LOG(WARN, "failed to init storage schema", KR(ret), K(table_schema));
   } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_))) {
     STORAGE_LOG(WARN, "fill column checksum failed", K(ret), K(param));
@@ -130,32 +151,30 @@ inline int TestTabletHelper::create_tablet(
     const ObTabletMapKey key(ls_id, tablet_id);
     const bool need_create_empty_major_sstable =
       !(create_tablet_schema.is_user_hidden_table() || (create_tablet_schema.is_index_table() && !create_tablet_schema.can_read_index()));
+    const bool need_generate_cs_replica_cg_array =
+      ls_handle.get_ls()->is_cs_replica() && create_tablet_schema.is_row_store() && create_tablet_schema.is_user_data_table();
     if (OB_FAIL(t3m->create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, tablet_handle))) {
       STORAGE_LOG(WARN, "t3m acquire tablet failed", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(tablet_handle.get_obj()->init_for_first_time_creation(
         *tablet_handle.get_allocator(),
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
-        snapshot_version, create_tablet_schema, need_create_empty_major_sstable, freezer))){
+        snapshot_version, create_tablet_schema, need_create_empty_major_sstable, share::SCN::invalid_scn()/*clog_checkpoint_scn*/,
+        share::SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*is_split_dest_tablet*/, ObTabletID()/*split_src_tablet_id*/,
+        false/*micro_index_clustered*/, need_generate_cs_replica_cg_array, false/*has_cs_replica*/, DATA_VERSION_4_3_0_0, freezer))){
       STORAGE_LOG(WARN, "failed to init tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (ObTabletStatus::Status::MAX != tablet_status) {
       ObTabletCreateDeleteMdsUserData data;
       data.tablet_status_ = tablet_status;
       data.create_commit_scn_ = create_commit_scn;
       data.create_commit_version_ = create_commit_scn.get_val_for_tx();
-      if (tablet_status == ObTabletStatus::Status::DELETED) {
-        data.delete_commit_scn_ = SCN::base_scn();
+      if (tablet_status == ObTabletStatus::Status::DELETED || tablet_status == ObTabletStatus::Status::TRANSFER_OUT_DELETED) {
+        data.delete_commit_scn_ = share::SCN::plus(create_commit_scn, 100);
+        data.delete_commit_version_ = data.delete_commit_scn_.get_val_for_tx();
       }
 
-      ObTabletComplexAddr<mds::MdsDumpKV> &tablet_status_committed_kv = tablet_handle.get_obj()->mds_data_.tablet_status_.committed_kv_;
-      const int64_t data_serialize_size = data.get_serialize_size();
-      int64_t pos = 0;
-      char *buf = static_cast<char *>(t3m->full_tablet_creator_.get_allocator().alloc(data_serialize_size));
-      if (OB_FAIL(data.serialize(buf, data_serialize_size, pos))) {
-        STORAGE_LOG(WARN, "data serialize failed", K(ret), K(data_serialize_size), K(pos));
-      } else if (ObTabletObjLoadHelper::alloc_and_new(*tablet_handle.get_allocator(), tablet_status_committed_kv.ptr_)) {
-        STORAGE_LOG(WARN, "failed to alloc and new", K(ret));
-      } else {
-        tablet_status_committed_kv.ptr_->v_.user_data_.assign(buf, data_serialize_size);
+      ObTabletCreateDeleteMdsUserData &user_data = tablet_handle.get_obj()->tablet_meta_.last_persisted_committed_tablet_status_;
+      if (OB_FAIL(user_data.assign(data))) {
+        STORAGE_LOG(WARN, "failed to assign", K(ret), K(data));
       }
     }
 
@@ -167,7 +186,7 @@ inline int TestTabletHelper::create_tablet(
     } else if (OB_FAIL(ls_tablet_svr->tablet_id_set_.set(tablet_id))){
       STORAGE_LOG(WARN, "set tablet id failed", K(ret), K(tablet_id));
     } else {
-      handle = tablet_handle;
+      handle.assign(tablet_handle);
     }
   }
   return ret;
@@ -203,13 +222,9 @@ inline int TestTabletHelper::remove_tablet(const ObLSHandle &ls_handle, const Ob
   ObTabletCreateDeleteMdsUserData data;
   ObTabletStatus status(ObTabletStatus::DELETING);
   data.tablet_status_ = status;
-  const int64_t data_serialize_size = data.get_serialize_size();
-  int64_t pos = 0;
-  char *buf = reinterpret_cast<char *>(t3m->full_tablet_creator_.get_allocator().alloc(data_serialize_size));
-  if (OB_FAIL(data.serialize(buf, data_serialize_size, pos))) {
-    STORAGE_LOG(WARN, "data serialize failed", K(ret), K(data_serialize_size), K(pos));
+  if (OB_FAIL(tablet_handle.get_obj()->tablet_meta_.last_persisted_committed_tablet_status_.assign(data))) {
+    STORAGE_LOG(WARN, "failed to assign", K(ret), K(data));
   } else {
-    tablet_handle.get_obj()->mds_data_.tablet_status_.committed_kv_.get_ptr()->v_.user_data_.assign(buf, data_serialize_size);
     ObMetaDiskAddr disk_addr;
     ObUpdateTabletPointerParam param;
     disk_addr.set_mem_addr(0, sizeof(ObTablet));

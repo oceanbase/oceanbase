@@ -55,14 +55,24 @@ public:
                          int64_t partno,
                          bool is_left,
                          ObHJPartition *&part,
-                         bool only_get = false);
+                         bool only_get = false,
+                         bool create_left_store = true);
 
   void free(ObHJPartition *&part) {
     if (NULL != part) {
+      ObPartitionStore *partition_store = part->get_partition_store();
+      const common::ObIAllocator *partition_store_allocator = nullptr;
+      if (partition_store != nullptr) {
+        partition_store_allocator = partition_store->get_alloc_this_from();
+      }
       part->~ObHJPartition();
       alloc_.free(part);
       part = NULL;
       part_count_ --;
+      if (&alloc_ == partition_store_allocator) {
+        partition_store->~ObPartitionStore();
+        alloc_.free(partition_store);
+      }
     }
   }
 

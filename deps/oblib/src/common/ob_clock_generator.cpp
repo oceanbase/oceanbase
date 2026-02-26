@@ -10,14 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_clock_generator.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/lock/ob_monitor.h"
-#include "lib/lock/mutex.h"
-#include "lib/time/ob_time_utility.h"
+#include "ob_clock_generator.h"
 #include "lib/thread/ob_thread_name.h"
 #include "lib/utility/utility.h"
+#include "lib/ash/ob_active_session_guard.h"
+
 
 using namespace oceanbase::lib;
 
@@ -94,7 +91,7 @@ void ObClockGenerator::run1()
 
   lib::set_thread_name("ClockGenerator");
   while (!ready_) {
-    ob_usleep(SLEEP_US);
+    ob_usleep(SLEEP_US, true/*is_idle_sleep*/);
   }
   while (!stopped_) {
     int64_t retry = 0;
@@ -119,7 +116,7 @@ void ObClockGenerator::run1()
     } else {
       ATOMIC_STORE(&cur_ts_, cur_ts);
     }
-    ob_usleep(SLEEP_US);
+    ob_usleep(SLEEP_US, true/*is_idle_sleep*/);
   }
 }
 

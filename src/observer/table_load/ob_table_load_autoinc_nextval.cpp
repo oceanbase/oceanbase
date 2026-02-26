@@ -78,7 +78,7 @@ int ObTableLoadAutoincNextval::get_input_value(ObStorageDatum &datum,
                                                const uint64_t &sql_mode)
 {
   int ret = OB_SUCCESS;
-  if (datum.is_null()) {
+  if (datum.is_nop() || datum.is_null()) {
     is_to_generate = true;
   } else {
     bool is_zero = false;

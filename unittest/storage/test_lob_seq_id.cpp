@@ -16,8 +16,6 @@
 
 
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "storage/lob/ob_lob_seq.h"
 
 namespace oceanbase
 {
@@ -231,6 +229,11 @@ TEST_F(TestLobSeqId, test_chunk_size_v1_to_v0)
   ASSERT_EQ(ctx_v0.modified_len_, ctx_v1.modified_len_);
   ASSERT_EQ(4, ctx_v1.chunk_size_);
   ASSERT_EQ(ctx_v0.first_meta_offset_ & 0xffffff, ctx_v1.first_meta_offset_ );
+}
+
+TEST_F(TestLobSeqId, test_lob_outrow_locator_size)
+{
+  ASSERT_EQ(84, sizeof(ObLobCommon) + sizeof(ObLobData)  + sizeof(ObLobDataOutRowCtx) + sizeof(uint64_t));
 }
 
 

@@ -10,19 +10,23 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX STORAGE_FTS
-
-#include "lib/string/ob_string.h"
 #include "storage/fts/ob_whitespace_ft_parser.h"
 
+#include "lib/oblog/ob_log_module.h"
+#include "lib/string/ob_string.h"
+#include "storage/fts/ob_fts_struct.h"
+#include "storage/fts/ob_whitespace_ft_parser.h"
+#include "storage/fts/utils/ob_ft_char_utils.h"
+
+#define USING_LOG_PREFIX STORAGE_FTS
+
 using namespace oceanbase::common;
+using namespace oceanbase::plugin;
 
 namespace oceanbase
 {
 namespace storage
 {
-
-#define true_word_char(ctype, character) ((ctype) & (_MY_U | _MY_L | _MY_NMR) || (character) == '_')
 
 ObSpaceFTParser::ObSpaceFTParser()
   : cs_(nullptr),
@@ -46,7 +50,7 @@ void ObSpaceFTParser::reset()
   is_inited_ = false;
 }
 
-int ObSpaceFTParser::init(lib::ObFTParserParam *param)
+int ObSpaceFTParser::init(ObFTParserParam *param)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -71,11 +75,10 @@ int ObSpaceFTParser::init(lib::ObFTParserParam *param)
   return ret;
 }
 
-int ObSpaceFTParser::get_next_token(
-    const char *&word,
-    int64_t &word_len,
-    int64_t &char_len,
-    int64_t &word_freq)
+int ObSpaceFTParser::get_next_token(const char *&word,
+                                    int64_t &word_len,
+                                    int64_t &char_len,
+                                    int64_t &word_freq) // word_freq is always 1 ?
 {
   int ret = OB_SUCCESS;
   int mbl = 0;
@@ -141,47 +144,51 @@ ObWhiteSpaceFTParserDesc::ObWhiteSpaceFTParserDesc()
 {
 }
 
-int ObWhiteSpaceFTParserDesc::init(lib::ObPluginParam *param)
+int ObWhiteSpaceFTParserDesc::init(ObPluginParam *param)
 {
   is_inited_ = true;
   return OB_SUCCESS;
 }
 
-int ObWhiteSpaceFTParserDesc::deinit(lib::ObPluginParam *param)
+int ObWhiteSpaceFTParserDesc::deinit(ObPluginParam *param)
 {
   reset();
   return OB_SUCCESS;
 }
 
 int ObWhiteSpaceFTParserDesc::segment(
-    lib::ObFTParserParam *param,
-    lib::ObITokenIterator *&iter) const
+    ObFTParserParam *param,
+    ObITokenIterator *&iter) const
 {
   int ret = OB_SUCCESS;
-  void *buf = nullptr;
+  ObSpaceFTParser *parser = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("default ft parser desc hasn't be initialized", K(ret), K(is_inited_));
   } else if (OB_ISNULL(param) || OB_ISNULL(param->fulltext_) || OB_UNLIKELY(!param->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(param));
-  } else if (OB_ISNULL(buf = param->allocator_->alloc(sizeof(ObSpaceFTParser)))) {
+  } else if (OB_ISNULL(parser = OB_NEWx(ObSpaceFTParser, param->allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate space ft parser", K(ret));
   } else {
-    ObSpaceFTParser *parser = new (buf) ObSpaceFTParser();
     if (OB_FAIL(parser->init(param))) {
       LOG_WARN("fail to init whitespace fulltext parser", K(ret), KPC(param));
     } else {
       iter = parser;
     }
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObSpaceFTParser, param->allocator_, parser);
+  }
+
   return ret;
 }
 
 void ObWhiteSpaceFTParserDesc::free_token_iter(
-    lib::ObFTParserParam *param,
-    lib::ObITokenIterator *&iter) const
+    ObFTParserParam *param,
+    ObITokenIterator *&iter) const
 {
   if (OB_NOT_NULL(iter)) {
     abort_unless(nullptr != param);
@@ -189,6 +196,16 @@ void ObWhiteSpaceFTParserDesc::free_token_iter(
     iter->~ObITokenIterator();
     param->allocator_->free(iter);
   }
+}
+
+int ObWhiteSpaceFTParserDesc::get_add_word_flag(ObAddWordFlag &flag) const
+{
+  int ret = OB_SUCCESS;
+  flag.set_min_max_word();
+  flag.set_stop_word();
+  flag.set_casedown();
+  flag.set_groupby_word();
+  return ret;
 }
 
 } // end namespace storage

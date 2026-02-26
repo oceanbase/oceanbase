@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "common/row/ob_row.h"
-#include "lib/utility/utility.h"
 
 namespace oceanbase
 {

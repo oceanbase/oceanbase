@@ -11,8 +11,6 @@
  */
 
 #include "lib/allocator/ob_libeasy_mem_pool.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/allocator/ob_mod_define.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
@@ -35,7 +33,6 @@ void *common::ob_easy_realloc(void *ptr, size_t size)
     attr.label_ = set.name_of_idx(set.idx_of_pcode(pcode));
     attr.ctx_id_ = ObCtxIds::LIBEASY;
     attr.tenant_id_ = OB_SERVER_TENANT_ID;
-    attr.prio_ = lib::OB_HIGH_ALLOC;
     {
       TP_SWITCH_GUARD(true);
       ret = ob_realloc(ptr, size, attr);

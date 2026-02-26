@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/join/ob_join_vec_op.h"
-#include "share/vector/ob_uniform_format.h"
 
 namespace oceanbase
 {
@@ -23,6 +22,7 @@ namespace sql
 
 OB_SERIALIZE_MEMBER((ObJoinVecSpec, ObOpSpec),
                     join_type_, other_join_conds_);
+
 
 int ObJoinVecOp::inner_rescan()
 {
@@ -39,6 +39,8 @@ int ObJoinVecOp::blank_row_batch(const ExprFixedArray &exprs, int64_t batch_size
       ObIVector *vec = exprs.at(col_idx)->get_vector(eval_ctx_);
       if (OB_UNLIKELY(VEC_UNIFORM_CONST == exprs.at(col_idx)->get_format(eval_ctx_))) {
         reinterpret_cast<ObUniformFormat<true> *>(vec)->set_null(0);
+      } else if (VEC_UNIFORM == exprs.at(col_idx)->get_format(eval_ctx_)) {
+        reinterpret_cast<ObUniformFormat<false> *>(vec)->set_all_null(batch_size);
       } else {
         reinterpret_cast<ObBitmapNullVectorBase *>(vec)->get_nulls()->set_all(batch_size);
         reinterpret_cast<ObBitmapNullVectorBase *>(vec)->set_has_null();
@@ -66,21 +68,66 @@ void ObJoinVecOp::blank_row_batch_one(const ExprFixedArray &exprs)
   }
 }
 
-int ObJoinVecOp::calc_other_conds(bool &is_match)
+int ObJoinVecOp::calc_other_conds(const ObBitVector &skip, bool &is_match)
 {
   int ret = OB_SUCCESS;
   is_match = true;
   const ObIArray<ObExpr *> &conds = get_spec().other_join_conds_;
-  ObDatum *cmp_res = NULL;
+  const int64_t batch_idx = eval_ctx_.get_batch_idx();
+  EvalBound eval_bound(eval_ctx_.get_batch_size(), batch_idx, batch_idx + 1, false);
+  ObIVector *res_vec = nullptr;
   ARRAY_FOREACH(conds, i) {
-    if (OB_FAIL(conds.at(i)->eval(eval_ctx_, cmp_res))) {
+    if (OB_FAIL(conds.at(i)->eval_vector(eval_ctx_, skip, eval_bound))) {
       LOG_WARN("fail to calc other join condition", K(ret), K(*conds.at(i)));
-    } else if (cmp_res->is_null() || 0 == cmp_res->get_int()) {
+    } else if (OB_ISNULL(res_vec = conds.at(i)->get_vector(eval_ctx_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get source vector", K(ret), K(res_vec));
+    } else if (res_vec->is_null(batch_idx) || 0 == res_vec->get_int(batch_idx)) {
       is_match = false;
       break;
     }
   }
+  return ret;
+}
 
+int ObJoinVecOp::batch_calc_other_conds(ObBatchRows &brs)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObExpr *> &conds = get_spec().other_join_conds_;
+  bool all_skip = false;
+  ARRAY_FOREACH(conds, i) {
+    if (all_skip) {
+      break;
+    } else if (OB_FAIL(conds.at(i)->eval_vector(eval_ctx_, brs))) {
+      LOG_WARN("fail to calc other join condition", K(ret), K(*conds.at(i)));
+    } else {
+      VectorHeader &vec_header = conds.at(i)->get_vector_header(eval_ctx_);
+      common::ObIVector *vec = conds.at(i)->get_vector(eval_ctx_);
+      if (vec_header.format_ == VEC_FIXED) {
+        if (OB_UNLIKELY(static_cast<ObFixedLengthBase *>(vec)->get_length() != sizeof(int64_t))) {
+          ob_abort();
+        }
+        ObFixedLengthFormat<int64_t> *vec_ptr = static_cast<ObFixedLengthFormat<int64_t> *>(vec);
+        if (vec_ptr->has_null()) {
+          brs.merge_skip(vec_ptr->get_nulls(), brs.size_);
+          brs.all_rows_active_ = false;
+        }
+        brs.apply_filter(reinterpret_cast<const int64_t *>(vec_ptr->get_data()));
+      } else if (vec_header.format_ == VEC_UNIFORM_CONST) {
+        if (vec->is_null(0) || !vec->get_bool(0)) {
+          brs.skip_->set_all(brs.size_);
+          brs.all_rows_active_ = false;
+        }
+      } else {
+        for (int64_t i = 0; i < brs.size_; ++i) {
+          if (vec->is_null(i) || !vec->get_bool(i)) {
+            brs.set_skip(i);
+          }
+        }
+      }
+      all_skip = brs.size_ == brs.skip_->accumulate_bit_cnt(brs.size_);
+    }
+  }
   return ret;
 }
 

@@ -79,7 +79,7 @@ class ObAllVirtualProxyPartitionInfo : public ObAllVirtualProxyBaseIterator
     PART_KEY_PRECISION,
     PART_KEY_SCALE,
 
-    SPARE1,
+    SPARE1, // replace this with a table-level schema_version
     SPARE2,
     SPARE3,
     SPARE4,

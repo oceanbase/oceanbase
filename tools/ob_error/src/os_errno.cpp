@@ -14,7 +14,6 @@
 
 #include "os_errno.h"
 #include <string.h>
-#include <cstdio>
 using namespace oceanbase::common;
 
 static const char *OS_ERRNO_NAME[OS_MAX_ERROR_CODE];

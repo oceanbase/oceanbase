@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/rc/context.h"
-#include "lib/lds/ob_lds_constructor.hpp"
-#include "lib/lock/ob_mutex.h"
-#include "lib/rc/ob_rc.h"
-#include "lib/coro/co_var.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -54,6 +50,15 @@ MemoryContext &MemoryContext::root()
 {
   static MemoryContext root(&__MemoryContext__::root());
   return root;
+}
+
+int64_t MemoryContext::tree_mem_hold()
+{
+  int64_t total = 0;
+  if (OB_LIKELY(ref_context_ != nullptr)) {
+    total = ref_context_->tree_mem_hold();
+  }
+  return total;
 }
 
 } // end of namespace lib

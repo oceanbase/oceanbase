@@ -42,8 +42,8 @@ public:
     sql::ObWhiteFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
     common::ObBitmap &result_bitmap) = 0;
   virtual int get_rows(const common::ObIArray<int32_t> &cols,
-    const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const int64_t *row_ids, const char **cell_datas, const int64_t row_cap,
+    const common::ObIArray<const share::schema::ObColumnParam *> &col_params, const bool is_padding_mode,
+    const int32_t *row_ids, const char **cell_datas, const int64_t row_cap,
     common::ObIArray<ObSqlDatumInfo> &datum_infos, const int64_t datum_offset = 0) = 0;
   virtual bool can_apply_black(const common::ObIArray<int32_t> &col_offsets) const = 0;
   virtual int filter_black_filter_batch(const sql::ObPushdownFilterExecutor *parent,
@@ -55,16 +55,6 @@ public:
       const int64_t begin_idx,
       int64_t &row_idx,
       bool &equal) override;
-  virtual int get_rows(
-      const common::ObIArray<int32_t> &cols,
-      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const int64_t *row_ids,
-      const int64_t row_cap,
-      const char **cell_datas,
-      const int64_t vec_offset,
-      uint32_t *len_array,
-      sql::ObEvalCtx &eval_ctx,
-      sql::ObExprPtrIArray &exprs) = 0;
 
 protected:
   virtual int find_bound(const ObDatumRange &range, const int64_t begin_idx, int64_t &row_idx,
@@ -73,6 +63,13 @@ protected:
   // For column store
   virtual int find_bound(const ObDatumRowkey &key, const bool lower_bound, const int64_t begin_idx,
     const int64_t end_idx, int64_t &row_idx, bool &equal) override;
+
+  #define FOREACH_ADD_DECODER(col_param) \
+  for (int64_t i = 0; OB_SUCC(ret) && i < request_cnt_; ++i) { \
+    if (OB_FAIL(add_decoder(cols_index.at(i),  cols_desc.at(i).col_type_, (col_param), decoders_buf_pos, decoders_[i]))) { \
+      LOG_WARN("add_decoder failed", K(ret), "request_idx", i); \
+    } \
+  }
 };
 
 }  // namespace blocksstable

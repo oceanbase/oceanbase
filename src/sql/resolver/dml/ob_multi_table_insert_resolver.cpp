@@ -12,21 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_multi_table_insert_resolver.h"
-#include "share/ob_define.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/ob_autoincrement_param.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/parser/parse_malloc.h"
 #include "ob_default_value_utils.h"
-#include "observer/ob_server.h"
-#include "pl/ob_pl_resolver.h"
-#include "common/ob_smart_call.h"
 
 namespace oceanbase
 {
@@ -59,8 +46,8 @@ int ObMultiTableInsertResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(insert_all_stmt = create_stmt<ObInsertAllStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create insert stmt failed", K(insert_all_stmt));
-  } else if (OB_FAIL(resolve_outline_data_hints())) {
-    LOG_WARN("resolve outline data hints failed", K(ret));
+  } else if (OB_FAIL(pre_process_hints(parse_tree))) {
+    LOG_WARN("pre process hints failed", K(ret));
   } else if (OB_ISNULL(parse_tree.children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(parse_tree.children_[0]));
@@ -468,7 +455,9 @@ int ObMultiTableInsertResolver::resolve_insert_table_columns(const ParseNode *no
         LOG_WARN("check insert column duplicate failed", K(ret));
       } else if (is_duplicate) {
         ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-        LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(column_expr->get_column_name()));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
+            helper.convert(column_expr->get_column_name()));
       } else if (OB_HIDDEN_SESSION_ID_COLUMN_ID == column_expr->get_column_id()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify __session_id value");
@@ -498,7 +487,9 @@ int ObMultiTableInsertResolver::resolve_insert_table_columns(const ParseNode *no
           LOG_WARN("check insert column duplicate failed", K(ret));
         } else if (is_duplicate) {
           ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(column_items.at(i).column_name_));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
+              helper.convert(column_items.at(i).column_name_));
         } else if (OB_FAIL(mock_values_column_ref(column_items.at(i).expr_, table_info))) {
           LOG_WARN("mock values column reference failed", K(ret));
         }
@@ -602,10 +593,6 @@ int ObMultiTableInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr 
       value_desc->set_ref_id(table_info.table_id_, column_ref->get_column_id());
       value_desc->set_column_attr(ObString::make_string(OB_VALUES), column_ref->get_column_name());
       value_desc->set_udt_set_id(column_ref->get_udt_set_id());
-      if (ob_is_enumset_tc(column_ref->get_result_type().get_type ())
-          && OB_FAIL(value_desc->set_enum_set_values(column_ref->get_enum_set_values()))) {
-        LOG_WARN("failed to set_enum_set_values", K(*column_ref), K(ret));
-      }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(value_desc->add_flag(IS_COLUMN))) {
           LOG_WARN("failed to add flag IS_COLUMN", K(ret));
@@ -717,7 +704,7 @@ int ObMultiTableInsertResolver::resolve_insert_values_node(const ParseNode *node
           } else {
             ObString func_name = ObString::make_string(N_OLS_LABEL_VALUE_CHECK);
             label_value_check_expr->set_func_name(func_name);
-            if (OB_FAIL(label_value_check_expr->add_param_expr(expr))) {
+            if (OB_FAIL(label_value_check_expr->set_param_expr(expr))) {
               LOG_WARN("fail to add parm", K(ret));
             }
           }

@@ -27,7 +27,7 @@ public:
   ObFdSimulator();
   virtual ~ObFdSimulator(){};
 
-  const static int DEFAULT_ARRAY_SIZE = 100;
+  const static int DEFAULT_ARRAY_SIZE = 300;
   const static int INVALID_SLOT_ID = -1;
   /*pointerid is a union, 
     when the slot is free, it is a id, which point next free slot
@@ -81,6 +81,8 @@ private:
   common::ObSpinLock lock_;
   int32_t used_fd_cnt_;
   int32_t total_fd_cnt_;
+  int64_t alloc_fd_cnt_;   // just for stat in log
+  int64_t release_fd_cnt_; // just for stat in log
   bool is_init_;
 };
 

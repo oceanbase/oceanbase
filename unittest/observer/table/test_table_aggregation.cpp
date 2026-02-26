@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 OceanBase
+ * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -13,7 +13,6 @@
 #include <gtest/gtest.h>
 #define private public  // 获取private成员
 #define protected public  // 获取protect成员
-#include "common/row/ob_row.h"
 #include "observer/table/ob_table_aggregation.h"
 
 using namespace oceanbase::common;

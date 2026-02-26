@@ -13,16 +13,253 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_like.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/engine/ob_exec_context.h"
-#include "share/object/ob_obj_cast.h"
-#include "lib/oblog/ob_log.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
 using namespace common;
+namespace common
+{
+OB_DECLARE_AVX2_SPECIFIC_CODE(
+class StringSearcher {
+private:
+  static constexpr int AVX2_SIZE = sizeof(__m256i);
+
+public:
+  StringSearcher() : pattern_(nullptr), pattern_end_(nullptr), pattern_len_(0) {}
+  inline int init(const char *pattern, size_t len) {
+    int ret = OB_SUCCESS;
+    if (nullptr == pattern || 0 == len) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument. pattern is null.", K(ret), K(pattern), K(len));
+    } else {
+      pattern_ = pattern;
+      pattern_end_ = pattern_ + len;
+      pattern_len_ = len;
+
+      first_ = *pattern;
+      vfirst_ = _mm256_set1_epi8(first_);
+      if (2 <= pattern_len_) {
+        last_ = *(pattern_end_ - 1);
+        vlast_ = _mm256_set1_epi8(last_);
+      }
+    }
+    return ret;
+  }
+  inline const char *get_pattern() { return pattern_; }
+  inline const char *get_patterne_end() { return pattern_end_; }
+  inline size_t get_pattern_length() { return pattern_len_; }
+
+public:
+  // Determines if `pattern_` is a substring of `text`.
+  inline int is_substring(const char *text, const char *text_end, bool &res) const {
+    int ret = OB_SUCCESS;
+    res = false;
+    const char *text_cur = text;
+    // `pattern_` will not be null because it is prepared in `set_instr_info()`.
+    if (nullptr == pattern_ || 0 == pattern_len_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument. pattern_ is null.", K(ret), K(pattern_), K(pattern_len_));
+    } else if (text == text_end) {
+      // `text` is NULL, so `res` will be false.
+    } else if (1 == pattern_len_) {
+      // Here is the quick path when `pattern_len_` is 1.
+      // All elements of `vfirst_`(__m128i) are first byte of `pattern_`.
+      // We will compare `text` and `vfirst_` using avx(__mm256i) in each iteration.
+      // Align the end of `text` based on `AVX2_SIZE`.
+      const char *avx_end = text + ((text_end - text) & ~(AVX2_SIZE - 1));
+      for (; text_cur < avx_end; text_cur += AVX2_SIZE) {
+        __m256i first_block = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(text_cur));
+        __m256i first_cmp = _mm256_cmpeq_epi8(first_block, vfirst_);
+        uint32_t mask = _mm256_movemask_epi8(first_cmp);
+        if (0 != mask) {
+          res = true;
+          break;
+        }
+      }
+    } else {
+      // Here is the common path when `pattern_len_` is greater than 1.
+      // First, find positions in `text` that are equal to the first and last byte of `pattern_`
+      // at same time using avx(__mm256i).
+      // Then, use func `memequal_opt` to compare middle bytes of `pattern_` and corresponding
+      // bytes of `text`.
+      // Align the end of `text` based on `AVX2_SIZE` and `pattern_len_`.
+      const char *avx_end = text + ((text_end - (text + pattern_len_ - 1)) & ~(AVX2_SIZE - 1));
+      for (; !res && text_cur < avx_end; text_cur += AVX2_SIZE) {
+        const char *last_cur = text_cur + pattern_len_ - 1;
+        __m256i first_block = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(text_cur));
+        __m256i last_block = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(last_cur));
+        __m256i first_cmp = _mm256_cmpeq_epi8(first_block, vfirst_);
+        __m256i last_cmp = _mm256_cmpeq_epi8(last_block, vlast_);
+        uint32_t mask = _mm256_movemask_epi8(_mm256_and_si256(first_cmp, last_cmp));
+        while (mask != 0) {
+          int offset = __builtin_ctz(mask);
+          // The first and the last bytes match, so we don't need to compare them again.
+          if (2 == pattern_len_ ||
+              memequal_opt(text_cur + offset + 1, pattern_ + 1, pattern_len_ - 2)) {
+            res = true;
+            break;
+          }
+          mask &= (mask - 1);
+        }
+      }
+    }
+    // Handle the tail of text.
+    if (!res && text_end - text_cur >= pattern_len_) {
+      res = NULL != MEMMEM(text_cur, text_end - text_cur, pattern_, pattern_len_);
+    }
+    return ret;
+  }
+
+  // Determines if `text` starts with `pattern_`.
+  inline int start_with(const char *text, const char *text_end, bool &res) const {
+    int ret = OB_SUCCESS;
+    // pattern_ will not be null because it is prepared in set_instr_info().
+    if (nullptr == pattern_ || 0 == pattern_len_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument. pattern_ is null.", K(ret), K(pattern_), K(pattern_len_));
+    } else if (pattern_len_ > text_end - text) {
+      res = false;
+    } else {
+      res = memequal_opt(text, pattern_, pattern_len_);
+    }
+    return ret;
+  }
+
+  // Determines if `text` ends with `pattern_`.
+  inline int end_with(const char *text, const char *text_end, bool &res) const {
+    int ret = OB_SUCCESS;
+    // pattern_ will not be null because it is prepared in set_instr_info().
+    if (nullptr == pattern_ || 0 == pattern_len_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument. pattern_ is null.", K(ret), K(pattern_), K(pattern_len_));
+    } else if (pattern_len_ > text_end - text) {
+      res = false;
+    } else {
+      res = memequal_opt(text_end - pattern_len_, pattern_, pattern_len_);
+    }
+    return ret;
+  }
+
+  // Determines if `text` equals with `pattern_`.
+  inline int equal(const char *text, const char *text_end, bool &res) const {
+    int ret = OB_SUCCESS;
+    // pattern_ will not be null because it is prepared in set_instr_info().
+    if (nullptr == pattern_ || 0 == pattern_len_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument. pattern_ is null.", K(ret), K(pattern_), K(pattern_len_));
+    } else if (pattern_len_ != text_end - text) {
+      res = false;
+    } else {
+      res = memequal_opt(text, pattern_, pattern_len_);
+    }
+    return res;
+  }
+
+  inline bool memequal_opt(const char *s1, const char *s2, size_t n) const {
+    switch (n)
+    {
+    case 1:
+      return *s1 == *s2;
+    case 2:
+      return memequal_plain<int16_t>(s1, s2);
+    case 3:
+      return memequal_plain<int16_t>(s1, s2) && memequal_plain<int8_t>(s1 + 2, s2 + 2);
+    case 4:
+      return memequal_plain<int32_t>(s1, s2);
+    case 5:
+      return memequal_plain<int32_t>(s1, s2) && memequal_plain<int8_t>(s1 + 4, s2 + 4);
+    case 6:
+      return memequal_plain<int32_t>(s1, s2) && memequal_plain<int16_t>(s1 + 4, s2 + 4);
+    case 7:
+      return memequal_plain<int32_t>(s1, s2) &&
+             memequal_plain<int16_t>(s1 + 4, s2 + 4) &&
+             memequal_plain<int8_t>(s1 + 6, s2 + 6);
+    case 8:
+      return memequal_plain<int64_t>(s1, s2);
+    default:
+      break;
+    }
+    if (n <= 16) {
+      return memequal_plain<int64_t>(s1, s2) && memequal_plain<int64_t>(s1 + n - 8, s2 + n - 8);
+    }
+    while (n >= 64) {
+      if (memequal_sse<4>(s1, s2)) {
+        s1 += 64;
+        s2 += 64;
+        n -= 64;
+      } else {
+        return false;
+      }
+    }
+    switch (n / 16) {
+    case 3:
+      if (!memequal_sse<1>(s1 + 32, s2 + 32)) {
+        return false;
+      }
+    case 2:
+      if (!memequal_sse<1>(s1 + 16, s2 + 16)) {
+        return false;
+      }
+    case 1:
+      if (!memequal_sse<1>(s1, s2)) {
+        return false;
+      }
+    }
+    return memequal_sse<1>(s1 + n - 16, s2 + n - 16);
+  }
+
+  // compare the values of two int8_t, int16_t or other comparable plain types.
+  template <typename T>
+  OB_INLINE bool memequal_plain(const char *p1, const char *p2) const {
+    return *reinterpret_cast<const T *>(p1) == *reinterpret_cast<const T *>(p2);
+  }
+
+  // compare two values by sse, cnt means the count of __m128i to compare.
+  template <int cnt>
+  OB_INLINE bool memequal_sse(const char *p1, const char *p2) const {
+    if (cnt == 1) {
+      return 0xFFFF == _mm_movemask_epi8(
+          _mm_cmpeq_epi8(
+              _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1)),
+              _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2))));
+    }
+    if (cnt == 4) {
+      return 0xFFFF == _mm_movemask_epi8(
+          _mm_and_si128(
+              _mm_and_si128(
+                  _mm_cmpeq_epi8(
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1)),
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2))),
+                  _mm_cmpeq_epi8(
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1) + 1),
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2) + 1))),
+              _mm_and_si128(
+                  _mm_cmpeq_epi8(
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1) + 2),
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2) + 2)),
+                  _mm_cmpeq_epi8(
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1) + 3),
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2) + 3)))));
+    }
+  }
+
+private:
+  // string to be searched for
+  const char *pattern_;
+  const char *pattern_end_;
+  size_t pattern_len_;
+  // first or last byte of `pattern_`
+  uint8_t first_;
+  uint8_t last_;
+  // vector filled `first_` or `last_`
+  __m256i vfirst_;
+  __m256i vlast_;
+};
+)
+}
+
 namespace sql
 {
 
@@ -230,7 +467,7 @@ int ObExprLike::check_pattern_valid(const T &pattern,
                   K(pattern_val), K(ret));
     }
     if (OB_SUCC(ret) && NULL != like_ctx) {
-      record_last_check<is_static_engine>(*like_ctx, pattern_val,
+      ret = record_last_check<is_static_engine>(*like_ctx, pattern_val,
                                           escape_val, &exec_ctx->get_allocator());
     }
   }
@@ -293,10 +530,12 @@ int ObExprLike::calc_result_type3(ObExprResType &type,
         type.set_calc_collation_type(type_ctx.get_session()->get_nls_collation());
       }
     } else {
-      ret = aggregate_charsets_for_comparison(type.get_calc_meta(), types, 2, type_ctx.get_coll_type());
+      ret = aggregate_charsets_for_comparison(type.get_calc_meta(), types, 2, type_ctx);
     }
     type1.set_calc_collation_type(type.get_calc_collation_type());
     type2.set_calc_collation_type(type.get_calc_collation_type());
+    type1.set_calc_collation_level(type.get_calc_collation_level());
+    type2.set_calc_collation_level(type.get_calc_collation_level());
     ObExprOperator::calc_result_flag2(type, type1, type2); // ESCAPE is ignored
   }
   return ret;
@@ -318,8 +557,8 @@ int ObExprLike::set_instr_info(ObIAllocator *exec_allocator,
   char *pattern_buf = nullptr;
   ObIAllocator *exec_cal_buf = exec_allocator;
   InstrInfo &instr_info = like_ctx.instr_info_;
-  if (cs_type != CS_TYPE_UTF8MB4_BIN) {
-    //we optimize the case in which cs_type == CS_TYPE_UTF8MB4_BIN only
+  if (cs_type != CS_TYPE_UTF8MB4_BIN && cs_type != CS_TYPE_UTF8MB4_0900_BIN) {
+    //we optimize the case in which cs_type == CS_TYPE_UTF8MB4_BIN/CS_TYPE_UTF8MB4_0900_BIN only
     //just let it go
   } else if (OB_UNLIKELY(OB_ISNULL(cs = ObCharset::get_charset(cs_type)) ||
                   OB_ISNULL(cs->cset))) {
@@ -400,6 +639,23 @@ int ObExprLike::set_instr_info(ObIAllocator *exec_allocator,
       }//end deduce instrmode
     }//end else
   }
+#if OB_USE_MULTITARGET_CODE
+  // optimize for special patterns
+  if (OB_SUCC(ret)) {
+    if (1 == instr_info.instr_cnt_ && common::is_arch_supported(ObTargetArch::AVX2)) {
+        void *buf = nullptr;
+        if (OB_ISNULL(buf = exec_allocator->alloc(sizeof(StringSearcher)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocator memory", K(ret));
+        } else if (FALSE_IT(like_ctx.string_searcher_ = new (buf) StringSearcher())) {
+          // do nothing
+        } else if (OB_FAIL(reinterpret_cast<StringSearcher *>(like_ctx.string_searcher_)->init(
+            instr_info.instr_starts_[0], instr_info.instr_lengths_[0]))) {
+          LOG_WARN("failed to init string_searcher_", K(ret));
+        }
+    }
+  }
+#endif
   LOG_DEBUG("end set instr info", K(cs_type), K(pattern), K(escape),
             K(escape_coll), K(instr_info));
   return ret;
@@ -413,8 +669,9 @@ int ObExprLike::calc_with_instr_mode(T &result,
 {
   int ret = OB_SUCCESS;
   const InstrInfo instr_info = like_ctx.instr_info_;
+  void *string_searcher = like_ctx.string_searcher_;
   const int32_t text_len = text.length();
-  if (OB_UNLIKELY(cs_type != CS_TYPE_UTF8MB4_BIN)) {
+  if (OB_UNLIKELY(cs_type != CS_TYPE_UTF8MB4_BIN && cs_type != CS_TYPE_UTF8MB4_0900_BIN)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument(s)", K(ret), K(cs_type), K(text));
   } else if (OB_UNLIKELY(instr_info.empty())) {
@@ -425,19 +682,19 @@ int ObExprLike::calc_with_instr_mode(T &result,
     int64_t res = 0;
     switch(instr_info.instr_mode_) {
       case START_WITH_PERCENT_SIGN: {
-        res = match_with_instr_mode<true, false>(text, instr_info);
+        res = match_with_instr_mode<true, false>(text, instr_info, string_searcher);
         break;
       }
       case START_END_WITH_PERCENT_SIGN: {
-        res = match_with_instr_mode<true, true>(text, instr_info);
+        res = match_with_instr_mode<true, true>(text, instr_info, string_searcher);
         break;
       }
       case END_WITH_PERCENT_SIGN: {
-        res = match_with_instr_mode<false, true>(text, instr_info);
+        res = match_with_instr_mode<false, true>(text, instr_info, string_searcher);
         break;
       }
       case MIDDLE_PERCENT_SIGN: {
-        res = match_with_instr_mode<false ,false>(text, instr_info);
+        res = match_with_instr_mode<false, false>(text, instr_info, string_searcher);
         break;
       }
       default: {
@@ -601,11 +858,12 @@ int ObExprLike::cg_expr(ObExprCGCtx &op_cg_ctx,
 }
 
 template <bool is_static_engine>
-void ObExprLike::record_last_check(ObExprLikeContext &like_ctx,
+int ObExprLike::record_last_check(ObExprLikeContext &like_ctx,
                                   const ObString pattern_val,
                                   const ObString escape_val,
                                   ObIAllocator *buf_alloc)
 {
+  int ret = OB_SUCCESS;
   if (is_static_engine) {
     const uint32_t init_len = 16;
     like_ctx.same_as_last = false;
@@ -619,23 +877,36 @@ void ObExprLike::record_last_check(ObExprLikeContext &like_ctx,
       }
       like_ctx.last_pattern_ = (char*) (buf_alloc->alloc(sizeof(char) *
                                         like_ctx.pattern_buf_len_));
-    }
-    MEMCPY(like_ctx.last_pattern_, pattern_val.ptr(), pattern_val.length());
-    like_ctx.last_escape_len_ = escape_val.length();
-    if (escape_val.length() > like_ctx.escape_buf_len_) {
-      if(0 == like_ctx.escape_buf_len_) {
-        like_ctx.escape_buf_len_ = init_len;
+      if (OB_ISNULL(like_ctx.last_pattern_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret));
       }
-      while (escape_val.length() > like_ctx.escape_buf_len_) {
-        like_ctx.escape_buf_len_ *= 2;
-      }
-      like_ctx.last_escape_ = (char*) (buf_alloc->alloc(sizeof(char) *
-                                        like_ctx.escape_buf_len_));
     }
-    MEMCPY(like_ctx.last_escape_, escape_val.ptr(), escape_val.length());
+    if (OB_SUCC(ret)) {
+      MEMCPY(like_ctx.last_pattern_, pattern_val.ptr(), pattern_val.length());
+      like_ctx.last_escape_len_ = escape_val.length();
+      if (escape_val.length() > like_ctx.escape_buf_len_) {
+        if(0 == like_ctx.escape_buf_len_) {
+          like_ctx.escape_buf_len_ = init_len;
+        }
+        while (escape_val.length() > like_ctx.escape_buf_len_) {
+          like_ctx.escape_buf_len_ *= 2;
+        }
+        like_ctx.last_escape_ = (char*) (buf_alloc->alloc(sizeof(char) *
+                                          like_ctx.escape_buf_len_));
+        if (OB_ISNULL(like_ctx.last_escape_)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc memory failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        MEMCPY(like_ctx.last_escape_, escape_val.ptr(), escape_val.length());
+      }
+    }
   } else {
     like_ctx.set_checked();
   }
+  return ret;
 }
 
 template <bool is_static_engine>
@@ -708,7 +979,7 @@ int ObExprLike::like_varchar_inner(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum 
                                             text_val, pattern_val, escape_val);
           }
           if (OB_SUCC(ret) && !is_oracle_mode()) {
-            record_last_check<true>(*like_ctx, pattern_val, escape_val,
+            ret = record_last_check<true>(*like_ctx, pattern_val, escape_val,
                               &ctx.exec_ctx_.get_allocator());
           }
         } else if (like_ctx->is_instr_mode()) {//instr mode
@@ -774,7 +1045,27 @@ int ObExprLike::like_varchar(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &expr_
 
 
 template <bool percent_sign_start, bool percent_sign_end>
-int64_t ObExprLike::match_with_instr_mode(const ObString &text, const InstrInfo instr_info)
+int64_t ObExprLike::match_with_instr_mode(const ObString &text,
+                                          const InstrInfo instr_info,
+                                          void *string_searcher)
+{
+  int64_t res = 0;
+#if OB_USE_MULTITARGET_CODE
+  // while `instr_info.instr_cnt_` is 1, try to optimize it with SIMD.
+  if (1 == instr_info.instr_cnt_ && common::is_arch_supported(ObTargetArch::AVX2)) {
+    res = match_with_instr_mode_by_simd<percent_sign_start, percent_sign_end>(text, string_searcher);
+  } else {
+    res = match_with_instr_mode<percent_sign_start, percent_sign_end>(text, instr_info);
+  }
+#else
+  res = match_with_instr_mode<percent_sign_start, percent_sign_end>(text, instr_info);
+#endif
+  return res;
+}
+
+template <bool percent_sign_start, bool percent_sign_end>
+OB_INLINE int64_t ObExprLike::match_with_instr_mode(const ObString &text,
+                                                    const InstrInfo &instr_info)
 {
   int64_t res = 0;
   const char *text_ptr = text.ptr();
@@ -822,6 +1113,34 @@ int64_t ObExprLike::match_with_instr_mode(const ObString &text, const InstrInfo 
   return res;
 }
 
+// while `instr_info.instr_cnt_` is 1, optimize to calc substring, start_with, end_with or equal.
+template <bool percent_sign_start, bool percent_sign_end>
+OB_INLINE int64_t ObExprLike::match_with_instr_mode_by_simd(const ObString &text,
+                                                            void *string_searcher)
+{
+  bool res = false;
+#if OB_USE_MULTITARGET_CODE
+  int ret = OB_SUCCESS;
+  const char *text_ptr = text.ptr();
+  uint32_t text_len = text.length();
+  StringSearcher *string_searcher_ptr = reinterpret_cast<StringSearcher *>(string_searcher);
+  if (percent_sign_start && percent_sign_end) {
+    ret = string_searcher_ptr->is_substring(text_ptr, text_ptr + text_len, res);
+  } else if (!percent_sign_start && percent_sign_end) {
+    ret = string_searcher_ptr->start_with(text_ptr, text_ptr + text_len, res);
+  } else if (percent_sign_start && !percent_sign_end) {
+    ret = string_searcher_ptr->end_with(text_ptr, text_ptr + text_len, res);
+  } else {
+    ret = string_searcher_ptr->equal(text_ptr, text_ptr + text_len, res);
+  }
+  if (OB_FAIL(ret)) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "failed to call string_searcher's func.",
+        K(ret), K(percent_sign_start), K(percent_sign_end));
+  }
+#endif
+  return res;
+}
+
 struct ObNonInstrModeMatcher
 {
   inline int64_t operator() (const ObCollationType coll_type,
@@ -845,10 +1164,11 @@ struct ObNonInstrModeMatcher
 
 template <bool NullCheck, bool UseInstrMode, INSTR_MODE InstrMode>
 int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
-                                const ObCollationType coll_type,
-                                const int32_t escape_wc,
-                                const ObString &pattern_val,
-                                const InstrInfo instr_info)
+                                 const ObCollationType coll_type,
+                                 const int32_t escape_wc,
+                                 const ObString &pattern_val,
+                                 const InstrInfo instr_info,
+                                 void *string_searcher)
 {
   int ret = OB_SUCCESS;
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
@@ -869,7 +1189,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
           if (UseInstrMode) {
             int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                     : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                    (text_datums[i].get_string(), instr_info);
+                    (text_datums[i].get_string(), instr_info, string_searcher);
             res_datums[i].set_int(res);
           } else {
             res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_datums[i].get_string(),
@@ -888,7 +1208,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
           } else if (UseInstrMode) {
             int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                   : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                  (text_val, instr_info);
+                  (text_val, instr_info, string_searcher);
             res_datums[i].set_int(res);
           } else {
             res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_val,
@@ -911,7 +1231,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
             if (UseInstrMode) {
             int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                 : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                (text_datums[i].get_string(), instr_info);
+                (text_datums[i].get_string(), instr_info, string_searcher);
               res_datums[i].set_int(res);
             } else {
               res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_datums[i].get_string(),
@@ -931,7 +1251,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
               if (UseInstrMode) {
                 int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                     : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                    (text_val, instr_info);
+                    (text_val, instr_info, string_searcher);
                 res_datums[i].set_int(res);
               } else {
                 res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_val,
@@ -948,9 +1268,12 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
 }
 
 template <typename TextVec, typename ResVec, bool NullCheck, bool UseInstrMode, INSTR_MODE InstrMode>
-int ObExprLike::match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL, const ObCollationType coll_type,
-                                  const int32_t escape_wc, const ObString &pattern_val,
-                                  const InstrInfo instr_info)
+int ObExprLike::match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL,
+                                  const ObCollationType coll_type,
+                                  const int32_t escape_wc,
+                                  const ObString &pattern_val,
+                                  const InstrInfo instr_info,
+                                  void *string_searcher)
 {
   int ret = OB_SUCCESS;
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
@@ -966,7 +1289,7 @@ int ObExprLike::match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL, const ObCollationTy
         if (UseInstrMode) {
           int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                   : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                  (text_vec->get_string(i), instr_info);
+                  (text_vec->get_string(i), instr_info, string_searcher);
           res_vec->set_int(i, res);
         } else {
           res_vec->set_int(i, ObNonInstrModeMatcher()(coll_type, text_vec->get_string(i),
@@ -986,7 +1309,7 @@ int ObExprLike::match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL, const ObCollationTy
         } else if (UseInstrMode) {
           int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                 : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                (text_val, instr_info);
+                (text_val, instr_info, string_searcher);
           res_vec->set_int(i, res);
         } else {
           res_vec->set_int(i, ObNonInstrModeMatcher()(coll_type, text_val,
@@ -1023,12 +1346,12 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
         eval_flags.set(i);
       }
     }
-    expr.get_eval_info(ctx).notnull_ = false;
+    expr.get_eval_info(ctx).set_notnull(false);
   } else {
     ObString pattern_val = pattern_datum->get_string();
     ObString escape_val;
     // check pattern is not null already, so result is null if and only if text is null.
-    bool null_check = !expr.args_[0]->get_eval_info(ctx).notnull_;
+    bool null_check = !expr.args_[0]->get_eval_info(ctx).is_notnull();
     if (escape_datum->is_null() || escape_datum->get_string().empty()) {
       bool is_no_backslash_escapes = false;
       IS_NO_BACKSLASH_ESCAPES(ctx.exec_ctx_.get_my_session()->get_sql_mode(),
@@ -1052,12 +1375,13 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
           escape_val, escape_coll, *like_ctx))) {
         LOG_WARN("failed to set instr info", K(ret), K(pattern_val));
       } else if (!is_oracle_mode()) {
-        record_last_check<true>(*like_ctx, pattern_val, escape_val,
+        ret = record_last_check<true>(*like_ctx, pattern_val, escape_val,
                           &ctx.exec_ctx_.get_allocator());
       }
     }
     INSTR_MODE instr_mode = like_ctx->get_instr_mode();
     const InstrInfo instr_info = like_ctx->instr_info_;
+    void *string_searcher = like_ctx->string_searcher_;
     int32_t escape_wc = 0;
     LOG_DEBUG("set instr info inner end", K(coll_type), K(pattern_val), K(instr_mode),
               K(like_ctx->same_as_last));
@@ -1068,7 +1392,7 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");
     } else {
       #define MATCH_TEXT_BATCH_ARG_LIST expr, ctx, skip, size, coll_type, escape_wc, pattern_val, \
-                instr_info
+                instr_info, string_searcher
       // it seems to take a lot of work to make eval_info.notnull_ correct and it may be removed.
       // so null_check variable is not used now, match_text_batch is called always with null check.
       #define CALL_MATCH_TEXT_BATCH(use_instr_mode, instr_mode) \
@@ -1108,7 +1432,7 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
       if (OB_FAIL(ret)) {
         LOG_WARN("match text batch failed", K(ret), K(instr_mode), K(null_check));
       } else {
-        expr.get_eval_info(ctx).notnull_ = !null_check;
+        expr.get_eval_info(ctx).set_notnull(!null_check);
       }
       #undef MATCH_TEXT_BATCH_ARG_LIST
       #undef CALL_MATCH_TEXT_BATCH
@@ -1142,12 +1466,12 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
         eval_flags.set(i);
       }
     }
-    expr.get_eval_info(ctx).notnull_ = false;
+    expr.get_eval_info(ctx).set_notnull(false);
   } else {
     ObString pattern_val = pattern_inrow->get_string();
     ObString escape_val;
     // check pattern is not null already, so result is null if and only if text is null.
-    bool null_check = !expr.args_[0]->get_eval_info(ctx).notnull_;
+    bool null_check = !expr.args_[0]->get_eval_info(ctx).is_notnull();
     if (escape_vector->is_null(0) || escape_vector->get_string(0).empty()) {
       bool is_no_backslash_escapes = false;
       IS_NO_BACKSLASH_ESCAPES(ctx.exec_ctx_.get_my_session()->get_sql_mode(),
@@ -1177,6 +1501,7 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
     }
     INSTR_MODE instr_mode = like_ctx->get_instr_mode();
     const InstrInfo instr_info = like_ctx->instr_info_;
+    void *string_searcher = like_ctx->string_searcher_;
     int32_t escape_wc = 0;
     LOG_DEBUG("set instr info inner end", K(coll_type), K(pattern_val), K(instr_mode),
               K(like_ctx->same_as_last));
@@ -1187,7 +1512,7 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");
     } else {
       #define MATCH_TEXT_VECTOR_ARG_LIST expr, ctx, skip, bound, coll_type, escape_wc, pattern_val, \
-                instr_info
+                instr_info, string_searcher
       // it seems to take a lot of work to make eval_info.notnull_ correct and it may be removed.
       // so null_check variable is not used now, match_text_batch is called always with null check.
       #define CALL_MATCH_TEXT_VECTOR(use_instr_mode, instr_mode) \
@@ -1227,7 +1552,7 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
       if (OB_FAIL(ret)) {
         LOG_WARN("match text batch failed", K(ret), K(instr_mode), K(null_check));
       } else {
-        expr.get_eval_info(ctx).notnull_ = !null_check;
+        expr.get_eval_info(ctx).set_notnull(!null_check);
       }
       #undef MATCH_TEXT_VECTOR_ARG_LIST
       #undef CALL_MATCH_TEXT_VECTOR
@@ -1313,28 +1638,30 @@ int ObExprLike::eval_like_expr_vector_only_text_vectorized(VECTOR_EVAL_FUNC_ARG_
   int ret = OB_SUCCESS;
   ObExpr &pattern = *expr.args_[1];
   ObExpr &escape = *expr.args_[2];
-  if (OB_FAIL(pattern.eval_vector(ctx, skip, bound))) {
+  int64_t const_skip = 0;
+  const ObBitVector *param_skip = to_bit_vector(&const_skip);
+  if (OB_FAIL(pattern.eval_vector(ctx, *param_skip, EvalBound(1)))) {
     LOG_WARN("eval pattern failed", K(ret));
-  } else if (OB_FAIL(escape.eval_vector(ctx, skip, bound))) {
+  } else if (OB_FAIL(escape.eval_vector(ctx, *param_skip, EvalBound(1)))) {
     LOG_WARN("eval escape failed", K(ret));
   // the third arg escape must be varchar
   } else if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("eval text batch failed", K(ret));
-  }  else {
+  } else {
     VectorFormat text_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_DISCRETE == text_format && VEC_DISCRETE == res_format) {
-      ret = vector_like<TextDiscVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_UNIFORM == text_format && VEC_DISCRETE == res_format) {
-      ret = vector_like<TextUniVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_CONTINUOUS == text_format && VEC_DISCRETE == res_format) {
-      ret = vector_like<TextContVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrContVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_DISCRETE == text_format && VEC_UNIFORM == res_format) {
-      ret = vector_like<TextDiscVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrDiscVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_UNIFORM == text_format && VEC_UNIFORM == res_format) {
-      ret = vector_like<TextUniVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_CONTINUOUS == text_format && VEC_UNIFORM == res_format) {
-      ret = vector_like<TextContVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrContVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else {
       ret = vector_like<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
     }
@@ -1352,5 +1679,8 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprLike, raw_expr) {
   return ret;
 }
 
+template int64_t ObExprLike::match_with_instr_mode<true, true>(const ObString &text,
+                                                               const InstrInfo instr_info,
+                                                               void *string_searcher);
 }
 }

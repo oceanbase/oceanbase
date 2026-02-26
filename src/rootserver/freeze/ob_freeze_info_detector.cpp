@@ -15,18 +15,11 @@
 #include "rootserver/freeze/ob_freeze_info_detector.h"
 
 #include "rootserver/freeze/ob_major_merge_info_manager.h"
-#include "share/ob_freeze_info_manager.h"
 #include "rootserver/ob_root_utils.h"
-#include "lib/profile/ob_trace_id.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_global_stat_proxy.h"
-#include "observer/ob_server_struct.h"
-#include "share/rc/ob_tenant_base.h"
 #include "rootserver/ob_thread_idling.h"
-#include "share/ob_rpc_struct.h"
 #include "share/ob_service_epoch_proxy.h"
-#include "share/ob_zone_merge_info.h"
 
 namespace oceanbase
 {
@@ -80,6 +73,7 @@ int ObMajorMergeInfoDetector::start()
   return ret;
 }
 
+ERRSIM_POINT_DEF(SKIP_REFRESH_ZONE_INFO)
 void ObMajorMergeInfoDetector::run3()
 {
   int ret = OB_SUCCESS;
@@ -96,6 +90,7 @@ void ObMajorMergeInfoDetector::run3()
       LOG_TRACE("run freeze info detector", K_(tenant_id));
 
       bool can_work = false;
+      bool skip_refresh_zone_info = false;
       int64_t proposal_id = 0;
       ObRole role = ObRole::INVALID_ROLE;
 
@@ -149,7 +144,14 @@ void ObMajorMergeInfoDetector::run3()
         }
 
         ret = OB_SUCCESS;
-        if (OB_FAIL(try_update_zone_info(proposal_id))) {
+#ifdef ERRSIM
+        if (OB_UNLIKELY(SKIP_REFRESH_ZONE_INFO)) {
+          skip_refresh_zone_info = true;
+          LOG_INFO("ERRSIM SKIP_REFRESH_ZONE_INFO", K(ret));
+          ret = OB_SUCCESS;
+        }
+#endif
+        if (OB_FAIL(!skip_refresh_zone_info && try_update_zone_info(proposal_id))) {
           LOG_WARN("fail to try update zone info", KR(ret), K_(tenant_id), K(proposal_id));
         }
       }

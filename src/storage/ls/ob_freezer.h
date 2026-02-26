@@ -23,6 +23,7 @@
 #include "logservice/ob_log_handler.h"
 #include "lib/container/ob_array_serialization.h"
 #include "share/ob_occam_thread_pool.h"
+#include "storage/ls/ob_freezer_define.h"
 
 namespace oceanbase
 {
@@ -51,7 +52,6 @@ namespace checkpoint
 {
 class ObDataCheckpoint;
 }
-
 
 class ObFreezeState
 {
@@ -196,33 +196,36 @@ public:
   void reset();
   void offline() { enable_ = false; }
   void online() { enable_ = true; }
+  ObLS *get_ls() { return ls_; }
 
 public:
   /********************** freeze **********************/
+  // freezer interface
   int logstream_freeze(const int64_t trace_id);
-  int wait_ls_freeze_finish();
-  int wait_tablet_freeze_finish(ObIArray<ObTableHandleV2> &frozen_memtable_handles,
-                                ObIArray<ObTabletID> &freeze_failed_tablets);
-  int ls_inner_tablet_freeze(const ObTabletID &tablet_id);
   int tablet_freeze(const int64_t trace_id,
                     const ObIArray<ObTabletID> &tablet_ids,
                     const bool need_rewrite_meta,
                     ObIArray<ObTableHandleV2> &frozen_memtable_handles,
                     ObIArray<ObTabletID> &freeze_failed_tablets);
+
+  // freezer helper
+  int wait_ls_freeze_finish();
+  int wait_tablet_freeze_finish(ObIArray<ObTableHandleV2> &frozen_memtable_handles,
+                                ObIArray<ObTabletID> &freeze_failed_tablets);
+  int ls_inner_tablet_freeze(const ObTabletID &tablet_id);
   int get_all_async_freeze_tablets(const int64_t ls_epoch, ObIArray<ObTabletID> &tablet_ids);
   bool is_async_freeze_tablets_empty() const { return async_freeze_tablets_.empty(); }
-  bool is_async_tablet_freeze_task_running() { return ATOMIC_LOAD(&is_async_tablet_freeze_task_running_); }
-  bool set_async_tablet_freeze_task_start_succ() { return ATOMIC_BCAS(&is_async_tablet_freeze_task_running_, false, true); }
-  void set_async_freeze_task_stop() { ATOMIC_STORE(&is_async_tablet_freeze_task_running_, false); }
   void record_async_freeze_tablet(const AsyncFreezeTabletInfo &async_freeze_tablet_info);
   void erase_async_freeze_tablet(const AsyncFreezeTabletInfo &async_freeze_tablet_info);
-  void commit_an_async_freeze_task(const int64_t trace_id, const bool is_ls_freeze);
+  void submit_an_async_freeze_task(const int64_t trace_id, const bool is_ls_freeze);
+  void async_ls_freeze_consumer(const int64_t trace_id);
   void async_tablet_freeze_consumer(const int64_t trace_id);
   common::hash::ObHashSet<AsyncFreezeTabletInfo> &get_async_freeze_tablets() { return async_freeze_tablets_; }
   /********************** freeze **********************/
 
   /* freeze_flag */
-  bool is_freeze(uint32_t is_freeze=UINT32_MAX) const;
+  bool is_freeze(uint32_t freeze_flag) const;
+  bool is_ls_freeze_running() const {  return 0 < ATOMIC_LOAD(&high_priority_freeze_cnt_); }
   uint32_t get_freeze_flag() const { return ATOMIC_LOAD(&freeze_flag_); };
   uint32_t get_freeze_clock() { return ATOMIC_LOAD(&freeze_flag_) & (~(1 << 31)); }
 
@@ -247,6 +250,16 @@ public:
   void print_freezer_statistics();
 
   /* others */
+  bool need_resubmit_log() { return ATOMIC_LOAD(&need_resubmit_log_); }
+  void set_throttle_is_skipping() { throttle_is_skipping_ = true; }
+  void unset_throttle_is_skipping() { throttle_is_skipping_ = false; }
+  bool throttle_is_skipping() { return throttle_is_skipping_; }
+  void set_tenant_replay_is_pending() { tenant_replay_is_pending_ = true; }
+  void unset_tenant_replay_is_pending() { tenant_replay_is_pending_ = false; }
+  bool tenant_replay_is_pending() const { return tenant_replay_is_pending_; }
+  void disable_flush() { flush_is_disabled_ = true; }
+  void enable_flush() { flush_is_disabled_ = false; }
+  bool flush_is_disabled() { return flush_is_disabled_; }
   // get consequent callbacked log_ts right boundary
   virtual int get_max_consequent_callbacked_scn(share::SCN &max_consequent_callbacked_scn);
   // to set snapshot version when memtables meet ready_for_flush
@@ -258,7 +271,6 @@ public:
   int get_newest_snapshot_version(const ObTabletID &tablet_id,
                                   share::SCN &snapshot_version);
   ObFreezerStat& get_stat() { return stat_; }
-  bool need_resubmit_log() { return ATOMIC_LOAD(&need_resubmit_log_); }
   void set_need_resubmit_log(bool flag) { return ATOMIC_STORE(&need_resubmit_log_, flag); }
   int pend_ls_replay();
   int restore_ls_replay();
@@ -282,12 +294,29 @@ private:
     bool need_release_;
     ObFreezer &parent_;
   };
-  class PendTenantReplayGuard
-  {
+  class PendTenantReplayHelper {
   public:
-    PendTenantReplayGuard();
-    ~PendTenantReplayGuard();
+    PendTenantReplayHelper(ObFreezer &host, ObLS *current_freeze_ls)
+        : host_(host), current_freeze_ls_(current_freeze_ls) {}
+    ~PendTenantReplayHelper() { reset_pend_status_(); }
+    void set_skip_throttle_flag();
+    void check_pend_condition_once();
+  private:
+    bool current_ls_is_leader_();
+    bool remain_memory_is_exhausting_();
+    void pend_tenant_replay_();
+    void restore_tenant_replay_();
+    void reset_pend_status_()
+    {
+      (void)host_.unset_throttle_is_skipping();
+      (void)restore_tenant_replay_();
+    }
+  private:
+    ObFreezer &host_;
+    ObLS *current_freeze_ls_;
+    ObSEArray<ObLSHandle, 16> ls_handle_array_;
   };
+
 private:
   /* freeze_flag */
   int set_freeze_flag();
@@ -297,10 +326,13 @@ private:
   void try_freeze_tx_data_();
 
   /* inner subfunctions for freeze process */
-  int inner_logstream_freeze();
   int submit_log_for_freeze(const bool is_tablet_freeze, const bool is_try);
   void submit_log_if_needed_(ObIArray<ObTableHandleV2> &frozen_memtable_handles);
   void try_submit_log_for_freeze_(const bool is_tablet_freeze);
+  void resubmit_log_if_needed_(const int64_t start_time,
+                               const bool is_tablet_freeze,
+                               const bool is_try,
+                               const ObITabletMemtable *freeze_memtable = nullptr /* used for tablet freeze */);
   int wait_data_memtable_freeze_finish_(ObITabletMemtable *tablet_memtable);
   int wait_direct_load_memtable_freeze_finish_(ObITabletMemtable *tablet_memtable);
   int set_tablet_freeze_flag_(const int64_t trace_id,
@@ -310,7 +342,11 @@ private:
                               ObIArray<ObTableHandleV2> &frozen_memtable_handles);
   int handle_no_active_memtable_(const ObTabletID &tablet_id,
                                  const ObTablet *tablet,
-                                 const share::SCN freeze_snapshot_version);
+                                 share::SCN freeze_snapshot_version);
+  int decide_real_snapshot_version_(const ObTabletID &tablet_id,
+                                    const ObTablet *tablet,
+                                    const SCN freeze_snapshot_version,
+                                    SCN &real_snapshot_version);
   void handle_set_tablet_freeze_failed(const bool need_rewrite_meta,
                                        const ObTabletID &tablet_id,
                                        const ObLSID &ls_id,
@@ -323,12 +359,12 @@ private:
                                  ObTabletID &record_tablet_id,
                                  bool &try_guard);
   int submit_wait_freeze_finish_task_(const bool is_ls_freeze, ObFuture<int> *result, ObTableHandleV2 &handle);
-  int wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tablet_memtable);
+  int wait_memtable_ready_for_flush_(ObITabletMemtable *tablet_memtable);
   int try_set_tablet_freeze_begin_();
   void set_tablet_freeze_begin_();
-  void set_tablet_freeze_end_();
+  void set_tablet_freeze_end_() { ATOMIC_DEC(&low_priority_freeze_cnt_); }
   void set_ls_freeze_begin_();
-  void set_ls_freeze_end_();
+  void set_ls_freeze_end_() { ATOMIC_DEC(&high_priority_freeze_cnt_); }
   int check_ls_state(); // must be used under the protection of ls_lock
   int tablet_freeze_(const int64_t trace_id,
                      const ObIArray<ObTabletID> &tablet_ids,
@@ -337,12 +373,9 @@ private:
                      ObIArray<ObTableHandleV2> &frozen_memtable_handles,
                      ObIArray<ObTabletID> &freeze_failed_tablets);
   int inner_wait_memtable_freeze_finish_(ObTableHandleV2 &memtable_handle);
-  int try_wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tablet_memtable,
-                                                     bool &ready_for_flush,
-                                                     bool &is_force_released,
-                                                     const int64_t start,
-                                                     int64_t &last_submit_log_time);
   void submit_checkpoint_task();
+  bool async_freeze_task_already_exists_(const bool is_ls_freeze);
+  bool acquired_exec_async_task_permission_(const bool is_ls_freeze);
 private:
   // flag whether the logsteram is freezing
   // the first bit: 1, freeze; 0, not freeze
@@ -368,7 +401,11 @@ private:
   bool need_resubmit_log_;
   bool enable_;                     // whether we can do freeze now
   bool is_inited_;
-  bool is_async_tablet_freeze_task_running_;
+  bool is_async_tablet_freeze_task_existing_;
+  bool is_async_ls_freeze_task_existing_;
+  bool throttle_is_skipping_;
+  bool tenant_replay_is_pending_;
+  bool flush_is_disabled_;
   common::hash::ObHashSet<AsyncFreezeTabletInfo> async_freeze_tablets_;
 };
 

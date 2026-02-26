@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SHARE
-#include <cmath>
 
 #include "ob_unit_info.h"
 
@@ -22,6 +21,7 @@ namespace share
 const char *const ObUnit::unit_status_strings[ObUnit::UNIT_STATUS_MAX] = {
   "ACTIVE",
   "DELETING",
+  "ADDING"
 };
 
 ObUnit::Status ObUnit::str_to_unit_status(const ObString &str)
@@ -56,6 +56,7 @@ void ObUnit::reset()
   is_manual_migrate_ = false;
   status_ = UNIT_STATUS_MAX;
   replica_type_ = REPLICA_TYPE_FULL;
+  time_stamp_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObUnit::assign(const ObUnit& that)
@@ -74,6 +75,43 @@ int ObUnit::assign(const ObUnit& that)
     is_manual_migrate_ = that.is_manual_migrate_;
     status_ = that.status_;
     replica_type_ = that.replica_type_;
+    time_stamp_ = that.time_stamp_;
+  }
+  return ret;
+}
+
+int ObUnit::init(
+    const uint64_t unit_id,
+    const uint64_t resource_pool_id,
+    const uint64_t unit_group_id,
+    const common::ObZone &zone,
+    const common::ObAddr &server,
+    const common::ObAddr &migrate_from_server,
+    const bool is_manual_migrate,
+    const Status &status,
+    const common::ObReplicaType &replica_type,
+    const int64_t time_stamp)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == unit_id
+               || OB_INVALID_ID == resource_pool_id
+               || OB_INVALID_ID == unit_group_id
+               || zone.is_empty()
+               || !server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(unit_id), K(resource_pool_id), K(unit_group_id), K(zone), K(server));
+  } else if (OB_FAIL(zone_.assign(zone))) {
+    LOG_WARN("fail to assign zone", KR(ret), K(zone));
+  } else {
+    unit_id_ = unit_id;
+    resource_pool_id_ = resource_pool_id;
+    unit_group_id_ = unit_group_id;
+    server_ = server;
+    migrate_from_server_ = migrate_from_server;
+    is_manual_migrate_ = is_manual_migrate;
+    status_ = status;
+    replica_type_ = replica_type;
+    time_stamp_ = time_stamp;
   }
   return ret;
 }
@@ -87,8 +125,13 @@ bool ObUnit::is_valid() const
          && !zone_.is_empty()
          && server_.is_valid()
          && server_ != migrate_from_server_
-         && (status_ >= UNIT_STATUS_ACTIVE && status_ < UNIT_STATUS_MAX)
+         && is_valid_status(status_)
          && ObReplicaTypeCheck::is_replica_type_valid(replica_type_);
+}
+
+bool ObUnit::is_valid_status(const ObUnit::Status status)
+{
+  return status >= UNIT_STATUS_ACTIVE && status < UNIT_STATUS_MAX;
 }
 
 int ObUnit::get_unit_status_str(const char *&status_str) const
@@ -101,6 +144,11 @@ int ObUnit::get_unit_status_str(const char *&status_str) const
     status_str = unit_status_strings[status_];
   }
   return ret;
+}
+
+bool ObUnit::compare_with_zone(const ObUnit &lu, const ObUnit &ru)
+{
+  return lu.zone_ < ru.zone_;
 }
 
 DEF_TO_STRING(ObUnit)
@@ -127,7 +175,8 @@ OB_SERIALIZE_MEMBER(ObUnit,
                     migrate_from_server_,
                     is_manual_migrate_,
                     status_,
-                    replica_type_);
+                    replica_type_,
+                    time_stamp_);
 
 int ObUnitInfo::assign(const ObUnitInfo &other)
 {
@@ -136,6 +185,98 @@ int ObUnitInfo::assign(const ObUnitInfo &other)
   config_ = other.config_;
   if (OB_FAIL(copy_assign(pool_, other.pool_))) {
     SHARE_LOG(WARN, "failed to assign pool_", K(ret));
+  }
+  return ret;
+}
+
+ObTenantServers::ObTenantServers()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      servers_(),
+      renew_time_(0)
+{
+  servers_.set_label("TntSrvArr");
+}
+
+ObTenantServers::~ObTenantServers()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  renew_time_ = 0;
+  servers_.destroy();
+}
+
+int ObTenantServers::assign(const ObTenantServers &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    if (OB_FAIL(servers_.assign(other.servers_))) {
+      LOG_WARN("assign failed", KR(ret), "servers", other.servers_);
+    } else {
+      tenant_id_ = other.tenant_id_;
+      renew_time_ = other.renew_time_;
+    }
+  }
+  return ret;
+}
+
+int ObTenantServers::init_or_insert_server(
+    const uint64_t tenant_id,
+    const common::ObAddr &server,
+    const common::ObAddr &migrate_server,
+    const int64_t renew_time)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || !server.is_valid()
+      || renew_time <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input parameter", KR(ret),
+        K(tenant_id), K(server), K(renew_time));
+  } else if (!is_valid()) {
+    tenant_id_ = tenant_id;
+    renew_time_ = renew_time;
+  } else if (tenant_id != tenant_id_) {
+    ret = OB_CONFLICT_VALUE;
+    LOG_WARN("already initialized; tenant mismatch", KR(ret),
+        "tenant to be inserted", tenant_id,
+        "tenant already inserted", tenant_id_);
+  }
+
+  // insert_server will ensure that
+  // there are no duplicates in the servers of tenant_servers
+  if (FAILEDx(insert_server_(server))) {
+    LOG_WARN("failed to insert server to tenant_servers", KR(ret), K(server));
+  } else if (migrate_server.is_valid()) {
+    if (OB_FAIL(insert_server_(migrate_server))) {
+      LOG_WARN("failed to insert migrate_server to tenant_servers", KR(ret), K(migrate_server));
+    }
+  }
+  return ret;
+}
+
+void ObTenantServers::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  renew_time_ = 0;
+  servers_.reset();
+}
+
+bool ObTenantServers::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_)
+         && !servers_.empty()
+         && renew_time_ > 0;
+}
+
+int ObTenantServers::insert_server_(const common::ObAddr &server)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the server is invalid", KR(ret), K(server));
+  } else if (has_exist_in_array(servers_, server)) {
+    // server exist
+  } else if (OB_FAIL(servers_.push_back(server))) {
+    LOG_WARN("push_back failed", KR(ret), K(server));
   }
   return ret;
 }

@@ -12,10 +12,6 @@
 
 #include "ob_information_table_constraints_table.h"
 
-#include "lib/container/ob_array_serialization.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
 #include "share/schema/ob_constraint.h"
 
 using namespace oceanbase::common;
@@ -146,7 +142,7 @@ int ObInfoSchemaTableConstraintsTable::add_table_constraints(const ObTableSchema
 {
   int ret = OB_SUCCESS;
   //add rowkey constraints
-  if (!table_schema.is_heap_table()) {
+  if (table_schema.is_table_with_pk()) {
     if (OB_FAIL(add_rowkey_constraints(table_schema, database_name, cells, col_count))) {
       SERVER_LOG(WARN, "fail to add rowkey indexes", K(ret));
     }

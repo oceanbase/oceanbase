@@ -25,10 +25,12 @@ namespace sql {
 class ObISortVecOpImpl
 {
 public:
-  explicit ObISortVecOpImpl(ObMonitorNode &op_monitor_info, lib::MemoryContext &mem_context) :
+  explicit ObISortVecOpImpl(ObMonitorNode &op_monitor_info,
+                            lib::MemoryContext &mem_context,
+                            ObSqlWorkAreaType profile_type) :
     mem_context_(mem_context), input_rows_(OB_INVALID_ID), input_width_(OB_INVALID_ID),
     op_type_(PHY_INVALID), op_id_(UINT64_MAX), io_event_observer_(nullptr),
-    profile_(ObSqlWorkAreaType::SORT_WORK_AREA), op_monitor_info_(op_monitor_info),
+    profile_(profile_type), op_monitor_info_(op_monitor_info),
     sql_mem_processor_(profile_, op_monitor_info_)
   {}
   virtual ~ObISortVecOpImpl()
@@ -36,6 +38,8 @@ public:
   virtual void reset() = 0;
   virtual int init(ObSortVecOpContext &context) = 0;
   virtual int add_batch(const ObBatchRows &input_brs, bool &sort_need_dump) = 0;
+  virtual int add_batch(const ObBatchRows &input_brs, const uint16_t selector[], const int64_t size) = 0;
+  virtual int rewind() = 0;
   virtual int get_next_batch(const int64_t max_cnt, int64_t &read_rows) = 0;
   virtual int sort() = 0;
   virtual int add_batch_stored_row(int64_t &row_size, const ObCompactRow **sk_stored_rows,

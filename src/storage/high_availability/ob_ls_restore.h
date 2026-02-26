@@ -49,8 +49,8 @@ public:
   share::ObTaskId task_id_;
   ObStorageHASrcInfo src_;
   ObLSMetaPackage src_ls_meta_package_;
-  ObArray<common::ObTabletID> sys_tablet_id_array_;
-  ObArray<common::ObTabletID> data_tablet_id_array_;
+  ObArray<ObLogicTabletID> sys_tablet_id_array_;
+  ObArray<ObLogicTabletID> data_tablet_id_array_;
   ObStorageHATableInfoMgr ha_table_info_mgr_;
   ObHATabletGroupMgr tablet_group_mgr_;
   bool need_check_seq_;
@@ -94,7 +94,7 @@ public:
   }
   virtual int start_running() override;
   virtual bool operator == (const share::ObIDagNet &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx() override;
@@ -133,7 +133,7 @@ public:
   virtual ~ObLSRestoreDag();
   ObLSRestoreCtx *get_ctx() const { return static_cast<ObLSRestoreCtx *>(ha_dag_net_ctx_); }
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
 
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this))
@@ -211,8 +211,6 @@ private:
   void set_tablet_to_restore(ObMigrationTabletParam &tablet_meta);
   int alloc_copy_ls_view_reader_(ObICopyLSViewInfoReader *&reader);
   void free_copy_ls_view_reader_(ObICopyLSViewInfoReader *&reader);
-  int generate_tablet_id_array_(
-      const ObIArray<common::ObTabletID> &tablet_id_array);
   int reset_multi_version_start_(ObMigrationTabletParam &param);
 private:
   bool is_inited_;
@@ -250,7 +248,6 @@ private:
   int create_or_update_tablets_();
   int build_tablets_sstable_info_();
   int generate_sys_tablet_restore_dag_();
-
 private:
   bool is_inited_;
   ObLSHandle ls_handle_;
@@ -309,20 +306,20 @@ public:
   ObTabletGroupMetaRestoreDag();
   virtual ~ObTabletGroupMetaRestoreDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   virtual int generate_next_dag(share::ObIDag *&dag);
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
 
   int init(
-      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      const common::ObIArray<ObLogicTabletID> &tablet_id_array,
       share::ObIDagNet *dag_net,
       share::ObIDag *finish_dag);
   INHERIT_TO_STRING_KV("ObLSRestoreDag", ObLSRestoreDag, KP(this), KPC(ha_dag_net_ctx_));
 protected:
   bool is_inited_;
-  ObArray<ObTabletID> tablet_id_array_;
+  ObArray<ObLogicTabletID> tablet_id_array_;
   share::ObIDag *finish_dag_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletGroupMetaRestoreDag);
 };
@@ -333,7 +330,7 @@ public:
   ObTabletGroupMetaRestoreTask();
   virtual ~ObTabletGroupMetaRestoreTask();
   int init(
-      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      const common::ObIArray<ObLogicTabletID> &tablet_id_array,
       share::ObIDag *finish_dag);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletGroupMetaRestoreTask"), KP(this), KPC(ctx_));
@@ -346,7 +343,7 @@ private:
 private:
   bool is_inited_;
   ObLSRestoreCtx *ctx_;
-  common::ObArray<common::ObTabletID> tablet_id_array_;
+  common::ObArray<ObLogicTabletID> tablet_id_array_;
   share::ObIDag *finish_dag_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletGroupMetaRestoreTask);
 };

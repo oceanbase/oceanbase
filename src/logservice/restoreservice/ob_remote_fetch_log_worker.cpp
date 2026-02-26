@@ -12,26 +12,8 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_remote_fetch_log_worker.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/ob_define.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/restore/ob_storage.h"                     // is_io_error
-#include "lib/utility/ob_tracepoint.h"                  // EventTable
-#include "share/ob_errno.h"
-#include "share/rc/ob_tenant_base.h"                    // mtl_alloc
 #include "storage/tx_storage/ob_ls_service.h"           // ObLSService
-#include "storage/ls/ob_ls.h"                           // ObLS
-#include "logservice/palf/log_group_entry.h"            // LogGroupEntry
-#include "logservice/palf/lsn.h"                        // LSN
 #include "ob_log_restore_service.h"                     // ObLogRestoreService
-#include "share/scn.h"                        // SCN
-#include "ob_fetch_log_task.h"                          // ObFetchLogTask
-#include "ob_log_restore_handler.h"                     // ObLogRestoreHandler
-#include "ob_log_restore_allocator.h"                       // ObLogRestoreAllocator
-#include "storage/tx_storage/ob_ls_handle.h"            // ObLSHandle
-#include "logservice/archiveservice/ob_archive_define.h"   // archive
-#include "storage/tx_storage/ob_ls_map.h"               // ObLSIterator
-#include "logservice/archiveservice/large_buffer_pool.h"
 
 namespace oceanbase
 {
@@ -63,6 +45,7 @@ ObRemoteFetchWorker::ObRemoteFetchWorker() :
   ls_svr_(NULL),
   task_queue_(),
   allocator_(NULL),
+  writer_(NULL),
   log_ext_handler_(),
   cond_()
 {}
@@ -75,7 +58,8 @@ ObRemoteFetchWorker::~ObRemoteFetchWorker()
 int ObRemoteFetchWorker::init(const uint64_t tenant_id,
     ObLogRestoreAllocator *allocator,
     ObLogRestoreService *restore_service,
-    ObLSService *ls_svr)
+    ObLSService *ls_svr,
+    ObRemoteLogWriter *writer)
 {
   int ret = OB_SUCCESS;
   const int64_t FETCH_LOG_MEMORY_LIMIT = 1024 * 1024 * 1024L;  // 1GB
@@ -86,7 +70,8 @@ int ObRemoteFetchWorker::init(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
       || OB_ISNULL(allocator)
       || OB_ISNULL(restore_service)
-      || OB_ISNULL(ls_svr)) {
+      || OB_ISNULL(ls_svr)
+      || OB_ISNULL(writer)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(tenant_id), K(allocator), K(restore_service), K(ls_svr));
   } else if (OB_FAIL(task_queue_.init(FETCH_LOG_TASK_LIMIT, "RFLTaskQueue", MTL_ID()))) {
@@ -98,6 +83,7 @@ int ObRemoteFetchWorker::init(const uint64_t tenant_id,
     allocator_ = allocator;
     restore_service_ = restore_service;
     ls_svr_ = ls_svr;
+    writer_ = writer;
     inited_ = true;
   }
   return ret;
@@ -124,10 +110,13 @@ void ObRemoteFetchWorker::destroy()
     task_queue_.destroy();
     restore_service_ = NULL;
     ls_svr_ = NULL;
+    writer_ = NULL;
     allocator_ = NULL;
     log_ext_handler_.destroy();
     inited_ = false;
+    ObThreadPool::destroy();
   }
+  LOG_INFO("ObRemoteFetchWorker destroy success");
 }
 
 int ObRemoteFetchWorker::start()
@@ -176,9 +165,11 @@ int ObRemoteFetchWorker::submit_fetch_log_task(ObFetchLogTask *task)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(task));
   } else if (FALSE_IT(task->iter_.reset())) {
+  } else if (FALSE_IT(task->task_stat_.gen_ts_ = ObTimeUtility::current_time())) {
   } else if (OB_FAIL(task_queue_.push(task))) {
     LOG_WARN("push task failed", K(ret), KPC(task));
   } else {
+    signal();
     LOG_TRACE("submit_fetch_log_task succ", KP(task));
   }
   return ret;
@@ -216,6 +207,7 @@ int ObRemoteFetchWorker::get_thread_count(int64_t &thread_count) const
 void ObRemoteFetchWorker::run1()
 {
   LOG_INFO("ObRemoteFetchWorker thread start");
+  ObDIActionGuard ag("LogService", "LogRestoreService", "RemoteLogFetcher");
   lib::set_thread_name("RFLWorker");
   ObCurTraceId::init(GCONF.self_addr_);
 
@@ -229,6 +221,7 @@ void ObRemoteFetchWorker::run1()
       int64_t end_tstamp = ObTimeUtility::current_time();
       int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
+        common::ObBKGDSessInActiveGuard inactive_guard;
         cond_.timedwait(wait_interval);
       }
     }
@@ -277,7 +270,7 @@ int ObRemoteFetchWorker::handle_single_task_()
     }
 
     // only fatal error report fail, retry with others
-    if (is_fatal_error_(ret) && need_fetch_log_(task->id_)) {
+    if (is_fatal_error_(ret) && need_fetch_log_(id)) {
       report_error_(id, ret, cur_lsn, ObLogRestoreErrorContext::ErrorType::FETCH_LOG);
     }
 //errsim: inject restore failed error
@@ -299,7 +292,11 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
   int ret = OB_SUCCESS;
   bool empty = true;
   const int64_t DEFAULT_BUF_SIZE = 64 * 1024 * 1024L;
-
+  int64_t fetch_log_size = 0;
+  task->task_stat_.start_fetch_ts_ = ObTimeUtility::current_time();
+  const uint64_t io_tenant_id = MTL_ID();
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+        io_tenant_id, OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_tenant_id) * 1000LL);
   if (OB_UNLIKELY(! task->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(ret), K(task));
@@ -307,15 +304,20 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
           task->cur_lsn_, task->end_lsn_, allocator_->get_buferr_pool(),
           &log_ext_handler_, DEFAULT_BUF_SIZE))) {
     LOG_WARN("ObRemoteLogIterator init failed", K(ret), K_(tenant_id), KPC(task));
+  } else if (OB_FAIL(task->iter_.set_io_context(palf::LogIOContext(tenant_id_, task->id_.id(), palf::LogIOUser::RESTORE)))) {
+    LOG_WARN("set_io_context failed", K(ret), K_(tenant_id), KPC(task));
   } else if (!need_fetch_log_(task->id_)) {
     LOG_TRACE("no need fetch log", KPC(task));
-  } else if (OB_FAIL(task->iter_.pre_read(empty))) {
+  } else if (OB_FAIL(task->iter_.pre_read(empty, task->task_stat_.fetch_log_size_))) {
     LOG_WARN("pre_read failed", K(ret), KPC(task));
+  } else if (FALSE_IT(task->task_stat_.finish_fetch_ts_ = ObTimeUtility::current_time())) {
   } else if (empty) {
     LOG_TRACE("pre read empty");
     // do nothing
   } else if (OB_FAIL(push_submit_array_(*task))) {
     LOG_WARN("push submit array failed", K(ret));
+  } else {
+    writer_->notify_task();
   }
 
   if (OB_SUCC(ret) && ! empty) {
@@ -423,7 +425,7 @@ int64_t ObRemoteFetchWorker::calcuate_thread_count_(const int64_t log_restore_co
   int64_t thread_count = 0;
   int64_t recommend_concurrency_in_single_file = log_ext_handler_.get_recommend_concurrency_in_single_file();
   thread_count = static_cast<int64_t>(
-    log_restore_concurrency + recommend_concurrency_in_single_file - 1) / recommend_concurrency_in_single_file;
+    log_restore_concurrency + recommend_concurrency_in_single_file - 1) / recommend_concurrency_in_single_file * 2;
   return thread_count;
 }
 

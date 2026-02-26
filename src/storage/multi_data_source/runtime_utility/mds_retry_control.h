@@ -26,11 +26,19 @@ namespace mds
 {
 
 struct RetryParam {
+  RetryParam():
+  ls_id_(0),
+  start_ts_(0),
+  last_print_ts_(0),
+  timeout_ts_(0),
+  retry_cnt_(0),
+  print_interval_(0) {}
   RetryParam(share::ObLSID ls_id, int64_t lock_timeout_us, int64_t print_interval = 500_ms) :
   ls_id_(ls_id),
   start_ts_(ObClockGenerator::getClock()),
   last_print_ts_(0),
-  timeout_ts_(start_ts_ + lock_timeout_us),
+  // to avoid over MAX limit, signed number overlimit bahavior is not defined by standard
+  timeout_ts_(start_ts_ > (INT64_MAX - lock_timeout_us) ? INT64_MAX : start_ts_ + lock_timeout_us),
   retry_cnt_(0),
   print_interval_(print_interval) {}
   RetryParam &operator++() { ++retry_cnt_; return *this; }

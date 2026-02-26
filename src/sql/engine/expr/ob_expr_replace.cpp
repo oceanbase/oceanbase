@@ -14,16 +14,10 @@
 
 #include "sql/engine/expr/ob_expr_replace.h"
 
-#include <limits.h>
-#include <string.h>
 
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/ob_compatibility_control.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_exec_context.h"
+#include "lib/charset/ob_charset_string_helper.h"
 
 namespace oceanbase
 {
@@ -81,8 +75,7 @@ int ObExprReplace::calc_result_typeN(ObExprResType &type,
       if (3 == param_num) {
         types_array[2].set_calc_type(ObVarcharType);
       }
-      OZ(ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
-              type, types_array, param_num, type_ctx.get_coll_type()));
+      OZ(ObExprOperator::aggregate_charsets_for_string_result_with_comparison(type, types_array, 1, type_ctx));
       for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
         types_array[i].set_calc_meta(type);
       }
@@ -97,10 +90,15 @@ int ObExprReplace::calc_result_typeN(ObExprResType &type,
     int64_t max_len = 0;
     if (lib::is_oracle_mode()) {
       result_len = types_array[0].get_calc_length();
-      if (param_num == 2 || types_array[2].is_null()) {
+      if (param_num == 2 || types_array[2].is_null() || types_array[2].get_calc_length() == 0) {
         // do nothing
       } else {
-        OX(result_len *= types_array[2].get_calc_length());
+        if (OB_SUCC(ret)) {
+          result_len *= types_array[2].get_calc_length();
+          if (result_len > OB_MAX_LONGTEXT_LENGTH) {
+            result_len = OB_MAX_LONGTEXT_LENGTH;
+          }
+        }
         if (OB_SUCC(ret) && (type.is_nchar() || type.is_nvarchar2())) {
           const ObCharsetInfo *cs = ObCharset::get_charset(type.get_collation_type());
           result_len = result_len * cs->mbmaxlen;
@@ -236,7 +234,18 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
   } else if (text->is_null()
              || (is_mysql && from->is_null())
              || (is_mysql && NULL != to && to->is_null())) {
-    if (is_mysql && !from->is_null() && 0 == from->len_) {
+    ObExpr *from_expr = expr.args_[1];
+    int64_t from_len = 0;
+    if (!ob_is_text_tc(from_expr->datum_meta_.type_)) {
+      from_len = from->len_;
+    } else {
+      ObLobLocatorV2 locator(from->get_string(), from_expr->obj_meta_.has_lob_header());
+      if (OB_FAIL(locator.get_lob_data_byte_len(from_len))) {
+        LOG_WARN("get lob data byte length failed", K(ret), K(locator));
+      }
+    }
+    if (OB_FAIL(ret)){
+    } else if (is_mysql && !from->is_null() && 0 == from_len) {
       ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
       const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
       uint64_t compat_version = 0;

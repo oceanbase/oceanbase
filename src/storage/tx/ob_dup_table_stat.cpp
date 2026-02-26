@@ -8,7 +8,7 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#include "storage/tx/ob_dup_table_stat.h"
+#include "ob_dup_table_stat.h"
 #include "storage/tx/ob_dup_table_tablets.h"
 
 namespace oceanbase
@@ -115,7 +115,7 @@ const ObString &get_dup_tablet_set_attr_str(const TabletSetAttr attr)
     ObString("DATA_SYNCING"),
     ObString("READABLE"),
     ObString("DELETIGN"),
-    ObString("UNKONW") //  invliad argument, return unknow string
+    ObString("UNKONW") //  invalid argument, return unknow string
   };
 
   int8_t attr_idx = 0;
@@ -138,7 +138,7 @@ const ObString &get_dup_tablet_set_state_str(const TabletSetState state)
     ObString("LOGGING"),
     ObString("CONFIRMING"),
     ObString("CONFIRMED"),
-    ObString("UNKONW") //  invliad argument, return unknow string
+    ObString("UNKONW") //  invalid argument, return unknow string
   };
 
   int8_t state_idx = 0;

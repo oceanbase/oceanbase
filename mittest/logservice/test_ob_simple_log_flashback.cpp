@@ -1,3 +1,6 @@
+// owner: yunlong.cb
+// owner group: log
+
 // Copyright (c) 2021 OceanBase
 // OceanBase is licensed under Mulan PubL v2.
 // You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -7,13 +10,6 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
-#include "lib/file/file_directory_utils.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "logservice/palf/log_define.h"
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include "lib/utility/ob_defer.h"
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 
@@ -57,15 +53,16 @@ int ObLogFlashbackService::get_ls_list_(const uint64_t tenant_id,
                                         share::ObLSStatusInfoArray &ls_array)
 {
   int ret = OB_SUCCESS;
-  common::ObFunction<int(const palf::PalfHandle&)> get_palf_info =
-  [&](const palf::PalfHandle &palf_handle)
+  common::ObFunction<int(const ipalf::IPalfHandle&)> get_palf_info =
+  [&](const ipalf::IPalfHandle &palf_handle)
   {
     int ret = OB_SUCCESS;
     share::ObLSStatusInfo ls_status;
     int64_t palf_id = -1;
     palf_handle.get_palf_id(palf_id);
     share::ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
-    if (OB_FAIL(ls_status.init(tenant_id, share::ObLSID(palf_id), 1, share::ObLSStatus::OB_LS_NORMAL, 1, "z1", flag))) {
+    ObUnitIDList unit_list;
+    if (OB_FAIL(ls_status.init(tenant_id, share::ObLSID(palf_id), 1, share::ObLSStatus::OB_LS_NORMAL, 1, "z1", flag, unit_list))) {
       CLOG_LOG(WARN, "ls_status init failed", K(ret), K(palf_id));
     } else if (OB_FAIL(ls_array.push_back(ls_status))) {
       CLOG_LOG(WARN, "ls_array push_back failed", K(ret), K(palf_id));
@@ -88,11 +85,15 @@ int ObLogFlashbackService::BaseLSOperator::update_leader_()
   leader_.reset();
   logservice::ObLogService *log_service = NULL;
   log_service = MTL(logservice::ObLogService*);
-  palf::PalfHandleGuard palf_handle;
-  if (OB_FAIL(log_service->open_palf(ls_id_, palf_handle))) {
+  palf::PalfHandleGuard palf_handle_guard;
+  if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(ERROR, "logservice is not supported", K(ret));
+  } else if (OB_FAIL(log_service->open_palf(ls_id_, palf_handle_guard))) {
     CLOG_LOG(ERROR, "open_palf failed", K(ret), K_(ls_id));
   } else {
-    palf::PalfHandleImpl *palf_handle_impl = dynamic_cast<palf::PalfHandleImpl*>(palf_handle.palf_handle_.palf_handle_impl_);
+    palf::PalfHandle *palf_handle = static_cast<palf::PalfHandle*>(palf_handle_guard.get_palf_handle());
+    palf::PalfHandleImpl *palf_handle_impl = dynamic_cast<palf::PalfHandleImpl*>(palf_handle->palf_handle_impl_);
     leader_ = palf_handle_impl->state_mgr_.get_leader();
   }
   return ret;
@@ -121,6 +122,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 5;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 
 
 // test cases:

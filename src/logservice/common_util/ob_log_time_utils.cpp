@@ -12,8 +12,6 @@
 */
 
 #include "ob_log_time_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_print_utils.h"  // databuff_printf
 
 using namespace oceanbase::common;
 

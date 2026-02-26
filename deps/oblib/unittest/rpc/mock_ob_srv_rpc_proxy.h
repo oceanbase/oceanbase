@@ -43,7 +43,7 @@ public:
   MOCK_METHOD2(switch_leader, int(const ObSwitchLeaderArg &arg, const ObRpcOpts &opts));
   MOCK_METHOD2(switch_schema, int(const Int64 &schema_version, const ObRpcOpts &opts));
   MOCK_METHOD2(bootstrap, int(const ObServerInfoList &server_infos, const ObRpcOpts &opts));
-  MOCK_METHOD2(is_empty_server, int(Bool &is_empty, const ObRpcOpts &opts));
+  MOCK_METHOD2(check_server_empty, int(Bool &is_empty, const ObRpcOpts &opts));
   MOCK_METHOD1(report_replica, int(const ObRpcOpts &));
   MOCK_METHOD1(recycle_replica, int(const ObRpcOpts &));
   MOCK_METHOD1(clear_location_cache, int(const ObRpcOpts &));

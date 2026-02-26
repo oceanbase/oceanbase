@@ -15,26 +15,38 @@ repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/9/aarch64/
 
 
 [deps]
+obdal-0.2.2-302025082510.el8.aarch64.rpm target=community
 devdeps-gtest-1.8.0-132022101316.el8.aarch64.rpm
 devdeps-isa-l-static-2.22.0-22022092915.el8.aarch64.rpm
-devdeps-libcurl-static-8.2.1-172023092015.el8.aarch64.rpm
+devdeps-libcurl-static-8.12.1-132025040210.el8.aarch64.rpm
 devdeps-mariadb-connector-c-3.1.12-12022100422.el8.aarch64.rpm
 devdeps-libaio-0.3.112-12022092915.el8.aarch64.rpm
 devdeps-relaxed-rapidjson-1.0.0-52023011719.el8.aarch64.rpm
 devdeps-openssl-static-1.1.1u-22023100710.el8.aarch64.rpm
-devdeps-libxml2-2.10.4-42023082915.el8.aarch64.rpm
-devdeps-mxml-2.12.0-12022090616.el8.aarch64.rpm
+devdeps-libxml2-2.13.6-22025032016.el8.aarch64.rpm
+devdeps-mxml-3.3.1-22025092517.el8.aarch64.rpm
 devdeps-xz-5.2.2-42022090615.el8.aarch64.rpm
 devdeps-lua-5.4.6-22023082916.el8.aarch64.rpm
-devdeps-oss-c-sdk-3.9.2-182022100412.el8.aarch64.rpm
-devdeps-zlib-static-1.2.13-32023061421.el8.aarch64.rpm
-devdeps-ncurses-static-6.2-72022100815.el8.aarch64.rpm
+devdeps-oss-c-sdk-3.11.2-142025100915.el8.aarch64.rpm
+devdeps-zlib-static-1.2.13-82024102414.el8.aarch64.rpm
+devdeps-ncurses-static-6.5-62025040314.el8.aarch64.rpm
 devdeps-boost-1.74.0-22022110914.el8.aarch64.rpm
-devdeps-s2geometry-0.9.0-12023092021.el8.aarch64.rpm
+devdeps-abseil-cpp-20211102.0-62024122014.el8.aarch64.rpm
+devdeps-s2geometry-0.10.0-122024122617.el8.aarch64.rpm
 devdeps-icu-69.1-72022112416.el8.aarch64.rpm
-devdeps-cos-c-sdk-5.0.16-52023070517.el8.aarch64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.aarch64.rpm
-devdeps-protobuf-c-1.4.1-100000072023102410.el8.aarch64.rpm
+devdeps-protobuf-c-1.5.1-100000052025032810.el8.aarch64.rpm
+devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.aarch64.rpm
+devdeps-apache-arrow-20.0.0-42025082815.el8.aarch64.rpm
+devdeps-vsag-1.1.0-882025110711.el8.aarch64.rpm
+devdeps-apache-orc-2.1.1-82025081116.el8.aarch64.rpm
+devdeps-fast-float-6.1.3-42024112122.el8.aarch64.rpm
+devdeps-hdfs-sdk-3.3.6-112024123116.el8.aarch64.rpm
+devdeps-apache-avro-cpp-1.12.0-72025062510.el8.aarch64.rpm
+devdeps-apache-thrift-0.16.0-132025070909.el8.aarch64.rpm
+devdeps-mit-krb5-1.21.3-212025063015.el8.aarch64.rpm
+devdeps-cyrus-sasl-2.1.28-102025070115.el8.aarch64.rpm
+devdeps-python3-3.13.3-132025070111.el8.aarch64.rpm
 
 [deps-el9]
 devdeps-apr-1.6.5-232023090616.el9.aarch64.rpm target=el9
@@ -43,15 +55,17 @@ devdeps-apr-1.6.5-232023090616.el9.aarch64.rpm target=el9
 obdevtools-binutils-2.30-12022100413.el8.aarch64.rpm
 obdevtools-bison-2.4.1-12022100413.el8.aarch64.rpm
 obdevtools-ccache-3.7.12-12022100417.el8.aarch64.rpm
-obdevtools-cmake-3.22.1-22022100417.el8.aarch64.rpm
+obdevtools-cmake-3.30.3-52024111819.el8.aarch64.rpm
 obdevtools-flex-2.5.35-12022100417.el8.aarch64.rpm
-obdevtools-gcc9-9.3.0-52022092914.el8.aarch64.rpm
-obdevtools-llvm-11.0.1-312022092921.el8.aarch64.rpm
+obdevtools-gcc-12.3.0-32024122017.el8.aarch64.rpm
+obdevtools-llvm-17.0.6-72025060300.el8.aarch64.rpm
 
 [tools-deps]
-devdeps-oblogmsg-1.0-192024032014.el8.aarch64.rpm
-devdeps-rocksdb-6.22.1.1-52022100420.el8.aarch64.rpm
-obshell-4.2.3.1-52024053020.el8.aarch64.rpm target=community
+devdeps-oblogmsg-1.1-52024052811.el8.aarch64.rpm
+devdeps-rocksdb-6.22.1-32024123015.el8.aarch64.rpm
+obstack-2.0.4-172024070513.el8.aarch64.rpm
+obshell-4.3.2.0-52025092411.el8.aarch64.rpm target=community
+#obshell-4.3.2.1-12025101110.el8.aarch64.rpm target=community
 
 [test-utils]
 ob-deploy-1.6.0-41.el8.aarch64.rpm target=community

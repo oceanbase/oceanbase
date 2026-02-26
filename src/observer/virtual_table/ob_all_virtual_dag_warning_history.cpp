@@ -11,9 +11,6 @@
  */
 
 #include "ob_all_virtual_dag_warning_history.h"
-#include "share/ob_errno.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
 
 namespace oceanbase
 {
@@ -91,7 +88,7 @@ int ObAllVirtualDagWarningHistory::process_curr_tenant(ObNewRow *&row)
       break;
     case TENANT_ID:
       //tenant_id
-      cells[i].set_int(dag_warning_info_.tenant_id_);
+      cells[i].set_int(MTL_ID());
       break;
     case TASK_ID:
       //table_id

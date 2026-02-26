@@ -11,12 +11,7 @@
  */
 
 #include "ob_archive_task_queue.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"
 #include "logservice/archiveservice/ob_archive_task.h"
-#include "logservice/archiveservice/ob_archive_util.h"
-#include "share/ob_errno.h"             // ret
 #include "ob_archive_worker.h"          // ObArchiveWorker
 
 using namespace oceanbase::common;

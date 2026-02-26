@@ -11,8 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include "observer/ob_server.h"
 #include "ob_resource_inner_sql_connection_pool.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -54,7 +54,8 @@ int ObResourceInnerSQLConnectionPool::init(ObMultiVersionSchemaService *schema_s
                                                ob_sql,
                                                vt_iter_creator,
                                                config,
-                                               false))) {
+                                               false,
+                                               true /* is_resource_conn_pool */))) {
     LOG_ERROR("init inner sql connection pool failed", K(ret));
   } else {
     is_inited_ = true;
@@ -84,7 +85,6 @@ int ObResourceInnerSQLConnectionPool::acquire(
     common::sqlclient::ObISQLConnection *&conn, sql::ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
-  ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
   ObInnerSQLConnection *inner_conn = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -101,11 +101,11 @@ int ObResourceInnerSQLConnectionPool::acquire(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("conn is null", K(ret));
     } else {
+      ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
       uint64_t conn_id = OB_INVALID_ID;
       if (OB_FAIL(fetch_max_conn_id(conn_id))) {
         LOG_WARN("failed to fetch max_conn_id", K(ret));
       } else {
-        inner_conn->set_is_resource_conn(true);
         inner_conn->set_is_idle(false);
         inner_conn->set_resource_svr(MYADDR);
         inner_conn->set_resource_conn_id(conn_id);
@@ -117,6 +117,7 @@ int ObResourceInnerSQLConnectionPool::acquire(
       }
     }
   } else { // get conn with conn_id from id_conn_map_ directly
+    ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
     if (OB_FAIL(id_conn_map_.get_refactored(conn_id, conn))) {
       // Failed to get the connection by conn_id. the connection may not have received
       // any requests from the source observer for more than ten minutes, and was then
@@ -157,6 +158,7 @@ int ObResourceInnerSQLConnectionPool::acquire(
    * observer more than 10 min, try to release that resource_conn now.
    */
   // TODO:@xiaofeng.lby, max_last_query_elapse_time is not configurable now
+  ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
   if (OB_SUCC(ret) && OB_NOT_NULL(conn) && !inner_sql_conn_pool_.used_conn_list_.is_empty()) {
     const int64_t max_last_query_elapse_time = 10 * 60 * 1000000; // duration is 10 mins
     const int64_t now = ObTimeUtility::current_time();
@@ -165,8 +167,7 @@ int ObResourceInnerSQLConnectionPool::acquire(
            && !inner_sql_conn_pool_.used_conn_list_.is_empty()
            && need_check_last_query_elapse_time) {
       if (0 == inner_sql_conn_pool_.used_conn_list_.get_first()->get_last_query_timestamp()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("last_query_timestamp of resource_conn in used_conn_list is 0", K(ret));
+        need_check_last_query_elapse_time = false;
       } else if (!inner_sql_conn_pool_.used_conn_list_.get_first()->is_idle()) {
         need_check_last_query_elapse_time = false; // release only when conn is idle
       } else if (now - inner_sql_conn_pool_.used_conn_list_.get_first()->get_last_query_timestamp()

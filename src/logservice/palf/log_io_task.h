@@ -36,6 +36,23 @@ enum class LogIOTaskType
   PURGE_THROTTLING_TYPE = 6,
 };
 
+OB_INLINE const char *log_io_task_type_str(const LogIOTaskType type)
+{
+#define IO_TASK_TYPE_NAME(io_type)  case LogIOTaskType::io_type: { str = #io_type; } break
+  const char *str = nullptr;
+  switch (type) {
+    IO_TASK_TYPE_NAME(FLUSH_LOG_TYPE);
+    IO_TASK_TYPE_NAME(FLUSH_META_TYPE);
+    IO_TASK_TYPE_NAME(TRUNCATE_PREFIX_TYPE);
+    IO_TASK_TYPE_NAME(TRUNCATE_LOG_TYPE);
+    IO_TASK_TYPE_NAME(FLASHBACK_LOG_TYPE);
+    IO_TASK_TYPE_NAME(PURGE_THROTTLING_TYPE);
+    default: str = "UNKNOWN_TYPE";
+  }
+  return str;
+#undef IO_TASK_TYPE_NAME
+}
+
 class IPalfHandleImplGuard;
 class LogIOTask;
 

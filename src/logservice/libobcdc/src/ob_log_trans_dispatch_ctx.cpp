@@ -144,13 +144,14 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
         && OB_NOT_NULL(part_trans_task)
         && OB_NOT_NULL(msg_sorter)
         && (part_trans_task->get_trans_id() == msg_sorter->get_cur_sort_trans_id()) // wait last trans handled in sorter
-        && part_trans_task->is_dispatched_redo_be_sorted()) {
+        && (part_trans_task->is_dispatched_redo_be_sorted() || ! need_pause)) {
       const int64_t extra_redo_dispatch_size = CDC_CFG_MGR.get_extra_redo_dispatch_memory_size();
 
       if (REACH_TIME_INTERVAL(PRINT_STAT_INTERVAL)) {
         LOG_INFO("[NOTICE][REDO_DISPATCH][DATA_SKEW] budget usedup but dispatched_redo all sorted, use extra_redo budget",
             K(budget),
             K(average_budget),
+            K(need_pause),
             "extra_redo_dispatch_size", SIZE_TO_STR(extra_redo_dispatch_size),
             "part_trans_task", part_trans_task->get_part_trans_info(),
             "redo_sorted_progress", part_trans_task->get_sorted_redo_list().sorted_progress_);

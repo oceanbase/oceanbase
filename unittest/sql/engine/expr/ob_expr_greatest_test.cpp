@@ -85,7 +85,8 @@ void ObExprGreatestTest::TearDown()
   EXPECT_TRUE(OB_SUCCESS == err); \
   obj.set_result_type(type); \
   err = obj.calc_resultN(r,objs, N, &buf); \
-  _OB_LOG(INFO, "r=%s ref=%s", to_cstring(r), to_cstring(ref)); \
+  ObCStringHelper helper; \
+  _OB_LOG(INFO, "r=%s ref=%s", helper.convert(r), helper.convert(ref)); \
   EXPECT_TRUE(OB_SUCCESS == err); \
   EXPECT_TRUE(ref.get_type() == r.get_type());  \
   if (ref.get_type() != ObNullType){\
@@ -99,10 +100,11 @@ void ObExprGreatestTest::TearDown()
 #define CHECK_FUNC_FAIL(obj, func, r, N) \
   ObExprResType type; \
   int err = obj.calc_result_typeN(type, types, N); \
-  _OB_LOG(INFO, "err=%d type=%s", err, to_cstring(type)); \
+  ObCStringHelper helper; \
+  _OB_LOG(INFO, "err=%d type=%s", err, helper.convert(type)); \
   obj.set_result_type(type); \
   err = obj.calc_resultN(r, objs, N, &buf); \
-  _OB_LOG(INFO, "r=%s ref=%s", to_cstring(r), to_cstring(ref)); \
+  _OB_LOG(INFO, "r=%s ref=%s", helper.convert(r), helper.convert(ref)); \
   EXPECT_TRUE(OB_SUCCESS != err);
 
 

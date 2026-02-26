@@ -27,19 +27,22 @@ namespace sql
 class ObBatchResultHolder
 {
 public:
-  ObBatchResultHolder() : exprs_(NULL), eval_ctx_(NULL), datums_(NULL),
+  ObBatchResultHolder() : allocator_(NULL), exprs_(NULL), eval_ctx_(NULL), datums_(NULL),
                           saved_size_(0), inited_(false)
   {
   }
 
-  int init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
+  int init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx,
+           common::ObIAllocator *alloctor = nullptr);
   int save(int64_t size);
   int restore();
   bool is_saved() const { return saved_size_ > 0; }
   void reset() { saved_size_ = 0; }
+  void destroy();
   int check_datum_modified();
 
 private:
+  common::ObIAllocator *allocator_;
   const common::ObIArray<ObExpr *> *exprs_;
   ObEvalCtx *eval_ctx_;
   ObDatum *datums_;

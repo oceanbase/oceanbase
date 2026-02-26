@@ -13,14 +13,32 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/tablet/ob_tablet_info.h"
-#include "share/ob_errno.h" // KR(ret)
-#include "share/ob_ls_id.h" // ls_id
 #include "share/tablet/ob_tablet_filter.h" // ObTabletFilter
 
 namespace oceanbase
 {
 namespace share
 {
+
+const static char * ObDataChecksumTypeStr[] = {
+  "NORMAL",
+  "COLUMNSTORE",
+  "NORMAL_WITH_NORMAL_COLUMN",
+  "COLUMNSTORE_WITH_NORMAL_COLUMN"
+};
+
+const char *data_check_checksum_type_to_str(const ObDataChecksumType type)
+{
+  STATIC_ASSERT(static_cast<uint8_t>(ObDataChecksumType::DATA_CHECKSUM_MAX) == ARRAYSIZEOF(ObDataChecksumTypeStr), "checksum type len is mismatch");
+  const char *str = "";
+  if (is_valid_data_checksum_type(type)) {
+    str = ObDataChecksumTypeStr[static_cast<uint8_t>(type)];
+  } else {
+    str = "INVALI_DATACHECKSUM_TYPE";
+  }
+  return str;
+}
+
 ObTabletReplica::ObTabletReplica()
     : tenant_id_(OB_INVALID_TENANT_ID),
       tablet_id_(),
@@ -78,7 +96,8 @@ int ObTabletReplica::init(
     const int64_t data_size,
     const int64_t required_size,
     const int64_t report_scn,
-    const ScnStatus status)
+    const ScnStatus status,
+    const int64_t ddl_create_snapshot)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(
@@ -89,10 +108,11 @@ int ObTabletReplica::init(
       || data_size < 0
       || required_size < 0
       || report_scn < 0
-      || !is_status_valid(status))) {
+      || !is_status_valid(status)
+      || ddl_create_snapshot < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init with invalid arguments", KR(ret), K(tenant_id), K(tablet_id), K(ls_id),
-        K(server), K(snapshot_version), K(data_size), K(required_size), K(report_scn), K(status));
+        K(server), K(snapshot_version), K(data_size), K(required_size), K(report_scn), K(status), K(ddl_create_snapshot));
   } else {
     tenant_id_ = tenant_id;
     tablet_id_ = tablet_id;
@@ -103,6 +123,7 @@ int ObTabletReplica::init(
     required_size_ = required_size;
     report_scn_ = report_scn;
     status_ = status;
+    ddl_create_snapshot_ = ddl_create_snapshot;
   }
   return ret;
 }

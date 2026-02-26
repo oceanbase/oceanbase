@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX STORAGE_REDO
 
 #include "ob_storage_log_entry.h"
-#include "lib/checksum/ob_crc64.h"
-#include "lib/utility/utility.h"
-#include "lib/time/ob_time_utility.h"
 
 namespace oceanbase
 {

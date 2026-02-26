@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl.h"
-#include "lib/oblog/ob_log.h"
-#include "sql/dtl/ob_dtl_channel.h"
 #include "sql/dtl/ob_dtl_rpc_channel.h"
-#include "sql/dtl/ob_dtl_flow_control.h"
 #include "sql/dtl/ob_dtl_local_channel.h"
-#include "observer/ob_server_struct.h"
-#include "ob_dtl_interm_result_manager.h"
 #include "sql/dtl/ob_dtl_channel_watcher.h"
 
 using namespace oceanbase::lib;
@@ -510,7 +505,7 @@ int ObDtl::init_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
   if (nullptr == chan) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("channel is null", K(tenant_id), KP(chid), K(ret));
-  } else if (OB_FAIL(chan->init())) {
+  } else if (OB_FAIL(chan->init(dfc))) {
     LOG_WARN("init channel fail", K(tenant_id), KP(chid), K(ret));
   } else {
     if (nullptr != dfc) {

@@ -85,7 +85,7 @@ public:
   ObDtlOpInfo() :
     dop_(-1), plan_id_(-1), exec_id_(-1), session_id_(-1), database_id_(0),
     op_id_(UINT64_MAX), input_rows_(0), input_width_(-1),
-    disable_auto_mem_mgr_(false)
+    disable_auto_mem_mgr_(false), max_batch_size_(0)
   {
     sql_id_[0] = '\0';
   }
@@ -112,7 +112,8 @@ public:
         && op_id_ == other.op_id_
         && input_rows_ == other.input_rows_
         && input_width_ == other.input_width_
-        && disable_auto_mem_mgr_ == other.disable_auto_mem_mgr_;
+        && disable_auto_mem_mgr_ == other.disable_auto_mem_mgr_
+        && max_batch_size_ == other.max_batch_size_;
   }
 
   void set(int64_t dop,
@@ -124,7 +125,8 @@ public:
           uint64_t op_id,
           int64_t input_rows,
           int64_t input_width,
-          bool disable_auto_mem_mgr)
+          bool disable_auto_mem_mgr,
+          int64_t max_batch_size)
   {
     dop_ = dop;
     plan_id_ = plan_id;
@@ -135,6 +137,7 @@ public:
     input_rows_ = input_rows;
     input_width_ = input_width;
     disable_auto_mem_mgr_ = disable_auto_mem_mgr;
+    max_batch_size_ = max_batch_size;
     if (OB_ISNULL(sql_id)) {
       sql_id_[0] = '\0';
     } else {
@@ -153,6 +156,7 @@ public:
   int64_t get_input_rows() { return input_rows_; }
   int64_t get_input_width() { return input_width_; }
   bool get_disable_auto_mem_mgr() { return disable_auto_mem_mgr_; }
+  int64_t get_max_batch_size() { return max_batch_size_; }
 
   TO_STRING_KV(K_(dop), K_(plan_id), K_(exec_id), K_(session_id), K_(sql_id), K_(database_id));
 public:
@@ -166,6 +170,7 @@ public:
   int64_t input_rows_;
   int64_t input_width_;
   bool disable_auto_mem_mgr_;
+  int64_t max_batch_size_;
 };
 
 class ObDtlSqcInfo
@@ -217,7 +222,10 @@ public:
 class ObDtlLinkedBuffer
     : public common::ObLink
 {
-  OB_UNIS_VERSION(1);
+  // master version is 3, 42x version is 2.
+  // compatibility handling based on the version number during deserialization.
+  // notice: Do not modify the version number arbitrarily.
+  OB_UNIS_VERSION(3);
 public:
   ObDtlLinkedBuffer()
       : buf_(), size_(), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),
@@ -369,7 +377,8 @@ public:
   void set_register_dm_info(const common::ObRegisterDmInfo &register_dm_info) { register_dm_info_ = register_dm_info; }
 
   //不包含allocated_chid_ copy，谁申请谁释放
-  static void assign(const ObDtlLinkedBuffer &src, ObDtlLinkedBuffer *dst) {
+  static int assign(const ObDtlLinkedBuffer &src, ObDtlLinkedBuffer *dst) {
+    int ret = OB_SUCCESS;
     MEMCPY(dst->buf_, src.buf_, src.size_);
     dst->size_ = src.size_;
     dst->is_data_msg_ = src.is_data_msg_;
@@ -386,12 +395,14 @@ public:
     dst->sqc_id_ = src.sqc_id_;
     dst->enable_channel_sync_ = src.enable_channel_sync_;
     dst->register_dm_info_ = src.register_dm_info_;
-    dst->row_meta_ = src.row_meta_;
+    ret = dst->row_meta_.assign(src.row_meta_);
     dst->op_info_ = src.op_info_;
+    return ret;
   }
 
-  void shallow_copy(const ObDtlLinkedBuffer &src)
+  int shallow_copy(const ObDtlLinkedBuffer &src)
   {
+    int ret = OB_SUCCESS;
     buf_ = src.buf_;
     size_ = src.size_;
     is_data_msg_ = src.is_data_msg_;
@@ -407,8 +418,9 @@ public:
     sqc_id_ = src.sqc_id_;
     enable_channel_sync_ = src.enable_channel_sync_;
     register_dm_info_ = src.register_dm_info_;
-    row_meta_ = src.row_meta_;
+    ret = row_meta_.assign(src.row_meta_);
     op_info_ = src.op_info_;
+    return ret;
   }
 
   OB_INLINE ObDtlDfoKey &get_dfo_key() {
@@ -471,6 +483,7 @@ public:
   int64_t get_dfo_id() { return dfo_id_; }
   int64_t get_sqc_id() { return sqc_id_; }
   RowMeta &get_row_meta() { return row_meta_; }
+  void set_row_meta(const RowMeta &row_meta) { row_meta_ = row_meta; }
   uint64_t get_px_sequence_id() { return dfo_key_.px_sequence_id_; }
 
   int64_t get_dop() { return op_info_.dop_; }
@@ -512,6 +525,9 @@ public:
   {
     op_info_.disable_auto_mem_mgr_ = disable_auto_mem_mgr;
   }
+
+  int64_t get_max_batch_size() { return op_info_.max_batch_size_; }
+  void set_max_batch_size(int64_t max_batch_size) { op_info_.max_batch_size_ = max_batch_size; }
 private:
 /*
 

@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_expr_to_days.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_util.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -40,11 +37,7 @@ int ObExprToDays::calc_result_type1(ObExprResType &type,
   type.set_int();
   type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
   type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
-  if (ob_is_enumset_tc(date.get_type())) {
-    date.set_calc_type(ObVarcharType);
-  } else {
-    date.set_calc_type(ObDateType);
-  }
+  date.set_calc_type(ObDateType);
   return ret;
 }
 

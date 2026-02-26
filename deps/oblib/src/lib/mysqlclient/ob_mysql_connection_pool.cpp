@@ -12,12 +12,9 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include "lib/oblog/ob_log_module.h"
-
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
 #include "lib/mysqlclient/ob_server_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_server_provider.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/thread/thread_mgr.h"
 
@@ -91,10 +88,10 @@ ObMySQLConnectionPool::ObMySQLConnectionPool()
     tg_id_(-1),
     server_provider_(NULL),
     busy_conn_count_(0),
-    user_info_lock_(obsys::WRITE_PRIORITY),
+    user_info_lock_(ObWaitEventIds::USER_INFO_LOCK),
     config_(),
-    get_lock_(obsys::WRITE_PRIORITY),
-    dblink_pool_lock_(obsys::WRITE_PRIORITY),
+    get_lock_(ObWaitEventIds::MYSQL_CONN_GET_LOCK),
+    dblink_pool_lock_(ObWaitEventIds::MYSQL_CONN_DBLINK_POOL_LOCK),
     allocator_(ObModIds::OB_SQL_CONNECTION_POOL),
     server_list_(allocator_),
     tenant_server_pool_map_(),
@@ -122,7 +119,7 @@ ObMySQLConnectionPool::ObMySQLConnectionPool()
 ObMySQLConnectionPool::~ObMySQLConnectionPool()
 {
   ObServerConnectionPool *pool = NULL;
-  obsys::ObWLockGuard lock(get_lock_);
+  obsys::ObWLockGuard<obsys::WRITE_PRIORITY> lock(get_lock_);
   tenant_server_pool_map_.destroy();
 
   for (ServerList::iterator iter = server_list_.begin();
@@ -155,7 +152,7 @@ int ObMySQLConnectionPool::set_db_param(const char *db_user, const char *db_pass
 {
   int ret = OB_SUCCESS;
   int64_t w_len = 0;
-  obsys::ObWLockGuard lock(user_info_lock_);
+  obsys::ObWLockGuard<obsys::WRITE_PRIORITY> lock(user_info_lock_);
   if (OB_ISNULL(db_user) || OB_ISNULL(db_pass) || OB_ISNULL(db_name)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid db param", KP(db_user), KP(db_pass), KP(db_name), K(ret));
@@ -188,7 +185,7 @@ int ObMySQLConnectionPool::set_db_param(const ObString &db_user, const ObString 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("db param buffer is not enough", K(db_user), K(db_pass), K(db_name), K(ret));
   } else {
-    obsys::ObWLockGuard lock(user_info_lock_);
+    obsys::ObWLockGuard<obsys::WRITE_PRIORITY> lock(user_info_lock_);
     MEMCPY(db_user_, db_user.ptr(), db_user.length());
     db_user_[db_user.length()] = '\0';
     MEMCPY(db_pass_, db_pass.ptr(), db_pass.length());
@@ -242,7 +239,7 @@ void ObMySQLConnectionPool::signal_refresh()
 void ObMySQLConnectionPool::close_all_connection()
 {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard lock(get_lock_);
+  obsys::ObWLockGuard<obsys::WRITE_PRIORITY> lock(get_lock_);
   ObServerConnectionPool *pool = NULL;
   for (ServerList::iterator iter = server_list_.begin();
       iter != server_list_.end(); iter++) {
@@ -464,11 +461,10 @@ int ObMySQLConnectionPool::acquire(const uint64_t tenant_id, ObMySQLConnection *
   }
 
   if (OB_ISNULL(connection)) {
-    //overwrite ret
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED: ret;
     LOG_WARN("failed to acquire connection",
              K(this), K(tenant_id), K(server_count), K(busy_conn_count_), K(ret));
-    obsys::ObRLockGuard lock(get_lock_);
+    obsys::ObRLockGuard<obsys::WRITE_PRIORITY> lock(get_lock_);
     for (ServerList::iterator iter = server_list_.begin();
         iter != server_list_.end(); iter++) {
       if (OB_NOT_NULL(*iter)) {
@@ -483,14 +479,14 @@ int ObMySQLConnectionPool::acquire(const uint64_t tenant_id, ObMySQLConnection *
 
 int64_t ObMySQLConnectionPool::get_server_count() const
 {
-  obsys::ObRLockGuard lock(get_lock_);
+  obsys::ObRLockGuard<obsys::WRITE_PRIORITY> lock(get_lock_);
   return server_list_.size();
 }
 
 int ObMySQLConnectionPool::do_acquire(const uint64_t tenant_id, ObMySQLConnection *&connection)
 {
   int ret = OB_SUCCESS;
-  obsys::ObRLockGuard lock(get_lock_);
+  obsys::ObRLockGuard<obsys::WRITE_PRIORITY> lock(get_lock_);
   ObServerConnectionPool *pool = NULL;
   if (OB_FAIL(get_pool(tenant_id, pool))) {
     LOG_WARN("failed to get pool", K(ret));
@@ -519,7 +515,7 @@ int ObMySQLConnectionPool::try_connect(ObMySQLConnection *connection)
   char db_name[OB_MAX_DATABASE_NAME_BUF_LENGTH] = {0};
   // copy db_user infos within lock
   {
-    obsys::ObRLockGuard lock(user_info_lock_);
+    obsys::ObRLockGuard<obsys::WRITE_PRIORITY> lock(user_info_lock_);
     MEMCPY(db_user, db_user_, OB_MAX_USER_NAME_BUF_LENGTH);
     MEMCPY(db_pass, db_pass_, OB_MAX_PASSWORD_BUF_LENGTH);
     MEMCPY(db_name, db_name_, OB_MAX_DATABASE_NAME_BUF_LENGTH);
@@ -593,7 +589,7 @@ int ObMySQLConnectionPool::execute_init_sql(ObMySQLConnection *connection)
 int ObMySQLConnectionPool::release(ObMySQLConnection *connection, const bool succ)
 {
   int ret = OB_SUCCESS;
-  obsys::ObRLockGuard lock(get_lock_);
+  obsys::ObRLockGuard<obsys::WRITE_PRIORITY> lock(get_lock_);
   ObServerConnectionPool *pool = NULL;
   if (OB_ISNULL(connection)) {
     ret = OB_INVALID_ARGUMENT;
@@ -601,9 +597,10 @@ int ObMySQLConnectionPool::release(ObMySQLConnection *connection, const bool suc
   } else {
     const int64_t cost_time = ::oceanbase::common::ObTimeUtility::current_time() - connection->get_timestamp();
     if (cost_time > config_.connection_pool_warn_time_) {
+      char time_buf[OB_MAX_TIME_STR_LENGTH] = {'\0'};
       LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "this connection cost too much time", K(this), K(cost_time),
                K(config_.connection_pool_warn_time_), K(connection->get_server()),
-               "start time", time2str(connection->get_timestamp()));
+               "start time", time2str(connection->get_timestamp(), time_buf, sizeof(time_buf)));
     }
     //reset_trace_id(connection);//we just set a new one when acquire next time
     if (OB_ISNULL(pool = connection->get_root())) {
@@ -640,7 +637,7 @@ void ObMySQLConnectionPool::runTimerTask()
       //Ignore the error code and does not affect the subsequent process
       LOG_WARN("failed to prepare refresh", K(ret), K(tmp_ret));
     }
-    obsys::ObWLockGuard lock(get_lock_);
+    obsys::ObWLockGuard<obsys::WRITE_PRIORITY> lock(get_lock_);
     if (OB_FAIL(server_provider_->refresh_server_list())) {
       if (!is_updated_) { // has never successfully updated, it is in startup time, should not print ERROR
         LOG_INFO("fail to refresh mysql server list in startup time, it's normal", K(ret));
@@ -770,7 +767,7 @@ int ObMySQLConnectionPool::escape(const char *from, const int64_t from_size,
   }
   return ret;
 }
-int ObMySQLConnectionPool::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObAddr &server,
+int ObMySQLConnectionPool::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObString &host_name, int32_t port,
                                               const ObString &db_tenant, const ObString &db_user,
                                               const ObString &db_pass, const ObString &db_name,
                                               const common::ObString &conn_str,
@@ -788,7 +785,7 @@ int ObMySQLConnectionPool::create_dblink_pool(const dblink_param_ctx &param_ctx,
     // can not use obsys::ObRLockGuard lock(get_lock_), it's useless
     // can not use obsys::ObWLockGuard lock(get_lock_), cause it will have dead lock
     // use a new lock for create_dblink_pool
-    obsys::ObWLockGuard lock(dblink_pool_lock_);
+    obsys::ObWLockGuard<obsys::WRITE_PRIORITY> lock(dblink_pool_lock_);
     if (OB_FAIL(get_dblink_pool(param_ctx, dblink_pool))) { //get again
     LOG_WARN("fail to get dblink connection pool", K(param_ctx));
     } else if (OB_NOT_NULL(dblink_pool)) {
@@ -797,14 +794,14 @@ int ObMySQLConnectionPool::create_dblink_pool(const dblink_param_ctx &param_ctx,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("out of memory", K(ret));
     } else if (OB_FAIL(dblink_pool->init_dblink(param_ctx.tenant_id_, param_ctx.dblink_id_,
-                                                server, db_tenant, db_user, db_pass,
+                                                host_name, port, db_tenant, db_user, db_pass,
                                                 db_name, conn_str, cluster_str,
                                                 this, config_.sqlclient_per_observer_conn_limit_))) {
       LOG_WARN("fail to init dblink connection pool", K(ret));
     } else if (OB_FAIL(server_list_.push_back(dblink_pool))) {
       LOG_WARN("fail to push pool to list", K(ret));
     } else {
-      LOG_DEBUG("new dblink pool created", K(server), K(config_.sqlclient_per_observer_conn_limit_));
+      LOG_DEBUG("new dblink pool created", K(host_name), K(port), K(config_.sqlclient_per_observer_conn_limit_));
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(dblink_pool)) {

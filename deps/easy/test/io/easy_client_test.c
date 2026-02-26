@@ -1,5 +1,3 @@
-#include "io/easy_client.h"
-#include "io/easy_io.h"
 #include <easy_test.h>
 #include "packet/easy_simple_handler.h"
 #include <sys/types.h>

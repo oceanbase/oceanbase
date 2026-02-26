@@ -12,14 +12,12 @@
 
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
-#include "ob_log_ls_fetch_ctx.h"
 
+#include "ob_log_ls_fetch_ctx.h"
 #include "lib/hash_func/murmur_hash.h"        // murmurhash
 
 #include "ob_log_utils.h"                     // get_timestamp
 #include "ob_log_config.h"                    // ObLogFetcherConfig
-#include "ob_log_ls_fetch_mgr.h"              // IObLogLSFetchMgr
-#include "ob_log_trace_id.h"                  // ObLogTraceIdGuard
 #include "ob_log_fetcher_err_handler.h"       // TCTX
 #include "ob_log_fetcher.h"                   // IObLogFetcher
 #include "logservice/common_util/ob_log_time_utils.h"
@@ -137,7 +135,8 @@ int LSFetchCtx::init(
     const ClientFetchingMode fetching_mode,
     const ObBackupPathString &archive_dest_str,
     ObILogFetcherLSCtxAddInfo &ls_ctx_add_info,
-    IObLogErrHandler &err_handler)
+    IObLogErrHandler &err_handler,
+    logservice::ObLogserviceModelInfo &logservice_model_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_tstamp_ns = start_parameters.get_start_tstamp_ns();
@@ -160,6 +159,9 @@ int LSFetchCtx::init(
   start_parameters_ = start_parameters;
   fetched_log_size_ = 0;
   err_handler_ = &err_handler;
+
+  enable_logservice_ = logservice_model_info.get_model();
+  group_iterator_.set_logservice_mode(enable_logservice_);
 
   if (start_lsn.is_valid()) {
     // LSN is valid, init mem_storage; otherwise after need locate start_lsn success, we can init mem_storage
@@ -191,7 +193,7 @@ int LSFetchCtx::init_group_iterator_(const palf::LSN &start_lsn)
   } else {
     palf::GetFileEndLSN group_iter_end_func = [&](){ return palf::LSN(palf::LOG_MAX_LSN_VAL); };
 
-    if (OB_FAIL(mem_storage_.init(start_lsn))) {
+    if (OB_FAIL(mem_storage_.init(start_lsn, enable_logservice_))) {
       LOG_ERROR("init mem_storage_ failed", KR(ret), K_(tls_id), K(start_lsn));
     }
     // init palf iterator
@@ -268,8 +270,10 @@ int LSFetchCtx::init_remote_iter()
   } else if (OB_FAIL(get_log_ext_handler(log_ext_handler))) {
     LOG_ERROR("get log external handler failed", KR(ret));
   } else if (OB_FAIL(remote_iter_.init(tenant_id, ls_id, start_scn, start_lsn,
-      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler))) {
+      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE, enable_logservice_))) {
     LOG_ERROR("remote iter init failed", KR(ret), K(tenant_id), K(ls_id), K(start_scn), K(start_lsn));
+  } else if (OB_FAIL(remote_iter_.set_io_context(palf::LogIOContext(palf::LogIOUser::CDC)))) {
+    LOG_ERROR("remote iter set_io_context failed", KR(ret), K(tenant_id), K(ls_id), K(start_scn), K(start_lsn));
   }
   return ret;
 }
@@ -281,7 +285,7 @@ int LSFetchCtx::append_log(const char *buf, const int64_t buf_len)
   if (! mem_storage_.is_inited()) {
     const LSN &start_lsn = progress_.get_next_lsn();
 
-    if (OB_FAIL(mem_storage_.init(start_lsn))) {
+    if (OB_FAIL(mem_storage_.init(start_lsn, enable_logservice_))) {
       LOG_ERROR("init mem_storage_ failed", KR(ret), K_(tls_id), K(start_lsn));
     } else if (OB_FAIL(group_iterator_.reuse(start_lsn))) {
       LOG_ERROR("MemPalfBufferIterator resuse failed", KR(ret), K_(tls_id), K(start_lsn));
@@ -305,22 +309,29 @@ int LSFetchCtx::append_log(const char *buf, const int64_t buf_len)
 
 void LSFetchCtx::reset_memory_storage()
 {
-  mem_storage_.destroy();
+  mem_storage_.reset();
+  LOG_DEBUG("reset memory storage", KPC(this));
 }
 
 int LSFetchCtx::get_next_group_entry(
-    palf::LogGroupEntry &group_entry,
+    ipalf::IGroupEntry &group_entry,
     palf::LSN &lsn,
-    const char *&buf)
+    const char *&buf,
+    const share::SCN replayable_point,
+    const obrpc::ObCdcFetchRawSource data_end_source)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!group_iterator_.is_inited())) {
     ret = OB_NOT_INIT;
     LOG_ERROR("group_iterator_ not init!");
-  } else if (OB_FAIL(group_iterator_.next())) {
+  } else if (OB_FAIL(group_iterator_.next(replayable_point))) {
     if (OB_ITER_END != ret) {
-      LOG_ERROR("iterate group_entry failed", KR(ret), K_(group_iterator));
+      if (obrpc::ObCdcFetchRawSource::ARCHIVE != data_end_source && OB_PARTIAL_LOG != ret) {
+        LOG_ERROR("iterate group_entry failed", KR(ret), K_(group_iterator));
+      } else {
+        LOG_WARN("iterate group_entry failed", KR(ret), K_(group_iterator));
+      }
     }
   } else if (OB_FAIL(group_iterator_.get_entry(buf, group_entry, lsn))) {
     LOG_ERROR("get_next_group_entry failed", KR(ret), K_(group_iterator), K(group_entry), K(lsn));
@@ -330,7 +341,7 @@ int LSFetchCtx::get_next_group_entry(
 }
 
 int LSFetchCtx::get_next_remote_group_entry(
-    palf::LogGroupEntry &group_entry,
+    ipalf::IGroupEntry &group_entry,
     palf::LSN &lsn,
     const char *&buf,
     int64_t &buf_size)
@@ -350,12 +361,12 @@ int LSFetchCtx::get_next_remote_group_entry(
 }
 
 int LSFetchCtx::get_log_entry_iterator(
-    const palf::LogGroupEntry &group_entry,
+    const ipalf::IGroupEntry &group_entry,
     const palf::LSN &start_lsn,
     palf::MemPalfBufferIterator &entry_iter)
 {
   int ret = OB_SUCCESS;
-  palf::GetFileEndLSN entry_iter_end_func = [&](){ return start_lsn + group_entry.get_group_entry_size(); };
+  palf::GetFileEndLSN entry_iter_end_func = [&](){ return start_lsn + group_entry.get_group_entry_size(start_lsn); };
 
   if (OB_FAIL(entry_iter.init(start_lsn, entry_iter_end_func, &mem_storage_))) {
     LOG_ERROR("entry_iter init failed", KR(ret), K_(mem_storage), K_(group_iterator), K(group_entry), K(start_lsn));
@@ -371,12 +382,12 @@ int LSFetchCtx::sync(volatile bool &stop_flag)
 }
 
 int LSFetchCtx::update_progress(
-    const palf::LogGroupEntry &group_entry,
+    const ipalf::IGroupEntry &group_entry,
     const palf::LSN &group_entry_lsn)
 {
   int ret = OB_SUCCESS;
   const int64_t submit_ts = group_entry.get_scn().get_val_for_logservice();
-  const int64_t group_entry_serialize_size = group_entry.get_serialize_size();
+  const int64_t group_entry_serialize_size = group_entry.get_serialize_size(group_entry_lsn);
 
   // Verifying log continuity
   if (OB_UNLIKELY(progress_.get_next_lsn() != group_entry_lsn)) {
@@ -895,21 +906,23 @@ void LSFetchCtx::print_dispatch_info() const
 
   if (fetch_info_.is_from_idle_to_idle()) {
     if (REACH_TIME_INTERVAL_THREAD_LOCAL(10 * _SEC_)) {
+      ObCStringHelper helper;
       _ISTAT("[DISPATCH_FETCH_TASK] LS=%s TO=%s FROM=%s REASON=\"%s\" "
           "DELAY=%s PROGRESS=%s DISCARDED=%d",
-          to_cstring(tls_id_), to_cstring(fetch_info_.cur_mod_),
-          to_cstring(fetch_info_.out_mod_), fetch_info_.out_reason_,
+          helper.convert(tls_id_), helper.convert(fetch_info_.cur_mod_),
+          helper.convert(fetch_info_.out_mod_), fetch_info_.out_reason_,
           NTS_TO_DELAY(progress),
-          to_cstring(cur_progress),
+          helper.convert(cur_progress),
           discarded_);
     }
   } else {
+    ObCStringHelper helper;
     _ISTAT("[DISPATCH_FETCH_TASK] LS=%s TO=%s FROM=%s REASON=\"%s\" "
         "DELAY=%s PROGRESS=%s DISCARDED=%d",
-        to_cstring(tls_id_), to_cstring(fetch_info_.cur_mod_),
-        to_cstring(fetch_info_.out_mod_), fetch_info_.out_reason_,
+        helper.convert(tls_id_), helper.convert(fetch_info_.cur_mod_),
+        helper.convert(fetch_info_.out_mod_), fetch_info_.out_reason_,
         NTS_TO_DELAY(progress),
-        to_cstring(cur_progress),
+        helper.convert(cur_progress),
         discarded_);
   }
 }
@@ -989,9 +1002,9 @@ void LSFetchCtx::handle_error(const share::ObLSID &ls_id,
       const int err_no,
       const char *fmt, ...)
 {
-   if (OB_NOT_NULL(err_handler_)) {
-     err_handler_->handle_error(ls_id, err_type, trace_id, lsn, err_no, fmt);
-   }
+  if (OB_NOT_NULL(err_handler_)) {
+    err_handler_->handle_error(ls_id, err_type, trace_id, lsn, err_no, fmt);
+  }
 }
 
 /////////////////////////////////// LSProgress ///////////////////////////////////
@@ -1123,8 +1136,9 @@ int64_t LSFetchCtx::FetchModule::to_string(char *buffer, const int64_t size) con
     }
 
     case FETCH_MODULE_FETCH_STREAM: {
-      (void)databuff_printf(buffer, size, pos, "[%s](%p)",
-          to_cstring(svr_), fetch_stream_);
+      (void)databuff_printf(buffer, size, pos, "[");
+      (void)databuff_printf(buffer, size, pos, svr_);
+      (void)databuff_printf(buffer, size, pos, "](%p)", fetch_stream_);
       break;
     }
 
@@ -1238,12 +1252,13 @@ void LSFetchInfoForPrint::print_fetch_progress(const char *description,
     const int64_t array_cnt,
     const int64_t cur_time) const
 {
+  ObCStringHelper helper;
   _LOG_INFO("[STAT] %s idx=%ld/%ld tls_id=%s mod=%s "
       "discarded=%d delay=%s tps=%.2lf progress=%s",
-      description, idx, array_cnt, to_cstring(tls_id_),
-      to_cstring(fetch_mod_),
+      description, idx, array_cnt, helper.convert(tls_id_),
+      helper.convert(fetch_mod_),
       is_discarded_, TVAL_TO_STR(cur_time * NS_CONVERSION - progress_.get_progress()),
-      tps_, to_cstring(progress_));
+      tps_, helper.convert(progress_));
 }
 
 void LSFetchInfoForPrint::print_dispatch_progress(const char *description,
@@ -1251,10 +1266,11 @@ void LSFetchInfoForPrint::print_dispatch_progress(const char *description,
     const int64_t array_cnt,
     const int64_t cur_time) const
 {
+  ObCStringHelper helper;
   _LOG_INFO("[STAT] %s idx=%ld/%ld tls_id=%s delay=%s pending_task(queue/total)=%ld/%ld "
       "dispatch_progress=%s last_dispatch_log_lsn=%lu next_task=%s "
       "next_trans(log_lsn=%lu,committed=%d,ready_to_commit=%d,global_version=%s) checkpoint=%s",
-      description, idx, array_cnt, to_cstring(tls_id_),
+      description, idx, array_cnt, helper.convert(tls_id_),
       TVAL_TO_STR(cur_time - dispatch_progress_/NS_CONVERSION),
       dispatch_info_.task_count_in_queue_,
       dispatch_info_.pending_task_count_,

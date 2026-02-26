@@ -11,9 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "common/ob_clock_generator.h"
 #include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase

@@ -64,7 +64,7 @@ struct ObJsonCastParam {
     is_trunc_(false),
     is_pretty_(false),
     is_only_check_(false),
-    is_json_table_(false),
+    relaxed_time_convert_(false),
     rt_expr_(nullptr)
   {}
   ~ObJsonCastParam() {}
@@ -77,7 +77,7 @@ struct ObJsonCastParam {
   bool is_trunc_;
   bool is_pretty_;
   bool is_only_check_; // only check cast, not set result
-  bool is_json_table_; // cast mode for json table.
+  bool relaxed_time_convert_; // relaxed_time_convert_ for json_table and multivalue index.
   const ObExpr *rt_expr_; // get nls format expr
 };
 
@@ -162,6 +162,7 @@ public:
                                          ObCollationType collation,
                                          ObAccuracy &accuracy,
                                          ObObjType obj_type,
+                                         ObScale scale,
                                          ObObj &res_obj);
 
   typedef int (*ObItemMethodValid)(ObIJsonBase*& in,
@@ -208,6 +209,9 @@ public:
   static int datetime_scale_check(const common::ObAccuracy &accuracy,
                                   int64_t &value,
                                   bool strict = false);
+  static int mdatetime_scale_check(const common::ObAccuracy &accuracy,
+                                  ObMySQLDateTime &value,
+                                  bool strict = false);
   static ObJsonUtil::ObItemMethodValid get_item_method_cast_res_func(ObJsonPath* j_path,
                                           ObIJsonBase* j_base);
   static ObJsonUtil::ObJsonCastSqlObj get_json_obj_cast_func(ObObjType dst_type);
@@ -217,11 +221,11 @@ public:
                           ObEvalCtx &ctx,
                           bool &is_null_result,
                           ObJsonParamCacheCtx *&param_ctx,
-                          common::ObIAllocator &temp_allocator,
+                          MultimodeAlloctor &temp_allocator,
                           bool &is_cover_by_error);
   static int get_json_doc(ObExpr *expr,
                           ObEvalCtx &ctx,
-                          common::ObIAllocator &allocator,
+                          MultimodeAlloctor &allocator,
                           ObIJsonBase*& j_base,
                           bool &is_null, bool & is_cover_by_error,
                           bool relax = false);

@@ -33,6 +33,9 @@ EVENT_INFO(BLOCKSCAN_ROW_CNT, blockscan_row_cnt)
 EVENT_INFO(PUSHDOWN_STORAGE_FILTER_ROW_CNT, pushdown_storage_filter_row_cnt)
 EVENT_INFO(FUSE_ROW_CACHE_HIT, fuse_row_cache_hit)
 EVENT_INFO(SCHEDULE_TIME, schedule_time)
+EVENT_INFO(NETWORK_WAIT_TIME, network_wait_time)
+EVENT_INFO(TX_TABLE_READ_CNT, tx_table_read_cnt)
+EVENT_INFO(OUTROW_LOB_CNT, outrow_lob_cnt)
 #endif
 
 #ifndef OCEANBASE_SQL_OB_EXEC_STAT_H
@@ -43,6 +46,7 @@ EVENT_INFO(SCHEDULE_TIME, schedule_time)
 #include "lib/net/ob_addr.h"
 #include "sql/ob_sql_define.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
+#include "lib/stat/ob_diagnostic_info.h"
 namespace oceanbase
 {
 namespace sql
@@ -80,10 +84,10 @@ struct ObExecRecord
    ret;                                                        \
  })
 
-#define RECORD(se, di) \
+#define RECORD(se) \
   do { \
-    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info = \
-        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info(); \
+    oceanbase::common::ObDiagnosticInfo *diag_session_info = \
+        oceanbase::common::ObLocalDiagnosticInfo::get(); \
     if (NULL != diag_session_info) { \
       oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats(); \
       io_read_count_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT); \
@@ -105,6 +109,9 @@ struct ObExecRecord
       application_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::APWAIT_TIME);                     \
       concurrency_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::CCWAIT_TIME);                     \
       schedule_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SCHEDULE_WAIT_TIME);                 \
+      network_wait_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::NETWORK_WAIT_TIME);                   \
+      tx_table_read_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::TX_TABLE_READ_CNT);                   \
+      outrow_lob_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::OUTROW_LOB_CNT);                   \
     } \
   } while(0);
 
@@ -114,12 +121,12 @@ struct ObExecRecord
     event##_ += event##_end_ - event##_start_; \
   } while(0);
 
-  void record_start(common::ObDiagnoseSessionInfo *di = NULL) {
-    RECORD(start, di);
+  void record_start() {
+    RECORD(start);
   }
 
-  void record_end(common::ObDiagnoseSessionInfo *di = NULL) {
-    RECORD(end, di);
+  void record_end() {
+    RECORD(end);
   }
 
   void update_stat() {
@@ -144,11 +151,15 @@ struct ObExecRecord
     UPDATE_EVENT(blockscan_block_cnt);
     UPDATE_EVENT(blockscan_row_cnt);
     UPDATE_EVENT(pushdown_storage_filter_row_cnt);
+    UPDATE_EVENT(fuse_row_cache_hit);
+    UPDATE_EVENT(network_wait_time);
+    UPDATE_EVENT(tx_table_read_cnt);
+    UPDATE_EVENT(outrow_lob_cnt);
   }
 
-  uint64_t get_cur_memstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
-    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
-        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+  uint64_t get_cur_memstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
+    oceanbase::common::ObDiagnosticInfo *diag_session_info =
+        (NULL != di) ? di : oceanbase::common::ObLocalDiagnosticInfo::get();
     uint64_t cur_memstore_read_row_count = 0;
     if (NULL != diag_session_info) {
       oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
@@ -159,9 +170,9 @@ struct ObExecRecord
     return cur_memstore_read_row_count;
   }
 
-  uint64_t get_cur_ssstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
-    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
-        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+  uint64_t get_cur_ssstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
+    oceanbase::common::ObDiagnosticInfo *diag_session_info =
+        (NULL != di) ? di : oceanbase::common::ObLocalDiagnosticInfo::get();
     uint64_t cur_ssstore_read_row_count = 0;
     if (NULL != diag_session_info) {
       oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
@@ -182,6 +193,14 @@ enum ExecType {
   PSCursor,
   DbmsCursor,
   CursorFetch
+};
+
+enum ObTransStatus
+{
+  INVALID_STATUS = 0,
+  TRANS_NOT_OPENED = 1,
+  IMPLICIT_TRANS = 2,
+  COMMIT_TRANS = 3,
 };
 
 struct ObReqTimestamp
@@ -317,15 +336,25 @@ struct ObAuditRecordData {
     partition_hit_ = true;
     is_perf_event_closed_ = false;
     pl_trace_id_.reset();
+    stmt_type_ = sql::stmt::T_NONE;
+    sql_memory_used_ = nullptr;
+    trans_status_ = INVALID_STATUS;
+    ccl_rule_id_ = 0;
+    ccl_match_time_ = 0;
+    cursor_elapsed_ = 0;
   }
 
   int64_t get_elapsed_time() const
   {
     int64_t elapsed_time = 0;
-    if (OB_UNLIKELY(exec_timestamp_.multistmt_start_ts_ > 0)) {
-      elapsed_time = exec_timestamp_.executor_end_ts_ - exec_timestamp_.multistmt_start_ts_;
+    if (cursor_elapsed_ > 0) {
+      elapsed_time = cursor_elapsed_;
     } else {
-      elapsed_time = exec_timestamp_.executor_end_ts_ - exec_timestamp_.receive_ts_;
+      if (OB_UNLIKELY(exec_timestamp_.multistmt_start_ts_ > 0)) {
+        elapsed_time = exec_timestamp_.executor_end_ts_ - exec_timestamp_.multistmt_start_ts_;
+      } else {
+        elapsed_time = exec_timestamp_.executor_end_ts_ - exec_timestamp_.receive_ts_;
+      }
     }
     return elapsed_time;
   }
@@ -337,15 +366,6 @@ struct ObAuditRecordData {
 
   void update_event_stage_state() {
     exec_record_.update_stat();
-    const int64_t cpu_time = MAX(exec_timestamp_.elapsed_t_ - exec_record_.wait_time_, 0);
-    const int64_t elapsed_time = MAX(exec_timestamp_.elapsed_t_, 0);
-    if(is_inner_sql_) {
-      EVENT_ADD(SYS_TIME_MODEL_DB_INNER_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_DB_INNER_CPU, cpu_time);
-    } else {
-      EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_DB_CPU, cpu_time);
-    }
   }
 
   bool is_timeout() const {
@@ -444,8 +464,17 @@ struct ObAuditRecordData {
   char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
   ObCurTraceId::TraceId pl_trace_id_;
   int64_t plsql_exec_time_;
+  char format_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  stmt::StmtType stmt_type_;
   uint64_t total_memstore_read_row_count_;
   uint64_t total_ssstore_read_row_count_;
+  int64_t *sql_memory_used_;
+  int64_t plsql_compile_time_;
+  ObTransStatus trans_status_;
+  int64_t insert_update_or_replace_duplicate_row_count_;
+  int64_t ccl_rule_id_;
+  int64_t ccl_match_time_;
+  int64_t cursor_elapsed_;
 };
 
 } //namespace sql

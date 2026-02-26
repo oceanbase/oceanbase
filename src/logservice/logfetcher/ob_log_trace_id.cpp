@@ -12,7 +12,7 @@
  * OBCDC general tools
  */
 
-#include "lib/net/ob_addr.h"
+#include "ob_log_trace_id.h"
 #include "lib/profile/ob_trace_id.h"
 
 namespace oceanbase

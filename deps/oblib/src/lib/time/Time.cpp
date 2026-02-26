@@ -1,9 +1,6 @@
 #include "lib/time/Time.h"
 
 #include <iomanip>
-#include <sys/time.h>
-#include <cassert>
-#include <stdint.h>
 #include <sstream>
 #include "lib/oblog/ob_log.h"
 

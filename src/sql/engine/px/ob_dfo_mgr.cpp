@@ -12,22 +12,16 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/px/ob_dfo_mgr.h"
-#include "sql/engine/px/ob_px_util.h"
+#include "ob_dfo_mgr.h"
 #include "sql/engine/basic/ob_temp_table_access_op.h"
-#include "sql/engine/basic/ob_temp_table_insert_op.h"
 #include "sql/engine/basic/ob_temp_table_access_vec_op.h"
-#include "sql/engine/basic/ob_temp_table_insert_vec_op.h"
-#include "sql/engine/px/exchange/ob_transmit_op.h"
 #include "sql/engine/basic/ob_material_op.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "sql/engine/join/ob_join_filter_op.h"
-#include "sql/engine/px/exchange/ob_px_repart_transmit_op.h"
-#include "sql/optimizer/ob_px_resource_analyzer.h"
-#include "sql/engine/px/ob_px_scheduler.h"
+#include "src/sql/engine/px/exchange/ob_px_transmit_op.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "sql/engine/px/ob_px_coord_op.h"
 #include "sql/engine/basic/ob_material_vec_op.h"
+#include "sql/engine/basic/ob_select_into_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -206,6 +200,9 @@ int ObDfoWorkerAssignment::calc_admited_worker_count(const ObIArray<ObDfo*> &dfo
     const int64_t query_admited = task_exec_ctx->get_admited_worker_cnt();
     if (query_expected > 0 && 0 >= query_admited) {
       ret = OB_ERR_INSUFFICIENT_PX_WORKER;
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, px_expected);
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(required_px_workers_number_, query_expected);
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(admitted_px_workers_number_, query_admited);
       LOG_WARN("not enough thread resource", K(ret), K(px_expected), K(query_admited), K(query_expected));
     } else if (0 == query_expected) {
       // note: 对于单表、dop=1的查询，会走 fast dfo，此时 query_expected = 0
@@ -232,7 +229,8 @@ int ObDfoWorkerAssignment::calc_admited_worker_count(const ObIArray<ObDfo*> &dfo
 int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
                                          int64_t expected_worker_count,
                                          int64_t minimal_worker_count,
-                                         int64_t admited_worker_count)
+                                         int64_t admited_worker_count,
+                                         bool use_adaptive_px_dop)
 {
   int ret = OB_SUCCESS;
   /*  算法： */
@@ -298,7 +296,9 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
     // compatible with version before 4.2
     compatible_before_420 = true;
     scale_rate = static_cast<double>(admited_worker_count) / static_cast<double>(expected_worker_count);
-  } else if (0 >= admited_worker_count || minimal_worker_count == admited_worker_count) {
+  } else if (0 >= admited_worker_count) {
+    scale_rate = 1.0;
+  } else if (minimal_worker_count == admited_worker_count) {
     scale_rate = 0.0;
   } else if (OB_UNLIKELY(minimal_worker_count > admited_worker_count
                          || minimal_worker_count >= expected_worker_count)) {
@@ -334,7 +334,8 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_dfos_worker_count(dfos, false, total_assigned))) {
     LOG_WARN("failed to get dfos worker count", K(ret));
-  } else if (total_assigned > admited_worker_count && admited_worker_count != 0) {
+  } else if (!use_adaptive_px_dop && total_assigned > admited_worker_count
+             && admited_worker_count != 0) {
     // 意味着某些 dfo 理论上一个线程都分不到
     ret = OB_ERR_PARALLEL_SERVERS_TARGET_NOT_ENOUGH;
     LOG_USER_ERROR(OB_ERR_PARALLEL_SERVERS_TARGET_NOT_ENOUGH, total_assigned);
@@ -448,8 +449,9 @@ int ObDfoMgr::init(ObExecContext &exec_ctx,
                                                                       px_minimal,
                                                                       px_admited))) {
     LOG_WARN("fail to calc admited worler count", K(ret));
-  } else if (OB_FAIL(ObDfoWorkerAssignment::assign_worker(*this, px_expected, px_minimal, px_admited))) {
-    LOG_WARN("fail assign worker to dfos", K(ret),  K(px_expected), K(px_minimal), K(px_admited));
+  } else if (OB_FAIL(ObDfoWorkerAssignment::assign_worker(
+               *this, px_expected, px_minimal, px_admited, exec_ctx.is_use_adaptive_px_dop()))) {
+    LOG_WARN("fail assign worker to dfos", K(ret), K(px_expected), K(px_minimal), K(px_admited));
   } else {
     inited_ = true;
   }
@@ -465,10 +467,15 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
                        ObPxCoordInfo &px_coord_info) const
 {
   int ret = OB_SUCCESS;
+  bool partition_random_affinitize = true;
   bool top_px = (nullptr == parent_dfo);
   bool got_fulltree_dfo = false;
   ObDfo *dfo = NULL;
   bool is_stack_overflow = false;
+  if (OB_NOT_NULL(phy_op->get_phy_plan())
+      && phy_op->get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_3_3_0) {
+    partition_random_affinitize = false;
+  }
   if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_stack_overflow) {
@@ -481,7 +488,11 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the first phy_op must be a coord op", K(ret), K(phy_op->type_));
   } else if (phy_op->is_table_scan() && NULL != parent_dfo) {
-    parent_dfo->set_scan(true);
+    if (static_cast<const ObTableScanSpec*>(phy_op)->use_dist_das()) {
+      parent_dfo->set_das(true);
+    } else {
+      parent_dfo->set_scan(true);
+    }
     parent_dfo->inc_tsc_op_cnt();
     auto tsc_op = static_cast<const ObTableScanSpec *>(phy_op);
     if (TableAccessType::HAS_USER_TABLE == px_coord_info.table_access_type_){
@@ -493,15 +504,25 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     }
     if (parent_dfo->need_p2p_info_ && parent_dfo->get_p2p_dh_addrs().empty()) {
       ObDASTableLoc *table_loc = nullptr;
-       if (OB_ISNULL(table_loc = DAS_CTX(exec_ctx).get_table_loc_by_id(
-            tsc_op->get_table_loc_id(), tsc_op->get_loc_ref_table_id()))) {
-         OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(exec_ctx).get_location_router(),
-                                                       exec_ctx.get_allocator(),
-                                                       exec_ctx.get_my_session()->get_effective_tenant_id(),
-                                                       tsc_op->get_table_loc_id(),
-                                                       tsc_op->get_loc_ref_table_id(),
-                                                       table_loc));
+      if (!tsc_op->is_ob_external_table()) {
+        if (OB_ISNULL(table_loc = DAS_CTX(exec_ctx).get_table_loc_by_id(
+              tsc_op->get_table_loc_id(), tsc_op->get_loc_ref_table_id()))) {
+          OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(exec_ctx).get_location_router(),
+                                                        exec_ctx.get_allocator(),
+                                                        exec_ctx.get_my_session()->get_effective_tenant_id(),
+                                                        tsc_op->get_table_loc_id(),
+                                                        tsc_op->get_loc_ref_table_id(),
+                                                        table_loc));
+        }
+      } else {
+        // 对于外表没有索引rescan, 所以不会出现table_loc
+        if (OB_FAIL(ObPXServerAddrUtil::get_external_table_loc(exec_ctx, tsc_op->get_table_loc_id(),
+            tsc_op->get_loc_ref_table_id(), tsc_op->get_query_range_provider(),
+            *parent_dfo, table_loc))) {
+          LOG_WARN("failed to get external table loc", K(ret));
+        }
       }
+
       if (OB_FAIL(ret)) {
       } else {
         const DASTabletLocList &locations = table_loc->get_tablet_locs();
@@ -514,7 +535,9 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     }
   } else if (phy_op->is_dml_operator() && NULL != parent_dfo) {
     // 当前op是一个dml算子，需要设置dfo的属性
-    parent_dfo->set_dml_op(true);
+    if (ObPXServerAddrUtil::check_build_dfo_with_dml(*phy_op)) {
+      parent_dfo->set_dml_op(true);
+    }
     const ObPhyOperatorType op_type = phy_op->get_type();
     LOG_TRACE("set DFO need_branch_id", K(op_type));
     parent_dfo->set_need_branch_id_op(op_type == PHY_INSERT_ON_DUP
@@ -535,6 +558,18 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     if (parent_dfo->need_p2p_info_ && parent_dfo->get_p2p_dh_addrs().empty()) {
       OZ(px_coord_info.p2p_temp_table_info_.temp_access_ops_.push_back(phy_op));
       OZ(px_coord_info.p2p_temp_table_info_.dfos_.push_back(parent_dfo));
+    }
+  } else if (phy_op->get_type() == PHY_SELECT_INTO && NULL != parent_dfo) {
+    // odps只支持一台机器上的并行 只能有一个sqc ODPS写
+    const ObSelectIntoSpec *select_into_spec = static_cast<const ObSelectIntoSpec*>(phy_op);
+    ObExternalFileFormat external_properties;
+    if (!select_into_spec->external_properties_.str_.empty()) {
+      if (OB_FAIL(external_properties.load_from_string(select_into_spec->external_properties_.str_,
+                                                       allocator))) {
+        LOG_WARN("failed to load external properties", K(ret));
+      } else if (ObExternalFileFormat::FormatType::ODPS_FORMAT == external_properties.format_type_) {
+        parent_dfo->set_into_odps(true);
+      }
     }
   } else if (IS_PX_GI(phy_op->get_type()) && NULL != parent_dfo) {
     const ObGranuleIteratorSpec *gi_spec =
@@ -609,6 +644,8 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       dfo->set_dop(1);
       dfo->set_execution_id(exec_ctx.get_my_session()->get_current_execution_id());
       dfo->set_px_sequence_id(dfo_int_gen.get_px_sequence_id());
+      dfo->set_partition_random_affinitize(partition_random_affinitize);
+      dfo->set_query_sql(px_coord_info.coord_.query_sql());
       if (OB_NOT_NULL(phy_op->get_phy_plan()) && phy_op->get_phy_plan()->is_enable_px_fast_reclaim()) {
         ObDetectableId sqc_detectable_id;
         // if generate_detectable_id failed, means that server id is not ready
@@ -645,11 +682,13 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       // 修改成 is_local = true, dop = 1
       dfo->set_coord_info_ptr(&px_coord_info);
       dfo->set_single(transmit->is_px_single());
-      dfo->set_dop(transmit->get_px_dop());
+      dfo->set_dop(transmit->is_px_single() ? transmit->get_px_dop() :
+                                              get_adaptive_px_dop(*transmit, exec_ctx));
       dfo->set_qc_id(transmit->get_px_id());
       dfo->set_dfo_id(transmit->get_dfo_id());
       dfo->set_execution_id(exec_ctx.get_my_session()->get_current_execution_id());
       dfo->set_px_sequence_id(dfo_int_gen.get_px_sequence_id());
+      dfo->set_query_sql(px_coord_info.coord_.query_sql());
       if (OB_NOT_NULL(phy_op->get_phy_plan()) && phy_op->get_phy_plan()->is_enable_px_fast_reclaim()) {
         ObDetectableId sqc_detectable_id;
         // if generate_detectable_id failed, means that server id is not ready
@@ -662,8 +701,10 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       }
       if (OB_SUCC(ret)) {
         dfo->set_dist_method(transmit->dist_method_);
-        dfo->set_slave_mapping_type(transmit->get_slave_mapping_type());
-        parent_dfo->set_slave_mapping_type(transmit->get_slave_mapping_type());
+        if (transmit->is_slave_mapping()) {
+          dfo->set_out_slave_mapping_type(transmit->get_slave_mapping_type());
+          parent_dfo->set_in_slave_mapping_type(transmit->get_slave_mapping_type());
+        }
         dfo->set_pkey_table_loc_id(
           (reinterpret_cast<const ObPxTransmitSpec *>(transmit))->repartition_table_id_);
         if (OB_ISNULL(parent_dfo)) {
@@ -676,7 +717,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
                                               dfo->get_interrupt_id()))) {
           LOG_WARN("fail gen dfo int id", K(ret));
         } else {
-          dfo->set_qc_server_id(GCTX.server_id_);
+          dfo->set_qc_server_id(GCTX.get_server_index());
           dfo->set_parent_dfo_id(parent_dfo->get_dfo_id());
           LOG_TRACE("cur dfo dop",
                     "dfo_id", dfo->get_dfo_id(),
@@ -997,4 +1038,20 @@ int ObDfoMgr::get_running_dfos(ObIArray<ObDfo*> &dfos) const
     }
   }
   return ret;
+}
+
+int64_t ObDfoMgr::get_adaptive_px_dop(const ObTransmitSpec &spec, ObExecContext &exec_ctx) const
+{
+  int ret = OB_SUCCESS;
+  int64_t px_dop = spec.get_px_dop();
+  AutoDopHashMap &auto_dop_map = exec_ctx.get_auto_dop_map();
+  if (!auto_dop_map.created()) {
+    // do nothing
+  } else if (OB_FAIL(auto_dop_map.get_refactored(spec.get_id(), px_dop))) {
+    LOG_WARN("failed to get refactored", K(ret));
+  } else {
+    px_dop = px_dop >= 1 ? px_dop : spec.get_px_dop();
+  }
+  LOG_TRACE("adaptive px dop", K(spec.get_id()), K(px_dop));
+  return px_dop;
 }

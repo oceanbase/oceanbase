@@ -11,14 +11,8 @@
  */
 
 #include "ob_archive_io.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_tracepoint.h"            // EventTable
-#include "share/ob_device_manager.h"              // ObIODevice
 #include "share/backup/ob_backup_io_adapter.h"    // ObBackupIoAdapter
 #include "share/ob_debug_sync.h"                  // DEBUG_SYNC
-#include "share/ob_debug_sync_point.h"            // LOG_ARCHIVE_PUSH_LOG
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
@@ -29,6 +23,7 @@ namespace archive
 {
 int ObArchiveIO::push_log(const ObString &uri,
     const share::ObBackupStorageInfo *storage_info,
+    const int64_t backup_dest_id,
     char *data,
     const int64_t data_len,
     const int64_t offset,
@@ -36,10 +31,8 @@ int ObArchiveIO::push_log(const ObString &uri,
     const bool is_can_seal)
 {
   int ret = OB_SUCCESS;
-  ObBackupIoAdapter util;
-  ObIOFd fd;
+  ObBackupIoAdapter io_adapter;
   int64_t write_size = -1;
-  ObIODevice*  device_handle = NULL;
 
   DEBUG_SYNC(LOG_ARCHIVE_PUSH_LOG);
 
@@ -54,38 +47,23 @@ int ObArchiveIO::push_log(const ObString &uri,
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(data), K(data_len));
   } else {
     if (is_full_file) {
-      if (OB_FAIL(util.open_with_access_type(device_handle, fd, storage_info, uri,
-              common::ObStorageAccessType::OB_STORAGE_ACCESS_OVERWRITER))) {
-        ARCHIVE_LOG(INFO, "open_with_access_type failed", K(ret), K(uri), KP(storage_info));
-      } else if (OB_ISNULL(device_handle)) {
-        ret = OB_ERR_UNEXPECTED;
-        ARCHIVE_LOG(ERROR, "device_handle is NULL", K(ret), K(device_handle), K(uri));
-      } else if (OB_FAIL(device_handle->write(fd, data, data_len, write_size))) {
+      if (OB_FAIL(io_adapter.write_single_file(uri, storage_info, data, data_len,
+          common::ObStorageIdMod(backup_dest_id, common::ObStorageUsedMod::STORAGE_USED_ARCHIVE)))) {
         ARCHIVE_LOG(WARN, "fail to write file", K(ret), K(uri), KP(storage_info), K(data), K(data_len));
       }
     } else {
-      if (OB_FAIL(util.open_with_access_type(device_handle, fd, storage_info, uri,
-              common::ObStorageAccessType::OB_STORAGE_ACCESS_RANDOMWRITER))) {
-        ARCHIVE_LOG(INFO, "open_with_access_type failed", K(ret), K(uri), KP(storage_info));
-      } else if (OB_ISNULL(device_handle)) {
-        ret = OB_ERR_UNEXPECTED;
-        ARCHIVE_LOG(ERROR, "device_handle is NULL", K(ret), K(device_handle), K(uri));
-      } else if (OB_FAIL(device_handle->pwrite(fd, offset, data_len, data, write_size))) {
+      if (OB_FAIL(io_adapter.pwrite(uri, storage_info, data, offset, data_len,
+          common::ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER, write_size, is_can_seal,
+          common::ObStorageIdMod(backup_dest_id, common::ObStorageUsedMod::STORAGE_USED_ARCHIVE)))) {
         ARCHIVE_LOG(WARN, "fail to write file", K(ret), K(uri), KP(storage_info), K(data), K(data_len));
-      }  else if (is_can_seal && OB_FAIL(device_handle->seal_file(fd))) {
-        ARCHIVE_LOG(WARN, "fail to seal file", K(ret), K(uri), KP(storage_info));
       }
     }
   }
 
-
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = util.close_device_and_fd(device_handle, fd))) {
-    ARCHIVE_LOG(WARN, "fail to close file and release device!", K(tmp_ret), K(uri), KP(storage_info));
-  }
-
   if (OB_CLOUD_OBJECT_NOT_APPENDABLE == ret) {
-    if (OB_FAIL(check_context_match_in_normal_file_(uri, storage_info, data, data_len, offset))) {
+    if (OB_FAIL(check_context_match_in_normal_file_(uri, storage_info,
+        common::ObStorageIdMod(backup_dest_id, common::ObStorageUsedMod::STORAGE_USED_ARCHIVE),
+        data, data_len, offset))) {
       ARCHIVE_LOG(WARN, "check_context_match_ failed", K(uri));
     }
   }
@@ -101,6 +79,7 @@ int ObArchiveIO::mkdir(const ObString &uri, const share::ObBackupStorageInfo *st
 
 int ObArchiveIO::check_context_match_in_normal_file_(const ObString &uri,
     const share::ObBackupStorageInfo *storage_info,
+    const common::ObStorageIdMod &storage_id_mod,
     char *data,
     const int64_t data_len,
     const int64_t offset)
@@ -123,7 +102,8 @@ int ObArchiveIO::check_context_match_in_normal_file_(const ObString &uri,
   } else if (OB_ISNULL(read_buffer = static_cast<char*>(allocator.alloc(data_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     ARCHIVE_LOG(WARN, "allocate memory failed", K(uri), K(data_len));
-  } else if (OB_FAIL(reader.adaptively_read_part_file(uri, storage_info, read_buffer, data_len, offset, read_size))) {
+  } else if (OB_FAIL(reader.adaptively_read_part_file(uri, storage_info, read_buffer, data_len, offset, read_size,
+                                                      storage_id_mod))) {
     ARCHIVE_LOG(WARN, "pread failed", K(uri), K(read_buffer), K(data_len), K(offset));
   } else if (read_size < data_len) {
     ret = OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;

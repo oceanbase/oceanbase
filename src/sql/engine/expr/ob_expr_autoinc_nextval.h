@@ -64,6 +64,7 @@ private:
   static int generate_autoinc_value(const ObSQLSessionInfo &my_session,
                                     uint64_t &new_val,
                                     share::ObAutoincrementService &auto_service,
+                                    ObEvalCtx &ctx,
                                     share::AutoincParam *autoinc_param,
                                     ObPhysicalPlanCtx *plan_ctx);
 

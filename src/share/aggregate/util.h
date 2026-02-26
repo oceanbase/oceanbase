@@ -20,6 +20,13 @@
 #include "common/object/ob_obj_type.h"
 #include "sql/engine/ob_bit_vector.h"
 #include "share/vector/ob_vector_define.h"
+#include "share/ob_cluster_version.h"
+
+#define EXTRACT_MEM_ADDR(ptr) (reinterpret_cast<char *>(*reinterpret_cast<int64_t *>((ptr))))
+#define STORE_MEM_ADDR(addr, dst)                                                                  \
+  do {                                                                                             \
+    *reinterpret_cast<int64_t *>((dst)) = reinterpret_cast<int64_t>((addr));                       \
+  } while (false)
 
 namespace oceanbase
 {
@@ -112,6 +119,95 @@ struct add_param_batch<T, false>
   inline static int do_op(T &v, Args&&... args)
   {
     return OB_SUCCESS;
+  }
+};
+
+template <typename T, typename = std::void_t<>>
+struct defined_add_row : std::false_type
+{};
+
+template <typename T>
+struct defined_add_row<T, std::void_t<decltype(&T::template add_row<ObVectorBase>)>>
+  : std::true_type
+{};
+
+template <typename T, bool defined = defined_add_row<T>::value>
+struct AddRow
+{
+  template <typename... Args>
+  OB_INLINE static int do_op(T &v, Args &&... args)
+  {
+    return v.template add_row(std::forward<Args>(args)...);
+  }
+};
+
+template <typename T>
+struct AddRow<T, false>
+{
+  template <typename... Args>
+  OB_INLINE static int do_op(T &v, Args &&... args)
+  {
+    return OB_SUCCESS;
+  }
+};
+
+template <typename T, typename = std::void_t<>>
+struct defined_add_nullable_row : std::false_type
+{};
+
+template <typename T>
+struct defined_add_nullable_row<
+  T, std::void_t<decltype(&T::template add_nullable_row<ObVectorBase>)>> : std::true_type
+{};
+
+template <typename T, bool defined = defined_add_nullable_row<T>::value>
+struct AddNullableRow
+{
+  template <typename... Args>
+  OB_INLINE static int do_op(T &v, Args &&... args)
+  {
+    return v.template add_nullable_row(std::forward<Args>(args)...);
+  }
+};
+
+template <typename T>
+struct AddNullableRow<T, false>
+{
+  template <typename... Args>
+  OB_INLINE static int do_op(T &v, Args &&... args)
+  {
+    return OB_SUCCESS;
+  }
+};
+
+template <typename T, typename = std::void_t<>>
+struct defined_removal_func: std::false_type {};
+
+template <typename T>
+struct defined_removal_func<
+  T, std::void_t<decltype(&T::template add_or_sub_row<ObVectorBase>)>>
+  : std::true_type
+{};
+
+template<typename T, bool defined = defined_removal_func<T>::value>
+struct removal_opt
+{
+  template<typename... Args>
+  inline static int add_or_sub_row(T &v, Args&&... args)
+  {
+    return v.add_or_sub_row(std::forward<Args>(args)...);
+  }
+};
+
+template<typename T>
+struct removal_opt<T, false>
+{
+  template<typename... Args>
+  inline static int add_or_sub_row(T &v, Args&&... args)
+  {
+    int ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "removal opt not suppported", K(ret));
+    return ret;
   }
 };
 
@@ -409,6 +505,15 @@ inline int add_values(const int32_t &l, const number::ObCompactNumber &r, char *
   return ret;
 }
 
+template<typename L, typename R>
+inline int sub_values(const L &l, const R &r, char *res_buf, const int32_t res_len)
+{
+  int ret = OB_SUCCESS;
+  L &res = *reinterpret_cast<L *>(res_buf) ;
+  res = l - r;
+  return ret;
+}
+
 template<typename Input, typename Output>
 struct Caster
 {
@@ -548,19 +653,82 @@ struct AggBitVector: sql::ObTinyBitVector
 
 using NotNullBitVector = AggBitVector;
 
-inline bool supported_aggregate_function(const ObItemType agg_op)
+inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_rollup = false,
+                                         bool has_rollup = false)
 {
   switch (agg_op) {
   case T_FUN_COUNT:
   case T_FUN_MIN:
   case T_FUN_MAX:
   case T_FUN_COUNT_SUM:
-  case T_FUN_SUM: {
+  case T_FUN_SUM:
+  case T_FUN_APPROX_COUNT_DISTINCT:
+  case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
+  case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
+  case T_FUN_SYS_BIT_OR:
+  case T_FUN_SYS_BIT_AND:
+  case T_FUN_SYS_BIT_XOR: {
     return true;
+  }
+  case T_FUN_GROUPING:
+  case T_FUN_GROUPING_ID: {
+    return use_hash_rollup;
+  }
+  case T_FUN_GROUP_ID: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0;
+  }
+  case T_FUN_SYS_RB_BUILD_AGG: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
+  }
+  case T_FUN_SYS_RB_AND_AGG:
+  case T_FUN_SYS_RB_OR_AGG: {
+    return GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_3_5_3;
+  }
+  case T_FUN_SUM_OPNSIZE: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_1;
+  }
+  case T_FUN_GROUP_CONCAT: {
+    uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
+    if (!has_rollup && ob_version >= CLUSTER_VERSION_4_3_5_1) {
+      return true;
+    }
+  }
+  case T_FUN_TOP_FRE_HIST: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2;
+  }
+  case T_FUN_HYBRID_HIST: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2;
+  }
+  case T_FUN_ARG_MAX: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0;
+  }
+  case T_FUN_ARG_MIN: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0;
+  }
+  case T_FUN_KEEP_WM_CONCAT:
+  case T_FUN_WM_CONCAT: {
+    return (!has_rollup && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0);
   }
   default:
     return false;
   }
+}
+
+inline bool agg_res_not_null(const ObItemType agg_op)
+{
+  // TODO: add other functions
+  bool ret = false;
+  switch (agg_op) {
+  case T_FUN_COUNT:
+  case T_FUN_COUNT_SUM: {
+    ret = true;
+    break;
+  }
+  default: {
+    break;
+  }
+  }
+  return ret;
 }
 
 #define AGG_FIXED_TC_LIST     \
@@ -583,7 +751,9 @@ inline bool supported_aggregate_function(const ObItemType agg_op)
   VEC_TC_DEC_INT64,           \
   VEC_TC_DEC_INT128,          \
   VEC_TC_DEC_INT256,          \
-  VEC_TC_DEC_INT512
+  VEC_TC_DEC_INT512,          \
+  VEC_TC_MYSQL_DATETIME,      \
+  VEC_TC_MYSQL_DATE           \
 
 #define AGG_VEC_TC_LIST       \
   VEC_TC_NULL,                \
@@ -598,6 +768,7 @@ inline bool supported_aggregate_function(const ObItemType agg_op)
   VEC_TC_TIME,                \
   VEC_TC_YEAR,                \
   VEC_TC_STRING,              \
+  VEC_TC_EXTEND,              \
   VEC_TC_BIT,                 \
   VEC_TC_ENUM_SET,            \
   VEC_TC_ENUM_SET_INNER,      \
@@ -615,7 +786,11 @@ inline bool supported_aggregate_function(const ObItemType agg_op)
   VEC_TC_DEC_INT64,           \
   VEC_TC_DEC_INT128,          \
   VEC_TC_DEC_INT256,          \
-  VEC_TC_DEC_INT512
+  VEC_TC_DEC_INT512,          \
+  VEC_TC_COLLECTION,          \
+  VEC_TC_MYSQL_DATETIME,      \
+  VEC_TC_MYSQL_DATE,          \
+  VEC_TC_ROARINGBITMAP
 
 } // end namespace aggregate
 } // end namespace share

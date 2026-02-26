@@ -36,7 +36,10 @@ public:
       aggr_code_expr_(nullptr),
       by_pass_enabled_(false),
       support_fast_single_row_agg_(false),
-      llc_ndv_est_enabled_(false)
+      skew_detection_enabled_(false),
+      llc_ndv_est_enabled_(false),
+      implicit_aggr_in_3stage_indexes_(alloc),
+      need_last_group_in_3stage_(false)
   {
   }
   DECLARE_VIRTUAL_TO_STRING;
@@ -59,7 +62,10 @@ public:
   bool by_pass_enabled_;
   // COUNT/SUM/MIN/MAX can use fast single row agg
   bool support_fast_single_row_agg_;
+  bool skew_detection_enabled_;
   bool llc_ndv_est_enabled_;
+  ObFixedArray<int64_t, common::ObIAllocator> implicit_aggr_in_3stage_indexes_;
+  bool need_last_group_in_3stage_;
 };
 
 //modifiable

@@ -95,13 +95,14 @@ public:
       const ObIArray<ObTabletID> &tablet_ids,
       ObMySQLProxy &sql_proxy,
       common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_map);
-  static int get_tablet_checksum_record_without_execution_id(
+  static int get_local_index_tablet_finish_status(
       const uint64_t tenant_id,
-      const uint64_t table_id,
+      const uint64_t data_table_id,
+      const uint64_t index_table_id,
       const int64_t ddl_task_id,
       const ObIArray<ObTabletID> &tablet_ids,
       ObMySQLProxy &sql_proxy,
-      common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_map);
+      common::hash::ObHashMap<uint64_t, bool> &tablet_finished_map);
   static int check_column_checksum(
       const uint64_t tenant_id,
       const int64_t execution_id,
@@ -109,6 +110,7 @@ public:
       const uint64_t index_table_id,
       const int64_t ddl_task_id,
       const bool is_unique_index_checking,
+      const ObIArray<int64_t> &ignore_col_ids,
       bool &is_equal,
       common::ObMySQLProxy &sql_proxy);
   static int check_column_checksum_without_execution_id(
@@ -117,6 +119,7 @@ public:
       const uint64_t index_table_id,
       const int64_t ddl_task_id,
       const bool is_unique_index_checking,
+      const ObIArray<int64_t> &ignore_col_ids,
       bool &is_equal,
       common::ObMySQLProxy &sql_proxy);
   static int delete_checksum(

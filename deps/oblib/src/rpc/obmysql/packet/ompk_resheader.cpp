@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX RPC_OBMYSQL
 
 #include "rpc/obmysql/packet/ompk_resheader.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "rpc/obmysql/ob_mysql_util.h"
 
 using namespace oceanbase::common;

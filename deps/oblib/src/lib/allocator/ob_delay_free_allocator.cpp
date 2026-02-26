@@ -11,7 +11,6 @@
  */
 
 #include "lib/allocator/ob_delay_free_allocator.h"
-#include "lib/oblog/ob_log.h"
 
 
 namespace oceanbase

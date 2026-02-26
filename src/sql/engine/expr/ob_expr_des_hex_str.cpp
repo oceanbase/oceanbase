@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_des_hex_str.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

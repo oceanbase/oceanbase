@@ -13,15 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_all_virtual_proxy_partition_info.h"
-#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/parser/ob_parser_utils.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/json/ob_json_print_utils.h"
-#include "common/ob_smart_var.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -424,11 +416,15 @@ int ObAllVirtualProxyPartitionInfo::fill_row_(const ObTableSchema &table_schema)
           // 1. The generated column of the primary key table can also be used as the partition key
           // 2. Virtual table
           // 3. No primary key table (heap table)
+          // 4. Cluster by table
           if (OB_LIKELY(OB_ENTRY_NOT_EXIST == ret)) {
-            if (!table_schema.is_heap_table() && column_schema->is_generated_column()) {
+            if (table_schema.is_index_organized_table_with_pk() && column_schema->is_generated_column()) {
               idx = info.get_size() + next_part_key_idx_;
               ret = OB_SUCCESS;
-            } else if (table_schema.is_vir_table() || table_schema.is_heap_table()) {
+            } else if (table_schema.is_vir_table()
+                       || table_schema.is_table_without_pk()
+                       || table_schema.is_table_with_clustering_key()
+                       || table_schema.is_mlog_table()) {
               idx = -1;
               ret = OB_SUCCESS;
             } else {
@@ -470,8 +466,9 @@ int ObAllVirtualProxyPartitionInfo::fill_row_(const ObTableSchema &table_schema)
         cells[i].set_int(static_cast<int64_t>(accuracy.get_scale()));
         break;
       }
-    case SPARE1: {// int, unused
-        cells[i].set_int(0);
+    // replace the meaning of the 'spare1' column with that of 'schema_version'
+    case SPARE1: {
+        cells[i].set_int(table_schema.get_schema_version());
         break;
       }
     case SPARE2: {// int, unused
@@ -739,7 +736,7 @@ int ObAllVirtualProxyPartitionInfo::build_check_str_to_raw_expr_(
         ObString scope_name = "constraint column function";
         LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, q_name.col_name_.length(), q_name.col_name_.ptr(),
                        scope_name.length(), scope_name.ptr());
-      } else if (OB_FAIL(sql::ObRawExprUtils::init_column_expr(*col_schema, *q_name.ref_expr_))) {
+      } else if (OB_FAIL(sql::ObRawExprUtils::init_column_expr(*col_schema, NULL, *q_name.ref_expr_))) {
         LOG_WARN("init column expr failed", KR(ret));
       }
     }

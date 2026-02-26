@@ -16,14 +16,10 @@
 #define private public
 #define UNITTEST
 
-#include <iostream>
-#include <thread>
 
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
 
-#include "storage/ls/ob_ls.h"
 
 #undef private
 #undef protected
@@ -50,7 +46,7 @@ public:
   static void SetUpTestCase()
   {
     EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-    ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+    ObServerStorageMetaService::get_instance().is_started_ = true;
   }
   static void TearDownTestCase() { MockTenantModuleEnv::get_instance().destroy(); }
 
@@ -135,12 +131,9 @@ void TestDirectLoadPlusOffline::offline_ls_with_active_direct_load_memtable()
   create_ls(TEST_LS_ID, ls_);
   create_tablets(TEST_LS_ID);
 
-  ASSERT_EQ(OB_SUCCESS,
-            ls_->get_tablet_svr()->create_memtable(ObTabletID(TEST_TABLET_ID),
-                                                   0 /* schema version */,
-                                                   true /* for_direct_load */,
-                                                   false /*for_replay*/,
-                                                   SCN::min_scn() /*clog_checkpoint*/));
+  CreateMemtableArg arg;
+  arg.for_inc_direct_load_ = true;
+  ASSERT_EQ(OB_SUCCESS, ls_->get_tablet_svr()->create_memtable(ObTabletID(TEST_TABLET_ID), arg));
 
   ASSERT_EQ(OB_SUCCESS, ls_->offline());
 }
@@ -159,7 +152,6 @@ int main(int argc, char **argv)
 {
   int ret = 1;
   system("rm -f test_direct_load_plus_offline.log*");
-  system("rm -fr run_*");
   ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_direct_load_plus_offline.log", true);
   logger.set_log_level(OB_LOG_LEVEL_INFO);

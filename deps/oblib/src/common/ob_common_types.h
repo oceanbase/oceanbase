@@ -56,7 +56,10 @@ struct ObQueryFlag
 #define OBSF_BIT_IS_MDS_QUERY         1
 #define OBSF_BIT_IS_SELECT_FOLLOWER   1
 #define OBSF_BIT_ENABLE_LOB_PREFETCH  1
-#define OBSF_BIT_RESERVED             25
+#define OBSF_BIT_IS_BARE_ROW_SCAN     1
+#define OBSF_BIT_MR_MV_SCAN           2
+#define OBSF_BIT_IS_PLAIN_INSERT      1
+#define OBSF_BIT_RESERVED             21
 
   static const uint64_t OBSF_MASK_SCAN_ORDER = (0x1UL << OBSF_BIT_SCAN_ORDER) - 1;
   static const uint64_t OBSF_MASK_DAILY_MERGE =  (0x1UL << OBSF_BIT_DAILY_MERGE) - 1;
@@ -86,10 +89,13 @@ struct ObQueryFlag
   static const uint64_t OBSF_MASK_IS_MDS_QUERY = (0x1UL << OBSF_BIT_IS_MDS_QUERY) - 1;
   static const uint64_t OBSF_MASK_IS_SELECT_FOLLOWER = (0x1UL << OBSF_BIT_IS_SELECT_FOLLOWER) - 1;
   static const uint64_t OBSF_MASK_ENABLE_LOB_PREFETCH = (0x1UL << OBSF_BIT_ENABLE_LOB_PREFETCH) - 1;
+  static const uint64_t OBSF_MASK_IS_DIRECT_SCAN = (0x1UL << OBSF_BIT_IS_BARE_ROW_SCAN) - 1;
+  static const uint64_t OBSF_MASK_IS_PLAIN_INSERT = (0x1UL << OBSF_BIT_IS_PLAIN_INSERT) - 1;
 
-  enum ScanOrder
+
+  enum ScanOrder //FARM COMPAT WHITELIST
   {
-    ImplementedOrder = 0,
+    NoOrder = 0,
     Forward = 1,
     Reverse = 2,
     KeepOrder = 3,
@@ -114,12 +120,18 @@ struct ObQueryFlag
     ReservedMode = 2,
   };
 
+  enum MRMVScanMode
+  {
+    NormalMode = 0,
+    RefreshMode = 1,
+    RealTimeMode = 2,
+  };
   union
   {
     uint64_t flag_;
     struct
     {
-      uint64_t scan_order_     : OBSF_BIT_SCAN_ORDER;        // 1: forward(default), 2: reverse
+      uint64_t scan_order_     : OBSF_BIT_SCAN_ORDER;        // 0: no order, 1: forward(default), 2: reverse
       uint64_t daily_merge_    : OBSF_BIT_DAILY_MERGE;       // 0: normal scan(default), 1: daily merge scan
       uint64_t rmmb_optimize_ : OBSF_BIT_RMMB_OPTIMIZE;     // 0: donot optimize(default), 1: optimize
       uint64_t whole_macro_scan_: OBSF_BIT_WHOLE_MACRO_SCAN;  // 0: normal scan 1:whole macro scan, like daily merge or build index, will read one macro block in single io request
@@ -152,6 +164,9 @@ struct ObQueryFlag
       uint64_t enable_rich_format_ : OBSF_BIT_ENABLE_RICH_FORMAT;
       uint64_t is_mds_query_ : OBSF_BIT_IS_MDS_QUERY;
       uint64_t enable_lob_prefetch_ : OBSF_BIT_ENABLE_LOB_PREFETCH;
+      uint64_t is_bare_row_scan_ : OBSF_BIT_IS_BARE_ROW_SCAN; // 1: to scan mult version row directly without compact.
+      uint64_t mr_mv_scan_ : OBSF_BIT_MR_MV_SCAN; // 0: normal table scan. 1. major refresh mview base table scan in refresh 2. major refresh rt-mview base table scan
+      uint64_t is_plain_insert_gts_opt_ : OBSF_BIT_IS_PLAIN_INSERT;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
@@ -195,8 +210,11 @@ struct ObQueryFlag
     is_mds_query_ = is_mds_query & OBSF_MASK_IS_MDS_QUERY;
   }
   void reset() { flag_ = 0; }
+  inline ScanOrder get_scan_order() const { return (ScanOrder)scan_order_; }
+  inline bool is_keep_order() const { return ScanOrder::KeepOrder == get_scan_order(); }
   inline bool is_reverse_scan() const { return scan_order_ == Reverse; }
   inline bool is_ordered_scan() const { return scan_order_ == ObQueryFlag::Forward || scan_order_ == ObQueryFlag::Reverse; }
+  inline bool is_support_sort_scan() const { return scan_order_ == Forward || scan_order_ == NoOrder || scan_order_ == Reverse; }
   inline bool is_daily_merge() const { return daily_merge_; }
   inline bool is_rmmb_optimized() const { return rmmb_optimize_; }
   inline bool is_whole_macro_scan() const { return whole_macro_scan_; }
@@ -205,7 +223,7 @@ struct ObQueryFlag
   inline bool is_query_stat() const { return query_stat_; }
   inline bool is_mysql_mode() const { return sql_mode_ == MysqlMode; }
   inline bool is_read_latest() const { return read_latest_; }
-  inline bool is_lookup_for_4377() const { return is_lookup_for_4377_; }
+  inline bool is_lookup_for_4377() const { return is_lookup_for_4377_ && !for_foreign_key_check_; }
   inline bool is_prewarm() const { return prewarm_; }
   inline bool is_index_invalid() const { return index_invalid_; }
   inline bool is_use_row_cache() const { return !is_whole_macro_scan() && use_row_cache_ == UseCache; }
@@ -239,11 +257,14 @@ struct ObQueryFlag
   inline bool is_for_foreign_key_check() const { return for_foreign_key_check_; }
   inline bool is_sstable_cut() const { return is_sstable_cut_; }
   inline bool is_skip_read_lob() const { return skip_read_lob_; }
+  inline bool is_bare_row_scan() const {return is_bare_row_scan_; }
   inline bool is_mds_query() const { return is_mds_query_; }
   inline void set_is_select_follower() { is_select_follower_ = true; }
   inline bool is_select_follower() const { return is_select_follower_; }
   inline void set_enable_lob_prefetch() { enable_lob_prefetch_ = true; }
   inline bool enable_lob_prefetch() const { return enable_lob_prefetch_; }
+  inline void set_plain_insert_gts_opt() { is_plain_insert_gts_opt_ = true; }
+  inline bool is_plain_insert_gts_opt() const { return is_plain_insert_gts_opt_; }
   inline void disable_cache()
   {
     set_not_use_row_cache();
@@ -251,6 +272,11 @@ struct ObQueryFlag
     set_not_use_block_cache();
     set_not_use_bloomfilter_cache();
   }
+  inline void set_is_new_query_range() { is_new_query_range_ = true; }
+  inline bool is_new_query_range() const { return is_new_query_range_; }
+  inline bool is_mr_mview_refresh_base_scan() const { return RefreshMode == mr_mv_scan_;  }
+  inline bool is_mr_rt_mview_base_scan() const { return RealTimeMode == mr_mv_scan_;  }
+  inline bool is_mr_mview_query() const { return is_mr_mview_refresh_base_scan() || is_mr_rt_mview_base_scan(); }
 
   TO_STRING_KV("scan_order", scan_order_,
                "daily_merge", daily_merge_,
@@ -276,11 +302,15 @@ struct ObQueryFlag
                "is_sstable_cut", is_sstable_cut_,
                "skip_read_lob", skip_read_lob_,
                "is_lookup_for_4377", is_lookup_for_4377_,
+               "is_bare_row_scan", is_bare_row_scan_,
                "enable_rich_format", enable_rich_format_,
                "is_for_foreign_key_check", for_foreign_key_check_,
                "is_mds_query", is_mds_query_,
                "is_select_follower", is_select_follower_,
                "enable_lob_prefetch", enable_lob_prefetch_,
+               "is_bare_row_scan", is_bare_row_scan_,
+               "mr_mv_scan", mr_mv_scan_,
+               "is_plain_insert_gts_opt", is_plain_insert_gts_opt_,
                "reserved", reserved_);
   OB_UNIS_VERSION(1);
 };

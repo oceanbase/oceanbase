@@ -11,18 +11,11 @@
  */
 
 #define USING_LOG_PREFIX PL
-#include "pl/sys_package/ob_dbms_session.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
+#include "ob_dbms_session.h"
 #include "pl/ob_pl.h"
-#include "share/ob_dml_sql_splicer.h"
 #include "share/ob_global_context_operator.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 namespace oceanbase
 {
@@ -50,7 +43,7 @@ int ObDBMSSession::clear_all_context(sql::ObExecContext &ctx,
     ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
     LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
   } else if (OB_FAIL(check_argument(params.at(0), false, true, 0,
-                                    OB_MAX_CONTEXT_STRING_LENGTH, context_name))) {
+                                    OB_MAX_CONTEXT_STRING_LENGTH, context_name, ctx.get_allocator()))) {
     LOG_WARN("failed to check param 0", K(ret));
   } else if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
@@ -106,7 +99,7 @@ int ObDBMSSession::clear_context(sql::ObExecContext &ctx,
     ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
     LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
   } else if (OB_FAIL(check_argument(params.at(0), false, true, 0,
-                                    OB_MAX_CONTEXT_STRING_LENGTH, context_name))) {
+                                    OB_MAX_CONTEXT_STRING_LENGTH, context_name, ctx.get_allocator()))) {
     LOG_WARN("failed to check param 0", K(ret));
   } else if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
@@ -122,10 +115,10 @@ int ObDBMSSession::clear_context(sql::ObExecContext &ctx,
                                       ctx_schema->get_schema_name()))) {
     LOG_WARN("failed to check privileges", K(ret));
   } else if (OB_FAIL(check_client_id(params.at(1),
-                      OB_MAX_CONTEXT_CLIENT_IDENTIFIER_LENGTH_IN_SESSION, client_id))) {
+                      OB_MAX_CONTEXT_CLIENT_IDENTIFIER_LENGTH_IN_SESSION, client_id, ctx.get_allocator()))) {
     LOG_WARN("failed to check param 1", K(ret));
   } else if (OB_FAIL(check_argument(params.at(2), true, true, 2,
-                      OB_MAX_CONTEXT_STRING_LENGTH, attribute))) {
+                      OB_MAX_CONTEXT_STRING_LENGTH, attribute, ctx.get_allocator()))) {
     LOG_WARN("failed to check param 2", K(ret));
   } else {
     if (ACCESSED_GLOBALLY == ctx_schema->get_context_type()) {
@@ -174,6 +167,159 @@ int ObDBMSSession::clear_identifier(sql::ObExecContext &ctx,
   return ret;
 }
 
+int ObDBMSSession::is_role_enabled(sql::ObExecContext &ctx,
+                                   sql::ParamStore &params,
+                                   common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(session_is_role_enabled(ctx, params, result))) {
+    LOG_WARN("failed to check role enabled", K(ret));
+  }
+  return ret;
+}
+
+int ObDBMSSession::session_is_role_enabled(sql::ObExecContext &ctx,
+                                           sql::ParamStore &params,
+                                           common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *session = ctx.get_my_session();
+  ObString role_name;
+  uint64_t role_id = OB_INVALID_ID;
+  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+  const ObUserInfo *user_info = NULL;
+  ObPLContext *pl_ctx = NULL;
+  ObString host_name(OB_DEFAULT_HOST_NAME);
+  ObPLExecState *target_frame = NULL;
+  if (OB_UNLIKELY(OB_ISNULL(session))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is nullptr", K(ret));
+  } else if (OB_ISNULL(schema_guard = ctx.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_UNLIKELY(1 != params.count())) {
+    ObString func_name("SESSION_IS_ROLE_ENABLED");
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
+  } else if (OB_FAIL(ObRawExprUtils::resolve_identifier(ctx.get_allocator(),
+                                                        *ctx.get_my_session(),
+                                                        params.at(0),
+                                                        "ROLE_NAME",
+                                                        role_name,
+                                                        false,
+                                                        false))) {
+    LOG_WARN("failed to resolve identifier", K(ret));
+  } else if (OB_FAIL(schema_guard->get_user_info(session->get_effective_tenant_id(),
+                                          role_name, host_name,
+                                          user_info))) {
+    LOG_WARN("failed to get user info", K(ret));
+  } else if (OB_ISNULL(user_info)) {
+    result.set_bool(false);
+  } else if (OB_FALSE_IT(role_id = user_info->get_user_id())) {
+  } else if (OB_ISNULL(pl_ctx = session->get_pl_context()) || OB_ISNULL(pl_ctx->get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get pl context", K(ret));
+  } else if (OB_FAIL(find_top_definer(pl_ctx, *schema_guard, target_frame))) {
+    LOG_WARN("failed to find latest call above all definer", K(ret));
+  } else if (OB_ISNULL(target_frame) || OB_ISNULL(target_frame->get_exec_ctx().pl_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+  } else {
+    // find top definer, use roles in old_role_id_array
+    const ObIArray<uint64_t>& old_role_id_array = target_frame->get_exec_ctx().pl_ctx_->get_old_role_id_array();
+    bool find = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !find && i < old_role_id_array.count(); ++i) {
+      if (old_role_id_array.at(i) == role_id) {
+        find = true;
+      }
+    }
+    result.set_bool(find);
+  }
+  return ret;
+}
+
+int ObDBMSSession::find_top_definer(ObPLContext *pl_ctx,
+                                    ObSchemaGetterGuard &schema_guard,
+                                    ObPLExecState *&exec_state)
+{
+  int ret = OB_SUCCESS;
+  uint64_t stack_cnt = pl_ctx->get_exec_stack().count();
+  ObPLExecState *frame = NULL;
+  for (int64_t i = stack_cnt - 1; OB_SUCC(ret) && i >= 0; --i) {
+    bool is_special_ir = false;
+    frame = pl_ctx->get_exec_stack().at(i);
+    if (OB_ISNULL(frame)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get frame", K(i), K(stack_cnt), K(ret));
+    } else if (OB_FAIL(frame->get_function().is_special_pkg_invoke_right())) {
+      LOG_WARN("failed to check special pkg invoke right", K(ret));
+    } else if (frame->get_function().is_invoker_right() ||
+               frame->get_function().get_proc_type() == STANDALONE_ANONYMOUS ||
+               is_special_ir) {
+      // continue
+    } else {
+      exec_state = frame;
+    }
+  }
+  if (NULL == exec_state) {
+    //if no definer exists, return current frame instead
+    exec_state = pl_ctx->get_exec_stack().at(stack_cnt - 1);
+  }
+  return ret;
+}
+
+int ObDBMSSession::current_is_role_enabled(sql::ObExecContext &ctx,
+                                           sql::ParamStore &params,
+                                           common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *session = ctx.get_my_session();
+  ObString role_name;
+  uint64_t role_id = OB_INVALID_ID;
+  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+  const ObUserInfo *user_info = NULL;
+  ObPLContext *pl_ctx = NULL;
+  ObString host_name(OB_DEFAULT_HOST_NAME);
+  if (OB_UNLIKELY(OB_ISNULL(session))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is nullptr", K(ret));
+  } else if (OB_ISNULL(schema_guard = ctx.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_UNLIKELY(1 != params.count())) {
+    ObString func_name("CURRENT_IS_ROLE_ENABLED");
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
+  } else if (OB_FAIL(ObRawExprUtils::resolve_identifier(ctx.get_allocator(),
+                                                        *ctx.get_my_session(),
+                                                        params.at(0),
+                                                        "ROLE_NAME",
+                                                        role_name,
+                                                        false,
+                                                        false))) {
+    LOG_WARN("failed to resolve identifier", K(ret));
+  } else if (OB_FAIL(schema_guard->get_user_info(session->get_effective_tenant_id(),
+                                          role_name, host_name,
+                                          user_info))) {
+    LOG_WARN("failed to get user info", K(ret));
+  } else if (OB_ISNULL(user_info)) {
+    result.set_bool(false);
+  } else if (OB_FALSE_IT(role_id = user_info->get_user_id())) {
+  } else if (OB_ISNULL(pl_ctx = session->get_pl_context())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get pl context", K(ret));
+  } else {
+    const common::ObIArray<uint64_t>& role_array = session->get_enable_role_array();
+    bool find = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !find && i < role_array.count(); ++i) {
+      if (role_array.at(i) == role_id) {
+        find = true;
+      }
+    }
+    result.set_bool(find);
+  }
+  return ret;
+}
 
 int ObDBMSSession::set_context(sql::ObExecContext &ctx,
                                sql::ParamStore &params,
@@ -203,7 +349,7 @@ int ObDBMSSession::set_context(sql::ObExecContext &ctx,
     ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
     LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
   } else if (OB_FAIL(check_argument(params.at(0), false, true, 0,
-                                    OB_MAX_CONTEXT_STRING_LENGTH, context_name))) {
+                                    OB_MAX_CONTEXT_STRING_LENGTH, context_name, ctx.get_allocator()))) {
     LOG_WARN("failed to check param 0", K(ret));
   } else if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
@@ -219,18 +365,18 @@ int ObDBMSSession::set_context(sql::ObExecContext &ctx,
                                       ctx_schema->get_schema_name()))) {
     LOG_WARN("failed to check privileges", K(ret));
   } else if (OB_FAIL(check_argument(params.at(1), false, true, 1,
-                                    OB_MAX_CONTEXT_STRING_LENGTH, attribute))) {
+                                    OB_MAX_CONTEXT_STRING_LENGTH, attribute, ctx.get_allocator()))) {
     LOG_WARN("failed to check param 1", K(ret));
   } else if (OB_FAIL(check_argument(params.at(2), true, false, 2,
-                                    OB_MAX_CONTEXT_VALUE_LENGTH, value))) {
+                                    OB_MAX_CONTEXT_VALUE_LENGTH, value, ctx.get_allocator()))) {
     LOG_WARN("failed to check param 2", K(ret));
   } else {
     if (ACCESSED_GLOBALLY == ctx_schema->get_context_type()) {
       if (OB_FAIL(check_argument(params.at(3), true, true, 3,
-                                 OB_MAX_CONTEXT_STRING_LENGTH, username))) {
+                                 OB_MAX_CONTEXT_STRING_LENGTH, username, ctx.get_allocator()))) {
         LOG_WARN("failed to check param 3", K(ret));
       } else if (OB_FAIL(check_client_id(params.at(4),
-                         OB_MAX_CONTEXT_CLIENT_IDENTIFIER_LENGTH_IN_SESSION, client_id))) {
+                         OB_MAX_CONTEXT_CLIENT_IDENTIFIER_LENGTH_IN_SESSION, client_id, ctx.get_allocator()))) {
         LOG_WARN("failed to check param 4", K(ret));
       } else {
         if (client_id.empty()) {
@@ -328,7 +474,8 @@ int ObDBMSSession::reset_package(sql::ObExecContext &ctx,
 
 int ObDBMSSession::check_argument(const ObObj &input_param, bool allow_null,
                                   bool need_case_up, int32_t param_idx,
-                                  int64_t max_len, ObString &output_param)
+                                  int64_t max_len, ObString &output_param,
+                                  ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
   if (input_param.is_null()) {
@@ -347,14 +494,17 @@ int ObDBMSSession::check_argument(const ObObj &input_param, bool allow_null,
     ret = OB_ERR_INVALID_INPUT_ARGUMENT;
     LOG_USER_ERROR(OB_ERR_INVALID_INPUT_ARGUMENT, param_idx + 1);
   } else if (need_case_up) {
-    try_caseup(input_param.get_collation_type(), output_param);
+    if (OB_FAIL(try_caseup(input_param.get_collation_type(), output_param, alloc))) {
+      LOG_WARN("failed to case up", K(ret));
+    }
   }
   return ret;
 }
 
 int ObDBMSSession::check_client_id(const ObObj &input_param,
                                    int64_t max_len,
-                                   ObString &output_param)
+                                   ObString &output_param,
+                                   ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
   if (input_param.is_null()) {
@@ -367,21 +517,26 @@ int ObDBMSSession::check_client_id(const ObObj &input_param,
   } else if (output_param.length() > max_len) {
     ret = OB_ERR_CLIENT_IDENTIFIER_TOO_LONG;
     LOG_USER_ERROR(OB_ERR_CLIENT_IDENTIFIER_TOO_LONG);
-  } else {
-    try_caseup(input_param.get_collation_type(), output_param);
+  } else if (OB_FAIL(try_caseup(input_param.get_collation_type(), output_param, alloc))) {
+    LOG_WARN("failed to case up", K(ret));
   }
   return ret;
 }
 
-void ObDBMSSession::try_caseup(ObCollationType cs_type, ObString &str_val)
+int ObDBMSSession::try_caseup(ObCollationType cs_type, ObString &str_val, ObIAllocator &alloc)
 {
+  int ret = OB_SUCCESS;
+  ObString dest;
   if (!str_val.empty()) {
     if (str_val.ptr()[0] == '\"' && str_val.ptr()[str_val.length() - 1] == '\"') {
       str_val.assign(str_val.ptr() + 1, str_val.length() - 2);
+    } else if (OB_FAIL(ObCharset::caseup(cs_type, str_val, dest, alloc))) {
+      LOG_WARN("failed to case up", K(ret));
     } else {
-      ObCharset::caseup(cs_type, str_val);
+      str_val = dest;
     }
   }
+  return ret;
 }
 
 int ObDBMSSession::check_privileges(pl::ObPLContext *pl_ctx,

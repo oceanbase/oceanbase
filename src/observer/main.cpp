@@ -25,8 +25,8 @@
 #include "lib/utility/ob_defer.h"
 #include "objit/ob_llvm_symbolizer.h"
 #include "observer/ob_server.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server_utils.h"
+#include "observer/omt/ob_tenant_config.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_version.h"
@@ -43,7 +43,9 @@
 #ifdef __NEED_PERF__
 #include "lib/profile/gperf.h"
 #endif
-
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#endif
 using namespace oceanbase::obsys;
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -51,6 +53,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::diagnose;
 using namespace oceanbase::observer;
 using namespace oceanbase::share;
+using namespace oceanbase::omt;
 
 #define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
 #define MPRINTx(format, ...)                                                   \
@@ -76,6 +79,7 @@ static void print_help()
   MPRINT("  -6,--ipv6 USE_IPV6       server use ipv6 address");
   MPRINT("  -m,--mode MODE server mode");
   MPRINT("  -f,--scn flashback_scn");
+  MPRINT("  -L,--plugins_load plugins to load");
 }
 
 static void print_version()
@@ -91,8 +95,50 @@ static void print_version()
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
   MPRINT("BUILD_FLAGS: %s%s", build_flags(), extra_flags);
   MPRINT("BUILD_INFO: %s\n", build_info());
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  MPRINT("LIBPALF_VERSION: %s (%s)\n",
+    oceanbase::libpalf::libpalf_get_version(),
+    oceanbase::libpalf::libpalf_get_release_version());
+#endif
   MPRINT("Copyright (c) 2011-present OceanBase Inc.");
   MPRINT();
+}
+
+static int dump_config_to_json()
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(g_config_mem_attr);
+  ObJsonArray j_arr(&allocator);
+  omt::ObTenantConfig *tenant_config = OB_NEW(ObTenantConfig, SET_USE_UNEXPECTED_500("TenantConfig"), OB_SYS_TENANT_ID);
+  ObJsonBuffer j_buf(&allocator);
+  FILE *out_file = nullptr;
+  const char *out_path = "./ob_all_available_parameters.json";
+  if (OB_ISNULL(tenant_config)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    MPRINT("new tenant config failed! ret=%d\n", ret);
+  } else if (OB_FAIL(ObServerConfig::get_instance().to_json_array(allocator, j_arr))) {
+    MPRINT("dump cluster config to json failed, ret=%d\n", ret);
+  } else if (OB_FAIL(tenant_config->to_json_array(allocator, j_arr))) {
+    MPRINT("dump tenant config to json failed, ret=%d\n", ret);
+  } else if (OB_FAIL(j_arr.print(j_buf, false))) {
+    MPRINT("print json array to buffer failed, ret=%d\n", ret);
+  } else if (nullptr == j_buf.ptr()) {
+    ret = OB_ERR_NULL_VALUE;
+    MPRINT("json buffer is null, ret=%d\n", ret);
+  } else if (nullptr == (out_file = fopen(out_path, "w"))) {
+    ret = OB_IO_ERROR;
+    MPRINT("failed to open file, errno=%d, ret=%d\n", errno, ret);
+  } else if (EOF == fputs(j_buf.ptr(), out_file)) {
+    ret = OB_IO_ERROR;
+    MPRINT("write json buffer to file failed, errno=%d, ret=%d\n", errno, ret);
+  }
+  if (nullptr != tenant_config) {
+    OB_DELETE(ObTenantConfig, SET_USE_UNEXPECTED_500("TenantConfig"), tenant_config);
+  }
+  if (nullptr != out_file) {
+    fclose(out_file);
+  }
+  return ret;
 }
 
 static void print_args(int argc, char *argv[])
@@ -164,8 +210,10 @@ static void get_opts_setting(
       {"mode", 'm', 1},
       {"scn", 'f', 1},
       {"version", 'V', 0},
+      {"dump_config_to_json", 'C', 0},
       {"ipv6", '6', 0},
       {"local_ip", 'I', 1},
+      {"plugins_load", 'L', 1},
   };
 
   size_t opts_cnt = sizeof(ob_opts) / sizeof(ob_opts[0]);
@@ -278,6 +326,13 @@ parse_short_opt(const int c, const char *value, ObServerOptions &opts)
     exit(0);
     break;
 
+  case 'C':
+    if (OB_SUCCESS != dump_config_to_json()) {
+      MPRINT("dump config to json failed");
+    }
+    exit(0);
+    break;
+
   case '6':
     opts.use_ipv6_ = true;
     break;
@@ -285,6 +340,11 @@ parse_short_opt(const int c, const char *value, ObServerOptions &opts)
   case 'I':
     MPRINT("local_ip: %s", value);
     opts.local_ip_ = value;
+    break;
+
+  case 'L':
+    MPRINT("plugins_load: %s", value);
+    opts.plugins_load_ = value;
     break;
 
   case 'h':
@@ -398,7 +458,7 @@ static int check_uid_before_start(const char *dir_path)
   return ret;
 }
 
-static void print_all_thread(const char* desc)
+void print_all_thread(const char* desc, uint64_t tenant_id)
 {
   MPRINT("============= [%s] begin to show unstopped thread =============", desc);
   DIR *dir = opendir("/proc/self/task");
@@ -415,13 +475,22 @@ static void print_all_thread(const char* desc)
         if (file == NULL) {
           MPRINT("fail to print thread tid: %s", tid);
         } else {
-          char name[256];
-          fgets(name, 256, file);
-          size_t len = strlen(name);
-          if (len > 0 && name[len - 1] == '\n') {
-            name[len - 1] = '\0';
+          char thread_name[256];
+          if (fgets(thread_name, sizeof(thread_name), file) != nullptr) {
+            size_t len = strlen(thread_name);
+            if (len > 0 && thread_name[len - 1] == '\n') {
+              thread_name[len - 1] = '\0';
+            }
+            if (!is_server_tenant(tenant_id)) {
+              char tenant_id_str[20];
+              snprintf(tenant_id_str, sizeof(tenant_id_str), "T%lu_", tenant_id);
+              if (0 == strncmp(thread_name, tenant_id_str, strlen(tenant_id_str))) {
+                MPRINT("[CHECK_KILL_GRACEFULLY][T%lu][%s] detect unstopped thread, tid: %s, name: %s", tenant_id, desc, tid, thread_name);
+              }
+            } else {
+              MPRINT("[CHECK_KILL_GRACEFULLY][%s] detect unstopped thread, tid: %s, name: %s", desc, tid, thread_name);
+            }
           }
-          MPRINT("[%s] detect unstopped thread, tid: %s, name: %s", desc, tid, name);
           fclose(file);
         }
       }
@@ -431,7 +500,7 @@ static void print_all_thread(const char* desc)
   MPRINT("============= [%s] finish to show unstopped thread =============", desc);
 }
 
-int main(int argc, char *argv[])
+int inner_main(int argc, char *argv[])
 {
   // temporarily unlimited memory before init config
   set_memory_limit(INT_MAX64);
@@ -444,9 +513,6 @@ int main(int argc, char *argv[])
   }
   ObStackHeaderGuard stack_header_guard;
   // just take effect in observer
-#ifndef OB_USE_ASAN
-  init_malloc_hook();
-#endif
   int64_t memory_used = get_virtual_memory_used();
 #ifndef OB_USE_ASAN
   /**
@@ -502,7 +568,8 @@ int main(int argc, char *argv[])
   int64_t pos = 0;
 
   print_args(argc, argv);
-
+  // no diagnostic info attach to main thread.
+  ObDisableDiagnoseGuard disable_guard;
   setlocale(LC_ALL, "");
   // Set character classification type to C to avoid printf large string too
   // slow.
@@ -530,6 +597,7 @@ int main(int argc, char *argv[])
       pos))) {
   } else if (OB_FAIL(ObEncryptionUtil::init_ssl_malloc())) {
     MPRINT("failed to init crypto malloc");
+  } else if (FALSE_IT(OB_LOGGER.set_log_level(opts.log_level_))) {
   } else if (!opts.nodaemon_ && OB_FAIL(start_daemon(PID_FILE_NAME))) {
   } else {
     ObCurTraceId::get_trace_id()->set("Y0-0000000000000001-0-0");
@@ -598,7 +666,7 @@ int main(int argc, char *argv[])
       } else if (OB_FAIL(observer.wait())) {
         LOG_ERROR("observer wait fail", K(ret));
       }
-      print_all_thread("BEFORE_DESTROY");
+      print_all_thread("BEFORE_DESTROY", OB_SERVER_TENANT_ID);
       observer.destroy();
     }
     curl_global_cleanup();
@@ -606,6 +674,35 @@ int main(int argc, char *argv[])
   }
 
   LOG_INFO("observer exits", "observer_version", PACKAGE_STRING);
-  print_all_thread("AFTER_DESTROY");
+  print_all_thread("AFTER_DESTROY", OB_SERVER_TENANT_ID);
+  return ret;
+}
+
+#ifdef OB_USE_ASAN
+const char* __asan_default_options()
+{
+  return "abort_on_error=1:disable_coredump=0:unmap_shadow_on_exit=1:log_path=./log/asan.log";
+}
+#endif
+
+int main(int argc, char *argv[])
+{
+  int ret = OB_SUCCESS;
+  size_t stack_size = 16<<20;
+  struct rlimit limit;
+  if (0 == getrlimit(RLIMIT_STACK, &limit)) {
+    if (RLIM_INFINITY != limit.rlim_cur) {
+      stack_size = limit.rlim_cur;
+    }
+  }
+  void *stack_addr = ::mmap(nullptr, stack_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (MAP_FAILED == stack_addr) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ret = CALL_WITH_NEW_STACK(inner_main(argc, argv), stack_addr, stack_size);
+    if (-1 == ::munmap(stack_addr, stack_size)) {
+      ret = OB_ERR_UNEXPECTED;
+    }
+  }
   return ret;
 }

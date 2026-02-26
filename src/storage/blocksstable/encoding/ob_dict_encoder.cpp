@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_dict_encoder.h"
-#include "lib/container/ob_array_iterator.h"
-#include "ob_bit_stream.h"
-#include "storage/blocksstable/ob_data_buffer.h"
 #include "ob_integer_array.h"
-#include "ob_encoding_hash_util.h"
 
 namespace oceanbase
 {
@@ -156,7 +152,7 @@ int ObDictEncoder::build_dict()
       ObCmpFunc cmp_func;
       cmp_func.cmp_func_ = lib::is_oracle_mode()
           ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
-      std::sort(ht_->begin(), ht_->end(), DictCmp(ret, cmp_func));
+      lib::ob_sort(ht_->begin(), ht_->end(), DictCmp(ret, cmp_func));
       // calc new dict_ref if dict is sorted
       int64_t i = 0;
       FOREACH(l, *ht_) {
@@ -301,6 +297,7 @@ int ObDictEncoder::store_dict(const ObDatum &datum, char *buf, int64_t &len)
       case ObOTimestampSC:
       case ObIntervalSC:
       case ObGeometrySC:
+      case ObRoaringBitmapSC:
         MEMCPY(buf, datum.ptr_, datum.len_);
         len = datum.len_;
         break;

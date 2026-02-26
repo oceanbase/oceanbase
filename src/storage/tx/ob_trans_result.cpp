@@ -11,8 +11,6 @@
  */
 
 #include "ob_trans_result.h"
-#include "lib/worker.h"
-#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {

@@ -33,6 +33,7 @@ using oceanbase::palf::LSN;
     if (OB_SUCC(ret))
 
 int64_t cal_archive_file_id(const LSN &lsn, const int64_t N);
+int64_t cal_thread_run_interval();
 // 不支持并发
 struct SimpleQueue
 {

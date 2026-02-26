@@ -11,8 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include <string.h>
-#include "share/ob_define.h"
 #include "share/ob_locality_priority.h"
 
 namespace oceanbase
@@ -33,9 +31,8 @@ int ObLocalityPriority::get_primary_region_prioriry(const char *primary_zone,
     char *str1, *str2;
     char *saveptr1, *saveptr2;
     char *token, *subtoken;
-    char tmp_primary_zone[MAX_ZONE_LENGTH];
-
-    size_t size = strlen(primary_zone) > (MAX_ZONE_LENGTH - 1) ? (MAX_ZONE_LENGTH - 1): strlen(primary_zone);
+    SMART_VAR(char[MAX_ZONE_LIST_LENGTH], tmp_primary_zone) {
+    size_t size = strlen(primary_zone) > (MAX_ZONE_LIST_LENGTH - 1) ? (MAX_ZONE_LIST_LENGTH - 1): strlen(primary_zone);
     memcpy(tmp_primary_zone, primary_zone, size);
     tmp_primary_zone[size] = '\0';
     str1 = tmp_primary_zone;
@@ -104,6 +101,7 @@ int ObLocalityPriority::get_primary_region_prioriry(const char *primary_zone,
         } //for
       }
     } // for
+    } // end smar var
   }
 
   return ret;

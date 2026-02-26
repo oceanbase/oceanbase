@@ -105,6 +105,8 @@ public:
     return mds_table_map_.for_each(wrapper);
   }
 
+  bool can_flush();
+
 public: // derived from ObCommonCheckpoint
   share::SCN get_freezing_scn() const;
   virtual share::SCN get_rec_scn() override;

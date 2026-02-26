@@ -25,8 +25,9 @@ TEST(TestObMemtableValue, smoke_test)
 {
   ObMvccRow mr;
 
-  fprintf(stdout, "mr=[%s]\n", to_cstring(mr));
-  fprintf(stdout, "mr=[%s]\n", to_cstring(mr, true));
+  ObCStringHelper helper;
+  fprintf(stdout, "mr=[%s]\n", helper.convert(mr));
+  fprintf(stdout, "mr=[%s]\n", helper.convert(mr, true));
 }
 
 }

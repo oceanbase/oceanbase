@@ -42,6 +42,7 @@ public:
   ObLSMeta ls_meta_;                // the meta of ls
   palf::PalfBaseInfo palf_meta_;    // the meta of palf
   transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta dup_ls_meta_; // the meta of dup_ls_meta_;
+  share::SCN tx_data_recycle_scn_;
 };
 
 } // storage

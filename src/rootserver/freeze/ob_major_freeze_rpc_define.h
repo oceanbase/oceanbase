@@ -20,6 +20,7 @@
 #include "rpc/obrpc/ob_rpc_proxy_macros.h"
 #include "observer/ob_server_struct.h"
 #include "share/config/ob_server_config.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 
 namespace oceanbase
 {
@@ -63,15 +64,24 @@ struct ObMajorFreezeRequest
 {
 public:
   ObSimpleFreezeInfo info_;
+  rootserver::ObMajorFreezeReason freeze_reason_;
 
-  ObMajorFreezeRequest() {}
-  ObMajorFreezeRequest(const ObSimpleFreezeInfo &info) : info_(info) {}
+  ObMajorFreezeRequest()
+    : info_(),
+      freeze_reason_(rootserver::MF_REASON_MAX)
+    {}
+  ObMajorFreezeRequest(
+    const ObSimpleFreezeInfo &info,
+    const rootserver::ObMajorFreezeReason freeze_reason)
+    : info_(info),
+      freeze_reason_(freeze_reason)
+    {}
 
   bool is_valid() const { return info_.is_valid(); }
 
   uint64_t tenant_id() const { return info_.tenant_id_; }
 
-  TO_STRING_KV(K_(info));
+  TO_STRING_KV(K_(info), "freeze_reason", major_freeze_reason_to_str(freeze_reason_));
 
   OB_UNIS_VERSION(1);
 };

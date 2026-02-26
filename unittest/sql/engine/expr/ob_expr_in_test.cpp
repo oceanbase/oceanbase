@@ -335,8 +335,6 @@ int calc_result_typeN(ObExprResType &type, const ObObj *types, const int64_t row
     for (int64_t j = 0; OB_SUCC(ret) && j < row_dimension; ++j) {
       if (OB_FAIL(calc_result_type2(tmp_res_type, types[left_start_idx+ j], types[right_start_idx + j]))) {
         SQL_ENG_LOG(WARN, "failed to calc result types", K(ret));
-      } else if (OB_FAIL(type.get_row_calc_cmp_types().push_back(tmp_res_type.get_calc_meta()))) {
-        SQL_ENG_LOG(WARN, "failed to push back cmp type", K(ret));
       }
     }
   }

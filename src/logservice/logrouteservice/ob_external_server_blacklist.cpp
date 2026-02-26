@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_external_server_blacklist.h"
-#include "share/ob_define.h"
 #include "share/rc/ob_tenant_base.h"   // mtl_malloc
-#include "lib/string/ob_string.h"      // ObString
 
 namespace oceanbase
 {
@@ -222,8 +220,9 @@ int ObLogSvrBlacklist::build_svr_patterns_(char *svrs_buf,
         } else if (OB_FAIL(exceptional_svrs.push_back(svr))) {
           LOG_ERROR("exceptional_svrs push_back svr fail", KR(ret), K(svr));
         } else {
+          ObCStringHelper helper;
           _LOG_INFO("[%sSERVER_BLACKLIST] [ADD] [SVR=%s] [SVR_CNT=%ld]",
-              is_sql_server_ ? "SQL_": "", to_cstring(svr), exceptional_svrs.count());
+              is_sql_server_ ? "SQL_": "", helper.convert(svr), exceptional_svrs.count());
         }
       }
     } // while

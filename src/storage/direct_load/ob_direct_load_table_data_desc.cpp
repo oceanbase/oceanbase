@@ -20,6 +20,8 @@ namespace storage
 using namespace common;
 using namespace observer;
 
+DEFINE_ENUM_FUNC(ObDirectLoadSampleMode::Type, type, OB_DIRECT_LOAD_SAMPLE_MODE_DEF, ObDirectLoadSampleMode::);
+
 ObDirectLoadTableDataDesc::ObDirectLoadTableDataDesc()
   : rowkey_column_num_(0),
     column_count_(0),
@@ -28,13 +30,9 @@ ObDirectLoadTableDataDesc::ObDirectLoadTableDataDesc()
     sstable_data_block_size_(0),
     extra_buf_size_(0),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
-    is_heap_table_(false),
-    mem_chunk_size_(0),
-    max_mem_chunk_count_(0),
-    merge_count_per_round_(0),
-    heap_table_mem_chunk_size_(0),
-    session_count_(0),
-    exe_mode_(ObTableLoadExeMode::MAX_TYPE)
+    row_flag_(),
+    sample_mode_(ObDirectLoadSampleMode::NO_SAMPLE),
+    num_per_sample_(0)
 {
 }
 
@@ -51,25 +49,22 @@ void ObDirectLoadTableDataDesc::reset()
   sstable_data_block_size_ = 0;
   extra_buf_size_ = 0;
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
-  is_heap_table_ = false;
-  mem_chunk_size_ = 0;
-  max_mem_chunk_count_ = 0;
-  merge_count_per_round_ = 0;
-  heap_table_mem_chunk_size_ = 0;
-  session_count_ = 0;
-  exe_mode_ = ObTableLoadExeMode::MAX_TYPE;
+  row_flag_.reset();
+  sample_mode_ = ObDirectLoadSampleMode::NO_SAMPLE;
+  num_per_sample_ = 0;
 }
 
 bool ObDirectLoadTableDataDesc::is_valid() const
 {
-  return (is_heap_table_ || rowkey_column_num_ > 0) &&
+  return rowkey_column_num_ >= 0 &&
          rowkey_column_num_ <= column_count_ && column_count_ > 0 &&
          external_data_block_size_ > 0 && external_data_block_size_ % DIO_ALIGN_SIZE == 0 &&
          sstable_index_block_size_ > 0 && sstable_index_block_size_ % DIO_ALIGN_SIZE == 0 &&
          sstable_data_block_size_ > 0 && sstable_data_block_size_ % DIO_ALIGN_SIZE == 0 &&
          extra_buf_size_ > 0 && extra_buf_size_ % DIO_ALIGN_SIZE == 0 &&
          compressor_type_ > ObCompressorType::INVALID_COMPRESSOR &&
-         max_mem_chunk_count_ > 0 && merge_count_per_round_ > 0;
+         ObDirectLoadSampleMode::is_type_valid(sample_mode_) &&
+         (!ObDirectLoadSampleMode::is_sample_enabled(sample_mode_) || num_per_sample_ > 0);
 }
 
 } // namespace storage

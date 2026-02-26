@@ -1,3 +1,6 @@
+// owner: cxf262476
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -19,12 +22,7 @@
 #include "env/ob_simple_server_restart_helper.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "logservice/ob_log_base_type.h"
-#include "mtlenv/tablelock/table_lock_tx_common_env.h"
-#include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
-#include "share/schema/ob_schema_getter_guard.h"
 #include "storage/tablelock/ob_table_lock_service.h"
-#include "share/ob_ls_id.h"
 
 static const char *TEST_FILE_NAME = "test_lock_table_persistence";
 static const char *BORN_CASE_NAME = "ObLockTableBeforeRestartTest";
@@ -136,12 +134,14 @@ TEST_F(ObLockTableBeforeRestartTest, test_lock_table_flush)
   ObLS *ls = nullptr;
   ObLSHandle handle;
   ObTableLockOwnerID owner_id;
-  owner_id.convert_from_value(1);
+  owner_id.convert_from_value(static_cast<ObLockOwnerType>(0), 1);
   share::ObLSID ls_id = share::LOCK_SERVICE_LS;
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
   ASSERT_NE(nullptr, ls = handle.get_ls());
-  ObCheckpointExecutor *checkpoint_executor = ls->get_checkpoint_executor();
-  ASSERT_NE(nullptr, checkpoint_executor);
+  ObTableHandleV2 table_handle;
+  ObLockMemtable *lock_memtable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ls->lock_table_.get_lock_memtable(table_handle));
+  ASSERT_EQ(OB_SUCCESS, table_handle.get_lock_memtable(lock_memtable));
 
   ObSchemaGetterGuard guard;
   ASSERT_EQ(OB_SUCCESS, GCTX.schema_service_->get_tenant_schema_guard(RunCtx.tenant_id_, guard));
@@ -154,11 +154,6 @@ TEST_F(ObLockTableBeforeRestartTest, test_lock_table_flush)
   ObTableLockService *table_lock_ser = MTL(ObTableLockService*);
   ASSERT_EQ(OB_SUCCESS, table_lock_ser->lock_table(table_id, EXCLUSIVE, owner_id, 0));
   usleep(1000 * 1000);
-
-  ObLockMemtable *lock_memtable
-    = dynamic_cast<ObLockMemtable *>(dynamic_cast<ObLSTxService *>(checkpoint_executor
-            ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
-            ->common_checkpoints_[ObCommonCheckpointType::LOCK_MEMTABLE_TYPE]);
 
   SCN rec_scn = lock_memtable->get_rec_scn();
   ASSERT_NE(rec_scn, SCN::max_scn());
@@ -251,17 +246,14 @@ TEST_F(ObLockTableAfterRestartTest, test_recover_lock_table)
   share::ObLSID ls_id = share::LOCK_SERVICE_LS;
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
   ASSERT_NE(nullptr, ls = handle.get_ls());
-  ObCheckpointExecutor *checkpoint_executor = ls->get_checkpoint_executor();
-  ASSERT_NE(nullptr, checkpoint_executor);
 
   // get lock_scn from table
   select_existed_data(lock_scn, unlock_scn);
-
   // check lock_memtable scn
-  ObLockMemtable *lock_memtable
-    = dynamic_cast<ObLockMemtable *>(dynamic_cast<ObLSTxService *>(checkpoint_executor
-            ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
-            ->common_checkpoints_[ObCommonCheckpointType::LOCK_MEMTABLE_TYPE]);
+  ObTableHandleV2 table_handle;
+  ObLockMemtable *lock_memtable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ls->lock_table_.get_lock_memtable(table_handle));
+  ASSERT_EQ(OB_SUCCESS, table_handle.get_lock_memtable(lock_memtable));
   ASSERT_EQ(lock_memtable->get_rec_scn(), unlock_scn);
   ASSERT_EQ(lock_memtable->flushed_scn_, lock_scn);
   ASSERT_EQ(lock_memtable->max_committed_scn_, unlock_scn);

@@ -11,7 +11,6 @@
  */
 
 #include "ob_server_event_history_table_operator.h"
-#include "share/config/ob_server_config.h"
 namespace oceanbase
 {
 namespace observer

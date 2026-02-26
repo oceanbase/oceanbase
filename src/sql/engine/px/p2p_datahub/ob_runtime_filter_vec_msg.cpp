@@ -12,48 +12,65 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_vec_msg.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_proxy.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_process.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
-#include "sql/engine/expr/ob_expr_join_filter.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/engine/ob_operator.h"
-#include "share/detect/ob_detect_manager_utils.h"
-#include "sql/engine/basic/ob_temp_row_store.h"
-#include "lib/utility/ob_tracepoint.h"
+#include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
-template <typename ResVec>
-static int proc_filter_not_active(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound);
-
-template <>
-int proc_filter_not_active<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
-                                          const EvalBound &bound)
+class SmallHashSetBatchInsertOP
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBitVector::flip_foreach(
-          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
-            res_vec->set_int(idx, 1);
-            return OB_SUCCESS;
-          }))) {
-    LOG_WARN("fail to do for each operation", K(ret));
+public:
+  SmallHashSetBatchInsertOP(ObSmallHashSet<true> &sm_hash_set, uint64_t *batch_hash_values)
+      : sm_hash_set_(sm_hash_set), batch_hash_values_(batch_hash_values)
+  {}
+  OB_INLINE int operator()(int64_t batch_i)
+  {
+    return sm_hash_set_.insert_hash(batch_hash_values_[batch_i]);
   }
-  return ret;
-}
 
-template <>
-int proc_filter_not_active<IntegerFixedVec>(IntegerFixedVec *res_vec, const ObBitVector &skip,
-                                            const EvalBound &bound)
+private:
+  ObSmallHashSet<true> &sm_hash_set_;
+  uint64_t *batch_hash_values_;
+};
+
+template<typename ResVec>
+class InFilterProbeOP
 {
-  int ret = OB_SUCCESS;
-  uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data + bound.start(), 1, (bound.range_size() * res_vec->get_length(0)));
-  return ret;
-}
+public:
+  InFilterProbeOP(ObSmallHashSet<true> &sm_hash_set, ResVec *res_vec, uint64_t *right_hash_values,
+                  int64_t &total_count, int64_t &filter_count)
+      : sm_hash_set_(sm_hash_set), res_vec_(res_vec), right_hash_values_(right_hash_values),
+        total_count_(total_count), filter_count_(filter_count)
+  {}
+  OB_INLINE int operator()(int64_t batch_i)
+  {
+    bool is_match = false;
+    constexpr int64_t is_match_payload = 1;
+    total_count_ += 1;
+    is_match = sm_hash_set_.test_hash(right_hash_values_[batch_i]);
+    if (!is_match) {
+      filter_count_++;
+      if (std::is_same<ResVec, IntegerUniVec>::value) {
+        res_vec_->set_int(batch_i, 0);
+      }
+    } else {
+      if (std::is_same<ResVec, IntegerUniVec>::value) {
+        res_vec_->set_int(batch_i, 1);
+      } else {
+        res_vec_->set_payload(batch_i, &is_match_payload, sizeof(int64_t));
+      }
+    }
+    return OB_SUCCESS;
+  }
+private:
+  ObSmallHashSet<true> &sm_hash_set_;
+  ResVec *res_vec_;
+  uint64_t *right_hash_values_;
+  int64_t &total_count_;
+  int64_t &filter_count_;
+};
 
 OB_SERIALIZE_MEMBER(ObRFCmpInfo, ser_cmp_func_, obj_meta_);
 OB_SERIALIZE_MEMBER(ObRFRangeFilterVecMsg::MinMaxCellSize, min_datum_buf_size_,
@@ -86,7 +103,8 @@ OB_DEF_DESERIALIZE(ObRFRangeFilterVecMsg)
               build_row_cmp_info_,
               probe_row_cmp_info_,
               query_range_info_);
-  if (OB_FAIL(adjust_cell_size())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(adjust_cell_size())) {
     LOG_WARN("fail do adjust cell size", K(ret));
   }
   return ret;
@@ -184,6 +202,11 @@ OB_DEF_SERIALIZE(ObRFInFilterVecMsg)
   }
   OB_UNIS_ENCODE(hash_funcs_for_insert_);
   OB_UNIS_ENCODE(query_range_info_);
+  OB_UNIS_ENCODE(use_hash_join_seed_);
+  OB_UNIS_ENCODE(build_send_opt_);
+  if (OB_SUCC(ret) && is_active_ && build_send_opt_) {
+    OB_UNIS_ENCODE(sm_hash_set_);
+  }
   return ret;
 }
 
@@ -208,12 +231,30 @@ OB_DEF_DESERIALIZE(ObRFInFilterVecMsg)
     for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
       ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, row_store_.get_row(i), nullptr);
       if (OB_FAIL(rows_set_.set_refactored(node))) {
-        LOG_WARN("fail to insert in filter node", K(ret));
+        LOG_WARN("failed to insert in filter node", K(ret));
       }
     }
   }
   OB_UNIS_DECODE(hash_funcs_for_insert_);
   OB_UNIS_DECODE(query_range_info_);
+  OB_UNIS_DECODE(use_hash_join_seed_);
+  OB_UNIS_DECODE(build_send_opt_);
+  if (OB_SUCC(ret) && is_active_) {
+    if (build_send_opt_) {
+      // new fashion, directly deserialize
+      OB_UNIS_DECODE(sm_hash_set_);
+    } else {
+      // old fashion, insert from row store
+      if (OB_FAIL(sm_hash_set_.init(max_in_num_, tenant_id_))) {
+        LOG_WARN("failed to init small hash set", K(max_in_num_));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_store_.get_row_cnt(); ++i) {
+        if (OB_FAIL(sm_hash_set_.insert_hash(row_store_.get_hash_value(i, build_row_meta_)))) {
+          LOG_WARN("failed to insert hash value into sm_hash_set_", K(ret));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -231,6 +272,11 @@ OB_DEF_SERIALIZE_SIZE(ObRFInFilterVecMsg)
   }
   OB_UNIS_ADD_LEN(hash_funcs_for_insert_);
   OB_UNIS_ADD_LEN(query_range_info_);
+  OB_UNIS_ADD_LEN(use_hash_join_seed_);
+  OB_UNIS_ADD_LEN(build_send_opt_);
+  if (is_active_) {
+    OB_UNIS_ADD_LEN(sm_hash_set_);
+  }
   return len;
 }
 
@@ -367,7 +413,7 @@ int ObRFRangeFilterVecMsg::dynamic_copy_cell(const ObDatum &src, ObDatum &target
   int ret = OB_SUCCESS;
   int64_t need_size = src.len_;
   if (src.is_null()) {
-    target.null_ = 1;
+    target.set_null();
   } else {
     if (need_size > cell_size) {
       need_size = need_size * 2;
@@ -609,7 +655,7 @@ int ObRFRangeFilterVecMsg::might_contain(const ObExpr &expr,
       }
       filter_ctx.check_count_++;
       res.set_int(is_match ? 1 : 0);
-      ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+      filter_ctx.collect_sample_info(!is_match, 1);
     }
   }
   return ret;
@@ -668,7 +714,7 @@ int ObRFRangeFilterVecMsg::do_might_contain_batch(const ObExpr &expr,
     filter_ctx.filter_count_ += filter_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.check_count_ += total_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -780,7 +826,7 @@ int ObRFRangeFilterVecMsg::do_might_contain_vector(
       filter_ctx.total_count_ += total_count;
       filter_ctx.check_count_ += total_count;
       filter_ctx.filter_count_ += filter_count;
-      ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+      filter_ctx.collect_sample_info(filter_count, total_count);
     }
   }
   return ret;
@@ -827,7 +873,7 @@ int ObRFRangeFilterVecMsg::prepare_query_range()
   } else if (is_empty_) {
     // make empty range
     if (OB_FAIL(fill_empty_query_range(query_range_info_, query_range_allocator_, query_range_))) {
-      LOG_WARN("faild to fill_empty_query_range");
+      LOG_WARN("failed to fill_empty_query_range");
     } else {
       is_query_range_ready_ = true;
     }
@@ -885,7 +931,8 @@ void ObRFRangeFilterVecMsg::after_process()
   (void)prepare_query_range();
 }
 
-int ObRFRangeFilterVecMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges)
+int ObRFRangeFilterVecMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                                                   bool need_deep_copy, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (!is_query_range_ready_) {
@@ -893,9 +940,18 @@ int ObRFRangeFilterVecMsg::try_extract_query_range(bool &has_extract, ObIArray<O
   } else {
     // overwrite ranges
     ranges.reset();
-    if (OB_FAIL(ranges.push_back(query_range_))) {
-      LOG_WARN("failed to push_back range");
+    if (need_deep_copy) {
+      if (OB_FAIL(ranges.prepare_allocate(1))) {
+        LOG_WARN("failed to prepare_allocate");
+      } else if (OB_FAIL(deep_copy_range(*allocator, query_range_, ranges.at(0)))) {
+        LOG_WARN("failed to deep_copy_range");
+      }
     } else {
+      if (OB_FAIL(ranges.push_back(query_range_))) {
+        LOG_WARN("failed to push_back range");
+      }
+    }
+    if (OB_SUCC(ret)) {
       has_extract = true;
     }
   }
@@ -1044,12 +1100,16 @@ int ObRFInFilterVecMsg::assign(const ObP2PDatahubMsgBase &msg)
     LOG_WARN("fail to assign row_store_", K(ret));
   } else if (OB_FAIL(rows_set_.create(bucket_cnt * 2, "RFCPInFilter", "RFCPInFilter"))) {
     LOG_WARN("fail to init in hash set", K(ret));
+  } else if (OB_FAIL(sm_hash_set_.init(bucket_cnt, tenant_id_))) {
+    LOG_WARN("failed to init sm_hash_set_", K(other_msg.row_store_.get_row_cnt()));
   } else if (OB_FAIL(hash_funcs_for_insert_.assign(other_msg.hash_funcs_for_insert_))) {
     LOG_WARN("fail to assign hash_funcs_for_insert_", K(ret));
   } else if (OB_FAIL(query_range_info_.assign(other_msg.query_range_info_))) {
     LOG_WARN("fail to assign query_range_info_", K(ret));
   } else {
     max_in_num_ = other_msg.max_in_num_;
+    use_hash_join_seed_ = other_msg.use_hash_join_seed_;
+    build_send_opt_ = other_msg.build_send_opt_;
     int64_t row_cnt = other_msg.row_store_.get_row_cnt();
     if (0 == row_cnt) {
     } else {
@@ -1060,6 +1120,11 @@ int ObRFInFilterVecMsg::assign(const ObP2PDatahubMsgBase &msg)
           LOG_WARN("fail to insert in filter node", K(ret));
         }
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sm_hash_set_.merge(other_msg.sm_hash_set_))) {
+      LOG_WARN("failed to merge sm_hash_set_");
     }
   }
   return ret;
@@ -1090,52 +1155,97 @@ int ObRFInFilterVecMsg::insert_by_row_vector(
     uint64_t *batch_hash_values)
 {
   UNUSED(calc_tablet_id_expr);
+  // need calculate hash values
+  return do_insert_by_row_vector(child_brs, expr_array, hash_funcs, eval_ctx, batch_hash_values,
+                                 true /*need_calc_hash_values*/);
+}
+
+int ObRFInFilterVecMsg::insert_by_row_vector_without_calc_hash_value(
+    const ObBatchRows *child_brs, const common::ObIArray<ObExpr *> &expr_array,
+    const common::ObHashFuncs &hash_funcs, ObEvalCtx &eval_ctx, uint64_t *batch_hash_values)
+{
+  // will reuse hash values calculated in join filter create operator
+  return do_insert_by_row_vector(child_brs, expr_array, hash_funcs, eval_ctx, batch_hash_values,
+                                 false /*need_calc_hash_values*/);
+}
+
+int ObRFInFilterVecMsg::do_insert_by_row_vector(const ObBatchRows *child_brs,
+                                                const common::ObIArray<ObExpr *> &expr_array,
+                                                const common::ObHashFuncs &hash_funcs,
+                                                ObEvalCtx &eval_ctx, uint64_t *batch_hash_values,
+                                                bool need_calc_hash_values)
+{
   int ret = OB_SUCCESS;
   uint64_t seed = ObExprJoinFilter::JOIN_FILTER_SEED;
-
+  if (use_hash_join_seed_) {
+    seed = ObHashJoinVecOp::HASH_SEED;
+  }
   if (child_brs->size_ > 0 && is_active_) {
     EvalBound bound(child_brs->size_, child_brs->all_rows_active_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr_array.count(); ++i) {
-      ObExpr *expr = expr_array.at(i); // expr ptr check in cg, not check here
-      if (OB_FAIL(expr->eval_vector(eval_ctx, *(child_brs->skip_), bound))) {
-        LOG_WARN("eval_vector failed", K(ret));
-      } else {
-        const bool is_batch_seed = (i > 0);
-        ObIVector *arg_vec = expr->get_vector(eval_ctx);
-        arg_vec->murmur_hash_v3(*expr, batch_hash_values, *(child_brs->skip_), bound,
-                                is_batch_seed ? batch_hash_values : &seed, is_batch_seed);
+    if (need_calc_hash_values) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr_array.count(); ++i) {
+        ObExpr *expr = expr_array.at(i); // expr ptr check in cg, not check here
+        if (OB_FAIL(expr->eval_vector(eval_ctx, *(child_brs->skip_), bound))) {
+          LOG_WARN("eval_vector failed", K(ret));
+        } else {
+          const bool is_batch_seed = (i > 0);
+          ObIVector *arg_vec = expr->get_vector(eval_ctx);
+          arg_vec->murmur_hash_v3(*expr, batch_hash_values, *(child_brs->skip_), bound,
+                                  is_batch_seed ? batch_hash_values : &seed, is_batch_seed);
+        }
       }
     }
 
-    ObRowWithHash &cur_row = cur_row_with_hash_;
-    ObDatum datum;
-    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
-    batch_info_guard.set_batch_size(child_brs->size_);
-    for (int64_t batch_i = 0; OB_SUCC(ret) && is_active_ && batch_i < child_brs->size_; ++batch_i) {
-      if (child_brs->skip_->at(batch_i)) {
-        continue;
-      }
-      batch_info_guard.set_batch_idx(batch_i);
-      bool ignore_null = false;
-      for (int64_t arg_i = 0; OB_SUCC(ret) && arg_i < expr_array.count(); ++arg_i) {
-        ObExpr *expr = expr_array.at(arg_i);
-        ObIVector *arg_vec = expr->get_vector(eval_ctx);
-        if (arg_vec->is_null(batch_i) && !need_null_cmp_flags_.at(arg_i)) {
-          ignore_null = true;
-          break;
-        } else {
-          datum.ptr_ = arg_vec->get_payload(batch_i);
-          datum.len_ = arg_vec->get_length(batch_i);
-          datum.null_ = arg_vec->is_null(batch_i) ? 1 : 0;
-          cur_row.row_.at(arg_i) = (datum);
-          cur_row.hash_val_ = batch_hash_values[batch_i];
+    SmallHashSetBatchInsertOP sm_hash_set_batch_ins_op(sm_hash_set_, batch_hash_values);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(
+                   ObBitVector::flip_foreach(*child_brs->skip_, bound, sm_hash_set_batch_ins_op))) {
+      LOG_WARN("failed insert batch_hash_values into sm_hash_set_");
+    } else if (sm_hash_set_.size() > max_in_num_) {
+      is_active_ = false;
+    } else if (is_empty_ && sm_hash_set_.size() > 0) {
+      is_empty_ = false;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (build_send_opt_ && !query_range_info_.can_extract()) {
+      // in new fashion, insert datum only when extract query range
+    } else {
+      ObRowWithHash &cur_row = cur_row_with_hash_;
+      ObDatum datum;
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+      batch_info_guard.set_batch_size(child_brs->size_);
+      for (int64_t batch_i = 0; OB_SUCC(ret) && is_active_ && batch_i < child_brs->size_; ++batch_i) {
+        if (child_brs->skip_->at(batch_i)) {
+          continue;
         }
-      }
-      if (OB_SUCC(ret) && !ignore_null) {
-        ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, nullptr /*compact_row*/,
-                              &cur_row);
-        if (OB_FAIL(try_insert_node(node, expr_array, eval_ctx))) {
-          LOG_WARN("fail to insert node", K(ret));
+        batch_info_guard.set_batch_idx(batch_i);
+        bool ignore_null = false;
+        for (int64_t arg_i = 0; OB_SUCC(ret) && arg_i < expr_array.count(); ++arg_i) {
+          ObExpr *expr = expr_array.at(arg_i);
+          ObIVector *arg_vec = expr->get_vector(eval_ctx);
+          if (arg_vec->is_null(batch_i) && !need_null_cmp_flags_.at(arg_i)) {
+            ignore_null = true;
+            break;
+          } else {
+            datum.ptr_ = arg_vec->get_payload(batch_i);
+            datum.len_ = arg_vec->get_length(batch_i);
+            datum.null_ = arg_vec->is_null(batch_i) ? 1 : 0;
+            cur_row.row_.at(arg_i) = (datum);
+            cur_row.hash_val_ = batch_hash_values[batch_i];
+          }
+        }
+        if (OB_SUCC(ret) && !ignore_null) {
+          if (build_send_opt_ && row_store_.get_row_cnt() > max_in_num_) {
+            // do not insert any more
+            break;
+          } else {
+            ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, nullptr /*compact_row*/,
+                                  &cur_row);
+            if (OB_FAIL(try_insert_node(node, expr_array, eval_ctx))) {
+              LOG_WARN("fail to insert node", K(ret));
+            }
+          }
         }
       }
     }
@@ -1271,11 +1381,11 @@ bool ObRFInFilterVecMsg::ObRFInFilterNode::operator==(const ObRFInFilterNode &ot
   uint64_t self_hash = 0;
   uint64_t other_hash = 0;
   if (OB_FAIL(hash(self_hash)) || OB_FAIL(other.hash(other_hash))) {
-    LOG_WARN("faild to hash", K(ret));
+    LOG_WARN("failed to hash", K(ret));
   } else if (self_hash != other_hash) {
     bool_ret = false;
   } else if (nullptr != other.compact_row_) {
-    // comapre the row in the hashset (during merge process, merge other's hashset into own hashset)
+    // compare the row in the hashset (during merge process, merge other's hashset into own hashset)
     // compare other.compact_row_ with self.compact_row_
     const char *self_payload = nullptr;
     const char *other_payload = nullptr;
@@ -1340,14 +1450,43 @@ int ObRFInFilterVecMsg::merge(ObP2PDatahubMsgBase &msg)
     is_active_ = false;
   } else if (!msg.is_empty() && is_active_) {
     ObSpinLockGuard guard(lock_);
-    for (int64_t i = 0; i < other_msg.row_store_.get_row_cnt() && OB_SUCC(ret); ++i) {
-      ObCompactRow *cur_row = other_msg.row_store_.get_row(i);
-      int64_t row_size = other_msg.row_store_.get_row_size(i);
-      // when merge, we must compare the node exist or not
-      ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, cur_row,
-                            nullptr /*row_with_hash*/);
-      if (OB_FAIL(try_merge_node(node, row_size))) {
-        LOG_WARN("fail to insert node", K(ret));
+    if (OB_FAIL(sm_hash_set_.merge(other_msg.sm_hash_set_))) {
+      LOG_WARN("failed to merge");
+    } else if (sm_hash_set_.size() > max_in_num_) {
+      is_active_ = false;
+    } else if (is_empty_ && sm_hash_set_.size() > 0) {
+      is_empty_ = false;
+    }
+
+    if (build_send_opt_ && !query_range_info_.can_extract()) {
+      // in new fashion, insert datum only when extract query range
+    } else if (!build_send_opt_) {
+      // old fashion, for compaction
+      for (int64_t i = 0; i < other_msg.row_store_.get_row_cnt() && OB_SUCC(ret); ++i) {
+        ObCompactRow *cur_row = other_msg.row_store_.get_row(i);
+        int64_t row_size = other_msg.row_store_.get_row_size(i);
+        // when merge, we must compare the node exist or not
+        ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, cur_row,
+                              nullptr /*row_with_hash*/);
+        if (OB_FAIL(try_merge_node(node, row_size))) {
+          LOG_WARN("fail to insert node", K(ret));
+        }
+      }
+    } else if (build_send_opt_) {
+      for (int64_t i = 0; i < other_msg.row_store_.get_row_cnt() && OB_SUCC(ret); ++i) {
+        ObCompactRow *cur_row = other_msg.row_store_.get_row(i);
+        int64_t row_size = other_msg.row_store_.get_row_size(i);
+        // when merge, we must compare the node exist or not
+        if (row_store_.get_row_cnt() > max_in_num_) {
+          // do not insert any more
+          break;
+        } else {
+          ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, cur_row,
+                                nullptr /*row_with_hash*/);
+          if (OB_FAIL(try_merge_node(node, row_size))) {
+            LOG_WARN("fail to insert node", K(ret));
+          }
+        }
       }
     }
   }
@@ -1360,7 +1499,9 @@ int ObRFInFilterVecMsg::reuse()
   is_empty_ = true;
   row_store_.reset();
   rows_set_.reuse();
+  sm_hash_set_.clear();
   (void)reuse_query_range();
+  is_active_ = true;
   return ret;
 }
 
@@ -1373,6 +1514,17 @@ int ObRFInFilterVecMsg::might_contain(const ObExpr &expr,
   ObDatum datum;
   bool is_match = true;
   uint64_t hash_val = ObExprJoinFilter::JOIN_FILTER_SEED;
+  if (use_hash_join_seed_) {
+    // hash value explained in:
+    //        hash join               small hash set
+    //  10001111....1011010          10001111....1011010
+    //  ||_______63_______|          ||_______63_______|
+    //  |     hash                   |       hash
+    //  |                            |
+    // is match                      |--->  is bucket empty(only used inner small hash set)
+    // the highest bit of hash values is not used in small hash set probe
+    hash_val = ObHashJoinVecOp::HASH_SEED;
+  }
   ObRowWithHash &cur_row = *filter_ctx.cur_row_with_hash_;
   if (OB_UNLIKELY(!is_active_)) {
     res.set_int(1);
@@ -1401,17 +1553,27 @@ int ObRFInFilterVecMsg::might_contain(const ObExpr &expr,
       }
     }
     if (OB_SUCC(ret)) {
-      cur_row.hash_val_ = hash_val;
-      ObRFInFilterNode node(&probe_row_cmp_info_, nullptr, nullptr /*compact_row*/, &cur_row);
-      if (OB_FAIL(rows_set_.exist_refactored(node))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          is_match = false;
-          ret = OB_SUCCESS;
-        } else if (OB_HASH_EXIST == ret) {
-          is_match = true;
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("fail to check node", K(ret));
+      // for das table get, filter after index backs still enter this path, so
+      // so we still need to mask hash value
+      if (use_hash_join_seed_) {
+        cur_row.hash_val_ = hash_val & ObHJStoredRow::HASH_VAL_MASK;
+      } else {
+        cur_row.hash_val_ = hash_val;
+      }
+      if (build_send_opt_) {
+        is_match = sm_hash_set_.test_hash(cur_row.hash_val_);
+      } else {
+        ObRFInFilterNode node(&probe_row_cmp_info_, nullptr, nullptr /*compact_row*/, &cur_row);
+        if (OB_FAIL(rows_set_.exist_refactored(node))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            is_match = false;
+            ret = OB_SUCCESS;
+          } else if (OB_HASH_EXIST == ret) {
+            is_match = true;
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to check node", K(ret));
+          }
         }
       }
     }
@@ -1421,7 +1583,7 @@ int ObRFInFilterVecMsg::might_contain(const ObExpr &expr,
       }
       filter_ctx.check_count_++;
       res.set_int(is_match ? 1 : 0);
-      ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+      filter_ctx.collect_sample_info(!is_match, 1);
     }
   }
   return ret;
@@ -1484,7 +1646,7 @@ int ObRFInFilterVecMsg::do_might_contain_batch(const ObExpr &expr,
     filter_ctx.filter_count_ += filter_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.check_count_ += total_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -1518,7 +1680,8 @@ int ObRFInFilterVecMsg::might_contain_batch(
   return ret;
 }
 
-int ObRFInFilterVecMsg::do_might_contain_vector(
+template<typename ResVec>
+int ObRFInFilterVecMsg::do_might_contain_vector_impl(
     const ObExpr &expr,
     ObEvalCtx &ctx,
     const ObBitVector &skip,
@@ -1528,12 +1691,23 @@ int ObRFInFilterVecMsg::do_might_contain_vector(
   int ret = OB_SUCCESS;
   int64_t total_count = 0;
   int64_t filter_count = 0;
-  int64_t batch_size = bound.batch_size();
   uint64_t seed = ObExprJoinFilter::JOIN_FILTER_SEED;
+  if (use_hash_join_seed_) {
+    // hash value explained in:
+    //        hash join               small hash set
+    //  10001111....1011010          10001111....1011010
+    //  ||_______63_______|          ||_______63_______|
+    //  |     hash                   |       hash
+    //  |                            |
+    // is match                      |--->  is bucket empty(only used inner small hash set)
+    // the highest bit of hash values is not used in small hash set probe
+    seed = ObHashJoinVecOp::HASH_SEED;
+  }
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  VectorFormat res_format = expr.get_format(ctx);
   uint64_t *right_hash_vals = filter_ctx.right_hash_vals_;
-  if (VEC_FIXED == res_format) {
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+
+  if (std::is_same<ResVec, IntegerFixedVec>::value) {
     IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
     if (OB_FAIL(preset_not_match(res_vec, bound))) {
       LOG_WARN("failed to preset_not_match", K(ret));
@@ -1554,67 +1728,55 @@ int ObRFInFilterVecMsg::do_might_contain_vector(
     }
   }
 
+#define IN_FILTER_PROBE_HELPER                                                                     \
+  is_match = sm_hash_set_.test_hash(right_hash_vals[batch_i]);                                     \
+  if (!is_match) {                                                                                 \
+    filter_count++;                                                                                \
+    if (std::is_same<ResVec, IntegerUniVec>::value) {                                              \
+      res_vec->set_int(batch_i, 0);                                                                \
+    }                                                                                              \
+  } else {                                                                                         \
+    if (std::is_same<ResVec, IntegerUniVec>::value) {                                              \
+      res_vec->set_int(batch_i, 1);                                                                \
+    } else {                                                                                       \
+      res_vec->set_payload(batch_i, &is_match_payload, sizeof(int64_t));                           \
+    }                                                                                              \
+  }
+
   if (OB_FAIL(ret)) {
   } else {
-    ObRowWithHash &cur_row = *filter_ctx.cur_row_with_hash_;
-    ObRFInFilterNode node(&probe_row_cmp_info_, nullptr, nullptr /*compact_row*/, &cur_row);
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
-    batch_info_guard.set_batch_size(batch_size);
+    batch_info_guard.set_batch_size(bound.batch_size());
     bool is_match = true;
     const int64_t is_match_payload = 1; // for VEC_FIXED set set_payload, always 1
-    ObDatum datum;
-    for (int64_t batch_i  = bound.start(); batch_i < bound.end() && OB_SUCC(ret); ++batch_i) {
-      if (skip.at(batch_i)) {
-        continue;
-      } else {
-        total_count++;
-        eval_flags.set(batch_i);
-        cur_row.hash_val_ = right_hash_vals[batch_i];
-        batch_info_guard.set_batch_idx(batch_i);
-        for (int arg_i = 0; OB_SUCC(ret) && arg_i < expr.arg_cnt_; ++arg_i) {
-          ObIVector *arg_vec = expr.args_[arg_i]->get_vector(ctx);
-          datum.ptr_ = arg_vec->get_payload(batch_i);
-          datum.len_ = arg_vec->get_length(batch_i);
-          datum.null_ = arg_vec->is_null(batch_i) ? 1 : 0;
-          cur_row.row_.at(arg_i) = datum;
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(rows_set_.exist_refactored(node))) {
-          if (OB_HASH_NOT_EXIST == ret) {
-            is_match = false;
-            filter_count++;
-            ret = OB_SUCCESS;
-          } else if (OB_HASH_EXIST == ret) {
-            is_match = true;
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("fail to check node", K(ret));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (VEC_UNIFORM == res_format) {
-            IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-            res_vec->set_int(batch_i, is_match ? 1 : 0);
-          } else if (VEC_FIXED == res_format) {
-            IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-            if (is_match) {
-              res_vec->set_payload(batch_i, &is_match_payload, sizeof(int64_t));
-            } else {
-              // do nothing, already set not match in preset_not_match
-            }
-          }
-        }
+    if (bound.get_all_rows_active()) {
+      total_count += bound.end() - bound.start();
+      for (int64_t batch_i = bound.start(); batch_i < bound.end() && OB_SUCC(ret); ++batch_i) {
+        IN_FILTER_PROBE_HELPER
       }
+    } else {
+      InFilterProbeOP<ResVec> in_filter_probe_op(sm_hash_set_, res_vec, right_hash_vals,
+                                                 total_count, filter_count);
+      (void)ObBitVector::flip_foreach(skip, bound, in_filter_probe_op);
     }
     if (OB_SUCC(ret)) {
+      eval_flags.set_all(true);
       filter_ctx.total_count_ += total_count;
       filter_ctx.check_count_ += total_count;
       filter_ctx.filter_count_ += filter_count;
-      ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+      filter_ctx.collect_sample_info(filter_count, total_count);
     }
   }
+#undef IN_FILTER_PROBE_HELPER
   return ret;
 }
+
+#define IN_FILTER_DISPATCH_RES_FORMAT(function, res_format)                                        \
+  if (res_format == VEC_FIXED) {                                                                   \
+    ret = function<IntegerFixedVec>(expr, ctx, skip, bound, filter_ctx);                           \
+  } else {                                                                                         \
+    ret = function<IntegerUniVec>(expr, ctx, skip, bound, filter_ctx);                             \
+  }
 
 int ObRFInFilterVecMsg::might_contain_vector(
     const ObExpr &expr,
@@ -1655,8 +1817,9 @@ int ObRFInFilterVecMsg::might_contain_vector(
       filter_ctx.check_count_ += total_count;
       filter_ctx.total_count_ += total_count;
     }
-  } else if (OB_FAIL(do_might_contain_vector(expr, ctx, skip, bound, filter_ctx))) {
-    LOG_WARN("fail to do might contain vector");
+  } else {
+    VectorFormat res_format = expr.get_format(ctx);
+    IN_FILTER_DISPATCH_RES_FORMAT(do_might_contain_vector_impl, res_format);
   }
   return ret;
 }
@@ -1668,15 +1831,14 @@ int ObRFInFilterVecMsg::prepare_storage_white_filter_data(ObDynamicFilterExecuto
 {
   int ret = OB_SUCCESS;
   int col_idx = dynamic_filter.get_col_idx();
-  if (is_empty_) {
-    dynamic_filter.set_filter_action(DynamicFilterAction::FILTER_ALL);
-    is_data_prepared = true;
-  } else if (!is_active_) {
+  if (!is_active_) {
     dynamic_filter.set_filter_action(DynamicFilterAction::PASS_ALL);
+    is_data_prepared = true;
+  } else if (is_empty_) {
+    dynamic_filter.set_filter_action(DynamicFilterAction::FILTER_ALL);
     is_data_prepared = true;
   } else {
     for (int64_t i = 0; i < row_store_.get_row_cnt() && OB_SUCC(ret); ++i) {
-      // row_store_.get_row(i)->get_datum(build_row_meta_, col_idx);
       if (OB_FAIL(params.push_back(row_store_.get_row(i)->get_datum(build_row_meta_, col_idx)))) {
         LOG_WARN("failed to push back");
       }
@@ -1697,6 +1859,7 @@ int ObRFInFilterVecMsg::destroy()
   build_row_meta_.reset();
   cur_row_with_hash_.row_.reset();
   rows_set_.destroy();
+  sm_hash_set_.~ObSmallHashSet<true>();
   need_null_cmp_flags_.reset();
   row_store_.reset();
   hash_funcs_for_insert_.reset();
@@ -1717,7 +1880,7 @@ int ObRFInFilterVecMsg::prepare_query_ranges()
     // make empty range
     ObNewRange query_range;
     if (OB_FAIL(fill_empty_query_range(query_range_info_, query_range_allocator_, query_range))) {
-      LOG_WARN("faild to fill_empty_query_range");
+      LOG_WARN("failed to fill_empty_query_range");
     } else if (OB_FAIL(query_range_.push_back(query_range))) {
       LOG_WARN("failed to push back query_range");
     } else {
@@ -1725,7 +1888,7 @@ int ObRFInFilterVecMsg::prepare_query_ranges()
     }
   } else if (query_range_info_.prefix_col_idxs_.count() == build_row_meta_.col_cnt_) {
     // col count matches, the hashmap make sure all rows contain the filter are different
-    // so not need to dedupcate
+    // so not need to deduplicate
     ret = process_query_ranges_without_deduplicate();
   } else {
     // prefix col less than store col, need do deduplicate
@@ -1975,11 +2138,11 @@ int ObRFInFilterVecMsg::generate_one_range(int row_idx)
 
 void ObRFInFilterVecMsg::check_finish_receive()
 {
-  if (ATOMIC_LOAD(&is_active_)) {
-    if (msg_receive_expect_cnt_ == ATOMIC_LOAD(&msg_receive_cur_cnt_)) {
+  if (msg_receive_expect_cnt_ == ATOMIC_LOAD(&msg_receive_cur_cnt_)) {
+    if (ATOMIC_LOAD(&is_active_)) {
       (void)after_process();
-      is_ready_ = true;
     }
+    is_ready_ = true;
   }
 }
 
@@ -1989,7 +2152,8 @@ void ObRFInFilterVecMsg::after_process()
   (void)prepare_query_ranges();
 }
 
-int ObRFInFilterVecMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges)
+int ObRFInFilterVecMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                                                bool need_deep_copy, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (!is_query_range_ready_) {
@@ -1997,9 +2161,22 @@ int ObRFInFilterVecMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNe
   } else {
     // overwrite ranges
     ranges.reset();
-    if (OB_FAIL(ranges.assign(query_range_))) {
-      LOG_WARN("failed to assign range");
+    if (need_deep_copy) {
+      if (OB_FAIL(ranges.prepare_allocate(query_range_.count()))) {
+        LOG_WARN("failed to prepare_allocate");
+      } else if (need_deep_copy) {
+        for (int64_t i = 0; i < ranges.count() && OB_SUCC(ret); ++i) {
+          if (OB_FAIL(deep_copy_range(*allocator, query_range_.at(i), ranges.at(i)))) {
+            LOG_WARN("failed to deep_copy_range");
+          }
+        }
+      }
     } else {
+      if (OB_FAIL(ranges.assign(query_range_))) {
+        LOG_WARN("failed to assign");
+      }
+    }
+    if (OB_SUCC(ret)) {
       has_extract = true;
     }
   }

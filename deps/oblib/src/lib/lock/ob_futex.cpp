@@ -12,7 +12,6 @@
 
 #include "ob_futex.h"
 #include <linux/futex.h>
-#include "lib/ob_abort.h"
 
 static struct timespec make_timespec(int64_t us)
 {

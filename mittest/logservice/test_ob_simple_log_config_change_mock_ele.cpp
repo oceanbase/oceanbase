@@ -1,3 +1,6 @@
+// owner: yunlong.cb
+// owner group: log
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,10 +13,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include <share/scn.h>
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
@@ -38,6 +37,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 7;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 
 MockLocCB loc_cb;
 
@@ -291,9 +291,10 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
 
     // 1. leader can not commit logs
     block_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    block_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
-    sleep(1);
     EXPECT_GT(leader.palf_handle_impl_->sw_.last_submit_lsn_, leader.palf_handle_impl_->sw_.committed_end_lsn_);
+    EXPECT_UNTIL_EQ(leader.palf_handle_impl_->sw_.get_max_lsn(), leader.palf_handle_impl_->sw_.last_submit_end_lsn_);
 
     // 2. remove D
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(common::ObMember(d_addr, 1), 3, CONFIG_CHANGE_TIMEOUT));
@@ -303,6 +304,7 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
 
     // 3. leader can commit logs
     unblock_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    unblock_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
 
     // 4. check if the leader can commit logs after D has been removed from match_lsn_map
     EXPECT_UNTIL_EQ(leader.palf_handle_impl_->sw_.committed_end_lsn_, leader.palf_handle_impl_->sw_.last_submit_end_lsn_);
@@ -400,8 +402,9 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
 
     // 2. leader can not commit logs
     block_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    block_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
-    sleep(1);
+    EXPECT_UNTIL_EQ(leader.palf_handle_impl_->sw_.get_max_lsn(), leader.palf_handle_impl_->sw_.last_submit_end_lsn_);
     EXPECT_GT(leader.palf_handle_impl_->sw_.last_submit_lsn_, leader.palf_handle_impl_->sw_.committed_end_lsn_);
 
     // 3. remove C
@@ -412,6 +415,7 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
 
     // 3. leader can commit logs
     unblock_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    unblock_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
 
     // 4. check if the leader can commit logs after C has been removed from match_lsn_map
     EXPECT_UNTIL_EQ(leader.palf_handle_impl_->sw_.committed_end_lsn_, leader.palf_handle_impl_->sw_.last_submit_end_lsn_);

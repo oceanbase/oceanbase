@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_show_create_table.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_printer.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -53,7 +50,7 @@ int ObShowCreateTable::inner_get_next_row(common::ObNewRow *&row)
     } else if (OB_UNLIKELY(OB_INVALID_ID == show_table_id)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_USER_ERROR(OB_ERR_UNEXPECTED, "this table is used for show clause, can't be selected");
-    } else if (OB_FAIL(schema_guard_->get_table_schema(effective_tenant_id_, show_table_id, table_schema))) {
+    } else if (OB_FAIL(sql_schema_guard_.get_table_schema(effective_tenant_id_, show_table_id, table_schema))) {
       SERVER_LOG(WARN, "fail to get table schema", K(ret), K(effective_tenant_id_), K(show_table_id));
     } else if (OB_UNLIKELY(NULL == table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
@@ -215,8 +212,21 @@ int ObShowCreateTable::fill_row_cells_inner(const uint64_t show_table_id,
         case OB_APP_MIN_COLUMN_ID + 2: {
           // create_table
           ObSchemaPrinter schema_printer(*schema_guard_, strict_mode, sql_quote_show_create, ansi_quotes);
+          schema_printer.set_sql_schema_guard(&sql_schema_guard_);
           int64_t pos = 0;
-          if (table_schema.is_view_table()) {
+          if (table_schema.is_materialized_view()) {
+            if (OB_FAIL(schema_printer.print_materialized_view_definition(effective_tenant_id_,
+                                                                         show_table_id,
+                                                                         table_def_buf,
+                                                                         table_def_buf_size,
+                                                                         pos,
+                                                                         TZ_INFO(session_),
+                                                                         false,
+                                                                         session_->get_sql_mode()))) {
+              SERVER_LOG(WARN, "Generate materialized view definition failed",
+                         KR(ret), K(effective_tenant_id_), K(show_table_id));
+            }
+          } else if (table_schema.is_view_table()) {
             if (OB_FAIL(schema_printer.print_view_definiton(effective_tenant_id_,
                                                             show_table_id,
                                                             table_def_buf,

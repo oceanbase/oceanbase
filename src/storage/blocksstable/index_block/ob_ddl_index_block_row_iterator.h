@@ -22,6 +22,7 @@ namespace oceanbase
 namespace storage
 {
 class ObDDLMemtable;
+class ObIncMajorDDLAggregateCGSSTable;
 }
 namespace blocksstable
 {
@@ -37,9 +38,9 @@ public:
                    const bool is_reverse_scan,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                          const ObDatumRowkey *&endkey) override;
+                          ObCommonDatumRowkey &endkey) override;
   virtual int get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                       const ObDatumRowkey *&endkey,
+                       ObCommonDatumRowkey &endkey,
                        bool &is_scan_left_border,
                        bool &is_scan_right_border,
                        const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -76,7 +77,8 @@ public:
   int get_next_meta(const ObDataMacroBlockMeta *&meta);
 private:
   int inner_get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                        const ObDatumRowkey *&endkey,
+                        const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
+                        ObCommonDatumRowkey &endkey,
                         int64_t &row_offset/*for co sstable*/);
 private:
   bool is_iter_start_;
@@ -99,9 +101,9 @@ public:
                    const bool is_reverse_scan,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                          const ObDatumRowkey *&endkey) override;
+                          ObCommonDatumRowkey &endkey) override;
   virtual int get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                       const ObDatumRowkey *&endkey,
+                       ObCommonDatumRowkey &endkey,
                        bool &is_scan_left_border,
                        bool &is_scan_right_border,
                        const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -148,9 +150,9 @@ public:
                    const bool is_reverse_scan,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                          const ObDatumRowkey *&endkey) override;
+                          ObCommonDatumRowkey &endkey) override;
   virtual int get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                       const ObDatumRowkey *&endkey,
+                       ObCommonDatumRowkey &endkey,
                        bool &is_scan_left_border,
                        bool &is_scan_right_border,
                        const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -178,7 +180,7 @@ class ObDDLMergeBlockRowIterator : public ObIndexBlockRowIterator
 public:
   static const int64_t MAX_SSTABLE_COUNT = 4096;
   typedef ObSimpleRowsMerger<ObDDLSSTableMergeLoserTreeItem, ObDDLSSTableMergeLoserTreeCompare> SimpleMerger;
-  typedef common::ObLoserTree<ObDDLSSTableMergeLoserTreeItem, ObDDLSSTableMergeLoserTreeCompare, MAX_SSTABLE_COUNT> MergeLoserTree;
+  typedef common::ObLoserTree<ObDDLSSTableMergeLoserTreeItem, ObDDLSSTableMergeLoserTreeCompare> MergeLoserTree;
   ObDDLMergeBlockRowIterator();
   virtual ~ObDDLMergeBlockRowIterator();
   virtual int init(const ObMicroBlockData &idx_block_data,
@@ -186,10 +188,16 @@ public:
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
                    const ObIndexBlockIterParam &iter_param) override;
+  int init(const ObMicroBlockData &idx_block_data,
+           const ObStorageDatumUtils *datum_utils,
+           ObIAllocator *allocator,
+           const bool is_reverse_scan,
+           const ObIndexBlockIterParam &iter_param,
+           const ObIArray<ObDDLMemtable *> &ddl_memtables);
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                          const ObDatumRowkey *&endkey) override;
+                          ObCommonDatumRowkey &endkey) override;
   virtual int get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                       const ObDatumRowkey *&endkey,
+                       ObCommonDatumRowkey &endkey,
                        bool &is_scan_left_border,
                        bool &is_scan_right_border,
                        const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -214,7 +222,7 @@ public:
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLMergeBlockRowIterator",
                        KP(raw_iter_), KP(transformed_iter_), KP(empty_merge_iter_), KP(all_range_iter_), K(iters_), KP(allocator_), KP(consumers_),
                        K(consumer_cnt_), K(compare_), KPC(simple_merge_), KPC(loser_tree_), KPC(endkey_merger_), K(is_single_sstable_),
-                       K(is_iter_start_), K(is_iter_finish_), K(query_range_), KP(idx_block_data_), K(first_index_item_), K(iter_param_));
+                       K(is_iter_start_), K(is_iter_finish_), KP(idx_block_data_), K(first_index_item_), K(iter_param_));
   struct MergeIndexItem final
   {
   public:
@@ -227,7 +235,7 @@ public:
     }
     int init(ObIAllocator *allocator,
              const ObIndexBlockRowHeader *idx_row_header,
-             const ObDatumRowkey *endkey,
+             const ObCommonDatumRowkey &endkey,
              const bool is_scan_left_border,
              const bool is_scan_right_border,
              const ObIndexBlockRowMinorMetaInfo *idx_minor_info,
@@ -257,6 +265,20 @@ private:
   int locate_first_endkey(); //for reverse scan
   int get_readable_ddl_kvs(const ObIndexBlockIterParam &iter_param,
                            ObArray<storage::ObDDLMemtable *> &ddl_memtables);
+  int refine_ddl_memtables(const int64_t sstable_cg_idx,
+                           const int64_t sstable_slice_idx,
+                           const ObSSTable *ddl_sstable,
+                           const common::ObIArray<ObDDLMemtable *> &input_ddl_memtables,
+                           ObIArray<ObDDLMemtable *> &output_ddl_memtables);
+  int inner_init(const ObMicroBlockData &idx_block_data,
+                 const ObStorageDatumUtils *datum_utils,
+                 ObIAllocator *allocator,
+                 const bool is_reverse_scan,
+                 const ObIndexBlockIterParam &iter_param,
+                 const ObIArray<ObDDLMemtable *> *ddl_memtables);
+  int init_for_inc_major(const ObSSTable *ddl_aggregate_sstable,
+                         ObIArray<ObDDLMemtable *> &ddl_memtables,
+                         const ObSSTable *&sstable);
   int init_sstable_index_iter(const ObMicroBlockData &idx_block_data,
                               const ObStorageDatumUtils *datum_utils,
                               ObIAllocator *allocator,
@@ -267,10 +289,10 @@ private:
                               const ObStorageDatumUtils *datum_utils,
                               ObIAllocator *allocator,
                               const bool is_reverse_scan,
-                              const ObIndexBlockIterParam &iter_param);
+                              const ObIArray<storage::ObDDLMemtable *> &ddl_memtables);
   int init_merger();
   int inner_get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                     const ObDatumRowkey *&endkey,
+                     ObCommonDatumRowkey &endkey,
                      bool &is_scan_left_border,
                      bool &is_scan_right_border,
                      const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -278,16 +300,19 @@ private:
                      int64_t &agg_buf_size,
                      int64_t &row_offset);
   int supply_consume();
+  void free_iters(ObIAllocator *allocator);
 private:
   bool is_single_sstable_;
   bool is_iter_start_;
   bool is_iter_finish_;
   ObIAllocator *allocator_;
   const ObMicroBlockData *idx_block_data_;
+  ObArray<ObDDLMemtable *> ddl_memtables_;
   ObRAWIndexBlockRowIterator *raw_iter_;
   ObTFMIndexBlockRowIterator *transformed_iter_;
   ObDDLMergeEmptyIterator *empty_merge_iter_;
   ObDDLSStableAllRangeIterator *all_range_iter_;
+  ObArray<ObDDLIndexBlockRowIterator *> ddl_memtable_iters_;
   ObArray<ObIndexBlockRowIterator *> iters_;
   int64_t *consumers_;
   int64_t consumer_cnt_;
@@ -298,6 +323,98 @@ private:
   ObDatumRange query_range_;
   MergeIndexItem first_index_item_;
   ObIndexBlockIterParam iter_param_;
+  const ObSSTable *sstable_;
+};
+
+class ObUnitedSliceRowIterator : public ObIndexBlockRowIterator
+{
+public:
+  ObUnitedSliceRowIterator();
+  virtual ~ObUnitedSliceRowIterator();
+  virtual void reset() override;
+  virtual void reuse() override;
+  virtual int init(const ObMicroBlockData &idx_block_data,
+                   const ObStorageDatumUtils *datum_utils,
+                   ObIAllocator *allocator,
+                   const bool is_reverse_scan,
+                   const ObIndexBlockIterParam &iter_param) override;
+  virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
+                          ObCommonDatumRowkey &endkey) override;
+  virtual int get_next(const ObIndexBlockRowHeader *&idx_row_header,
+                       ObCommonDatumRowkey &endkey,
+                       bool &is_scan_left_border,
+                       bool &is_scan_right_border,
+                       const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
+                       const char *&agg_row_buf,
+                       int64_t &agg_buf_size,
+                       int64_t &row_offset) override;
+  virtual int locate_key(const ObDatumRowkey &rowkey) override;
+  virtual int locate_range(const ObDatumRange &range,
+                           const bool is_left_border,
+                           const bool is_right_border,
+                           const bool is_normal_cg) override;
+  virtual int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan) override;
+  virtual bool end_of_block() const override;
+  virtual int get_index_row_count(const ObDatumRange &range,
+                                  const bool is_left_border,
+                                  const bool is_right_border,
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) override;
+  virtual int switch_context(ObStorageDatumUtils *datum_utils) override;
+  INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObUnitedSliceRowIterator",
+      KP_(allocator), KPC_(merge_iter), KPC_(idx_block_data), K_(iter_param), K_(range),
+      K_(row_offsets), K_(start_datum_offset), K_(end_datum_offset),
+      K_(slice_count), K_(start_slice_idx), K_(end_slice_idx), K_(cur_slice_idx), K_(is_iter_end));
+private:
+  int init_slice_info(const ObIndexBlockIterParam &iter_param);
+  int init_slice_info_for_inc_major(const ObIndexBlockIterParam &iter_param);
+  int calculate_row_offsets(const int64_t cg_idx, const ObIArray<ObSSTable *> &cg_slices);
+  int convert_slice_offset(int64_t abs_row_offset, int64_t &slice_idx, int64_t &slice_row_offset);
+  int prepare_slice_query_param(const int64_t slice_idx, ObIndexBlockIterParam &slice_iter_param, ObIArray<ObDDLMemtable *> &slice_ddl_memtables);
+  int prepare_slice_query_param_for_inc_major(
+      const int64_t slice_idx,
+      ObIndexBlockIterParam &slice_iter_param,
+      ObIArray<ObDDLMemtable *> &slice_ddl_memtables);
+  int prepare_slice_sstable(const bool is_inc_major,
+                            const int64_t slice_idx,
+                            int64_t &cg_idx,
+                            ObSSTable *&sstable);
+  int prepare_slice_sstable_for_ddl(const int64_t slice_idx,
+                                    int64_t &cg_idx,
+                                    ObSSTable *&sstable);
+  int prepare_slice_sstable_for_inc_major(const int64_t slice_idx,
+                                          int64_t &cg_idx,
+                                          ObSSTable *&sstable);
+  int prepare_slice_memtables(const bool is_inc_major,
+                              const int64_t cg_idx,
+                              const int64_t slice_idx,
+                              ObIArray<ObDDLMemtable *> &slice_ddl_memtables);
+  int prepare_slice_memtables_for_ddl(const int64_t cg_idx,
+                                      const int64_t slice_idx,
+                                      ObIArray<ObDDLMemtable *> &slice_ddl_memtables);
+  int prepare_slice_memtables_for_inc_major(const int64_t cg_idx,
+                                            const int64_t slice_idx,
+                                            ObIArray<ObDDLMemtable *> &slice_ddl_memtables);
+  int set_slice_query_param(ObSSTable *sstable, ObIndexBlockIterParam &slice_iter_param);
+  int locate_slice_idx_by_key(const ObDatumRowkey &rowkey, int64_t &slice_idx);
+private:
+  ObIAllocator *allocator_;
+  ObDDLMergeBlockRowIterator *merge_iter_;
+  const ObMicroBlockData *idx_block_data_;
+  ObIndexBlockIterParam iter_param_;
+  ObDatumRange range_;
+  ObArray<int64_t> row_offsets_;
+  ObStorageDatum start_datum_offset_;
+  ObStorageDatum end_datum_offset_;
+  int64_t slice_count_;
+  int64_t start_slice_idx_;
+  int64_t end_slice_idx_;
+  int64_t cur_slice_idx_;
+  bool is_iter_end_;
+  ObStorageMetaHandle slice_sstable_handle_; // for holding slice sstable
+  ObMicroBlockData slice_root_block_;
+  ObStorageDatum abs_datum_offset_;
+  ObDatumRowkey abs_endkey_; // absolute endkey(row offset) for normal cg
 };
 
 } // end namespace blocksstable

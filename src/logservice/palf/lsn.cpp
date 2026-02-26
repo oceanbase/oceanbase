@@ -11,7 +11,6 @@
  */
 
 #include "lsn.h"
-#include "log_define.h"
 
 namespace oceanbase {
 namespace palf{

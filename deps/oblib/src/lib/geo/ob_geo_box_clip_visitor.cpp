@@ -171,8 +171,7 @@ int ObGeoBoxClipVisitor::visit(ObCartesianMultipoint *geo)
             allocator_,
             mpt[i].get<0>(),
             mpt[i].get<1>(),
-            geo->get_srid(),
-            allocator_);
+            geo->get_srid());
         if (OB_ISNULL(pt)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory for geometry", K(ret));
@@ -398,7 +397,7 @@ int ObGeoBoxClipVisitor::line_visit(
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mls)) {
-    mls = OB_NEWx(ObCartesianMultilinestring, allocator_);
+    mls = OB_NEWx(ObCartesianMultilinestring, allocator_, line.get_srid(), *allocator_);
     if (OB_ISNULL(mls)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory for geometry", K(ret));
@@ -768,7 +767,7 @@ int ObGeoBoxClipVisitor::make_polygons(
     } else {
       for (uint32_t j = 0; OB_SUCC(ret) && j < new_mpy.size(); ++j) {
         bool is_covered_by = false;
-        ObGeoEvalCtx gis_context(allocator_);
+        ObGeoEvalCtx gis_context(*mem_ctx_);
         ObCartesianLineString *tmp_line = reinterpret_cast<ObCartesianLineString *>(&ext_ring);
         if (OB_FAIL(gis_context.append_geo_arg(tmp_line))
             || OB_FAIL(gis_context.append_geo_arg(&new_mpy[j]))) {
@@ -865,7 +864,7 @@ int ObGeoBoxClipVisitor::visit_polygon_inner_ring(
       double xmid = xmin_ + (xmax_ - xmin_) / 2;
       double ymid = ymin_ + (ymax_ - ymin_) / 2;
       ObCartesianPoint pt(xmid, ymid);
-      ObGeoEvalCtx gis_context(allocator_);
+      ObGeoEvalCtx gis_context(*mem_ctx_);
       if (OB_FAIL(gis_context.append_geo_arg(&pt))
           || OB_FAIL(gis_context.append_geo_arg(&tmp_py))) {
         LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
@@ -908,7 +907,7 @@ int ObGeoBoxClipVisitor::visit_polygon_ext_ring(const ObCartesianLinearring &ext
     double xmid = xmin_ + (xmax_ - xmin_) / 2;
     double ymid = ymin_ + (ymax_ - ymin_) / 2;
     ObCartesianPoint pt(xmid, ymid);
-    ObGeoEvalCtx gis_context(allocator_);
+    ObGeoEvalCtx gis_context(*mem_ctx_);
     if (OB_FAIL(gis_context.append_geo_arg(&pt)) || OB_FAIL(gis_context.append_geo_arg(&tmp_py))) {
       LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
     } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Within>::gis_func::eval(

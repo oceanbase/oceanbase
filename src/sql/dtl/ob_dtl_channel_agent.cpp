@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_channel_agent.h"
-#include "sql/dtl/ob_dtl_channel.h"
-#include "sql/dtl/ob_dtl_basic_channel.h"
-#include "sql/dtl/ob_dtl_rpc_channel.h"
-#include "sql/engine/px/ob_px_row_store.h"
-#include "common/row/ob_row.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -33,9 +28,12 @@ int ObDtlBufEncoder::switch_writer(const ObDtlMsg &msg)
       } else if (DtlWriterType::CHUNK_DATUM_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &datum_msg_writer_;
       } else if (DtlWriterType::VECTOR_FIXED_WRITER == msg_writer_map[px_row.get_data_type()]) {
+        vector_fixed_msg_writer_.set_size_per_buffer(size_per_buffer_);
         msg_writer_ = &vector_fixed_msg_writer_;
       } else if (DtlWriterType::VECTOR_ROW_WRITER == msg_writer_map[px_row.get_data_type()]) {
+        vector_row_msg_writer_.set_row_meta(meta_);
         msg_writer_ = &vector_row_msg_writer_;
+        vector_row_msg_writer_.set_plan_min_cluster_version(plan_min_cluster_version_);
       } else if (DtlWriterType::VECTOR_WRITER == msg_writer_map[px_row.get_data_type()]) {
         //TODO : support local channel shuffle in vector mode
         msg_writer_ = &vector_row_msg_writer_;
@@ -159,11 +157,21 @@ int ObDtlBcastService::send_message(ObDtlLinkedBuffer *&bcast_buf, bool drain)
           LOG_WARN("start message process fail", K(ret));
         }
       }
+      bool send_by_tenant = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(DTL.get_rpc_proxy()
+        if (send_by_tenant
+            && OB_FAIL(DTL.get_rpc_proxy()
                        .to(server_addr_)
+                       .group_id(share::OBCG_DTL)
+                       .by(tenant_id_)
                        .timeout(timeout_us)
                        .ap_send_bc_message(args, &cb))) {
+          LOG_WARN("failed to seed message", K(ret));
+        } else if (!send_by_tenant
+                   && OB_FAIL(DTL.get_rpc_proxy()
+                                 .to(server_addr_)
+                                 .timeout(timeout_us)
+                                 .ap_send_bc_message(args, &cb))) {
           LOG_WARN("failed to seed message", K(ret));
         } else {
           // all rpc channel in this service has send this msg. this buffer will be release in agent.
@@ -247,7 +255,7 @@ int ObDtlChanAgent::init(dtl::ObDtlFlowControl &dfc,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("no momery", K(ret));
         } else {
-          bc_service = new(buf) ObDtlBcastService();
+          bc_service = new(buf) ObDtlBcastService(tenant_id, data_ch->send_by_tenant());
           bc_service->bcast_ch_count_++;
           bc_service->active_chs_count_++;
           bc_service->server_addr_ = data_ch->peer_;
@@ -412,8 +420,9 @@ int ObDtlChanAgent::send_last_buffer(ObDtlLinkedBuffer *&last_buffer)
       } else {
         last_buffer->size() = size;
         last_buffer->pos() = pos;
-        ObDtlLinkedBuffer::assign(*last_buffer, buf);
-        if (OB_FAIL(ch->send_buffer(buf))) {
+        if (OB_FAIL(ObDtlLinkedBuffer::assign(*last_buffer, buf))) {
+          LOG_WARN("failed to assign buffer", K(ret));
+        } else if (OB_FAIL(ch->send_buffer(buf))) {
           LOG_WARN("failed to send buffer", K(ret));
         }
         if (nullptr != buf) {

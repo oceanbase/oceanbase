@@ -27,7 +27,7 @@ public:
   LogLoopThread();
   virtual ~LogLoopThread();
 public:
-  int init(IPalfEnvImpl *palf_env_impl);
+  int init(IPalfEnvImpl *palf_env_impl, const common::ObAddr &self);
   void destroy();
   void run1();
 private:
@@ -35,6 +35,9 @@ private:
 private:
   IPalfEnvImpl *palf_env_impl_;
   int64_t run_interval_;
+  common::ObAddr self_;
+  bool any_in_period_freeze_mode_;
+  bool any_is_reconfirming_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(LogLoopThread);

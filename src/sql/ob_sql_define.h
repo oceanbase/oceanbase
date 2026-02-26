@@ -39,7 +39,7 @@ const int64_t OB_MIN_PARALLEL_TASK_COUNT = 13; //期望每一个并行度最低�
 const int64_t OB_MAX_PARALLEL_TASK_COUNT = 100; //期望每一个并行度最大持有task数量
 const int64_t OB_MIN_MARCO_COUNT_IN_TASK = 1; //每个task最少负责的宏块个数
 const int64_t OB_INVAILD_PARALLEL_TASK_COUNT = -1;
-const int64_t OB_EXPECTED_TASK_LOAD = 100; //MB, one task will get 100MB data from disk
+const int64_t OB_EXPECTED_TASK_LOAD = 102400; //KB, one task will get 100MB data from disk
 const int64_t OB_GET_MACROS_COUNT_BY_QUERY_RANGE = 1;
 const int64_t OB_GET_BLOCK_RANGE = 2;
 const int64_t OB_BROADCAST_THRESHOLD = 100;
@@ -110,7 +110,8 @@ enum PathType
   FUNCTION_TABLE_ACCESS,
   TEMP_TABLE_ACCESS,
   JSON_TABLE_ACCESS,
-  VALUES_TABLE_ACCESS
+  VALUES_TABLE_ACCESS,
+  LAKE_TABLE_ACCESS
 };
 
 enum JtColType {
@@ -124,6 +125,9 @@ enum JtColType {
   COL_TYPE_VAL_EXTRACT_XML, // 7
   COL_TYPE_XMLTYPE_XML, // 8
   COL_TYPE_ORDINALITY_XML = 9,
+  COL_TYPE_RB_ITERATE = 10,
+  COL_TYPE_UNNEST = 11,
+  COL_TYPE_INDEX_DATE_GEN = 12,
 };
 
 enum ObNameTypeClass
@@ -138,8 +142,36 @@ enum ObMatchAgainstMode {
   NATURAL_LANGUAGE_MODE_WITH_QUERY_EXPANSION = 1,
   BOOLEAN_MODE = 2,
   WITH_QUERY_EXPANSION = 3,
-  MAX_MATCH_AGAINST_MODE = 4,
+  MATCH_PHRASE_MODE = 4,
+  MAX_MATCH_AGAINST_MODE = 5,
 };
+
+enum ObMatchOperator {
+  MATCH_OPERATOR_OR = 0,
+  MATCH_OPERATOR_AND = 1,
+  MAX_MATCH_OPERATOR = 2,
+};
+
+enum ObMatchScoreNorm {
+  SCORE_NORM_NONE = 0,
+  SCORE_NORM_MIN_MAX = 1,
+  MAX_SCORE_NORM_TYPE = 3,
+};
+
+enum ObMatchFiledsType {
+  MATCH_MOST_FIELDS = 0,
+  MATCH_BEST_FIELDS = 1,
+  MATCH_CROSS_FIELDS = 2,
+  MAX_MATCH_FIELDS_TYPE = 3,
+};
+
+#define IS_HASH_SLAVE_MAPPING(type)                                                                \
+  (((type) == SlaveMappingType::SM_PWJ_HASH_HASH)                                                  \
+   || ((type) == SlaveMappingType::SM_PPWJ_HASH_HASH))
+
+#define IS_BCAST_SLAVE_MAPPING(type)                                                               \
+  (((type) == SlaveMappingType::SM_PPWJ_BCAST_NONE)                                                \
+   || ((type) == SlaveMappingType::SM_PPWJ_NONE_BCAST))
 
 #define IS_JOIN(type) \
 (((type) == PHY_MERGE_JOIN) || \
@@ -175,6 +207,10 @@ enum ObMatchAgainstMode {
    (join_type) == RIGHT_ANTI_JOIN)
 
 #define IS_OUTER_OR_CONNECT_BY_JOIN(join_type) (IS_OUTER_JOIN(join_type) || CONNECT_BY_JOIN == join_type)
+
+#define IS_INNER_JOIN(join_type) (INNER_JOIN == join_type)
+
+#define IS_NOT_INNER_JOIN(join_type) (INNER_JOIN != join_type)
 
 #define IS_LEFT_STYLE_JOIN(join_type) \
   ((join_type) == LEFT_SEMI_JOIN || \
@@ -320,12 +356,14 @@ enum ExplainType
   EXPLAIN_EXTENDED,
   EXPLAIN_PARTITIONS,
   EXPLAIN_TRADITIONAL,
+  EXPLAIN_FORMAT_OBJECT_NAME_DISPLAY,
   EXPLAIN_FORMAT_JSON,
   EXPLAIN_BASIC,
   EXPLAIN_PLANREGRESS,
   EXPLAIN_EXTENDED_NOADDR,
   EXPLAIN_DBLINK_STMT,
   EXPLAIN_HINT_FORMAT,
+  EXPLAIN_PLAN_TABLE
 };
 
 enum DiagnosticsType
@@ -393,6 +431,12 @@ DECLARE_ENUM(Type, type, PQ_DIST_METHOD_DEF, static);
   }
 };
 
+#define IS_PKEY_DIST_METHOD(type)                                                                  \
+  (((type) == ObPQDistributeMethod::Type::PARTITION)                                               \
+   || ((type) == ObPQDistributeMethod::Type::PARTITION_RANDOM)                                     \
+   || ((type) == ObPQDistributeMethod::Type::PARTITION_HASH)                                       \
+   || ((type) == ObPQDistributeMethod::Type::PARTITION_RANGE))
+
 struct ObNullDistributeMethod
 {
 /*
@@ -425,6 +469,13 @@ enum DistinctType
 };
 
 enum class ObPDMLOption {
+  NOT_SPECIFIED = -1,
+  ENABLE,
+  DISABLE,
+  MAX_VALUE
+};
+
+enum class ObParallelDASOption {
   NOT_SPECIFIED = -1,
   ENABLE,
   DISABLE,
@@ -506,12 +557,13 @@ enum PXParallelRule
   // force disable parallel below
   PL_UDF_DAS_FORCE_SERIALIZE, //stmt has_pl_udf will use das, force serialize;
   DBLINK_FORCE_SERIALIZE, //stmt has dblink will use das, force seialize;
+  LICENSE_NOT_ALLOW_OLAP, // current license does not support olap
   MAX_OPTION
 };
 
 inline const char *ob_px_parallel_rule_str(PXParallelRule px_parallel_ruel)
 {
-  const char *ret = "USE_PX_DEFAULT";
+  const char *ret = "MAX_OPTION";
   static const char *parallel_rule_type_to_str[] =
   {
     "USE_PX_DEFAULT",
@@ -521,6 +573,7 @@ inline const char *ob_px_parallel_rule_str(PXParallelRule px_parallel_ruel)
     "AUTO_DOP",
     "PL_UDF_DAS_FORCE_SERIALIZE",
     "DBLINK_FORCE_SERIALIZE",
+    "LICENSE_NOT_ALLOW_OLAP",
     "MAX_OPTION",
   };
   if (OB_LIKELY(px_parallel_ruel >= USE_PX_DEFAULT)
@@ -560,6 +613,16 @@ enum ObIDPAbortType
   IDP_STOPENUM_LINEARDOWN_ABORT = 2,
   IDP_ENUM_FAILED_ABORT = 3,
   IDP_NO_ABORT = 4
+};
+
+enum class PseudoColumnRefType {
+  PSEUDO_PARTITION_ID = 0,
+  PSEUDO_SUB_PARTITION_ID = 1,
+  PSEUDO_PARTITION_NAME = 2,
+  PSEUDO_SUB_PARTITION_NAME = 3,
+  PSEUDO_PARTITION_INDEX = 4,
+  PSEUDO_SUB_PARTITION_INDEX = 5,
+  MAX = 255  // 不超过 8 位的最大值
 };
 
 struct ObSqlDatumArray
@@ -663,6 +726,7 @@ inline const ObString &ob_match_against_mode_str(const ObMatchAgainstMode mode)
     "NATURAL LANGUAGE MODE WITH QUERY EXPANSION",
     "BOOLEAN MODE",
     "WITH QUERY EXPANSION",
+    "MATCH_PHRASE_MODE",
     "UNKNOWN MATCH MODE"
   };
 
@@ -672,6 +736,27 @@ inline const ObString &ob_match_against_mode_str(const ObMatchAgainstMode mode)
   } else {
     return ma_mode_str[ObMatchAgainstMode::MAX_MATCH_AGAINST_MODE];
   }
+}
+
+static bool is_fixed_length_storage(ObObjType type) {
+  bool is_fixed = true;
+  ObObjTypeClass tc = ob_obj_type_class(type);
+  OB_ASSERT(tc >= ObNullTC && tc < ObMaxTC);
+  if (ObNumberTC == tc
+      || ObExtendTC == tc
+      || ObTextTC == tc
+      || ObEnumSetInnerTC == tc
+      || ObRawTC == tc
+      || ObRowIDTC == tc
+      || ObLobTC == tc
+      || ObJsonTC == tc
+      || ObGeometryTC == tc
+      || ObUserDefinedSQLTC == tc
+      || ObDecimalIntTC == tc
+      || ObRoaringBitmapTC == tc) {
+    is_fixed = false;
+  }
+  return is_fixed;
 }
 
 static bool is_fixed_length(ObObjType type) {
@@ -689,7 +774,9 @@ static bool is_fixed_length(ObObjType type) {
       || ObJsonTC == tc
       || ObGeometryTC == tc
       || ObUserDefinedSQLTC == tc
-      || ObDecimalIntTC == tc) {
+      || ObDecimalIntTC == tc
+      || ObRoaringBitmapTC == tc
+      || ObCollectionSQLTC == tc) {
     is_fixed = false;
   }
   return is_fixed;
@@ -705,6 +792,7 @@ static int16_t get_type_fixed_length(ObObjType type) {
     case ObIntTC:
     case ObDoubleTC:
     case ObDateTimeTC:
+    case ObMySQLDateTimeTC:
     case ObTimeTC:
     case ObBitTC:
     case ObEnumSetTC:
@@ -713,6 +801,7 @@ static int16_t get_type_fixed_length(ObObjType type) {
       break;
     }
     case ObDateTC:
+    case ObMySQLDateTC:
     case ObFloatTC:
     {
       len = 4;
@@ -737,6 +826,10 @@ static int16_t get_type_fixed_length(ObObjType type) {
   }
   return len;
 }
+
+#define SPM_MODE_DISABLE 0
+#define SPM_MODE_ONLINE_EVOLVE 1
+#define SPM_MODE_BASELINE_FIRST 2
 
 }  // namespace sql
 }  // namespace oceanbase

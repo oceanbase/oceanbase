@@ -12,7 +12,6 @@
 
 #include <gtest/gtest.h>
 #include "lib/allocator/page_arena.h"
-#include "lib/random/ob_random.h"
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 

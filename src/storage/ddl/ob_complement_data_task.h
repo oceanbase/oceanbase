@@ -13,53 +13,101 @@
 #ifndef OCEANBASE_STORAGE_OB_COMPLEMENT_DATA_TASK_H
 #define OCEANBASE_STORAGE_OB_COMPLEMENT_DATA_TASK_H
 
-#include "storage/access/ob_table_access_context.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "storage/access/ob_table_access_context.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
-#include "storage/ddl/ob_ddl_redo_log_writer.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/ob_store_row_comparer.h"
-#include "sql/engine/expr/ob_expr_frame_info.h"
+#include "storage/ddl/ob_cg_macro_block_write_task.h"
+#include "storage/ddl/ob_tablet_slice_row_iterator.h"
+#include "storage/ddl/ob_ddl_merge_task_v2.h"
 
 namespace oceanbase
 {
-namespace sql
-{
-struct ObTempExpr;
-}
+
 namespace storage
 {
+template <typename T>
+int add_dag_and_get_progress(
+    T *dag,
+    int64_t &row_inserted,
+    int64_t &cg_row_inserted,
+    int64_t &physical_row_count)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  row_inserted = 0;
+  cg_row_inserted=0;
+  physical_row_count = 0;
+  if (OB_ISNULL(dag)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(dag));
+  } else if (OB_FAIL(MTL(ObTenantDagScheduler*)->add_dag(dag))) {
+    // caution ret = OB_EAGAIN or OB_SIZE_OVERFLOW
+    if (OB_EAGAIN == ret
+        && OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->get_dag_progress<T>(dag, row_inserted, cg_row_inserted, physical_row_count))) {
+      // tmp_ret is used to prevent the failure from affecting DDL_Task status
+      LOG_WARN("get complement data progress failed", K(tmp_ret), K(ret));
+    }
+  }
+  return ret;
+}
+
 class ObScan;
 class ObLocalScan;
 class ObRemoteScan;
 class ObMultipleScanMerge;
+class ObChunk;
+class ObComplementDataDag;
+class ObComplementFailCallback : public ObDDLFailCallback
+{
+public:
+  ObComplementFailCallback():dag_(nullptr) {};
+  virtual ~ObComplementFailCallback() {};
+  int init(ObComplementDataDag *dag);
+  virtual int process(int ret_code) override;
+private:
+  ObComplementDataDag *dag_;
+};
 struct ObComplementDataParam final
 {
 public:
-  static const int64_t DEFAULT_COMPLEMENT_DATA_MEMORY_LIMIT = 128L * 1024L * 1024L;
   ObComplementDataParam():
     is_inited_(false), orig_tenant_id_(common::OB_INVALID_TENANT_ID), dest_tenant_id_(common::OB_INVALID_TENANT_ID),
     orig_ls_id_(share::ObLSID::INVALID_LS_ID), dest_ls_id_(share::ObLSID::INVALID_LS_ID), orig_table_id_(common::OB_INVALID_ID),
     dest_table_id_(common::OB_INVALID_ID), orig_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID),
     row_store_type_(common::ENCODING_ROW_STORE), orig_schema_version_(0), dest_schema_version_(0),
-    snapshot_version_(0), concurrent_cnt_(0), task_id_(0), execution_id_(-1), tablet_task_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID), data_format_version_(0),
-    allocator_("CompleteDataPar", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    snapshot_version_(0), task_id_(0), execution_id_(-1), tablet_task_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID), data_format_version_(0),
+    orig_schema_tablet_size_(0), dest_schema_cg_cnt_(0), user_parallelism_(0), concurrent_cnt_(0), ranges_(),
+    is_no_logging_(false), dest_lob_meta_tablet_id_(), allocator_("CompleteDataPar", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
   ~ObComplementDataParam() { destroy(); }
   int init(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
-  int split_task_ranges(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const int64_t tablet_size, const int64_t hint_parallelism);
-
+  int prepare_task_ranges();
+  int split_task_ranges(
+      const int64_t task_id,
+      const uint64_t data_format_version,
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const int64_t tablet_size,
+      const int64_t hint_parallelism);
+  int split_task_ranges_remote(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    const int64_t tablet_size,
+    const int64_t hint_parallelism,
+    const int64_t dest_schema_cg_cnt);
   bool is_valid() const
   {
     return common::OB_INVALID_TENANT_ID != orig_tenant_id_ && common::OB_INVALID_TENANT_ID != dest_tenant_id_
            && orig_ls_id_.is_valid() && dest_ls_id_.is_valid() && common::OB_INVALID_ID != orig_table_id_
-           && common::OB_INVALID_ID != dest_table_id_ && orig_tablet_id_.is_valid() && dest_tablet_id_.is_valid() && 0 != concurrent_cnt_
+           && common::OB_INVALID_ID != dest_table_id_ && orig_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
            && snapshot_version_ > 0 && compat_mode_ != lib::Worker::CompatMode::INVALID && execution_id_ >= 0 && tablet_task_id_ > 0
-           && data_format_version_ > 0;
+           && data_format_version_ > 0 && orig_schema_tablet_size_ > 0 && dest_schema_cg_cnt_ > 0 && user_parallelism_ > 0;
   }
 
+  bool has_generated_task_ranges() const {
+    return concurrent_cnt_ > 0 && !ranges_.empty() && concurrent_cnt_ == ranges_.count();
+  }
   int get_hidden_table_key(ObITable::TableKey &table_key) const;
   bool use_new_checksum() const { return data_format_version_ >= DATA_VERSION_4_2_1_1; }
   void destroy()
@@ -73,23 +121,49 @@ public:
     dest_table_id_ = common::OB_INVALID_ID;
     orig_tablet_id_.reset();
     dest_tablet_id_.reset();
-    ranges_.reset();
-    allocator_.reset();
+    dest_lob_meta_tablet_id_.reset();
     row_store_type_ = common::ENCODING_ROW_STORE;
     orig_schema_version_ = 0;
     dest_schema_version_ = 0;
     snapshot_version_ = 0;
-    concurrent_cnt_ = 0;
     task_id_ = 0;
     execution_id_ = -1;
     tablet_task_id_ = 0;
     compat_mode_ = lib::Worker::CompatMode::INVALID;
     data_format_version_ = 0;
+    orig_schema_tablet_size_ = 0;
+    dest_schema_cg_cnt_ = 0;
+    user_parallelism_ = 0;
+    concurrent_cnt_ = 0;
+    is_no_logging_ = false;
+    ranges_.reset();
+    direct_load_type_ = DIRECT_LOAD_INVALID;
+    if (nullptr != tablet_param_.storage_schema_) {
+      tablet_param_.storage_schema_->~ObStorageSchema();
+      allocator_.free(tablet_param_.storage_schema_);
+      tablet_param_.storage_schema_ = nullptr;
+    }
+    if (nullptr != lob_meta_tablet_param_.storage_schema_) {
+      lob_meta_tablet_param_.storage_schema_->~ObStorageSchema();
+      allocator_.free(lob_meta_tablet_param_.storage_schema_);
+      lob_meta_tablet_param_.storage_schema_ = nullptr;
+    }
+    allocator_.reset();
   }
   TO_STRING_KV(K_(is_inited), K_(orig_tenant_id), K_(dest_tenant_id), K_(orig_ls_id), K_(dest_ls_id),
       K_(orig_table_id), K_(dest_table_id), K_(orig_tablet_id), K_(dest_tablet_id), K_(orig_schema_version),
-      K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(concurrent_cnt), K_(task_id),
-      K_(execution_id), K_(compat_mode), K_(data_format_version), K_(ranges));
+      K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(task_id),
+      K_(execution_id), K_(compat_mode), K_(data_format_version), K_(orig_schema_tablet_size),K_(user_parallelism),
+      K_(concurrent_cnt), K_(ranges), K_(is_no_logging), K_(direct_load_type), K_(tablet_param), K_(lob_meta_tablet_param));
+private:
+  int fill_tablet_param();
+  int get_complement_parallel_mode(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const int64_t schema_version,
+      const lib::Worker::CompatMode compat_mode,
+      const bool is_recover_table,
+      bool &is_allow_parallel);
 public:
   bool is_inited_;
   uint64_t orig_tenant_id_;
@@ -104,15 +178,27 @@ public:
   int64_t orig_schema_version_;
   int64_t dest_schema_version_;
   int64_t snapshot_version_;
-  int64_t concurrent_cnt_;
   int64_t task_id_;
   int64_t execution_id_;
   int64_t tablet_task_id_;
   lib::Worker::CompatMode compat_mode_;
-  uint64_t data_format_version_;
-  ObSEArray<common::ObStoreRange, 32> ranges_;
-private:
+  int64_t data_format_version_;
+  int64_t orig_schema_tablet_size_;
+  int64_t dest_schema_cg_cnt_;
+  int64_t user_parallelism_;  /* user input parallelism */
+  /* complememt prepare task will initialize parallel task ranges */
+  int64_t concurrent_cnt_; /* real complement tasks num */
+  ObArray<blocksstable::ObDatumRange> ranges_;
+  bool is_no_logging_;
+  ObDDLTableSchema ddl_table_schema_;
+  ObWriteTabletParam tablet_param_;
+  ObWriteTabletParam lob_meta_tablet_param_;
+  ObDirectLoadType direct_load_type_;
+  ObTabletID dest_lob_meta_tablet_id_;
   common::ObArenaAllocator allocator_;
+  static constexpr int64_t MAX_RPC_STREAM_WAIT_THREAD_COUNT = 100;
+  static constexpr int64_t ROW_TABLE_PARALLEL_MIN_TASK_SIZE = 2 * 1024 * 1024L; /*2MB*/
+  static constexpr int64_t COLUMN_TABLE_EACH_CG_PARALLEL_MIN_TASK_SIZE = 4 * 1024 * 1024L; /*4MB*/
 };
 
 void add_ddl_event(const ObComplementDataParam *param, const ObString &stmt);
@@ -121,40 +207,39 @@ struct ObComplementDataContext final
 {
 public:
   ObComplementDataContext():
+    allocator_("DDL_COMPL_CTX", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
     lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0),
-    data_sstable_redo_writer_(), index_builder_(nullptr), start_scn_(share::SCN::min_scn()), tablet_direct_load_mgr_handle_(), row_scanned_(0), row_inserted_(0), context_id_(0),
-    allocator_("CompleteDataCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    physical_row_count_(0), row_scanned_(0), row_inserted_(0), total_slice_cnt_(-1),
+    tablet_ctx_(), cg_row_inserted_(0)
   {}
   ~ObComplementDataContext() { destroy(); }
-  int init(const ObComplementDataParam &param, const blocksstable::ObDataStoreDesc &desc);
+  int init(
+    const ObComplementDataParam &param,
+    const share::schema::ObTableSchema &hidden_table_schema);
   void destroy();
-  int write_start_log(const ObComplementDataParam &param);
   int add_column_checksum(const ObIArray<int64_t> &report_col_checksums, const ObIArray<int64_t> &report_col_ids);
   int get_column_checksum(ObIArray<int64_t> &report_col_checksums, ObIArray<int64_t> &report_col_ids);
-  int check_already_committed(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      bool &is_commited);
-  TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder),
-    K_(start_scn), K_(tablet_direct_load_mgr_handle), K_(row_scanned), K_(row_inserted));
+
+  TO_STRING_KV(K_(is_inited), K_(is_major_sstable_exist), K_(complement_data_ret), K_(concurrent_cnt),
+      K_(physical_row_count), K_(row_scanned), K_(row_inserted), K_(total_slice_cnt));
 public:
+  ObArenaAllocator allocator_;
   bool is_inited_;
   bool is_major_sstable_exist_;
   int complement_data_ret_;
   ObSpinLock lock_;
   int64_t concurrent_cnt_;
-  ObDDLRedoLogWriter data_sstable_redo_writer_;
-  blocksstable::ObSSTableIndexBuilder *index_builder_;
-  share::SCN start_scn_;
-  ObTabletDirectLoadMgrHandle tablet_direct_load_mgr_handle_;
+  int64_t physical_row_count_;
   int64_t row_scanned_;
   int64_t row_inserted_;
-  int64_t context_id_;
   ObArray<int64_t> report_col_checksums_;
   ObArray<int64_t> report_col_ids_;
-private:
-  common::ObArenaAllocator allocator_;
+  int64_t total_slice_cnt_;
+  ObDDLTabletContext *tablet_ctx_;
+
+  /* for compat, unused yet */
+  int64_t cg_row_inserted_;
 };
 
 class ObComplementPrepareTask;
@@ -167,12 +252,12 @@ public:
   ~ObComplementDataDag();
   int init(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
   int prepare_context();
-  int64_t hash() const;
+  virtual uint64_t hash() const override;
   bool operator ==(const share::ObIDag &other) const;
   bool is_inited() const { return is_inited_; }
+  void handle_init_failed_ret_code(int ret) { context_.complement_data_ret_ = ret; }
   ObComplementDataParam &get_param() { return param_; }
   ObComplementDataContext &get_context() { return context_; }
-  void handle_init_failed_ret_code(int ret) { context_.complement_data_ret_ = ret; }
   int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
 
   int fill_dag_key(char *buf, const int64_t buf_len) const override;
@@ -185,11 +270,13 @@ public:
   virtual bool is_ha_dag() const override { return false; }
   // report replica build status to RS.
   int report_replica_build_status();
-  int check_and_exit_on_demand();
+  int calc_total_row_count();
+  ObComplementFailCallback &get_fail_callback() { return fail_cb_; }
 private:
   bool is_inited_;
   ObComplementDataParam param_;
   ObComplementDataContext context_;
+  ObComplementFailCallback fail_cb_;
   DISALLOW_COPY_AND_ASSIGN(ObComplementDataDag);
 };
 
@@ -207,42 +294,71 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObComplementPrepareTask);
 };
 
-class ObComplementWriteTask final : public share::ObITask
+class ObComplementWriteMacroOperator : public ObWriteMacroBaseOperator
+{
+public:
+  explicit ObComplementWriteMacroOperator(ObPipeline *pipeline)
+    : ObWriteMacroBaseOperator(pipeline)
+  {}
+  virtual ~ObComplementWriteMacroOperator() = default;
+  virtual int execute(
+      const ObChunk &input_chunk,
+      ResultState &result_state,
+      ObChunk &output_chunk) override;
+  virtual int try_execute_finish(const ObChunk &input_chunk,
+                                 ResultState &result_state,
+                                 ObChunk &output_chunk);
+};
+
+class ObComplementRowIterator : public ObIStoreRowIterator
+{
+public:
+  ObComplementRowIterator()
+    : is_inited_(false), scan_(nullptr)
+  {}
+  virtual ~ObComplementRowIterator() = default;
+  int init(ObScan *scan);
+  virtual int get_next_row(const blocksstable::ObDatumRow *&row);
+private:
+  bool is_inited_;
+  ObScan *scan_;
+};
+
+class ObComplementWriteTask final : public ObWriteMacroPipeline
 {
 public:
   ObComplementWriteTask();
   ~ObComplementWriteTask();
   int init(const int64_t task_id, ObComplementDataParam &param, ObComplementDataContext &context);
-  int process() override;
+  virtual int preprocess() override;
+  virtual void postprocess(int &ret_code) override;
+protected:
+  virtual int get_next_chunk(ObChunk *&next_chunk) override;
+  virtual int fill_writer_param(ObWriteMacroParam &param);
 private:
-  int generate_next_task(share::ObITask *&next_task);
+  virtual int generate_next_task(share::ObITask *&next_task) override;
   int generate_col_param();
   int local_scan_by_range();
   int remote_scan();
   int do_local_scan();
   int do_remote_scan();
-  int append_row(ObScan *scan);
-  int append_lob(
-      const int64_t schema_rowkey_cnt,
-      const int64_t extra_rowkey_cnt,
-      ObDDLInsertRowIterator &iterator,
-      ObArenaAllocator &lob_allocator);
-  int add_extra_rowkey(const int64_t rowkey_cnt,
-                       const int64_t extra_rowkey_cnt,
-                       const blocksstable::ObDatumRow &row,
-                       const int64_t sql_no = 0);
 
 private:
   static const int64_t RETRY_INTERVAL = 100 * 1000; // 100ms
-  common::ObArenaAllocator allocator_;
   bool is_inited_;
   int64_t task_id_;
   ObComplementDataParam *param_;
   ObComplementDataContext *context_;
-  blocksstable::ObDatumRow write_row_;
   ObArray<ObColDesc> col_ids_;
   ObArray<ObColDesc> org_col_ids_;
   ObArray<int32_t> output_projector_;
+  ObComplementWriteMacroOperator write_op_;
+  ObScan *scan_;
+  common::ObArenaAllocator allocator_;
+  ObComplementRowIterator row_iter_;
+  ObTabletSliceRowIterator slice_row_iter_;
+  ObChunk chunk_;
+  blocksstable::ObDatumRange scan_range_;
   DISALLOW_COPY_AND_ASSIGN(ObComplementWriteTask);
 };
 
@@ -254,41 +370,57 @@ public:
   int init(ObComplementDataParam &param, ObComplementDataContext &context);
   int process() override;
 private:
-  int add_build_hidden_table_sstable();
-private:
   bool is_inited_;
   ObComplementDataParam *param_;
   ObComplementDataContext *context_;
   DISALLOW_COPY_AND_ASSIGN(ObComplementMergeTask);
 };
 
+class ObComplementReportReplicaTask final : public share::ObITask
+{
+public:
+  ObComplementReportReplicaTask();
+  ~ObComplementReportReplicaTask();
+  int process() override;
+private:
+};
+
 struct ObExtendedGCParam final
 {
 public:
   ObExtendedGCParam():
-    col_ids_(), org_col_ids_(), extended_col_ids_(), org_extended_col_ids_(), dependent_exprs_(), output_projector_()
+    col_ids_(), org_col_ids_(), extended_col_ids_(), org_extended_col_ids_(), output_projector_()
   {}
   ~ObExtendedGCParam() {}
   common::ObArray<share::schema::ObColDesc> col_ids_;
   common::ObArray<share::schema::ObColDesc> org_col_ids_;
   common::ObArray<share::schema::ObColDesc> extended_col_ids_;
   common::ObArray<share::schema::ObColDesc> org_extended_col_ids_;
-  ObArray<sql::ObTempExpr *> dependent_exprs_;
   common::ObArray<int32_t> output_projector_;
-  TO_STRING_KV(K_(col_ids), K_(org_col_ids), K_(extended_col_ids), K_(org_extended_col_ids),
-      K_(dependent_exprs), K_(output_projector));
+  TO_STRING_KV(K_(col_ids), K_(org_col_ids), K_(extended_col_ids), K_(org_extended_col_ids), K_(output_projector));
 };
 
-class ObScan
+class ObScan : public ObIStoreRowIterator
 {
 public:
-  ObScan() = default;
+  ObScan() :
+    schema_rowkey_cnt_(0),
+    snapshot_version_(0),
+    mult_version_cols_desc_(),
+    checksum_calculator_()
+  { }
   virtual ~ObScan() = default;
-  virtual int get_next_row(
-      const blocksstable::ObDatumRow *&tmp_row,
-      const blocksstable::ObDatumRow *&tmp_row_after_reshape) = 0;
-  virtual compaction::ObColumnChecksumCalculator *get_checksum_calculator() = 0;
   virtual int get_origin_table_checksum(ObArray<int64_t> &report_col_checksums, ObArray<int64_t> &report_col_ids) = 0;
+protected:
+  int64_t storaged_index_with_extra_rowkey(const int64_t i)
+  {
+    return i < schema_rowkey_cnt_ ? i : i + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  }
+protected:
+  int64_t schema_rowkey_cnt_;
+  int64_t snapshot_version_;
+  common::ObArray<share::schema::ObColDesc> mult_version_cols_desc_; // for checksum calculate, with extra rowkey.
+  compaction::ObColumnChecksumCalculator checksum_calculator_;
 };
 
 class ObLocalScan : public ObScan
@@ -301,24 +433,18 @@ public:
            const common::ObIArray<int32_t> &projector,
            const share::schema::ObTableSchema &data_table_schema,
            const int64_t snapshot_version,
-           transaction::ObTransService *txs,
            const share::schema::ObTableSchema &hidden_table_schema,
-           const bool output_org_cols_only);
+           const bool unique_index_checking);
   int table_scan(const share::schema::ObTableSchema &data_table_schema,
                  const share::ObLSID &ls_id,
                  const ObTabletID &tablet_id,
                  ObTabletTableIterator &table_iter,
                  common::ObQueryFlag &query_flag,
-                 blocksstable::ObDatumRange &range,
-                 transaction::ObTxDesc *tx_desc);
-  virtual int get_next_row(
-      const blocksstable::ObDatumRow *&tmp_row,
-      const blocksstable::ObDatumRow *&tmp_row_after_reshape) override;
+                 blocksstable::ObDatumRange &range);
+  virtual int get_next_row(const blocksstable::ObDatumRow *&tmp_row) override;
   int get_origin_table_checksum(
       ObArray<int64_t> &report_col_checksums,
       ObArray<int64_t> &report_col_ids) override;
-  compaction::ObColumnChecksumCalculator *get_checksum_calculator() override
-    {return &checksum_calculator_;}
 private:
   int get_output_columns(
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -334,7 +460,7 @@ private:
   int construct_access_param(
       const share::schema::ObTableSchema &data_table_schema,
       const ObTabletID &tablet_id);
-  int construct_range_ctx(common::ObQueryFlag &query_flag, const share::ObLSID &ls_id, transaction::ObTxDesc *tx_desc);
+  int construct_range_ctx(common::ObQueryFlag &query_flag, const share::ObLSID &ls_id);
   int construct_multiple_scan_merge(ObTablet &tablet, blocksstable::ObDatumRange &range);
   int construct_multiple_scan_merge(
       ObTabletTableIterator &table_iter,
@@ -346,10 +472,9 @@ private:
   uint64_t dest_table_id_;
   int64_t schema_version_;
   ObExtendedGCParam extended_gc_;
-  int64_t snapshot_version_;
   transaction::ObTransService *txs_;
   blocksstable::ObDatumRow default_row_;
-  blocksstable::ObDatumRow tmp_row_;
+  blocksstable::ObDatumRow write_row_; // with extra rowkey.
   ObIStoreRowIterator *row_iter_;
   ObMultipleScanMerge *scan_merge_;
   ObStoreCtx ctx_;
@@ -362,8 +487,7 @@ private:
   common::ObArray<share::schema::ObColumnParam *> col_params_;
   ObTableReadInfo read_info_;
   common::ObBitmap exist_column_mapping_;
-  compaction::ObColumnChecksumCalculator checksum_calculator_;
-  bool output_org_cols_only_;
+  bool unique_index_checking_;
 };
 
 class ObRemoteScan : public ObScan
@@ -377,18 +501,19 @@ public:
            const int64_t dest_table_id,
            const int64_t schema_version,
            const int64_t dest_schema_version,
-           const common::ObTabletID &src_tablet_id);
+           const int64_t snapshot_version,
+           const common::ObTabletID &src_tablet_id,
+           const ObDatumRange &datum_range);
   void reset();
-  virtual int get_next_row(
-      const blocksstable::ObDatumRow *&tmp_row,
-      const blocksstable::ObDatumRow *&tmp_row_after_reshape) override;
-  compaction::ObColumnChecksumCalculator *get_checksum_calculator() override
-    {return &checksum_calculator_;}
+  virtual int get_next_row(const blocksstable::ObDatumRow *&tmp_row) override;
   int get_origin_table_checksum(ObArray<int64_t> &report_col_checksums, ObArray<int64_t> &report_col_ids) override;
 private:
   int prepare_iter(const ObSqlString &sql_string, common::ObCommonSqlProxy *sql_proxy);
   int generate_build_select_sql(ObSqlString &sql_string);
-  // to fetch partition/subpartition name for select sql.
+  // to fetch partiton/subpartition name for select sql.
+  int generate_range_condition(const ObDatumRange &datum_range,
+                               bool is_oracle_mode,
+                               ObSqlString &sql);
   int fetch_source_part_info(
       const common::ObTabletID &src_tablet_id,
       const share::schema::ObTableSchema &src_table_schema,
@@ -399,9 +524,15 @@ private:
                                const bool with_comma,
                                const bool is_oracle_mode,
                                ObSqlString &sql_string);
+  int convert_rowkey_to_sql_literal(
+      const ObRowkey &rowkey,
+      bool is_oracle_mode,
+      char *buf,
+      int64_t &pos,
+      int64_t buf_len);
+
 private:
   bool is_inited_;
-  int64_t current_;
   uint64_t tenant_id_;
   int64_t table_id_;
   uint64_t dest_tenant_id_;
@@ -409,13 +540,16 @@ private:
   int64_t schema_version_;
   int64_t dest_schema_version_;
   common::ObTabletID src_tablet_id_;
-  blocksstable::ObDatumRow row_without_reshape_;
   blocksstable::ObDatumRow row_with_reshape_; // for checksum calculate only.
+  blocksstable::ObDatumRow write_row_; // with extra rowkey.
   ObMySQLProxy::MySQLResult res_;
   sqlclient::ObMySQLResult *result_;
+  const blocksstable::ObDatumRange *datum_range_;
   common::ObArenaAllocator allocator_;
   ObArray<ObColDesc> org_col_ids_;
-  common::ObArray<share::ObColumnNameInfo> column_names_;
+  common::ObArray<ObColumnNameInfo> column_names_;
+  common::ObArray<ObAccuracy> rowkey_col_accuracys_;
+  ObTimeZoneInfoWrap tz_info_wrap_; // for table recovery
   compaction::ObColumnChecksumCalculator checksum_calculator_;
 };
 

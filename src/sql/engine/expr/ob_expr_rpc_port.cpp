@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_rpc_port.h"
-#include "observer/ob_server_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

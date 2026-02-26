@@ -522,8 +522,6 @@ int ObStoragePerfRead::single_get_speed()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "should init first");
   } else {
-    //ObTenantStatEstGuard session_guard(1, 123*(thread_no_+1));
-    ObTenantStatEstGuard tenant_guard(1);
     ObRowGenerate row_generate;
     ObMemtableCtxFactory mem_ctx_fty;
     ObSchemaGetterGuard schema_guard;
@@ -687,8 +685,6 @@ int ObStoragePerfRead::multi_get_speed()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "should init first");
   } else {
-    //ObSessionStatEstGuard session_guard(1, 124 * (thread_no_ + 1));
-    ObTenantStatEstGuard tenant_guard(1);
     ObRowGenerate row_generate;
     ObArenaAllocator allocator(ObModIds::TEST);
     ObMemtableCtxFactory mem_ctx_fty;
@@ -888,7 +884,6 @@ int ObStoragePerfRead::scan_speed()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "should init first");
   } else {
-    ObSessionStatEstGuard session_guard(1, 125 * (thread_no_ + 1));
     ObRowGenerate row_generate;
     ObRowGenerate row_generate2;
     ObArenaAllocator allocator(ObModIds::TEST);

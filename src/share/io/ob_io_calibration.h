@@ -76,6 +76,7 @@ private:
   int find_item(const ObIOMode mode, const int64_t size, int64_t &item_idx) const;
 private:
   MeasureItemArray measure_items_[static_cast<int>(ObIOMode::MAX_MODE)];
+
 };
 
 class ObIOBenchRunner : public lib::TGRunnable
@@ -97,6 +98,7 @@ private:
   int64_t rt_us_;
   char *write_buf_;
   char *read_buf_;
+  int64_t block_count_;
 };
 
 class ObIOBenchController : public lib::TGRunnable
@@ -131,13 +133,13 @@ public:
   int update_io_ability(const ObIOAbility &io_ability);
   int reset_io_ability();
   int get_io_ability(ObIOAbility &io_ability);
-  int get_iops_scale(const ObIOMode mode, const int64_t size, double &iops_scale, bool &is_io_ability_valid);
+  void get_iops_scale(const ObIOMode mode, const int64_t size, double &iops_scale, bool &is_io_ability_valid);
   int read_from_table();
   int write_into_table(ObMySQLTransaction &trans, const ObAddr &addr, const ObIOAbility &io_ability);
   int refresh(const bool only_refresh, const ObIArray<ObIOBenchResult> &items);
   int execute_benchmark();
   int get_benchmark_status(int64_t &start_ts, int64_t &finish_ts, int &ret_code);
-  bool is_valid() { return io_ability_.is_valid(); }
+  bool is_valid() { DRWLock::RDLockGuard guard(lock_); return io_ability_.is_valid(); }
 private:
   ObIOCalibration();
   ~ObIOCalibration();

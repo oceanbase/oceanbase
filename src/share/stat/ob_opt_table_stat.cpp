@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "share/stat/ob_opt_table_stat.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/utility/ob_macro_utils.h"
 namespace oceanbase {
 namespace common {
 using namespace sql;
@@ -25,7 +23,8 @@ OB_DEF_SERIALIZE(ObOptTableStat) {
               partition_id_,
               object_type_,
               row_count_,
-              avg_row_size_
+              avg_row_size_,
+              sample_size_
               );
   return ret;
 }
@@ -37,7 +36,8 @@ OB_DEF_SERIALIZE_SIZE(ObOptTableStat) {
               partition_id_,
               object_type_,
               row_count_,
-              avg_row_size_
+              avg_row_size_,
+              sample_size_
               );
   return len;
 }
@@ -49,7 +49,8 @@ OB_DEF_DESERIALIZE(ObOptTableStat) {
               partition_id_,
               object_type_,
               row_count_,
-              avg_row_size_
+              avg_row_size_,
+              sample_size_
               );
   return ret;
 }
@@ -65,8 +66,12 @@ int ObOptTableStat::merge_table_stat(const ObOptTableStat &other)
     double avg_len = 0;
     other.get_avg_row_size(avg_len);
     add_avg_row_size(avg_len, other.get_row_count());
+    if (sample_size_ == 0) {
+      sample_size_ = row_count_;
+    }
     row_count_ += other.get_row_count();
     stattype_locked_ = other.get_stattype_locked();
+    sample_size_ += (other.sample_size_ == 0 ? other.get_row_count() : other.sample_size_);
   }
 
   return ret;

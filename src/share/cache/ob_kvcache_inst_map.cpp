@@ -10,7 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_kvcache_inst_map.h"
+#include "share/cache/ob_kvcache_inst_map.h"
+#include "lib/ob_errno.h"
+#include "lib/utility/ob_macro_utils.h"
+#include "share/cache/ob_kvcache_hazard_domain.h"
 
 
 namespace oceanbase
@@ -28,10 +31,10 @@ int ObTenantMBList::init(const uint64_t tenant_id)
       tenant_id, resource_mgr_))) {
     COMMON_LOG(WARN, "get_tenant_resource_mgr failed", K(ret), K(tenant_id));
   } else {
-    tenant_id_ = tenant_id;
     head_.reset();
     head_.prev_ = &head_;
     head_.next_ = &head_;
+    tenant_id_ = tenant_id;
     ref_cnt_ = 0;
     inited_ = true;
   }
@@ -111,11 +114,12 @@ bool ObKVCacheInst::can_destroy() const
 
 void ObKVCacheInst::try_mark_delete()
 {
+  ObKVMemBlockHandle* handle;
   if (!is_delete_) {
     is_delete_ = true;
     ATOMIC_DEC(&ref_cnt_);
-    for (int i = 0 ; i < MAX_POLICY ; ++i) {
-      if (nullptr != handles_[i]) {
+    for (int i = 0; i < MAX_POLICY; ++i) {
+      if (OB_NOT_NULL(handles_[i])) {
         handles_[i]->status_ = FULL;
         handles_[i] = nullptr;
       }
@@ -183,6 +187,8 @@ ObKVCacheInstMap::ObKVCacheInstMap()
     allocator_("TenantMBList"),
     inst_keys_(),
     mem_limit_getter_(NULL),
+    tenant_cache_info_buf_(nullptr),
+    cache_info_buf_lock_(),
     is_inited_(false)
 {
 }
@@ -241,6 +247,14 @@ int ObKVCacheInstMap::init(const int64_t max_entry_cnt, const ObKVCacheConfig *c
   }
 
   if (OB_SUCC(ret)) {
+    if (OB_ISNULL(tenant_cache_info_buf_ = reinterpret_cast<char *>(
+                      allocator_.alloc(TENANT_CACHE_INFO_BUF_LEN)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(WARN, "failed to allocate memory for tenant_cache_info_buf_");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     configs_ = configs;
     mem_limit_getter_ = &mem_limit_getter;
     is_inited_ = true;
@@ -258,6 +272,8 @@ void ObKVCacheInstMap::destroy()
   tenant_set_.destroy();
   list_map_.destroy();
   list_pool_.destroy();
+  allocator_.free(tenant_cache_info_buf_);
+  tenant_cache_info_buf_ = nullptr;
   allocator_.reset();
   configs_ = NULL;
   inst_keys_.destroy();
@@ -309,6 +325,11 @@ int ObKVCacheInstMap::get_cache_inst(
           inst->cache_id_ = inst_key.cache_id_;
           inst->tenant_id_ = inst_key.tenant_id_;
           inst->status_.config_ = &configs_[inst_key.cache_id_];
+          if (0 == STRNCMP(inst->status_.config_->cache_name_, "index_block_cache", MAX_CACHE_NAME_LENGTH)
+            || 0 == STRNCMP(inst->status_.config_->cache_name_, "user_block_cache", MAX_CACHE_NAME_LENGTH)) {
+            inst->is_block_cache_ = true;
+          }
+
           //the first ref is kept by inst_map_
           add_inst_ref(inst);
           //the second ref is return outside
@@ -461,19 +482,19 @@ int ObKVCacheInstMap::set_priority(const int64_t cache_id, const int64_t old_pri
   return ret;
 }
 
-int ObKVCacheInstMap::get_cache_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles)
+int ObKVCacheInstMap::get_cache_info(ObIArray<ObKVCacheInstHandle> &inst_handles, const uint64_t* tenant_id)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVCacheInstMap has not been inited, ", K(ret));
-  } else if (0 == tenant_id) {
+  } else if (OB_NOT_NULL(tenant_id) && OB_INVALID_TENANT_ID == *tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument, ", K(tenant_id), K(ret));
+    COMMON_LOG(WARN, "Invalid argument, ", K(*tenant_id), K(ret));
   } else {
     DRWLock::RDLockGuard rd_guard(lock_);
     for (KVCacheInstMap::iterator iter = inst_map_.begin(); OB_SUCC(ret) && iter != inst_map_.end(); ++iter) {
-      if (iter->first.tenant_id_ != tenant_id && OB_SYS_TENANT_ID != tenant_id) {
+      if (OB_NOT_NULL(tenant_id) && iter->first.tenant_id_ != *tenant_id) {
       } else if (OB_ISNULL(iter->second)) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "Unexpected null cache inst", K(ret));
@@ -490,36 +511,38 @@ void ObKVCacheInstMap::print_tenant_cache_info(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_LIKELY(is_inited_)) {
-    ContextParam param;
-    param.set_mem_attr(common::OB_SERVER_TENANT_ID, ObModIds::OB_TEMP_VARIABLES);
-    CREATE_WITH_TEMP_CONTEXT(param) {
-      static const int64_t BUFLEN = 1 << 17;
-      char *buf = (char *)ctxalp(BUFLEN);
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        COMMON_LOG(ERROR, "no memory", K(ret));
-      } else {
-        int64_t ctx_pos = 0;
-        {
-          DRWLock::RDLockGuard rd_guard(lock_);
-          for (KVCacheInstMap::iterator iter = inst_map_.begin(); iter != inst_map_.end(); ++iter) {
-            if (iter->second->tenant_id_ == tenant_id) {
-              ret = databuff_printf(buf, BUFLEN, ctx_pos,
-              "[CACHE] tenant_id=%8ld | cache_name=%30s | cache_size=%12ld | cache_store_size=%12ld | cache_map_size=%12ld | kv_cnt=%8ld | hold_size=%12ld\n",
-              iter->second->tenant_id_,
-              iter->second->status_.config_->cache_name_,
-              iter->second->status_.store_size_ + iter->second->node_allocator_.allocated(),
-              iter->second->status_.store_size_,
-              iter->second->node_allocator_.allocated(),
-              iter->second->status_.kv_cnt_,
-              iter->second->status_.hold_size_);
-            }
+  if (IS_NOT_INIT) {
+  } else if (OB_ISNULL(tenant_cache_info_buf_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(ERROR, "unexpected null tenant_cache_info_buf_", K(ret));
+  } else {
+    int64_t pos = 0;
+    {
+      // protect inst_map_ for read
+      DRWLock::RDLockGuard rd_guard(lock_);
+      if (OB_FAIL(rd_guard.get_ret())) {
+        COMMON_LOG(WARN, "Failed to lock", KR(ret));
+      } else if (cache_info_buf_lock_.try_lock()) {
+        // protect tenant_cache_info_buf_ for write
+        DEFER(cache_info_buf_lock_.unlock());
+        for (KVCacheInstMap::iterator iter = inst_map_.begin(); iter != inst_map_.end(); ++iter) {
+          if (iter->second->tenant_id_ == tenant_id) {
+            ret = databuff_printf(tenant_cache_info_buf_, TENANT_CACHE_INFO_BUF_LEN, pos,
+            "[CACHE] tenant_id=%8ld | cache_name=%30s | cache_size=%12ld | cache_store_size=%12ld | cache_retired_size=%12ld | cache_map_size=%12ld | kv_cnt=%8ld | hold_size=%12ld\n",
+            iter->second->tenant_id_,
+            iter->second->status_.config_->cache_name_,
+            iter->second->status_.store_size_ + iter->second->node_allocator_.allocated(),
+            iter->second->status_.store_size_,
+            iter->second->status_.retired_size_,
+            iter->second->node_allocator_.allocated(),
+            iter->second->status_.kv_cnt_,
+            iter->second->status_.hold_size_);
           }
         }
-        _OB_LOG(INFO, "[CACHE] tenant_id=%8ld cache memory info: \n%s", tenant_id, buf);
+        cache_info_buf_lock_.unlock();
       }
     }
+    _OB_LOG(INFO, "[CACHE] tenant_id=%8ld cache memory info: \n%s", tenant_id, tenant_cache_info_buf_);
   }
 }
 

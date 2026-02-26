@@ -28,6 +28,7 @@ class ObSequence
 public:
   static int64_t get_max_seq_no();
   static int64_t inc_and_get_max_seq_no();
+  static int inc_and_get_max_seq_no(const int64_t n, int64_t &seq);
   static int64_t get_and_inc_max_seq_no();
   static int get_and_inc_max_seq_no(const int64_t n, int64_t &seq);
   static void inc();
@@ -46,6 +47,20 @@ inline int64_t ObSequence::get_max_seq_no()
 inline int64_t ObSequence::inc_and_get_max_seq_no()
 {
   return ATOMIC_AAF(&max_seq_no_, 1);
+}
+
+inline int ObSequence::inc_and_get_max_seq_no(const int64_t n, int64_t &seq)
+{
+  int ret = OB_SUCCESS;
+  if (n > MAX_STEP_US || n < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    if (REACH_TIME_INTERVAL(10_s)) {
+      COMMON_LOG(ERROR, "seq no update encounter fatal error.", K(ret), K(n));
+    }
+  } else {
+    seq = ATOMIC_AAF(&max_seq_no_, n);
+  }
+  return ret;
 }
 
 inline int64_t ObSequence::get_and_inc_max_seq_no()

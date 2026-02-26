@@ -55,6 +55,14 @@ public:
   // __all_backup_skipped_tablet
   static int report_tablet_skipped(
       const uint64_t tenant_id, const ObBackupSkippedTablet &skipped_tablet, common::ObISQLClient &sql_client);
+  static int check_tablet_skipped_by_reorganize(common::ObISQLClient &sql_client,
+      const uint64_t tenant_id, const common::ObTabletID &tablet_id, bool &has_skipped);
+
+  static int get_tablet_to_ls_info(common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id, const common::ObTabletID &tablet_id, int64_t &tablet_count, int64_t &ls_id);
+
+  static int check_ls_has_sys_data(common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id, const int64_t task_id, const share::ObLSID &ls_id, bool &has_sys_data);
 
 private:
   static int fill_ls_task_info_(const ObBackupLSTaskInfo &task_info, share::ObDMLSqlSplicer &splicer);

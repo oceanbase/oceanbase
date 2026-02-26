@@ -12,13 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_ddl_executor_util.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/worker.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_srv_rpc_proxy.h"      //ObSrvRpcProxy
-#include "share/ob_ddl_error_message_table_operator.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
@@ -32,15 +25,19 @@ namespace sql
 int ObDDLExecutorUtil::handle_session_exception(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = session.get_effective_tenant_id();
+  bool is_standby = false;
   if (OB_UNLIKELY(session.is_query_killed())) {
     ret = OB_ERR_QUERY_INTERRUPTED;
     LOG_WARN("query is killed", K(ret));
   } else if (OB_UNLIKELY(session.is_zombie())) {
     ret = OB_SESSION_KILLED;
     LOG_WARN("session is killed", K(ret));
-  } else if (GCTX.is_standby_cluster()) {
+  } else if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+    LOG_WARN("fail to execute mtl_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+  } else if (is_standby) {
     ret = OB_SESSION_KILLED;
-    LOG_INFO("cluster switchoverd, kill session", KR(ret));
+    LOG_WARN("session is killed", KR(ret));
   }
   return ret;
 }
@@ -85,6 +82,27 @@ int ObDDLExecutorUtil::wait_ddl_finish(
             LOG_WARN("is ddl need retry at user", K(ret));
           } else {
             FORWARD_USER_ERROR(ret, error_message.user_message_);
+          }
+        } else if (error_message.consensus_schema_version_ != OB_INVALID_VERSION) {
+          ObTimeoutCtx ctx;
+          int64_t consensus_timeout =  30 * 1000 * 1000L; // 30s;
+          omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+          if (tenant_config.is_valid()) {
+            consensus_timeout = tenant_config->_wait_interval_after_parallel_ddl;
+          }
+          if (THIS_WORKER.is_timeout_ts_valid()) {
+            consensus_timeout = min(consensus_timeout, THIS_WORKER.get_timeout_remain());
+          }
+          int64_t start_time = ObTimeUtility::current_time();
+          if (OB_FAIL(ctx.set_timeout(consensus_timeout))) {
+            LOG_WARN("fail to set timeout ctx", KR(ret));
+          } else if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
+                      ctx, session, tenant_id, error_message.consensus_schema_version_, false /*skip_consensus*/))) {
+            LOG_WARN("fail to check parallel ddl schema in sync", KR(ret), K_(error_message.consensus_schema_version));
+          } else {
+            int64_t refresh_time = ObTimeUtility::current_time() - start_time;
+            LOG_INFO("parallel ddl wait schema", KR(ret), K(tenant_id), K(refresh_time),
+                                                 K_(error_message.consensus_schema_version));
           }
         }
         break;

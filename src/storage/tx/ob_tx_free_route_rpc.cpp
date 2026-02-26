@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_trans_rpc.h"
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "ob_trans_service.h"
-#include "share/rc/ob_tenant_base.h"
 #include "sql/ob_sql_trans_control.h"
-#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase {
 namespace obrpc {

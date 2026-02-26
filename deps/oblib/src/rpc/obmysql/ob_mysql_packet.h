@@ -23,6 +23,11 @@ namespace obmysql
 #define OBPROXY_MYSQL_CMD_START 64
 #define PREXECUTE_CMD 161
 
+// caching_sha2_password protocol constants
+#define REQUEST_PUBLIC_KEY 0x02           // Request public key
+#define FAST_AUTH_SUCCESS 0x03            // Fast authentication success
+#define PERFORM_FULL_AUTHENTICATION 0x04  // Server requests full authentication
+
 static const int64_t OB_MYSQL_MAX_PACKET_LENGTH = (1L << 24); //3bytes , 16M
 static const int64_t OB_MYSQL_MAX_PAYLOAD_LENGTH = (OB_MYSQL_MAX_PACKET_LENGTH - 1);
 // EASY_IO_BUFFER_SIZE is 16k, reserve 3k for libeasy header and request
@@ -171,6 +176,8 @@ union ObProxyCapabilityFlags
   bool is_feedback_proxy_info_support() const { return 1 == cap_flags_.OB_CAP_FEEDBACK_PROXY_SHIFT
                                                         && is_ob_protocol_v2_support(); }
 
+  bool is_ob_protocol_v2_compress() const { return 1 == cap_flags_.OB_CAP_OB_PROTOCOL_V2_COMPRESS
+                                                        && is_ob_protocol_v2_support(); }
   uint64_t capability_;
   struct CapabilityFlags
   {
@@ -208,7 +215,8 @@ union ObProxyCapabilityFlags
     uint64_t OB_CAP_PROXY_CLIENT_SESSION_ID:           1;
     uint64_t OB_CAP_OB_PROTOCOL_V2_COMPRESS:           1;
     uint64_t OB_CAP_FEEDBACK_PROXY_SHIFT:              1;
-    uint64_t OB_CAP_RESERVED_NOT_USE:                 41;
+    uint64_t OB_CAP_CHANGE_USER_CONN_ATTRS:            1;
+    uint64_t OB_CAP_RESERVED_NOT_USE:                 40;
   } cap_flags_;
 };
 
@@ -459,6 +467,7 @@ public:
 
   static int store_string_kv(char *buf, int64_t len, const ObStringKV &str, int64_t &pos);
   static uint64_t get_kv_encode_len(const ObStringKV &string_kv);
+  static const char *get_mysql_cmd_name(const ObMySQLCmd &cmd);
   inline static ObStringKV get_separator_kv(); // separator for system variables and user variables
 
   inline void set_seq(uint8_t seq);
@@ -699,12 +708,16 @@ union ObClientAttributeCapabilityFlags
   ObClientAttributeCapabilityFlags() : capability_(0) {}
   explicit ObClientAttributeCapabilityFlags(uint64_t cap) : capability_(cap) {}
   bool is_support_lob_locatorv2() const { return 1 == cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2; }
+  bool is_support_new_result_meta_data() const { return 1 == cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA; }
+  bool is_support_jdbc_binary_double() const { return  1 == cap_flags_.OB_CLIENT_SUPPORT_JDBC_BINARY_DOUBLE; }
 
   uint64_t capability_;
   struct CapabilityFlags
   {
     uint64_t OB_CLIENT_CAP_OB_LOB_LOCATOR_V2:       1;
-    uint64_t OB_CLIENT_CAP_RESERVED_NOT_USE:       63;
+    uint64_t OB_CLIENT_CAP_NEW_RESULT_META_DATA:       1;
+    uint64_t OB_CLIENT_SUPPORT_JDBC_BINARY_DOUBLE:     1;
+    uint64_t OB_CLIENT_CAP_RESERVED_NOT_USE:       61;
   } cap_flags_;
 };
 

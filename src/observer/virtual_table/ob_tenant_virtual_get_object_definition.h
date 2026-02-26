@@ -37,8 +37,8 @@ class ObGetObjectDefinition : public common::ObVirtualTableScannerIterator
   enum GetDDLObjectType
   {
     T_GET_DDL_TABLE,            // table, view, index
-    T_GET_DDL_PROCEDURE,        // procedure, function
-    T_GET_DDL_PACKAGE,          // package, package spec, package body
+    T_GET_DDL_PROCEDURE,        // procedure
+    T_GET_DDL_PACKAGE,          // package
     T_GET_DDL_CONSTRAINT,       // check/pk constraint
     T_GET_DDL_REF_CONSTRAINT,   // foreign key constraint
     T_GET_DDL_TABLESPACE,       // table space
@@ -50,6 +50,9 @@ class ObGetObjectDefinition : public common::ObVirtualTableScannerIterator
     T_GET_DDL_TYPE_SPEC,        // user defined type spec
     T_GET_DDL_TYPE_BODY,        // user defined type body
     T_GET_DDL_ROLE,
+    T_GET_DDL_PACKAGE_SPEC,     // package spec
+    T_GET_DDL_PACKAGE_BODY,     // package body
+    T_GET_DDL_FUNCTION,         // function
     T_GET_DDL_MAX
   };
   static const char *ObjectTypeName[T_GET_DDL_MAX];
@@ -81,7 +84,8 @@ private:
                     ObString &transform);
 
   int get_table_definition(ObString &ddl_str, const uint64_t table_id);
-  int get_procedure_definition(ObString &ddl_str, const uint64_t table_id);
+  int get_routine_definition(ObString &ddl_str, const ObString &routine_name,
+                             const ObString &db_name, GetDDLObjectType object_type);
   int get_constraint_definition(ObString &ddl_str, const ObString &constraint_name,
                                 const ObString &db_name,
                                 GetDDLObjectType object_type);
@@ -109,6 +113,11 @@ private:
                                 GetDDLObjectType object_type);
   int get_database_id(uint64_t tenant_id, const ObString db_name,
                       uint64_t &database_id);
+  int get_package_definition(ObString &ddl_str,
+                                const ObString &package_name,
+                                const ObString &db_name,
+                                share::schema::ObPackageType package_type,
+                                GetDDLObjectType object_type);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGetObjectDefinition);
 };

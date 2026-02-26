@@ -11,14 +11,7 @@
  */
 
 #include "mds_node.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_print_utils.h"
-#include "mds_table_base.h"
 #include "mds_ctx.h"
-#include "storage/multi_data_source/runtime_utility/mds_lock.h"
 
 namespace oceanbase
 {
@@ -84,6 +77,13 @@ void MdsNodeStatus::advance(TwoPhaseCommitState new_stat)// ATOMIC
   } while (!ATOMIC_BCAS(&union_.value_, old_node_status.union_.value_, new_node_status.union_.value_));
 }
 
+WriterType MdsNodeStatus::get_writer_type() const
+{
+  MdsNodeStatus node_status;
+  node_status.union_.value_ = ATOMIC_LOAD(&union_.value_);
+  return (WriterType)node_status.union_.field_.writer_type_;
+}
+
 TwoPhaseCommitState MdsNodeStatus::get_state() const// ATOMIC
 {
   MdsNodeStatus node_status;
@@ -99,17 +99,18 @@ int64_t MdsNodeStatus::to_string(char *buf, const int64_t buf_len) const// ATOMI
   databuff_printf(buf, buf_len, pos, "%s|", obj_to_string(node_status.union_.field_.node_type_));
   databuff_printf(buf, buf_len, pos, "%s|", obj_to_string(node_status.union_.field_.writer_type_));
   databuff_printf(buf, buf_len, pos, "%s|", obj_to_string(node_status.union_.field_.state_));
-  databuff_printf(buf, buf_len, pos, "%s", to_cstring(node_status.union_.field_.is_dumped_));
+  databuff_printf(buf, buf_len, pos, true == node_status.union_.field_.is_dumped_);
   return pos;
 }
 
 MdsNode::MdsNode(MdsNodeType node_type,
                  WriterType writer_type,
-                 const int64_t writer_id) :
+                 const int64_t writer_id,
+                 const transaction::ObTxSEQ seq_no) :
 ListNode<MdsNode>(),
 status_(node_type, writer_type),
 writer_id_(writer_id),
-seq_no_(0),
+seq_no_(seq_no),
 redo_scn_(share::SCN::max_scn()),
 end_scn_(share::SCN::max_scn()),
 trans_version_(share::SCN::max_scn()),

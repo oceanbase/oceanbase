@@ -12,15 +12,12 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tx_storage/ob_tenant_freezer_rpc.h"
 
+#include "ob_tenant_freezer_rpc.h"
 #include "observer/ob_server.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tx_storage/ob_tenant_freezer_common.h"
-#include "storage/multi_data_source/mds_table_mgr.h"
 
 namespace oceanbase
 {
@@ -155,6 +152,7 @@ int ObTenantFreezerP::do_major_freeze_()
 
       ObMajorFreezeParam param;
       param.transport_ = GCTX.net_frame_->get_req_transport();
+      param.freeze_reason_ = rootserver::MF_MAJOR_COMPACT_TRIGGER;
       if (OB_FAIL(param.add_freeze_info(tenant_id))) {
         LOG_WARN("push back failed", KR(ret), K(tenant_id));
       } else {

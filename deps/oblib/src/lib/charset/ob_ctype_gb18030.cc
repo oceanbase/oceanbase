@@ -10,11 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/charset/ob_mysql_global.h"
-#include "lib/charset/ob_ctype.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/charset/ob_gb18030_2022_tab.h"
-#include "lib/charset/ob_cypte_gb18030_tab.h"
+#include "lib/charset/ob_ctype_gb18030_tab.h"
 #define is_mb_1(c) ((unsigned char)(c) <= 0x7F)
 #define is_mb_odd(c) (0x81 <= (unsigned char)(c) && (unsigned char)(c) <= 0xFE)
 #define is_mb_even_2(c)                          \
@@ -927,7 +925,7 @@ static void ob_hash_sort_gb18030(const ObCharsetInfo *cs, const unsigned char *s
   *n2 = tmp2;
 }
 
-static ObCollationHandler ob_collation_ci_handler =
+static ObCollationHandler ob_collation_gb18030_ci_handler =
 {
   NULL,
   NULL,
@@ -962,6 +960,7 @@ static ObCollationHandler ob_collation_cs_handler =
 };
 
 static ObCharsetHandler ob_charset_gb18030_handler = {
+    NULL,
     ob_ismbchar_gb18030,
     ob_mbcharlen_gb18030,
     ob_numchars_mb,
@@ -988,7 +987,9 @@ static ObCharsetHandler ob_charset_gb18030_handler = {
     ob_strntod_8bit,
     // my_strtoll10_8bit,
     ob_strntoull10rnd_8bit,
-    ob_scan_8bit};
+    ob_scan_8bit,
+    skip_trailing_space
+};
 
 ObCharsetInfo ob_charset_gb18030_chinese_ci = {
     oceanbase::common::CS_TYPE_GB18030_CHINESE_CI,
@@ -1005,8 +1006,8 @@ ObCharsetInfo ob_charset_gb18030_chinese_ci = {
     to_upper_gb18030,                                /* UPPER         */
     sort_order_gb18030_ci,                              /* sort          */
     NULL,                                            /* uca           */
-    // NULL,                                            /* tab_to_uni    */
-    // NULL,                                            /* tab_from_uni  */
+    NULL,                                            /* tab_to_uni    */
+    NULL,                                            /* tab_from_uni  */
     &ob_caseinfo_gb18030,                            /* caseinfo      */
     NULL,                                            /* state_map     */
     NULL,                                            /* ident_map     */
@@ -1023,7 +1024,7 @@ ObCharsetInfo ob_charset_gb18030_chinese_ci = {
     1, /* levels_for_compare */
     1,
     &ob_charset_gb18030_handler,
-    &ob_collation_ci_handler,
+    &ob_collation_gb18030_ci_handler,
     PAD_SPACE};
 
 ObCharsetInfo ob_charset_gb18030_chinese_cs = {
@@ -1041,8 +1042,8 @@ ObCharsetInfo ob_charset_gb18030_chinese_cs = {
     to_upper_gb18030,                                /* UPPER         */
     sort_order_gb18030,                              /* sort          */
     NULL,                                            /* uca           */
-    // NULL,                                            /* tab_to_uni    */
-    // NULL,                                            /* tab_from_uni  */
+    NULL,                                            /* tab_to_uni    */
+    NULL,                                            /* tab_from_uni  */
     &ob_caseinfo_gb18030,                            /* caseinfo      */
     NULL,                                            /* state_map     */
     NULL,                                            /* ident_map     */
@@ -1077,8 +1078,8 @@ ObCharsetInfo ob_charset_gb18030_bin = {
     to_upper_gb18030,
     NULL,
     NULL,
-
-
+    NULL,
+    NULL,
     &ob_caseinfo_gb18030,
     NULL,
     NULL,
@@ -1098,12 +1099,6 @@ ObCharsetInfo ob_charset_gb18030_bin = {
     &ob_collation_mb_bin_handler,
     PAD_SPACE};
 
-
-// These four arrays will be init in ObCharset::init_charset()
-uint16 tab_gb18030_2022_2_uni[sizeof(tab_gb18030_2_uni)/sizeof(uint16)];
-uint16 tab_gb18030_2022_4_uni[sizeof(tab_gb18030_4_uni)/sizeof(uint16) + GB_2022_CNT_PART_1 + GB_2022_CNT_PART_2];
-uint16 tab_uni_gb18030_2022_p1[sizeof(tab_uni_gb18030_p1)/sizeof(uint16) + GB_2022_CNT_PART_1];
-uint16 tab_uni_gb18030_2022_p2[sizeof(tab_uni_gb18030_p2)/sizeof(uint16)];
 
 static uint gb18030_2_idx(const uchar *s)
 {
@@ -1599,6 +1594,7 @@ static ObCollationHandler ob_collation_2022_stroke_cs_handler =
 
 static ObCharsetHandler ob_charset_gb18030_2022_handler =
 {
+  NULL,
   ob_ismbchar_gb18030,
   ob_mbcharlen_gb18030,
   ob_numchars_mb,
@@ -1618,7 +1614,8 @@ static ObCharsetHandler ob_charset_gb18030_2022_handler =
   ob_strntoull_8bit,
   ob_strntod_8bit,
   ob_strntoull10rnd_8bit,
-  ob_scan_8bit
+  ob_scan_8bit,
+  skip_trailing_space
 };
 
 ObCharsetInfo ob_charset_gb18030_2022_bin =
@@ -1637,6 +1634,8 @@ ObCharsetInfo ob_charset_gb18030_2022_bin =
   to_upper_gb18030,               /* UPPER         */
   NULL,                           /* sort order    */
   NULL,                           /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,           /* caseinfo      */
   NULL,                           /* state_map     */
   NULL,                           /* ident_map     */
@@ -1673,6 +1672,8 @@ ObCharsetInfo ob_charset_gb18030_2022_pinyin_ci =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030_ci,                           /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */
@@ -1709,6 +1710,8 @@ ObCharsetInfo ob_charset_gb18030_2022_pinyin_cs =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030,                              /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */
@@ -1745,6 +1748,8 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_ci =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030_ci,                           /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */
@@ -1781,6 +1786,8 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_cs =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030,                              /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */
@@ -1817,6 +1824,8 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_ci =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030_ci,                           /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */
@@ -1853,6 +1862,8 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_cs =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030,                              /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */

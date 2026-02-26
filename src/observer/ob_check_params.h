@@ -30,7 +30,6 @@ public:
   static int check_all_params(bool strict_check);
 
 private:
-  static int read_one_int(const char *file_name, int64_t &value);
   static int read_one_line(const char* file_path, char* buffer, size_t buffer_size);
   static bool is_path_valid(const char *file_name);
   static int check_vm_max_map_count(bool strict_check);         // 1

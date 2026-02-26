@@ -12,12 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "sql/ob_sql_define.h"
 #include "sql/executor/ob_job_parser.h"
-#include "sql/engine/px/exchange/ob_px_transmit_op.h"
+#include "src/sql/engine/px/exchange/ob_transmit_op.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/profile/ob_perf_event.h"
-#include "lib/json/ob_json_print_utils.h"
 using namespace oceanbase::common;
 namespace oceanbase
 {

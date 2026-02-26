@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "share/ob_errno.h"                       // for KR(ret)
 #include "share/ob_arbitration_service_status.h"  // for ObArbitrationServiceStatus
 #include "lib/utility/ob_print_utils.h"           // for J_OBJ_START
 

@@ -52,7 +52,6 @@ public:
   int64_t param_idx_;
   ObSqlArrayObj *gr_param_; //group rescan param
 };
-
 typedef common::ObArrayWrap<GroupRescanParam> GroupParamArray;
 class ObDASCtx
 {
@@ -76,6 +75,9 @@ public:
       skip_scan_group_id_(-1),
       group_rescan_cnt_(-1),
       same_tablet_addr_(),
+      use_gts_opt_(false),
+      parent_table_set_(allocator),
+      real_das_dop_(0),
       flags_(0)
   {
     is_fk_cascading_ = 0;
@@ -104,7 +106,8 @@ public:
   ObDASTableLoc *get_external_table_loc_by_id(uint64_t table_loc_id, uint64_t ref_table_id);
   DASTableLocList &get_table_loc_list() { return table_locs_; }
   const DASTableLocList &get_table_loc_list() const { return table_locs_; }
-  DASDelCtxList& get_das_del_ctx_list() {return  del_ctx_list_;}
+  DASDelCtxList& get_das_del_ctx_list() { return del_ctx_list_; }
+  DASTableIdList& get_parent_table_set() { return parent_table_set_; }
   DASTableLocList &get_external_table_loc_list() { return external_table_locs_; }
   int extended_tablet_loc(ObDASTableLoc &table_loc,
                           const common::ObTabletID &tablet_id,
@@ -126,7 +129,7 @@ public:
                             const DASTableIDArrayWrap *related_table_ids = nullptr);
   int get_all_lsid(share::ObLSArray &ls_ids);
   int64_t get_related_tablet_cnt() const;
-  void set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { snapshot_ = snapshot; }
+  int set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { return snapshot_.assign(snapshot); }
   transaction::ObTxReadSnapshot &get_snapshot() { return snapshot_; }
   transaction::ObTxSEQ get_savepoint() const { return savepoint_; }
   void set_savepoint(const transaction::ObTxSEQ savepoint) { savepoint_ = savepoint; }
@@ -160,13 +163,18 @@ public:
 
   int find_group_param_by_param_idx(int64_t param_idx,
                                     bool &exist, uint64_t &array_idx);
+  int64_t get_real_das_dop() { return real_das_dop_; }
+  void set_real_das_dop(int64_t v) { real_das_dop_ = v; }
+  void set_use_gts_opt(bool v) { use_gts_opt_ = v; }
+  bool get_use_gts_opt() { return use_gts_opt_; }
 
   TO_STRING_KV(K_(table_locs),
                K_(external_table_locs),
                K_(is_fk_cascading),
                K_(snapshot),
                K_(savepoint),
-               K_(write_branch_id));
+               K_(write_branch_id),
+               K_(real_das_dop));
 private:
   int check_same_server(const ObDASTabletLoc *tablet_loc);
 private:
@@ -194,6 +202,9 @@ private:
   int64_t skip_scan_group_id_; //only allowed to be modified by GroupParamBackupGuard
   int64_t group_rescan_cnt_; //only allowed to be modified by GroupParamBackupGuard
   ObAddr same_tablet_addr_;
+  bool use_gts_opt_; // without get gts
+  DASTableIdList parent_table_set_; // The list of parent table, for inner sql.
+  int64_t real_das_dop_;
 public:
   union {
     uint64_t flags_;
@@ -203,7 +214,8 @@ public:
       uint64_t same_server_                     : 1; //if partitions hit the same server, could be local or remote
       uint64_t iter_uncommitted_row_            : 1; //iter uncommitted row in fk_checker
       uint64_t in_das_group_scan_               : 1; //the current execution in das group scan
-      uint64_t reserved_                        : 59;
+      uint64_t in_ignore_cascading_             : 1; //is an ignore stmt when cascading
+      uint64_t reserved_                        : 58;
     };
   };
 };

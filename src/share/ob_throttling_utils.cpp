@@ -13,8 +13,6 @@
 
 #include "ob_throttling_utils.h"
 #include "math.h"
-#include "lib/ob_define.h"
-#include "lib/utility/ob_utility.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

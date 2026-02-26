@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
-#include "storage/ob_super_block_struct.h"
 
 namespace oceanbase
 {
@@ -172,7 +171,7 @@ int ObMacroInfoIterator::get_next(ObTabletBlockInfo &block_info)
 int ObMacroInfoIterator::read_from_memory()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DiskMacroIter"));
   if (OB_ISNULL(macro_info_) || OB_UNLIKELY(ObTabletMacroType::INVALID_TYPE == target_type_
       || ObTabletMacroType::INVALID_TYPE == cur_type_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -252,7 +251,7 @@ int ObMacroInfoIterator::read_from_memory()
 int ObMacroInfoIterator::read_from_disk()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DiskMacroIter"));
   char *buf = nullptr;
   int64_t buf_len = 0;
   ObMetaDiskAddr addr;

@@ -52,7 +52,6 @@ public:
   static int fgetpos(const int64_t &fd, int64_t &pos);
   static int frename(const char *src_dir, const char *src_filename,
                      const char *dst_dir, const char *dst_filename, bool overwrite);
-  static int fis_open(const int64_t &fd, bool &b_open);
 public:
   static bool is_valid_max_line_size(const int size);
 private:

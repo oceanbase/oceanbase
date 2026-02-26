@@ -29,15 +29,19 @@ class ObDirectLoadMultipleHeapTableMap
   typedef common::ObArray<const RowType *> BagType;
   typedef common::hash::ObHashMap<const KeyType, BagType *, common::hash::NoPthreadDefendMode> MapType;
 public:
-  ObDirectLoadMultipleHeapTableMap(int64_t mem_limit);
+  ObDirectLoadMultipleHeapTableMap(int64_t mem_limit = (8LL << 20));
   virtual ~ObDirectLoadMultipleHeapTableMap() {}
 
+  void reuse();
   int init();
   int add_row(const KeyType &key, const RowType &row);
   int get_all_key_sorted(common::ObArray<KeyType> &key_array);
   int get(const KeyType &key, BagType &out_bag) {
     return tablet_map_.get(key, out_bag);
   }
+
+  void set_mem_limit(const int64_t mem_limit) { mem_limit_ = mem_limit; }
+  bool empty() const { return tablet_map_.empty(); }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDirectLoadMultipleHeapTableMap);

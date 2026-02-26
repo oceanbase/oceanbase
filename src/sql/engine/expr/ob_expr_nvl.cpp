@@ -12,13 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_nvl.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_is.h"
-#include <math.h>
 
 namespace oceanbase
 {
@@ -27,7 +23,6 @@ namespace sql
 {
 
 int ObExprNvlUtil::calc_result_type(ObExprResType &type,
-
                                      ObExprResType &type1,
                                      ObExprResType &type2,
                                      ObExprTypeCtx &type_ctx)
@@ -49,10 +44,16 @@ int ObExprNvlUtil::calc_result_type(ObExprResType &type,
         res_cs_type = type_ctx.get_session()->get_dtc_params().nls_collation_;
       }
     } else {
-      if (OB_FAIL(ObCharset::aggregate_collation(type1.get_collation_level(), type1.get_collation_type(),
-                                            type2.get_collation_level(), type2.get_collation_type(),
-                                            res_cs_level, res_cs_type))) {
-        LOG_WARN("aggregate collation failed", K(ret), K(type1), K(type2));
+      ObExprResTypes res_types;
+      if (OB_FAIL(res_types.push_back(type1))) {
+        LOG_WARN("fail to push back res type", K(ret));
+      } else if (OB_FAIL(res_types.push_back(type2))) {
+        LOG_WARN("fail to push back res type", K(ret));
+      } else if (OB_FAIL(ObExprOperator::aggregate_charsets_for_comparison(type, &res_types.at(0), 2, type_ctx))) {
+        LOG_WARN("failed to aggregate_charsets_for_comparison", K(ret));
+      } else {
+        res_cs_type = type.get_calc_collation_type();
+        res_cs_level = type.get_calc_collation_level();
       }
     }
     if (OB_SUCC(ret)) {
@@ -174,19 +175,20 @@ int ObExprNvl::calc_result_type2(ObExprResType &type,
       const bool type1_is_enumset = ob_is_enumset_tc(type1.get_type());
       const bool type2_is_enumset = ob_is_enumset_tc(type2.get_type());
       if (type1_is_enumset || type2_is_enumset) {
-        ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_type()]];
+        ObObjType calc_type = get_enumset_calc_type(type.get_type(), OB_INVALID_INDEX);
         if (OB_UNLIKELY(ObMaxType == calc_type)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_ENG_LOG(WARN, "invalid type of parameter ", K(type1), K(type2), K(ret));
         } else if (ObVarcharType == calc_type) {
           if (type1_is_enumset) {
-            type1.set_calc_type(calc_type);
-            type1.set_calc_collation_type(ObCharset::get_system_collation());
+            type1.set_calc_type(get_enumset_calc_type(type.get_type(), 0));
+            type1.set_calc_collation_type(type.get_collation_type());
           } else {
             set_calc_type(type, type1);
           }
           if (type2_is_enumset) {
-            type2.set_calc_type(calc_type);
+            type2.set_calc_type(get_enumset_calc_type(type.get_type(), 1));
+            type2.set_calc_collation_type(type.get_collation_type());
           } else {
             set_calc_type(type, type2);
           }
@@ -298,8 +300,14 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
       OZ (deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, params));
       OX (type.set_length(MAX(type1.get_calc_length(), type2.get_calc_length())));
     } else if (lib::is_oracle_mode() && type.is_ext()) {
-      CK (type1.get_udt_id() == type2.get_udt_id());
-      OX (type.set_udt_id(type1.get_udt_id()));
+      ObExprResType &null_type = type1.is_null() ? type1 : type2;
+      ObExprResType &res_type = !type1.is_null() ? type1 : type2;
+      CK ((type1.get_udt_id() == type2.get_udt_id()) || type1.is_null() || type2.is_null());
+      OX (type.set_udt_id(res_type.get_udt_id()));
+      OX (type.set_extend_type(res_type.get_extend_type()));
+      if (null_type.is_null()) {
+        OX (null_type.set_calc_accuracy(res_type.get_accuracy()));
+      }
     } else if (type.is_temporal_type()) {
       type.set_scale(0);
     } else if (type.is_user_defined_sql_type()) {
@@ -378,10 +386,14 @@ int ObExprNvlUtil::calc_nvl_expr(const ObExpr &expr, ObEvalCtx &ctx,
   // nvl(arg0, arg1)
   ObDatum *arg0 = NULL;
   ObDatum *arg1 = NULL;
+  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
+  bool v = false;
 
   if (OB_FAIL(expr.eval_param_value(ctx, arg0, arg1))) {
     LOG_WARN("eval args failed", K(ret));
-  } else if (!(arg0->is_null())) {
+  } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+    LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
+  } else if (!v) {
     res_datum.set_datum(*arg0);
   } else {
     res_datum.set_datum(*arg1);
@@ -399,6 +411,8 @@ int ObExprNvlUtil::calc_nvl_expr_batch(const ObExpr &expr,
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ObDatumVector args0;
   ObDatumVector args1;
+  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
+  bool v = false;
   if (OB_FAIL(expr.eval_batch_param_value(ctx, skip, batch_size, args0,
                                           args1))) {
     LOG_WARN("eval batch args failed", K(ret));
@@ -410,7 +424,9 @@ int ObExprNvlUtil::calc_nvl_expr_batch(const ObExpr &expr,
       eval_flags.set(i);
       ObDatum *arg0 = args0.at(i);
       ObDatum *arg1 = args1.at(i);
-      if (!(arg0->is_null())) {
+      if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+        LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
+      } else if (!v) {
         results[i].set_datum(*arg0);
       } else {
         results[i].set_datum(*arg1);
@@ -429,10 +445,14 @@ int ObExprNvlUtil::calc_nvl_expr2(const ObExpr &expr, ObEvalCtx &ctx,
   ObDatum *arg0 = NULL;
   ObDatum *arg1 = NULL;
   ObDatum *arg2 = NULL;
+  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
+  bool v = false;
 
   if (OB_FAIL(expr.eval_param_value(ctx, arg0, arg1, arg2))) {
     LOG_WARN("eval args failed", K(ret));
-  } else if (!(arg0->is_null())) {
+  } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+    LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
+  } else if (!v) {
     res_datum.set_datum(*arg1);
   } else {
     res_datum.set_datum(*arg2);

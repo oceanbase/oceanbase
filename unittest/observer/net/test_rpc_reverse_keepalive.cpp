@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "observer/net/ob_rpc_reverse_keepalive.h"
-#include "rpc/obrpc/ob_rpc_reverse_keepalive_struct.h"
-#include "rpc/frame/ob_req_deliver.h"
 #include "lib/net/ob_net_util.h"
 
 #define private public
@@ -65,7 +62,7 @@ public:
   bool handlePacketQueue(rpc::ObRequest *req, void *args) override final
   {
     ObIAllocator &alloc = THIS_WORKER.get_sql_arena_allocator();
-    const observer::ObGlobalContext gctx;
+    const observer::ObGlobalContext &gctx = observer::ObGlobalContext::get_instance();
     ObReqProcessor *processor = NULL;
     ObRpcPacketCode pcode = reinterpret_cast<const obrpc::ObRpcPacket &>(req->get_packet()).get_pcode();
     if (OB_RPC_REVERSE_KEEPALIVE == pcode) {
@@ -147,6 +144,7 @@ TEST_F(TestRpcReverseKeepAliveService, reverse_keepalive_service)
   ASSERT_EQ(ret, OB_HASH_NOT_EXIST);
 
   rpc_reverse_keepalive_instance.destroy();
+  global_poc_server.destroy();
 }
 
 } // end namespace obrpc

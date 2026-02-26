@@ -32,15 +32,17 @@ template <typename K, typename V>
 UserMdsNode<K, V>::UserMdsNode()
 : MdsNode(MdsNodeType::UNKNOWN_NODE,
           WriterType::UNKNOWN_WRITER,
-          INVALID_VALUE),
+          INVALID_VALUE,
+          transaction::ObTxSEQ()),
 ListNode<UserMdsNode<K, V>>() { p_mds_row_ = nullptr; }
 
 template <typename K, typename V>
 UserMdsNode<K, V>::UserMdsNode(MdsRowBase<K, V> *p_mds_row,
                                MdsNodeType node_type,
                                WriterType writer_type,
-                               const int64_t writer_id)
-: MdsNode(node_type, writer_type, writer_id),
+                               const int64_t writer_id,
+                               const transaction::ObTxSEQ seq_no)
+: MdsNode(node_type, writer_type, writer_id, seq_no),
 ListNode<UserMdsNode<K, V>>()
 {
   static_assert(std::is_default_constructible<V>::value,
@@ -89,20 +91,32 @@ int64_t UserMdsNode<K, V>::to_string(char * buf, const int64_t buf_len) const
     p_mds_table = p_mds_row_->p_mds_unit_->p_mds_table_;
   }
   databuff_printf(buf, buf_len, pos, "this:0x%lx, ", (unsigned long)this);
-  databuff_printf(buf, buf_len, pos, "ls_id:%s, ", p_mds_table ? to_cstring(p_mds_table->ls_id_) : "NULL");
-  databuff_printf(buf, buf_len, pos, "tablet_id:%s, ", p_mds_table ? to_cstring(p_mds_table->tablet_id_) : "NULL");
+  if (nullptr != p_mds_table) {
+    databuff_print_multi_objs(buf, buf_len, pos, "ls_id:", p_mds_table->ls_id_, ", ");
+  } else {
+    databuff_printf(buf, buf_len, pos, "ls_id:%s, ", "NULL");
+  }
+  if (nullptr != p_mds_table) {
+    databuff_print_multi_objs(buf, buf_len, pos, "tablet_id:", p_mds_table->tablet_id_, ", ");
+  } else {
+    databuff_printf(buf, buf_len, pos, "tablet_id:%s, ", "NULL");
+  }
   databuff_printf(buf, buf_len, pos, "writer:%ld, ", writer_id_);
-  databuff_printf(buf, buf_len, pos, "seq_no:%ld, ", seq_no_);
-  databuff_printf(buf, buf_len, pos, "redo_scn:%s, ", obj_to_string(redo_scn_));
-  databuff_printf(buf, buf_len, pos, "end_scn:%s, ", obj_to_string(end_scn_));
-  databuff_printf(buf, buf_len, pos, "trans_version:%s, ", obj_to_string(trans_version_));
-  databuff_printf(buf, buf_len, pos, "status:%s, ", to_cstring(status_));
+  databuff_print_multi_objs(buf, buf_len, pos, "seq_no:", seq_no_, ", ");
+  char scn_buf[64] = {'\0'};
+  databuff_printf(buf, buf_len, pos, "redo_scn:%s, ",
+      obj_to_string(redo_scn_, scn_buf, sizeof(scn_buf)));
+  databuff_printf(buf, buf_len, pos, "end_scn:%s, ",
+      obj_to_string(end_scn_, scn_buf, sizeof(scn_buf)));
+  databuff_printf(buf, buf_len, pos, "trans_version:%s, ",
+      obj_to_string(trans_version_, scn_buf, sizeof(scn_buf)));
+  databuff_print_multi_objs(buf, buf_len, pos, "status:", status_, ", ");
   databuff_printf(buf, buf_len, pos, "ver_next:0x%lx, ",
   (unsigned long)(static_cast<UserMdsNode*>(static_cast<ListNode<UserMdsNode<K, V>>*>(ListNode<UserMdsNode<K, V>>::next_))));
   databuff_printf(buf, buf_len, pos, "linked:0x%lx, ",
   (unsigned long)(static_cast<UserMdsNode*>(static_cast<ListNode<MdsNode>*>(ListNode<MdsNode>::next_))));
   databuff_printf(buf, buf_len, pos, "mds_ctx:0x%lx, ", (unsigned long)(mds_ctx_));
-  databuff_printf(buf, buf_len, pos, "user_data:%s", to_cstring(user_data_));
+  databuff_print_multi_objs(buf, buf_len, pos, "user_data:", user_data_);
   return pos;
 }
 
@@ -112,6 +126,22 @@ MdsNodeType UserMdsNode<K, V>::get_node_type() const
   MDS_TG(1_ms);
   CLICK();
   return status_.union_.field_.node_type_;
+}
+
+template <typename K, typename V>
+void UserMdsNode<K, V>::advance_mds_table_max_aborted_scn_(const share::SCN &scn)
+{
+  MdsTableBase *p_mds_table = nullptr;
+  if (!p_mds_row_ || !(p_mds_row_->p_mds_unit_)) {
+    MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected NULL row or unit ptr", K(*this));
+  } else {
+    p_mds_table = p_mds_row_->p_mds_unit_->p_mds_table_;
+    if (OB_ISNULL(p_mds_table)) {
+       MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected NULL table ptr", K(*this));
+    } else {
+      p_mds_table->try_advance_max_aborted_scn(scn);
+    }
+  }
 }
 
 template <typename K, typename V>
@@ -253,8 +283,11 @@ bool UserMdsNode<K, V>::try_on_abort(const share::SCN &abort_scn)// CAUTIONS: no
     end_scn_ = abort_scn;
     on_user_data_abort_(abort_scn);
     MDS_LOG(INFO, "mds node on_abort", K(*this), K(abort_scn));
-    if (is_valid_scn_(redo_scn_) && is_valid_scn_(abort_scn)) {
-      if (end_scn_ < redo_scn_) {
+    advance_mds_table_max_aborted_scn_(abort_scn);
+    if (is_valid_scn_(redo_scn_)) {
+      if (!is_valid_scn_(abort_scn)) {
+        MDS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "mds node has valid redo_scn, but aborted with invalid end_scn", K(*this), K(abort_scn));
+      } else if (end_scn_ < redo_scn_) {
         MDS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "end scn lower than redo scn", K(*this), K(abort_scn));
       }
     } else {
@@ -308,7 +341,7 @@ int UserMdsNode<K, V>::fill_virtual_info(MdsNodeInfoForVirtualTable &mds_node_in
   constexpr int64_t buffer_size = 2_KB;
   char stack_buffer[buffer_size] = { 0 };
   int64_t pos = 0;
-  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", to_cstring(user_data_)))) {
+  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, user_data_))) {
   } else if (OB_FAIL(mds_node_info.user_data_.assign(ObString(pos, stack_buffer)))) {
     MDS_LOG(WARN, "fail construct ObStringHolder", K(*this));
   } else {
@@ -347,7 +380,7 @@ void UserMdsNode<K, V>::report_event_(const char (&event_str)[N],
     observer::MdsEventKey key(MTL_ID(),
                               p_mds_row_->p_mds_unit_->p_mds_table_->ls_id_,
                               p_mds_row_->p_mds_unit_->p_mds_table_->tablet_id_);
-    observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
+    observer::ObMdsEventBuffer::append(key, event, p_mds_row_->p_mds_unit_->p_mds_table_, file, line, function_name);
   }
 }
 
@@ -362,15 +395,21 @@ int UserMdsNode<K, V>::fill_event_(observer::MdsEvent &event,
   MDS_TG(1_ms);
   int64_t pos = 0;
   int64_t last_pos = 0;
-  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", to_cstring(user_data_)))) {
+  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, user_data_))) {
   } else if (FALSE_IT(event.info_str_.assign_ptr(stack_buffer, pos))) {
   } else if (FALSE_IT(last_pos = pos)) {
-  } else if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", p_mds_row_ ? to_cstring(*p_mds_row_->key_) : "NULL"))) {
-  } else if (FALSE_IT(event.key_str_.assign_ptr(&stack_buffer[last_pos], pos - last_pos))) {
+  }
+  if (nullptr != p_mds_row_) {
+    if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, *p_mds_row_->key_))) {}
+  } else {
+    if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", "NULL"))) {}
+  }
+  if (FALSE_IT(event.key_str_.assign_ptr(&stack_buffer[last_pos], pos - last_pos))) {
   } else if (FALSE_IT(last_pos = pos)) {
   } else {
     event.record_thread_info_();
     event.event_ = event_str;
+    event.obj_ptr_ = (void*)this;
     if (OB_LIKELY(has_valid_link_back_ptr_())) {
       event.unit_id_ = p_mds_row_->p_mds_unit_->unit_id_;
     }
@@ -385,6 +424,23 @@ int UserMdsNode<K, V>::fill_event_(observer::MdsEvent &event,
   }
   return ret;
 }
+
+template <typename K, typename V>
+int UserMdsNode<K, V>::assign(const UserMdsNode<K, V> &rhs)
+{
+  int ret = OB_SUCCESS;
+  status_ = rhs.status_;
+  writer_id_ = rhs.writer_id_;
+  seq_no_ = rhs.seq_no_;
+  redo_scn_ = rhs.redo_scn_;
+  end_scn_ = rhs.end_scn_;
+  trans_version_ = rhs.trans_version_;
+  if (OB_FAIL(meta::copy_or_assign(rhs.user_data_, user_data_, DefaultAllocator::get_instance()))) {
+    MDS_LOG(WARN, "fail to do no_link_assign", KR(ret), K(*this));
+  }
+  return ret;
+}
+
 #undef CONSTRUCT_ROW_LOCK_GUARD
 }
 }

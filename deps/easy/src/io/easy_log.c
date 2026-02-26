@@ -1,4 +1,4 @@
-#include "io/easy_log.h"
+#include "easy_log.h"
 #include "util/easy_time.h"
 #include <pthread.h>
 #include <unistd.h>

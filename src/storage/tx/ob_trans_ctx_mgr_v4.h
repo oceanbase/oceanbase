@@ -21,6 +21,7 @@
 #include "storage/tx/ob_tx_ls_log_writer.h"
 #include "storage/tx/ob_tx_ls_state_mgr.h"
 #include "storage/tx/ob_tx_retain_ctx_mgr.h"
+#include "storage/tx/ob_tx_log_cb_mgr.h"
 #include "storage/tablelock/ob_lock_table.h"
 #include "storage/tx/ob_keep_alive_ls_handler.h"
 
@@ -55,7 +56,7 @@ namespace transaction
 class ObLSTxCtxMgrStat;
 class ObTransCtx;
 class ObPartTransCtx;
-class ObITsMgr;
+class ObTsMgr;
 class ObITxLogParam;
 class ObITxLogAdapter;
 class ObLSTxLogAdapter;
@@ -101,6 +102,8 @@ struct ObTxCreateArg
                 const uint64_t cluster_id,
                 const uint64_t cluster_version,
                 const uint32_t session_id,
+                const uint32_t client_sid,
+                const uint32_t associated_session_id,
                 const common::ObAddr &scheduler,
                 const int64_t trans_expired_time,
                 ObTransService *trans_service,
@@ -115,6 +118,8 @@ struct ObTxCreateArg
         cluster_id_(cluster_id),
         cluster_version_(cluster_version),
         session_id_(session_id),
+        client_sid_(client_sid),
+        associated_session_id_(associated_session_id),
         scheduler_(scheduler),
         trans_expired_time_(trans_expired_time),
         trans_service_(trans_service),
@@ -131,7 +136,8 @@ struct ObTxCreateArg
   TO_STRING_KV(K_(for_replay), "ctx_source", to_str_ctx_source(ctx_source_),
                  K_(tenant_id), K_(tx_id),
                  K_(ls_id), K_(cluster_id), K_(cluster_version),
-                 K_(session_id), K_(scheduler), K_(trans_expired_time), KP_(trans_service),
+                 K_(session_id),K_(client_sid), K_(associated_session_id),
+                 K_(scheduler), K_(trans_expired_time), KP_(trans_service),
                  K_(epoch), K_(xid));
   bool for_replay_;
   PartCtxSource ctx_source_;
@@ -141,6 +147,8 @@ struct ObTxCreateArg
   uint64_t cluster_id_;
   uint64_t cluster_version_;
   uint32_t session_id_;
+  uint32_t client_sid_;
+  uint32_t associated_session_id_;
   const common::ObAddr &scheduler_;
   int64_t trans_expired_time_;
   ObTransService *trans_service_;
@@ -190,7 +198,7 @@ public:
            const share::ObLSID &ls_id,
            ObTxTable *tx_table,
            ObLockTable *lock_table,
-           ObITsMgr *ts_mgr,
+           ObTsMgr *ts_mgr,
            ObTransService *txs,
            ObITxLogParam *log_param,
            ObITxLogAdapter * log_adapter);
@@ -215,7 +223,7 @@ public:
   int collect_tx_ctx(const share::ObLSID dest_ls_id,
                      const SCN log_scn,
                      const ObIArray<ObTabletID> &tablet_list,
-                     const ObIArray<ObTransID> &move_tx_ids,
+                     const ObIArray<ObTransID> *move_tx_ids,
                      int64_t &colllect_count,
                      ObIArray<ObTxCtxMoveArg> &res);
   int move_tx_op(const ObTransferMoveTxParam &move_tx_param,
@@ -367,8 +375,6 @@ public:
   int dump_single_tx_data_2_text(const int64_t tx_id, FILE *fd);
   int start_readonly_request();
   int end_readonly_request();
-
-  void dump_readonly_request(const int64_t max_req_number);
 
   // check this ObLSTxCtxMgr contains the specified ObLSID
   bool contain(const share::ObLSID &ls_id)
@@ -546,6 +552,7 @@ public:
   // Get the trans_service corresponding to this ObLSTxCtxMgr;
   transaction::ObTransService *get_trans_service() { return txs_; }
 
+  ObTxLogCbPoolMgr &get_log_cb_pool_mgr() { return log_cb_pool_mgr_;}
   ObTxRetainCtxMgr &get_retain_ctx_mgr() { return ls_retain_ctx_mgr_; }
 
   // Get the tenant_id corresponding to this ObLSTxCtxMgr;
@@ -605,13 +612,12 @@ private:
   int get_tx_ctx_(const ObTransID &tx_id, const bool for_replay, ObPartTransCtx *&tx_ctx);
   int submit_start_working_log_();
   int try_wait_gts_and_inc_max_commit_ts_();
-  share::SCN get_aggre_rec_scn_();
+  share::SCN get_aggre_rec_scn_() const;
 public:
   static const int64_t MAX_HASH_ITEM_PRINT = 16;
   static const int64_t WAIT_SW_CB_TIMEOUT = 100 * 1000; // 100 ms
   static const int64_t WAIT_SW_CB_INTERVAL = 10 * 1000; // 10 ms
   static const int64_t WAIT_READONLY_REQUEST_TIME = 10 * 1000 * 1000;
-  static const int64_t READONLY_REQUEST_TRACE_ID_NUM = 8192;
 
 private:
   inline bool is_master_() const
@@ -635,6 +641,9 @@ private:
 
   inline bool is_r_pending_() const
   { return tx_ls_state_mgr_.is_resume_leader_pending(); }
+
+  inline bool is_f_pending_() const
+  { return tx_ls_state_mgr_.is_follower_swl_pending(); }
 
   inline bool is_pending_() const
   { return tx_ls_state_mgr_.is_leader_takeover_pending(); }
@@ -668,6 +677,8 @@ private:
   ObITxLogAdapter *tx_log_adapter_;
   ObLSTxLogAdapter log_adapter_def_;
 
+  ObTxLogCbPoolMgr log_cb_pool_mgr_;
+
   ObTxRetainCtxMgr ls_retain_ctx_mgr_;
 
   mutable RWLock rwlock_;
@@ -695,7 +706,7 @@ private:
   ObTransService *txs_;
 
   // The time source
-  ObITsMgr *ts_mgr_;
+  ObTsMgr *ts_mgr_;
 
   // See the ObLSTxCtxMgr's member function update_max_replay_commit_version
   share::SCN max_replay_commit_version_;
@@ -712,7 +723,6 @@ private:
 
   // Online timestamp for ObLSTxCtxMgr
   int64_t online_ts_;
-  ObCurTraceId::TraceId readonly_request_trace_id_set_[READONLY_REQUEST_TRACE_ID_NUM];
 };
 
 // Used to iteratively access TxCtx in ObLSTxCtxMgr;
@@ -788,7 +798,7 @@ public:
   // @param [in] tenant_id: tenant id
   // @param [in] ts_mgr: used to get gts, see: update_max_replay_commit_version function;
   // @param [in] txs: transaction service which hold the ObTxCtxMgr;
-  int init(const int64_t tenant_id, ObITsMgr *ts_mgr, ObTransService *txs);
+  int init(const int64_t tenant_id, ObTsMgr *ts_mgr, ObTransService *txs);
 
   // Mark ObTxCtxMgr as running
   int start();
@@ -976,7 +986,7 @@ private:
   ObLSTxCtxMgrMap ls_tx_ctx_mgr_map_;
 
   // The time source
-  ObITsMgr *ts_mgr_;
+  ObTsMgr *ts_mgr_;
 
   // Statistical variable that records the number of ObLSTxCtxMgr allocated;
   int64_t ls_alloc_cnt_;

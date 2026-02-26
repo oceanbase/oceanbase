@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "sql/resolver/ddl/ob_truncate_table_resolver.h"
-#include "share/ob_define.h"
-#include "share/ob_rpc_struct.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -81,8 +78,9 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
                                                                  false,
                                                                  table_schema))) {
               if (OB_TABLE_NOT_EXIST == ret) {
-                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name),
-                                                   to_cstring(table_name));
+                ObCStringHelper helper;
+                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name),
+                                                   helper.convert(table_name));
               }
               LOG_WARN("fail to get table schema", K(ret));
             } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
@@ -94,8 +92,9 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
                                     stmt::T_TRUNCATE_TABLE,
                                     session_info_->get_enable_role_array()))) {
               if (OB_TABLE_NOT_EXIST == ret) {
-                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name),
-                                                   to_cstring(table_name));
+                ObCStringHelper helper;
+                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name),
+                                                   helper.convert(table_name));
               }
               LOG_WARN("failed to check ora ddl priv", K(database_name), K(table_name),
                        K(session_info_->get_priv_user_id()), K(ret));
@@ -118,9 +117,10 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
                                                   orig_table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(truncate_table_stmt->get_table_name()));
       if (NULL == orig_table_schema && OB_TABLE_NOT_EXIST == ret) {
+        ObCStringHelper helper;
         LOG_USER_ERROR(OB_TABLE_NOT_EXIST,
-                       to_cstring(truncate_table_stmt->get_database_name()),
-                       to_cstring(truncate_table_stmt->get_table_name()));
+                       helper.convert(truncate_table_stmt->get_database_name()),
+                       helper.convert(truncate_table_stmt->get_table_name()));
       }
     } else if (orig_table_schema->is_external_table()) {
       ret = OB_NOT_SUPPORTED;
@@ -142,9 +142,14 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate materialized view log is");
       } else if (orig_table_schema->has_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
-        SQL_RESV_LOG(WARN, "truncate table with materialized view log is not supported",
-            KR(ret), K(orig_table_schema->get_table_name()));
+        SQL_RESV_LOG(WARN, "truncate table with materialized view log is not supported", KR(ret),
+                     K(orig_table_schema->get_table_name()));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table with materialized view log is");
+      } else if (orig_table_schema->table_referenced_by_fast_lsm_mv()) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "truncate table required by materialized view is not supported",
+            KR(ret), K(orig_table_schema->get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table required by materialized view is");
       }
     }
   }

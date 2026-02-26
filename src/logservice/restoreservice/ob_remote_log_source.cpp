@@ -10,15 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_remote_log_source.h"             // ObRemoteLogParent
-#include "lib/net/ob_addr.h"                  // ObAddr
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "ob_log_archive_piece_mgr.h"
+#include "ob_remote_log_source.h"
 #include "ob_remote_log_source_allocator.h"    // ObResSrcAlloctor
-#include "share/ob_define.h"
-#include <cstdint>
 
 namespace oceanbase
 {

@@ -10,6 +10,7 @@
 * See the Mulan PubL v2 for more details.
 */
 #include "lib/locale/ob_locale_type.h"
+
 namespace oceanbase {
 namespace common {
 // Note that the index of the ob_locale_ja_JP is exactly 2 and should be placed in the 2nd position in the ob_locales.

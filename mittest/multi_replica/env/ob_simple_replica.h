@@ -37,7 +37,7 @@ public:
                         const std::string &env_prefix,
                         const int zone_id,
                         const int rpc_port,
-                        const string &rs_list,
+                        const std::string &rs_list,
                         const ObServerInfoList &server_list,
                         bool is_restart,
                         ObServer &server = ObServer::get_instance(),

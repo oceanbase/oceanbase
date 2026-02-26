@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include "share/ob_debug_sync.h"
 
-#include "share/ob_define.h"
-#include "lib/thread_local/ob_tsi_factory.h"
-#include "share/config/ob_server_config.h"
+#include "ob_debug_sync.h"
 #include "share/ob_common_rpc_proxy.h"
 
 namespace oceanbase
@@ -810,8 +807,15 @@ int ObDebugSync::parse_action(const ObString &str_origin,
         ret = OB_PARSE_DEBUG_SYNC_ERROR;
         LOG_WARN("integer expected after TIMEOUT", K(ret), K(str_origin));
       } else {
-        action.timeout_ = atoll(to_cstring(token));
-        token = get_token(str);
+        ObCStringHelper helper;
+        const char *token_str = helper.convert(token);
+        if (OB_ISNULL(token_str)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("fail to convert token", K(ret), K(token));
+        } else {
+          action.timeout_ = atoll(token_str);
+          token = get_token(str);
+        }
       }
     } else if (token.case_compare("NO_CLEAR_EVENT") == 0) {
       // parse NO_CLEAR_EVENT
@@ -830,12 +834,19 @@ int ObDebugSync::parse_action(const ObString &str_origin,
         ret = OB_PARSE_DEBUG_SYNC_ERROR;
         LOG_WARN("integer expected after EXECUTE", K(ret), K(str_origin));
       } else {
-        action.execute_ = atoll(to_cstring(token));
-        if (action.execute_ <= 0) {
-          ret = OB_PARSE_DEBUG_SYNC_ERROR;
-          LOG_WARN("invalid execute count", K(ret), K(token), K(str_origin));
+        ObCStringHelper helper;
+        const char *token_str = helper.convert(token);
+        if (OB_ISNULL(token_str)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("fail to convert token", K(ret), K(token));
         } else {
-          token = get_token(str);
+          action.execute_ = atoll(token_str);
+          if (action.execute_ <= 0) {
+            ret = OB_PARSE_DEBUG_SYNC_ERROR;
+            LOG_WARN("invalid execute count", K(ret), K(token), K(str_origin));
+          } else {
+            token = get_token(str);
+          }
         }
       }
     }

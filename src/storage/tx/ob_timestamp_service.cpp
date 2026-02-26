@@ -12,13 +12,9 @@
 
 #include "ob_timestamp_service.h"
 #include "ob_standby_timestamp_service.h"
-#include "ob_trans_event.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_srv_network_frame.h"
 #include "ob_timestamp_access.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -290,5 +286,5 @@ void ObTimestampService::get_virtual_info(int64_t &ts_value, common::ObRole &rol
   TRANS_LOG(INFO, "gts get virtual info", K(ret), K_(last_id), K(ts_value), K(role), K(proposal_id));
 }
 
-}
-}
+} // transaction
+} // oceanbase

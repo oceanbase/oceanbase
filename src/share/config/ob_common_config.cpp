@@ -12,10 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/config/ob_server_config.h"
+#include "ob_common_config.h"
 #include "lib/container/ob_array_iterator.h"
-#include "lib/utility/ob_defer.h"
-#include "common/ob_record_header.h"
+#include "lib/utility/ob_sort.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
@@ -92,7 +91,7 @@ void ObBaseConfig::get_sorted_config_items(ConfigItemArray &configs) const
     ConfigItem item(it->first.str(), NULL == it->second ? "" : it->second->str());
     (void)configs.push_back(item);
   }
-  std::sort(configs.begin(), configs.end());
+  lib::ob_sort(configs.begin(), configs.end());
 }
 int ObBaseConfig::load_from_buffer(const char *config_str, const int64_t config_str_len,
                               const int64_t version, const bool check_name)
@@ -145,7 +144,7 @@ int ObBaseConfig::load_from_buffer(const char *config_str, const int64_t config_
             ret = OB_INVALID_ARGUMENT;
           }
         } else {
-          (*pp_item)->set_value(value);
+          (*pp_item)->set_value_unsafe(value);
           (*pp_item)->set_version(version);
           if (need_print_config(name)) {
             _LOG_INFO("load config succ, %s=%s", name, value);
@@ -207,8 +206,11 @@ int ObBaseConfig::load_from_file(const char *config_file,
     } else {
       // end with '\0'
       config_file_buf[read_len] = '\0';
-
-      if (OB_FAIL(load_from_buffer(config_file_buf, read_len, version, check_name))) {
+      {
+        DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
+        ret = load_from_buffer(config_file_buf, read_len, version, check_name);
+      }
+      if (OB_FAIL(ret)) {
         LOG_ERROR("load config fail", KR(ret), K(config_file), K(version), K(check_name),
             K(read_len));
       } else {
@@ -285,9 +287,9 @@ ObCommonConfig::~ObCommonConfig()
 {
 }
 
-int ObCommonConfig::add_extra_config(const char *config_str,
-                                     int64_t version /* = 0 */ ,
-                                     bool check_config /* = true */)
+int ObCommonConfig::add_extra_config_unsafe(const char *config_str,
+                                     int64_t version,
+                                     bool check_config)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_OPTS_LENGTH = sysconf(_SC_ARG_MAX);
@@ -295,7 +297,8 @@ int ObCommonConfig::add_extra_config(const char *config_str,
   char *buf = NULL;
   char *saveptr = NULL;
   char *token = NULL;
-  bool split_by_comma = false;
+  const char *delimiters[] = {"\n", "|\n", ",\n"};
+  const char *delimiter = "\n";
 
   if (OB_ISNULL(config_str)) {
     ret = OB_ERR_UNEXPECTED;
@@ -309,14 +312,17 @@ int ObCommonConfig::add_extra_config(const char *config_str,
   } else {
     MEMCPY(buf, config_str, config_str_length);
     buf[config_str_length] = '\0';
-    token = STRTOK_R(buf, "\n", &saveptr);
-    if (0 == STRLEN(saveptr)) {
-      token = STRTOK_R(buf, ",\n", &saveptr);
-      split_by_comma = true;
+    for (int i = 0; i < sizeof(delimiters)/sizeof(delimiters[0]); i++) {
+      token = STRTOK_R(buf, delimiters[i], &saveptr);
+      if (0 != STRLEN(saveptr)) {
+        delimiter = delimiters[i];
+        break;
+      }
     }
     const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
     const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
     const ObString compatible_cfg(COMPATIBLE);
+    const ObString enable_compatible_monotonic_cfg(ENABLE_COMPATIBLE_MONOTONIC);
     auto func = [&]() {
       char *saveptr_one = NULL;
       const char *name = NULL;
@@ -354,7 +360,7 @@ int ObCommonConfig::add_extra_config(const char *config_str,
           }
         }
         if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
-        } else if (!(*pp_item)->set_value(value)) {
+        } else if (!(*pp_item)->set_value_unsafe(value)) {
           ret = OB_INVALID_CONFIG;
           LOG_ERROR("Invalid config value", K(name), K(value), K(ret));
         } else if (check_config && (!(*pp_item)->check_unit(value) || !(*pp_item)->check())) {
@@ -369,7 +375,15 @@ int ObCommonConfig::add_extra_config(const char *config_str,
           (*pp_item)->set_version(version);
           LOG_INFO("Load config succ", K(name), K(value));
           if (0 == compatible_cfg.case_compare(name)) {
-            FLOG_INFO("[COMPATIBLE] load data_version from config file",
+            const uint64_t tenant_id = get_tenant_id();
+            uint64_t data_version = 0;
+            int tmp_ret = 0;
+            if (OB_TMP_FAIL(ObClusterVersion::get_version(value, data_version))) {
+              LOG_ERROR("parse data_version failed", KR(tmp_ret), K(value));
+            } else if (OB_TMP_FAIL(ODV_MGR.set(tenant_id, data_version))) {
+              LOG_WARN("fail to set data_version", KR(tmp_ret), K(tenant_id), K(data_version));
+            }
+            FLOG_INFO("[COMPATIBLE] [DATA_VERSION] load data_version from config file",
                       KR(ret), "tenant_id", get_tenant_id(),
                       "version", (*pp_item)->version(),
                       "value", (*pp_item)->str(),
@@ -377,6 +391,9 @@ int ObCommonConfig::add_extra_config(const char *config_str,
                       "dump_version", (*pp_item)->dumped_version(),
                       "dump_value", (*pp_item)->spfile_str(),
                       "dump_value_updated", (*pp_item)->dump_value_updated());
+          } else if (0 == enable_compatible_monotonic_cfg.case_compare(name)) {
+            ObString v_str((*pp_item)->str());
+            ODV_MGR.set_enable_compatible_monotonic(0 == v_str.case_compare("True") ? true : false);
           }
         }
       }
@@ -387,28 +404,62 @@ int ObCommonConfig::add_extra_config(const char *config_str,
         func();
         break;
       }
-      token = (true == split_by_comma) ? STRTOK_R(NULL, ",\n", &saveptr) : STRTOK_R(NULL, "\n", &saveptr);
+      token = STRTOK_R(NULL, delimiter, &saveptr);
     }
     // reset
     MEMCPY(buf, config_str, config_str_length);
     buf[config_str_length] = '\0';
     saveptr = nullptr;
-    token = STRTOK_R(buf, "\n", &saveptr);
-    if (0 == STRLEN(saveptr)) {
-      token = STRTOK_R(buf, ",\n", &saveptr);
-      split_by_comma = true;
+    delimiter = "\n";
+    for (int i = 0; i < sizeof(delimiters)/sizeof(delimiters[0]); i++) {
+      token = STRTOK_R(buf, delimiters[i], &saveptr);
+      if (0 != STRLEN(saveptr)) {
+        delimiter = delimiters[i];
+        break;
+      }
     }
     while (OB_SUCC(ret) && OB_NOT_NULL(token)) {
       if (strncmp(token, "enable_production_mode:", 23) != 0) {
         func();
       }
-      token = (true == split_by_comma) ? STRTOK_R(NULL, ",\n", &saveptr) : STRTOK_R(NULL, "\n", &saveptr);
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+      constexpr char logservice_access_point_name[] = "logservice_access_point";
+      constexpr int64_t logservice_access_point_name_len = sizeof(logservice_access_point_name) - 1;
+      if (0 == strncmp(token, logservice_access_point_name, logservice_access_point_name_len)
+        && NULL != STRSTR(token, "://")) {
+        ret = OB_INVALID_CONFIG;
+        LOG_ERROR("logservice_access_point cannot be setted by -o", K(ret));
+      }
+#endif
+      token = STRTOK_R(NULL, delimiter, &saveptr);
     }
   }
 
   if (NULL != buf) {
     delete [] buf;
     buf = NULL;
+  }
+  return ret;
+}
+
+int ObCommonConfig::to_json_array(ObIAllocator &allocator, ObJsonArray &j_arr) const
+{
+  int ret = OB_SUCCESS;
+  for (ObConfigContainer::const_iterator it = container_.begin();
+      OB_SUCC(ret) && it != container_.end(); ++it) {
+    ObConfigItem *item = it->second;
+    ObJsonObject *j_obj = nullptr;
+    if (nullptr == item) {
+      ret = OB_ERR_NULL_VALUE;
+      OB_LOG(WARN, "config item is null", "name", it->first.str(), K(ret));
+    } else if (nullptr == (j_obj = OB_NEW(ObJsonObject, g_config_mem_attr, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "create json object failed", K(ret));
+    } else if (OB_FAIL(item->to_json_obj(allocator, *j_obj))) {
+      OB_LOG(WARN, "convert config item to json object failed", "name", it->first.str(), K(ret));
+    } else if (OB_FAIL(j_arr.append(j_obj))) {
+      OB_LOG(WARN, "append json object to json array failed", "name", it->first.str(), K(ret));
+    } else {}
   }
   return ret;
 }
@@ -445,7 +496,7 @@ OB_DEF_SERIALIZE(ObCommonConfig)
               it->first.str(), it->second->spfile_str());
         }
         if (OB_SUCC(ret) && 0 == compatible_cfg.case_compare(it->first.str())) {
-          FLOG_INFO("[COMPATIBLE] dump data_version",
+          FLOG_INFO("[COMPATIBLE] [DATA_VERSION] dump data_version",
                     KR(ret), "tenant_id", get_tenant_id(),
                     "version", it->second->version(),
                     "value", it->second->str(),
@@ -483,8 +534,11 @@ OB_DEF_DESERIALIZE(ObCommonConfig)
     } else {
       MEMSET(copy_buf, '\0', data_len + 1);
       MEMCPY(copy_buf, buf + pos, data_len);
-      if (OB_FAIL(ObCommonConfig::add_extra_config(copy_buf, 0, false))) {
-        LOG_ERROR("Read server config failed", K(ret));
+      {
+        DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
+        if (OB_FAIL(ObCommonConfig::add_extra_config_unsafe(copy_buf, 0, false))) {
+          LOG_ERROR("Read server config failed", K(ret));
+        }
       }
 
       if (nullptr != copy_buf) {

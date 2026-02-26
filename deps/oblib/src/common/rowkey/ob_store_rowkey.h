@@ -96,7 +96,12 @@ public:
   }
 
 
-  TO_YSON_KV(OB_ID(store_rowkey), to_cstring(*this));
+  int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    ObCStringHelper helper;
+    return oceanbase::yson::databuff_encode_elements(buf, buf_len, pos,
+        ::oceanbase::name::store_rowkey, helper.convert(*this));
+  }
   inline int64_t to_string(char *buffer, const int64_t length) const
   {
     return key_.to_string(buffer, length);
@@ -114,7 +119,6 @@ public:
   {
     return key_.to_format_string(buffer, length);
   }
-  const char *repr() const { return common::to_cstring(*this); }
 
   inline int need_transform_to_collation_free(bool &need_transform) const
   {

@@ -12,28 +12,25 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/ob_signal_handle.h"
 
-#include "io/easy_log.h"
 
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
-#include "lib/allocator/ob_malloc.h"
+#include "ob_signal_handle.h"
 #include "lib/profile/ob_profile_log.h"
 #include "lib/profile/ob_perf_event.h"
-#include "lib/profile/ob_atomic_event.h"
-#include "lib/signal/ob_signal_struct.h"
-#include "storage/memtable/ob_memtable.h"
 #include "observer/ob_server.h"
 #include "observer/ob_dump_task_generator.h"
 #include "sql/ob_sql_init.h"
 #include "lib/allocator/ob_pcounter.h"
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
+#include "lib/ash/ob_active_session_guard.h"
+
+extern void switch_check_io_hang_errsim();
 
 namespace oceanbase
 {
 using namespace common;
 using namespace storage;
+
 namespace observer
 {
 
@@ -53,6 +50,7 @@ void ObSignalHandle::run1()
     while (!has_set_stop()) {//need not to check ret
       {
         oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT);
+        common::ObBKGDSessInActiveGuard inactive_guard;
         signum = sigtimedwait(&waitset, NULL, &timeout);
       }
       if (-1 == signum) {
@@ -184,6 +182,7 @@ int ObSignalHandle::deal_signals(int signum)
       //GARL_PRINT();
       PC_REPORT();
       ObTenantMemoryPrinter::get_instance().print_tenant_usage();
+      switch_check_io_hang_errsim();
       break;
     }
     case 50: {

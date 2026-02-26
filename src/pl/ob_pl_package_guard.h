@@ -15,16 +15,22 @@
 
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "pl/dblink/ob_pl_dblink_guard.h"
+#include "observer/ob_req_time_service.h"
 
 namespace oceanbase
 {
 
 namespace pl
 {
+
+class ObPLFunction;
 class ObPLPackageGuard
 {
 public:
-  ObPLPackageGuard(uint64_t tenant_id) : alloc_(), dblink_guard_(alloc_)
+  ObPLPackageGuard(uint64_t tenant_id)
+    : alloc_(),
+      dblink_guard_(alloc_),
+      req_time_guard_()
   {
     lib::ObMemAttr attr;
     attr.label_ = "PLPKGGuard";
@@ -44,10 +50,12 @@ public:
   {
     return map_.get_refactored(package_id, package);
   }
+
   common::ObArenaAllocator alloc_;
   ObPLDbLinkGuard dblink_guard_;
 private:
-  common::hash::ObHashMap<uint64_t, sql::ObCacheObjGuard*> map_;
+  common::hash::ObHashMap<uint64_t, sql::ObCacheObjGuard*, common::hash::NoPthreadDefendMode> map_;
+  observer::ObReqTimeGuard req_time_guard_;
 };
 
 }

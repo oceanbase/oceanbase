@@ -87,7 +87,7 @@ public:
   compressor_type_(common::ObCompressorType::NONE_COMPRESSOR), is_init_(false), block_ch_cnt_(0),
   total_memory_size_(0), total_buffer_cnt_(0), accumulated_blocked_cnt_(0), blocks_(), chans_(), drain_ch_cnt_(0),
   dfo_key_(), op_metric_(nullptr),
-  chan_loop_(nullptr), ch_info_(nullptr)
+  chan_loop_(nullptr), ch_info_(nullptr), last_block_start_time_(0), total_block_time_(0)
   { }
 
   virtual ~ObDtlFlowControl() { destroy(); }
@@ -220,6 +220,11 @@ public:
 
   common::ObCompressorType get_compressor_type() { return compressor_type_; }
 
+  void begin_block_time_counting();
+  void end_block_time_counting();
+
+  int64_t get_total_block_time() { return total_block_time_; }
+
 private:
   static const int64_t THRESHOLD_SIZE = 2097152;
   static const int64_t MAX_BUFFER_CNT = 3;
@@ -254,6 +259,8 @@ private:
 
 private:
   // Todo: In DFC, it can monitor data size and so on
+  int64_t last_block_start_time_;
+  int64_t total_block_time_;
 };
 
 OB_INLINE void ObDtlFlowControl::set_block(int64_t idx)

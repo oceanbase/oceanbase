@@ -12,12 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/oblog/ob_log.h"
 #include "sql/engine/expr/ob_expr_initcap.h"
-#include "objit/common/ob_item_type.h"
-#include "common/data_buffer.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "lib/charset/ob_charset_string_helper.h"
 
 namespace oceanbase
 {
@@ -83,27 +81,30 @@ int ObExprInitcapCommon::initcap_string(const ObString &text,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(text.length()), K(case_multiply), K(cs_type), K(ret));
     } else {
-      ObStringScanner scanner(text, cs_type);
-      ObString cur_letter;
-      int32_t wchar = 0;
       bool has_first_letter = last_has_first_letter;
 
       if (1 == case_multiply) {
         MEMCPY(buf, text.ptr(), text.length());
       }
 
-      while (OB_SUCC(ret)) {
-        if (OB_ITER_END == (ret = scanner.next_character(cur_letter, wchar))) {
-          ret = OB_SUCCESS;
-          break;
-        } else if (OB_FAIL(ret)) {
-          LOG_WARN("fail to get next character", K(ret), K(scanner));
-        } else {
+      struct Functor {
+
+        Functor(char* buffer, int64_t& position, int multiply, bool& first_letter, ObCollationType charset_type)
+            : buf(buffer), pos(position), case_multiply(multiply), has_first_letter(first_letter), cs_type(charset_type) {}
+
+        char* buf;
+        int64_t& pos;
+        int case_multiply;
+        bool& has_first_letter;
+        const ObCollationType cs_type;
+
+        int operator()(const ObString &cur_letter, ob_wc_t wchar) {
+          int ret = OB_SUCCESS;
           bool is_alphanumeric =
               (wchar <= INT8_MAX
-               && ob_isalnum(ObCharset::get_charset(CS_TYPE_UTF8MB4_GENERAL_CI), wchar));
+                && ob_isalnum(ObCharset::get_charset(CS_TYPE_UTF8MB4_GENERAL_CI), wchar));
           if (is_alphanumeric) {
-            char *src_ptr = (1 == case_multiply) ? buf + pos : cur_letter.ptr();
+            char *src_ptr = (1 == case_multiply) ? buf + pos : const_cast<char*>(cur_letter.ptr());
             int64_t buf_remain = cur_letter.length() * case_multiply;
             int64_t write_len = has_first_letter ?
                   ObCharset::casedn(cs_type, src_ptr, cur_letter.length(), buf + pos, buf_remain)
@@ -119,8 +120,13 @@ int ObExprInitcapCommon::initcap_string(const ObString &text,
             MEMCPY(buf + pos, cur_letter.ptr(), cur_letter.length());
             pos += cur_letter.length();
           }
-        }
-      }
+          return ret;
+        };
+
+      };
+      struct Functor temp_handle(buf, pos, case_multiply, has_first_letter, cs_type);
+      ObCharsetType charset_type = ObCharset::charset_type_by_coll(cs_type);
+      OZ(ObFastStringScanner::foreach_char(text, charset_type, temp_handle));
       if (OB_SUCC(ret)) {
         last_has_first_letter = has_first_letter;
         res_str.assign_ptr(buf, pos);

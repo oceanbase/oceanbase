@@ -13,14 +13,17 @@
 #ifndef OB_LOAD_DATA_STMT_H_
 #define OB_LOAD_DATA_STMT_H_
 
+#include "sql/engine/cmd/ob_load_data_storage_info.h"
 #include "sql/resolver/cmd/ob_cmd_stmt.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/resolver/dml/ob_hint.h"
 #include "share/backup/ob_backup_struct.h"
+
 namespace oceanbase
 {
 namespace sql
 {
+class ObDirectLoadOptimizerCtx;
 
 enum class ObLoadDupActionType {
   LOAD_STOP_ON_DUP = 0, //stop when going to insert duplicated key
@@ -45,6 +48,7 @@ public:
   int add_files(common::ObString *start, const int64_t count = 1);
   int get_next_file(common::ObString &file);
   int copy(const ObLoadFileIterator &other);
+  void rewind() { pos_ = 0; }
   TO_STRING_KV(K_(files), K_(pos));
 private:
   common::ObSEArray<common::ObString, 16> files_;
@@ -62,7 +66,10 @@ struct ObLoadArgument
                     database_id_(OB_INVALID_INDEX_INT64),
                     table_id_(OB_INVALID_INDEX_INT64),
                     is_csv_format_(false),
-                    part_level_(share::schema::PARTITION_LEVEL_MAX)
+                    part_level_(share::schema::PARTITION_LEVEL_MAX),
+                    compression_format_(ObCSVGeneralFormat::ObCSVCompression::NONE),
+                    is_diagnosis_enabled_(false),
+                    diagnosis_limit_num_(0)
 
   {}
 
@@ -72,6 +79,7 @@ struct ObLoadArgument
                K_(dupl_action),
                K_(file_cs_type),
                K_(file_name),
+               K_(url_spec),
                K_(access_info),
                K_(database_name),
                K_(table_name),
@@ -80,16 +88,24 @@ struct ObLoadArgument
                K_(database_id),
                K_(table_id),
                K_(is_csv_format),
-               K_(file_iter));
+               K_(file_iter),
+               K_(compression_format),
+               K_(is_diagnosis_enabled),
+               K_(diagnosis_limit_num));
 
-  void assign(const ObLoadArgument &other) {
+  int assign(const ObLoadArgument &other) {
+    int ret = OB_SUCCESS;
     load_file_storage_ = other.load_file_storage_;
     is_default_charset_ = other.is_default_charset_;
     ignore_rows_ = other.ignore_rows_;
     dupl_action_ = other.dupl_action_;
     file_cs_type_ = other.file_cs_type_;
     file_name_ = other.file_name_;
-    access_info_ = other.access_info_;
+    url_spec_ = other.url_spec_;
+    diagnosis_limit_num_ = other.diagnosis_limit_num_;
+    is_diagnosis_enabled_ = other.is_diagnosis_enabled_;
+    diagnosis_log_file_ = other.diagnosis_log_file_;
+    diagnosis_bad_file_ = other.diagnosis_bad_file_;
     database_name_ = other.database_name_;
     table_name_ = other.table_name_;
     combined_name_ = other.combined_name_;
@@ -99,6 +115,11 @@ struct ObLoadArgument
     is_csv_format_ = other.is_csv_format_;
     part_level_ = other.part_level_;
     file_iter_.copy(other.file_iter_);
+    compression_format_ = other.compression_format_;
+    if (OB_FAIL(access_info_.assign(other.access_info_))) {
+      OB_LOG(WARN, "fail to assign access info", K(ret), K_(other.access_info));
+    }
+    return ret;
   }
 
   ObLoadFileLocation load_file_storage_;
@@ -107,7 +128,8 @@ struct ObLoadArgument
   ObLoadDupActionType dupl_action_;
   common::ObCollationType file_cs_type_;
   common::ObString file_name_;
-  share::ObBackupStorageInfo access_info_;
+  common::ObString url_spec_;
+  ObLoadDataStorageInfo access_info_;
   common::ObString database_name_;
   common::ObString table_name_;
   common::ObString combined_name_;
@@ -117,6 +139,11 @@ struct ObLoadArgument
   bool is_csv_format_;
   share::schema::ObPartitionLevel part_level_;
   ObLoadFileIterator file_iter_;
+  ObCSVGeneralFormat::ObCSVCompression compression_format_;
+  bool is_diagnosis_enabled_;
+  int64_t diagnosis_limit_num_;
+  common::ObString diagnosis_log_file_;
+  common::ObString diagnosis_bad_file_;
 };
 
 struct ObDataInFileStruct
@@ -198,6 +225,7 @@ public:
       string_values_[i].reset();
     }
     direct_load_hint_.reset();
+    hint_str_.reset();
   }
   int set_value(IntHintItem item, int64_t value);
   int get_value(IntHintItem item, int64_t &value) const;
@@ -205,15 +233,19 @@ public:
   int get_value(StringHintItem item, ObString &value) const;
   ObDirectLoadHint &get_direct_load_hint() { return direct_load_hint_; }
   const ObDirectLoadHint &get_direct_load_hint() const { return direct_load_hint_; }
+  ObString &get_hint_str() { return hint_str_; }
+  void set_hint_str(const ObString &hint_str) { hint_str_ = hint_str; }
   TO_STRING_KV("Int Hint Item",
                common::ObArrayWrap<int64_t>(integer_values_, TOTAL_INT_ITEM),
                "String Hint Item",
                common::ObArrayWrap<ObString>(string_values_, TOTAL_STRING_ITEM),
-               K_(direct_load_hint));
+               K_(direct_load_hint),
+               K_(hint_str));
 private:
   int64_t integer_values_[TOTAL_INT_ITEM];
   ObString string_values_[TOTAL_STRING_ITEM];
   ObDirectLoadHint direct_load_hint_;
+  ObString hint_str_;
 };
 
 class ObLoadDataStmt : public ObCMDStmt
@@ -234,7 +266,7 @@ public:
   };
 
   ObLoadDataStmt() :
-    ObCMDStmt(stmt::T_LOAD_DATA), is_default_table_columns_(false)
+    ObCMDStmt(stmt::T_LOAD_DATA), optimizer_ctx_(nullptr), is_default_table_columns_(false)
   {
   }
   virtual ~ObLoadDataStmt()
@@ -256,15 +288,26 @@ public:
   ObLoadDataHint &get_hints() { return hints_; }
   void set_default_table_columns() { is_default_table_columns_ = true; }
   bool get_default_table_columns() { return is_default_table_columns_; }
+  int set_part_ids(common::ObIArray<ObObjectID> &part_ids);
+  int set_part_names(common::ObIArray<ObString> &part_names);
+  const common::ObIArray<ObObjectID> &get_part_ids() const { return part_ids_; }
+  common::ObIArray<ObString> &get_part_names() { return part_names_; }
+  bool is_load_data_url() const { return is_load_data_url_; }
+  void set_is_load_data_url(bool is_load_data_url) { is_load_data_url_ = is_load_data_url; }
+  void set_optimizer_ctx(ObDirectLoadOptimizerCtx *optimizer_ctx) { optimizer_ctx_ = optimizer_ctx; }
+  ObDirectLoadOptimizerCtx *get_optimizer_ctx() { return optimizer_ctx_; }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_),
+               KP_(optimizer_ctx),
                K_(load_args),
                K_(data_struct_in_file),
                K_(field_or_var_list),
                K_(assignments),
                K_(hints),
-               K_(is_default_table_columns));
+               K_(is_default_table_columns),
+               K_(part_ids));
 
 private:
+  ObDirectLoadOptimizerCtx *optimizer_ctx_;
   ObLoadArgument load_args_;
   ObDataInFileStruct data_struct_in_file_;
   common::ObSEArray<FieldOrVarStruct, 4> field_or_var_list_;
@@ -272,7 +315,9 @@ private:
   ObAssignments assignments_;
   ObLoadDataHint hints_;
   bool is_default_table_columns_;
-
+  common::ObArray<ObObjectID> part_ids_;
+  common::ObArray<ObString> part_names_;
+  bool is_load_data_url_;
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataStmt);
 };
 

@@ -14,7 +14,7 @@
 #define OCEANBASE_LOGSERVICE_PALF_ITERATOR_
 #include "log_iterator_impl.h"           // LogIteratorImpl
 #include "log_iterator_storage.h"        // LogIteratorStorage
-//#include "log_define.h"                  // PALF_INITIAL_PROPOSAL_ID
+#include "log_define.h"                  // PALF_INITIAL_PROPOSAL_ID
 namespace oceanbase
 {
 namespace share
@@ -23,27 +23,25 @@ class SCN;
 }
 namespace palf
 {
-template <class PalfIteratorStorage, class LogEntryType>
+typedef ObFunction<void()> DestroyStorageFunctor;
+
+template <class LogEntryType>
 class PalfIterator
 {
 public:
   PalfIterator()
       : iterator_storage_(), iterator_impl_(), need_print_error_(true),
         is_inited_(false), io_ctx_(LogIOUser::DEFAULT), last_print_time_(0) {}
-  PalfIterator(const int64_t palf_id, const LogIOUser io_user = LogIOUser::DEFAULT)
-      :iterator_storage_(), iterator_impl_(), need_print_error_(true),
-        is_inited_(false), io_ctx_(palf_id, io_user), last_print_time_(0) {}
   ~PalfIterator() {destroy();}
   int init(const LSN &start_offset,
            const GetFileEndLSN &get_file_end_lsn,
-           ILogStorage *log_storage,
-           const bool allow_filling_cache = true)
+           ILogStorage *log_storage)
   {
     int ret = OB_SUCCESS;
     auto get_mode_version = []() { return PALF_INITIAL_PROPOSAL_ID; };
     if (IS_INIT) {
       ret = OB_INIT_TWICE;
-    } else if (OB_FAIL(do_init_(start_offset, get_file_end_lsn, get_mode_version, log_storage, allow_filling_cache))) {
+    } else if (OB_FAIL(do_init_(start_offset, get_file_end_lsn, get_mode_version, log_storage))) {
       PALF_LOG(WARN, "PalfIterator init failed", K(ret));
     } else {
       PALF_LOG(TRACE, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
@@ -54,17 +52,30 @@ public:
   int init(const LSN &start_offset,
            const GetFileEndLSN &get_file_end_lsn,
            const GetModeVersion &get_mode_version,
-           ILogStorage *log_storage,
-           const bool allow_filling_cache = true)
+           ILogStorage *log_storage)
   {
     int ret = OB_SUCCESS;
     if (IS_INIT) {
       ret = OB_INIT_TWICE;
-    } else if (OB_FAIL(do_init_(start_offset, get_file_end_lsn, get_mode_version, log_storage, allow_filling_cache))) {
+    } else if (OB_FAIL(do_init_(start_offset, get_file_end_lsn, get_mode_version, log_storage))) {
       PALF_LOG(WARN, "PalfIterator init failed", K(ret));
     } else {
       PALF_LOG(TRACE, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
       is_inited_ = true;
+    }
+    return ret;
+  }
+
+  int set_io_context(const LogIOContext &io_ctx)
+  {
+    int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+    } else if (!io_ctx.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "LogIOContext is invalid!", K(ret), K(io_ctx));
+    } else {
+      io_ctx_ = io_ctx;
     }
     return ret;
   }
@@ -82,11 +93,13 @@ public:
   }
   void destroy()
   {
-    if (IS_INIT) {
-      is_inited_ = false;
-      iterator_impl_.destroy();
-      iterator_storage_.destroy();
-      io_ctx_.destroy();
+    is_inited_ = false;
+    iterator_impl_.destroy();
+    iterator_storage_.destroy();
+    io_ctx_.destroy();
+    if (destroy_storage_functor_.is_valid()) {
+      destroy_storage_functor_();
+      destroy_storage_functor_.reset();
     }
   }
 
@@ -167,7 +180,7 @@ public:
       print_error_log(ret);
     } else {
       if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_print_time_)) {
-        PALF_LOG(INFO, "[PALF STAT ITERATOR INFO]", K(io_ctx_));
+        PALF_LOG(INFO, "[PALF STAT ITERATOR INFO]", K_(io_ctx));
       }
       PALF_LOG(TRACE, "PalfIterator next success", K(iterator_impl_), K(ret), KPC(this),
                K(replayable_point_scn), K(next_min_scn), K(iterate_end_by_replayable_point));
@@ -208,11 +221,6 @@ public:
     }
     return ret;
   }
-  int get_entry(const char *&buffer, int64_t &nbytes, share::SCN &scn, LSN &lsn)
-  {
-    bool unused_is_raw_write = false;
-    return get_entry_(buffer, nbytes, scn, lsn, unused_is_raw_write);
-  }
   int get_entry(const char *&buffer, int64_t &nbytes, share::SCN &scn, LSN &lsn, bool &is_raw_write)
   {
     return get_entry_(buffer, nbytes, scn, lsn, is_raw_write);
@@ -240,10 +248,6 @@ public:
   {
     return iterator_impl_.check_is_the_last_entry(io_ctx_);
   }
-  LSN get_curr_read_lsn() const
-  {
-    return iterator_impl_.get_curr_read_lsn();
-  }
   void print_error_log(int ret) const
   {
     if (need_print_error_ && (OB_INVALID_DATA == ret || OB_CHECKSUM_ERROR == ret)) {
@@ -255,21 +259,22 @@ public:
   {
     need_print_error_ = need_print_error;
   }
-  void enable_fill_cache()
+  // @brief cleanup some resource when calling 'destroy'.
+  int set_destroy_iterator_storage_functor(const DestroyStorageFunctor &destroy_func)
   {
-    io_ctx_.set_allow_filling_cache(true);
-  }
-  void disable_fill_cache()
-  {
-    io_ctx_.set_allow_filling_cache(false);
-  }
-  void set_palf_id(const int64_t palf_id)
-  {
-    io_ctx_.set_palf_id(palf_id);
-  }
-  void set_type(const LogIOUser user_type)
-  {
-    io_ctx_.set_user_type(user_type);
+    int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      PALF_LOG(WARN, "not inited");
+    } else if (!destroy_func.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid argument", K(destroy_func));
+    } else if (FALSE_IT(destroy_storage_functor_ = destroy_func)) {
+    } else if (!destroy_storage_functor_.is_valid()) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      PALF_LOG(WARN, "alloc memory failed, destroy_storage_functor_ is invalid", KR(ret), KPC(this));
+    } else {}
+    return ret;
   }
   TO_STRING_KV(K_(iterator_impl), K_(io_ctx));
 
@@ -277,21 +282,22 @@ private:
   int do_init_(const LSN &start_offset,
                const GetFileEndLSN &get_file_end_lsn,
                const GetModeVersion &get_mode_version,
-               ILogStorage *log_storage,
-               const bool allow_filling_cache)
+               ILogStorage *log_storage)
   {
     int ret = OB_SUCCESS;
     if (IS_INIT) {
       ret = OB_INIT_TWICE;
-    } else if (!get_file_end_lsn.is_valid() || !get_mode_version.is_valid()) {
+    } else if (!get_file_end_lsn.is_valid()
+               || !get_mode_version.is_valid()
+               || NULL == log_storage) {
       ret = OB_INVALID_ARGUMENT;
-      PALF_LOG(WARN, "invalid argument", K(ret), K(start_offset), K(get_file_end_lsn), K(get_mode_version));
+      PALF_LOG(WARN, "invalid argument", K(ret), K(start_offset), K(get_file_end_lsn), K(get_mode_version),
+               K(log_storage));
     } else if (OB_FAIL(iterator_storage_.init(start_offset, LogEntryType::BLOCK_SIZE, get_file_end_lsn, log_storage))) {
       PALF_LOG(WARN, "IteratorStorage init failed", K(ret));
     } else if (OB_FAIL(iterator_impl_.init(get_mode_version, &iterator_storage_))) {
       PALF_LOG(WARN, "PalfIterator init failed", K(ret));
     } else {
-      io_ctx_.set_allow_filling_cache(allow_filling_cache);
       io_ctx_.set_start_lsn(start_offset);
       PALF_LOG(TRACE, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
       is_inited_ = true;
@@ -338,20 +344,21 @@ private:
   }
 
 private:
-  PalfIteratorStorage iterator_storage_;
+  IteratorStorage iterator_storage_;
   LogIteratorImpl<LogEntryType> iterator_impl_;
+  DestroyStorageFunctor destroy_storage_functor_;
   bool need_print_error_;
   bool is_inited_;
   LogIOContext io_ctx_;
   int64_t last_print_time_;
 };
 
-typedef PalfIterator<MemoryIteratorStorage, LogEntry> MemPalfBufferIterator;
-typedef PalfIterator<MemoryIteratorStorage, LogGroupEntry> MemPalfGroupBufferIterator;
-typedef PalfIterator<MemoryIteratorStorage, LogMetaEntry> MemPalfMetaBufferIterator;
-typedef PalfIterator<DiskIteratorStorage, LogEntry> PalfBufferIterator;
-typedef PalfIterator<DiskIteratorStorage, LogGroupEntry> PalfGroupBufferIterator;
-typedef PalfIterator<DiskIteratorStorage, LogMetaEntry> PalfMetaBufferIterator;;
+typedef PalfIterator<LogEntry> MemPalfBufferIterator;
+typedef PalfIterator<LogGroupEntry> MemPalfGroupBufferIterator;
+typedef PalfIterator<LogMetaEntry> MemPalfMetaBufferIterator;
+typedef PalfIterator<LogEntry> PalfBufferIterator;
+typedef PalfIterator<LogGroupEntry> PalfGroupBufferIterator;
+typedef PalfIterator<LogMetaEntry> PalfMetaBufferIterator;
 }
 }
 #endif

@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_rpc_processor.h"
 #include "sql/dtl/ob_dtl.h"
-#include "sql/dtl/ob_dtl_linked_buffer.h"
 #include "sql/dtl/ob_dtl_rpc_channel.h"
-#include "sql/dtl/ob_dtl_flow_control.h"
-#include "sql/engine/basic/ob_chunk_row_store.h"
-#include "sql/dtl/ob_dtl_fc_server.h"
-#include "ob_dtl_interm_result_manager.h"
-#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 using namespace oceanbase::common;
 
 namespace oceanbase {
@@ -171,7 +165,7 @@ int ObDtlSendMessageP::process_px_bloom_filter_data(ObDtlLinkedBuffer *&buffer)
           if (OB_FAIL(filter->merge_filter(&bf_data.filter_))) {
             LOG_WARN("fail to merge filter", K(ret));
           } else if (OB_FAIL(filter->process_recieve_count(bf_data.bloom_filter_count_))) {
-            LOG_WARN("fail to process recieve count", K(ret));
+            LOG_WARN("fail to process receive count", K(ret));
           }
           // merge以及process操作完成之后, 需要减少其引用计数.
           (void)filter->dec_merge_filter_count();

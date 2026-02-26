@@ -16,7 +16,6 @@
 #include "lib/ob_define.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "share/resource_manager/ob_resource_plan_info.h"
 
 namespace oceanbase
 {
@@ -27,8 +26,18 @@ class ObString;
 class ObObj;
 class ObMySQLProxy;
 }
+namespace sql
+{
+class ObSQLSessionInfo;
+}
 namespace share
 {
+class ObPlanDirective;
+class ObResourceMappingRule;
+class ObResourceUserMappingRule;
+class ObResourceIdNameMappingRule;
+class ObResourceColumnMappingRule;
+class ObResourceMappingRuleManager;
 class ObResourceManagerProxy
 {
 public:
@@ -66,7 +75,9 @@ public:
       const common::ObObj &utilization_limit,
       const common::ObObj &min_iops,
       const common::ObObj &max_iops,
-      const common::ObObj &weight_iops);
+      const common::ObObj &weight_iops,
+      const common::ObObj &max_net_bandwidth,
+      const common::ObObj &net_bandwidth_weight);
   int create_plan_directive(
       uint64_t tenant_id,
       const common::ObString &plan,
@@ -76,7 +87,9 @@ public:
       const common::ObObj &utilization_limit,
       const common::ObObj &min_iops,
       const common::ObObj &max_iops,
-      const common::ObObj &weight_iops);
+      const common::ObObj &weight_iops,
+      const common::ObObj &max_net_bandwidth,
+      const common::ObObj &net_bandwidth_weight);
   // 这里之所以直接传入 ObObj，而不是传入 ObString 或 int
   // 是为了便于判断传入的参数是否是缺省，如果缺省则 ObObj.is_null() 是 true
   int update_plan_directive(
@@ -88,7 +101,9 @@ public:
       const common::ObObj &utilization_limit,
       const common::ObObj &min_iops,
       const common::ObObj &max_iops,
-      const common::ObObj &weight_iops);
+      const common::ObObj &weight_iops,
+      const common::ObObj &max_net_bandwidth,
+      const common::ObObj &net_bandwidth_weight);
   int delete_plan_directive(
       uint64_t tenant_id,
       const common::ObString &plan,
@@ -181,7 +196,6 @@ public:
       const common::ObString &plan,
       const common::ObString &group,
       ObPlanDirective &directive);
-  int reset_all_mapping_rules();
 
 private:
   int allocate_consumer_group_id(
@@ -208,7 +222,6 @@ private:
       uint64_t tenant_id,
       const common::ObString &user_name,
       bool &exist);
-  int check_if_function_exist(const common::ObString &function_name, bool &exist);
   int check_if_column_exist(
       uint64_t tenant_id,
       const common::ObString &db_name,
@@ -240,13 +253,18 @@ private:
       const common::ObString &group,
       const int64_t iops_minimum,
       const int64_t iops_maximum,
-      bool &valid);
+      bool &valid,
+      ObIArray<ObPlanDirective> &directives);
 
   // get user_info from inner mapping_table
   int get_user_mapping_info(
       const uint64_t tenant_id,
       const common::ObString &user,
       ObResourceUserMappingRule &rule);
+  // if net bandwidth config not default, return ob_not_support
+  int check_net_bandwidth_config_is_default_(
+      const common::ObObj &max_net_bandwidth,
+      const common::ObObj &net_bandwidth_weight);
 
 public:
   class TransGuard {

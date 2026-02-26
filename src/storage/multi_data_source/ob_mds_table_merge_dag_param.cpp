@@ -18,12 +18,16 @@ namespace storage
 {
 namespace mds
 {
-ObMdsTableMergeDagParam::ObMdsTableMergeDagParam()
+ObTabletMdsMiniMergeDagParam::ObTabletMdsMiniMergeDagParam()
   : ObTabletMergeDagParam(),
     flush_scn_(share::SCN::invalid_scn()),
     generate_ts_(0),
     mds_construct_sequence_(-1)
 {
+  // Mds dump should not access mds data to avoid potential dead lock
+  // between mds table lock on ObTabletBasePointer and other mds component
+  // inner locks.
+  skip_get_tablet_ = true;
 }
 } // namespace mds
 } // namespace storage

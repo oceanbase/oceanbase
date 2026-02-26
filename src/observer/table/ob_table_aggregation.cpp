@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_aggregation.h"
-#include "common/row/ob_row.h"
-#include "common/object/ob_obj_compare.h"
 #include "sql/engine/expr/ob_expr_add.h" // for ObExprAdd::is_add_out_of_range
 
 using namespace oceanbase::common;
@@ -135,10 +133,20 @@ void ObTableAggCalculator::aggregate_count(uint64_t idx, const ObNewRow &row, co
   const ObObj &cur_value = row.get_cell(projs_->at(idx));
   ObObj &count_val = results_.at(idx);
   if (key_word.empty() || key_word == "*") {
-    if (!count_val .is_null()) {
-      count_val.set_int(count_val.get_int() + 1);
+    if (is_count_all_) {
+      if (!cur_value.is_null()) {
+        if (!count_val.is_null()) {
+          count_val.set_int(count_val.get_int() + cur_value.get_int());
+        } else {
+          count_val.set_int(cur_value.get_int());
+        }
+      }
     } else {
-      count_val.set_int(1);
+      if (!count_val.is_null()) {
+        count_val.set_int(count_val.get_int() + 1);
+      } else {
+        count_val.set_int(1);
+      }
     }
   } else {
     if (!cur_value.is_null()) {

@@ -52,20 +52,21 @@ public:
   bool is_valid() const;
   int init(compaction::ObBasicTabletMergeCtx &merge_ctx);
   int init(const compaction::ObMediumCompactionInfo &medium_info);
+  int init_parallel_merge(const compaction::ObParallelMergeInfo &paral_info);
+  int init_serial_merge();
   OB_INLINE int64_t get_concurrent_cnt() const { return concurrent_cnt_; }
   int get_merge_range(const int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
   static int get_concurrent_cnt(
       const int64_t tablet_size,
       const int64_t macro_block_cnt,
       int64_t &concurrent_cnt);
-  TO_STRING_KV(K_(parallel_type), "array_cnt", range_array_.count(), K_(range_array), K_(concurrent_cnt), K_(is_inited));
+  DECLARE_TO_STRING;
 private:
   static const int64_t MIN_PARALLEL_MINOR_MERGE_THREASHOLD = 2;
   static const int64_t MIN_PARALLEL_MERGE_BLOCKS = 32;
   static const int64_t PARALLEL_MERGE_TARGET_TASK_CNT = 20;
 
   //TODO @hanhui parallel in ai
-  int init_serial_merge();
   int init_parallel_mini_merge(compaction::ObBasicTabletMergeCtx &merge_ctx);
   int init_parallel_mini_minor_merge(compaction::ObBasicTabletMergeCtx &merge_ctx);
   int init_parallel_major_merge(compaction::ObBasicTabletMergeCtx &merge_ctx);

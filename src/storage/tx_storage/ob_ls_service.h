@@ -19,6 +19,7 @@
 #include "storage/ob_storage_rpc.h"
 #include "storage/ls/ob_ls_meta_package.h"                      // ObLSMetaPackage
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
+#include "storage/mview/ob_major_mv_merge_info.h"
 
 namespace oceanbase
 {
@@ -50,6 +51,7 @@ class ObLSService : public ObIResourceLimitCalculatorHandler
   static const int64_t DEFAULT_LOCK_TIMEOUT = 60_s;
   static const int64_t SMALL_TENANT_MEMORY_LIMIT = 4 * 1024 * 1024 * 1024L; // 4G
   static const int64_t TENANT_MEMORY_PER_LS_NEED = 200 * 1024 * 1024L; // 200MB
+  static const int64_t TENANT_MEMORY_PER_LOGONLY_LS_NEED = 100 * 1024 * 1024L; // 100MB
 public:
   int64_t break_point = -1; // just for test
 public:
@@ -86,8 +88,9 @@ public:
   int create_ls_for_ha(const share::ObTaskId task_id, const ObMigrationOpArg &arg);
 
   // create a LS for replay or update LS's meta
+  // @param [in] ls_epoch, the epoch increases monotonically in tenant scope when an ls is created
   // @param [in] ls_meta, all the parameters that is needed to create a LS for replay
-  int replay_create_ls(const ObLSMeta &ls_meta);
+  int replay_create_ls(const int64_t ls_epoch, const ObLSMeta &ls_meta);
   // replay create ls commit slog.
   // @param [in] ls_id, the create process of which is committed.
   int replay_create_ls_commit(const share::ObLSID &ls_id);
@@ -107,6 +110,10 @@ public:
   int get_ls(const share::ObLSID &ls_id,
              ObLSHandle &handle,
              ObLSGetMod mod);
+  int get_ls_replica(
+      const ObLSID &ls_id,
+      ObLSGetMod mod,
+      share::ObLSReplica &replica);
   // @param [in] func, iterate all ls diagnose info
   int iterate_diagnose(const ObFunction<int(const storage::ObLS &ls)> &func);
 
@@ -129,6 +136,9 @@ public:
   // @param [out] guard, the iterator created.
   // use guard just like a pointer of ObLSIterator
   int get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGetMod mod);
+
+  template<class FUNC>
+  int foreach_ls(FUNC &func);
 
   // get all ls ids
   int get_ls_ids(common::ObIArray<share::ObLSID> &ls_id_array);
@@ -153,7 +163,25 @@ public:
   obrpc::ObStorageRpcProxy *get_storage_rpc_proxy() { return &storage_svr_rpc_proxy_; }
   storage::ObStorageRpc *get_storage_rpc() { return &storage_rpc_; }
   ObLSMap *get_ls_map() { return &ls_map_; }
+  int64_t get_ls_count() const { return ls_map_.get_ls_count(); }
   int dump_ls_info();
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  int check_sslog_ls_exist();
+  void report_tablet_id_for_tablet_version_gc(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id)
+  {
+    int ret = OB_SUCCESS;
+    ObLSHandle ls_handle;
+    ObTabletGCInfo tablet_info(tablet_id);
+    if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+      STORAGE_LOG(WARN, "failed to get ls", K(ret), K(ls_id), K(tablet_id));
+    } else {
+      ls_handle.get_ls()->get_ls_private_block_gc_handler().report_tablet_id_for_gc_service(tablet_info);
+    }
+  }
+#endif
 
   TO_STRING_KV(K_(tenant_id), K_(is_inited));
 private:
@@ -178,31 +206,31 @@ private:
     ObLSRestoreStatus restore_status_;
     share::ObTaskId task_id_;
     bool need_create_inner_tablet_;
+    storage::ObMajorMVMergeInfo major_mv_merge_info_;
   };
 
   int create_ls_(const ObCreateLSCommonArg &arg,
                  const ObMigrationOpArg &mig_arg);
   // the tenant smaller than 5G can only create 8 ls.
   // other tenant can create 100 ls.
-  int check_tenant_ls_num_();
+  int check_tenant_ls_num_(const bool is_check_for_logonly);
   int inner_create_ls_(const share::ObLSID &lsid,
                        const ObMigrationStatus &migration_status,
                        const share::ObLSRestoreStatus &restore_status,
                        const share::SCN &create_scn,
+                       const ObMajorMVMergeInfo &major_mv_merge_info,
+                       const ObLSStoreFormat &store_format,
+                       const ObReplicaType &replica_type,
                        ObLS *&ls);
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
-  int write_prepare_create_ls_slog_(const ObLSMeta &ls_meta) const;
-  int write_commit_create_ls_slog_(const share::ObLSID &ls_id) const;
-  int write_abort_create_ls_slog_(const share::ObLSID &ls_id) const;
-  int write_remove_ls_slog_(const share::ObLSID &ls_id) const;
   int remove_ls_from_map_(const share::ObLSID &ls_id);
-  void remove_ls_(ObLS *ls, const bool remove_from_disk, const bool write_slog);
+  void remove_ls_(ObLS *ls, const bool remove_from_disk);
   int safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk);
-  int replay_update_ls_(const ObLSMeta &ls_meta);
   int restore_update_ls_(const ObLSMetaPackage &meta_package);
   int replay_remove_ls_(const share::ObLSID &ls_id);
-  int replay_create_ls_(const ObLSMeta &ls_meta);
+  int replay_create_ls_(const int64_t ls_epoch, const ObLSMeta &ls_meta);
+  int replay_update_ls_(const ObLSMeta &ls_meta);
   int post_create_ls_(const int64_t create_type,
                       ObLS *&ls);
   void del_ls_after_create_ls_failed_(ObLSCreateState& ls_create_state, ObLS *ls);
@@ -219,7 +247,16 @@ private:
   // for resource limit calculator
   int cal_min_phy_resource_needed_(const int64_t ls_cnt,
                                    ObMinPhyResourceResult &min_phy_res);
-  int get_resource_constraint_value_(ObResoureConstraintValue &constraint_value);
+  int get_resource_constraint_value_(ObResoureConstraintValue &constraint_value,
+                                     const bool is_check_for_logonly = false);
+  // for get_ls_replica
+  int get_replica_type_(
+      const common::ObAddr &addr,
+      const ObMemberList &ob_member_list,
+      const GlobalLearnerList &learner_list,
+      const common::ObLSStoreFormat &ls_store_format,
+      const ObLSMeta &ls_meta,
+      ObReplicaType &replica_type);
 
 private:
   bool is_inited_;
@@ -252,7 +289,36 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLSService);
 };
 
+template <class FUNC>
+int ObLSService::foreach_ls(FUNC &func)
+{
+  int ret = OB_SUCCESS;
 
+  ObLSIterator *iter = NULL;
+  common::ObSharedGuard<ObLSIterator> guard;
+  if (OB_FAIL(get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
+    STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
+  } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "iter is NULL", K(ret));
+  } else {
+    ObLS *ls = nullptr;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(iter->get_next(ls))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          STORAGE_LOG(WARN, "iter next ls failed", KR(ret), KP(this));
+        }
+      } else if (OB_FAIL(func(*ls))) {
+        STORAGE_LOG(WARN, "do function on ls failed", K(ret));
+      }
+    }
+  }
+  return ret;
 }
-}
+
+}  // namespace storage
+}  // namespace oceanbase
 #endif

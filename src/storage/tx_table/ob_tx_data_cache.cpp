@@ -11,7 +11,6 @@
  */
 
 #include "ob_tx_data_cache.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/tx/ob_tx_data_op.h"
 
 namespace oceanbase {

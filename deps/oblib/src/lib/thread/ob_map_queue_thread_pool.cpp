@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "lib/thread/ob_thread_name.h"
-#include "lib/oblog/ob_log_module.h"
 #include "lib/thread/ob_map_queue_thread_pool.h"
 
 namespace oceanbase

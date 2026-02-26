@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_px_multi_part_insert_op.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/tx_storage/ob_access_service.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -46,20 +43,13 @@ int ObPxMultiPartInsertOp::inner_open()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table or row desc is invalid", K(ret), K(MY_SPEC.row_desc_));
   } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), ins_rtdef_, this, this,
-                                       MY_SPEC.ins_ctdef_.is_heap_table_))) {
+                                       MY_SPEC.ins_ctdef_.is_table_without_pk_,
+                                       MY_SPEC.ins_ctdef_.is_table_with_clustering_key_))) {
     LOG_WARN("failed to init data driver", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-    if (ObTableDirectInsertService::is_direct_insert(*plan)) {
-      int64_t task_id = ctx_.get_px_task_id() + 1;
-      if (OB_FAIL(ObTableDirectInsertService::open_task(plan->get_append_table_id(), task_id, table_ctx_))) {
-        LOG_WARN("failed to open table direct insert task", KR(ret),
-            K(plan->get_append_table_id()), K(task_id));
-      } else {
-        ins_rtdef_.das_rtdef_.direct_insert_task_id_ = task_id;
-      }
-    }
+  } else if (OB_UNLIKELY(GET_PHY_PLAN_CTX(ctx_)->get_is_direct_insert_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("direct-insert plan should not use pdml op",
+        KR(ret), K(GET_PHY_PLAN_CTX(ctx_)->get_is_direct_insert_plan()));
   }
   LOG_TRACE("pdml static insert op", K(ret), K_(MY_SPEC.row_desc), K_(MY_SPEC.ins_ctdef));
   return ret;
@@ -105,18 +95,6 @@ int ObPxMultiPartInsertOp::inner_close()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-  if (ObTableDirectInsertService::is_direct_insert(*plan)) {
-    int64_t task_id = ctx_.get_px_task_id() + 1;
-    int error_code = (static_cast<const ObPxMultiPartInsertOpInput *>(input_))->get_error_code();
-    if (OB_TMP_FAIL(ObTableDirectInsertService::close_task(plan->get_append_table_id(),
-                                                           task_id,
-                                                           table_ctx_,
-                                                           error_code))) {
-      LOG_WARN("failed to close table direct insert task", KR(tmp_ret),
-          K(plan->get_append_table_id()), K(task_id), K(error_code));
-    }
-  }
   if (OB_FAIL(ObTableModifyOp::inner_close())) {
     LOG_WARN("failed to inner close table modify", K(ret));
   } else {
@@ -143,6 +121,7 @@ int ObPxMultiPartInsertOp::read_row(ObExecContext &ctx,
       LOG_WARN("fail get next row from child", K(ret));
     }
   } else {
+    op_monitor_info_.otherstat_2_value_++;
     // 每一次从child节点获得新的数据都需要进行清除计算标记
     clear_evaluated_flag();
     if (OB_FAIL(ObDMLService::process_insert_row(MY_SPEC.ins_ctdef_, ins_rtdef_, *this, is_skipped))) {
@@ -166,6 +145,8 @@ int ObPxMultiPartInsertOp::read_row(ObExecContext &ctx,
         tablet_id = expr_datum.get_int();
         LOG_DEBUG("get the part id", K(ret), K(expr_datum));
       }
+    } else {
+      op_monitor_info_.otherstat_4_value_++;
     }
   }
   if (OB_SUCC(ret)) {
@@ -201,12 +182,16 @@ int ObPxMultiPartInsertOp::write_rows(ObExecContext &ctx,
         LOG_WARN("insert row to das failed", K(ret));
       } else if (OB_FAIL(discharge_das_write_buffer())) {
         LOG_WARN("failed to submit all dml task when the buffer of das op is full", K(ret));
+      } else {
+        op_monitor_info_.otherstat_3_value_++;
       }
     }
 
     if (OB_ITER_END == ret) {
       if (OB_FAIL(submit_all_dml_task())) {
         LOG_WARN("do insert rows post process failed", K(ret));
+      } else {
+        op_monitor_info_.otherstat_5_value_ += ins_rtdef_.das_rtdef_.affected_rows_;
       }
     }
     if (!(MY_SPEC.is_pdml_index_maintain_)) {
@@ -214,7 +199,9 @@ int ObPxMultiPartInsertOp::write_rows(ObExecContext &ctx,
       plan_ctx->add_affected_rows(ins_rtdef_.das_rtdef_.affected_rows_);
     }
     LOG_TRACE("pdml insert ok", K(MY_SPEC.is_pdml_index_maintain_),
-              K(ins_rtdef_.das_rtdef_.affected_rows_));
+              K(ins_rtdef_.das_rtdef_.affected_rows_), K(op_monitor_info_.otherstat_1_value_),
+              K(op_monitor_info_.otherstat_2_value_), K(op_monitor_info_.otherstat_3_value_),
+              K(op_monitor_info_.otherstat_4_value_), K(op_monitor_info_.otherstat_5_value_));
     ins_rtdef_.das_rtdef_.affected_rows_ = 0;
   }
   return ret;

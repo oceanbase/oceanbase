@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX TABLELOCK
 
 #include "storage/tablelock/ob_lock_utils.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h" // ObLockObjRequest
-#include "lib/mysqlclient/ob_mysql_transaction.h" // ObMysqlTransaction
 #include "observer/ob_inner_sql_connection.h" // ObInnerSQLConnection
-#include "share/ob_share_util.h" // ObShareUtil
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 
 namespace oceanbase

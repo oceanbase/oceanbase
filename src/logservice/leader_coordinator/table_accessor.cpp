@@ -11,27 +11,7 @@
  */
 
 
-#include "share/ob_errno.h"
-#include "share/ob_occam_time_guard.h"
-#include "share/rc/ob_tenant_base.h"
 #include "table_accessor.h"
-#include "lib/hash/ob_hash.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string_holder.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/utility.h"
-#include "observer/ob_server_struct.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_ls_id.h"
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <unistd.h>
-#include "share/schema/ob_schema_utils.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
 {
@@ -484,10 +464,23 @@ int LsElectionReferenceInfoRow::update_row_to_table_()
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = 0;
-  if (CLICK_FAIL(sql.append_fmt(
+  ObCStringHelper helper;
+  const char *table_str = nullptr;
+  const char *priority_str = nullptr;
+  const char *server_str = nullptr;
+  if (nullptr == (table_str = helper.convert(row_for_table_.element<2>()))) {
+    ret = OB_ERR_NULL_VALUE;
+    COORDINATOR_LOG_(WARN, "fail to convert table name");
+  } else if (nullptr == (priority_str = helper.convert(row_for_table_.element<3>()))) {
+    ret = OB_ERR_NULL_VALUE;
+    COORDINATOR_LOG_(WARN, "fail to convert zone_priority");
+  } else if (nullptr == (server_str = helper.convert(row_for_table_.element<4>()))) {
+    ret = OB_ERR_NULL_VALUE;
+    COORDINATOR_LOG_(WARN, "fail to convert manual_leader_server");
+  } else if (CLICK_FAIL(sql.append_fmt(
     "UPDATE %s SET zone_priority='%s', manual_leader_server='%s', blacklist='%s' WHERE tenant_id=%ld and ls_id=%ld",
     share::OB_ALL_LS_ELECTION_REFERENCE_INFO_TNAME,
-    to_cstring(row_for_table_.element<2>()), to_cstring(row_for_table_.element<3>()), to_cstring(row_for_table_.element<4>()),
+    table_str, priority_str, server_str,
     row_for_table_.element<0>(), row_for_table_.element<1>()))) {
     COORDINATOR_LOG_(WARN, "format insert or update sql failed");
   } else if (!trans_.is_started()) {
@@ -594,11 +587,11 @@ int TableAccessor::get_all_ls_election_reference_info(common::ObIArray<LsElectio
         COORDINATOR_LOG_(WARN, "push back new election reference info failed");
       } else {
         LsElectionReferenceInfo &back = all_ls_election_reference_info.at(all_ls_election_reference_info.count() - 1);
-        char ip_port_string[32] = {0};
+        char ip_port_string[MAX_IP_PORT_LENGTH] = {0};
         back.element<0>() = lines[idx].element<0>();// ls_id
         if (CLICK_FAIL(calculate_zone_priority_score(lines[idx].element<1>()/*zone_priority*/, zone_name_holder, back.element<1>()))) {// self server score
           COORDINATOR_LOG_(WARN, "get self zone score failed");
-        } else if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, 32))) {
+        } else if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, MAX_IP_PORT_LENGTH))) {
           COORDINATOR_LOG_(WARN, "ip port to string failed");
         } else {
           back.element<2>() = (lines[idx].element<2>().get_ob_string().case_compare(ip_port_string) == 0);// is_manual_leader
@@ -647,7 +640,10 @@ int TableAccessor::get_self_zone_region(const ObStringHolder &zone_name_holder,
   int64_t pos = 0;
   const char *columns[1] = {"info"};
   char where_condition[STACK_BUFFER_SIZE] = {0};
-  if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone = '%s' and name = 'region'", to_cstring(zone_name_holder)))) {
+  if (CLICK_FAIL({ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone = '");
+                  OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, zone_name_holder);
+                  OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "' and name = 'region'");
+                  ret;})) {
     COORDINATOR_LOG_(WARN, "where condition to string failed");
   } else if (CLICK_FAIL(ObTableAccessHelper::read_single_row(OB_SYS_TENANT_ID, columns, share::OB_ALL_ZONE_TNAME, where_condition, region_name_holder))) {
     COORDINATOR_LOG_(WARN, "get zone region from __all_zone failed");
@@ -693,7 +689,10 @@ int TableAccessor::is_primary_region(const ObStringHolder &region_name_holder, b
       ObStringHolder primary_region;
       ObStringHolder &one_primary_zone = primary_zone_list_split_by_semicolon_comma[0];
       pos = 0;
-      if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone = '%s' and name = 'region'", to_cstring(one_primary_zone)))) {
+      if (CLICK_FAIL({ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone = '");
+                      OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, one_primary_zone);
+                      OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "' and name = 'region'");
+                      ret;})) {
         COORDINATOR_LOG_(WARN, "where condition to string failed");
       } else if (CLICK_FAIL(ObTableAccessHelper::read_single_row(OB_SYS_TENANT_ID, columns, share::OB_ALL_ZONE_TNAME, where_condition, primary_region))) {
         COORDINATOR_LOG_(WARN, "get primary_region from __all_zone failed");
@@ -752,8 +751,8 @@ int TableAccessor::get_removed_status_and_reason(ObStringHolder &blacklist, bool
   if (!blacklist.empty() && CLICK_FAIL(ObTableAccessHelper::split_string_by_char(blacklist, ';', arr))) {
     COORDINATOR_LOG_(WARN, "split_string_by_char(;) failed");
   } else {
-    char ip_port_string[64] = {0};
-    if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, 64))) {
+    char ip_port_string[MAX_IP_PORT_LENGTH] = {0};
+    if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, MAX_IP_PORT_LENGTH))) {
       COORDINATOR_LOG_(WARN, "self addr to string failed");
     } else {
       int64_t len = strlen(ip_port_string);
@@ -791,7 +790,10 @@ int TableAccessor::get_zone_stop_status(ObStringHolder &zone_name, bool &is_zone
   const char *columns[1] = {"value"};
   char where_condition[STACK_BUFFER_SIZE] = {0};
   int64_t value;
-  if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone='%s' and name='status'", to_cstring(zone_name)))) {
+  if (CLICK_FAIL({ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone='");
+                  OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, zone_name);
+                  OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "' and name='status'");
+                  ret;})) {
     COORDINATOR_LOG_(WARN, "create where condition failed");
   } else if (CLICK_FAIL(ObTableAccessHelper::read_single_row(OB_SYS_TENANT_ID, columns, share::OB_ALL_ZONE_TNAME, where_condition, value))) {
     COORDINATOR_LOG_(WARN, "read row failed");
@@ -812,9 +814,9 @@ int TableAccessor::get_server_stop_status(bool &is_server_stopped)
   int64_t pos = 0;
   const char *columns[1] = {"stop_time"};
   char where_condition[STACK_BUFFER_SIZE] = {0};
-  char svr_ip_string[16] = {0};
+  char svr_ip_string[MAX_IP_ADDR_LENGTH] = {0};
   int64_t stop_time = 0;
-  if (!GCTX.self_addr().ip_to_string(svr_ip_string, 16)) {
+  if (!GCTX.self_addr().ip_to_string(svr_ip_string, MAX_IP_ADDR_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(INFO, "self ip to string failed");
   } else if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where svr_ip='%s' and svr_port=%d", svr_ip_string, GCTX.self_addr().get_port()))) {

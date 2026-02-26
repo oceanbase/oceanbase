@@ -27,13 +27,14 @@ ObIHashPartInfrastructure::~ObIHashPartInfrastructure()
 int ObIHashPartInfrastructure::init(
   uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part, int64_t ways,
   int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-  ObSqlMemMgrProcessor *sql_mem_processor)
+  ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type,
+  bool need_rewind)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  if (OB_ISNULL(buf = mem_context_->allocp(sizeof(ObArenaAllocator)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    SQL_ENG_LOG(WARN, "failed to allocate memory", K(ret));
+  if (need_rewind && 2 == ways) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_ENG_LOG(WARN, "Two-way input does not support rewind", K(ret), K(need_rewind), K(ways));
   } else {
     tenant_id_ = tenant_id;
     enable_sql_dumped_ = enable_sql_dumped;
@@ -41,6 +42,7 @@ int ObIHashPartInfrastructure::init(
     need_pre_part_ = need_pre_part;
     exprs_ = &exprs;
     max_batch_size_ = max_batch_size;
+    need_rewind_ = need_rewind;
     if (1 == ways) {
       ways_ = InputWays::ONE;
     } else if (2 == ways) {
@@ -49,14 +51,25 @@ int ObIHashPartInfrastructure::init(
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "Invalid Argument", K(ret), K(ways));
     }
-    arena_alloc_ = new (buf) ObArenaAllocator(mem_context_->get_malloc_allocator());
-    arena_alloc_->set_label("HashPartInfra");
     alloc_ = &mem_context_->get_malloc_allocator();
     sql_mem_processor_ = sql_mem_processor;
+    compressor_type_ = compressor_type;
     init_part_func_ = &ObIHashPartInfrastructure::init_default_part;
     insert_row_func_ = &ObIHashPartInfrastructure::direct_insert_row;
     part_shift_ = sizeof(uint64_t) * CHAR_BIT / 2;
     vector_ptrs_.set_allocator(alloc_);
+  }
+  return ret;
+}
+
+int ObIHashPartInfrastructure::set_need_rewind(bool need_rewind)
+{
+  int ret = OB_SUCCESS;
+  if (need_rewind && InputWays::TWO == ways_) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_ENG_LOG(WARN, "Two-way input does not support rewind", K(ret), K(need_rewind), K(ways_));
+  } else {
+    need_rewind_ = need_rewind;
   }
   return ret;
 }
@@ -90,34 +103,33 @@ void ObIHashPartInfrastructure::clean_cur_dumping_partitions()
 
 void ObIHashPartInfrastructure::clean_dumped_partitions()
 {
+#define CLEAN_DUMPED_PARTITIONS(part_list, part_map)                                              \
+  DLIST_FOREACH_REMOVESAFE_X(node, part_list, OB_SUCC(ret)) {                                     \
+    ObIntraPartition *part = node;                                                                \
+    ObIntraPartition *tmp_part = part_list.remove(part);                                          \
+    if (tmp_part != part) {                                                                       \
+      ret = OB_ERR_UNEXPECTED;                                                                    \
+      SQL_ENG_LOG(ERROR, "unexpected status: part it not match", K(ret), K(part), K(tmp_part));   \
+    } else if (OB_FAIL(part_map.erase_refactored(part->part_key_, &tmp_part))) {                  \
+      SQL_ENG_LOG(WARN, "failed to remove part from map", K(ret), K(part->part_key_));            \
+    } else if (part != tmp_part) {                                                                \
+      ret = OB_ERR_UNEXPECTED;                                                                    \
+      SQL_ENG_LOG(ERROR, "unexepcted status: part is not match", K(ret), K(part), K(tmp_part));   \
+    }                                                                                             \
+    part->~ObIntraPartition();                                                                    \
+    alloc_->free(part);                                                                           \
+    part = nullptr;                                                                               \
+  }                                                                                               \
+
   int ret = OB_SUCCESS;
-  DLIST_FOREACH_REMOVESAFE_X(node, left_part_list_, OB_SUCC(ret)) {
+  CLEAN_DUMPED_PARTITIONS(left_part_list_, left_part_map_);
+  CLEAN_DUMPED_PARTITIONS(right_part_list_, right_part_map_);
+  DLIST_FOREACH_REMOVESAFE_X(node, rewind_part_list_, OB_SUCC(ret)) {
     ObIntraPartition *part = node;
-    ObIntraPartition *tmp_part = left_part_list_.remove(part);
+    ObIntraPartition *tmp_part = rewind_part_list_.remove(part);
     if (tmp_part != part) {
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(ERROR, "unexpected status: part it not match", K(ret), K(part), K(tmp_part));
-    } else if (OB_FAIL(left_part_map_.erase_refactored(part->part_key_, &tmp_part))) {
-      SQL_ENG_LOG(WARN, "failed to remove part from map", K(ret), K(part->part_key_));
-    } else if (part != tmp_part) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_ENG_LOG(ERROR, "unexepcted status: part is not match", K(ret), K(part), K(tmp_part));
-    }
-    part->~ObIntraPartition();
-    alloc_->free(part);
-    part = nullptr;
-  }
-  DLIST_FOREACH_REMOVESAFE_X(node, right_part_list_, OB_SUCC(ret)) {
-    ObIntraPartition *part = node;
-    ObIntraPartition *tmp_part = right_part_list_.remove(part);
-    if (tmp_part != part) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_ENG_LOG(ERROR, "unexpected status: part it not match", K(ret), K(part), K(tmp_part));
-    } else if (OB_FAIL(right_part_map_.erase_refactored(part->part_key_, &tmp_part))) {
-      SQL_ENG_LOG(WARN, "failed to remove part from map", K(ret), K(part->part_key_));
-    } else if (part != tmp_part) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_ENG_LOG(ERROR, "unexepcted status: part is not match", K(ret), K(part), K(tmp_part));
     }
     part->~ObIntraPartition();
     alloc_->free(part);
@@ -125,6 +137,7 @@ void ObIHashPartInfrastructure::clean_dumped_partitions()
   }
   left_part_list_.reset();
   right_part_list_.reset();
+  rewind_part_list_.reset();
   left_part_map_.destroy();
   right_part_map_.destroy();
   has_create_part_map_ = false;
@@ -147,7 +160,6 @@ void ObIHashPartInfrastructure::destroy_cur_parts()
 void ObIHashPartInfrastructure::destroy()
 {
   reset();
-  arena_alloc_ = nullptr;
   left_part_map_.destroy();
   right_part_map_.destroy();
   vector_ptrs_.destroy();
@@ -155,6 +167,10 @@ void ObIHashPartInfrastructure::destroy()
     if (OB_NOT_NULL(alloc_)) {
       alloc_->free(my_skip_);
       my_skip_ = nullptr;
+      if (store_rows_ != nullptr) {
+        alloc_->free(store_rows_);
+        store_rows_ = nullptr;
+      }
     }
   }
 }
@@ -188,9 +204,73 @@ void ObIHashPartInfrastructure::reset()
   right_part_cur_id_ = 0;
   io_event_observer_ = nullptr;
   is_inited_vec_ = false;
-  if (OB_NOT_NULL(arena_alloc_)) {
-    arena_alloc_->reset();
+  need_rewind_ = false;
+  is_inited_pre_part_ = false;
+  has_dump_preprocess_part_ = false;
+}
+
+void ObIHashPartInfrastructure::reuse()
+{
+  left_row_store_iter_.reset();
+  right_row_store_iter_.reset();
+  hash_table_row_store_iter_.reset();
+  destroy_cur_parts();
+  clean_cur_dumping_partitions();
+  clean_dumped_partitions();
+  preprocess_part_.store_.reuse();
+  left_part_map_.clear();
+  right_part_map_.clear();
+  cur_left_part_ = nullptr;
+  cur_right_part_ = nullptr;
+  left_dumped_parts_ = nullptr;
+  right_dumped_parts_ = nullptr;
+  cur_dumped_parts_ = nullptr;
+  cur_part_start_id_ = 0;
+  start_round_ = false;
+  cur_side_ = InputSide::LEFT;
+  has_cur_part_dumped_ = false;
+  est_part_cnt_ = INT64_MAX;
+  cur_level_ = 0;
+  part_shift_ = sizeof(uint64_t) * CHAR_BIT / 2;
+  period_row_cnt_ = 0;
+  left_part_cur_id_ = 0;
+  right_part_cur_id_ = 0;
+  is_inited_vec_ = false;
+  need_rewind_ = false;
+  is_inited_pre_part_ = false;
+  has_dump_preprocess_part_ = false;
+}
+
+int ObIHashPartInfrastructure::rewind()
+{
+  int ret = OB_SUCCESS;
+  if (!need_rewind_ || InputWays::TWO == ways_ || !left_part_list_.is_empty()) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_ENG_LOG(WARN, "rewind is not supported if the condition is not met", K(ret),
+      K(need_rewind_), K(ways_), K(left_part_list_.get_size()));
+  } else {
+    has_dump_preprocess_part_ = has_create_part_map_ ? true : false;
+    has_cur_part_dumped_ = false;
+    left_row_store_iter_.reset();
+    hash_table_row_store_iter_.reset();
+    start_round_ = false;
+    cur_left_part_ = nullptr;
+    cur_dumped_parts_ = nullptr;
+    period_row_cnt_ = 0;
+    DLIST_FOREACH_REMOVESAFE_X(node, rewind_part_list_, OB_SUCC(ret)) {
+      ObIntraPartition *part = node;
+      ObIntraPartition *tmp_part = rewind_part_list_.remove(part);
+      if (tmp_part != part) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_ENG_LOG(ERROR, "unexpected status: part it not match", K(ret), K(part), K(tmp_part));
+      } else if (OB_FAIL(left_part_map_.set_refactored(tmp_part->part_key_, tmp_part))) {
+        SQL_ENG_LOG(WARN, "failed to push into hash table", K(ret), K(tmp_part->part_key_));
+      } else {
+        left_part_list_.add_last(tmp_part);
+      }
+    }
   }
+  return ret;
 }
 
 int ObIHashPartInfrastructure::init_default_part(
@@ -206,8 +286,8 @@ int ObIHashPartInfrastructure::init_default_part(
     part->part_key_.level_ = cur_level_ + 1;
     part->part_key_.nth_part_ = nth_part;
     ObMemAttr attr(tenant_id_, "HashPartInfra", ObCtxIds::WORK_AREA);
-    if (OB_FAIL(part->store_.init(*exprs_, max_batch_size_, attr, limit, true,
-                                  ObHashPartItem::get_extra_size()))) {
+    if (OB_FAIL(part->store_.init(*exprs_, max_batch_size_, attr, limit, true, /*enable_dump*/
+                                  ObHashPartItem::get_extra_size(), compressor_type_))) {
       SQL_ENG_LOG(WARN, "failed to init row store", K(ret));
     } else if (OB_ISNULL(sql_mem_processor_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -229,7 +309,7 @@ int ObIHashPartInfrastructure::start_round()
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "current rount is not finish", K(ret));
   } else {
-    if (need_pre_part_) {
+    if (need_pre_part_ && !is_inited_pre_part_) {
       if (OB_FAIL((this->*init_part_func_)(&preprocess_part_, 0, INT64_MAX, 0))) {
         SQL_ENG_LOG(WARN, "failed to init preprocess part", K(ret));
       }
@@ -242,6 +322,7 @@ int ObIHashPartInfrastructure::start_round()
     has_cur_part_dumped_ = false;
     est_part_cnt_ = INT64_MAX;
     period_row_cnt_ = 0;
+    has_dump_preprocess_part_ = false;
   }
   return ret;
 }
@@ -337,14 +418,15 @@ int ObIHashPartInfrastructure::end_round()
     left_row_store_iter_.reset();
     right_row_store_iter_.reset();
     hash_table_row_store_iter_.reset();
-    preprocess_part_.store_.reset();
     start_round_ = false;
     cur_left_part_ = nullptr;
     cur_right_part_ = nullptr;
     cur_dumped_parts_ = nullptr;
     period_row_cnt_ = 0;
-    if (OB_NOT_NULL(arena_alloc_)) {
-      arena_alloc_->reset();
+    has_dump_preprocess_part_ = false;
+    if (!need_rewind_ || has_create_part_map_) {
+      is_inited_pre_part_ = false;
+      preprocess_part_.store_.reuse();
     }
   }
   return ret;
@@ -401,7 +483,27 @@ void ObIHashPartInfrastructure::est_partition_count()
     ds = max_mem_size - tmp_part_cnt * BLOCK_SIZE - es;
     tmp_max_f = tmp_part_cnt * tmp_part_cnt * ds;
   }
+  if (slice_cnt_func_) {
+    est_part_cnt_ = est_part_cnt_ / slice_cnt_func_();
+  }
   est_part_cnt_ = est_part_cnt_ < MIN_PART_CNT ? MIN_PART_CNT : est_part_cnt_;
+}
+
+void ObIHashPartInfrastructure::dump_hp_infras_group_info()
+{
+  int ret = OB_SUCCESS;
+  int64_t slice_cnt = 1;
+  int64_t total_mem_used = get_total_mem_used();
+  int64_t mem_bound = sql_mem_processor_->get_mem_bound();
+  int64_t data_size = sql_mem_processor_->get_data_size();
+  if (slice_cnt_func_) {
+    slice_cnt = slice_cnt_func_();
+  }
+  if (total_mem_used_func_) {
+    total_mem_used = total_mem_used_func_();
+  }
+  SQL_ENG_LOG(INFO, "dump hp infras group info", K(period_row_cnt_), K(est_part_cnt_), K(slice_cnt),
+              K(mem_bound), K(data_size), K(total_mem_used));
 }
 
 int64_t ObIHashPartInfrastructure::est_bucket_count(
@@ -422,6 +524,9 @@ int64_t ObIHashPartInfrastructure::est_bucket_count(
     est_bucket_num >>= 1;
     est_bucket_mem_size = next_pow2(est_bucket_num) * bkt_size;
     est_data_mem_size = est_bucket_num * width;
+  }
+  if (slice_cnt_func_) {
+    est_bucket_num = est_bucket_num / slice_cnt_func_();
   }
   est_bucket_num = est_bucket_num < min_bucket_cnt ? min_bucket_cnt :
                     (est_bucket_num > max_bucket_cnt ? max_bucket_cnt : est_bucket_num);
@@ -457,6 +562,7 @@ insert_batch_on_partitions(const common::ObIArray<ObExpr *> &exprs,
         } else {
           ObHashPartItem *store_row = static_cast<ObHashPartItem *>(srow);
           store_row->set_hash_value(hash_values[idx], cur_dumped_parts_[part_idx]->store_.get_row_meta());
+          store_row->set_is_match(cur_dumped_parts_[part_idx]->store_.get_row_meta(), false);
         }
         return ret;
       }
@@ -546,46 +652,41 @@ int ObIHashPartInfrastructure::create_dumped_partitions(
   return ret;
 }
 
-int ObIHashPartInfrastructure::calc_hash_value_for_batch(
-  const common::ObIArray<ObExpr *> &exprs,
-  const ObBatchRows &brs,
-  uint64_t *hash_values_for_batch,
-  int64_t start_idx,
-  uint64_t *hash_vals)
+int ObIHashPartInfrastructure::calc_hash_value_for_batch(const common::ObIArray<ObExpr *> &exprs,
+                                                         const ObBitVector &skip,
+                                                         const int64_t size,
+                                                         const bool all_rows_active,
+                                                         uint64_t *hash_values_for_batch,
+                                                         int64_t start_idx, uint64_t *hash_vals)
 {
   int ret = OB_SUCCESS;
   uint64_t default_hash_value = DEFAULT_PART_HASH_VALUE;
-  if (OB_ISNULL(sort_collations_)
-      || OB_ISNULL(eval_ctx_)
-      || OB_ISNULL(hash_values_for_batch)) {
+  if (OB_ISNULL(sort_collations_) || OB_ISNULL(eval_ctx_) || OB_ISNULL(hash_values_for_batch)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "hash func or sort collation or hash values vector not init",
-                K(sort_collations_), K(brs),
-                K(hash_values_for_batch), K(ret));
-  } else if (0 == brs.size_) {
-    //do nothing
+                K(sort_collations_), K(hash_values_for_batch), K(ret));
+  } else if (0 == size) {
+    // do nothing
   } else if (0 != sort_collations_->count()) {
-    //from child op, need eval
+    // from child op, need eval
     for (int64_t j = start_idx; OB_SUCC(ret) && j < sort_collations_->count(); ++j) {
       const int64_t idx = sort_collations_->at(j).field_idx_;
-      if (OB_FAIL(exprs.at(idx)->eval_vector(*eval_ctx_, brs))) {
+      if (OB_FAIL(exprs.at(idx)->eval_vector(*eval_ctx_, skip, size, all_rows_active))) {
         SQL_ENG_LOG(WARN, "failed to eval batch", K(ret), K(j));
       }
     }
     if (OB_SUCC(ret)) {
       if (nullptr != hash_vals) {
-        MEMCPY(hash_values_for_batch, hash_vals,  sizeof(uint64_t) * brs.size_);
+        MEMCPY(hash_values_for_batch, hash_vals, sizeof(uint64_t) * size);
       }
       for (int64_t j = start_idx; OB_SUCC(ret) && j < sort_collations_->count(); ++j) {
         bool is_batch_seed = (0 != j);
         const int64_t idx = sort_collations_->at(j).field_idx_;
         ObExpr *expr = exprs.at(idx);
         ObIVector *col_vec = expr->get_vector(*eval_ctx_);
-        if (OB_FAIL(col_vec->murmur_hash_v3(*expr, hash_values_for_batch,
-                                            *brs.skip_,
-                                            EvalBound(brs.size_, brs.all_rows_active_),
-                                            is_batch_seed ? hash_values_for_batch : &default_hash_value,
-                                            is_batch_seed))) {
+        if (OB_FAIL(col_vec->murmur_hash_v3(
+              *expr, hash_values_for_batch, skip, EvalBound(size, all_rows_active),
+              is_batch_seed ? hash_values_for_batch : &default_hash_value, is_batch_seed))) {
           SQL_ENG_LOG(WARN, "failed to calc hash value", K(ret));
         }
       }
@@ -604,8 +705,12 @@ int ObIHashPartInfrastructure::update_mem_status_periodically()
                     updated))) {
     SQL_ENG_LOG(WARN, "failed to update usable memory size periodically", K(ret));
   } else if (updated) {
+    int64_t total_mem_used = get_mem_used();
+    if (total_mem_used_func_) {
+      total_mem_used = total_mem_used_func_();
+    }
     //no error no will return , do not check
-    sql_mem_processor_->update_used_mem_size(get_mem_used());
+    sql_mem_processor_->update_used_mem_size(total_mem_used);
     est_partition_count();
   }
   return ret;
@@ -727,7 +832,11 @@ insert_row_for_batch(const common::ObIArray<ObExpr *> &batch_exprs,
 int ObIHashPartInfrastructure::finish_insert_row()
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(cur_dumped_parts_)) {
+  if (need_rewind_ && has_cur_part_dumped_ &&
+      OB_FAIL(dump_preprocess_part())) {
+    SQL_ENG_LOG(WARN, "failed to dump preprocess part", K(ret));
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(cur_dumped_parts_)) {
     for (int64_t i = 0; i < est_part_cnt_ && OB_SUCC(ret); ++i) {
       SQL_ENG_LOG(TRACE, "trace dumped partition",
         K(cur_dumped_parts_[i]->store_.get_row_cnt_in_memory()),
@@ -742,6 +851,25 @@ int ObIHashPartInfrastructure::finish_insert_row()
     cur_dumped_parts_ = nullptr;
   }
   return ret;
+}
+
+bool ObIHashPartInfrastructure::is_equal_hash_infras(
+  const common::ObIArray<ObExpr *> &compare_exprs)
+{
+  bool is_equal = true;
+  if (OB_ISNULL(exprs_)) {
+    is_equal = false;
+    SQL_ENG_LOG(TRACE, "exprs is null");
+  } else if (exprs_->count() != compare_exprs.count()) {
+    is_equal = false;
+  } else {
+    for (int64_t i = 0; is_equal && i < compare_exprs.count(); i++) {
+      if (compare_exprs.at(i) != exprs_->at(i)) {
+        is_equal = false;
+      }
+    }
+  }
+  return is_equal;
 }
 
 int ObIHashPartInfrastructure::get_next_left_partition()
@@ -829,7 +957,9 @@ int ObIHashPartInfrastructure::get_cur_matched_partition(
 int ObIHashPartInfrastructure::open_hash_table_part()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(hash_table_row_store_iter_.init(&preprocess_part_.store_))) {
+  if (has_dump_preprocess_part_) {
+    // do nothing
+  } else if (OB_FAIL(hash_table_row_store_iter_.init(&preprocess_part_.store_))) {
     SQL_ENG_LOG(WARN, "failed to init row store iterator", K(ret));
   }
   return ret;
@@ -881,7 +1011,6 @@ int ObIHashPartInfrastructure::open_cur_part(InputSide input_side)
 int ObIHashPartInfrastructure::close_cur_part(InputSide input_side)
 {
   int ret = OB_SUCCESS;
-  has_cur_part_dumped_ = false;
   ObIntraPartition *tmp_part = nullptr;
   if (!start_round_) {
     ret = OB_ERR_UNEXPECTED;
@@ -899,10 +1028,17 @@ int ObIHashPartInfrastructure::close_cur_part(InputSide input_side)
     cur_right_part_ = nullptr;
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(tmp_part)) {
-    tmp_part->~ObIntraPartition();
-    alloc_->free(tmp_part);
-    tmp_part = nullptr;
+    // If has_cur_part_dumped_ is false, the partition is a leaf node.
+    // hold is required in scenarios where rewind is required
+    if (need_rewind_ && !has_cur_part_dumped_) {
+      rewind_part_list_.add_last(tmp_part);
+    } else {
+      tmp_part->~ObIntraPartition();
+      alloc_->free(tmp_part);
+      tmp_part = nullptr;
+    }
   }
+  has_cur_part_dumped_ = false;
   return ret;
 }
 
@@ -984,8 +1120,21 @@ int ObIHashPartInfrastructure::get_left_next_batch(
   uint64_t *hash_values_for_batch)
 {
   int ret = OB_SUCCESS;
-  const ObCompactRow *store_rows[max_row_cnt];
-  if (OB_ISNULL(hash_values_for_batch)) {
+  if (store_rows_ == nullptr || store_rows_size_ < max_row_cnt) {
+    if (store_rows_ != nullptr) {
+      alloc_->free(store_rows_);
+      store_rows_ = nullptr;
+    }
+    if (OB_ISNULL(store_rows_ = static_cast<const ObCompactRow **>
+        (alloc_->alloc(max_row_cnt * sizeof(ObCompactRow *))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc store rows", K(ret));
+    } else {
+      store_rows_size_ = max_row_cnt;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(hash_values_for_batch)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "hash values vector is not init", K(ret));
   } else if (OB_ISNULL(cur_left_part_) || OB_ISNULL(eval_ctx_)) {
@@ -995,7 +1144,7 @@ int ObIHashPartInfrastructure::get_left_next_batch(
                                                          *eval_ctx_,
                                                          max_row_cnt,
                                                          read_rows,
-                                                         &store_rows[0]))) {
+                                                         const_cast<const ObCompactRow **>(store_rows_)))) {
     if (OB_ITER_END != ret) {
       SQL_ENG_LOG(WARN, "failed to get next batch", K(ret));
     }
@@ -1003,7 +1152,7 @@ int ObIHashPartInfrastructure::get_left_next_batch(
   //we need to precalcucate the hash values for batch, if not iter_end
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; i < read_rows; ++i) {
-      const ObHashPartItem *sr = static_cast<const ObHashPartItem *> (store_rows[i]);
+      const ObHashPartItem *sr = static_cast<const ObHashPartItem *> (store_rows_[i]);
       hash_values_for_batch[i] = sr->get_hash_value(preprocess_part_.store_.get_row_meta());
     }
   }
@@ -1037,6 +1186,9 @@ int ObIHashPartInfrastructure::get_next_hash_table_batch(
   if (OB_ISNULL(eval_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "eval ctx is nullptr", K(ret));
+  } else if (has_dump_preprocess_part_) {
+    ret = OB_ITER_END;
+    SQL_ENG_LOG(TRACE, "has dump preprocess part", K(ret), K(has_dump_preprocess_part_));
   } else if (OB_FAIL(hash_table_row_store_iter_.get_next_batch(exprs,
                                                                *eval_ctx_,
                                                                max_row_cnt,
@@ -1058,7 +1210,7 @@ int ObIHashPartInfrastructure::process_dump(bool is_block, bool &full_by_pass)
         alloc_,
         [&](int64_t max_memory_size)
         { UNUSED(max_memory_size); return need_dump(); },
-        dumped, sql_mem_processor_->get_data_size()))) {
+        dumped, get_each_slice_avg_size(sql_mem_processor_->get_data_size())))) {
       SQL_ENG_LOG(WARN, "failed to extend max memory size", K(ret));
     } else if (dumped) {
       full_by_pass = true;
@@ -1100,18 +1252,19 @@ void ObHashPartInfrastructureVecImpl::destroy()
 {
   if (nullptr != hp_infras_) {
     hp_infras_->destroy();
-    if (OB_NOT_NULL(mem_context_)) {
-      if (OB_NOT_NULL(alloc_)) {
-        hp_infras_->~ObIHashPartInfrastructure();
-        alloc_->free(hp_infras_);
-        hp_infras_ = nullptr;
-        alloc_ = nullptr;
-      }
-      DESTROY_CONTEXT(mem_context_);
-      mem_context_ = nullptr;
+    if (OB_NOT_NULL(alloc_)) {
+      hp_infras_->~ObIHashPartInfrastructure();
+      alloc_->free(hp_infras_);
+      hp_infras_ = nullptr;
+      alloc_ = nullptr;
     }
   }
+  if (OB_NOT_NULL(mem_context_)) {
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = nullptr;
+  }
   is_inited_ = false;
+  is_destroyed_ = true;
 }
 
 int ObHashPartInfrastructureVecImpl::init_mem_context(uint64_t tenant_id)
@@ -1245,7 +1398,8 @@ int64_t ObHashPartInfrastructureVecImpl::get_bucket_size() const
 int ObHashPartInfrastructureVecImpl::init(uint64_t tenant_id,
   bool enable_sql_dumped, bool unique, bool need_pre_part,
   int64_t ways, int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-  ObSqlMemMgrProcessor *sql_mem_processor)
+  ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type,
+  bool need_rewind/*=false*/)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -1256,8 +1410,10 @@ int ObHashPartInfrastructureVecImpl::init(uint64_t tenant_id,
   } else if (OB_FAIL(init_hp_infras(tenant_id, exprs, hp_infras_))) {
     LOG_WARN("failed to init hash part infras instance", K(ret));
   } else if (OB_FAIL(hp_infras_->init(tenant_id, enable_sql_dumped, unique,
-      need_pre_part, ways, max_batch_size, exprs, sql_mem_processor))) {
+    need_pre_part, ways, max_batch_size, exprs, sql_mem_processor, compressor_type, need_rewind))) {
     LOG_WARN("failed to init hash part infras", K(ret));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc store rows", K(ret));
   } else {
     is_inited_ = true;
   }
@@ -1300,9 +1456,7 @@ int ObHashPartInfrastructureVecImpl::set_funcs(
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->set_funcs(sort_collations, eval_ctx))) {
-      LOG_WARN("failed to set funcs", K(ret));
-    }
+    return hp_infras_->set_funcs(sort_collations, eval_ctx);
   }
   return ret;
 }
@@ -1311,9 +1465,7 @@ int ObHashPartInfrastructureVecImpl::start_round()
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->start_round())) {
-      LOG_WARN("failed to start round", K(ret));
-    }
+    return hp_infras_->start_round();
   }
   return ret;
 }
@@ -1322,11 +1474,57 @@ int ObHashPartInfrastructureVecImpl::end_round()
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->end_round())) {
+    return hp_infras_->end_round();
+  }
+  return ret;
+}
+
+void ObHashPartInfrastructureVecImpl::switch_left()
+{
+  hp_infras_->switch_left();
+}
+
+bool ObHashPartInfrastructureVecImpl::has_cur_part(InputSide input_side)
+{
+  return hp_infras_->has_cur_part(input_side);
+}
+
+int ObHashPartInfrastructureVecImpl::get_right_next_batch(
+                           const common::ObIArray<ObExpr *> &exprs,
+                           const int64_t max_row_cnt,
+                           int64_t &read_rows)
+{
+  HP_INFRAS_STATUS_CHECK
+  {
+    if (OB_FAIL(hp_infras_->get_right_next_batch(exprs, max_row_cnt, read_rows))) {
       LOG_WARN("failed to end round", K(ret));
     }
   }
   return ret;
+}
+
+int ObHashPartInfrastructureVecImpl::exists_batch(
+                  const common::ObIArray<ObExpr*> &exprs,
+                  const ObBatchRows &brs, ObBitVector *skip,
+                  uint64_t *hash_values_for_batch)
+{
+  HP_INFRAS_STATUS_CHECK
+  {
+    if (OB_FAIL(hp_infras_->exists_batch(exprs, brs, skip, hash_values_for_batch))) {
+      LOG_WARN("failed to end round", K(ret));
+    }
+  }
+  return ret;
+}
+
+const RowMeta &ObHashPartInfrastructureVecImpl::get_hash_store_row_meta() const
+{
+  return hp_infras_->get_hash_store_row_meta();
+}
+
+void ObHashPartInfrastructureVecImpl::switch_right()
+{
+  hp_infras_->switch_right();
 }
 
 int ObHashPartInfrastructureVecImpl::init_hash_table(int64_t bucket_cnt,
@@ -1335,9 +1533,7 @@ int ObHashPartInfrastructureVecImpl::init_hash_table(int64_t bucket_cnt,
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->init_hash_table(bucket_cnt, min_bucket, max_bucket))) {
-      LOG_WARN("failed to init hash table", K(ret));
-    }
+    return hp_infras_->init_hash_table(bucket_cnt, min_bucket, max_bucket);
   }
   return ret;
 }
@@ -1346,26 +1542,20 @@ int ObHashPartInfrastructureVecImpl::init_my_skip(const int64_t batch_size)
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->init_my_skip(batch_size))) {
-      LOG_WARN("failed to init my skip", K(ret));
-    }
+    return hp_infras_->init_my_skip(batch_size);
   }
   return ret;
 }
 
 int ObHashPartInfrastructureVecImpl::calc_hash_value_for_batch(
-  const common::ObIArray<ObExpr *> &batch_exprs,
-  const ObBatchRows &child_brs,
-  uint64_t *hash_values_for_batch,
-  int64_t start_idx,
+  const common::ObIArray<ObExpr *> &batch_exprs, const ObBitVector &skip, const int64_t size,
+  const bool all_rows_active, uint64_t *hash_values_for_batch, int64_t start_idx,
   uint64_t *hash_vals)
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->calc_hash_value_for_batch(batch_exprs, child_brs, hash_values_for_batch,
-                                                      start_idx, hash_vals))) {
-      LOG_WARN("failed to calc hash value for batch", K(ret));
-    }
+    return hp_infras_->calc_hash_value_for_batch(batch_exprs, skip, size, all_rows_active,
+                                                 hash_values_for_batch, start_idx, hash_vals);
   }
   return ret;
 }
@@ -1374,9 +1564,7 @@ int ObHashPartInfrastructureVecImpl::finish_insert_row()
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->finish_insert_row())) {
-      LOG_WARN("failed to finish insert row", K(ret));
-    }
+    return hp_infras_->finish_insert_row();
   }
   return ret;
 }
@@ -1385,9 +1573,7 @@ int ObHashPartInfrastructureVecImpl::open_cur_part(InputSide input_side)
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->open_cur_part(input_side))) {
-      LOG_WARN("failed to open current part", K(ret));
-    }
+    return hp_infras_->open_cur_part(input_side);
   }
   return ret;
 }
@@ -1396,9 +1582,7 @@ int ObHashPartInfrastructureVecImpl::close_cur_part(InputSide input_side)
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->close_cur_part(input_side))) {
-      LOG_WARN("failed to close current part", K(ret));
-    }
+    return hp_infras_->close_cur_part(input_side);
   }
   return ret;
 }
@@ -1427,9 +1611,7 @@ int ObHashPartInfrastructureVecImpl::get_next_pair_partition(InputSide input_sid
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->get_next_pair_partition(input_side))) {
-      LOG_WARN("failed to get next pair partition", K(ret));
-    }
+    return hp_infras_->get_next_pair_partition(input_side);
   }
   return ret;
 }
@@ -1438,9 +1620,7 @@ int ObHashPartInfrastructureVecImpl::get_next_partition(InputSide input_side)
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->get_next_partition(input_side))) {
-      LOG_WARN("failed to get next partition", K(ret));
-    }
+    return hp_infras_->get_next_partition(input_side);
   }
   return ret;
 }
@@ -1453,10 +1633,7 @@ int ObHashPartInfrastructureVecImpl::get_left_next_batch(
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->get_left_next_batch(exprs, max_row_cnt,
-                                                read_rows, hash_values_for_batch))) {
-      LOG_WARN("failed to get left next batch", K(ret));
-    }
+    return hp_infras_->get_left_next_batch(exprs, max_row_cnt, read_rows, hash_values_for_batch);
   }
   return ret;
 }
@@ -1469,9 +1646,7 @@ int ObHashPartInfrastructureVecImpl::get_next_hash_table_batch(
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->get_next_hash_table_batch(exprs, max_row_cnt, read_rows, store_row))) {
-      LOG_WARN("failed to get next hash table batch", K(ret));
-    }
+    return hp_infras_->get_next_hash_table_batch(exprs, max_row_cnt, read_rows, store_row);
   }
   return ret;
 }
@@ -1480,9 +1655,7 @@ int ObHashPartInfrastructureVecImpl::resize(int64_t bucket_cnt)
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->resize(bucket_cnt))) {
-      LOG_WARN("failed to resize", K(ret));
-    }
+    return hp_infras_->resize(bucket_cnt);
   }
   return ret;
 }
@@ -1496,10 +1669,8 @@ int ObHashPartInfrastructureVecImpl::insert_row_for_batch(
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->insert_row_for_batch(batch_exprs, hash_values_for_batch,
-                                                 batch_size, skip, output_vec))) {
-      LOG_WARN("failed to insert row for batch", K(ret));
-    }
+    return hp_infras_->insert_row_for_batch(batch_exprs, hash_values_for_batch, batch_size, skip,
+                                            output_vec);
   }
   return ret;
 }
@@ -1517,11 +1688,9 @@ int ObHashPartInfrastructureVecImpl::do_insert_batch_with_unique_hash_table_by_p
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->do_insert_batch_with_unique_hash_table_by_pass(
-          exprs, hash_values_for_batch, batch_size, skip, is_block, can_insert, exists,
-          full_by_pass, output_vec))) {
-      LOG_WARN("failed to do insert batch with unique hash table by pass", K(ret));
-    }
+    return hp_infras_->do_insert_batch_with_unique_hash_table_by_pass(
+      exprs, hash_values_for_batch, batch_size, skip, is_block, can_insert, exists, full_by_pass,
+      output_vec);
   }
   return ret;
 }
@@ -1530,9 +1699,7 @@ int ObHashPartInfrastructureVecImpl::open_hash_table_part()
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->open_hash_table_part())) {
-      LOG_WARN("failed to open hash table part", K(ret));
-    }
+    return hp_infras_->open_hash_table_part();
   }
   return ret;
 }
@@ -1578,9 +1745,7 @@ int ObHashPartInfrastructureVecImpl::extend_hash_table_l3()
 {
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->extend_hash_table_l3())) {
-      LOG_WARN("failed to extend hash table l3", K(ret));
-    }
+    return hp_infras_->extend_hash_table_l3();
   }
   return ret;
 }
@@ -1605,6 +1770,17 @@ int64_t ObHashPartInfrastructureVecImpl::get_hash_store_mem_used() const
   return ht_mem_used;
 }
 
+int64_t ObHashPartInfrastructureVecImpl::get_actual_mem_used() const
+{
+  int64_t actual_mem_used = 0;
+  HP_INFRAS_STATUS_CHECK
+  {
+    actual_mem_used = hp_infras_->get_hash_store_mem_used()
+      + hp_infras_->get_hash_table_mem_used();
+  }
+  return actual_mem_used;
+}
+
 void ObHashPartInfrastructureVecImpl::destroy_my_skip()
 {
   if (nullptr != hp_infras_) {
@@ -1620,5 +1796,61 @@ int64_t ObHashPartInfrastructureVecImpl::estimate_total_count() const
     est_total_cnt = hp_infras_->estimate_total_count();
   }
   return est_total_cnt;
+}
+
+void ObHashPartInfrastructureVecImpl::reuse()
+{
+  HP_INFRAS_STATUS_CHECK
+  {
+    hp_infras_->reuse();
+  }
+}
+
+int64_t ObHashPartInfrastructureVecImpl::get_total_mem_used() const
+{
+  int64_t mem_used = 0;
+  HP_INFRAS_STATUS_CHECK
+  {
+    mem_used = hp_infras_->get_total_mem_used();
+  }
+  return mem_used;
+}
+
+bool ObHashPartInfrastructureVecImpl::is_equal_hash_infras(
+  const common::ObIArray<ObExpr *> &compare_exprs)
+{
+  bool is_equal = true;
+  HP_INFRAS_STATUS_CHECK
+  {
+    is_equal = hp_infras_->is_equal_hash_infras(compare_exprs);
+  }
+  return is_equal;
+}
+
+void ObHashPartInfrastructureVecImpl::set_hp_infras_group_func(HpGroupAggrFunc mem_calc_func,
+                                                               HpGroupAggrFunc slice_calc_func)
+{
+  HP_INFRAS_STATUS_CHECK
+  {
+    hp_infras_->set_hp_infras_group_func(mem_calc_func, slice_calc_func);
+  }
+}
+
+int ObHashPartInfrastructureVecImpl::set_need_rewind(bool need_rewind)
+{
+  HP_INFRAS_STATUS_CHECK
+  {
+    return hp_infras_->set_need_rewind(need_rewind);
+  }
+  return ret;
+}
+
+int ObHashPartInfrastructureVecImpl::rewind()
+{
+  HP_INFRAS_STATUS_CHECK
+  {
+    return hp_infras_->rewind();
+  }
+  return ret;
 }
 //////////////////// end ObHashPartInfrastructureVecImpl //////////////////

@@ -49,7 +49,6 @@ private:
       new_expr_(NULL),
       equal_infos_(),
       need_add_constraint_(PRE_CALC_RESULT_NONE),
-      can_pullup_(false),
       mem_equal_(false),
       is_used_(false),
       is_complex_const_info_(false),
@@ -67,13 +66,12 @@ private:
     ObRawExpr* new_expr_;
     common::ObSEArray<ObPCParamEqualInfo, 2> equal_infos_;
     PreCalcExprExpectResult need_add_constraint_;
-    bool can_pullup_;
     bool mem_equal_; //param expr mem is const expr.
     bool is_used_;
     //record or/in predicate const exprs
     bool is_complex_const_info_;
-    common::ObSEArray<ObRawExpr*, 4> multi_const_exprs_;
-    common::ObSEArray<PreCalcExprExpectResult, 4> multi_need_add_constraints_;
+    common::ObSEArray<ObRawExpr*, 2> multi_const_exprs_;
+    common::ObSEArray<PreCalcExprExpectResult, 2> multi_need_add_constraints_;
 
     TO_STRING_KV(KPC_(column_expr),
                  KPC_(const_expr),
@@ -81,7 +79,6 @@ private:
                  K_(new_expr),
                  K_(equal_infos),
                  K_(need_add_constraint),
-                 K_(can_pullup),
                  K_(mem_equal),
                  K_(is_used),
                  K_(is_complex_const_info),
@@ -99,16 +96,21 @@ private:
     {
     }
     ~ConstInfoContext() {}
+    void reset() {
+      active_const_infos_.reset();
+      expired_const_infos_.reset();
+      extra_excluded_exprs_.reset();
+    }
 
     int add_const_infos(ObIArray<ExprConstInfo> &const_infos);
     int add_const_info(ExprConstInfo &const_info);
-    int merge_expired_const_infos(ConstInfoContext &other, bool is_null_side);
+    int merge_expired_const_infos(ConstInfoContext &other, bool can_pull_up);
     int find_exclude_expr(const ObRawExpr *expr, bool &found);
     int expire_const_infos();
 
-    common::ObSEArray<ExprConstInfo, 4> active_const_infos_;
-    common::ObSEArray<ExprConstInfo, 4> expired_const_infos_;
-    common::ObSEArray<ObRawExpr *, 4> extra_excluded_exprs_;
+    common::ObSEArray<ExprConstInfo, 2> active_const_infos_;
+    common::ObSEArray<ExprConstInfo, 2> expired_const_infos_;
+    common::ObSEArray<ObRawExpr *, 2> extra_excluded_exprs_;
     bool allow_trans_;
     const ObSharedExprChecker &shared_expr_checker_;
 
@@ -165,13 +167,16 @@ private:
                            ConstInfoContext &const_ctx,
                            bool &trans_happened);
   int replace_select_exprs_skip_agg(ObSelectStmt *stmt,
-                                  ConstInfoContext &const_ctx,
-                                  bool &trans_happened);
-  int replace_select_exprs_skip_agg_internal(ObRawExpr *&cur_expr,
-                                          ConstInfoContext &const_ctx,
-                                          ObIArray<ObRawExpr *> &parent_exprs,
-                                          bool &trans_happened,
-                                          bool used_in_compare);
+                                   ConstInfoContext &const_ctx,
+                                   bool &trans_happened);
+  int replace_common_exprs_skip_agg(ObIArray<ObRawExpr*> &exprs,
+                                    ConstInfoContext &const_ctx,
+                                    bool &trans_happened);
+  int replace_expr_skip_agg_internal(ObRawExpr *&cur_expr,
+                                     ConstInfoContext &const_ctx,
+                                     ObIArray<ObRawExpr *> &parent_exprs,
+                                     bool &trans_happened,
+                                     bool used_in_compare);
 
   int replace_assignment_exprs(ObIArray<ObAssignment> &assignments,
                                ConstInfoContext &const_ctx,
@@ -187,7 +192,12 @@ private:
 
   int exclude_redundancy_join_cond(ObIArray<ObRawExpr*> &condition_exprs,
                                   ObIArray<ExprConstInfo> &expr_const_infos,
-                                  ObIArray<ObRawExpr*> &excluded_exprs);
+                                  ObIArray<ObRawExpr*> &excluded_exprs,
+                                  ObDMLStmt *stmt);
+
+  int check_is_expr_const_null(ObIArray<ExprConstInfo> &expr_const_infos,
+                               ObRawExpr *expr,
+                               bool &is_const_null);
 
   bool find_const_expr(ObIArray<ExprConstInfo> &expr_const_infos, 
                       ObRawExpr *expr, 
@@ -303,7 +313,7 @@ private:
                                      bool &trans_happened);
 
   int check_constraint_expr_validity(ObRawExpr *check_constraint_expr,
-                                     const ObIArray<ObDMLStmt::PartExprItem> &part_items,
+                                     const ObIArray<PartExprItem> &part_items,
                                      ObIArray<ExprConstInfo> &expr_const_infos,
                                      ObRawExpr *&part_column_expr,
                                      ObIArray<ObRawExpr*> &old_column_exprs,
@@ -313,7 +323,7 @@ private:
 
   int do_check_constraint_param_expr_vaildity(ObRawExpr *column_param_expr,
                                               ObRawExpr *non_column_param_expr,
-                                              const ObIArray<ObDMLStmt::PartExprItem> &part_items,
+                                              const ObIArray<PartExprItem> &part_items,
                                               ObIArray<ExprConstInfo> &expr_const_infos,
                                               ObIArray<ObRawExpr*> &old_column_exprs,
                                               ObIArray<ObRawExpr*> &new_const_exprs,

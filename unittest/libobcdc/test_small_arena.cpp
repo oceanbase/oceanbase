@@ -14,7 +14,6 @@
 #include "ob_log_utils.h"       // current_time
 #include "ob_small_arena.h"
 
-#include "lib/allocator/ob_concurrent_fifo_allocator.h"   // ObConcurrentFIFOAllocator
 
 #define ALLOC_AND_CHECK(size) ALLOC_ALIGN_AND_CHECK(sizeof(void*), size)
 

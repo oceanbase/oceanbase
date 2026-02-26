@@ -12,6 +12,7 @@
 
 #ifndef OCEANBASE_RPC_OBRPC_OB_RPC_TIME_
 #define OCEANBASE_RPC_OBRPC_OB_RPC_TIME_
+#include <cstdint>
 
 namespace oceanbase
 {

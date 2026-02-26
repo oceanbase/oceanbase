@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ls/ob_ls.h"
-#include "storage/checkpoint/ob_checkpoint_executor.h"
+#include "ob_checkpoint_executor.h"
 #include "storage/tx_storage/ob_checkpoint_service.h"
-#include "storage/checkpoint/ob_data_checkpoint.h"
-#include "share/ob_force_print_log.h"
-#include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
@@ -31,34 +27,43 @@ namespace checkpoint
 {
 
 ObCheckpointExecutor::ObCheckpointExecutor()
-    : rwlock_(common::ObLatchIds::CLOG_CKPT_RWLOCK),
+    : ls_(nullptr),
+      loghandler_(nullptr),
+      rwlock_(common::ObLatchIds::CLOG_CKPT_RWLOCK),
       update_checkpoint_enabled_(false),
       reuse_recycle_scn_times_(0),
       prev_clog_checkpoint_lsn_(),
       prev_recycle_scn_(),
       update_clog_checkpoint_times_(0),
       last_add_server_history_time_(0)
+#ifdef OB_BUILD_SHARED_STORAGE
+      ,
+      ckpt_change_record_()
+#endif
 {
-  reset();
+  MEMSET(handlers_, 0, sizeof(ObICheckpointSubHandler *) * ObLogBaseType::MAX_LOG_BASE_TYPE);
 }
 
 ObCheckpointExecutor::~ObCheckpointExecutor()
-{
-  reset();
-}
-
-void ObCheckpointExecutor::reset()
 {
   for (int i = 0; i < ObLogBaseType::MAX_LOG_BASE_TYPE; i++) {
     handlers_[i] = NULL;
   }
   ls_ = NULL;
   loghandler_ = NULL;
+  reset();
+}
+
+void ObCheckpointExecutor::reset()
+{
   reuse_recycle_scn_times_ = 0;
   prev_clog_checkpoint_lsn_.reset();
   prev_recycle_scn_.set_invalid();
   update_clog_checkpoint_times_ = 0;
   last_add_server_history_time_ = 0;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ckpt_change_record_.reset();
+#endif
 }
 
 int ObCheckpointExecutor::register_handler(const ObLogBaseType &type,
@@ -115,6 +120,7 @@ void ObCheckpointExecutor::offline()
 {
   WLockGuard guard(rwlock_);
   update_checkpoint_enabled_ = false;
+  reset();
 }
 
 void ObCheckpointExecutor::get_min_rec_scn(int &log_type, SCN &min_rec_scn) const
@@ -130,16 +136,17 @@ void ObCheckpointExecutor::get_min_rec_scn(int &log_type, SCN &min_rec_scn) cons
   }
 }
 
-inline void get_min_rec_scn_service_type_by_index_(int index, char* service_type)
+inline void get_min_rec_scn_service_type_by_index_(int index, char* service_type, const int64_t str_len)
 {
   int ret = OB_SUCCESS;
   if (index == 0) {
-    strncpy(service_type ,"MAX_DECIDED_SCN", common::MAX_SERVICE_TYPE_BUF_LENGTH);
-  } else if (OB_FAIL(log_base_type_to_string(ObLogBaseType(index),
-                     service_type,
-                     common::MAX_SERVICE_TYPE_BUF_LENGTH))) {
+    strncpy(service_type ,"MAX_DECIDED_SCN", str_len);
+  } else if (OB_FAIL(log_base_type_to_string(ObLogBaseType(index), service_type, str_len))) {
     STORAGE_LOG(WARN, "log_base_type_to_string failed", K(ret), K(index));
-    strncpy(service_type ,"UNKNOWN_SERVICE_TYPE", common::MAX_SERVICE_TYPE_BUF_LENGTH);
+    strncpy(service_type ,"UNKNOWN_SERVICE_TYPE", str_len);
+  }
+  if (str_len > 0) {
+    service_type[str_len - 1] = '\0';
   }
 }
 
@@ -167,20 +174,28 @@ int ObCheckpointExecutor::update_clog_checkpoint()
   RLockGuard guard(rwlock_);
   if (update_checkpoint_enabled_) {
     ObFreezer *freezer = ls_->get_freezer();
+    const share::ObLSID ls_id = ls_->get_ls_id();
     if (OB_NOT_NULL(freezer)) {
-      SCN checkpoint_scn;
-      checkpoint_scn.set_max();
-      if (OB_FAIL(freezer->get_max_consequent_callbacked_scn(checkpoint_scn))) {
-        STORAGE_LOG(WARN, "get_max_consequent_callbacked_scn failed", K(ret), K(freezer->get_ls_id()));
+      SCN max_decided_scn;
+      if (OB_FAIL(freezer->get_max_consequent_callbacked_scn(max_decided_scn))) {
+        STORAGE_LOG(WARN, "get_max_consequent_callbacked_scn failed", K(ret), K(ls_id));
       } else {
         // used to record which handler provide the smallest rec_scn
         int min_rec_scn_service_type_index = 0;
-        char service_type[common::MAX_SERVICE_TYPE_BUF_LENGTH];
+        const int64_t buf_len = common::MAX_SERVICE_TYPE_BUF_LENGTH;
+        char service_type[buf_len];
+        SCN checkpoint_scn = max_decided_scn;
         get_min_rec_scn(min_rec_scn_service_type_index, checkpoint_scn);
-        get_min_rec_scn_service_type_by_index_(min_rec_scn_service_type_index, service_type);
+        get_min_rec_scn_service_type_by_index_(min_rec_scn_service_type_index, service_type, buf_len);
+
+#ifdef OB_BUILD_SHARED_STORAGE
+        if (GCTX.is_shared_storage_mode()) {
+          // here we can check if checkpoint is quickly changed because ss mode do advance_checkpoint each 10 minutes
+          (void)ObCkptUtil::check_ckpt_changed(false /*is_ss_ckpt*/, ls_id, checkpoint_scn, ckpt_change_record_);
+        }
+#endif
 
         const SCN checkpoint_scn_in_ls_meta = ls_->get_clog_checkpoint_scn();
-        const share::ObLSID ls_id = ls_->get_ls_id();
         LSN clog_checkpoint_lsn;
         if (checkpoint_scn == checkpoint_scn_in_ls_meta) {
           STORAGE_LOG(INFO, "[CHECKPOINT] clog checkpoint no change", K(checkpoint_scn),
@@ -194,25 +209,25 @@ int ObCheckpointExecutor::update_clog_checkpoint()
                         K(checkpoint_scn_in_ls_meta), K(ls_id), K(service_type));
           }
         } else if (OB_FAIL(loghandler_->locate_by_scn_coarsely(checkpoint_scn, clog_checkpoint_lsn))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            STORAGE_LOG(WARN, "no file in disk", K(ret), K(ls_id), K(checkpoint_scn));
-            ret = OB_SUCCESS;
-          } else if (OB_NOT_INIT == ret) {
+          if (OB_NOT_INIT == ret) {
             STORAGE_LOG(WARN, "palf has been disabled", K(ret), K(checkpoint_scn), K(ls_->get_ls_id()));
             ret = OB_SUCCESS;
-          } else if (OB_NEED_RETRY == ret) {
+          } else if (OB_NEED_RETRY == ret || OB_ENTRY_NOT_EXIST == ret) {
             STORAGE_LOG(WARN, "locate_by_scn_coarsely need retry", K(checkpoint_scn), K(ls_->get_ls_id()));
             ret = OB_SUCCESS;
           } else {
             STORAGE_LOG(ERROR, "locate lsn by logts failed", K(ret), K(ls_id),
                         K(checkpoint_scn), K(checkpoint_scn_in_ls_meta));
           }
-        } else if (OB_FAIL(ls_->set_clog_checkpoint(clog_checkpoint_lsn, checkpoint_scn))) {
+        } else if (OB_FAIL(ls_->set_clog_checkpoint(clog_checkpoint_lsn, checkpoint_scn, true/*write_slog*/))) {
           STORAGE_LOG(WARN, "set clog checkpoint failed", K(ret), K(clog_checkpoint_lsn), K(checkpoint_scn), K(ls_id));
         } else {
           update_clog_checkpoint_times_++;
           FLOG_INFO("[CHECKPOINT] update clog checkpoint successfully",
-                    K(clog_checkpoint_lsn), K(checkpoint_scn), K(ls_id),
+                    K(max_decided_scn),
+                    K(clog_checkpoint_lsn),
+                    K(checkpoint_scn),
+                    K(ls_id),
                     K(service_type));
         }
         add_server_event_history_for_update_clog_checkpoint(checkpoint_scn, service_type);
@@ -379,21 +394,44 @@ int ObCheckpointExecutor::calculate_recycle_scn_(const SCN max_decided_scn, SCN 
   return ret;
 }
 
+/**
+ * @brief As calculate_recycle_scn_() comments show : There is a threshold of clog recycle and the default value is 5%.
+ *But if there are too many logstreams in a single tenant, for example, 20 logstreams. And each logstream used 4.9% clog
+ *disk, then all logstreams used 98% clog disk but the clog recycling cannot be triggered. So another parameter is added
+ *: MAX_TENANT_RECYCLE_CLOG_PERCENTAGE, which used to set the max recycle clog trigger.
+ *
+ *For example, in the previous logic, if there were a total of 10 logstreams and the minimum recycle threshold for each
+ *logstream was 5%, then the total threshold would be 50%. However, in the new logic, the minimum recycle threshold for
+ *each log stream cannot reach 5% but is calculated as MAX_TENANT_RECYCLE_CLOG_PERCENTAGE (30) divided by 10, which is
+ *3%. Therefore, regardless of the number of log streams, it ensures that the clog recycling can be triggered properly.
+ *
+ */
 int ObCheckpointExecutor::calculate_min_recycle_scn_(const LSN clog_checkpoint_lsn, SCN &min_recycle_scn)
 {
-  const int64_t MIN_RECYCLE_CLOG_PERCENTAGE = 5;
+  const int64_t DEFAULT_MIN_LS_RECYCLE_CLOG_PERCENTAGE = 5;
+  const int64_t MAX_TENANT_RECYCLE_CLOG_PERCENTAGE = ObCheckPointService::NEED_FLUSH_CLOG_DISK_PERCENT;
+
   int ret = OB_SUCCESS;
   int64_t used_size = 0;
   int64_t total_size = 0;
 
-  logservice::ObLogService *log_service = nullptr;
-  if (OB_ISNULL(log_service = MTL(logservice::ObLogService *))) {
+  ObLogService *log_service = nullptr;
+  ObLSService *ls_service = nullptr;
+  if (OB_ISNULL(log_service = MTL(ObLogService *)) || OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "get_log_service failed", K(ret));
   } else if (OB_FAIL(log_service->get_palf_disk_usage(used_size, total_size))) {
     STORAGE_LOG(WARN, "get_disk_usage failed", K(ret), K(used_size), K(total_size));
   } else {
-    LSN min_recycle_lsn = clog_checkpoint_lsn + (total_size * MIN_RECYCLE_CLOG_PERCENTAGE / 100);
+    int64_t ls_count = ls_service->get_ls_count();
+    if (ls_count <= 0) {
+      ls_count = 1;
+    }
+
+    int64_t ls_min_recycle_clog_percentage =
+        MIN(DEFAULT_MIN_LS_RECYCLE_CLOG_PERCENTAGE, MAX_TENANT_RECYCLE_CLOG_PERCENTAGE / ls_count);
+
+    LSN min_recycle_lsn = clog_checkpoint_lsn + (total_size * ls_min_recycle_clog_percentage / 100);
     if (OB_FAIL(loghandler_->locate_by_lsn_coarsely(min_recycle_lsn, min_recycle_scn))) {
       STORAGE_LOG(WARN, "locate min_recycle_scn by lsn failed", KR(ret));
     }

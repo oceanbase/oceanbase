@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_multiple_heap_table_index_scanner.h"
-#include "storage/direct_load/ob_direct_load_multiple_heap_table.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table_index_entry_compare.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 

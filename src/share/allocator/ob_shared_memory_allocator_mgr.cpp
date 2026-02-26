@@ -45,15 +45,17 @@ void ObSharedMemAllocMgr::update_throttle_config()
     int64_t mds_limit_percentage = tenant_config->_mds_memory_limit_percentage;
     int64_t trigger_percentage = tenant_config->writing_throttling_trigger_percentage;
     int64_t max_duration = tenant_config->writing_throttling_maximum_duration;
+    int64_t tenant_vector_limit_percentage = ObTenantVectorAllocator::get_vector_mem_limit_percentage(tenant_config);
     if (0 == share_mem_limit_percentage) {
-      // 0 means use (memstore_limit + 10)
-      share_mem_limit_percentage = tenant_memstore_limit_percentage + 10;
+      // 0 means use (max(memstore_limit, vector_limit + 5) + 10)
+      share_mem_limit_percentage = MAX(tenant_memstore_limit_percentage, tenant_vector_limit_percentage + 5) + 10;
     }
 
     int64_t share_mem_limit = total_memory / 100 * share_mem_limit_percentage;
     int64_t memstore_limit = total_memory / 100 * tenant_memstore_limit_percentage;
     int64_t tx_data_limit = total_memory / 100 * tx_data_limit_percentage;
     int64_t mds_limit = total_memory / 100 * mds_limit_percentage;
+    int64_t vector_limit = total_memory / 100 * tenant_vector_limit_percentage;
 
     bool share_config_changed = false;
     (void)share_resource_throttle_tool_.update_throttle_config<FakeAllocatorForTxShare>(
@@ -71,7 +73,12 @@ void ObSharedMemAllocMgr::update_throttle_config()
     (void)share_resource_throttle_tool_.update_throttle_config<ObTenantMdsAllocator>(
         mds_limit, trigger_percentage, max_duration, mds_config_changed);
 
-    if (share_config_changed || memstore_config_changed || tx_data_config_changed || mds_config_changed) {
+    bool vector_config_changed = false;
+    (void)share_resource_throttle_tool_.update_throttle_config<ObTenantVectorAllocator>(
+        vector_limit, trigger_percentage, max_duration, vector_config_changed);
+
+    if (share_config_changed || memstore_config_changed || tx_data_config_changed || mds_config_changed ||
+        vector_config_changed) {
       SHARE_LOG(INFO,
                 "[Throttle] Update Config",
                 K(tenant_id_),
@@ -85,7 +92,9 @@ void ObSharedMemAllocMgr::update_throttle_config()
                 K(mds_limit_percentage),
                 K(mds_limit),
                 K(trigger_percentage),
-                K(max_duration));
+                K(max_duration),
+                K(tenant_vector_limit_percentage),
+                K(vector_limit));
 
     }
   } else {

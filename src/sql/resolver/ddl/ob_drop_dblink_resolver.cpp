@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_drop_dblink_resolver.h"
 
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_drop_dblink_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -83,7 +80,7 @@ int ObDropDbLinkResolver::resolve(const ParseNode &parse_tree)
     if (OB_ISNULL(name_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
-    } else if (name_node->str_len_ >= OB_MAX_DBLINK_NAME_LENGTH) {
+    } else if (name_node->str_len_ > OB_MAX_DBLINK_NAME_LENGTH) {
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(name_node->str_len_), name_node->str_value_);
     } else {

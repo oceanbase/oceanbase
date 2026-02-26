@@ -11,14 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "lib/utility/utility.h"      // ob_atoll
 #include "share/backup/ob_archive_persist_helper.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
 #include "share/ob_tenant_info_proxy.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_smart_var.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -602,21 +596,18 @@ int ObArchivePersistHelper::start_new_round(common::ObISQLClient &proxy, const O
   return ret;
 }
 
-int ObArchivePersistHelper::stop_round(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &round) const
+int ObArchivePersistHelper::stop_round(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &old_round,
+    const ObTenantArchiveRoundAttr &new_round) const
 {
   int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-  ObInnerTableOperator round_table_operator;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
-  } else if (!round.state_.is_stop()) {
+  } else if (!new_round.state_.is_stop()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid round state", K(ret), K(round));
-  } else if (OB_FAIL(round_table_operator.init(OB_ALL_LOG_ARCHIVE_PROGRESS_TNAME, *this))) {
-    LOG_WARN("failed to init round progress table", K(ret));
-  } else if (OB_FAIL(round_table_operator.update_row(proxy, round, affected_rows))) {
-    LOG_WARN("failed to stop round", K(ret), K(round));
+    LOG_WARN("invalid round state", K(ret), K(new_round));
+  } else if (OB_FAIL(switch_round_state_to(proxy, old_round, new_round))) {
+    LOG_WARN("failed to stop round", K(ret), K(old_round), K(new_round));
   }
 
   return ret;
@@ -635,7 +626,13 @@ int ObArchivePersistHelper::switch_round_state_to(common::ObISQLClient &proxy, c
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
   } else if (OB_FAIL(round_table_operator.init(OB_ALL_LOG_ARCHIVE_PROGRESS_TNAME, *this))) {
     LOG_WARN("failed to init round progress table", K(ret));
-  } else if (OB_FAIL(predicates.assign_fmt("%s='%s'", OB_STR_STATUS, round.state_.to_status_str()))) {
+  } else if (OB_FAIL(predicates.assign_fmt("%s = '%s' and %s = %ld and %s = %lu",
+                                           OB_STR_STATUS,
+                                           round.state_.to_status_str(),
+                                           OB_STR_ROUND_ID,
+                                           round.round_id_,
+                                           OB_STR_CHECKPOINT_SCN,
+                                           round.checkpoint_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to assign predicates", K(ret), K(round));
   } else if (OB_FAIL(assignments.assign_fmt("%s='%s'", OB_STR_STATUS, new_state.to_status_str()))) {
     LOG_WARN("failed to assign assignments", K(ret), K(new_state));
@@ -659,12 +656,21 @@ int ObArchivePersistHelper::switch_round_state_to(common::ObISQLClient &proxy, c
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
   } else if (OB_FAIL(round_table_operator.init(OB_ALL_LOG_ARCHIVE_PROGRESS_TNAME, *this))) {
     LOG_WARN("failed to init round progress table", K(ret));
-  } else if (OB_FAIL(condition.assign_fmt("%s='%s'", OB_STR_STATUS, old_round.state_.to_status_str()))) {
+  } else if (OB_FAIL(condition.assign_fmt("%s = '%s' and %s = %ld and %s = %lu",
+                                          OB_STR_STATUS,
+                                          old_round.state_.to_status_str(),
+                                          OB_STR_ROUND_ID,
+                                          old_round.round_id_,
+                                          OB_STR_CHECKPOINT_SCN,
+                                          old_round.checkpoint_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to assign condition", K(ret), K(old_round));
   } else if (OB_FAIL(new_round.build_assignments(assignments))) {
     LOG_WARN("failed to build assignments", K(ret), K(new_round));
   } else if (OB_FAIL(round_table_operator.compare_and_swap(proxy, old_round, assignments.ptr(), condition.ptr(), affected_rows))) {
     LOG_WARN("failed to switch round state", K(ret), K(old_round), K(new_round));
+  } else if (0 == affected_rows) {
+    ret = OB_EAGAIN;
+    LOG_WARN("round attr has changed, may be leader switched.", K(ret), K(old_round), K(new_round));
   }
 
   return ret;
@@ -733,6 +739,37 @@ int ObArchivePersistHelper::insert_his_round(common::ObISQLClient &proxy, const 
   return ret;
 }
 
+int ObArchivePersistHelper::is_all_piece_in_round_deleted(common::ObISQLClient &proxy,
+          const int64_t round_id, bool &is_piece_all_deleted) const {
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  is_piece_all_deleted = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("select count(1) as cnt from %s where %s=%lu and %s=%ld and %s!='%s'",
+          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_,
+          OB_STR_ROUND_ID, round_id, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      int64_t count = 0;
+      if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("failed to get next", K(ret), K_(tenant_id), K(sql));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "cnt", count, int64_t);
+        is_piece_all_deleted = (count == 0);
+      }
+    }
+  }
+  return ret;
+}
 
 int ObArchivePersistHelper::get_piece(common::ObISQLClient &proxy, const int64_t dest_id,
     const int64_t round_id, const int64_t piece_id, const bool need_lock, ObTenantArchivePieceAttr &piece) const
@@ -785,6 +822,46 @@ int ObArchivePersistHelper::get_piece(common::ObISQLClient &proxy, const int64_t
     }
   }
 
+  return ret;
+}
+
+int ObArchivePersistHelper::get_piece(common::ObISQLClient &proxy, const int64_t piece_id,
+          const bool need_lock, ObTenantArchivePieceAttr &piece) const {
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("select * from %s where %s=%lu and %s=%ld",
+    OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_PIECE_ID, piece_id))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("no row exist", K(ret), K_(tenant_id), K(piece_id));
+        } else {
+          LOG_WARN("failed to get next", K(ret), K_(tenant_id), K(sql));
+        }
+      } else if (OB_FAIL(piece.parse_from(*result))) {
+        LOG_WARN("failed to parse piece", K(ret));
+      } else if (OB_SUCC(result->next())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Get more than one piece for specific piece_id, unexpected", K(ret), K(sql), K(piece_id));
+      } else if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get next result", K(ret), K(sql));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
   return ret;
 }
 
@@ -872,7 +949,7 @@ int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLC
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid backup_dest_str", K(ret), K(backup_dest_str));
   } else if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s<=%lu and %s='%s' and %s!='%s'",
-      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_CHECKPOINT_SCN,
+      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_END_SCN,
       end_scn.get_val_for_inner_table_field(), OB_STR_PATH, backup_dest_str, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
@@ -1428,5 +1505,97 @@ int ObArchivePersistHelper::clean_round_comment(common::ObISQLClient &proxy, con
     LOG_WARN("failed to clean round comment", K(ret), K(key));
   }
 
+  return ret;
+}
+
+// Get the first piece which start scn is not greater than start_scn
+// and the next piece which checkpoint scn is not less than end_scn
+// Note: the two pieces are continuous if they has same round_id, otherwise not continuous.
+int ObArchivePersistHelper::check_piece_continuity_between_two_scn(
+    common::ObISQLClient &proxy, const int64_t dest_id,
+    const share::SCN &start_scn, const share::SCN &end_scn, bool &is_continuous) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObArray<ObTenantArchivePieceAttr> piece_list;
+  ObTenantArchivePieceAttr floor_piece;
+  ObTenantArchivePieceAttr ceil_piece;
+  bool floor_piece_found = false;
+  bool ceil_piece_found = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (dest_id <= 0 || !start_scn.is_valid() || !end_scn.is_valid() || start_scn >= end_scn) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_id), K(start_scn), K(end_scn));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sql.assign_fmt( // Get the latest piece whose start_scn <= start_scn
+        "select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s<=%ld order by %s desc limit 1",
+        OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME,
+        OB_STR_TENANT_ID, tenant_id_,
+        OB_STR_DEST_ID, dest_id,
+        OB_STR_FILE_STATUS, OB_STR_DELETED,
+        OB_STR_START_SCN, start_scn.get_val_for_inner_table_field(),
+        OB_STR_PIECE_ID))) {
+      LOG_WARN("failed to assign sql format for floor piece", K(ret));
+    } else {
+      HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+          LOG_WARN("failed to execute sql for floor piece", K(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null for floor piece", K(ret), K(sql));
+        } else if (OB_FAIL(parse_piece_result_(*result, piece_list))) {
+          LOG_WARN("failed to parse floor piece result", K(ret));
+        } else if (piece_list.count() == 1) {
+          floor_piece = piece_list.at(0);
+          floor_piece_found = true;
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    piece_list.reset();
+    sql.reset();
+    if (OB_FAIL(sql.assign_fmt( // Get the first piece whose checkpoint_scn >= end_scn
+        "select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s>=%ld order by %s limit 1",
+        OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME,
+        OB_STR_TENANT_ID, tenant_id_,
+        OB_STR_DEST_ID, dest_id,
+        OB_STR_FILE_STATUS, OB_STR_DELETED,
+        OB_STR_CHECKPOINT_SCN, end_scn.get_val_for_inner_table_field(),
+        OB_STR_PIECE_ID))) {
+      LOG_WARN("failed to assign sql format for ceil piece", K(ret));
+    } else {
+      HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+          LOG_WARN("failed to execute sql for ceil piece", K(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null for ceil piece", K(ret), K(sql));
+        } else if (OB_FAIL(parse_piece_result_(*result, piece_list))) {
+          LOG_WARN("failed to parse ceil piece result", K(ret));
+        } else if (piece_list.count() == 1) {
+          ceil_piece = piece_list.at(0);
+          ceil_piece_found = true;
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (floor_piece_found && ceil_piece_found && floor_piece.key_.round_id_ == ceil_piece.key_.round_id_) {
+      is_continuous = true;
+      LOG_INFO("success to find 2 pieces in the same round", K(is_continuous), K(floor_piece), K(ceil_piece));
+    } else {
+      is_continuous = false;
+      LOG_INFO("fail to find 2 pieces in the same round", K(is_continuous), K(floor_piece), K(ceil_piece));
+    }
+  }
   return ret;
 }

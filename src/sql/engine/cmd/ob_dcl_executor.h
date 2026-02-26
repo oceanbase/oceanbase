@@ -50,14 +50,24 @@ public:
 private:
   int revoke_user(obrpc::ObCommonRpcProxy *rpc_proxy,
                   ObRevokeStmt &stmt);
+  int revoke_catalog(obrpc::ObCommonRpcProxy *rpc_proxy,
+                     ObRevokeStmt &stmt);
   int revoke_db(obrpc::ObCommonRpcProxy *rpc_proxy,
                 ObRevokeStmt &stmt);
   int revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy,
-                   ObRevokeStmt &stmt);
+                   ObRevokeStmt &stmt,
+                   ObExecContext &ctx);
 
-  int revoke_routine(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeStmt &stmt);
+  int revoke_routine(obrpc::ObCommonRpcProxy *rpc_proxy,
+                     ObRevokeStmt &stmt,
+                     ObExecContext &ctx);
   int revoke_sys_priv(obrpc::ObCommonRpcProxy *rpc_proxy,
                    ObRevokeStmt &stmt);
+  int revoke_object(obrpc::ObCommonRpcProxy *rpc_proxy,
+                    ObRevokeStmt &stmt,
+                    ObExecContext &ctx);
+  int revoke_sensitive_rule(obrpc::ObCommonRpcProxy *rpc_proxy,
+                            ObRevokeStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRevokeExecutor);
 };

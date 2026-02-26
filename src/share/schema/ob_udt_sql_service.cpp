@@ -12,14 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_udt_sql_service.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "ob_udt_info.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "pl/ob_pl_stmt.h"
+#include "src/sql/resolver/expr/ob_raw_expr.h"
 
 namespace oceanbase
 {
@@ -149,10 +142,12 @@ int ObUDTSqlService::drop_udt(const ObUDTTypeInfo &udt_info,
     LOG_WARN("delete from __all_type failed", K(ret), K(udt_info));
   } else {
     if (!is_object_type) {
-      // do nothing
+      if (OB_FAIL(del_udt_attrs(sql_client, udt_info, new_schema_version))) {
+        LOG_WARN("failed to del udt attrs", K(ret), K(udt_info));
+      }
     } else {
       if (!is_object_body) {
-       if ((udt_info.get_attributes() > 0 || udt_info.is_collection())
+       if ((udt_info.get_attributes() > 0)
            && OB_FAIL(del_udt_attrs(sql_client, udt_info, new_schema_version))) {
           LOG_WARN("failed to del udt attrs", K(ret), K(udt_info));
         } else if (OB_FAIL(del_udt_objects_in_udt(sql_client, udt_info, new_schema_version))) {
@@ -175,6 +170,50 @@ int ObUDTSqlService::drop_udt(const ObUDTTypeInfo &udt_info,
     opt.ddl_stmt_str_ = (NULL != ddl_stmt_str) ? *ddl_stmt_str : ObString();
     if (OB_SUCC(ret) && OB_FAIL(log_operation(opt, sql_client))) {
       LOG_WARN("Failed to log operation", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObUDTSqlService::alter_udt(ObUDTTypeInfo &udt_info,
+                               const ObUDTTypeInfo *old_udt_info,
+                               const int64_t del_param_schema_version,
+                               ObISQLClient *sql_client,
+                               const ObString *ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(sql_client));
+  CK(OB_NOT_NULL(old_udt_info));
+
+  if (OB_SUCC(ret)) {
+    if (!udt_info.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("new udt info is invalid", K(udt_info), K(ret));
+    } else {
+      if (OB_FAIL(add_udt(*sql_client, udt_info, true))) {
+        LOG_WARN("add udt failed", K(udt_info), K(ret));
+      } else if ((old_udt_info->get_attributes() > 0 || old_udt_info->is_collection())
+          && OB_FAIL(del_udt_attrs(*sql_client, *old_udt_info, del_param_schema_version))) {
+        LOG_WARN("del udt params failed", K(udt_info), K(ret));
+      } else if ((udt_info.get_attributes() > 0 || udt_info.is_collection())
+                && OB_FAIL(add_udt_attrs(*sql_client, udt_info))) {
+        LOG_WARN("add udt params failed", K(udt_info), K(ret));
+      } else if (OB_FAIL(add_udt_object(*sql_client, udt_info, (old_udt_info->get_object_type_infos().count() > 0), false, false))) {
+        LOG_WARN("failed to add udt object", K(ret));
+      }
+
+      if (OB_SUCC(ret)) {
+        ObSchemaOperation opt;
+        opt.tenant_id_ = udt_info.get_tenant_id();
+        opt.database_id_ = udt_info.get_database_id();
+        opt.table_id_ = udt_info.get_type_id();
+        opt.op_type_ = OB_DDL_ALTER_UDT;
+        opt.schema_version_ = udt_info.get_schema_version();
+        opt.ddl_stmt_str_ = (NULL != ddl_stmt_str) ? *ddl_stmt_str : ObString();
+        if (OB_FAIL(log_operation(opt, *sql_client))) {
+          LOG_WARN("Failed to log operation", K(ret));
+        }
+      }
     }
   }
   return ret;

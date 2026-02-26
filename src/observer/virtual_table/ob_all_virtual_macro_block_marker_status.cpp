@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_macro_block_marker_status.h"
-#include "lib/utility/ob_print_utils.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase
@@ -46,6 +45,10 @@ int ObAllVirtualMacroBlockMarkerStatus::init (
     marker_status_ = marker_status;
     is_end_ = false;
     start_to_read_ = true;
+    if (GCTX.is_shared_storage_mode()) {
+      // no ref_cnt in shared_storage, return a empty iter;
+      is_end_ = true;
+    }
   }
   return ret;
 }
@@ -166,7 +169,7 @@ int ObAllVirtualMacroBlockMarkerStatus::inner_get_next_row(common::ObNewRow *&ro
       }
       case OB_APP_MIN_COLUMN_ID + 18: {
         // whether finished marking
-        cur_row_.cells_[i].set_bool(true);
+        cur_row_.cells_[i].set_bool(marker_status_.mark_finished_);
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 19: {

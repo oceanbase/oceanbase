@@ -11,11 +11,7 @@
  */
 
 #include "sql/engine/cmd/ob_set_names_executor.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "observer/ob_server_struct.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share;

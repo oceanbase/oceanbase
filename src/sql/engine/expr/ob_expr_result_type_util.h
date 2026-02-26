@@ -199,8 +199,10 @@ public:
                                            const common::ObObjType type1,
                                            const common::ObObjType type2)
   {
-    return get_arith_calc_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2,
-                               ObArithResultTypeMap::OP::MUL);
+    return lib::is_oracle_mode()
+           ? get_arith_calc_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2,
+                                    ObArithResultTypeMap::OP::MUL)
+           : get_mul_result_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2);
   }
   OB_INLINE static int get_div_calc_type(common::ObObjType &calc_type,
                                            common::ObObjType &calc_ob1_type,
@@ -222,6 +224,22 @@ public:
     return get_arith_calc_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2,
                                ObArithResultTypeMap::OP::MOD);
   }
+  static int get_array_calc_type(ObExecContext *exec_ctx,
+                                 const ObExprResType &type1,
+                                 const ObExprResType &type2,
+                                 ObExprResType &calc_type);
+  static int get_array_calc_type(ObExecContext *exec_ctx,
+                                 const ObDataType &coll_elem1_type,
+                                 const ObDataType &coll_elem2_type,
+                                 uint32_t depth,
+                                 ObExprResType &calc_type,
+                                 ObObjMeta &element_meta);
+  static int get_deduce_element_type(ObExprResType &input_type, ObDataType &elem_type);
+  static int assign_type_array(const ObIArray<ObRawExprResType> &src, ObIArray<ObExprResType> &dest);
+  static int get_collection_calc_type(ObExecContext *exec_ctx,
+                                      const ObExprResType &type1,
+                                      const ObExprResType &type2,
+                                      ObExprResType &calc_type);
 };
 
 

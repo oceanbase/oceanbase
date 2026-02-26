@@ -13,15 +13,8 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/report/ob_server_meta_table_checker.h"
-#include "observer/ob_server_struct.h" // GCTX
-#include "share/ob_thread_define.h" // ServerMetaChecker
-#include "share/ls/ob_ls_table_operator.h" // ObLSTableOperator
 #include "share/tablet/ob_tablet_table_operator.h" // ObTabletTableOperator
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "observer/omt/ob_multi_tenant.h" // ObMultiTenant
-#include "share/tablet/ob_tablet_info.h" // ObTabletInfo
-#include "share/ob_tablet_replica_checksum_operator.h" // for ObTabletReplicaChecksumItem
-#include "lib/mysqlclient/ob_mysql_transaction.h" // ObMySQLTransaction
+#include "share/ob_ls_id.h"
 
 namespace oceanbase
 {
@@ -289,11 +282,11 @@ int ObServerMetaTableChecker::check_tablet_table_(
       } else if (OB_UNLIKELY(stopped_)) {
         ret = OB_CANCELED;
         LOG_WARN("ObServerMetaTableChecker is stopped", KR(ret), K_(tablet_tg_id));
-      } else if (OB_FAIL(tt_operator_->remove_residual_tablet(trans, tenant_id, GCONF.self_addr_,
-                 limit, affected_rows_meta))) {
+      } else if (OB_FAIL(tt_operator_->remove_residual_tablet(trans, tenant_id, ObLSID(share::ObLSID::INVALID_LS_ID), GCONF.self_addr_,
+                 limit, OB_ALL_TABLET_META_TABLE_TNAME, affected_rows_meta))) {
         LOG_WARN("fail to remove residual tablet by operator", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(ObTabletReplicaChecksumOperator::remove_residual_checksum(trans,
-                 tenant_id, GCONF.self_addr_, limit, affected_rows_checksum))) {
+      } else if (OB_FAIL(tt_operator_->remove_residual_tablet(trans,
+                 tenant_id, ObLSID(share::ObLSID::INVALID_LS_ID), GCONF.self_addr_, limit, OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, affected_rows_checksum))) {
         LOG_WARN("fail to remove residual checksum by operator", KR(ret), K(tenant_id));
       } else {
         meta_residual_count += affected_rows_meta;

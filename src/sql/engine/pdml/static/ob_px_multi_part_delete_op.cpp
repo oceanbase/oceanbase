@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_multi_part_delete_op.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "sql/engine/px/datahub/ob_dh_msg_provider.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/dml/ob_dml_service.h"
 
@@ -65,7 +62,7 @@ int ObPxMultiPartDeleteOp::inner_open()
     LOG_WARN("failed to inner open", K(ret));
   } else if (OB_FAIL(ObDMLService::init_del_rtdef(dml_rtctx_, del_rtdef_, MY_SPEC.del_ctdef_))) {
     LOG_WARN("init delete rtdef failed", K(ret));
-  } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), del_rtdef_, this, this, false, MY_SPEC.with_barrier_))) {
+  } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), del_rtdef_, this, this, false, false, MY_SPEC.with_barrier_))) {
     LOG_WARN("failed to init data driver", K(ret));
   } else if (MY_SPEC.with_barrier_) {
     if (OB_ISNULL(input_)) {
@@ -145,6 +142,7 @@ int ObPxMultiPartDeleteOp::read_row(ObExecContext &ctx,
       LOG_WARN("fail get next row from child", K(ret));
     }
   } else {
+    op_monitor_info_.otherstat_2_value_++;
     // 每一次从child节点获得新的数据都需要进行清除计算标记
     clear_evaluated_flag();
     if (OB_FAIL(ObDMLService::process_delete_row(MY_SPEC.del_ctdef_, del_rtdef_, is_skipped, *this))) {
@@ -169,6 +167,8 @@ int ObPxMultiPartDeleteOp::read_row(ObExecContext &ctx,
         tablet_id = expr_datum.get_int();
         LOG_DEBUG("get the part id", K(ret), K(expr_datum));
       }
+    } else {
+      op_monitor_info_.otherstat_4_value_++;
     }
   }
   return ret;
@@ -202,12 +202,16 @@ int ObPxMultiPartDeleteOp::write_rows(ObExecContext &ctx,
         LOG_WARN("delete row to das failed", K(ret));
       } else if (OB_FAIL(discharge_das_write_buffer())) {
         LOG_WARN("failed to submit all dml task when the buffer of das op is full", K(ret));
+      } else {
+        op_monitor_info_.otherstat_3_value_++;
       }
     }
 
     if (OB_ITER_END == ret) {
       if (OB_FAIL(submit_all_dml_task())) {
         LOG_WARN("do delete rows post process failed", K(ret));
+      } else {
+        op_monitor_info_.otherstat_5_value_ += del_rtdef_.das_rtdef_.affected_rows_;
       }
     }
     if (!(MY_SPEC.is_pdml_index_maintain_) && !(MY_SPEC.is_pdml_update_split_)) {
@@ -219,8 +223,10 @@ int ObPxMultiPartDeleteOp::write_rows(ObExecContext &ctx,
       plan_ctx->add_row_duplicated_count(del_rtdef_.das_rtdef_.affected_rows_);
     }
     
-    LOG_TRACE("pdml delete ok", K(MY_SPEC.is_pdml_index_maintain_),
-              K(del_rtdef_.das_rtdef_.affected_rows_));
+    LOG_TRACE("pdml delete ok",K(MY_SPEC.is_pdml_index_maintain_),
+              K(del_rtdef_.das_rtdef_.affected_rows_), K(op_monitor_info_.otherstat_1_value_),
+              K(op_monitor_info_.otherstat_2_value_), K(op_monitor_info_.otherstat_3_value_),
+              K(op_monitor_info_.otherstat_4_value_), K(op_monitor_info_.otherstat_5_value_));
     del_rtdef_.das_rtdef_.affected_rows_ = 0;
   }
   return ret;

@@ -11,17 +11,8 @@
  */
 
 #include "ob_ls_task.h"
-#include <cstdint>
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_print_utils.h"
-#include "ob_archive_define.h"                // ArchiveKey
-#include "share/backup/ob_archive_piece.h"    // ObArchivePiece
-#include "share/backup/ob_archive_struct.h"   // ObLSArchivePersistInfo
 #include "ob_archive_task.h"                  // Archive.*Task
 #include "ob_ls_mgr.h"                        // ObArchiveLSMgr
-#include "ob_archive_worker.h"                // ObArchiveWorker
 #include "ob_archive_allocator.h"             // ObArchiveAllocator
 #include "ob_archive_task_queue.h"            // ObArchiveTaskStatus
 
@@ -497,6 +488,24 @@ int ObLSArchiveTask::update_unlock_(const StartArchiveHelper &helper,
   return ret;
 }
 
+int ObLSArchiveTask::check_ref_file_id_exist(const int64_t file_id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(dest_.check_ref_file_id_exist(file_id, exist))) {
+    ARCHIVE_LOG(WARN, "check_ref_file_id_exist failed", K(ret), K(file_id));
+  }
+  return ret;
+}
+
+int ObLSArchiveTask::release_ref_file_id(const int64_t file_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(dest_.release_ref_file_id(file_id))) {
+    ARCHIVE_LOG(WARN, "release_ref_file_id failed", K(ret), K(file_id));
+  }
+  return ret;
+}
+
 bool ObLSArchiveTask::is_task_stale_(const ArchiveWorkStation &station) const
 {
   return station_ != station;
@@ -524,6 +533,7 @@ ObLSArchiveTask::ArchiveDest::ArchiveDest() :
   wait_send_task_array_(),
   wait_send_task_count_(0),
   send_task_queue_(NULL),
+  file_id_ref_set_(),
   allocator_(NULL)
 {}
 
@@ -545,6 +555,7 @@ void ObLSArchiveTask::ArchiveDest::destroy()
   max_seq_log_offset_.reset();
   max_fetch_info_.reset();
   last_fetch_timestamp_ = OB_INVALID_TIMESTAMP;
+  file_id_ref_set_.destroy();
 
   free_fetch_log_tasks_();
   free_send_task_status_();
@@ -587,6 +598,11 @@ int ObLSArchiveTask::ArchiveDest::init(const LSN &max_no_limit_lsn,
     ARCHIVE_LOG(INFO, "update archive dest with local archive progress", K(piece_min_lsn),
         K(tmp_tuple), K(piece), K(file_id), K(file_offset), KPC(this));
   }
+
+  if (OB_SUCC(ret) && OB_FAIL(file_id_ref_set_.create(BUCKET_NUM, "LSArcTask", "LSArcTask"))) {
+    ARCHIVE_LOG(WARN, "failed to create file_id_ref_set_", K(ret), K(piece), K(file_id), K(file_offset), KPC(this));
+  }
+
   max_no_limit_lsn_ = max_no_limit_lsn;
   wait_send_task_count_ = 0;
   free_fetch_log_tasks_();
@@ -664,7 +680,7 @@ int ObLSArchiveTask::ArchiveDest::pop_fetch_log(ObArchiveLogFetchTask *&task)
   } else {
     wait_send_task_array_[0] = wait_send_task_array_[wait_send_task_count_ - 1];
     wait_send_task_count_--;
-    std::sort(wait_send_task_array_, wait_send_task_array_ + wait_send_task_count_, LogFetchTaskCompare());
+    lib::ob_sort(wait_send_task_array_, wait_send_task_array_ + wait_send_task_count_, LogFetchTaskCompare());
   }
   return ret;
 }
@@ -744,7 +760,7 @@ int ObLSArchiveTask::ArchiveDest::push_fetch_log(ObArchiveLogFetchTask &task)
   } else {
     wait_send_task_array_[wait_send_task_count_] = &task;
     wait_send_task_count_++;
-    std::sort(wait_send_task_array_, wait_send_task_array_ + wait_send_task_count_, LogFetchTaskCompare());
+    lib::ob_sort(wait_send_task_array_, wait_send_task_array_ + wait_send_task_count_, LogFetchTaskCompare());
   }
   ARCHIVE_LOG(INFO, "print push_fetch_log", K(task), KPC(this));
   return ret;
@@ -754,6 +770,8 @@ int ObLSArchiveTask::ArchiveDest::push_send_task(ObArchiveSendTask &task, ObArch
 {
   int ret = OB_SUCCESS;
   const ObLSID id = task.get_ls_id();
+  const LSN &lsn = task.get_start_lsn();
+  const int64_t file_id = cal_archive_file_id(lsn, MAX_ARCHIVE_FILE_SIZE);
   if (NULL == send_task_queue_) {
     if (OB_ISNULL(send_task_queue_ = allocator_->alloc_send_task_status(id))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -766,6 +784,10 @@ int ObLSArchiveTask::ArchiveDest::push_send_task(ObArchiveSendTask &task, ObArch
   if (OB_SUCC(ret) && OB_NOT_NULL(send_task_queue_)) {
     if (OB_FAIL(send_task_queue_->push(&task, worker))) {
       ARCHIVE_LOG(WARN, "push send taskfailed", K(ret), K(task));
+    } else if (OB_FAIL(set_ref_file_id(file_id))) {
+      ARCHIVE_LOG(WARN, "set_ref_file_id failed", K(ret), K(id), K(file_id));
+    } else {
+      ARCHIVE_LOG(TRACE, "set_ref_file_id", K(id), K(file_id));
     }
   }
   return ret;
@@ -835,6 +857,38 @@ void ObLSArchiveTask::ArchiveDest::update_no_limit_lsn(const palf::LSN &lsn)
   } else {
     ARCHIVE_LOG(INFO, "lsn is smaller than max_no_limit_lsn_, just skip", K(lsn), K(max_no_limit_lsn_));
   }
+}
+
+int ObLSArchiveTask::ArchiveDest::set_ref_file_id(const int64_t file_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(file_id_ref_set_.set_refactored(file_id))) {
+    if (OB_HASH_EXIST != ret) {
+      ARCHIVE_LOG(WARN, "set_refactored failed", K(ret), K(file_id));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObLSArchiveTask::ArchiveDest::release_ref_file_id(const int64_t file_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(file_id_ref_set_.erase_refactored(file_id))) {
+    ARCHIVE_LOG(WARN, "set_refactored failed", K(ret), K(file_id));
+  }
+  return ret;
+}
+
+int ObLSArchiveTask::ArchiveDest::check_ref_file_id_exist(const int64_t file_id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(file_id_ref_set_.exist_refactored(file_id))) {
+    exist = OB_HASH_EXIST == ret ? true : false;
+    ret = OB_SUCCESS;
+  }
+  return ret;
 }
 
 void ObLSArchiveTask::ArchiveDest::mark_error()

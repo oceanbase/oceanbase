@@ -17,6 +17,7 @@
 #include "ob_pl_stmt.h"
 #include "ob_pl_persistent.h"
 #include "lib/hash/ob_hashmap.h"
+#include "lib/alloc/ob_malloc_callback.h"
 
 namespace oceanbase
 {
@@ -36,6 +37,25 @@ class ObPLPackageGuard;
 class ObPLResolver;
 class ObPLVarDebugInfo;
 class ObRoutinePersistentInfo;
+
+class ObPLCGMallocCallback final : public lib::ObMallocCallback
+{
+public:
+  ObPLCGMallocCallback(int64_t &mem_used)
+    : mem_used_(mem_used) {}
+  virtual ~ObPLCGMallocCallback() {}
+  virtual void operator()(const ObMemAttr &attr, int64_t add_size) override
+  {
+    if ((ObLabel(GET_PL_MOD_STRING(pl::OB_PL_JIT)) == attr.label_
+        || ObLabel(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)) == attr.label_)
+        && attr.ctx_id_ == ObCtxIds::GLIBC) {
+      mem_used_ += add_size;
+    }
+  }
+private:
+  int64_t &mem_used_;
+}; // end of class ObPLCGMallocCallback
+
 class ObPLCompiler
 {
 public:
@@ -49,6 +69,8 @@ public:
     schema_guard_(schema_guard),
     package_guard_(package_guard),
     sql_proxy_(sql_proxy) {}
+
+  static ObMutex package_dep_info_lock_;
   virtual ~ObPLCompiler() {}
 
   int compile(const ObStmtNodeTree *block,
@@ -61,8 +83,8 @@ public:
   int compile(const uint64_t id, ObPLFunction &func); //Procedure/Function接口
 
   int analyze_package(const ObString &source, const ObPLBlockNS *parent_ns,
-                      ObPLPackageAST &package_ast, bool is_for_trigger);
-  int generate_package(const ObString &exec_env, ObPLPackageAST &package_ast, ObPLPackage &package);
+                      ObPLPackageAST &package_ast, bool is_for_trigger, bool &is_wrap);
+  int generate_package(const ObString &exec_env, ObPLPackageAST &package_ast, ObPLPackage &package, bool &is_from_disk);
   int compile_package(const share::schema::ObPackageInfo &package_info, const ObPLBlockNS *parent_ns,
                       ObPLPackageAST &package_ast, ObPLPackage &package); //package
   static int compile_subprogram_table(common::ObIAllocator &allocator,
@@ -139,12 +161,14 @@ public:
   ObPLCompilerEnvGuard(const ObPackageInfo &info,
                        ObSQLSessionInfo &session_info,
                        share::schema::ObSchemaGetterGuard &schema_guard,
+                       ObPLCompileUnitAST &compile_unit,
                        int &ret,
                        const ObPLBlockNS *prarent_ns = nullptr);
 
   ObPLCompilerEnvGuard(const ObRoutineInfo &info,
                        ObSQLSessionInfo &session_info,
                        share::schema::ObSchemaGetterGuard &schema_guard,
+                       ObPLCompileUnitAST &compile_unit,
                        int &ret);
 
   ~ObPLCompilerEnvGuard();
@@ -154,6 +178,7 @@ private:
   void init(const Info &info,
             ObSQLSessionInfo &sessionInfo,
             share::schema::ObSchemaGetterGuard &schema_guard,
+            ObPLCompileUnitAST &compile_unit,
             int &ret,
             const ObPLBlockNS *parent_ns = nullptr);
 

@@ -132,7 +132,8 @@ public:
                                              uint64_t dep_obj_id,
                                              int64_t schema_version,
                                              share::schema::ObObjectType dep_obj_type);
-
+  static int remove_duplicated_dep_infos(ObIArray<ObDependencyInfo> &deps,
+                                        ObIArray<ObDependencyInfo> &source_deps);
   static int collect_dep_info(ObIArray<ObDependencyInfo> &deps,
                               ObObjectType dep_obj_type,
                               int64_t ref_obj_id,
@@ -163,12 +164,13 @@ public:
     const common::ObString &dep_attrs,
     const common::ObString &dep_reason,
     const int64_t schema_version);
-
   int get_object_create_time(common::ObISQLClient &sql_client,
                              share::schema::ObObjectType obj_type,
                              int64_t &create_time,
                              common::ObString &ref_obj_name);
   int gen_dependency_dml(const uint64_t exec_tenant_id, oceanbase::share::ObDMLSqlSplicer &dml);
+  int get_timestamp_str(int64_t timestamp, ObSqlString &value_str);
+  int get_insert_value_str(ObSqlString &value_str);
 
   static int collect_ref_infos(uint64_t tenant_id,
                                uint64_t dep_obj_id,
@@ -212,6 +214,11 @@ public:
                                    rootserver::ObDDLOperator &ddl_operator,
                                    share::schema::ObMultiVersionSchemaService &schema_service);
 
+  static int insert_dependency_infos(common::ObMySQLTransaction &trans,
+                              common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
+                              uint64_t tenant_id,
+                              uint64_t dep_obj_id,
+                              uint64_t schema_version, uint64_t owner_id);
   TO_STRING_KV(K_(tenant_id),
                K_(dep_obj_id),
                K_(dep_obj_type),
@@ -232,7 +239,37 @@ private:
                                   const common::ObIArray<std::pair<uint64_t, int64_t>>& ref_obj_infos,
                                   common::ObISQLClient &sql_proxy,
                                   common::ObIArray<CriticalDepInfo> &objs);
-
+  static bool is_duplicate_dependency(const ObIArray<ObDependencyInfo> &deps,
+                                      ObObjectType dep_obj_type,
+                                      int64_t ref_obj_id,
+                                      int64_t ref_timestamp,
+                                      ObObjectType ref_obj_type);
+  static int create_dependency_info(ObDependencyInfo &dep,
+                                   ObObjectType dep_obj_type,
+                                   int64_t ref_obj_id,
+                                   int64_t ref_timestamp,
+                                   ObObjectType ref_obj_type,
+                                   uint64_t property = 0,
+                                   const ObString &dep_attrs = ObString(),
+                                   const ObString &dep_reason = ObString(),
+                                   uint64_t order = UINT64_MAX,
+                                   uint64_t tenant_id = OB_INVALID_TENANT_ID,
+                                   uint64_t dep_obj_id = OB_INVALID_ID,
+                                   uint64_t dep_obj_owner_id = OB_INVALID_ID,
+                                   int64_t schema_version = OB_INVALID_VERSION);
+  static int add_dependency_if_not_duplicate(ObIArray<ObDependencyInfo> &deps,
+                                            ObObjectType dep_obj_type,
+                                            int64_t ref_obj_id,
+                                            int64_t ref_timestamp,
+                                            ObObjectType ref_obj_type,
+                                            uint64_t property = 0,
+                                            const ObString &dep_attrs = ObString(),
+                                            const ObString &dep_reason = ObString(),
+                                            uint64_t tenant_id = OB_INVALID_TENANT_ID,
+                                            uint64_t dep_obj_id = OB_INVALID_ID,
+                                            uint64_t dep_obj_owner_id = OB_INVALID_ID,
+                                            int64_t schema_version = OB_INVALID_VERSION,
+                                            uint64_t custom_order = UINT64_MAX);
 private:
   uint64_t tenant_id_;
   uint64_t dep_obj_id_;
@@ -467,7 +504,6 @@ public:
   inline const RefObjVersionMap &get_ref_obj_table() const { return ref_obj_version_table_; }
   static int batch_execute_insert_or_update_obj_dependency(
     const uint64_t tenant_id,
-    const bool is_standby,
     const int64_t new_schema_version,
     const ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
     ObMySQLTransaction &trans,
@@ -475,7 +511,6 @@ public:
     rootserver::ObDDLOperator &ddl_operator);
   static int batch_execute_delete_obj_dependency(
     const uint64_t tenant_id,
-    const bool is_standby,
     const ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
     ObMySQLTransaction &trans);
   static int update_max_dependency_version(

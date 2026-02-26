@@ -54,12 +54,15 @@ public:
   int check_name_type(ObQualifiedName &q_name, ObStmtScope scope, AccessNameType &type);
   // types and constants
   int recursive_resolve(const ParseNode *node, ObRawExpr *&expr, bool is_root_expr = false);
+  static bool should_not_contain_window_clause(const ObItemType func_type);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprResolverImpl);
   // function members
   int try_negate_const(ObRawExpr *&expr, const int64_t neg_cnt, int64_t &remain_reg_cnt);
   int do_recursive_resolve(const ParseNode *node, ObRawExpr *&expr, bool is_root_expr = false);
+  int mock_enum_type_info(common::ObIAllocator &allocator, ObString &string, uint64_t idx, ObIArray<common::ObString> &type_info);
+  int mock_set_type_info(common::ObIAllocator &allocator, ObString &string, uint64_t idx, ObIArray<common::ObString> &type_info);
   int process_datatype_or_questionmark(const ParseNode &node, ObRawExpr *&expr);
   int process_system_variable_node(const ParseNode *node, ObRawExpr *&expr);
   int process_char_charset_node(const ParseNode *node, ObRawExpr *&expr);
@@ -129,7 +132,7 @@ private:
   int process_json_array_node(const ParseNode *node, ObRawExpr *&expr);
   int process_json_mergepatch_node(const ParseNode *node, ObRawExpr *&expr);
   static void modification_type_to_int(ParseNode &node);
-  int process_fun_sys_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_fun_sys_node(const ParseNode *node, ObRawExpr *&expr, const bool is_root_expr);
   int process_dll_udf_node(const ParseNode *node, ObRawExpr *&expr);
   int process_agg_udf_node(const ParseNode *node,
                            const share::schema::ObUDF &udf_info,
@@ -141,6 +144,8 @@ private:
   int resolve_udf_param_expr(const ParseNode *node,
                              common::ObIArray<ObRawExpr*> &param_exprs);
   int process_match_against(const ParseNode *node, ObRawExpr *&expr);
+  int process_match(const ParseNode *node, ObRawExpr *&expr);
+  int process_match_score(const ParseNode *node, ObRawExpr *&expr);
   int process_window_function_node(const ParseNode *node, ObRawExpr *&expr);
   int process_sort_list_node(const ParseNode *node, common::ObIArray<OrderItem> &order_items);
   int process_frame_node(const ParseNode *node,
@@ -161,11 +166,14 @@ private:
                             ObRawExpr *&date_unit_expr);
   int process_geo_func_node(const ParseNode *node, ObRawExpr *&expr);
   int set_geo_func_name(ObSysFunRawExpr *func_expr, const ObItemType func_type);
+  int process_vector_func_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_vector_similarity_func_node(const ParseNode *node, ObRawExpr *&expr);
   bool is_win_expr_valid_scope(ObStmtScope scope) const;
   int check_and_canonicalize_window_expr(ObRawExpr *expr);
   int process_ident_node(const ParseNode &node, ObRawExpr *&expr);
   int process_multiset_node(const ParseNode *node, ObRawExpr *&expr);
   int process_cursor_attr_node(const ParseNode &node, ObRawExpr *&expr);
+  int get_current_of_base_table_id(ObDMLStmt *stmt, uint64_t &base_table_id);
   int process_obj_access_node(const ParseNode &node, ObRawExpr *&expr);
   int resolve_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
   int check_pl_variable(ObQualifiedName &q_name, bool &is_pl_var);
@@ -180,10 +188,10 @@ private:
   inline bool is_sys_connect_by_path_expr_valid_scope(ObStmtScope scope) const;
   int process_prior_node(const ParseNode &node, ObRawExpr *&expr);
   inline bool is_prior_expr_valid_scope(ObStmtScope scope) const;
-  static bool should_not_contain_window_clause(const ObItemType func_type);
   static bool should_contain_order_by_clause(const ObItemType func_type);
   int resolve_udf_node(const ParseNode *node, ObUDFInfo &udf_info);
   int process_sqlerrm_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_sqlcode_node(const ParseNode *node, ObRawExpr *&expr);
   int process_plsql_var_node(const ParseNode *node, ObRawExpr *&expr);
   int process_call_param_node(const ParseNode *node, ObRawExpr *&expr);
 
@@ -207,6 +215,7 @@ private:
   int process_sql_udt_construct_node(const ParseNode *node, ObRawExpr *&expr);
   int process_sql_udt_attr_access_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_element_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_xml_forest_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_attributes_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_attributes_values_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xmlparse_node(const ParseNode *node, ObRawExpr *&expr);
@@ -217,11 +226,17 @@ private:
   int resolve_dblink_udf_expr(const ParseNode *node,
                               ObQualifiedName &column_ref,
                               ObRawExpr *&expr);
-
+  int process_array_contains_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_lambda_func_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_array_map_func_node(const ParseNode *node, ObRawExpr *&expr);
+  int check_replace_lambda_params_node(const ParseNode *params_node, ParseNode *func_node);
+  int process_lambda_var_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_split_node(const ParseNode *node, ObRawExpr *&expr);
+  int extract_var_exprs(ObRawExpr *expr, ObIArray<ObVarRawExpr *> &var_exprs);
+  int check_lambda_params_duplicated(const ParseNode *params_node);
 private:
   int process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count);
   int transform_ratio_afun_to_arg_div_sum(const ParseNode *ratio_to_report, ParseNode *&div);
-  int convert_any_or_all_expr(ObRawExpr *&expr, bool &happened);
   int get_opposite_string(const common::ObString &orig_string, common::ObString &new_string, common::ObIAllocator &allocator);
   int reset_keep_aggr_sort_direction(ObIArray<OrderItem> &aggr_sort_item);
   int reset_aggr_sort_nulls_first(ObIArray<OrderItem> &aggr_sort_item);
@@ -235,6 +250,9 @@ private:
                                     const ObRawExpr *left_expr,
                                     const bool is_root_condition,
                                     ObRawExpr *&right_expr);
+  int try_cast_expr_to_int(ObRawExprFactory *expr_factory,
+                           const ObSQLSessionInfo *session,
+                           ObSysFunRawExpr *&expr);
 private:
   // data members
   ObExprResolveContext &ctx_;
@@ -254,6 +272,8 @@ int ObRawExprResolverImpl::process_node_with_children(const ParseNode *node,
     SQL_RESV_LOG(WARN, "invalid argument", K(node), K(children_num));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, raw_expr))) {
     SQL_RESV_LOG(WARN, "fail to create raw expr", K(ret));
+  } else if (OB_FAIL(raw_expr->init_param_exprs(children_num))) {
+    SQL_RESV_LOG(WARN, "fail to init param exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < children_num; i++) {
       ObRawExpr *sub_expr = NULL;

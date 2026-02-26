@@ -159,6 +159,9 @@ public:
   // Buffer should be large enough to hold all digits (digits10 + 1), a sign and a null character.
   static const int64_t MAX_DIGITS10_STR_SIZE = std::numeric_limits<uint64_t>::digits10 + 3;
 
+public:
+  static const char DIGITS[];
+
 private:
   /*
    * Formats value in reverse and returns a pointer to the beginning
@@ -182,8 +185,6 @@ private:
   void format_signed(int64_t value);
 
 private:
-  static const char DIGITS[];
-
   mutable char buf_[MAX_DIGITS10_STR_SIZE];
   char *ptr_;
   int64_t len_;

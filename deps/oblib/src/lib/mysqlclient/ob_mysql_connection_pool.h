@@ -159,7 +159,7 @@ public:
   virtual DblinkDriverProto get_pool_link_driver_proto() { return DBLINK_DRV_OB; }
 
   // dblink
-  virtual int create_dblink_pool(const dblink_param_ctx &param_ctx, const ObAddr &server,
+  virtual int create_dblink_pool(const dblink_param_ctx &param_ctx, const ObString &host_name, int32_t port,
                                  const ObString &db_tenant, const ObString &db_user,
                                  const ObString &db_pass, const ObString &db_name,
                                  const common::ObString &conn_str,
@@ -228,19 +228,19 @@ protected:
   volatile int64_t busy_conn_count_;
 
   // user name or password or db maybe modify, add user_info_lock_ to protect user info
-  mutable obsys::ObRWLock user_info_lock_;
+  mutable obsys::ObRWLock<obsys::WRITE_PRIORITY> user_info_lock_;
   char db_user_[OB_MAX_USER_NAME_BUF_LENGTH];
   char db_pass_[OB_MAX_PASSWORD_BUF_LENGTH];
   char db_name_[OB_MAX_DATABASE_NAME_BUF_LENGTH];
   char init_sql_[OB_MAX_SQL_LENGTH];
   ObConnPoolConfigParam config_;
-  mutable obsys::ObRWLock get_lock_;
-  // ObMySQLConnectionPool::do_acquire use obsys::ObRLockGuard lock(get_lock_)
-  // ObMySQLConnectionPool::create_dblink_pool need obsys::ObWLockGuard lock(get_lock_)
+  mutable obsys::ObRWLock<obsys::WRITE_PRIORITY> get_lock_;
+  // ObMySQLConnectionPool::do_acquire use obsys::ObRLockGuard<> lock(get_lock_)
+  // ObMySQLConnectionPool::create_dblink_pool need obsys::ObWLockGuard<> lock(get_lock_)
   // do_acquire call create_dblink_pool
   // will leading to dead lock
   // need one more lock for create_dblink_pool
-  mutable obsys::ObRWLock dblink_pool_lock_;
+  mutable obsys::ObRWLock<obsys::WRITE_PRIORITY> dblink_pool_lock_;
   common::ObArenaAllocator allocator_;
   ServerList server_list_;
   TenantServerConnMap tenant_server_pool_map_;

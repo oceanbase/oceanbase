@@ -12,11 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_calc_partition_id.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_func_part_hash.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
+#include "share/vector/expr_cmp_func.h"
 
 namespace oceanbase
 {
@@ -96,12 +94,30 @@ int ObExprCalcPartitionBase::calc_result_typeN(ObExprResType &type,
   return OB_SUCCESS;
 }
 
+typedef int64_t (*GetPayloadFunc)(const char *payload);
+static int64_t get_64_len_val(const char *payload)
+{
+  return *reinterpret_cast<const int64_t *>(payload);
+}
+
+static int64_t get_8_len_val(const char *payload)
+{
+  return static_cast<int64_t>(*(reinterpret_cast<const uint8_t *>(payload)));
+}
+
+static GetPayloadFunc FAST_CALC_PART_GET_VAL_FUNCS[2] = {get_64_len_val, get_8_len_val};
+
+REG_SER_FUNC_ARRAY(OB_SFA_FAST_CALC_PART_VEC,
+                   FAST_CALC_PART_GET_VAL_FUNCS,
+                   sizeof(FAST_CALC_PART_GET_VAL_FUNCS) / sizeof(void *));
+
+ERRSIM_POINT_DEF(ERRSIM_USE_FAST_CALC_PART);
 int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
                                    const ObRawExpr &raw_expr,
                                    ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  ObTableID ref_table_id = reinterpret_cast<ObTableID>(raw_expr.get_extra());
+  ObTableID ref_table_id = reinterpret_cast<ObTableID>(raw_expr.get_ref_table_id());
   CalcPartitionBaseInfo *calc_part_info = NULL;
   const ObTableSchema *table_schema = NULL;
   OptRouteType opt_route = OPT_ROUTE_NONE;
@@ -136,7 +152,147 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
       OB_ASSERT(1 == rt_expr.arg_cnt_);
       OB_ASSERT(PARTITION_LEVEL_ONE == calc_part_info->part_level_);
       rt_expr.eval_func_ = ObExprCalcPartitionBase::calc_partition_level_one;
-      rt_expr.eval_vector_func_ = ObExprCalcPartitionBase::calc_partition_level_one_vector;
+      bool fallback = false;
+      const ObExpr *part_expr = rt_expr.args_[0];
+      if (T_OP_ROW != part_expr->type_ &&
+          !table_schema->is_external_table() &&
+          (CALC_TABLET_ID == calc_part_info->calc_id_type_ ||
+           CALC_PARTITION_ID == calc_part_info->calc_id_type_) &&
+          ERRSIM_USE_FAST_CALC_PART == OB_SUCCESS) {
+        ObDASTabletMapper tablet_mapper;
+        if (OB_ISNULL(expr_cg_ctx.session_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid expr_cg_ctx session", K(ret));
+        } else if (OB_ISNULL(expr_cg_ctx.session_->get_cur_exec_ctx())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid cur_exec_ctx", K(ret));
+        } else if (OB_FAIL(expr_cg_ctx.session_->get_cur_exec_ctx()->
+                    get_das_ctx().get_das_tablet_mapper(calc_part_info->ref_table_id_,
+                                                        tablet_mapper,
+                                                        &calc_part_info->related_table_ids_))) {
+          LOG_WARN("get das tablet mapper failed", K(ret), K(calc_part_info));
+        } else {
+          share::schema::RelatedTableInfo *related_info_ptr = nullptr;
+          if (tablet_mapper.get_related_table_info().related_tids_ != nullptr &&
+              !tablet_mapper.get_related_table_info().related_tids_->empty()) {
+            related_info_ptr = &tablet_mapper.get_related_table_info();
+          }
+          if (OB_NOT_NULL(related_info_ptr)) {
+            fallback = true;
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (fallback) {
+        } else if (table_schema->is_hash_part()) {
+          // The execution period involves inner_functions;
+          // disable this path during the upgrade.
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0) {
+            fallback = true;
+          } else {
+            rt_expr.inner_func_cnt_ = 1;
+            void **func_buf = NULL;
+            int64_t func_buf_size = sizeof(void *);
+            if (OB_ISNULL(func_buf = (void **)expr_cg_ctx.allocator_->alloc(func_buf_size))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to allocate memory", K(ret));
+            } else {
+              rt_expr.inner_functions_ = func_buf;
+              if (lib::is_oracle_mode()) {
+                if (OB_UNLIKELY(!part_expr->obj_meta_.is_int())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("oracle type invalid", K(part_expr->obj_meta_), KR(ret));
+                } else {
+                  rt_expr.inner_functions_[0] = (void *)(FAST_CALC_PART_GET_VAL_FUNCS[0]);
+                }
+              } else {
+                switch (ob_obj_type_class(part_expr->obj_meta_.get_type())) {
+                  case ObIntTC:
+                  case ObUIntTC:
+                  case ObBitTC: {
+                    rt_expr.inner_functions_[0] = (void *)(FAST_CALC_PART_GET_VAL_FUNCS[0]);
+                    break;
+                  }
+                  case ObYearTC: {
+                    rt_expr.inner_functions_[0] = (void *)(FAST_CALC_PART_GET_VAL_FUNCS[1]);
+                    break;
+                  }
+                  default: {
+                    ret = OB_INVALID_ARGUMENT;
+                    LOG_WARN("type is wrong", K(ret), K(part_expr->obj_meta_.get_type()));
+                    break;
+                  }
+                }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              rt_expr.eval_vector_func_ =
+                  ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
+            }
+          }
+        } else if (table_schema->is_key_part()) {
+          if (OB_UNLIKELY(!part_expr->obj_meta_.is_int())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("type invalid", K(part_expr->obj_meta_), KR(ret));
+          } else {
+            rt_expr.eval_vector_func_ =
+                ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
+          }
+        } else if (table_schema->is_range_part()) {
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0) {
+            fallback = true;
+          } else {
+            ObPartition * const* part_array = table_schema->get_part_array();
+            if (OB_ISNULL(part_array) || OB_ISNULL(part_array[0]) ||
+                OB_ISNULL(part_array[0]->get_high_bound_val().get_obj_ptr())) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("partition_array is null", K(ret));
+            } else if (part_expr->obj_meta_.get_type() !=
+                part_array[0]->get_high_bound_val().get_obj_ptr()->get_meta().get_type()) {
+              fallback = true;
+            } else {
+              rt_expr.eval_vector_func_ =
+                ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
+            }
+          }
+        } else if (table_schema->is_list_part()) {
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0) {
+            fallback = true;
+          } else {
+            ObObjType part_expr_type = rt_expr.args_[0]->datum_meta_.type_;
+            // The following types are not supported for hash.
+            if (ob_is_json(part_expr_type) || ob_is_urowid(part_expr_type)) {
+              fallback = true;
+            } else {
+              ObPartition * const* part_array = table_schema->get_part_array();
+              if (OB_ISNULL(part_array) || OB_ISNULL(part_array[0])) {
+                  ret = OB_INVALID_ARGUMENT;
+                  LOG_WARN("partition_array is null", K(ret));
+              } else {
+                const ObIArray<common::ObNewRow> &list_row_values =
+                    part_array[0]->get_list_row_values();
+                ObObj *list_part_obj = list_row_values.at(0).cells_;
+                if (OB_ISNULL(list_part_obj)) {
+                  ret = OB_INVALID_ARGUMENT;
+                  LOG_WARN("list_part_obj is null", K(ret));
+                } else if (part_expr->obj_meta_.get_type() !=
+                           list_part_obj->get_meta().get_type()) {
+                  fallback = true;
+                } else {
+                  rt_expr.eval_vector_func_ =
+                      ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
+                }
+              }
+            }
+          }
+        } else {
+          fallback = true;
+        }
+      } else {
+        fallback = true;
+      }
+      if (OB_SUCC(ret) && fallback) {
+        rt_expr.eval_vector_func_ = ObExprCalcPartitionBase::calc_partition_level_one_vector;
+      }
     } else if (2 == param_cnt) {
       OB_ASSERT(PARTITION_LEVEL_TWO == calc_part_info->part_level_);
       rt_expr.eval_func_ = ObExprCalcPartitionBase::calc_partition_level_two;
@@ -249,6 +405,365 @@ int ObExprCalcPartitionBase::calc_partition_level_one(const ObExpr &expr,
   return ret;
 }
 
+template <typename ArgVec, bool IsOracleMode>
+static int inner_fast_calc_hash_partition_level_one_vector(ArgVec *vec,
+                                                          const int64_t row_idx,
+                                                          const int64_t part_num,
+                                                          ObPartition * const* part_array,
+                                                          ObPartition *&partition,
+                                                          const int64_t powN,
+                                                          GetPayloadFunc get_payload_func)
+{
+  int ret = OB_SUCCESS;
+  int64_t part_idx = OB_INVALID_INDEX;
+  int64_t val = 0;
+  if (OB_UNLIKELY(vec->is_null(row_idx))) {
+    val = 0;
+  } else {
+    val = (get_payload_func)(vec->get_payload(row_idx));
+    if (!IsOracleMode) {
+      if (OB_UNLIKELY(INT64_MIN == val)) {
+        val = INT64_MAX;
+      } else {
+        val = val < 0 ? -val : val;
+      }
+    } else {
+      if (OB_UNLIKELY(val < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("val is invalid", KR(ret), K(val), K(part_num));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (!IsOracleMode) {
+      part_idx = val % part_num;
+    } else {
+      part_idx = val & (powN - 1); //pow(2, N));
+      if (part_idx + powN < part_num && (val & powN) == powN) {
+        part_idx += powN;
+      }
+    }
+    if (OB_SUCC(ret) && OB_ISNULL(partition = part_array[part_idx])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition is null", K(ret), K(part_idx));
+    }
+  }
+  return ret;
+}
+
+template <typename ArgVec, bool IsOracleMode>
+static int inner_fast_calc_key_partition_level_one_vector(ArgVec *vec,
+                                                          const int64_t row_idx,
+                                                          const int64_t part_num,
+                                                          ObPartition * const* part_array,
+                                                          ObPartition *&partition,
+                                                          const int64_t powN)
+{
+  int ret = OB_SUCCESS;
+  int64_t part_idx = OB_INVALID_INDEX;
+  int64_t val = 0;
+  if (OB_UNLIKELY(vec->is_null(row_idx))) {
+    val = 0;
+  } else {
+    val = *reinterpret_cast<const int64_t *>(vec->get_payload(row_idx));
+    if (OB_UNLIKELY(val < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("val is invalid", KR(ret), K(val), K(part_num));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (!IsOracleMode) {
+      part_idx = val % part_num;
+    } else {
+      part_idx = val & (powN - 1); //pow(2, N));
+      if (part_idx + powN < part_num && (val & powN) == powN) {
+        part_idx += powN;
+      }
+    }
+    if (OB_SUCC(ret) && OB_ISNULL(partition = part_array[part_idx])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition is null", K(ret), K(part_idx));
+    }
+  }
+  return ret;
+}
+
+template <typename ArgVec>
+static int inner_fast_calc_range_partition_level_one_vector(ArgVec *vec,
+                                                          const int64_t row_idx,
+                                                          const int64_t part_num,
+                                                          ObPartition * const* part_array,
+                                                          ObPartition *&partition,
+                                                          const ObExprCalcPartitionBase::ObExprCalcPartCtx *calc_part_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObObj part_val_obj;
+  const char *payload = NULL;
+  ObLength len = 0;
+  bool is_null = false;
+  vec->get_payload(row_idx, is_null, payload, len);
+  ObDatum datum(payload, len, is_null);
+
+  ObFixedArray<RangePartition, common::ObIAllocator>::const_iterator upper_res =
+        std::upper_bound(calc_part_ctx->range_partitions_.begin(),
+                        calc_part_ctx->range_partitions_.end(),
+                        datum,
+                        calc_part_ctx->part_cmp_);
+  if (OB_FAIL(calc_part_ctx->part_cmp_.ret_)) {
+    LOG_WARN("partition_cmp failed", K(calc_part_ctx->part_cmp_.ret_));
+  } else {
+    int64_t part_idx = upper_res - calc_part_ctx->range_partitions_.begin();
+    if (OB_UNLIKELY(part_idx < 0 || part_idx >= part_num)) {
+      partition = nullptr;
+    } else if (OB_ISNULL(partition = part_array[part_idx])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition is null", KR(ret));
+    }
+  }
+  return ret;
+}
+
+template <typename ArgVec>
+static int inner_fast_calc_list_partition_level_one_vector(ArgVec *vec,
+                                                          const int64_t row_idx,
+                                                          const int64_t part_num,
+                                                          ObPartition * const* part_array,
+                                                          ObPartition *&partition,
+                                                          const ObExpr *part_expr,
+                                                          const ObExprCalcPartitionBase::ObExprCalcPartCtx *calc_part_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObObj part_val_obj;
+  const char *payload = NULL;
+  ObLength len = 0;
+  bool is_null = false;
+  vec->get_payload(row_idx, is_null, payload, len);
+  ObDatum datum(payload, len, is_null);
+  PartValKey tmp_row(datum, part_expr->basic_funcs_->murmur_hash_v2_,
+        part_expr->basic_funcs_->null_first_cmp_);
+  int64_t part_idx = OB_INVALID_INDEX;
+  if (OB_FAIL(calc_part_ctx->list_part_map_.get_refactored(tmp_row, part_idx))) {
+    if (ret == OB_HASH_NOT_EXIST) {
+      ret = OB_SUCCESS;
+      part_idx = calc_part_ctx->default_list_part_idx_;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(OB_INVALID_INDEX == part_idx)) {
+      partition = nullptr;
+    } else if (OB_ISNULL(partition = part_array[part_idx])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition is null", KR(ret), K(part_idx));
+    }
+  }
+  return ret;
+}
+
+template <typename ArgVec, typename ResVec,
+          ObExprCalcPartitionBase::PartType Type,
+          CalcPartIdType CalcIdType,
+          bool IsOracleMode>
+static int inner_fast_calc_partition_level_one_vector(const ObExpr &expr,
+                                 ObEvalCtx &ctx,
+                                 const ObBitVector &skip,
+                                 const EvalBound &bound,
+                                 const share::schema::ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObExpr *part_expr = expr.args_[0];
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ArgVec *vec = static_cast<ArgVec *>(part_expr->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  const int64_t part_num = table_schema->get_partition_num();
+  ObPartition * const* part_array = table_schema->get_part_array();
+  ObExprCalcPartitionBase::ObExprCalcPartCtx *calc_part_ctx = NULL;
+  if (OB_UNLIKELY(OB_ISNULL(part_array) || part_num <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("partition_array is null or partition_num is invalid",
+            KR(ret), KP(part_array), K(part_num));
+  }
+  int64_t powN = 0;
+  if (OB_SUCC(ret) && IsOracleMode &&
+      (Type == ObExprCalcPartitionBase::PartType::HASH ||
+       Type == ObExprCalcPartitionBase::PartType::KEY)) {
+    int64_t N = static_cast<int64_t>(std::log(part_num) / std::log(2));
+    const static int64_t max_part_num_log2 = 64;
+    if (N >= max_part_num_log2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is too big", K(N), K(part_num));
+    }
+    powN = (1ULL << N);
+  }
+  if (OB_SUCC(ret) && (Type == ObExprCalcPartitionBase::PartType::RANGE ||
+      Type == ObExprCalcPartitionBase::PartType::LIST)) {
+    uint64_t calc_part_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+    if (OB_ISNULL(calc_part_ctx = static_cast<ObExprCalcPartitionBase::ObExprCalcPartCtx *>(
+          ctx.exec_ctx_.get_expr_op_ctx(calc_part_ctx_id)))
+        && OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(calc_part_ctx_id, calc_part_ctx))) {
+      LOG_WARN("failed to create operator ctx", K(ret));
+    } else if (calc_part_ctx->inited_) {
+      // base info for calc range/list partition inited already
+    } else if (Type == ObExprCalcPartitionBase::PartType::RANGE) {
+      if (OB_FAIL(calc_part_ctx->init_calc_range_partition_base_info(*table_schema,
+                  *part_expr, ctx.exec_ctx_.get_allocator()))) {
+        LOG_WARN("Fail to init range partition base info", K(ret));
+      } else {
+        calc_part_ctx->inited_ = true;
+      }
+    } else { // LIST
+      if (OB_FAIL(calc_part_ctx->init_calc_list_partition_base_info(*table_schema,
+                  *part_expr, ctx.exec_ctx_.get_allocator()))) {
+        LOG_WARN("Fail to init list partition base info", K(ret));
+      } else {
+        calc_part_ctx->inited_ = true;
+      }
+    }
+  }
+  for (int64_t row_idx = bound.start(); row_idx < bound.end() && OB_SUCC(ret); ++row_idx) {
+    if (skip.at(row_idx) || eval_flags.at(row_idx)) {
+      continue;
+    }
+    ObPartition *partition = NULL;
+    if (Type == ObExprCalcPartitionBase::PartType::HASH) {
+      ret = inner_fast_calc_hash_partition_level_one_vector<ArgVec, IsOracleMode>(
+        vec, row_idx, part_num, part_array, partition, powN, (GetPayloadFunc)(expr.inner_functions_[0]));
+    } else if(Type == ObExprCalcPartitionBase::PartType::KEY) {
+      ret = inner_fast_calc_key_partition_level_one_vector<ArgVec, IsOracleMode>(
+        vec, row_idx, part_num, part_array, partition, powN);
+    } else if (Type == ObExprCalcPartitionBase::PartType::RANGE) {
+      ret = inner_fast_calc_range_partition_level_one_vector<ArgVec>(
+        vec, row_idx, part_num, part_array, partition, calc_part_ctx);
+    } else if (Type == ObExprCalcPartitionBase::PartType::LIST) {
+      ret = inner_fast_calc_list_partition_level_one_vector<ArgVec>(
+        vec, row_idx, part_num, part_array, partition, part_expr, calc_part_ctx);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected part_type", K(Type), K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      // Fill in the result
+      if (CalcIdType == CALC_TABLET_ID) {
+        if (OB_NOT_NULL(partition)) {
+          res_vec->set_int(row_idx, partition->get_tablet_id().id());
+        } else {
+          res_vec->set_int(row_idx, ObTabletID::INVALID_TABLET_ID);
+        }
+        eval_flags.set(row_idx);
+      } else if (CalcIdType == CALC_PARTITION_ID) {
+        if (OB_NOT_NULL(partition)) {
+          res_vec->set_int(row_idx, partition->get_part_id());
+        } else {
+          res_vec->set_int(row_idx, OB_INVALID_ID);
+        }
+        eval_flags.set(row_idx);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected calc_id_type", K(CalcIdType), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+#define PART_DISPATCH_VECTOR_IN_ARG_FORMAT(func_name, is_oracle_mode, part_type, calc_id_type, res_vec)    \
+if (arg_format == VEC_FIXED) {                                                                             \
+  ret = func_name<ObFixedLengthBase, res_vec, part_type, calc_id_type, is_oracle_mode>(                    \
+                  expr, ctx, skip, bound, table_schema);                                                   \
+} else if (arg_format == VEC_UNIFORM) {                                                                    \
+  ret = func_name<ObUniformFormat<false>, res_vec, part_type, calc_id_type, is_oracle_mode>(               \
+                  expr, ctx, skip, bound, table_schema);                                                   \
+} else if (arg_format == VEC_DISCRETE) {                                                                   \
+  ret = func_name<ObDiscreteFormat, res_vec, part_type, calc_id_type, is_oracle_mode>(                     \
+                  expr, ctx, skip, bound, table_schema);                                                   \
+} else if (arg_format == VEC_CONTINUOUS) {                                                                 \
+  ret = func_name<ObContinuousFormat, res_vec, part_type, calc_id_type, is_oracle_mode>(                   \
+                  expr, ctx, skip, bound, table_schema);                                                   \
+} else if (arg_format == VEC_UNIFORM_CONST) {                                                              \
+  ret = func_name<ObUniformFormat<true>, res_vec, part_type, calc_id_type, is_oracle_mode>(                \
+                  expr, ctx, skip, bound, table_schema);                                                   \
+} else {                                                                                                   \
+  ret = func_name<ObVectorBase, res_vec, part_type, calc_id_type, is_oracle_mode>(                         \
+                  expr, ctx, skip, bound, table_schema);                                                   \
+}
+
+#define PART_DISPATCH_VECTOR_IN_RES_FORMAT(func_name, is_oracle_mode, part_type, calc_id_type)                          \
+if (res_format == VEC_FIXED) {                                                                                          \
+  PART_DISPATCH_VECTOR_IN_ARG_FORMAT(func_name, is_oracle_mode, part_type, calc_id_type, ObFixedLengthBase);            \
+} else if (res_format == VEC_UNIFORM) {                                                                                 \
+  PART_DISPATCH_VECTOR_IN_ARG_FORMAT(func_name, is_oracle_mode, part_type, calc_id_type, ObUniformFormat<false>);       \
+} else if (res_format == VEC_UNIFORM_CONST) {                                                                           \
+  PART_DISPATCH_VECTOR_IN_ARG_FORMAT(func_name, is_oracle_mode, part_type, calc_id_type, ObUniformFormat<true>);        \
+} else {                                                                                                                \
+  PART_DISPATCH_VECTOR_IN_ARG_FORMAT(func_name, is_oracle_mode, part_type, calc_id_type, ObVectorBase);                 \
+}
+
+#define PART_DISPATCH_VECTOR_IN_CALC_ID_TYPE(func_name, is_oracle_mode, part_type)             \
+if (calc_part_info->calc_id_type_ == CALC_TABLET_ID) {                                         \
+  PART_DISPATCH_VECTOR_IN_RES_FORMAT(func_name, is_oracle_mode, part_type, CALC_TABLET_ID);    \
+} else if (calc_part_info->calc_id_type_ == CALC_PARTITION_ID) {                               \
+  PART_DISPATCH_VECTOR_IN_RES_FORMAT(func_name, is_oracle_mode, part_type, CALC_PARTITION_ID); \
+} else {                                                                                       \
+  ret = OB_ERR_UNEXPECTED;                                                                     \
+  LOG_WARN("unexpected calc id type", K(ret), K(calc_part_info->calc_id_type_));               \
+}
+
+#define PART_DISPATCH_VECTOR_IN_PART_TYPE(func_name, is_oracle_mode)                                           \
+if (table_schema->is_hash_part()) {                                                                            \
+  PART_DISPATCH_VECTOR_IN_CALC_ID_TYPE(func_name, is_oracle_mode, ObExprCalcPartitionBase::PartType::HASH);    \
+} else if (table_schema->is_key_part()) {                                                                      \
+  PART_DISPATCH_VECTOR_IN_CALC_ID_TYPE(func_name, is_oracle_mode, ObExprCalcPartitionBase::PartType::KEY);     \
+} else if (table_schema->is_range_part()) {                                                                    \
+  PART_DISPATCH_VECTOR_IN_CALC_ID_TYPE(func_name, is_oracle_mode, ObExprCalcPartitionBase::PartType::RANGE);   \
+} else if (table_schema->is_list_part()) {                                                                     \
+  PART_DISPATCH_VECTOR_IN_CALC_ID_TYPE(func_name, is_oracle_mode, ObExprCalcPartitionBase::PartType::LIST);    \
+} else {                                                                                                       \
+  ret = OB_ERR_UNEXPECTED;                                                                                     \
+  LOG_WARN("unexpected part type", K(ret));                                                                    \
+}
+
+#define PART_DISPATCH_VECTOR_IN_ORACLE_MODE(func_name)    \
+if (lib::is_oracle_mode()) {                              \
+  PART_DISPATCH_VECTOR_IN_PART_TYPE(func_name, true);     \
+} else {                                                  \
+  PART_DISPATCH_VECTOR_IN_PART_TYPE(func_name, false);    \
+}
+
+int ObExprCalcPartitionBase::fast_calc_partition_level_one_vector(const ObExpr &expr,
+                                                             ObEvalCtx &ctx,
+                                                             const ObBitVector &skip,
+                                                             const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  // The value is invalid,
+  // indicating that the corresponding plan was CG by an observer with a lower version.
+  // Revert to using the non-fast path directly.
+  if (expr.expr_ctx_id_ == ObExpr::INVALID_EXP_CTX_ID) {
+    if (OB_FAIL(calc_partition_level_one_vector(expr, ctx, skip, bound))) {
+      LOG_WARN("Fail to calc partition level one vector", K(ret));
+    }
+  } else {
+    CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
+    ObDASTabletMapper tablet_mapper;
+    const share::schema::ObTableSchema *table_schema = nullptr;
+    const ObExpr *part_expr = expr.args_[0];
+    if (OB_FAIL(ctx.exec_ctx_.get_das_ctx().get_das_tablet_mapper(calc_part_info->ref_table_id_,
+                                                                  tablet_mapper,
+                                                                  &calc_part_info->related_table_ids_))) {
+      LOG_WARN("get das tablet mapper failed", K(ret), K(calc_part_info));
+    } else if (OB_ISNULL(table_schema = tablet_mapper.get_table_schema())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_schema is null.", K(ret));
+    } else if (OB_FAIL(part_expr->eval_vector(ctx, skip, bound))) {
+      LOG_WARN("calc part expr failed", K(ret));
+    } else {
+      VectorFormat res_format = expr.get_format(ctx);
+      VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+      PART_DISPATCH_VECTOR_IN_ORACLE_MODE(inner_fast_calc_partition_level_one_vector);
+    }
+  }
+  return ret;
+}
+
 int ObExprCalcPartitionBase::calc_partition_level_one_vector(const ObExpr &expr,
                                                              ObEvalCtx &ctx,
                                                              const ObBitVector &skip,
@@ -330,7 +845,7 @@ int ObExprCalcPartitionBase::calc_partition_level_one_vector(const ObExpr &expr,
         } else if (CALC_PARTITION_ID == calc_part_info->calc_id_type_) {
           res_vec->set_int(row_idx, partition_id);
         } else if (CALC_PARTITION_TABLET_ID == calc_part_info->calc_id_type_) {
-          char *payload = const_cast<char *>(res_vec->get_payload(row_idx));
+          uint64_t *payload = reinterpret_cast<uint64_t *>(const_cast<char *>(res_vec->get_payload(row_idx)));
           payload[0] = partition_id;
           payload[1] = tablet_id.id();
           res_vec->set_payload_shallow(row_idx, payload, sizeof(uint64_t) * 2);
@@ -361,6 +876,10 @@ int ObExprCalcPartitionBase::calc_partition_level_one_vector(const ObExpr &expr,
                                  part_expr->obj_meta_,
                                  part_expr->obj_datum_map_))) {
           LOG_WARN("convert datum to obj failed", K(ret));
+        } else if (func_value.is_outrow_lob()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "outrow lob as partition key");
+          LOG_WARN("outrow lob as partition key is not supported", K(ret));
         } else {
           result = func_value;
           if (PARTITION_FUNC_TYPE_HASH == part_type) {
@@ -415,7 +934,7 @@ int ObExprCalcPartitionBase::calc_partition_level_one_vector(const ObExpr &expr,
                 } else if (CALC_PARTITION_ID == calc_part_info->calc_id_type_) {
                   res_vec->set_int(row_idx, partition_id);
                 } else if (CALC_PARTITION_TABLET_ID == calc_part_info->calc_id_type_) {
-                  char *payload = const_cast<char *>(res_vec->get_payload(row_idx));
+                  uint64_t *payload = reinterpret_cast<uint64_t *>(const_cast<char *>(res_vec->get_payload(row_idx)));
                   payload[0] = partition_id;
                   payload[1] = tablet_id.id();
                   res_vec->set_payload_shallow(row_idx, payload, sizeof(uint64_t) * 2);
@@ -438,19 +957,20 @@ int ObExprCalcPartitionBase::calc_partition_level_two(const ObExpr &expr,
   OB_ASSERT(2 == expr.arg_cnt_);
   OB_ASSERT(nullptr != expr.extra_info_);
   CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
-  PartitionIdCalcType calc_type = CALC_INVALID == calc_part_info->partition_id_calc_type_ ?
-                                    ctx.exec_ctx_.get_partition_id_calc_type() :
-                                    calc_part_info->partition_id_calc_type_;
+  PartitionIdCalcType calc_type = calc_part_info->partition_id_calc_type_;
   ObObjectID first_part_id = OB_INVALID_ID;
   ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
   ObObjectID partition_id = OB_INVALID_ID;
   if (CALC_IGNORE_FIRST_PART == calc_type) {
-    if (OB_FAIL(calc_partition_id(*expr.args_[1],
-                                  ctx,
-                                  *calc_part_info,
-                                  calc_part_info->first_part_id_,
-                                  tablet_id,
-                                  partition_id))) {
+    int64_t first_part_id = OB_INVALID_ID;
+    if (OB_FAIL(get_first_part_id(ctx.exec_ctx_, expr, first_part_id))) {
+      LOG_WARN("get first part id failed", K(ret));
+    } else if (OB_FAIL(calc_partition_id(*expr.args_[1],
+                                        ctx,
+                                        *calc_part_info,
+                                        first_part_id,
+                                        tablet_id,
+                                        partition_id))) {
       LOG_WARN("fail to calc partitoin id", K(ret));
     }
   } else if (CALC_IGNORE_SUB_PART == calc_type) {
@@ -555,6 +1075,51 @@ int ObExprCalcPartitionBase::calc_part_and_tablet_id(const ObExpr *calc_part_id,
   } else if (ObExprCalcPartitionId::NONE_PARTITION_ID == partition_id) {
     ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
     LOG_DEBUG("no partition matched", K(ret), KPC(calc_part_id), KPC(partition_id_datum));
+  }
+  return ret;
+}
+
+int ObExprCalcPartitionBase::calc_part_and_subpart_and_tablet_id(const ObExpr *calc_part_id,
+                                                     ObEvalCtx &eval_ctx,
+                                                     ObObjectID &partition_id,
+                                                     ObObjectID &first_partition_id,
+                                                     ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *partition_id_datum = NULL;
+  if (OB_FAIL(calc_part_and_tablet_id(calc_part_id, eval_ctx, partition_id, tablet_id))) {
+    LOG_WARN("failed to calc_part_and_tablet_id", K(ret));
+  } else {
+    // get first partition_id from table schema by partition_id
+    CalcPartitionBaseInfo *calc_part_info = NULL;
+    calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(calc_part_id->extra_info_);
+    if (OB_ISNULL(calc_part_info)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (calc_part_info->part_level_ == PARTITION_LEVEL_TWO &&
+               calc_part_info->calc_id_type_ == CALC_PARTITION_TABLET_ID){
+      // if table is part level two, only get partition_id(sub_partitionid)
+      // need get first partition id from table schema here
+      const ObTableSchema *table_schema = NULL;
+      const ObPartition *part = NULL;
+      const ObSubPartition *subpart = nullptr;
+      if (OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null sql_ctx", K(ret));
+      } else if (OB_FAIL(eval_ctx.exec_ctx_.get_sql_ctx()->schema_guard_->get_table_schema(
+          MTL_ID(), calc_part_info->ref_table_id_, table_schema))) {
+        LOG_WARN("get table schema failed", K(ret));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null table_schema", K(ret));
+      } else if (OB_FAIL(table_schema->get_subpartition_by_sub_part_id(partition_id, part, subpart))) {
+        LOG_WARN("fail to get partition", K(ret), K(partition_id));
+      } else if (OB_ISNULL(part)) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("fail to get partition", K(ret), K(partition_id));
+      } else {
+        first_partition_id = part->get_part_id();
+      }
+    }
   }
   return ret;
 }
@@ -705,6 +1270,10 @@ int ObExprCalcPartitionBase::calc_partition_id(const ObExpr &part_expr,
                                      part_expr.obj_meta_,
                                      part_expr.obj_datum_map_))) {
       LOG_WARN("convert datum to obj failed", K(ret));
+    } else if (func_value.is_outrow_lob()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "outrow lob as partition key");
+      LOG_WARN("outrow lob as partition key is not supported", K(ret));
     } else {
       result = func_value;
       if (PARTITION_FUNC_TYPE_HASH == part_type) {
@@ -799,6 +1368,211 @@ ObExprCalcPartitionTabletId::ObExprCalcPartitionTabletId(ObIAllocator &alloc)
 
 ObExprCalcPartitionTabletId::~ObExprCalcPartitionTabletId()
 {
+}
+
+bool PartValKey::operator==(const PartValKey &other) const
+{
+  int res = true;
+  cmp_func_(datum_, other.datum_, res);
+  return res == 0;
+}
+
+int PartValKey::hash(uint64_t &hash_val, uint64_t seed) const
+{
+  return hash_func_(datum_, seed, hash_val);
+}
+
+bool RangePartCmp::operator()(const ObDatum &l, const RangePartition &r) {
+  int ret = OB_SUCCESS;
+  int cmp_ret = 0;
+  bool res = false;
+
+  if (r.is_max_range_part()) {
+    res = true;
+  } else if (l.is_null()) {
+    // In part calc, MySQL treats null values as infinitely small,
+    // while Oracle treats them as infinitely large.
+    res = is_oracle_mode_ ? false : true;
+  } else {
+    ret_ = (row_cmp_func_)(part_expr_obj_meta_,
+                          part_array_obj_meta_,
+                          (const void *)l.ptr_, l.len_,
+                          (const void *)r.datum_.ptr_, r.datum_.len_, cmp_ret);
+    res = cmp_ret < 0;
+  }
+  return res;
+}
+
+int ObExprCalcPartitionBase::ObExprCalcPartCtx::init_calc_range_partition_base_info(
+                                                const share::schema::ObTableSchema &table_schema,
+                                                const ObExpr &part_expr,
+                                                common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  const int64_t part_num = table_schema.get_partition_num();
+  ObPartition * const* part_array = table_schema.get_part_array();
+  range_partitions_.set_allocator(&allocator);
+  if (OB_FAIL(range_partitions_.prepare_allocate(part_num))) {
+    LOG_WARN("Fail to prepare_allocate", K(ret), K(part_num));
+  }
+  ObDatum tmp_datum;
+  char buf[OBJ_DATUM_MAX_RES_SIZE];
+  tmp_datum.ptr_ = buf;
+  for (int i = 0; OB_SUCC(ret) && i < part_num; ++i) {
+    if (part_array[i]->get_high_bound_val().is_max_row()) {
+      range_partitions_.at(i).set_max_range_part();
+    } else if (OB_FAIL(tmp_datum.from_obj(
+            *(part_array[i]->get_high_bound_val().get_obj_ptr())))) {
+      LOG_WARN("Fail to from obj", K(ret), K(i));
+    } else if (OB_FAIL(range_partitions_.at(i).datum_.deep_copy(tmp_datum,
+                                        allocator))) {
+      LOG_WARN("failed to deep copy datum");
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(part_cmp_.row_cmp_func_ = VectorCmpExprFuncsHelper::get_row_cmp_func(
+                                          part_expr.datum_meta_,
+                                          part_expr.datum_meta_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("row_cmp_func is null", K(ret), K(part_expr.datum_meta_));
+    } else {
+      part_cmp_.part_expr_obj_meta_ = part_expr.obj_meta_;
+      part_cmp_.part_array_obj_meta_ =
+          part_array[0]->get_high_bound_val().get_obj_ptr()->get_meta();
+      part_cmp_.is_oracle_mode_ = lib::is_oracle_mode();
+    }
+  }
+  return ret;
+}
+
+int ObExprCalcPartitionBase::ObExprCalcPartCtx::init_calc_list_partition_base_info(
+                                            const share::schema::ObTableSchema &table_schema,
+                                            const ObExpr &part_expr,
+                                            common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  const int64_t part_num = table_schema.get_partition_num();
+  ObPartition * const* part_array = table_schema.get_part_array();
+  int64_t list_val_cnt = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_num; ++i) {
+    const ObIArray<common::ObNewRow> &list_row_values =
+            part_array[i]->get_list_row_values();
+    list_val_cnt += list_row_values.count();
+    // calc default value position
+    if (list_row_values.count() == 1
+    && list_row_values.at(0).get_count() >= 1
+    && list_row_values.at(0).get_cell(0).is_max_value()) {
+      default_list_part_idx_ = i;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObMemAttr list_part_map_attr(MTL_ID(), "LISTPART");
+    if (OB_FAIL(list_part_map_.create(list_val_cnt * 2,
+                                  list_part_map_attr, list_part_map_attr))) {
+      LOG_WARN("create interm_res hash table failed", K(ret));
+    } else {
+      ObDatum list_part_datum;
+      char buf[OBJ_DATUM_MAX_RES_SIZE];
+      list_part_datum.ptr_ = buf;
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_num; ++i) {
+        if (i == default_list_part_idx_) {
+          continue;
+        }
+        const ObIArray<common::ObNewRow> &list_row_values =
+              part_array[i]->get_list_row_values();
+        for (int64_t j = 0; OB_SUCC(ret) && j < list_row_values.count(); ++j) {
+          ObObj *list_part_obj = list_row_values.at(j).cells_;
+          if (OB_FAIL(list_part_datum.from_obj(*list_part_obj))) {
+            LOG_WARN("Fail to from obj", K(ret), K(i));
+          } else {
+            PartValKey list_part_row;
+            if (OB_FAIL(list_part_row.datum_.deep_copy(list_part_datum,
+                                        allocator))) {
+              LOG_WARN("failed to deep copy datum");
+            } else {
+              list_part_row.hash_func_ = part_expr.basic_funcs_->murmur_hash_v2_;
+              list_part_row.cmp_func_ = part_expr.basic_funcs_->null_first_cmp_;
+              if (OB_FAIL(list_part_map_.set_refactored(list_part_row, i))) {
+                LOG_WARN("Fail to set_refactored", K(ret), K(i), K(j));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprCalcPartitionBase::get_first_part_id(ObExecContext &ctx, const ObExpr &expr, int64_t &first_part_id)
+{
+  int ret = OB_SUCCESS;
+  first_part_id = OB_INVALID_ID;
+  uint64_t expr_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+  if (ObExpr::INVALID_EXP_CTX_ID == expr_ctx_id) {
+    // during upgrade, expr ctx not exist.
+    CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
+    if (OB_ISNULL(calc_part_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("extra info is null", K(ret));
+    } else {
+      first_part_id = calc_part_info->first_part_id_;
+    }
+  } else {
+    ObExprCalcPartCtx *calc_part_ctx = NULL;
+    if (OB_ISNULL(calc_part_ctx = static_cast<ObExprCalcPartCtx *>(ctx.get_expr_op_ctx(expr_ctx_id)))
+        && OB_FAIL(ctx.create_expr_op_ctx(expr_ctx_id, calc_part_ctx))) {
+      LOG_WARN("create expr op ctx failed", K(ret));
+    } else {
+      first_part_id = calc_part_ctx->first_part_id_;
+    }
+  }
+  return ret;
+}
+
+int ObExprCalcPartitionBase::set_first_part_id(ObExecContext &ctx, const ObExpr &expr, const int64_t first_part_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t expr_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+  if (ObExpr::INVALID_EXP_CTX_ID == expr_ctx_id) {
+    // during upgrade, expr ctx not exist.
+    CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
+    if (OB_ISNULL(calc_part_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("extra info is null", K(ret));
+    } else {
+      calc_part_info->first_part_id_ = first_part_id;
+    }
+  } else {
+    ObExprCalcPartCtx *calc_part_ctx = NULL;
+    if (OB_ISNULL(calc_part_ctx = static_cast<ObExprCalcPartCtx *>(ctx.get_expr_op_ctx(expr_ctx_id)))
+        && OB_FAIL(ctx.create_expr_op_ctx(expr_ctx_id, calc_part_ctx))) {
+      LOG_WARN("create expr op ctx failed", K(ret));
+    } else {
+      calc_part_ctx->first_part_id_ = first_part_id;
+    }
+  }
+  return ret;
+}
+
+int ObExprCalcPartitionBase::update_part_id_calc_type_for_upgrade(
+    ObExecContext &ctx,
+    const ObExpr &expr,
+    PartitionIdCalcType calc_type)
+{
+  int ret = OB_SUCCESS;
+  uint64_t expr_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+  if (ObExpr::INVALID_EXP_CTX_ID == expr_ctx_id) {
+    // 混跑要动态改partition_id_calc_type，434以下不会设置这个expr_ctx_id_
+    CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
+    if (OB_ISNULL(calc_part_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("extra info is null", K(ret));
+    } else {
+      calc_part_info->partition_id_calc_type_ = calc_type;
+    }
+  }
+  return ret;
 }
 
 }

@@ -54,9 +54,14 @@ public:
   inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
 private:
   int inner_get_next_row();
+  int fetch_catalog_table_schemas_(const uint64_t tenant_id,
+                                   const uint64_t database_id,
+                                   common::ObString &database_name,
+                                   common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas);
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
+  common::ObString database_name_;
   common::ObSEArray<const share::schema::ObSimpleTableSchemaV2 *, 128> table_schemas_;
   int64_t table_schema_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantShowTables);

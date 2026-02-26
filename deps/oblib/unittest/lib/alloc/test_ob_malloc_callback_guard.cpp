@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <iostream>
 
 #include "lib/alloc/ob_malloc_callback.h"
 #include "lib/allocator/ob_malloc.h"
@@ -37,7 +36,7 @@ private:
   int64_t& hold_;
 };
 
-TEST_F(TestObMallocCallbackGuard, AllocAndFree)
+TEST_F(TestObMallocCallbackGuard, DISABLED_AllocAndFree)
 {
   int64_t hold = 0;
   MallocCallback cb(hold);

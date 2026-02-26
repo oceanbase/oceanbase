@@ -12,14 +12,10 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_recover_restore_table_task.h"
-#include "lib/rc/context.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "rootserver/ddl_task/ob_ddl_scheduler.h"
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
-#include "rootserver/ddl_task/ob_ddl_redefinition_task.h"
-#include "observer/ob_server_event_history_table_operator.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
+#include "rootserver/restore/ob_restore_util.h"  // ObRestoreUtil
+#include "rootserver/ddl_task/ob_ddl_single_replica_executor.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -92,33 +88,40 @@ int ObRecoverRestoreTableTask::init(const ObDDLTaskRecord &task_record)
 int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
+  int64_t new_fetched_snapshot = 0;
+  int64_t persisted_snapshot = 0;
   ObDDLTaskStatus new_status = ObDDLTaskStatus::OBTAIN_SNAPSHOT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRecoverRestoreTableTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (snapshot_version_ > 0) {
-    // do nothing, already hold snapshot.
-  } else if (OB_FAIL(ObDDLWaitTransEndCtx::calc_snapshot_with_gts(dst_tenant_id_, task_id_, 0/*trans_end_snapshot*/, snapshot_version_))) {
+    new_status = next_task_status; // to switch to the next status.
+  } else if (OB_FAIL(ObDDLUtil::calc_snapshot_with_gts(new_fetched_snapshot,
+                                                       dst_tenant_id_,
+                                                       task_id_,
+                                                       0/*trans_end_snapshot*/,
+                                                       0/*index_snapshot_version_diff*/))) {
     // fetch snapshot.
     LOG_WARN("calc snapshot with gts failed", K(ret), K(dst_tenant_id_));
-  } else if (snapshot_version_ <= 0) {
+  } else if (new_fetched_snapshot <= 0) {
     // the snapshot version obtained here must be valid.
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("snapshot version is invalid", K(ret), K(snapshot_version_));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(root_service->get_sql_proxy(),
+    LOG_WARN("snapshot version is invalid", K(ret), K(new_fetched_snapshot));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(*GCTX.sql_proxy_,
                                                                       dst_tenant_id_,
                                                                       task_id_,
-                                                                      snapshot_version_))) {
-    LOG_WARN("update snapshot version failed", K(ret), K(dst_tenant_id_), K(task_id_), K(snapshot_version_));
+                                                                      new_fetched_snapshot,
+                                                                      persisted_snapshot))) {
+    LOG_WARN("update snapshot version failed", K(ret), K(dst_tenant_id_), K(task_id_), K(persisted_snapshot));
   }
 
   if (OB_FAIL(ret)) {
     snapshot_version_ = 0; // reset snapshot if failed.
-  } else {
+  } else if (snapshot_version_ <= 0) {
+    snapshot_version_ = persisted_snapshot > 0 ? persisted_snapshot : new_fetched_snapshot;
     new_status = next_task_status;
   }
   if (new_status == next_task_status || OB_FAIL(ret)) {
@@ -129,8 +132,20 @@ int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_s
   return ret;
 }
 
+bool ObRecoverRestoreTableTask::is_error_need_retry(const int ret_code)
+{
+  bool bret = false;
+  if (ObDDLTaskStatus::REDEFINITION == task_status_) {
+    bret = OB_SUCCESS == ret_code;
+  } else {
+    bret = ObDDLTask::is_error_need_retry(ret_code);
+  }
+  return bret;
+}
+
 // update sstable complement status for all leaders
 int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
+                                                                 const ObAddr &addr,
                                                                  const int64_t snapshot_version,
                                                                  const int64_t execution_id,
                                                                  const int ret_code,
@@ -147,10 +162,14 @@ int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::
     LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
   } else if (execution_id < execution_id_) {
     LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
-  } else if (OB_FAIL(replica_builder_.set_partition_task_status(tablet_id,
-                                                                ret_code,
-                                                                addition_info.row_scanned_,
-                                                                addition_info.row_inserted_))) {
+  } else if (OB_FAIL(replica_builder_.update_build_progress(tablet_id,
+                                                            addr,
+                                                            ret_code,
+                                                            addition_info.row_scanned_,
+                                                            addition_info.row_inserted_,
+                                                            addition_info.cg_row_inserted_,
+                                                            addition_info.physical_row_count_,
+                                                            false /* allow_retry */))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }
   return ret;
@@ -159,11 +178,14 @@ int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::
 int ObRecoverRestoreTableTask::success()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(cleanup())) {
     LOG_WARN("clean up failed", K(ret));
+  } else if (OB_TMP_FAIL(ObRestoreUtil::notify_restore_service(dst_tenant_id_))) {
+    LOG_WARN("wakeup restore serivice failed", K_(dst_tenant_id), K(tmp_ret));
   }
   return ret;
 }
@@ -171,6 +193,7 @@ int ObRecoverRestoreTableTask::success()
 int ObRecoverRestoreTableTask::fail()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObArenaAllocator tmp_arena("RestoreDDLClean");
   bool already_cleanuped = false;
 
@@ -178,7 +201,6 @@ int ObRecoverRestoreTableTask::fail()
   obrpc::ObTableItem table_item;
   obrpc::ObDropTableArg drop_table_arg;
   obrpc::ObDDLRes drop_table_res;
-  ObRootService *root_service = GCTX.root_service_;
   {
     bool is_oracle_mode = false;
     int64_t all_indexes_tablets_count = 0;
@@ -188,9 +210,9 @@ int ObRecoverRestoreTableTask::fail()
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
-    } else if (OB_ISNULL(root_service)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("error sys, root service must not be nullptr", K(ret));
+    } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
     } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(dst_tenant_id_, dst_tenant_schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret), K(dst_tenant_id_));
     } else if (OB_FAIL(dst_tenant_schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, table_schema))) {
@@ -239,7 +261,7 @@ int ObRecoverRestoreTableTask::fail()
       }
     } else if (OB_FAIL(drop_table_arg.tables_.push_back(table_item))) {
       LOG_WARN("push back failed", K(ret), K(drop_table_arg));
-    } else if (OB_FAIL(root_service->get_common_rpc_proxy().to(GCTX.self_addr())
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(GCTX.self_addr())
         .timeout(rpc_timeout).drop_table(drop_table_arg, drop_table_res))) {
       LOG_WARN("drop table failed", K(ret), K(rpc_timeout), K(drop_table_arg));
     } else {
@@ -251,24 +273,27 @@ int ObRecoverRestoreTableTask::fail()
       LOG_WARN("clean up failed", K(ret));
     }
   }
+
+  if (OB_TMP_FAIL(ObRestoreUtil::notify_restore_service(dst_tenant_id_))) {
+    LOG_WARN("wakeup restore serivice failed", K_(dst_tenant_id), K(tmp_ret));
+  }
   return ret;
 }
 
 int ObRecoverRestoreTableTask::check_health()
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys", K(ret));
-  } else if (!root_service->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service, do not need retry", K(ret), K(object_id_), K(target_object_id_));
+    LOG_WARN("ddl service not started", KR(ret));
     need_retry_ = false;
-  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service->get_sql_proxy(), tenant_id_))) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(GCTX.sql_proxy_, tenant_id_))) {
     // switch to build failed if the source tenant is been dropped,
     // in order to remove the destination tenant's persistent task record.
     if (OB_TENANT_HAS_BEEN_DROPPED == ret) {

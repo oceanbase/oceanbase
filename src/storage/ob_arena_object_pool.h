@@ -100,8 +100,9 @@ template <typename T, int64_t OBJ_NUM>
 void ObArenaObjPool<T, OBJ_NUM>::reset()
 {
   if (OB_UNLIKELY(alloc_count_ != free_count_)) {
-    TABLELOCK_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object alloc and free count not match", K(*this));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object alloc and free count not match", K(*this));
   }
+  OB_SAFE_ASSERT(alloc_count_ == free_count_);
 
   alloc_count_ = 0;
   free_count_ = 0;

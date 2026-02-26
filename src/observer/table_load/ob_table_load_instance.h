@@ -32,7 +32,7 @@ class ObTableLoadDDLParam;
 
 class ObTableLoadInstance
 {
-  static const int64_t WAIT_INTERVAL_US = 3 * 1000 * 1000; // 3s
+  static const int64_t WAIT_INTERVAL_US = 1 * 1000 * 1000; // 1s
 public:
   ObTableLoadInstance();
   ~ObTableLoadInstance();
@@ -41,36 +41,68 @@ public:
   int init(ObTableLoadParam &param,
            const common::ObIArray<uint64_t> &column_ids,
            ObTableLoadExecCtx *execute_ctx);
-  int write(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
+  int init(ObTableLoadParam &param,
+           const common::ObIArray<uint64_t> &column_ids,
+           const common::ObIArray<common::ObTabletID> &tablet_ids,
+           ObTableLoadExecCtx *execute_ctx);
   int commit();
   int px_commit_data();
   int px_commit_ddl();
-  const ObTableLoadTableCtx* get_table_ctx() { return table_ctx_; }
+  int check_status();
+  ObTableLoadTableCtx *get_table_ctx() { return table_ctx_; }
   sql::ObLoadDataStat *get_job_stat() const { return job_stat_; }
   const table::ObTableLoadResultInfo &get_result_info() const { return result_info_; }
 private:
-  int start_stmt(const ObTableLoadParam &param);
+  int start_stmt(const ObTableLoadParam &param,
+                 const common::ObIArray<common::ObTabletID> &tablet_ids);
   int end_stmt(const bool commit);
   // incremental
   static int64_t get_stmt_expire_ts(sql::ObSQLSessionInfo *session_info);
   int build_tx_param();
   int start_sql_tx();
   int end_sql_tx(const bool commit);
-  int lock_table_in_tx();
+  int lock_for_inc_load(const common::ObIArray<common::ObTabletID> &tablet_ids);
   int init_ddl_param_for_inc_direct_load();
   // full
-  int start_redef_table(const ObTableLoadParam &param);
+  int start_redef_table(const ObTableLoadParam &param,
+                        const common::ObIArray<common::ObTabletID> &tablet_ids);
   int commit_redef_table();
   int abort_redef_table();
 private:
   // direct load
-  int start_direct_load(const ObTableLoadParam &param, const common::ObIArray<uint64_t> &column_ids);
+  int start_direct_load(const ObTableLoadParam &param,
+                        const common::ObIArray<uint64_t> &column_ids,
+                        const common::ObIArray<ObTabletID> &tablet_ids);
   int wait_begin_finish();
   int end_direct_load(const bool commit);
   int add_tx_result_to_user_session();
-  int start_trans();
-  int write_trans(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
-  int commit_trans();
+  // lock table or tablets
+  int build_base_lock_arg(ObLockTableRequest &lock_table_arg);
+  int lock_table_in_tx();
+  int lock_tablets_in_tx(const ObIArray<ObTabletID> &tablet_ids);
+  int try_lock_in_tx(const ObLockRequest &arg);
+public:
+  static const int64_t DEFAULT_SEGMENT_ID = 1;
+  struct TransCtx
+  {
+  public:
+    void reset()
+    {
+      trans_id_.reset();
+      next_sequence_no_array_.reset();
+    }
+  public:
+    table::ObTableLoadTransId trans_id_;
+    table::ObTableLoadArray<uint64_t> next_sequence_no_array_;
+  };
+  int start_trans(TransCtx &trans_ctx, int64_t segment_id, ObIAllocator &allocator);
+  int commit_trans(TransCtx &trans_ctx);
+  int write_trans(TransCtx &trans_ctx, int32_t session_id,
+                  const table::ObTableLoadObjRowArray &obj_rows);
+private:
+  int check_trans_committed(TransCtx &trans_ctx);
+  bool is_valid_tablet_ids(const common::ObIArray<common::ObTabletID> &tablet_ids);
+
 private:
   struct StmtCtx
   {
@@ -106,10 +138,10 @@ private:
                  KP_(session_info),
                  KPC_(tx_desc),
                  K_(tx_param),
-                 KP_(is_incremental),
-                 KP_(use_insert_into_select_tx),
-                 KP_(is_started),
-                 KP_(has_added_tx_result));
+                 K_(is_incremental),
+                 K_(use_insert_into_select_tx),
+                 K_(is_started),
+                 K_(has_added_tx_result));
   public:
     uint64_t tenant_id_;
     uint64_t table_id_;
@@ -122,26 +154,13 @@ private:
     bool is_started_;
     bool has_added_tx_result_;
   };
-  struct TransCtx
-  {
-  public:
-    void reset()
-    {
-      trans_id_.reset();
-      next_sequence_no_array_.reset();
-    }
-  public:
-    table::ObTableLoadTransId trans_id_;
-    table::ObTableLoadArray<uint64_t> next_sequence_no_array_;
-  };
+
 private:
-  static const int64_t DEFAULT_SEGMENT_ID = 1;
   ObTableLoadExecCtx *execute_ctx_;
   common::ObIAllocator *allocator_;
   ObTableLoadTableCtx *table_ctx_;
   sql::ObLoadDataStat *job_stat_;
   StmtCtx stmt_ctx_;
-  TransCtx trans_ctx_;
   table::ObTableLoadResultInfo result_info_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadInstance);

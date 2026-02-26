@@ -12,16 +12,13 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_plan_factory.h"
-#include "sql/resolver/ob_stmt.h"
 #include "sql/optimizer/ob_select_log_plan.h"
 #include "sql/optimizer/ob_delete_log_plan.h"
 #include "sql/optimizer/ob_update_log_plan.h"
-#include "sql/optimizer/ob_insert_log_plan.h"
 #include "sql/optimizer/ob_explain_log_plan.h"
 #include "sql/optimizer/ob_help_log_plan.h"
 #include "sql/optimizer/ob_merge_log_plan.h"
 #include "sql/optimizer/ob_insert_all_log_plan.h"
-#include "sql/optimizer/ob_optimizer_context.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

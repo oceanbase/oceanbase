@@ -10,23 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/utility/ob_macro_utils.h"
 #include "logservice/ob_log_service.h"
-#include "share/ob_errno.h"
-#include "share/ob_occam_time_guard.h"
-#include "election_priority_impl.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_errno.h"
-#include "logservice/leader_coordinator/ob_leader_coordinator.h"
 #include "logservice/leader_coordinator/common_define.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/ob_table_access_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "logservice/palf/lsn.h"
 #include "observer/ob_server.h"
-
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#include "logservice/libpalf/libpalf_common_define.h"
+#endif
 namespace oceanbase
 {
 using namespace share;
@@ -203,12 +193,39 @@ int PriorityV1::get_role_(const share::ObLSID &ls_id, common::ObRole &role) cons
   #undef PRINT_WRAPPER
 }
 
+int PriorityV1::get_ls_election_reference_info(
+    const uint64_t &tenant_id,
+    const share::ObLSID &ls_id,
+    LsElectionReferenceInfo &election_reference_info)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
+    if (OB_ISNULL(coordinator)) {
+      ret = OB_ERR_UNEXPECTED;
+      COORDINATOR_LOG(ERROR, "unexpected nullptr");
+    } else if (OB_SUCC(coordinator->get_ls_election_reference_info(ls_id, election_reference_info))) {
+      // when creating tenant sys ls, __all_ls_election_reference_info in meta tenant may not exist
+      // so user sys ls should use meta sys ls election reference info
+    } else if (!is_user_tenant(tenant_id) || !ls_id.is_sys_ls()) {
+      COORDINATOR_LOG(WARN, "fail to get ls election reference info", KR(ret), K(tenant_id), K(*this));
+    } else if (OB_FAIL(get_ls_election_reference_info(gen_meta_tenant_id(tenant_id), ls_id,
+            election_reference_info))) {
+      COORDINATOR_LOG(WARN, "fail to get meta tenant ls election reference info", KR(ret),
+          K(tenant_id), K(*this));
+    } else {
+      COORDINATOR_LOG(INFO, "fail to get user tenant ls election reference info, "
+                            "use meta tenant ls election reference info", KR(ret), K(tenant_id));
+    }
+  }
+  return ret;
+}
+
 int PriorityV1::refresh_(const share::ObLSID &ls_id)
 {
   LC_TIME_GUARD(100_ms);
   #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(*this)
   int ret = OB_SUCCESS;
-  ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
   ObFailureDetector* detector = MTL(ObFailureDetector*);
   LsElectionReferenceInfo election_reference_info;
   SCN scn = SCN::min_scn();
@@ -216,14 +233,14 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
 #ifdef OB_BUILD_ARBITRATION
     ret = OB_NO_NEED_UPDATE;
 #endif
-  } else if (OB_ISNULL(coordinator) || OB_ISNULL(detector)) {
+  } else if (OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(ERROR, "unexpected nullptr");
   } else if (CLICK_FAIL(detector->get_specified_level_event(FailureLevel::FATAL, fatal_failures_))) {
     COORDINATOR_LOG_(WARN, "get fatal failures failed");
   } else if (CLICK_FAIL(detector->get_specified_level_event(FailureLevel::SERIOUS, serious_failures_))) {
     COORDINATOR_LOG_(WARN, "get serious failures failed");
-  } else if (CLICK_FAIL(coordinator->get_ls_election_reference_info(ls_id, election_reference_info))) {
+  } else if (CLICK_FAIL(get_ls_election_reference_info(MTL_ID(), ls_id, election_reference_info))) {
     COORDINATOR_LOG_(WARN, "fail to get ls election reference info");
   } else if (CLICK_FAIL(in_blacklist_reason_.assign(election_reference_info.element<3>().element<1>()))) {
     COORDINATOR_LOG_(WARN, "fail to copy removed reason string");
@@ -286,14 +303,20 @@ int PriorityV1::compare_in_blacklist_flag_(int &ret, const PriorityV1&rhs, ObStr
     if (is_in_blacklist_ == rhs.is_in_blacklist_) {
       compare_result = 0;
     } else if (!is_in_blacklist_ && rhs.is_in_blacklist_) {
-      if (CLICK_FAIL(databuff_printf(remove_reason, 64, pos, "IN BLACKLIST(%s)", to_cstring(rhs.in_blacklist_reason_)))) {
+      if (CLICK_FAIL({ret = databuff_printf(remove_reason, 64, pos, "IN BLACKLIST(");
+                      OB_SUCCESS != ret ? : databuff_printf(remove_reason, 64, pos, rhs.in_blacklist_reason_);
+                      OB_SUCCESS != ret ? : databuff_printf(remove_reason, 64, pos, ")");
+                      ret;})) {
         COORDINATOR_LOG(WARN, "data buf printf failed");
       } else if (CLICK_FAIL(reason.assign(remove_reason))) {
         COORDINATOR_LOG(WARN, "assign reason failed");
       }
       compare_result = 1;
     } else {
-      if (CLICK_FAIL(databuff_printf(remove_reason, 64, pos, "IN BLACKLIST(%s)", to_cstring(in_blacklist_reason_)))) {
+      if (CLICK_FAIL({ret = databuff_printf(remove_reason, 64, pos, "IN BLACKLIST(");
+                      OB_SUCCESS != ret ? : databuff_printf(remove_reason, 64, pos, in_blacklist_reason_);
+                      OB_SUCCESS != ret ? : databuff_printf(remove_reason, 64, pos, ")");
+                      ret;})) {
         COORDINATOR_LOG(WARN, "data buf printf failed");
       } else if (CLICK_FAIL(reason.assign(remove_reason))) {
         COORDINATOR_LOG(WARN, "assign reason failed");
@@ -428,7 +451,170 @@ bool PriorityV1::has_fatal_failure_() const
 {
   return !fatal_failures_.empty();
 }
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+int PriorityV1::fill_libpalf_priority_(libpalf::LibPalfElectionPriority *priority)
+{
+    #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(*this)
+    // same order as PriorityV1::compare
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(priority)) {
+      ret = OB_ERR_UNEXPECTED;
+      COORDINATOR_LOG_(WARN, "priority is null, unexpected.");
+    } else if (OB_FAIL(convert_observer_stopped_item_(priority))) {
+      COORDINATOR_LOG_(WARN, "fail to convert observer_stopped item");
+    } else if (OB_FAIL(convert_server_stopped_item_(priority))) {
+      COORDINATOR_LOG_(WARN, "fail to convert server_stopped item");
+    } else if (OB_FAIL(convert_zone_stopped_item_(priority))) {
+      COORDINATOR_LOG_(WARN, "fail to convert zone_stopped item");
+    } else if (OB_FAIL(convert_fatal_failures_item_(priority))) {
+      COORDINATOR_LOG_(WARN, "fail to convert fatal_failures item");
+    } else if (OB_FAIL(convert_scn_item_(priority))) {
+      COORDINATOR_LOG_(WARN, "fail to convert scn item");
+    } else if (OB_FAIL(convert_in_blacklist_item_(priority))) {
+      COORDINATOR_LOG_(WARN, "fail to convert in_blacklist_flag item");
+    } else if (OB_FAIL(convert_manual_leader_item_(priority))) {
+      COORDINATOR_LOG_(WARN, "fail to convert manual_leader item");
+    } else if (OB_FAIL(convert_primary_region_item_(priority))) {
+      COORDINATOR_LOG_(WARN, "fail to convert primary_region item");
+    } else if (OB_FAIL(convert_serious_failures_item_(priority))) {
+      COORDINATOR_LOG_(WARN, "fail to convert serious_failures item");
+    } else if (OB_FAIL(convert_zone_priority_item_(priority))) {
+      COORDINATOR_LOG_(WARN, "fail to convert zone_priority item");
+    }
+    #undef PRINT_WRAPPER
+    return ret;
+}
 
+int PriorityV1::convert_observer_stopped_item_(libpalf::LibPalfElectionPriority *priority)
+{
+  int ret = OB_SUCCESS;
+  libpalf::LibPalfElectPrioValue::Int_Body value(is_observer_stopped_);
+  libpalf::LibPalfElectPrioValue prio_value {libpalf::LibPalfElectPrioValue::Tag::Int, {value}};
+  const libpalf::LibPalfElectPrioItem item(OBSERVER_STOPPED_ITEM_NAME, prio_value, DEFAULT_COMPARE_THRESHOLD, false);
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_ele_prio_add_item(priority, &item, true)))) {
+    COORDINATOR_LOG(WARN, "fail to add observer_stopped item", KR(ret), K(MTL_ID()), K(*this));
+  }
+  return ret;
+}
+
+int PriorityV1::convert_server_stopped_item_(libpalf::LibPalfElectionPriority *priority)
+{
+  int ret = OB_SUCCESS;
+  libpalf::LibPalfElectPrioValue::Int_Body value(is_server_stopped_);
+  libpalf::LibPalfElectPrioValue prio_value {libpalf::LibPalfElectPrioValue::Tag::Int, {value}};
+  const libpalf::LibPalfElectPrioItem item(SERVER_STOPPED_ITEM_NAME, prio_value, DEFAULT_COMPARE_THRESHOLD, false);
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_ele_prio_add_item(priority, &item, true)))) {
+    COORDINATOR_LOG(WARN, "fail to add server_stopped item", KR(ret), K(MTL_ID()), K(*this));
+  }
+  return ret;
+}
+
+int PriorityV1::convert_zone_stopped_item_(libpalf::LibPalfElectionPriority *priority)
+{
+  int ret = OB_SUCCESS;
+  libpalf::LibPalfElectPrioValue::Int_Body value(is_zone_stopped_);
+  libpalf::LibPalfElectPrioValue prio_value {libpalf::LibPalfElectPrioValue::Tag::Int, {value}};
+  const libpalf::LibPalfElectPrioItem item(ZONE_STOPPED_ITEM_NAME, prio_value, DEFAULT_COMPARE_THRESHOLD, false);
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_ele_prio_add_item(priority, &item, true)))) {
+    COORDINATOR_LOG(WARN, "fail to add zone_stopped item", KR(ret), K(MTL_ID()), K(*this));
+  }
+  return ret;
+}
+
+int PriorityV1::convert_fatal_failures_item_(libpalf::LibPalfElectionPriority *priority)
+{
+  int ret = OB_SUCCESS;
+  libpalf::LibPalfElectPrioValue::Int_Body value(fatal_failures_.count());
+  libpalf::LibPalfElectPrioValue prio_value {libpalf::LibPalfElectPrioValue::Tag::Int, {value}};
+  const libpalf::LibPalfElectPrioItem item(FATAL_FAILURES_ITEM_NAME, prio_value, DEFAULT_COMPARE_THRESHOLD, false);
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_ele_prio_add_item(priority, &item, true)))) {
+    COORDINATOR_LOG(WARN, "fail to add fatal_failures item", KR(ret), K(MTL_ID()), K(*this));
+  }
+  return ret;
+}
+
+int PriorityV1::convert_primary_region_item_(libpalf::LibPalfElectionPriority *priority)
+{
+  int ret = OB_SUCCESS;
+  libpalf::LibPalfElectPrioValue::Int_Body value(is_primary_region_);
+  libpalf::LibPalfElectPrioValue prio_value {libpalf::LibPalfElectPrioValue::Tag::Int, {value}};
+  libpalf::LibPalfElectPrioItem item(PRIMARY_REGION_ITEM_NAME, prio_value, DEFAULT_COMPARE_THRESHOLD, true);
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_ele_prio_add_item(priority, &item, true)))) {
+    COORDINATOR_LOG(WARN, "fail to add primary_region item", KR(ret), K(MTL_ID()), K(*this));
+  }
+  return ret;
+}
+
+int PriorityV1::convert_serious_failures_item_(libpalf::LibPalfElectionPriority *priority)
+{
+  int ret = OB_SUCCESS;
+  libpalf::LibPalfElectPrioValue::Int_Body value(serious_failures_.count());
+  libpalf::LibPalfElectPrioValue prio_value {libpalf::LibPalfElectPrioValue::Tag::Int, {value}};
+  libpalf::LibPalfElectPrioItem item(SERIOUS_FAILURES_ITEM_NAME, prio_value, DEFAULT_COMPARE_THRESHOLD, false);
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_ele_prio_add_item(priority, &item, true)))) {
+    COORDINATOR_LOG(WARN, "fail to add serious_failures item", KR(ret), K(MTL_ID()), K(*this));
+  }
+  return ret;
+}
+
+int PriorityV1::convert_scn_item_(libpalf::LibPalfElectionPriority *priority)
+{
+  int ret = OB_SUCCESS;
+  double threshold = 0.0;
+  if (scn_.is_max()) {
+    threshold = OB_MAX_SCN_TS_NS;
+  } else if (scn_.is_valid()) {
+    threshold = MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_US;
+  } else {
+    threshold = OB_MIN_SCN_TS_NS;
+  }
+  // if scn is invalid(unexpected), scn_val is 0(OB_MIN_SCN_TS_NS)
+  libpalf::LibPalfElectPrioValue::Int_Body value(scn_.convert_to_ts());
+  libpalf::LibPalfElectPrioValue prio_value {libpalf::LibPalfElectPrioValue::Tag::Int, {value}};
+  libpalf::LibPalfElectPrioItem item(SCN_ITEM_NAME, prio_value, threshold, true);
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_ele_prio_add_item(priority, &item, true)))) {
+    COORDINATOR_LOG(WARN, "fail to add scn item", KR(ret), K(MTL_ID()), K(*this));
+  }
+  return ret;
+}
+
+int PriorityV1::convert_in_blacklist_item_(libpalf::LibPalfElectionPriority *priority)
+{
+  int ret = OB_SUCCESS;
+  libpalf::LibPalfElectPrioValue::Int_Body value(is_in_blacklist_);
+  libpalf::LibPalfElectPrioValue prio_value {libpalf::LibPalfElectPrioValue::Tag::Int, {value}};
+  libpalf::LibPalfElectPrioItem item(IN_BLACKLIST_ITEM_NAME, prio_value, DEFAULT_COMPARE_THRESHOLD, false);
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_ele_prio_add_item(priority, &item, true)))) {
+    COORDINATOR_LOG(WARN, "fail to add in_blacklist_flag item", KR(ret), K(MTL_ID()), K(*this));
+  }
+  return ret;
+}
+
+int PriorityV1::convert_manual_leader_item_(libpalf::LibPalfElectionPriority *priority)
+{
+  int ret = OB_SUCCESS;
+  libpalf::LibPalfElectPrioValue::Int_Body value(is_manual_leader_);
+  libpalf::LibPalfElectPrioValue prio_value {libpalf::LibPalfElectPrioValue::Tag::Int, {value}};
+  libpalf::LibPalfElectPrioItem item(MANUAL_LEADER_ITEM_NAME, prio_value, DEFAULT_COMPARE_THRESHOLD, true);
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_ele_prio_add_item(priority, &item, true)))) {
+    COORDINATOR_LOG(WARN, "fail to add manual_leader_flag item", KR(ret), K(MTL_ID()), K(*this));
+  }
+  return ret;
+}
+
+int PriorityV1::convert_zone_priority_item_(libpalf::LibPalfElectionPriority *priority)
+{
+  int ret = OB_SUCCESS;
+  libpalf::LibPalfElectPrioValue::Int_Body value(zone_priority_);
+  libpalf::LibPalfElectPrioValue prio_value {libpalf::LibPalfElectPrioValue::Tag::Int, {value}};
+  // smaller means higher priority
+  libpalf::LibPalfElectPrioItem item(ZONE_PRIORITY_ITEM_NAME, prio_value, DEFAULT_COMPARE_THRESHOLD, false);
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_ele_prio_add_item(priority, &item, true)))) {
+    COORDINATOR_LOG(WARN, "fail to add zone_priority item", KR(ret), K(MTL_ID()), K(*this));
+  }
+  return ret;
+}
+#endif
 }
 }
 }

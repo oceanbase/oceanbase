@@ -54,6 +54,7 @@ public:
     const char *payload = nullptr;
     bool null_cell = false;
     int32_t data_len = 0;
+    bool has_data = false;
 #ifndef NDEBUG
     helper::print_input_rows(row_sel, skip, bound, agg_ctx.aggr_infos_.at(agg_col_id), true,
                              agg_ctx.eval_ctx_, this, agg_col_id);
@@ -70,9 +71,14 @@ public:
           ObIVector *data_vec = aggr_info.expr_->get_vector(ctx);
           if (data_vec->is_null(i)) {
             null_cell = true;
+          } else if (aggr_info.expr_->is_nested_expr()) {
+            if(OB_FAIL(ObArrayExprUtils::get_collection_payload(agg_ctx.allocator_, ctx, *aggr_info.expr_, i, payload, data_len))) {
+              SQL_LOG(WARN, "get collection payload failed", K(ret));
+            }
           } else {
             data_vec->get_payload(i, payload, data_len);
           }
+          has_data = true;
           break;
         }
       }
@@ -81,15 +87,23 @@ public:
         ObIVector *data_vec = aggr_info.expr_->get_vector(ctx);
         if (data_vec->is_null(row_sel.index(i))) {
           null_cell = true;
+        } else if (aggr_info.expr_->is_nested_expr()) {
+          if(OB_FAIL(ObArrayExprUtils::get_collection_payload(agg_ctx.allocator_, ctx, *aggr_info.expr_, row_sel.index(i), payload, data_len))) {
+            SQL_LOG(WARN, "get collection payload failed", K(ret));
+          }
         } else {
           aggr_info.expr_->get_vector(ctx)->get_payload(row_sel.index(i), payload, data_len);
         }
+        has_data = true;
         break;
       }
     }
-    if (OB_SUCC(ret) && (payload != nullptr || null_cell)) {
+    if (OB_SUCC(ret) && has_data) {
       if (null_cell) {
         agg_ctx.set_agg_cell(nullptr, INT32_MAX, agg_col_id, agg_cell);
+      } else if (aggr_info.expr_->is_nested_expr() && data_len > 0) {
+        // do memcpy in get_collection_payload
+        agg_ctx.set_agg_cell(payload, data_len, agg_col_id, agg_cell);
       } else if (data_len > 0) {
         void *tmp_buf = agg_ctx.allocator_.alloc(data_len);
         if (OB_ISNULL(tmp_buf)) {
@@ -114,10 +128,21 @@ public:
   {
     int ret = OB_SUCCESS;
     NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell);
+    ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_idx);
     if (OB_LIKELY(not_nulls.at(agg_col_idx))) {
       // already copied
     } else if (!is_null) {
-      if (data_len > 0) {
+      if (aggr_info.expr_->is_nested_expr() && data_len > 0) {
+        const char *compact_ptr = nullptr;
+        int32_t compact_data_len = 0;
+        if (OB_FAIL(ObArrayExprUtils::get_collection_payload(agg_ctx.allocator_, agg_ctx.eval_ctx_,
+                                                             *aggr_info.expr_, batch_idx,
+                                                             compact_ptr, compact_data_len))) {
+          SQL_LOG(WARN, "get collection payload failed", K(ret));
+        } else {
+          agg_ctx.set_agg_cell(compact_ptr, compact_data_len, agg_col_idx, agg_cell);
+        }
+      } else if (data_len > 0) {
         if (OB_ISNULL(data)) {
           ret = OB_INVALID_ARGUMENT;
           SQL_LOG(WARN, "invalid null payload", K(ret));
@@ -174,7 +199,7 @@ public:
   }
 
   template<typename ColumnFmt>
-  inline int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     UNUSEDx(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info);
@@ -183,13 +208,41 @@ public:
   }
 
   template <typename ColumnFmt>
-  inline int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                               const int32_t agg_col_id, char *agg_cell, void *tmp_res,
                               int64_t &calc_info)
   {
     UNUSEDx(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info);
     SQL_LOG(DEBUG, "add_nullable_row do nothing");
     return OB_SUCCESS;
+  }
+
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const NotNullBitVector &curr_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (curr_not_nulls.at(agg_col_idx)) {
+      rollup_not_nulls.set(agg_col_idx);
+    }
+    int32_t curr_agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, group_row);
+    if (OB_LIKELY(curr_not_nulls.at(agg_col_idx) && curr_agg_cell_len != INT32_MAX)) {
+      const char *curr_payload = (const char *)(*reinterpret_cast<const int64_t *>(curr_agg_cell));
+      if (curr_agg_cell_len > 0) {
+        agg_ctx.set_agg_cell(curr_payload, curr_agg_cell_len, agg_col_idx, rollup_agg_cell);
+      } else {
+        agg_ctx.set_agg_cell(nullptr, curr_agg_cell_len, agg_col_idx, rollup_agg_cell);
+      }
+    } else {
+      agg_ctx.set_agg_cell(nullptr, INT32_MAX, agg_col_idx, rollup_agg_cell);
+    }
+    return ret;
   }
 
   TO_STRING_KV("aggregate", "first_row");

@@ -11,8 +11,6 @@
  */
 
 #include "share/schema/ob_schema_service_rpc_proxy.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
 
 namespace oceanbase
 {

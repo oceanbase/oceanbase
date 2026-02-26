@@ -43,9 +43,6 @@
 /* **************************************************************
 *  Includes
 ****************************************************************/
-#include <string.h>     /* memcpy, memset */
-#include <stdio.h>      /* printf (debug) */
-#include "bitstream.h"
 #define FSE_STATIC_LINKING_ONLY   /* FSE_optimalTableLog_internal */
 #include "fse.h"        /* header compression */
 #define HUF_STATIC_LINKING_ONLY

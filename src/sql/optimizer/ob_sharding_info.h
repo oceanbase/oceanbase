@@ -322,6 +322,11 @@ public:
   int copy_without_part_keys(const ObShardingInfo &other);
   int get_remote_addr(ObAddr &remote) const;
   int get_total_part_cnt(int64_t &total_part_cnt) const;
+  static int get_all_partition_key(ObOptimizerContext &ctx,
+                                   const ObDMLStmt &stmt,
+                                   const uint64_t table_id,
+                                   const uint64_t ref_table_id,
+                                   ObIArray<ObRawExpr*> &all_partition_keys);
   TO_STRING_KV(K_(part_level),
                K_(part_func_type),
                K_(subpart_func_type),
@@ -331,10 +336,9 @@ public:
                K_(phy_table_location_info));
 
 private:
-  int set_partition_key(ObRawExpr *part_expr,
-                        const share::schema::ObPartitionFuncType part_func_type,
-                        common::ObIArray<ObRawExpr*> &partition_keys);
-
+  static int get_partition_key(ObRawExpr *part_expr,
+                               const share::schema::ObPartitionFuncType part_func_type,
+                               common::ObIArray<ObRawExpr*> &partition_keys);
   // check whether all partition keys are of the same type
   static int is_compatible_partition_key(const ObShardingInfo *first_sharding,
                                          const ObIArray<ObSEArray<ObRawExpr*, 8>> &first_part_keys_list,
@@ -360,8 +364,8 @@ private:
                                 ObRawExpr *second_key,
                                 bool &is_equal);
 
-  static int is_lossless_column_cast(const ObRawExpr *expr,
-                                     const sql::ObShardingInfo &sharding_info, bool &is_lossless);
+  static int remove_lossless_cast_for_sharding_key(ObRawExpr *&expr,
+                                                   const ObShardingInfo &sharding_info);
 
   static bool is_part_func_scale_sensitive(const sql::ObShardingInfo &sharding_info,
                                            const common::ObObjType obj_type);

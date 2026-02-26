@@ -34,6 +34,7 @@ public:
   static int calc_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 #ifdef OB_BUILD_ORACLE_PL
   static int eval_coll(const common::ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTable *&coll);
+  static int eval_coll_composite(ObExecContext &exec_ctx, const common::ObObj &obj, pl::ObPLNestedTable *&result);
 #endif
 
 private:

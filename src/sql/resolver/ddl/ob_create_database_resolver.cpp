@@ -13,11 +13,8 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_database_resolver.h"
 
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_database_resolver.h"
 #include "sql/resolver/ddl/ob_create_database_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -49,6 +46,9 @@ int ObCreateDatabaseResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid node children", K(node), K(node->children_));
+  } else if (is_external_catalog_id(session_info_->get_current_default_catalog())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create database in catalog is");
   } else {
     ObCreateDatabaseStmt *create_database_stmt = NULL;
     if (OB_ISNULL(create_database_stmt = create_stmt<ObCreateDatabaseStmt>())) {

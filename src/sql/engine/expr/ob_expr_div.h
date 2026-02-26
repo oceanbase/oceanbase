@@ -58,6 +58,8 @@ public:
   static int div_intervalym_number_batch(BATCH_EVAL_FUNC_ARG_DECL);
   static int div_intervalds_number(EVAL_FUNC_ARG_DECL);
   static int div_intervalds_number_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int div_vec(EVAL_FUNC_ARG_DECL);
+  static int div_vec_batch(BATCH_EVAL_FUNC_ARG_DECL);
 
 #define DECINC_DIV_EVAL_FUNC_BASIC(L, R)                              \
   static int div_decimalint_##L##_##R(EVAL_FUNC_ARG_DECL);            \
@@ -119,11 +121,21 @@ public:
                           common::ObIAllocator *allocator,
                           common::ObScale calc_scale);
 
+  template<typename ltype, typename rtype>
+  static int decint_div_mysql_fn(EVAL_FUNC_ARG_DECL);
+
+  template<typename ltype, typename rtype>
+  static int decint_div_mysql_batch_fn(BATCH_EVAL_FUNC_ARG_DECL);
+
+  template<typename ltype, typename rtype>
+  static int decint_div_mysql_vec_fn(VECTOR_EVAL_FUNC_ARG_DECL);
+
   DISALLOW_COPY_AND_ASSIGN(ObExprDiv);
+  static ObScale decint_res_round_up_scale(const ObExpr &, int64_t div_inc);
 private:
+  static const int16_t extra_scale_for_decint_div = 8;
   static ObArithFunc div_funcs_[common::ObMaxTC];
   static ObArithFunc avg_div_funcs_[common::ObMaxTC];
-  static const common::ObScale DIV_CALC_SCALE;
   static const common::ObScale DIV_MAX_CALC_SCALE;
 };
 

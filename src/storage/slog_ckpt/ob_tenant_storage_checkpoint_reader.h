@@ -32,9 +32,9 @@ public:
   ~ObTenantStorageCheckpointReader() = default;
   ObTenantStorageCheckpointReader(const ObTenantStorageCheckpointReader &) = delete;
   ObTenantStorageCheckpointReader &operator=(const ObTenantStorageCheckpointReader &) = delete;
-  int iter_read_meta_item(const blocksstable::MacroBlockId &entry_block,
-                                const ObStorageMetaOp &op,
-                                ObIArray<blocksstable::MacroBlockId> &block_list);
+  static int iter_read_meta_item(const blocksstable::MacroBlockId &entry_block,
+                                 const ObStorageMetaOp &op,
+                                 ObIArray<blocksstable::MacroBlockId> &block_list);
 
   static int read_tablet_checkpoint_by_addr(const ObIArray<blocksstable::MacroBlockId> &block_list,
     const ObMetaDiskAddr &addr, char *item_buf, int64_t &item_buf_len);

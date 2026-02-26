@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ob_i_tablet_memtable.h"
 
-#include "storage/compaction/ob_compaction_diagnose.h"
+#include "ob_i_tablet_memtable.h"
 #include "storage/ls/ob_freezer.h"
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 
@@ -91,20 +90,18 @@ void ObITabletMemtable::unset_logging_blocked_for_active_memtable_()
   }
 }
 
-void ObITabletMemtable::resolve_left_boundary_for_active_memtable_()
+int ObITabletMemtable::resolve_left_boundary_for_active_memtable_()
 {
   int ret = OB_SUCCESS;
   storage::ObTabletMemtableMgr *memtable_mgr = get_memtable_mgr();
-  const SCN new_start_scn = MAX(get_end_scn(), get_migration_clog_checkpoint_scn());
 
   if (OB_NOT_NULL(memtable_mgr)) {
-    do {
-      if (OB_FAIL(memtable_mgr->resolve_left_boundary_for_active_memtable(this, new_start_scn))) {
-        TRANS_LOG(ERROR, "fail to set start log ts for active memtable", K(ret), K(ls_id_), KPC(this));
-        ob_usleep(100);
-      }
-    } while (OB_FAIL(ret));
+    if (OB_FAIL(memtable_mgr->resolve_left_boundary_for_active_memtable(this, get_end_scn()))) {
+      TRANS_LOG(WARN, "fail to resolve left boundary for active memtable", K(ret), K(ls_id_), KPC(this));
+    }
   }
+
+  return ret;
 }
 
 int ObITabletMemtable::get_ls_current_right_boundary_(SCN &current_right_boundary)
@@ -140,23 +137,6 @@ int ObITabletMemtable::set_freezer(ObFreezer *handler)
   } else {
     freezer_ = handler;
   }
-  return ret;
-}
-
-int ObITabletMemtable::set_migration_clog_checkpoint_scn(const SCN &clog_checkpoint_scn)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!is_inited())) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (clog_checkpoint_scn <= ObScnRange::MIN_SCN) {
-    ret = OB_SCN_OUT_OF_BOUND;
-    TRANS_LOG(WARN, "invalid clog_checkpoint_ts", K(ret));
-  } else {
-    (void)migration_clog_checkpoint_scn_.atomic_store(clog_checkpoint_scn);
-  }
-
   return ret;
 }
 
@@ -280,6 +260,10 @@ int ObITabletMemtable::set_max_end_scn(const SCN scn, bool allow_backoff)
     TRANS_LOG(INFO, "set max_end_scn force", K(scn), K(max_end_scn_.atomic_get()), K(key_), KPC(this));
     if (scn != max_end_scn_.atomic_get()) {
       max_end_scn_.dec_update(scn);
+      if (rec_scn_.atomic_get() > max_end_scn_) {
+        TRANS_LOG(INFO, "rec_scn is greater than max_end_scn, set it to max", K_(rec_scn), K_(max_end_scn));
+        rec_scn_.set_max();
+      }
     }
   } else {
     SCN old_max_end_scn;

@@ -11,14 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/expr/ob_expr_frame_info.h"
-#include "sql/engine/expr/ob_expr.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_i_expr_extra_info.h"
-#include "sql/engine/expr/ob_expr_extra_info_factory.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "sql/engine/px/ob_px_util.h"
+#include "ob_expr_frame_info.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/px/ob_px_util.h"
 
 namespace oceanbase
 {
@@ -366,7 +361,7 @@ OB_DEF_SERIALIZE(ObExprFrameInfo)
     }
   }
   OB_UNIS_ENCODE(const_frame_ptrs_.count());
-  OZ(ObPxTreeSerializer::serialize_frame_info(buf, buf_len, pos, const_frame_,
+  OZ(ObPxTreeSerializer::serialize_frame_info<true>(buf, buf_len, pos, const_frame_,
                                               const_frame_ptrs_.get_data(),
                                               const_frame_ptrs_.count()));
   OB_UNIS_ENCODE(param_frame_);
@@ -406,7 +401,7 @@ OB_DEF_DESERIALIZE(ObExprFrameInfo)
              allocator_.alloc(sizeof(char*) * const_frame_cnt))));
     OX(MEMSET(frames, 0, sizeof(char*) * const_frame_cnt));
   }
-  OZ(ObPxTreeSerializer::deserialize_frame_info(buf, data_len, pos,
+  OZ(ObPxTreeSerializer::deserialize_frame_info<true>(buf, data_len, pos,
      allocator_, const_frame_, &const_frame_ptrs_, frames, const_frame_cnt));
 
   OB_UNIS_DECODE(param_frame_);
@@ -446,7 +441,7 @@ OB_DEF_SERIALIZE_SIZE(ObExprFrameInfo)
   }
 
   OB_UNIS_ADD_LEN(const_frame_ptrs_.count());
-  len += ObPxTreeSerializer::get_serialize_frame_info_size(
+  len += ObPxTreeSerializer::get_serialize_frame_info_size<true>(
          const_frame_, const_frame_ptrs_.get_data(), const_frame_ptrs_.count());
   LOG_DEBUG("trace end get ser expr frame info size", K(ret), K(len));
 
@@ -695,7 +690,7 @@ int ObTempExpr::row_to_frame(const ObNewRow &row, ObTempExprCtx &temp_expr_ctx) 
     ObDatum &expr_datum = expr.locate_datum_for_write(temp_expr_ctx);
     if (v.get_type() != expr.datum_meta_.type_ && !v.is_null()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("obj type miss match", K(ret), K(v), K(idx_col), K(row));
+      LOG_WARN("obj type miss match", K(ret), K(v), K(idx_col), K(row), K(expr.datum_meta_.type_));
     } else if (OB_FAIL(expr_datum.from_obj(v, expr.obj_datum_map_))) {
       LOG_WARN("fail to from obj", K(v), K(idx_col), K(row), K(ret));
     } else if (is_lob_storage(v.get_type()) &&

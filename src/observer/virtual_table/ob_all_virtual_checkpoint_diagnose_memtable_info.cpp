@@ -20,7 +20,7 @@ using namespace share;
 using namespace storage;
 using namespace common;
 using namespace omt;
-using namespace checkpoint;
+using namespace storage::checkpoint;
 namespace observer
 {
 int ObAllVirtualCheckpointDiagnoseMemtableInfo::get_primary_key_()
@@ -82,7 +82,7 @@ int ObAllVirtualCheckpointDiagnoseMemtableInfo::get_primary_key_()
   return ret;
 }
 
-int GenerateMemtableRow::operator()(const ObTraceInfo &trace_info,
+int GenerateMemtableRow::operator()(const storage::checkpoint::ObTraceInfo &trace_info,
     const ObCheckpointDiagnoseKey &key,
     const ObMemtableDiagnoseInfo &memtable_diagnose_info) const
 {

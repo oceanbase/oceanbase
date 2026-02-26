@@ -11,8 +11,6 @@
  */
 
 #include "ob_server_blacklist.h"
-#include "common/ob_clock_generator.h"
-#include "lib/time/ob_time_utility.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase
@@ -312,7 +310,7 @@ void ObServerBlacklist::blacklist_loop_()
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       SHARE_LOG(INFO, "blacklist_loop exec finished", K(cost_time), K_(is_enabled), K(send_cnt));
     }
-    ob_usleep(sleep_time);
+    ob_usleep(sleep_time, true/*is_idle_sleep*/);
   }
 }
 

@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/objectpool/ob_concurrency_objpool.h"
-#include "lib/utility/serialization.h"
-#include "share/ob_tablet_autoincrement_param.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
@@ -121,8 +115,8 @@ int ObSyncTabletSeqMdsLogCb::init(const ObLSID &ls_id, const ObTabletID &tablet_
                                                     0,
                                                     ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("failed to get tablet", K(ls_id), K(tablet_id));
-  } else {
-    mds_ctx_.set_writer(mds::MdsWriter(mds::WriterType::AUTO_INC_SEQ, writer_id));
+  } else if (OB_FAIL(mds_ctx_.set_writer(mds::MdsWriter{mds::WriterType::AUTO_INC_SEQ, writer_id}))) {
+    LOG_WARN("fail to set writer", K(ret), K(writer_id));
   }
   return ret;
 }

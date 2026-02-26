@@ -24,6 +24,35 @@ namespace share
 {
 class ObTabletReplicaFilter;
 
+enum class ObDataChecksumType : uint8_t
+{
+  DATA_CHECKSUM_NORMAL = 0,
+  DATA_CHECKSUM_COLUMN_STORE = 1, // for column store replica data checksum
+  DATA_CHECKSUM_NORMAL_WITH_NORMAL_COLUMN = 2, // with hex column checksums
+  DATA_CHECKSUM_COLUMN_STORE_WITH_NORMAL_COLUMN = 3,
+  DATA_CHECKSUM_MAX
+};
+
+inline bool is_valid_data_checksum_type(const ObDataChecksumType &type)
+{
+  return type >= ObDataChecksumType::DATA_CHECKSUM_NORMAL
+      && type < ObDataChecksumType::DATA_CHECKSUM_MAX;
+}
+
+inline bool is_normal_column_checksum_type(const ObDataChecksumType &type)
+{
+  return type == ObDataChecksumType::DATA_CHECKSUM_NORMAL_WITH_NORMAL_COLUMN
+     || type == ObDataChecksumType::DATA_CHECKSUM_COLUMN_STORE_WITH_NORMAL_COLUMN;;
+}
+
+inline bool is_column_store_data_checksum_type(const ObDataChecksumType &type)
+{
+  return type == ObDataChecksumType::DATA_CHECKSUM_COLUMN_STORE
+     || type == ObDataChecksumType::DATA_CHECKSUM_COLUMN_STORE_WITH_NORMAL_COLUMN;
+}
+
+const char *data_check_checksum_type_to_str(const ObDataChecksumType type);
+
 class ObTabletReplica
 {
 public:
@@ -73,7 +102,8 @@ public:
       const int64_t data_size,
       const int64_t required_size,
       const int64_t report_scn,
-      const ScnStatus status);
+      const ScnStatus status,
+      const int64_t ddl_create_snapshot);
   void fake_for_diagnose(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
@@ -92,7 +122,8 @@ public:
       K_(data_size),
       K_(required_size),
       K_(report_scn),
-      K_(status));
+      K_(status),
+      K_(ddl_create_snapshot));
 private:
   uint64_t tenant_id_;
   common::ObTabletID tablet_id_;
@@ -104,6 +135,7 @@ private:
   // below: tablet level member for compaction
   int64_t report_scn_;
   ScnStatus status_;
+  int64_t ddl_create_snapshot_;
 };
 
 class ObTabletInfo

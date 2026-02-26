@@ -44,7 +44,6 @@ class ObEmptyServerChecker : public ObRsReentrantThread
 {
 public:
   ObEmptyServerChecker(): inited_(false),
-                          cond_(),
                           need_check_(true),
                           empty_servers_(),
                           server_mgr_(NULL),
@@ -65,30 +64,15 @@ public:
 
   virtual void wakeup();
   virtual void stop();
-  /**
-   * @description:
-   *    check if the given tenant has ls replicas on servers
-   * @param[in] tenant_id the tenant which need to be checked
-   * @param[in] servers on which the tenant might have ls replicas
-   * @param[out] exists true if at least one of the servers has tenant ls replicas
-   * @return return code
-   */
-  static int check_if_tenant_ls_replicas_exist_in_servers(
-    const uint64_t tenant_id,
-    const common::ObArray<common::ObAddr> &servers,
-    bool &exist);
+
 private:
    int try_delete_server_();
    int check_server_empty_();
-   static int check_server_emtpy_by_ls_(
-      const share::ObLSInfo &ls_info,
-      common::ObArray<common::ObAddr> &empty_servers);
    //TODO no need check, check in unit_mgr now
    int check_server_empty_in_unit(const common::ObAddr &addr, bool &is_empty);
 
 private:
   bool inited_;
-  common::ObThreadCond cond_;
   bool need_check_;
   common::ObArray<common::ObAddr> empty_servers_;
   ObServerManager *server_mgr_;

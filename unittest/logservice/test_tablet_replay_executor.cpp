@@ -18,7 +18,6 @@
 #define private public
 
 #include "logservice/replayservice/ob_tablet_replay_executor.h"
-#include "share/ob_tablet_autoincrement_param.h"
 
 namespace oceanbase
 {

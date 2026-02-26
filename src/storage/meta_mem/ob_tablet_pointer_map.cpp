@@ -10,11 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/meta_mem/ob_tablet_pointer_map.h"
-#include "storage/tablet/ob_tablet.h"
+#include "ob_tablet_pointer_map.h"
+#include "storage/meta_store/ob_storage_meta_io_util.h"
+#include "storage/ls/ob_ls.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 namespace oceanbase
 {
+using namespace blocksstable;
 namespace storage
 {
 
@@ -34,7 +37,7 @@ int ObTabletPointerMap::set(const ObTabletMapKey &key, ObTabletPointer &ptr)
   return ret;
 }
 
-int ObTabletPointerMap::erase(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard)
+int ObTabletPointerMap::erase(const ObTabletMapKey &key, ObTabletHandle &guard)
 {
   int ret = common::OB_SUCCESS;
   bool need_erase = false;
@@ -63,7 +66,8 @@ int ObTabletPointerMap::erase(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet
 int ObTabletPointerMap::inner_erase(const ObTabletMapKey &key)
 {
   int ret = common::OB_SUCCESS;
-  ObResourceValueStore<ObTabletPointer> *ptr = NULL;
+  ObResourceValueStore<ObTabletPointer> *ptr = nullptr;
+  ObTabletPointer *tablet_ptr = nullptr;
   uint64_t hash_val = 0;
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
@@ -74,11 +78,16 @@ int ObTabletPointerMap::inner_erase(const ObTabletMapKey &key)
     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
       STORAGE_LOG(WARN, "fail to get from map", K(ret));
+    } else if (OB_ISNULL(ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ptr should not be nullptr", K(ret), K(key), KP(ptr));
+    } else if (OB_ISNULL(tablet_ptr = ptr->get_value_ptr())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "value should not be nullptr", K(ret), K(key), KP(tablet_ptr));
     } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
       STORAGE_LOG(WARN, "fail to erase from map", K(ret));
     } else {
-      ObTabletPointer *value = ptr->get_value_ptr();
-      value->reset_obj();
+      tablet_ptr->reset_obj();
       if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
         STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
       }
@@ -110,7 +119,7 @@ int ObTabletPointerMap::exist(const ObTabletMapKey &key, bool &is_exist)
       } else {
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
       }
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr));
     } else {
@@ -120,43 +129,10 @@ int ObTabletPointerMap::exist(const ObTabletMapKey &key, bool &is_exist)
   return ret;
 }
 
-int ObTabletPointerMap::try_get_in_memory_meta_obj_and_addr(
-    const ObTabletMapKey &key,
-    ObMetaDiskAddr &addr,
-    ObMetaObjGuard<ObTablet> &guard)
-{
-  int ret = common::OB_SUCCESS;
-  uint64_t hash_val = 0;
-  ObTabletPointerHandle ptr_hdl(*this);
-  ObTabletPointer *t_ptr = nullptr;
-  guard.reset();
-  if (OB_UNLIKELY(!key.is_valid())) {
-    ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
-  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
-    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
-  } else { // read lock
-    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
-      if (common::OB_ENTRY_NOT_EXIST != ret) {
-        STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));
-      }
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
-      ret = common::OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
-    } else if (t_ptr->is_in_memory() && OB_FAIL(t_ptr->get_in_memory_obj(guard))) {
-      STORAGE_LOG(WARN, "fail to get meta object", K(ret), KP(t_ptr), K(key));
-    } else {
-      addr = t_ptr->get_addr();
-    }
-  }
-  return ret;
-}
-
 int ObTabletPointerMap::try_get_in_memory_meta_obj(
     const ObTabletMapKey &key,
     bool &success,
-    ObMetaObjGuard<ObTablet> &guard)
+    ObTabletHandle &guard)
 {
   int ret = common::OB_SUCCESS;
   uint64_t hash_val = 0;
@@ -176,7 +152,7 @@ int ObTabletPointerMap::try_get_in_memory_meta_obj(
       if (common::OB_ENTRY_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));
       }
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
     } else if (t_ptr->is_in_memory()) {
@@ -190,43 +166,56 @@ int ObTabletPointerMap::try_get_in_memory_meta_obj(
   return ret;
 }
 
-int ObTabletPointerMap::try_get_in_memory_meta_obj(
+int ObTabletPointerMap::try_get_in_memory_meta_obj_(
     const ObTabletMapKey &key,
     ObTabletPointerHandle &ptr_hdl,
-    ObMetaObjGuard<ObTablet> &guard,
+    ObTabletHandle &guard,
     bool &is_in_memory)
 {
   int ret = OB_SUCCESS;
   uint64_t hash_val = 0;
-  ObTabletPointer *t_ptr = nullptr;
-  is_in_memory = false;
   if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
     STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
     common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
-      if (common::OB_ENTRY_NOT_EXIST != ret) {
-        STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
-      }
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
-      ret = common::OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
-    } else if (OB_UNLIKELY(t_ptr->get_addr().is_none())) {
-      ret = OB_ITEM_NOT_SETTED;
-      STORAGE_LOG(DEBUG, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
-    } else if (t_ptr->is_in_memory()) {
-      t_ptr->get_obj(guard);
-      is_in_memory = true;
-    }
+    ret = try_get_in_memory_meta_obj_without_lock_(key, ptr_hdl, guard, is_in_memory);
   }
   return ret;
 }
 
-int ObTabletPointerMap::try_get_in_memory_meta_obj_with_filter(
+int ObTabletPointerMap::try_get_in_memory_meta_obj_without_lock_(
+    const ObTabletMapKey &key,
+    ObTabletPointerHandle &ptr_hdl,
+    ObTabletHandle &guard,
+    bool &is_in_memory)
+{
+  int ret = OB_SUCCESS;
+  ObTabletPointer *t_ptr = nullptr;
+  is_in_memory = false;
+  if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+    if (common::OB_ENTRY_NOT_EXIST != ret) {
+      STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
+    }
+  } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
+    ret = common::OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
+  } else if (OB_UNLIKELY(t_ptr->get_addr().is_none())) {
+    ret = OB_ITEM_NOT_SETTED;
+    STORAGE_LOG(DEBUG, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
+  } else if (t_ptr->is_in_memory()) {
+    guard.reset();
+    t_ptr->get_obj(guard);
+    is_in_memory = true;
+    EVENT_INC(ObStatEventIds::TABLET_CACHE_HIT);
+  }
+  return ret;
+}
+
+int ObTabletPointerMap::try_get_in_memory_meta_obj_with_filter_(
     const ObTabletMapKey &key,
     ObITabletFilterOp &op,
     ObTabletPointerHandle &ptr_hdl,
-    ObMetaObjGuard<ObTablet> &guard,
+    ObTabletHandle &guard,
     bool &is_in_memory)
 {
   int ret = OB_SUCCESS;
@@ -241,7 +230,7 @@ int ObTabletPointerMap::try_get_in_memory_meta_obj_with_filter(
       if (common::OB_ENTRY_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
       }
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
     } else if (OB_UNLIKELY(t_ptr->get_addr().is_none())) {
@@ -249,7 +238,7 @@ int ObTabletPointerMap::try_get_in_memory_meta_obj_with_filter(
       STORAGE_LOG(DEBUG, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
     } else if (t_ptr->is_in_memory()) {
       if (t_ptr->is_attr_valid()) { // try skip tablet with attr
-        ObTabletResidentInfo info(key, *t_ptr);
+        ObTabletResidentInfo info = t_ptr->get_tablet_resident_info(key);
         bool is_skipped = false;
         if (OB_FAIL(op(info, is_skipped))) {
           STORAGE_LOG(WARN, "fail to skip tablet", K(ret), KP(t_ptr), K(key), K(info));
@@ -262,6 +251,7 @@ int ObTabletPointerMap::try_get_in_memory_meta_obj_with_filter(
       if (OB_SUCC(ret)) {
         t_ptr->get_obj(guard);
         is_in_memory = true;
+        EVENT_INC(ObStatEventIds::TABLET_CACHE_HIT);
       }
     } else {
       op.inc_not_in_memory_cnt();
@@ -272,7 +262,7 @@ int ObTabletPointerMap::try_get_in_memory_meta_obj_with_filter(
 
 int ObTabletPointerMap::get_meta_obj(
     const ObTabletMapKey &key,
-    ObMetaObjGuard<ObTablet> &guard)
+    ObTabletHandle &guard)
 {
   int ret = common::OB_SUCCESS;
   ObTabletPointerHandle ptr_hdl(*this);
@@ -281,14 +271,14 @@ int ObTabletPointerMap::get_meta_obj(
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
-  } else if (OB_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, guard, is_in_memory))) {
+  } else if (OB_FAIL(try_get_in_memory_meta_obj_(key, ptr_hdl, guard, is_in_memory))) {
     if (OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret) {
       STORAGE_LOG(DEBUG, "meta obj does not exist", K(ret), K(key));
     } else {
       STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));
     }
   } else if (OB_UNLIKELY(!is_in_memory)) {
-    if (OB_FAIL(load_and_hook_meta_obj(key, ptr_hdl, guard))) {
+    if (OB_FAIL(load_and_hook_meta_obj_(key, ptr_hdl, guard))) {
       STORAGE_LOG(WARN, "fail to load and hook meta obj", K(ret), K(key));
     } else {
       EVENT_INC(ObStatEventIds::TABLET_CACHE_MISS);
@@ -302,7 +292,7 @@ int ObTabletPointerMap::get_meta_obj(
 int ObTabletPointerMap::get_meta_obj_with_filter(
     const ObTabletMapKey &key,
     ObITabletFilterOp &op,
-    ObMetaObjGuard<ObTablet> &guard)
+    ObTabletHandle &guard)
 {
   int ret = common::OB_SUCCESS;
   ObTabletPointerHandle ptr_hdl(*this);
@@ -311,7 +301,7 @@ int ObTabletPointerMap::get_meta_obj_with_filter(
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
-  } else if (OB_FAIL(try_get_in_memory_meta_obj_with_filter(key, op, ptr_hdl, guard, is_in_memory))) {
+  } else if (OB_FAIL(try_get_in_memory_meta_obj_with_filter_(key, op, ptr_hdl, guard, is_in_memory))) {
     if (OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret) {
       STORAGE_LOG(DEBUG, "meta obj does not exist", K(ret), K(key));
     } else if (OB_NOT_THE_OBJECT == ret) {
@@ -320,7 +310,7 @@ int ObTabletPointerMap::get_meta_obj_with_filter(
       STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));
     }
   } else if (OB_UNLIKELY(!is_in_memory)) {
-    if (OB_FAIL(load_and_hook_meta_obj(key, ptr_hdl, guard))) {
+    if (OB_FAIL(load_and_hook_meta_obj_(key, ptr_hdl, guard))) {
       STORAGE_LOG(WARN, "fail to load and hook meta obj", K(ret), K(key));
     } else {
       EVENT_INC(ObStatEventIds::TABLET_CACHE_MISS);
@@ -331,67 +321,73 @@ int ObTabletPointerMap::get_meta_obj_with_filter(
   return ret;
 }
 
-
-int ObTabletPointerMap::load_and_hook_meta_obj(
+int ObTabletPointerMap::load_and_hook_meta_obj_(
     const ObTabletMapKey &key,
     ObTabletPointerHandle &ptr_hdl,
-    ObMetaObjGuard<ObTablet> &guard)
+    ObTabletHandle &guard)
 {
   int ret = OB_SUCCESS;
   uint64_t hash_val = 0;
-  ObUpdateTabletPointerParam update_pointer_param;
-  ObTabletPointer *meta_pointer = ptr_hdl.get_resource_ptr();
-  do {
-    bool need_free_obj = false;
-    ObTablet *t = nullptr;
-    // Move load obj from disk out of the bucket lock, because
-    // wash obj may acquire the bucket lock again, which cause dead lock.
-    if (OB_FAIL(load_meta_obj(key, meta_pointer, update_pointer_param, t))) {
-      STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(meta_pointer), K(lbt()));
-    } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
-      STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
-    } else {
-      ObTabletPointerHandle tmp_ptr_hdl(*this);
-      {
-        common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-        if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
-          if (OB_ENTRY_NOT_EXIST != ret) {
-            STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
+  ObTabletPointer *meta_pointer = ptr_hdl.get_tablet_pointer();
+  bool need_update_addr = false;
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else {
+    do {
+      ObMetaDiskAddr addr;
+      bool need_free_obj = false;
+      ObTablet *t = nullptr;
+      // Move load obj from disk out of the bucket lock, because
+      // wash obj may acquire the bucket lock again, which cause dead lock.
+      if (OB_FAIL(load_meta_obj(key, meta_pointer, addr, t))) {
+        STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(meta_pointer), K(lbt()));
+      } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+        STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
+      } else {
+        ObTabletPointerHandle tmp_ptr_hdl(*this);
+        {
+          common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+          if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
+            if (OB_ENTRY_NOT_EXIST != ret) {
+              STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
+            }
+            need_free_obj = true;
+          } else if (meta_pointer->is_in_memory()) {  // some other thread finish loading
+            need_free_obj = true;
+            if (OB_FAIL(meta_pointer->get_in_memory_obj(guard))) {
+              STORAGE_LOG(WARN, "fail to get meta object", K(ret), KP(meta_pointer));
+            }
+          } else if (OB_UNLIKELY(addr != meta_pointer->get_addr()
+              || meta_pointer != tmp_ptr_hdl.get_tablet_pointer()
+              || meta_pointer->get_addr() != tmp_ptr_hdl.get_tablet_pointer()->get_addr())) {
+            ret = OB_ITEM_NOT_MATCH;
+            need_free_obj = true;
+            if (REACH_TIME_INTERVAL(1000000)) {
+              STORAGE_LOG(WARN, "disk address or pointer change", K(ret), K(addr), KPC(meta_pointer),
+                  KPC(tmp_ptr_hdl.get_tablet_pointer()));
+            }
+          } else {
+            meta_pointer->set_addr_with_reset_obj(addr);
+            if (OB_FAIL(meta_pointer->hook_obj(t, guard))) {
+              STORAGE_LOG(WARN, "fail to hook object", K(ret), K(addr), KP(meta_pointer));
+            }
           }
-          need_free_obj = true;
-        } else if (meta_pointer->is_in_memory()) {  // some other thread finish loading
-          need_free_obj = true;
-          if (OB_FAIL(meta_pointer->get_in_memory_obj(guard))) {
-            STORAGE_LOG(WARN, "fail to get meta object", K(ret), KP(meta_pointer));
-          }
-        } else if (OB_UNLIKELY(update_pointer_param.tablet_addr_ != meta_pointer->get_addr()
-            || meta_pointer != tmp_ptr_hdl.get_resource_ptr()
-            || meta_pointer->get_addr() != tmp_ptr_hdl.get_resource_ptr()->get_addr())) {
-          ret = OB_ITEM_NOT_MATCH;
-          need_free_obj = true;
-          if (REACH_TIME_INTERVAL(1000000)) {
-            STORAGE_LOG(WARN, "disk address or pointer change", K(ret), K(update_pointer_param), KPC(meta_pointer),
-                KPC(tmp_ptr_hdl.get_resource_ptr()));
-          }
-        } else {
-          if (OB_FAIL(meta_pointer->hook_obj(update_pointer_param.tablet_attr_, t, guard))) {
-            STORAGE_LOG(WARN, "fail to hook object", K(ret), K(update_pointer_param), KP(meta_pointer));
-          }
-        }
-      } // write lock end
-      if (need_free_obj) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(meta_pointer->release_obj(t))) {
-          STORAGE_LOG(ERROR, "fail to release object", K(ret), K(tmp_ret), KP(meta_pointer));
-        } else if (meta_pointer != tmp_ptr_hdl.get_resource_ptr()) {
-          meta_pointer = tmp_ptr_hdl.get_resource_ptr();
-          if (OB_TMP_FAIL(ptr_hdl.assign(tmp_ptr_hdl))) {
-            STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ret), K(ptr_hdl), K(tmp_ptr_hdl));
+        } // write lock end
+        if (need_free_obj) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(meta_pointer->release_obj(t))) {
+            STORAGE_LOG(ERROR, "fail to release object", K(ret), K(tmp_ret), KP(meta_pointer));
+          } else if (meta_pointer != tmp_ptr_hdl.get_tablet_pointer()) {
+            meta_pointer = tmp_ptr_hdl.get_tablet_pointer();
+            if (OB_TMP_FAIL(ptr_hdl.assign(tmp_ptr_hdl))) {
+              STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ret), K(ptr_hdl), K(tmp_ptr_hdl));
+            }
           }
         }
       }
-    }
-  } while (OB_ITEM_NOT_MATCH == ret);
+    } while (OB_ITEM_NOT_MATCH == ret);
+  }
   return ret;
 }
 
@@ -416,6 +412,7 @@ int ObTabletPointerMap::load_meta_obj(
     {
       common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
       ObTabletPointerHandle tmp_ptr_hdl(*this);
+      load_addr = meta_pointer->get_addr();
       // check whether the tablet has been deleted
       if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
         if (common::OB_ENTRY_NOT_EXIST != ret) {
@@ -423,8 +420,9 @@ int ObTabletPointerMap::load_meta_obj(
         } else {
           STORAGE_LOG(INFO, "the tablet has been deleted", K(ret), K(key));
         }
-      } else if (OB_FAIL(meta_pointer->read_from_disk(true/*is_full_load*/, arena_allocator, buf, buf_len, load_addr))) {
-        STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
+      }
+      if (FAILEDx(read_from_disk(true/*is_full_load*/, meta_pointer->get_ls()->get_ls_epoch(), load_addr, arena_allocator, buf, buf_len))) {
+        STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer), K(meta_pointer->get_ls()->get_ls_epoch()));
       } else if (OB_FAIL(t->assign_pointer_handle(tmp_ptr_hdl))) {
         STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ptr_hdl));
       } else {
@@ -441,10 +439,36 @@ int ObTabletPointerMap::load_meta_obj(
   return ret;
 }
 
+int ObTabletPointerMap::read_from_disk(
+    const bool is_full_load,
+    const int64_t ls_epoch,
+    const ObMetaDiskAddr &load_addr,
+    common::ObArenaAllocator &allocator,
+    char *&r_buf,
+    int64_t &r_len)
+{
+  int ret = OB_SUCCESS;
+  const int64_t buf_len = load_addr.size();
+  const ObMemAttr mem_attr(MTL_ID(), "MetaPointer");
+  ObMetaDiskAddr real_load_addr = load_addr;
+  if (!is_full_load && load_addr.is_raw_block()) {
+    if (load_addr.size() > ObTabletCommon::MAX_TABLET_FIRST_LEVEL_META_SIZE) {
+      real_load_addr.set_size(ObTabletCommon::MAX_TABLET_FIRST_LEVEL_META_SIZE);
+    }
+  }
+  if (OB_FAIL(MTL(ObTenantStorageMetaService*)->read_from_disk(real_load_addr, ls_epoch, allocator, r_buf, r_len))) {
+    if (OB_SEARCH_NOT_FOUND != ret) {
+      STORAGE_LOG(WARN, "fail to read from addr", K(ret), K(real_load_addr), K(ls_epoch));
+    }
+  }
+
+  return ret;
+}
+
 int ObTabletPointerMap::load_meta_obj(
     const ObTabletMapKey &key,
     ObTabletPointer *meta_pointer,
-    ObUpdateTabletPointerParam &update_pointer_param,
+    ObMetaDiskAddr &load_addr,
     ObTablet *&t)
 {
   int ret = common::OB_SUCCESS;
@@ -463,7 +487,7 @@ int ObTabletPointerMap::load_meta_obj(
     {
       common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
       ObTabletPointerHandle tmp_ptr_hdl(*this);
-      ObMetaDiskAddr load_addr;
+      load_addr = meta_pointer->get_addr();
       // check whether the tablet has been deleted
       if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
         if (common::OB_ENTRY_NOT_EXIST != ret) {
@@ -471,16 +495,15 @@ int ObTabletPointerMap::load_meta_obj(
         } else {
           STORAGE_LOG(INFO, "the tablet has been deleted", K(ret), K(key));
         }
-      } else if (OB_FAIL(meta_pointer->read_from_disk(false/*is_full_load*/, arena_allocator, buf, buf_len, load_addr))) {
-        STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
+      }
+      if (FAILEDx(read_from_disk(false/*is_full_load*/, meta_pointer->get_ls()->get_ls_epoch(), load_addr, arena_allocator, buf, buf_len))) {
+        STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer), K(meta_pointer->get_ls()->get_ls_epoch()));
       } else if (OB_FAIL(t->assign_pointer_handle(tmp_ptr_hdl))) {
         STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ptr_hdl));
       } else {
         t->tablet_addr_ = load_addr;
         if (OB_FAIL(meta_pointer->deserialize(buf, buf_len, t))) {
           STORAGE_LOG(WARN, "fail to deserialize object", K(ret), K(key), KPC(meta_pointer));
-        } else if (OB_FAIL(t->get_updating_tablet_pointer_param(update_pointer_param))) {
-          STORAGE_LOG(WARN, "fail to get updating tablet pointer parameters", K(ret), KPC(t));
         }
       }
     }
@@ -493,77 +516,91 @@ int ObTabletPointerMap::load_meta_obj(
   return ret;
 }
 
+// guard.get_obj()->set_allocator(guard.allocator) if &allocator == guard.get_allocator()
 int ObTabletPointerMap::get_meta_obj_with_external_memory(
     const ObTabletMapKey &key,
     common::ObArenaAllocator &allocator,
-    ObMetaObjGuard<ObTablet> &guard,
+    ObTabletHandle &guard,
     const bool force_alloc_new,
     ObITabletFilterOp *op)
 {
+  TIMEGUARD_INIT(T3mGetStaticTablet, 1_s);
   int ret = common::OB_SUCCESS;
   uint64_t hash_val = 0;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ObTabletPointerHandle ptr_hdl(*this);
   ObTabletPointer *t_ptr = nullptr;
   bool is_in_memory = false;
   guard.reset();
+  ObTabletHandle tmp_guard; // ensure deserialize_post_work is safe
+
   if (OB_UNLIKELY(!key.is_valid() || (force_alloc_new && nullptr != op))) { /*only support filter when not force new*/
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
-  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+  } else if (CLICK_FAIL(ResourceMap::hash_func_(key, hash_val))) {
     STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
-  } else if (force_alloc_new) {
-    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
-      if (common::OB_ENTRY_NOT_EXIST != ret) {
-        STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if ((nullptr == op && CLICK_FAIL(try_get_in_memory_meta_obj_(key, ptr_hdl, tmp_guard, is_in_memory)))
+        || (nullptr != op && CLICK_FAIL(try_get_in_memory_meta_obj_with_filter_(key, *op, ptr_hdl, tmp_guard, is_in_memory)))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        STORAGE_LOG(DEBUG, "meta obj does not exist", K(ret), K(key));
+      } else {
+        STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));
       }
-    } else if (!ptr_hdl.get_resource_ptr()->get_addr().is_disked()) {
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // focre_alloc_new must rely on disked address
+    if (force_alloc_new && !ptr_hdl.get_resource_ptr()->get_addr().is_disked()) {
       ret = OB_EAGAIN; // For non-disked addr tablet, please wait for persist.
     }
-  } else if ((nullptr == op && OB_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, guard, is_in_memory)))
-      || (nullptr != op && OB_FAIL(try_get_in_memory_meta_obj_with_filter(key, *op, ptr_hdl, guard, is_in_memory)))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      STORAGE_LOG(DEBUG, "meta obj does not exist", K(ret), K(key));
-    } else {
-      STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));
-    }
-  } else if (is_in_memory) {
-    EVENT_INC(ObStatEventIds::TABLET_CACHE_HIT);
   }
-  if (OB_SUCC(ret) && !is_in_memory) {
-    t_ptr = ptr_hdl.get_resource_ptr();
+
+  if (OB_FAIL(ret)) {
+  } else if (!force_alloc_new && is_in_memory) {
+    // already get in memory tablet, no need to load from disk, just return guard
+    if (OB_FAIL(guard.assign(tmp_guard))) {
+      STORAGE_LOG(WARN, "fail to assign guard", K(ret), K(tmp_guard), K(guard));
+    }
+  } else {
+    t_ptr = ptr_hdl.get_tablet_pointer();
     ObMetaDiskAddr disk_addr;
-    void *buf = allocator.alloc(sizeof(ObTablet));
-    if (OB_ISNULL(buf)) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = allocator.alloc(sizeof(ObTablet)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to allocate memory", K(ret), KP(buf), "size of", sizeof(ObTablet));
     } else {
       bool need_free_obj = false;
-      ObTablet *t = new (buf) ObTablet();
+      ObTablet *t = new (buf) ObTablet(true /*is_external_tablet*/);
       do {
+        tmp_guard.reset();
         t->reset();
-        if (OB_FAIL(load_meta_obj(key, t_ptr, allocator, disk_addr, t))) {
+        if (CLICK_FAIL(load_meta_obj(key, t_ptr, allocator, disk_addr, t))) {
           STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(t_ptr), K(lbt()));
         } else {
           ObTabletPointerHandle tmp_ptr_hdl(*this);
           common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-          // some other thread finish loading
-          if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
-            if (OB_ENTRY_NOT_EXIST != ret) {
-              STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
-            }
-          } else if (!force_alloc_new && t_ptr->is_in_memory()) {
-            if (OB_FAIL(t_ptr->get_in_memory_obj(guard))) {
-              STORAGE_LOG(WARN, "fail to get meta object", K(ret), KP(t_ptr));
-            } else {
-              need_free_obj = true;
+          // some other thread may finish loading, so we need to try get in memory meta obj again
+          if (CLICK_FAIL(try_get_in_memory_meta_obj_without_lock_(key, tmp_ptr_hdl, tmp_guard, is_in_memory))) {
+            STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (!force_alloc_new && is_in_memory) {
+            // already get in memory tablet, no need to load from disk, just return guard
+            need_free_obj = true;
+            if (OB_FAIL(guard.assign(tmp_guard))) {
+              STORAGE_LOG(WARN, "fail to assign guard", K(ret), K(tmp_guard), K(guard));
             }
           } else if (OB_UNLIKELY(disk_addr != t_ptr->get_addr()
-              || t_ptr != tmp_ptr_hdl.get_resource_ptr()
-              || t_ptr->get_addr() != tmp_ptr_hdl.get_resource_ptr()->get_addr())) {
+              || t_ptr != tmp_ptr_hdl.get_tablet_pointer()
+              || t_ptr->get_addr() != tmp_ptr_hdl.get_tablet_pointer()->get_addr())) {
             ret = OB_ITEM_NOT_MATCH;
-            if (t_ptr != tmp_ptr_hdl.get_resource_ptr()) {
-              t_ptr = tmp_ptr_hdl.get_resource_ptr();
+            if (t_ptr != tmp_ptr_hdl.get_tablet_pointer()) {
+              t_ptr = tmp_ptr_hdl.get_tablet_pointer();
               int tmp_ret = OB_SUCCESS;
               if (OB_TMP_FAIL(ptr_hdl.assign(tmp_ptr_hdl))) {
                 STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ret), K(ptr_hdl), K(tmp_ptr_hdl));
@@ -572,13 +609,37 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
             if (REACH_TIME_INTERVAL(1000000)) {
               STORAGE_LOG(WARN, "disk address change", K(ret), K(disk_addr), KPC(t_ptr));
             }
-          } else if (OB_FAIL(t->deserialize_post_work(allocator))) {
-            STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
-          } else {
-            ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-            guard.set_obj(t, &allocator, t3m);
+          } else if (OB_UNLIKELY(!is_in_memory)) {
+            STORAGE_LOG(WARN, "add macro ref cnt in write lock, may poor performance", K(key), K(disk_addr));
+            int32_t private_transfer_epoch = -1;
+            if (CLICK_FAIL(t->deserialize_post_work(allocator))) {
+              STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
+            } else if (CLICK_FAIL(t->get_private_transfer_epoch(private_transfer_epoch))) {
+              STORAGE_LOG(WARN, "fail to get private transfer epoch", K(ret), "tablet_meta", t->get_tablet_meta());
+            } else if (CLICK_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), private_transfer_epoch))) {
+                // !CAUTION: t3m->inc_external_tablet_cnt must be the last step which can modify ret; or, we have to dec_external_tablet_cnt in the failure process
+              STORAGE_LOG(WARN, "fail to inc external tablet cnt", K(ret), KP(t), KPC(t));
+            } else {
+              guard.set_obj(ObTabletHandle::ObTabletHdlType::COPY_FROM_T3M, t, &allocator, t3m);
+            }
           }
         }  // write lock end
+
+        if (OB_SUCC(ret) && force_alloc_new && is_in_memory) {
+          // tmp_guard is kept, so do post work outside write lock is safe
+          int32_t private_transfer_epoch = -1;
+          if (CLICK_FAIL(t->deserialize_post_work(allocator))) {
+            STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
+          } else if (CLICK_FAIL(t->get_private_transfer_epoch(private_transfer_epoch))) {
+            STORAGE_LOG(WARN, "fail to get private transfer epoch", K(ret), "tablet_meta", t->get_tablet_meta());
+          } else if (CLICK_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), private_transfer_epoch))) {
+            // !CAUTION: t3m->inc_external_tablet_cnt must be the last step which can modify ret; or, we have to dec_external_tablet_cnt in the failure process
+            STORAGE_LOG(WARN, "fail to inc external tablet cnt", K(ret), KP(t), KPC(t));
+          } else {
+            guard.set_obj(ObTabletHandle::ObTabletHdlType::COPY_FROM_T3M, t, &allocator, t3m);
+          }
+        }
+
         if ((OB_FAIL(ret) && OB_NOT_NULL(t)) || need_free_obj) {
           t->dec_macro_ref_cnt();
         }
@@ -590,6 +651,11 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
       }
     }
   }
+  if (&allocator == guard.get_allocator()) {
+    if (OB_NOT_NULL(guard.get_obj())) {
+      guard.get_obj()->set_allocator(guard.get_allocator());
+    }
+  }
   return ret;
 }
 
@@ -599,6 +665,9 @@ int ObTabletPointerMap::get_meta_addr(const ObTabletMapKey &key, ObMetaDiskAddr 
   uint64_t hash_val = 0;
   ObTabletPointerHandle ptr_hdl(*this);
   ObTabletPointer *t_ptr = nullptr;
+  ObTabletHandle guard;
+  ObTabletPointerHandle tmp_hdl(*this);
+  bool is_in_memory;
 
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
@@ -609,7 +678,7 @@ int ObTabletPointerMap::get_meta_addr(const ObTabletMapKey &key, ObMetaDiskAddr 
     common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr));
     } else {
@@ -619,7 +688,7 @@ int ObTabletPointerMap::get_meta_addr(const ObTabletMapKey &key, ObMetaDiskAddr 
   return ret;
 }
 
-int ObTabletPointerMap::set_meta_obj(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard)
+int ObTabletPointerMap::get_attr_for_obj(const ObTabletMapKey &key, ObTabletHandle &guard)
 {
   int ret = common::OB_SUCCESS;
   uint64_t hash_val = 0;
@@ -634,32 +703,7 @@ int ObTabletPointerMap::set_meta_obj(const ObTabletMapKey &key, ObMetaObjGuard<O
     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
-      ret = common::OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr));
-    } else {
-      t_ptr->set_obj(guard);
-    }
-  }
-  return ret;
-}
-
-int ObTabletPointerMap::get_attr_for_obj(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard)
-{
-  int ret = common::OB_SUCCESS;
-  uint64_t hash_val = 0;
-  ObTabletPointerHandle ptr_hdl(*this);
-  ObTabletPointer *t_ptr = nullptr;
-  if (OB_UNLIKELY(!key.is_valid() || !guard.is_valid())) {
-    ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(key), K(guard));
-  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
-    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
-  } else {
-    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
-      STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr));
     } else {
@@ -669,17 +713,42 @@ int ObTabletPointerMap::get_attr_for_obj(const ObTabletMapKey &key, ObMetaObjGua
   return ret;
 }
 
+int ObTabletPointerMap::get_tablet_pointer_initial_state(const ObTabletMapKey &key, bool &initial_state)
+{
+  int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
+  ObTabletPointerHandle ptr_handle(*this);
+  ObTabletPointer *t_ptr = nullptr;
+  if (OB_UNLIKELY(!key.is_valid())) {
+    ret = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
+  } else {
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_handle))) {
+      STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
+    } else if (OB_ISNULL(t_ptr = ptr_handle.get_tablet_pointer())) {
+      ret = common::OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr));
+    } else {
+      initial_state = t_ptr->get_initial_state();
+    }
+  }
+  return ret;
+}
+
 int ObTabletPointerMap::compare_and_swap_addr_and_object(
     const ObTabletMapKey &key,
-    const ObMetaObjGuard<ObTablet> &old_guard,
-    const ObMetaObjGuard<ObTablet> &new_guard,
+    const ObTabletHandle &old_guard,
+    const ObTabletHandle &new_guard,
     const ObUpdateTabletPointerParam &update_pointer_param)
 {
   int ret = common::OB_SUCCESS;
   ObTabletPointerHandle ptr_hdl(*this);
   ObTabletPointer *t_ptr = nullptr;
-  ObMetaObjGuard<ObTablet> ptr_guard;
-  const ObMetaDiskAddr &new_addr = update_pointer_param.tablet_addr_;
+  ObTabletHandle ptr_guard;
+  const ObMetaDiskAddr &new_addr = update_pointer_param.resident_info_.addr_;
   uint64_t hash_val = 0;
 
   if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
@@ -690,7 +759,7 @@ int ObTabletPointerMap::compare_and_swap_addr_and_object(
       if (common::OB_ENTRY_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));
       }
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr));
     } else if (OB_UNLIKELY(!t_ptr->is_in_memory())) {
@@ -715,10 +784,25 @@ int ObTabletPointerMap::compare_and_swap_addr_and_object(
     }
 
     if (OB_SUCC(ret)) {
-      if (t_ptr->get_addr().is_equal_for_persistence(new_addr)) {
+      // including creating memtables or updating the same tablets
+      bool skip_set_attr = t_ptr->get_addr().is_equal_for_persistence(new_addr);
+      if (GCTX.is_shared_storage_mode() && skip_set_attr) {
+        /* see ObLSTabletService::update_private_tablet_last_match_meta_version_without_lock */
+        if (!update_pointer_param.update_last_match_meta_version()) {
+          // do nothing
+        } else if (OB_UNLIKELY(!update_pointer_param.resident_info_.attr_.is_valid()))  {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "unexpected invalid tablet_attr of update_pointer_param", K(ret), K(update_pointer_param));
+        } else {
+          skip_set_attr = false;
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (skip_set_attr) {
         // no need to update tablet attr, including creating memtables or updating the same tablets
         STORAGE_LOG(DEBUG, "no need to update tablet attr", K(ret), K(new_addr), K(t_ptr->get_addr()), K(new_guard), K(old_guard));
-      } else if (OB_FAIL(t_ptr->set_tablet_attr(update_pointer_param.tablet_attr_))) {
+      } else if (OB_FAIL(t_ptr->set_tablet_attr(update_pointer_param.resident_info_.attr_))) {
         STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(key), KPC(t_ptr), K(update_pointer_param));
       }
 
@@ -736,6 +820,7 @@ int ObTabletPointerMap::compare_and_swap_address_without_object(
     const ObTabletMapKey &key,
     const ObMetaDiskAddr &old_addr,
     const ObMetaDiskAddr &new_addr,
+    const ObUpdateTabletPointerParam &update_pointer_param,
     const bool set_pool /* whether to set pool */,
     ObITenantMetaObjPool *pool)
 {
@@ -756,23 +841,30 @@ int ObTabletPointerMap::compare_and_swap_address_without_object(
     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr));
     } else if (OB_UNLIKELY(t_ptr->get_addr() != old_addr)) {
       ret = common::OB_NOT_THE_OBJECT;
       STORAGE_LOG(WARN, "old address has changed, need to get again", K(ret), KPC(t_ptr), K(old_addr));
+    } else if (OB_FAIL(t_ptr->set_tablet_attr(update_pointer_param.resident_info_.attr_))) {
+      STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(key), KPC(t_ptr), K(update_pointer_param));
     } else {
       t_ptr->set_addr_with_reset_obj(new_addr);
       if (set_pool) {
         t_ptr->set_obj_pool(*pool);
+      }
+      if (!GCTX.is_shared_storage_mode()) {
+        // do nothing
+      } else if (OB_FAIL(t_ptr->init_next_meta_version())) {
+        STORAGE_LOG(WARN, "failed to init tablet next meta version", K(ret), K(key));
       }
     }
   }
   return ret;
 }
 
-int ObTabletPointerMap::wash_meta_obj(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard, void *&free_obj)
+int ObTabletPointerMap::wash_meta_obj(const ObTabletMapKey &key, ObTabletHandle &guard, void *&free_obj)
 {
   int ret = common::OB_SUCCESS;
   uint64_t hash_val = 0;
@@ -796,7 +888,7 @@ int ObTabletPointerMap::wash_meta_obj(const ObTabletMapKey &key, ObMetaObjGuard<
       } else {
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));
       }
-    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
     } else if (OB_FAIL(t_ptr->dump_meta_obj(guard, free_obj))) {
@@ -805,5 +897,100 @@ int ObTabletPointerMap::wash_meta_obj(const ObTabletMapKey &key, ObMetaObjGuard<
   }
   return ret;
 }
+
+int ObTabletPointerMap::advance_notify_ss_change_version(
+    const ObTabletMapKey &key,
+    const share::SCN &change_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
+  ObTabletPointerHandle ptr_hdl(*this);
+  ObTabletPointer *t_ptr = nullptr;
+  if (OB_UNLIKELY(!ResourceMap::is_inited_)) {
+    ret = common::OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObMetaPointerMap has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "calc hash failed", K(ret), K(key));
+  } else {
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+      STORAGE_LOG(WARN, "get pointer handle failed", K(ret));
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
+      ret = common::OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "get meta pointer failed", K(ret), K(key), KP(t_ptr));
+    } else if (OB_FAIL(t_ptr->advance_notify_ss_change_version(key.tablet_id_, change_version))) {
+      if (OB_NO_NEED_UPDATE != ret) {
+        STORAGE_LOG(WARN, "advance notify ss change version", K(ret), K(key), K(change_version));
+      }
+    } else {
+      // do nothing
+    }
+  }
+  return ret;
+}
+
+int ObTabletPointerMap::alloc_tablet_meta_version(const ObTabletMapKey &key, int64_t &tablet_meta_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
+  ObTabletPointerHandle ptr_hdl(*this);
+  ObTabletPointer *t_ptr = nullptr;
+  if (OB_UNLIKELY(!ResourceMap::is_inited_)) {
+    ret = common::OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObMetaPointerMap has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid tablet key", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "calc hash failed", K(ret), K(key));
+  } else {
+    // hold wlock
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+      STORAGE_LOG(WARN, "get pointer handle failed", K(ret), K(key));
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected null tablet pointer", K(ret), K(key));
+    } else if (OB_FAIL(t_ptr->try_alloc_meta_version(tablet_meta_version))) {
+      STORAGE_LOG(WARN, "failed to alloc tablet meta version", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTabletPointerMap::set_tablet_next_meta_version(const ObTabletMapKey &key, const int64_t next_meta_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
+  ObTabletPointerHandle ptr_hdl(*this);
+  ObTabletPointer *t_ptr = nullptr;
+  if (OB_UNLIKELY(!ResourceMap::is_inited_)) {
+    ret = common::OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObMetaPointerMap has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid tablet key", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "calc hash failed", K(ret), K(key));
+  } else {
+    // hold wlock
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+      STORAGE_LOG(WARN, "get pointer handle failed", K(ret), K(key));
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_tablet_pointer())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected null tablet pointer", K(ret), K(key));
+    } else {
+      t_ptr->set_next_meta_version(next_meta_version);
+      STORAGE_LOG(INFO, "set tablet next meta version", K(ret), K(t_ptr->next_meta_version_),
+        K(t_ptr->last_gc_version_));
+    }
+  }
+  return ret;
+}
+
 } // end namespace storage
 } // end namespace oceanbase

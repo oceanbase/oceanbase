@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_select_into.h"
 #include "ob_log_table_scan.h"
-#include "ob_optimizer_util.h"
-#include "ob_opt_est_cost.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -62,6 +60,8 @@ int ObLogSelectInto::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   int ret = OB_SUCCESS;
   if (OB_FAIL(append(all_exprs, select_exprs_))) {
     LOG_WARN("failed to push back select exprs", K(ret));
+  } else if (file_partition_expr_ != NULL && OB_FAIL(all_exprs.push_back(file_partition_expr_))) {
+    LOG_WARN("failed to push back file partition expr", K(ret));
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get op exprs", K(ret));
   } else { /*do nothing*/ }

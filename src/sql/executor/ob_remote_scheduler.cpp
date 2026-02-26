@@ -14,20 +14,11 @@
 
 #include "sql/executor/ob_remote_scheduler.h"
 #include "sql/executor/ob_remote_job_control.h"
-#include "sql/executor/ob_task_spliter_factory.h"
 #include "sql/executor/ob_remote_job_executor.h"
 #include "sql/executor/ob_remote_task_executor.h"
 #include "sql/executor/ob_local_job_executor.h"
 #include "sql/executor/ob_local_task_executor.h"
-#include "sql/executor/ob_job.h"
-#include "share/partition_table/ob_partition_location.h"
 #include "sql/executor/ob_job_parser.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "share/ob_define.h"
-#include "lib/utility/utility.h"
-#include "sql/engine/ob_exec_context.h"
-#include "rpc/obrpc/ob_rpc_net_handler.h"
 
 namespace oceanbase
 {
@@ -153,6 +144,7 @@ int ObRemoteScheduler::build_remote_task(ObExecContext &ctx,
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   ObTaskExecutorCtx &task_exec_ctx = ctx.get_task_exec_ctx();
   ObSQLSessionInfo *session = nullptr;
+  share::ObLSArray task_ls_list;
   if (OB_FAIL(remote_task.assign_dependency_tables(dependency_tables))) {
     LOG_WARN("fail to assign dependency_tables", K(ret));
   }
@@ -163,11 +155,21 @@ int ObRemoteScheduler::build_remote_task(ObExecContext &ctx,
   LOG_TRACE("print schema_version", K(task_exec_ctx.get_query_tenant_begin_schema_version()),
       K(task_exec_ctx.get_query_sys_begin_schema_version()));
   remote_task.set_remote_sql_info(&plan_ctx->get_remote_sql_info());
-  ObDASTabletLoc *first_tablet_loc = DAS_CTX(ctx).get_table_loc_list().get_first()->get_first_tablet_loc();
+  ObDASTabletLoc *first_tablet_loc = nullptr;
   if (OB_FAIL(ret)){
   } else if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(DAS_CTX(ctx).get_all_lsid(task_ls_list))) {
+    LOG_WARN("get ls ids failed", K(ret));
+  } else if(OB_FAIL(remote_task.assign_ls_list(task_ls_list))) {
+    LOG_WARN("fail to assign ls list", K(ret));
+  } else if (OB_FAIL(session->get_trans_result().add_touched_ls(task_ls_list))) {
+    LOG_WARN("add touched ls failed", K(ret));
+  } else if (OB_ISNULL(DAS_CTX(ctx).get_table_loc_list().get_first()) ||
+             OB_ISNULL(first_tablet_loc = DAS_CTX(ctx).get_table_loc_list().get_first()->get_first_tablet_loc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty table loc list", K(ret), K(DAS_CTX(ctx).get_table_loc_list()));
   } else {
     remote_task.set_runner_svr(first_tablet_loc->server_);
     ObTaskID task_id;
@@ -175,7 +177,9 @@ int ObRemoteScheduler::build_remote_task(ObExecContext &ctx,
     task_id.set_server(ctx.get_addr());
     task_id.set_task_id(0);
     remote_task.set_task_id(task_id);
-    remote_task.set_snapshot(ctx.get_das_ctx().get_snapshot());
+    if (OB_FAIL(remote_task.set_snapshot(ctx.get_das_ctx().get_snapshot()))) {
+      LOG_WARN("fail to set snapshot", K(ret));
+    }
   }
   return ret;
 }
@@ -217,7 +221,7 @@ int ObRemoteScheduler::execute_with_sql(ObExecContext &ctx, ObPhysicalPlan *phy_
     LOG_WARN("fail to reset and init result", K(ret));
   } else if (OB_FAIL(build_remote_task(ctx, task, phy_plan->get_dependency_table()))) {
     LOG_WARN("build remote task failed", K(ret), K(task));
-  } else if (OB_FAIL(session->add_changed_package_info(ctx))) {
+  } else if (OB_FAIL(session->add_changed_package_info())) {
     LOG_WARN("failed to add changed package info to session", K(ret));
   } else {
     session->reset_all_package_changed_info();

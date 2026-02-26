@@ -41,21 +41,31 @@ protected:
 
   int add_result(ObObj &obj)  { return results_.push_back(obj); }
 
-  int do_estimate(uint64_t tenant_id,
+  int do_estimate(const ObOptStatGatherParam &gather_param,
                   const ObString &raw_sql,
                   bool need_copy_basic_stat,
                   ObOptStat &src_opt_stat,
                   ObIArray<ObOptStat> &dst_opt_stats);
+  int prepare_and_store_session(ObSQLSessionInfo *session,
+                                sql::ObSQLSessionInfo::StmtSavedValue *&session_value,
+                                ObCharsetType& old_client_charset_type,
+                                ObCharsetType& old_connection_charset_type,
+                                ObCharsetType& old_result_charset_type,
+                                ObCollationType& old_collation_type,
+                                bool &need_restore);
+  int restore_session(ObSQLSessionInfo *session,
+                      sql::ObSQLSessionInfo::StmtSavedValue *session_value,
+                      ObCharsetType old_client_charset_type,
+                      ObCharsetType old_connection_charset_type,
+                      ObCharsetType old_result_charset_type,
+                      ObCollationType old_collation_type);
 
   int pack(ObSqlString &raw_sql_str);
 
-  int add_from_table(const ObString &db_name,
-                     const ObString &table_name)
-  {
-    db_name_ = db_name;
-    from_table_ = table_name;
-    return OB_SUCCESS;
-  }
+  inline void set_from_table(const ObString &from_table) { from_table_ = from_table; }
+
+  int init_escape_char_names(common::ObIAllocator &allocator,
+                             const ObOptStatGatherParam &param);
 
   int add_partition_hint(const ObString &partition);
 
@@ -86,19 +96,28 @@ protected:
                          ObString &calc_part_id_str);
 
   void reset_select_items() { stat_items_.reset(); select_fields_.reset(); }
-  void reset_sample_hint() { sample_hint_.reset(); }
+  void reset_sample_hint() { sample_hint_.reset(); is_block_sample_ = false; }
   void reset_other_hint() { other_hints_.reset(); }
 
   int fill_specify_scn_info(common::ObIAllocator &alloc, uint64_t sepcify_scn);
 
 private:
-  int copy_basic_opt_stat(ObOptStat &src_opt_stat,
+  int copy_basic_opt_stat(const ObIArray<ObColumnStatParam> &column_params,
+                          const PartitionIdBlockMap *partition_id_block_map,
+                          ObOptStat &src_opt_stat,
                           ObIArray<ObOptStat> &dst_opt_stats);
 
   int copy_basic_col_stats(const int64_t cur_row_cnt,
                            const int64_t total_row_cnt,
+                           const ObIArray<ObColumnStatParam> &column_params,
                            ObIArray<ObOptColumnStat *> &src_col_stats,
                            ObIArray<ObOptColumnStat *> &dst_col_stats);
+
+  int scale_row_count(const PartitionIdBlockMap *partition_id_block_map,
+                      int64_t partition_id,
+                      int64_t row_cnt,
+                      double &sample_value,
+                      int64_t &scaled_row_cnt);
 
 protected:
 
@@ -106,6 +125,8 @@ protected:
   ObIAllocator &allocator_;
 
   ObString db_name_;
+  ObString tab_name_;
+  ObString data_table_name_;
   ObString from_table_;
   ObString partition_hint_;
   ObSqlString select_fields_;
@@ -119,6 +140,7 @@ protected:
   ObArray<ObObj> results_;
   double sample_value_;
   ObString current_scn_string_;
+  bool is_block_sample_;
 };
 
 

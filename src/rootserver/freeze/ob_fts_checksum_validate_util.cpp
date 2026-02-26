@@ -9,7 +9,6 @@
 // See the Mulan PubL v2 for more details.
 #include "rootserver/freeze/ob_fts_checksum_validate_util.h"
 #include "share/rc/ob_tenant_base.h"
-#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {
@@ -32,7 +31,7 @@ ObFTSGroupArray::ObFTSGroupArray()
 
 bool ObFTSGroupArray::need_check_fts() const
 {
-  return VERIFY_FTS_CHECKSUM && count() > 0;
+  return count() > 0;
 }
 
 } // namespace rootserver

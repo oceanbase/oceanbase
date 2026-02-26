@@ -71,13 +71,17 @@ private:
   int try_delete_extern_end_file_();
   int delete_tenant_locality_info_();
   int delete_tenant_diagnose_info_();
+  int delete_major_compaction_mview_dep_tablet_list_();
   int delete_tenant_backup_set_infos_();
   int delete_single_backup_set_info_();
   int delete_backup_set_start_file_();
   int delete_backup_piece_start_file_();
   int delete_backup_set_inner_placeholder_();
+  int delete_user_data_info_dir_();
   int delete_minor_data_info_dir_();
   int delete_major_data_info_dir_();
+  int delete_data_info_dir_(const share::ObBackupDataType &backup_data_type, int64_t max_turn_id);
+  int delete_table_list_dir_();
   int get_set_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
   int get_piece_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
   int get_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
@@ -92,6 +96,8 @@ private:
   int delete_backup_set_meta_info_files_();
   int delete_backup_piece_meta_info_files_();
   int delete_backup_dir_(const share::ObBackupPath &path);
+  int check_backup_set_dir_empty_();
+  int check_backup_piece_dir_empty_();
   int delete_backup_set_dir_();
   int delete_meta_info_dir_();
   int delete_single_piece_info_();

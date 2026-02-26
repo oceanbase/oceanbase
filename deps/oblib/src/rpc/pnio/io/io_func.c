@@ -10,6 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifdef ERRSIM
+extern bool trigger_rpc_socket_errsim();
+#endif
+
 int make_fd_nonblocking(int fd)
 {
   int err = 0;
@@ -96,10 +100,8 @@ char* fmap(const char* path, int oflag, int64_t size) {
 #endif
 ssize_t uintr_read(int fd, char* buf, size_t size) {
   ssize_t bytes = 0;
-#ifdef PNIO_ERRSIM
-  int rand_value = rand();
-  if (rand_value % RW_ERRSIM_FREQ == 0) {
-    rk_warn("uintr_read return 0. rand_value = %d\n", rand_value);
+#ifdef ERRSIM
+  if (trigger_rpc_socket_errsim()) {
     errno = EIO;
     return bytes;
   }
@@ -125,10 +127,8 @@ ssize_t uintr_write(int fd, const char* buf, size_t size) {
 
 ssize_t uintr_writev(int fd, struct iovec* iov, int cnt) {
   ssize_t bytes = 0;
-#ifdef PNIO_ERRSIM
-  int rand_value = rand();
-  if (rand_value % RW_ERRSIM_FREQ == 0) {
-    rk_warn("uintr_writev return 0. rand_value = %d\n", rand_value);
+#ifdef ERRSIM
+  if (trigger_rpc_socket_errsim()) {
     errno = EIO;
     return bytes;
   }

@@ -80,6 +80,7 @@ public:
   OB_INLINE ObJsonNode *get_parent() { return parent_; }
   virtual bool is_scalar() const { return false; }
   virtual bool is_number() const { return false; }
+  virtual bool use_lexicographical_order() const { return false;}
   virtual uint32_t depth() const = 0;
   virtual uint64_t get_serialize_size() = 0;
   virtual ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const = 0;
@@ -100,6 +101,7 @@ public:
       node = node->parent_;
     }
   }
+  virtual ObJsonNode* get_value(uint64_t index) const { return nullptr; }
   int get_array_element(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
@@ -113,6 +115,8 @@ public:
   int array_append(ObIJsonBase *value) override;
   int array_insert(uint64_t index, ObIJsonBase *value) override;
   int object_add(const common::ObString &key, ObIJsonBase *value) override;
+  virtual int object_add_v0(const common::ObString &key, ObIJsonBase *value, bool with_unique_key = false,
+                      bool is_lazy_sort = false, bool need_overwrite = true, bool is_schema = false);
 private:
   int check_valid_object_op(ObIJsonBase *value) const;
   int check_valid_array_op(ObIJsonBase *value) const;
@@ -120,6 +124,7 @@ private:
   int check_valid_array_op(uint64_t index) const;
 private:
   ObJsonNode *parent_;
+protected:
   uint64_t serialize_size_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonNode);
 };
@@ -181,9 +186,10 @@ private:
 public:
   explicit ObJsonObject(ObIAllocator *allocator)
       : ObJsonContainer(allocator),
-        serialize_size_(0),
+        children_serialize_size_(0),
         page_allocator_(*allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
-        object_array_(DEFAULT_PAGE_SIZE, page_allocator_)
+        object_array_(DEFAULT_PAGE_SIZE, page_allocator_),
+        use_lexicographical_order_(false)
   {
     set_parent(NULL);
   }
@@ -196,7 +202,6 @@ public:
   }
   OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_OBJECT; }
   OB_INLINE uint64_t element_count() const override { return object_array_.size(); }
-  OB_INLINE void set_serialize_size(uint64_t size) { serialize_size_ = size; }
   OB_INLINE uint32_t depth() const override
   {
     uint32_t max_child = 0;
@@ -215,15 +220,10 @@ public:
   void stable_sort();
   OB_INLINE uint64_t get_serialize_size()
   {
-    if (serialize_size_ == 0) {
+    if (serialize_size_ == 0 || serialize_size_ == children_serialize_size_) {
       update_serialize_size();
     }
     return serialize_size_;
-  }
-  OB_INLINE void set_serialize_delta_size(int64_t size)
-  {
-    serialize_size_ += size;
-    update_serialize_size_cascade(size);
   }
   void update_serialize_size(int64_t change_size = 0);
   ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
@@ -238,7 +238,7 @@ public:
   //
   // @param [in] index The index.
   // @return Returns ObJsonNode on success, NULL otherwise.
-  ObJsonNode *get_value(uint64_t index) const;
+  ObJsonNode *get_value(uint64_t index) const override;
 
   // Get object pair by index.
   //
@@ -310,10 +310,14 @@ public:
 
   void get_obj_array(ObJsonObjectArray*& obj_array) { obj_array = &object_array_; }
 
+  bool use_lexicographical_order() const override { return use_lexicographical_order_;}
+  void set_use_lexicographical_order() { use_lexicographical_order_ = true; }
+
 private:
-  uint64_t serialize_size_;
+  uint64_t children_serialize_size_;
   ModulePageAllocator page_allocator_;
   ObJsonObjectArray object_array_;
+  bool use_lexicographical_order_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonObject);
 };
 
@@ -326,7 +330,7 @@ private:
 public:
   explicit ObJsonArray(ObIAllocator *allocator)
       : ObJsonContainer(allocator),
-        serialize_size_(0),
+        children_serialize_size_(0),
         page_allocator_(*allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
         mode_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
         node_vector_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR)
@@ -357,16 +361,10 @@ public:
   }
   OB_INLINE uint64_t get_serialize_size()
   {
-    if (serialize_size_ == 0) {
+    if (serialize_size_ == 0 || serialize_size_ == children_serialize_size_) {
       update_serialize_size();
     }
     return serialize_size_;
-  }
-  OB_INLINE void set_serialize_size(uint64_t size) { serialize_size_ = size; }
-  OB_INLINE void set_serialize_delta_size(int64_t size)
-  {
-    serialize_size_ += size;
-    update_serialize_size_cascade(size);
   }
   void update_serialize_size(int64_t change_size = 0);
   ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
@@ -414,12 +412,25 @@ public:
   // @return void
   void clear();
 
+  ObJsonNode* get_value(uint64_t idx) const override;
 private:
-  uint64_t serialize_size_;
+  uint64_t children_serialize_size_;
   ModulePageAllocator page_allocator_;
   JsonNodeModuleArena mode_arena_;
   ObJsonNodeVector node_vector_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonArray);
+};
+
+class ObJsonHeteCol : public ObJsonArray
+{
+public:
+  explicit ObJsonHeteCol(ObIAllocator *allocator)
+      : ObJsonArray(allocator)
+  {}
+  virtual ~ObJsonHeteCol() {}
+
+public:
+  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_SEMI_HETE_COL; }
 };
 
 // json scalar include(number(decimal, double, int, uint), string, null, datetime, opaque, boolean)
@@ -590,23 +601,23 @@ public:
   {
   }
   virtual ~ObJsonString() {}
-  int64_t to_string(char *buf, const int64_t buf_len) const
+  virtual int64_t to_string(char *buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
     databuff_printf(buf, buf_len, pos, "json string ");
     pos += str_.to_string(buf + pos, buf_len - pos);
     return pos;
   }
-  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_STRING; }
+  OB_INLINE virtual ObJsonNodeType json_type() const override { return ObJsonNodeType::J_STRING; }
   OB_INLINE void set_value(const char *str, uint64_t length) { str_.assign_ptr(str, length); }
   OB_INLINE const common::ObString &value() const { return str_; }
   OB_INLINE void set_is_null_to_str(bool value) { is_null_to_str_ = value; }
   OB_INLINE bool get_is_null_to_str() const { return is_null_to_str_; }
   OB_INLINE uint64_t length() const { return str_.length(); }
   OB_INLINE ObString get_str() const { return str_; }
-  OB_INLINE uint64_t get_serialize_size()
+  OB_INLINE virtual uint64_t get_serialize_size()
   {
-    return serialization::encoded_length_vi64(length()) + length();
+    return sizeof(uint8_t)/*ObJBVerType*/ + serialization::encoded_length_vi64(length()) + length();
   }
   ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
   void set_ext(uint64_t type) { ext_ = type; }
@@ -616,6 +627,36 @@ private:
   uint64_t ext_;
   bool is_null_to_str_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonString);
+};
+
+
+class ObJsonSemiBin : public ObJsonString
+{
+public:
+  explicit ObJsonSemiBin()
+      : ObJsonString(nullptr, 0),
+        real_json_type_(ObJsonNodeType::J_ERROR)
+  {}
+
+  virtual ~ObJsonSemiBin() {}
+  int64_t to_string(char *buf, const int64_t buf_len) const override
+  {
+    int64_t pos = 0;
+    databuff_printf(buf, buf_len, pos, "json semi bin ");
+    pos += get_str().to_string(buf + pos, buf_len - pos);
+    return pos;
+  }
+  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_SEMI_BIN; }
+  OB_INLINE ObJsonNodeType real_json_type() const { return real_json_type_; }
+  OB_INLINE void set_json_type(ObJsonNodeType json_type) { real_json_type_ = json_type; }
+  OB_INLINE uint64_t get_serialize_size()
+  {
+    return length();
+  }
+
+private:
+  ObJsonNodeType real_json_type_;
+
 };
 
 class ObJsonNull : public ObJsonScalar
@@ -670,7 +711,8 @@ public:
   OB_INLINE uint64_t get_serialize_size()
   {
     uint64_t size = 0;
-    if (json_type() == ObJsonNodeType::J_DATE || json_type() == ObJsonNodeType::J_ORACLEDATE) {
+    if (json_type() == ObJsonNodeType::J_DATE || json_type() == ObJsonNodeType::J_MYSQL_DATE
+        || json_type() == ObJsonNodeType::J_ORACLEDATE) {
       size = sizeof(int32_t);
     } else {
       size = sizeof(int64_t);
@@ -711,7 +753,7 @@ public:
   OB_INLINE uint64_t size() const { return value_.length(); }
   OB_INLINE uint64_t get_serialize_size()
   {
-    return sizeof(uint16_t) + sizeof(uint64_t) + size(); // [field_type][length][value]; 
+    return sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint64_t) + size(); // [vertype][field_type][length][value];
   }
   ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
@@ -911,6 +953,11 @@ private:
 
 // Object element comparison function.
 struct ObJsonKeyCompare {
+
+  ObJsonKeyCompare(const bool use_lexicographical_order):
+    use_lexicographical_order_(use_lexicographical_order)
+  {}
+
   int operator()(const ObJsonObjectPair &left, const ObJsonObjectPair &right)
   {
     INIT_SUCC(ret);
@@ -918,8 +965,10 @@ struct ObJsonKeyCompare {
     common::ObString left_key = left.get_key();
     common::ObString right_key = right.get_key();
 
+    if (use_lexicographical_order_) {
+      ret = (left_key.compare(right_key) < 0);
     // first compare length
-    if (left_key.length() != right_key.length()) {
+    } else if (left_key.length() != right_key.length()) {
       ret = (left_key.length() < right_key.length());
     } else { // do Lexicographic order when length equals
       ret = (left_key.compare(right_key) < 0);
@@ -932,8 +981,10 @@ struct ObJsonKeyCompare {
   {
     int result = 0;
 
+    if (use_lexicographical_order_) {
+      result = left.compare(right);
     // first compare length
-    if (left.length() != right.length()) {
+    } else if (left.length() != right.length()) {
       result = left.length() - right.length();
     } else { // do Lexicographic order when length equals
       result = left.compare(right);
@@ -941,6 +992,8 @@ struct ObJsonKeyCompare {
 
     return result;
   }
+
+  bool use_lexicographical_order_;
 };
 
 } // namespace common

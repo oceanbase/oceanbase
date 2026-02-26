@@ -12,16 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_PC
 
-#include "sql/plan_cache/ob_plan_cache_util.h"
-#include "sql/plan_cache/ob_plan_set.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_i_tablet_scan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/executor/ob_task_executor.h"
-#include "sql/ob_phy_table_location.h"
-#include "sql/optimizer/ob_phy_table_location_info.h"
+#include "ob_plan_cache_util.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::omt;
@@ -30,6 +23,51 @@ namespace oceanbase
 {
 namespace sql
 {
+
+int ObPlanExecutingStat::get_executing_info(int64_t &exec_time, int64_t &exec_cnt) const
+{
+  int ret = OB_SUCCESS;
+  exec_time = 0;
+  exec_cnt = 0;
+  const int64_t exec_cur_timestamp = ObTimeUtility::current_time();
+  int64_t exec_start_timestamp = 0;
+  const int64_t all_exec_cnt = ATOMIC_LOAD(&(exec_cnt_));
+  for (int64_t i = 0; OB_SUCC(ret) && exec_cnt < all_exec_cnt && i < MAX_EXECUTING_SIZE; ++i) {
+    exec_start_timestamp = ATOMIC_LOAD(&(exec_start_timestamps_[i]));
+    if (0 < exec_start_timestamp) {
+      exec_time += exec_cur_timestamp - exec_start_timestamp;
+      ++exec_cnt;
+    }
+  }
+  return ret;
+}
+
+int ObPlanExecutingStat::set_executing_record(const int64_t exec_start_timestamp)
+{
+  int ret = OB_SUCCESS;
+  bool finish = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !finish && i < MAX_EXECUTING_SIZE; ++i) {
+    if (0 == ATOMIC_VCAS(&(exec_start_timestamps_[i]), 0, exec_start_timestamp)) {
+      ATOMIC_INC(&exec_cnt_);
+      finish = true;
+    }
+  }
+  return ret;
+}
+
+int ObPlanExecutingStat::erase_executing_record(const int64_t exec_start_timestamp)
+{
+  int ret = OB_SUCCESS;
+  bool find = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !find && i < MAX_EXECUTING_SIZE; ++i) {
+    if (exec_start_timestamp == ATOMIC_VCAS(&(exec_start_timestamps_[i]), exec_start_timestamp, 0)) {
+      ATOMIC_DEC(&exec_cnt_);
+      find = true;
+    }
+  }
+  return ret;
+}
+
 int ObGetAllPlanIdOp::set_key_array(common::ObIArray<uint64_t> *key_array)
 {
 int ret = common::OB_SUCCESS;
@@ -73,8 +111,10 @@ int ObGetAllCacheIdOp::operator()(common::hash::HashMapPair<ObCacheObjID, ObILib
   if (NULL == key_array_ || OB_ISNULL(entry.second)) {
     ret = common::OB_NOT_INIT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret));
-  } else if (entry.second->get_ns() >= ObLibCacheNameSpace::NS_CRSR
-            && entry.second->get_ns() <= ObLibCacheNameSpace::NS_PKG) {
+  } else if ((entry.second->get_ns() >= ObLibCacheNameSpace::NS_CRSR
+            && entry.second->get_ns() <= ObLibCacheNameSpace::NS_PKG)
+            || entry.second->get_ns() == ObLibCacheNameSpace::NS_CALLSTMT
+            || entry.second->get_ns() == ObLibCacheNameSpace::NS_UDF_RESULT_CACHE) {
     if (OB_ISNULL(entry.second)) {
       // do nothing
     } else if (!entry.second->added_lc()) {
@@ -318,13 +358,17 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
     }
 
     //Only check the on_same_server when has table location in the phy_plan.
+    bool is_dup_ls_modified = false;
+    if (OB_NOT_NULL(pc_ctx.sql_ctx_.session_info_)) {
+      is_dup_ls_modified = pc_ctx.sql_ctx_.session_info_->is_dup_ls_modified();
+    }
     if (OB_SUCC(ret) && N!=0 ) {
       if (OB_FAIL(ObLogPlan::select_replicas(exec_ctx, table_location_ptrs,
                                              exec_ctx.get_addr(),
                                              phy_location_info_ptrs))) {
         LOG_WARN("failed to select replicas", K(ret), K(table_locations),
                  K(exec_ctx.get_addr()), K(phy_location_info_ptrs));
-      } else if (!has_duplicate_tbl_not_in_dml || is_retrying) {
+      } else if (is_dup_ls_modified || is_retrying) {
         // do nothing
       } else if (OB_FAIL(reselect_duplicate_table_best_replica(candi_table_locs,
                                                                on_same_server))) {
@@ -341,9 +385,10 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
   return ret;
 }
 
-int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
-                                           const ObPlanCacheCtx &pc_ctx,
-                                           ObIArray<ObCandiTableLoc> &candi_table_locs)
+int ObPhyLocationGetter::get_phy_locations_and_add_to_das_ctx(
+  const ObIArray<ObTableLocation> &table_locations,
+  const ObPlanCacheCtx &pc_ctx,
+  ObIArray<ObCandiTableLoc> &candi_table_locs)
 {
   int ret = OB_SUCCESS;
   bool has_duplicate_tbl_not_in_dml = false;
@@ -352,88 +397,30 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
   ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
   const ParamStore &params = plan_ctx->get_param_store();
   int64_t N = table_locations.count();
-  bool is_retrying = false;
+  bool use_fast_leader_selection = true;
   if (OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid executor ctx!", K(ret), K(plan_ctx));
   } else {
-    int64_t calculate_candi_table_num = N;
-    for (int64_t i = 0; OB_SUCC(ret) && i < N ; i++) {
-      const ObTableLocation &table_location = table_locations.at(i);
-      if (table_location.get_loc_meta().select_leader_) {
-        if (OB_FAIL(table_location.calculate_final_tablet_locations(exec_ctx,
-                                                                    params,
-                                                                    dtc_params))) {
-          LOG_WARN("failed to calculate final tablet locations", K(table_location), K(ret));
-        } else {
-          calculate_candi_table_num -= 1;
+    for (int64_t i = 0; use_fast_leader_selection && i < N ; i++) {
+      use_fast_leader_selection &= table_locations.at(i).get_loc_meta().select_leader_;
+    }
+    if (use_fast_leader_selection) {
+      // Directly select leader replica for each table location.
+      for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+        if (OB_FAIL(table_locations.at(i).calculate_final_tablet_locations(exec_ctx, params, dtc_params))) {
+          LOG_WARN("failed to calculate final tablet locations", K(ret), K(table_locations.at(i)));
         }
       }
-    } // for end
-
-    if (OB_SUCC(ret) && calculate_candi_table_num > 0) {
-      ObSEArray<const ObTableLocation *, 2> table_location_ptrs;
-      ObSEArray<ObCandiTableLoc *, 2> phy_location_info_ptrs;
-
-      if (OB_FAIL(candi_table_locs.prepare_allocate(calculate_candi_table_num))) {
-        LOG_WARN("phy_locations_info prepare allocate error", K(ret), K(calculate_candi_table_num));
-      } else {
-        for (int64_t i = 0, j = 0; OB_SUCC(ret) && i < N && j < calculate_candi_table_num; i++) {
-          const ObTableLocation &table_location = table_locations.at(i);
-          if (!table_location.get_loc_meta().select_leader_) {
-            ObCandiTableLoc &candi_table_loc = candi_table_locs.at(j);
-            NG_TRACE(calc_partition_location_begin);
-            // 这里认为materialized view的复制表是每个server都有副本的，
-            // 因此这里不判断是否能生成materialized view了，一定都能生成
-            if (OB_FAIL(table_location.calculate_candi_tablet_locations(exec_ctx,
-                                                                        params,
-                                                                        candi_table_loc.get_phy_part_loc_info_list_for_update(),
-                                                                        dtc_params))) {
-              LOG_WARN("failed to calculate partition location", K(ret));
-            } else {
-              NG_TRACE(calc_partition_location_end);
-              if (table_location.is_duplicate_table_not_in_dml()) {
-                has_duplicate_tbl_not_in_dml = true;
-              }
-              candi_table_loc.set_duplicate_type(table_location.get_duplicate_type());
-              candi_table_loc.set_table_location_key(
-                  table_location.get_table_id(), table_location.get_ref_table_id());
-              LOG_DEBUG("plan cache util", K(candi_table_loc));
-            }
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(table_location_ptrs.push_back(&table_location))) {
-                LOG_WARN("failed to push back table location ptrs", K(ret), K(i),
-                         K(N), K(table_locations.at(i)));
-              } else if (OB_FAIL(phy_location_info_ptrs.push_back(&candi_table_loc))) {
-                LOG_WARN("failed to push back phy location info ptrs", K(ret), K(i),
-                         K(N), K(candi_table_locs.at(j)));
-              } else if (OB_FAIL(pc_ctx.is_retry_for_dup_tbl(is_retrying))) {
-                LOG_WARN("failed to test if retrying", K(ret));
-              } else if (is_retrying) {
-                LOG_INFO("Physical Location from Location Cache", K(candi_table_loc));
-              }
-              j += 1;
-            }
-          }
-        } // for end
-      }
-
-      //Only check the on_same_server when has table location in the phy_plan.
-      if (OB_SUCC(ret)) {
-        bool on_same_server = true;
-        if (OB_FAIL(ObLogPlan::select_replicas(exec_ctx, table_location_ptrs,
-                                               exec_ctx.get_addr(),
-                                               phy_location_info_ptrs))) {
-          LOG_WARN("failed to select replicas", K(ret), K(table_locations),
-                   K(exec_ctx.get_addr()), K(phy_location_info_ptrs));
-        } else if (!has_duplicate_tbl_not_in_dml || is_retrying) {
-          // do nothing
-        } else if (OB_FAIL(reselect_duplicate_table_best_replica(candi_table_locs,
-                                                                 on_same_server))) {
-          LOG_WARN("failed to reselect replicas", K(ret));
-        }
-        LOG_TRACE("after select_replicas", K(on_same_server), K(has_duplicate_tbl_not_in_dml),
-                  K(candi_table_locs), K(table_locations), K(ret));
+    } else {
+      // Not all tables require select leader, fallback to original path.
+      bool need_same_server = true;
+      if (OB_FAIL(get_phy_locations(table_locations, pc_ctx, candi_table_locs, need_same_server))) {
+        LOG_WARN("failed to get phy locations", K(ret), K(table_locations), K(pc_ctx));
+      } else if (candi_table_locs.empty()) {
+        // do nothing.
+      } else if (OB_FAIL(build_table_locs(exec_ctx.get_das_ctx(), table_locations, candi_table_locs))) {
+        LOG_WARN("failed to build table locations", K(ret), K(table_locations), K(candi_table_locs));
       }
     }
   }
@@ -510,6 +497,8 @@ int ObPhyLocationGetter::build_related_tablet_info(const ObTableLocation &table_
 
 OB_SERIALIZE_MEMBER(ObTableRowCount, op_id_, row_count_);
 
+
+
 int ObConfigInfoInPC::load_influence_plan_config()
 {
   int ret = OB_SUCCESS;
@@ -523,6 +512,9 @@ int ObConfigInfoInPC::load_influence_plan_config()
   enable_newsort_ = GCONF._enable_newsort;
   is_strict_defensive_check_ = GCONF.enable_strict_defensive_check();
   is_enable_px_fast_reclaim_ = GCONF._enable_px_fast_reclaim;
+  bloom_filter_ratio_ = GCONF._bloom_filter_ratio;
+  realistic_runtime_bloom_filter_size_ = !GCONF._preset_runtime_bloom_filter_size;
+  ndv_runtime_bloom_filter_size_ = GCONF._ndv_runtime_bloom_filter_size;
 
   // For Tenant configs
   // tenant config use tenant_config to get configs
@@ -536,6 +528,26 @@ int ObConfigInfoInPC::load_influence_plan_config()
     min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
     enable_spf_batch_rescan_ = tenant_config->_enable_spf_batch_rescan;
     enable_var_assign_use_das_ = tenant_config->_enable_var_assign_use_das;
+    enable_das_keep_order_ = tenant_config->_enable_das_keep_order;
+    enable_index_merge_ = tenant_config->_enable_index_merge;
+    enable_hyperscan_regexp_engine_ =
+        (0 == ObString::make_string("Hyperscan").case_compare(tenant_config->_regex_engine.str()));
+    enable_parallel_das_dml_ = tenant_config->_enable_parallel_das_dml;
+    direct_load_allow_fallback_ = tenant_config->direct_load_allow_fallback;
+    default_load_mode_ = ObDefaultLoadMode::get_type_value(tenant_config->default_load_mode.get_value_string());
+    hash_rollup_policy_ = tenant_config->_use_hash_rollup.case_compare("auto") == 0 ?
+                            0 :
+                            (tenant_config->_use_hash_rollup.case_compare("forced") == 0 ? 1 : 2);
+    enable_nlj_spf_use_rich_format_ = tenant_config->_enable_nlj_spf_use_rich_format;
+    enable_distributed_das_scan_ = tenant_config->_enable_distributed_das_scan;
+    enable_das_batch_rescan_flag_ = tenant_config->_enable_das_batch_rescan_flag;
+    enable_topn_runtime_filter_ = tenant_config->_enable_topn_runtime_filter;
+    min_const_integer_precision_ = static_cast<int8_t>(tenant_config->_min_const_integer_precision);
+    enable_runtime_filter_adaptive_apply_ = tenant_config->_enable_runtime_filter_adaptive_apply;
+    extend_sql_plan_monitor_metrics_ = tenant_config->_extend_sql_plan_monitor_metrics;
+    enable_mysql_compatible_dates_ = tenant_config->_enable_mysql_compatible_dates;
+    enable_insertup_column_store_opt_ = tenant_config->_enable_insertup_column_store_opt;
+    enable_px_task_rebalance_ = tenant_config->_enable_px_task_rebalance;
   }
 
   return ret;
@@ -580,14 +592,63 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
                                "%lu,", min_cluster_version_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(min_cluster_version_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", is_enable_px_fast_reclaim_))) {
+                               "%d,", is_enable_px_fast_reclaim_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(is_enable_px_fast_reclaim_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", enable_spf_batch_rescan_))) {
+                               "%d,", enable_spf_batch_rescan_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_spf_batch_rescan_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", enable_var_assign_use_das_))) {
+                               "%d,", enable_var_assign_use_das_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_var_assign_use_das_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", enable_das_keep_order_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_das_keep_order_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", bloom_filter_ratio_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(bloom_filter_ratio_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", enable_hyperscan_regexp_engine_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_hyperscan_regexp_engine_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", realistic_runtime_bloom_filter_size_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(realistic_runtime_bloom_filter_size_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", enable_parallel_das_dml_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_parallel_das_dml_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", direct_load_allow_fallback_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(direct_load_allow_fallback_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", default_load_mode_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(default_load_mode_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", hash_rollup_policy_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(hash_rollup_policy_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", enable_nlj_spf_use_rich_format_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_nlj_spf_use_rich_format_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", ndv_runtime_bloom_filter_size_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(ndv_runtime_bloom_filter_size_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", enable_index_merge_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_index_merge_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                              "%d,", enable_distributed_das_scan_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_distributed_das_scan_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                              "%ld,", enable_das_batch_rescan_flag_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_das_batch_rescan_flag_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                              "%d,", enable_topn_runtime_filter_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_topn_runtime_filter_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", min_const_integer_precision_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(min_const_integer_precision_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", enable_runtime_filter_adaptive_apply_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_runtime_filter_adaptive_apply_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", extend_sql_plan_monitor_metrics_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(extend_sql_plan_monitor_metrics_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", enable_px_task_rebalance_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_px_task_rebalance_));
   } else {
     // do nothing
   }

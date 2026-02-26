@@ -10,14 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "easy_define.h"
-#include "util/easy_string.h"
-#include "io/easy_baseth_pool.h"
-#include "util/easy_time.h"
+#include "ob_easy_log.h"
 #include "io/easy_io.h"
 #include "io/easy_log.h"
 #include <pthread.h>
-#include "lib/ob_define.h"
 #include "lib/profile/ob_trace_id.h"
 namespace oceanbase
 {
@@ -61,8 +57,10 @@ void ob_easy_log_format(int level, const char *file, int line, const char *funct
   }
 
   // print
+  char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
   len = lnprintf(buffer, 256, "%s %-5s %s:%d [%ld][%s] ", time_str,
-                 OB_EASY_LOG_LEVEL_STR[level - EASY_LOG_OFF], file, line, GETTID(), ObCurTraceId::get_trace_id_str());
+                 OB_EASY_LOG_LEVEL_STR[level - EASY_LOG_OFF], file, line, GETTID(),
+                 ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)));
   va_list args;
   va_start(args, fmt);
   vlen = vsnprintf(buffer + len, buf_len - len - 1,  fmt, args);

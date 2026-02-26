@@ -19,10 +19,6 @@
 
 namespace oceanbase
 {
-namespace observer
-{
-class ObGlobalContext;
-}
 namespace obrpc
 {
 

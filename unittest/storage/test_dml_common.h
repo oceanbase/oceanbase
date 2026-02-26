@@ -10,6 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifndef OB_TEST_DML_COMMON_H_
+#define OB_TEST_DML_COMMON_H_
+
 #include <gtest/gtest.h>
 
 #define protected public
@@ -27,7 +30,7 @@
 #include "share/ob_tenant_info_proxy.h"
 #include "share/schema/ob_table_param.h"
 #include "storage/mockcontainer/mock_ob_iterator.h"
-#include "mtlenv/mock_tenant_module_env.h"
+#include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "storage/ls/ob_ls_tablet_service.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_service.h"
@@ -317,7 +320,6 @@ int TestDmlCommon::mock_access_service(
     ObAccessService *svc = MTL(ObAccessService*);
     // do copy
     mock_svc->is_inited_ = svc->is_inited_;
-    mock_svc->tenant_id_ = svc->tenant_id_;
     mock_svc->ls_svr_ = svc->ls_svr_;
     mock_svc->tablet_service_ = tablet_service;
 
@@ -373,8 +375,8 @@ int TestDmlCommon::build_table_scan_param(
     ObTableScanParam &scan_param)
 {
   int ret = build_table_scan_param_base_(tenant_id, table_param, false, scan_param);
-  if (OB_SUCC(ret)) {
-    scan_param.snapshot_ = read_snapshot;
+  if (FAILEDx(scan_param.snapshot_.assign(read_snapshot))) {
+    STORAGE_LOG(WARN, "assign snapshot fail", K(ret));
   }
   return ret;
 }
@@ -465,6 +467,7 @@ void TestDmlCommon::build_data_table_schema(
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(ObRowStoreType::ENCODING_ROW_STORE);
   table_schema.set_storage_format_version(ObStorageFormatVersion::OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema.set_micro_index_clustered(false);
 
 #define ADD_COLUMN(column_id, column_name, data_type, collation_type, is_row_key) \
   { \
@@ -563,6 +566,7 @@ int TestDmlCommon::build_pure_data_tablet_arg(
   ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> tablet_id_array;
   ObArray<int64_t> tablet_schema_index_array;
+  ObArray<int64_t> create_commit_versions;
   share::schema::ObTableSchema table_schema;
   build_data_table_schema(tenant_id, table_schema);
 
@@ -571,7 +575,7 @@ int TestDmlCommon::build_pure_data_tablet_arg(
     STORAGE_LOG(WARN, "failed to push tablet id into array", K(ret), K(data_tablet_id));
   } else if (OB_FAIL(tablet_schema_index_array.push_back(0))) {
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
-  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false))) {
+  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false, create_commit_versions, false /*has_cs_replica*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
   } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn(), false/*need_check_tablet_cnt*/))) {
@@ -601,6 +605,7 @@ int TestDmlCommon::build_mixed_tablets_arg(
   ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> tablet_id_array;
   ObArray<int64_t> tablet_schema_index_array;
+  ObArray<int64_t> create_commit_versions;
   share::schema::ObTableSchema data_table_schema;
   share::schema::ObTableSchema index_table_schema;
   build_data_table_schema(tenant_id, data_table_schema);
@@ -623,7 +628,7 @@ int TestDmlCommon::build_mixed_tablets_arg(
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
   } else if (OB_FAIL(tablet_schema_index_array.push_back(1))) {
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
-  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false))) {
+  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false, create_commit_versions, false /*has_cs_replica*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
   } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn(), false/*need_check_tablet_cnt*/))) {
@@ -644,3 +649,5 @@ int TestDmlCommon::build_mixed_tablets_arg(
 }
 } // namespace storage
 } // namespace oceanbase
+
+#endif // OB_TEST_DML_COMMON_H_

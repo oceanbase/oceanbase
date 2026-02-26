@@ -24,7 +24,6 @@ class ObMultiStmtItem;
 }
 namespace observer
 {
-struct ObGlobalContext;
 
 class ObMPStmtGetPieceData : public ObMPBase
 {

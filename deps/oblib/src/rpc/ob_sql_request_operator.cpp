@@ -10,12 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "rpc/ob_sql_request_operator.h"
+#include "ob_sql_request_operator.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "rpc/obmysql/ob_easy_sql_request_operator.h"
 #include "rpc/obmysql/ob_poc_sql_request_operator.h"
-#include "rpc/ob_request.h"
-#include "rpc/obrpc/ob_rpc_opts.h"
 
 namespace oceanbase
 {

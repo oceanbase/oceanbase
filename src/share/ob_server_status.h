@@ -18,6 +18,7 @@
 #include "common/ob_zone.h"
 #include "share/ob_lease_struct.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_server_status.h"
 
 namespace oceanbase
 {
@@ -40,6 +41,26 @@ enum ObRootServiceStatus
 int get_rs_status_str(const ObRootServiceStatus status,
                       const char *&str);
 }
+
+enum ObServerMode {
+  INVALID_MODE = 0,
+  NORMAL_MODE,
+  PHY_FLASHBACK_MODE,
+  PHY_FLASHBACK_VERIFY_MODE,
+  DISABLED_CLUSTER_MODE,
+  DISABLED_WITH_READONLY_CLUSTER_MODE,
+  ARBITRATION_MODE,
+  SHARED_STORAGE_MODE,
+};
+
+enum ObServiceStatus {
+  SS_INIT,
+  SS_STARTING,
+  SS_SERVING,
+  SS_STOPPING,
+  SS_STOPPED
+};
+
 /////
 struct ObServerStatus
 {

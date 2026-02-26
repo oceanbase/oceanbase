@@ -12,13 +12,10 @@
 
 #define USING_LOG_PREFIX RPC_FRAME
 
-#include "io/easy_io.h"
 #include "rpc/frame/ob_net_easy.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 
-#include "lib/ob_define.h"
 #include "lib/utility/utility.h"
-#include "lib/file/file_directory_utils.h"
 #include "lib/thread/ob_thread_name.h"
 
 using namespace oceanbase::rpc;
@@ -154,7 +151,8 @@ ObNetEasy::ObNetEasy()
       rpc_unix_eio_(NULL),
       is_inited_(false),
       started_(false),
-      rpc_port_(0)
+      rpc_port_(0),
+      sql_io_cnt_(0)
 {
   net_easy_update_s2r_map_cb_ = NULL;
   net_easy_update_s2r_map_cb_args_ = NULL;
@@ -790,7 +788,7 @@ int ObNetEasy::init(const ObNetOptions &opts, uint8_t negotiation_enable)
           }
         }
       }
-
+      sql_io_cnt_ = opts.mysql_io_cnt_;
       is_inited_ = true;
     }
   } else {
@@ -859,7 +857,7 @@ int ObNetEasy::start()
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && sql_io_cnt_ > 0) {
     int eret = easy_eio_start(mysql_eio_);
     if (EASY_OK == eret) {
       LOG_INFO("start mysql easy io");

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
 #include "ob_schema_mem_mgr.h"
-#include "lib/oblog/ob_log.h"
-#include "share/ob_force_print_log.h"
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {

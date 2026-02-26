@@ -12,8 +12,6 @@
 
 #include "storage/tx/ob_trans_memory_stat.h"
 #include <gtest/gtest.h>
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {

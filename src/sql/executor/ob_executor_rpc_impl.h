@@ -24,6 +24,7 @@
 #include "sql/executor/ob_slice_id.h"
 #include "sql/executor/ob_executor_rpc_proxy.h"
 #include "lib/ob_define.h"
+#include "share/detect/ob_detectable_id.h"
 
 namespace oceanbase
 {
@@ -102,11 +103,24 @@ public:
   RemoteExecuteStreamHandle(const char *label, uint64_t tenant_id) :
     use_remote_protocol_v2_(false),
     sync_stream_handle_(label, tenant_id),
-    sync_stream_handle_v2_(label, tenant_id)
+    sync_stream_handle_v2_(label, tenant_id),
+    dm_detectable_id_()
   {
   }
-  ~RemoteExecuteStreamHandle() = default;
+  ~RemoteExecuteStreamHandle();
   void set_use_remote_protocol_v2() { use_remote_protocol_v2_ = true; }
+  const ObDetectableId &get_dm_detectable_id() { return dm_detectable_id_; }
+  int set_dm_detectable_id(const ObDetectableId &dm_detectable_id) {
+    int ret = OB_SUCCESS;
+    if (dm_detectable_id_.is_invalid()) {
+      dm_detectable_id_ = dm_detectable_id;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "this stream rpc handler already has set dm_detectable_id",
+              K(dm_detectable_id_), K(dm_detectable_id));
+    }
+    return ret;
+  }
   void reset()
   {
     if (use_remote_protocol_v2_) {
@@ -220,6 +234,7 @@ private:
   bool use_remote_protocol_v2_;
   RemoteStreamHandle sync_stream_handle_;
   RemoteStreamHandleV2 sync_stream_handle_v2_;
+  ObDetectableId dm_detectable_id_;
 };
 
 class ObExecutorRpcCtx

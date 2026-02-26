@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_datum.h"
-#include "ob_datum_util.h"
 
 namespace oceanbase
 {
@@ -78,6 +77,7 @@ ObObjDatumMapType ObDatum::get_obj_datum_map_type(const ObObjType type)
     OBJ_DATUM_STRING,         // ObCollectionSQLType
     OBJ_DATUM_4BYTE_DATA,     // ObMySQLDateType
     OBJ_DATUM_8BYTE_DATA,     // ObMySQLDateTimeType
+    OBJ_DATUM_STRING,         // ObRoaringBitmapType
   };
   static_assert(sizeof(maps) / sizeof(maps[0]) == ObMaxType,
       "new added type should extend this map");

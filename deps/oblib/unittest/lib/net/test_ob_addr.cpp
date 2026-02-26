@@ -50,13 +50,68 @@ TEST(OB_ADDR, TEST1)
   addr.set_ip_addr("1.0.0.1", 1);
   addr2.set_ip_addr("1.0.0.1", 2);
   EXPECT_LT(addr, addr2);
-  int ret = addr.ip_port_to_string(NULL, 10);
+  char *buf_null = NULL;
+  int ret = addr.ip_port_to_string(buf_null, 10);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   char buf[64];
   ret = addr.ip_port_to_string(buf, 0);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ret = addr.ip_port_to_string(buf, 5);
   ASSERT_EQ(OB_SIZE_OVERFLOW, ret);
+}
+
+TEST(OB_ADDR, IPV6_FORMAT_TEST)
+{
+  ObAddr addr;
+  addr.set_ip_addr("1::", 1024);
+  EXPECT_TRUE(addr.is_valid());
+  char buf[64];
+  int ret = addr.ip_port_to_string(buf, sizeof(buf));
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(0, memcmp("[1::]:1024", buf, strlen(buf)));
+
+  addr.set_ip_addr("::1", 1024);
+  EXPECT_TRUE(addr.is_valid());
+  ret = addr.ip_port_to_string(buf, sizeof(buf));
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(0, memcmp("[::1]:1024", buf, strlen(buf)));
+
+  addr.set_ip_addr("fd00:1:100a:1c60::a", 2882);
+  EXPECT_TRUE(addr.is_valid());
+  ret = addr.ip_port_to_string(buf, sizeof(buf));
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(0, memcmp("[fd00:1:100a:1c60::a]:2882", buf, strlen(buf)));
+
+  addr.set_ip_addr("fd00:1:100a:1c60::a", 2882);
+  EXPECT_TRUE(addr.is_valid());
+  int32_t ret_len;
+  ret = addr.addr_to_buffer(buf, sizeof(buf), ret_len);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(0, memcmp("[fd00:1:100a:1c60::a]:2882", buf, strlen(buf)));
+
+  addr.set_ip_addr("fd00:1:100a:1c60::a", 2882);
+  EXPECT_TRUE(addr.is_valid());
+  int64_t ret_pos = addr.to_string(buf, sizeof(buf));
+  ASSERT_EQ(strlen(buf), ret_pos);
+  ASSERT_EQ(0, memcmp("\"[fd00:1:100a:1c60::a]:2882\"", buf, strlen(buf)));
+
+  addr.set_ip_addr("fd00:1:100a:1c60::a", 2882);
+  EXPECT_TRUE(addr.is_valid());
+  bool ret_bool = addr.ip_to_string(buf, sizeof(buf));
+  ASSERT_EQ(true, ret_bool);
+  ASSERT_EQ(0, memcmp("fd00:1:100a:1c60::a", buf, strlen(buf)));
+
+  addr.set_ip_addr("2001:db8:0:0:1:0:0:1", 2882);
+  EXPECT_TRUE(addr.is_valid());
+  ret_bool = addr.ip_to_string(buf, sizeof(buf));
+  ASSERT_EQ(true, ret_bool);
+  ASSERT_EQ(0, memcmp("2001:db8::1:0:0:1", buf, strlen(buf)));
+
+  addr.set_ip_addr("2001:0:0:1:0:0:0:1", 2882);
+  EXPECT_TRUE(addr.is_valid());
+  ret_bool = addr.ip_to_string(buf, sizeof(buf));
+  ASSERT_EQ(true, ret_bool);
+  ASSERT_EQ(0, memcmp("2001:0:0:1::1", buf, strlen(buf)));
 }
 
 TEST(OB_ADDR, TEST_UNIX_PATH)

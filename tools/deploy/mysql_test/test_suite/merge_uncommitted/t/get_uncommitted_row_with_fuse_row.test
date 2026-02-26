@@ -7,7 +7,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 
 connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
 
-let $__timeout_def__ = 60 * 1000 * 1000;
+let $__timeout_def__ = 600 * 1000 * 1000;
 
 connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connection conn1;

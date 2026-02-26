@@ -104,10 +104,9 @@ public:
       ref_count_(0),
       lib_cache_(lib_cache),
       co_list_lock_(common::ObLatchIds::PLAN_SET_LOCK),
-      co_list_(allocator_)
-  {
-    lock_timeout_ts_ = GCONF.large_query_threshold;
-  }
+      co_list_(allocator_),
+      is_invalid_(false)
+  {}
   virtual ~ObILibCacheNode();
   /**
    * @brief initialize library cache node
@@ -148,7 +147,7 @@ public:
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
   //int erase_cache_obj(ObILibCacheCtx &context, ObILibCacheObject *cache_obj);
-  virtual int lock(bool is_rdlock);
+  virtual int lock(bool is_rdlock, int64_t timeout);
   virtual int update_node_stat(ObILibCacheCtx &ctx);
   StmtStat *get_node_stat() { return &node_stat_; }
   int unlock() { return rwlock_.unlock(); }
@@ -160,14 +159,11 @@ public:
   lib::MemoryContext &get_mem_context() { return mem_context_; }
   int64_t get_mem_size();
   ObPlanCache *get_lib_cache() const { return lib_cache_; }
+  bool is_invalid() const { return is_invalid_; }
 
-  VIRTUAL_TO_STRING_KV(K_(ref_count), K_(lock_timeout_ts));
+  VIRTUAL_TO_STRING_KV(K_(ref_count));
 
 protected:
-  void set_lock_timeout_threshold(int64_t threshold)
-  {
-    lock_timeout_ts_ = threshold;
-  }
   /**
    * @brief called by get_cache_obj(), each object in the ObLibCacheNameSpace enumeration structure
    * needs to inherit this interface and implement its own inner get implementation
@@ -206,11 +202,11 @@ protected:
   common::ObIAllocator &allocator_;
   common::TCRWLock rwlock_;
   int64_t ref_count_;
-  int64_t lock_timeout_ts_;
   StmtStat node_stat_;
   ObPlanCache *lib_cache_;
   common::SpinRWLock co_list_lock_;
   CacheObjList co_list_;
+  bool is_invalid_;
 };
 
 } // namespace common

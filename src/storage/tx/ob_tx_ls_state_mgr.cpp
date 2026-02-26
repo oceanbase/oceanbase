@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_tx_ls_state_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
+#include "ob_tx_ls_state_mgr.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 
 #define LOAD_CUR_STATE_CONTAINER         \
   TxLSStateContainer ls_state_container; \
@@ -273,15 +273,14 @@ void ObTxLSStateMgr::replay_SWL_succ(const share::SCN &swl_scn)
   max_applied_start_working_ts_.inc_update(swl_scn);
 }
 
-const char *ObTxLSStateMgr::iter_ctx_mgr_stat_info(uint64_t &state_container,
-                                                   bool &is_master,
-                                                   bool &is_stopped) const
+void ObTxLSStateMgr::iter_ctx_mgr_stat_info(uint64_t &state_container,
+                                            bool &is_master,
+                                            bool &is_stopped) const
 {
   LOAD_CUR_STATE_CONTAINER
   is_master = (ls_state_container.state_val_.state_ == TxLSState::L_WORKING);
   is_stopped = (ls_state_container.state_val_.state_ == TxLSState::STOPPED);
   state_container = ls_state_container.state_container_;
-  return to_cstring(ls_state_container.state_val_);
 }
 
 bool ObTxLSStateMgr::is_master() const
@@ -348,6 +347,12 @@ bool ObTxLSStateMgr::is_resume_leader_pending() const
   return is_resume_leader_pending_(ls_state_container);
 }
 
+bool ObTxLSStateMgr::is_follower_swl_pending() const
+{
+  LOAD_CUR_STATE_CONTAINER
+  return is_follower_swl_pending_(ls_state_container);
+}
+
 bool ObTxLSStateMgr::is_stopped() const
 {
   LOAD_CUR_STATE_CONTAINER
@@ -402,6 +407,11 @@ bool ObTxLSStateMgr::is_resume_leader_pending_(const TxLSStateContainer &ls_stat
   return ls_state_container.state_val_.state_ == TxLSState::R_SYNC_PENDING
          || ls_state_container.state_val_.state_ == TxLSState::R_SYNC_FAILED
          || ls_state_container.state_val_.state_ == TxLSState::R_APPLY_PENDING;
+}
+
+bool ObTxLSStateMgr::is_follower_swl_pending_(const TxLSStateContainer & ls_state_container)
+{
+  return ls_state_container.state_val_.state_ == TxLSState::F_SWL_PENDING;
 }
 
 } // namespace transaction

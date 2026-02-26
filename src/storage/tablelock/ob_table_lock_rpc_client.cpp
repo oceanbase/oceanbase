@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX TABLELOCK
 
 #include "ob_table_lock_rpc_client.h"
-#include "share/ob_ls_id.h"
 #include "share/location_cache/ob_location_service.h"
 #include "observer/ob_srv_network_frame.h"
 
@@ -59,6 +58,8 @@ int ObTableLockRpcClient::init()
   if (OB_FAIL(table_lock_rpc_proxy_.init(GCTX.net_frame_->get_req_transport(),
                                          GCTX.self_addr()))) {
     LOG_WARN("failed to init rpc proxy", K(ret));
+  } else {
+    table_lock_rpc_proxy_.set_detect_session_killed(true);
   }
   return ret;
 }

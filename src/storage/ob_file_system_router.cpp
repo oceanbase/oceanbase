@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_file_system_router.h"
-#include "observer/ob_server_struct.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_io_device_helper.h"
 
 namespace oceanbase {
@@ -45,6 +43,7 @@ ObFileSystemRouter::ObFileSystemRouter()
   slog_file_spec_.retry_write_policy_ = "normal";
   slog_file_spec_.log_create_policy_ = "normal";
   slog_file_spec_.log_write_policy_ = "truncate";
+
   svr_seq_ = 0;
   is_inited_ = false;
 }
@@ -68,23 +67,16 @@ void ObFileSystemRouter::reset()
   is_inited_ = false;
 }
 
-int ObFileSystemRouter::init(
-    const char *data_dir,
-    const char *cluster_name,
-    const int64_t cluster_id,
-    const char *zone,
-    const ObAddr &svr_addr)
+int ObFileSystemRouter::init(const char *data_dir)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_ISNULL(data_dir) || OB_ISNULL(cluster_name) || OB_UNLIKELY(!svr_addr.is_valid())
-      || OB_UNLIKELY(cluster_id < 0) || OB_ISNULL(zone)) {
+  } else if (OB_ISNULL(data_dir)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(data_dir), KP(cluster_name), K(svr_addr),
-        K(cluster_id), KP(zone));
+    LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(init_local_dirs(data_dir))) {
     LOG_WARN("init local dir fail", K(ret), K(data_dir));
   } else {
@@ -95,6 +87,7 @@ int ObFileSystemRouter::init(
     slog_file_spec_.retry_write_policy_ = "normal";
     slog_file_spec_.log_create_policy_ = "normal";
     slog_file_spec_.log_write_policy_ = "truncate";
+
     is_inited_ = true;
   }
 
@@ -110,9 +103,15 @@ int ObFileSystemRouter::get_tenant_clog_dir(
 {
   int ret = OB_SUCCESS;
   int pret = 0;
-  pret = snprintf(tenant_clog_dir, MAX_PATH_SIZE, "%s/tenant_%" PRIu64,
-                  clog_dir_, tenant_id);
-  if (pret < 0 || pret >= MAX_PATH_SIZE) {
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("construct tenant clog path in logservice mode is not supported", KR(ret), K(tenant_id));
+  } else
+#endif
+  if (FALSE_IT(pret = snprintf(tenant_clog_dir, MAX_PATH_SIZE, "%s/tenant_%" PRIu64,
+                  clog_dir_, tenant_id))) { // do nothing
+  } else if (pret < 0 || pret >= MAX_PATH_SIZE) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_ERROR("construct tenant clog path fail", K(ret), K(tenant_id));
   }
@@ -140,7 +139,11 @@ int ObFileSystemRouter::init_local_dirs(const char* data_dir)
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret)
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    && !GCONF.enable_logservice
+#endif
+  ) {
     pret = snprintf(clog_dir_, MAX_PATH_SIZE, "%s/clog", data_dir);
     if (pret < 0 || pret >= MAX_PATH_SIZE) {
       ret = OB_BUF_NOT_ENOUGH;

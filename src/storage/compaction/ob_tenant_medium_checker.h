@@ -93,12 +93,20 @@ public:
       const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
       int64_t start_idx,
       int64_t end_idx,
-      ObIArray<ObTabletCheckInfo> &check_tablet_ls_infos,
-      ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
+      ObArray<ObTabletCheckInfo> &check_tablet_ls_infos,
+      ObArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
       ObBatchFinishCheckStat &stat);
   int add_tablet_ls(const ObTabletID &tablet_id, const share::ObLSID &ls_id, const int64_t medium_scn);
   bool locality_cache_empty();
-  TO_STRING_KV(K_(is_inited), K_(ls_locality_cache));
+  bool locality_cache_refresh_success();
+  int64_t get_error_tablet_cnt() { return ATOMIC_LOAD(&error_tablet_cnt_); }
+  void clear_error_tablet_cnt() { ATOMIC_STORE(&error_tablet_cnt_, 0); }
+  void update_error_tablet_cnt(const int64_t delta_cnt)
+  {
+    // called when check tablet checksum error
+    (void)ATOMIC_AAF(&error_tablet_cnt_, delta_cnt);
+  }
+  TO_STRING_KV(K_(is_inited), K_(ls_locality_cache_empty));
 
 private:
   int reput_check_info(ObIArray<ObTabletCheckInfo> &tablet_ls_infos);
@@ -113,17 +121,19 @@ public:
   static const int64_t CHECK_LS_LOCALITY_INTERVAL = 5 * 60 * 1000 * 1000L; // 5m
 #endif
   static const int64_t DEFAULT_MAP_BUCKET = 1024;
-  static const int64_t MAX_BATCH_CHECK_NUM = 3000;
+  static const int64_t CLEAR_CKM_ERROR_INTERVAL = 2 * 60 * 1000 * 1000L; // 2m
   typedef common::ObArray<ObTabletCheckInfo> TabletLSArray;
   typedef hash::ObHashSet<ObTabletCheckInfo, hash::NoPthreadDefendMode> TabletLSSet;
   typedef hash::ObHashMap<share::ObLSID, share::ObLSInfo> LSInfoMap;
 private:
   bool is_inited_;
   int64_t last_check_timestamp_;
-  share::ObCompactionLocalityCache ls_locality_cache_;
+  int64_t error_tablet_cnt_; // for diagnose
   TabletLSSet tablet_ls_set_;
   LSInfoMap ls_info_map_; // ls leader
   lib::ObMutex lock_;
+  bool ls_locality_cache_empty_;
+  bool ls_locality_cache_refresh_success_;
 };
 
 }

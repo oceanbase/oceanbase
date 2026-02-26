@@ -11,16 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/string/ob_sql_string.h"
 #define private public
 #include "test_xml_utils.h"
-#include "lib/xml/ob_xpath.h"
 #include "lib/xml/ob_path_parser.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/xml/ob_xml_parser.h"
-#include "libxml2/libxml/xmlmemory.h"
-#include "lib/xml/ob_xml_util.h"
 #undef private
 
 using namespace oceanbase::common;

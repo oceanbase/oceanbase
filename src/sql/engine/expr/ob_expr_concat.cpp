@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_concat.h"
-#include <string.h>
-#include "lib/oblog/ob_log.h"
-//#include "share/object/ob_obj_cast.h"
-#include "objit/common/ob_item_type.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
@@ -201,8 +196,7 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(param_num <= 0
-                  || (lib::is_oracle_mode() && param_num != 2))) {
+  if (OB_UNLIKELY(param_num <= 0)) {
     ret = OB_INVALID_ARGUMENT_NUM;
     LOG_WARN("invalid argument number", K(ret), K(param_num));
   }
@@ -211,7 +205,7 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
 
   //类型 + 字符集推导
   if (lib::is_oracle_mode()) {
-    ObSEArray<ObExprResType*, 2, ObNullAllocator> params;
+    ObSEArray<ObExprResType*, 2> params;
     for (int64_t i = 0; i < param_num; ++i) {
       OZ (params.push_back(&types[i]));
     }
@@ -232,17 +226,22 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
     OZ (aggregate_charsets_for_string_result(type,
                                              types,
                                              param_num,
-                                             type_ctx.get_coll_type()));
+                                             type_ctx));
     for (int64_t i = 0; i < param_num; ++i) {
       types[i].set_calc_type(type.get_type());
       types[i].set_calc_collation_type(type.get_collation_type());
+      types[i].set_calc_collation_level(type.get_collation_level());
     }
   }
 
   //结果的长度推导
   if (OB_SUCC(ret)) {
     if (lib::is_oracle_mode()) {
-      type.set_length(types[0].get_calc_length() + types[1].get_calc_length());
+      ObLength max_len = 0;
+      for (int64_t i = 0; i < param_num; ++i) {
+        max_len += types[i].get_calc_length();
+      }
+      type.set_length(max_len);
     } else {
       ObLength max_len = 0;
       for (int64_t i = 0; i < param_num; ++i) {
@@ -354,9 +353,6 @@ int ObExprConcat::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &expr) const
 {
   int ret = OB_SUCCESS;
   CK(expr.arg_cnt_ > 0);
-  if (lib::is_oracle_mode()) {
-    CK(2 == expr.arg_cnt_);
-  }
   if (OB_SUCC(ret)) {
     expr.eval_func_ = &eval_concat;
   }

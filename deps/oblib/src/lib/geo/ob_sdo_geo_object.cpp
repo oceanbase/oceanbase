@@ -36,39 +36,26 @@ int ObSdoPoint::to_text(ObStringBuffer &buf)
 {
   int ret = OB_SUCCESS;
   int64_t len = 0;
-  char number_buf[128] = {0};
-  ObString format_str_x = need_sci_format(x_) ? "%.4E" : "%.9g";
-  ObString format_str_y = need_sci_format(y_) ? "%.4E" : "%.9g";
-  ObString format_str_z = need_sci_format(z_) ? "%.4E" : "%.9g";
   if (is_null_) {
     if (OB_FAIL(buf.append("NULL"))) {
       LOG_WARN("fail to print null", K(ret));
     }
   } else if (OB_FAIL(buf.append("SDO_POINT_TYPE"))) {
     LOG_WARN("fail to print point type start", K(ret));
-  } else if (OB_FAIL(buf.append("("))){
+  } else if (OB_FAIL(buf.append("("))) {
     LOG_WARN("fail to print (", K(ret));
-  } else if ((len = snprintf(number_buf, 128, format_str_x.ptr(), x_)) < 0) {
-    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(ObGeoTypeUtil::print_double(x_, buf))) {
     LOG_WARN("fail to val to string", K(ret), K(x_));
-  } else if (OB_FAIL(buf.append(number_buf, len))) {
-    LOG_WARN("fail to print gtype", K(ret));
   } else if (OB_FAIL(buf.append(", "))) {
     LOG_WARN("fail to print ,", K(ret));
-  } else if ((len = snprintf(number_buf, 128, format_str_y.ptr(), y_)) < 0) {
-    ret = OB_ERR_UNEXPECTED;
+  }else if (OB_FAIL(ObGeoTypeUtil::print_double(y_, buf))) {
     LOG_WARN("fail to val to string", K(ret), K(y_));
-  } else if (OB_FAIL(buf.append(number_buf, len))) {
-    LOG_WARN("fail to print gtype", K(ret));
   } else if (OB_FAIL(buf.append(", "))) {
     LOG_WARN("fail to print ,", K(ret));
   } else if (has_z_) {
-    if ((len = snprintf(number_buf, 128, format_str_z.ptr(), z_)) < 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to val to string", K(ret), K(x_));
-    } else if (OB_FAIL(buf.append(number_buf, len))) {
-      LOG_WARN("fail to print gtype", K(ret));
-    } else if (OB_FAIL(buf.append(")"))){
+   if (OB_FAIL(ObGeoTypeUtil::print_double(z_, buf))) {
+      LOG_WARN("fail to val to string", K(ret), K(z_));
+    } else if (OB_FAIL(buf.append(")"))) {
       LOG_WARN("fail to print (", K(ret));
     }
   } else if (OB_FAIL(buf.append("NULL"))) {
@@ -94,7 +81,7 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
   } else if ((len = snprintf(number_buf, 128, "%lu", gtype_num)) < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to val to string", K(ret));
-  } else if (OB_FAIL(buf.append(number_buf, len))) {
+  } else if (OB_FAIL(buf.append(number_buf, len, 0))) {
     LOG_WARN("fail to print gtype", K(ret));
   } else if (OB_FAIL(buf.append(", "))) {
     LOG_WARN("fail to print ,", K(ret));
@@ -102,7 +89,7 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
     LOG_WARN("fail to print srid", K(ret));
   } else if (srid_ != UINT32_MAX &&
              ((len = snprintf(number_buf, 128, "%u", srid_)) < 0 ||
-              OB_FAIL(buf.append(number_buf, len)))) {
+              OB_FAIL(buf.append(number_buf, len, 0)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to val to string", K(ret), K(len));
   } else if (OB_FAIL(buf.append(", "))) {
@@ -125,7 +112,7 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
       if ((len = snprintf(number_buf, 128, "%lu", elem_info_.at(i))) < 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to val to string", K(ret));
-      } else if (OB_FAIL(buf.append(number_buf, len))) {
+      } else if (OB_FAIL(buf.append(number_buf, len, 0))) {
         LOG_WARN("fail to print gtype", K(ret));
       } else if (i + 1 != elem_info_.count() && OB_FAIL(buf.append(", "))) {
         LOG_WARN("fail to print ,", K(ret));
@@ -148,12 +135,8 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
       LOG_WARN("fail to print (", K(ret));
     }
     for (uint64_t i = 0; i < ordinates_.count() && OB_SUCC(ret); i++) {
-      ObString format_str = need_sci_format(ordinates_.at(i)) ? "%.4E" : "%.9g";
-      if ((len = snprintf(number_buf, 128, format_str.ptr(), ordinates_.at(i))) < 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to val to string", K(ret));
-      } else if (OB_FAIL(buf.append(number_buf, len))) {
-        LOG_WARN("fail to print gtype", K(ret));
+      if (OB_FAIL(ObGeoTypeUtil::print_double(ordinates_.at(i), buf))) {
+        LOG_WARN("fail to val to string", K(ret), K(ordinates_.at(i)));
       } else if (i + 1 != ordinates_.count() && OB_FAIL(buf.append(", "))) {
         LOG_WARN("fail to print ,", K(ret));
       } else if (i + 1 == ordinates_.count() && OB_FAIL(buf.append(")"))) {

@@ -11,8 +11,6 @@
  */
 
 #include "ob_zstd_stream_compressor.h"
-#include "lib/ob_errno.h"
-#include "lib/thread_local/ob_tsi_factory.h"
 #include "ob_zstd_wrapper.h"
 
 

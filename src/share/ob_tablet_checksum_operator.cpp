@@ -13,17 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_tablet_checksum_operator.h"
-#include "share/config/ob_server_config.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "share/ob_freeze_info_proxy.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/string/ob_sql_string.h"
-#include "common/ob_smart_var.h"
-#include "common/ob_timeout_ctx.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
 
 namespace oceanbase
 {
@@ -284,9 +273,23 @@ int ObTabletChecksumOperator::load_tablet_checksum_items(
               item.tenant_id_ = (uint64_t)tenant_id;
               item.tablet_id_ = (uint64_t)tablet_id;
               item.ls_id_ = ls_id;
-              if (OB_FAIL(ObTabletReplicaChecksumOperator::set_column_meta_with_hex_str(column_meta_str, item.column_meta_))) {
-                LOG_WARN("fail to deserialize column meta from hex str", KR(ret));
-              } else if (OB_FAIL(items.push_back(item))) {
+              if (OB_FAIL(item.column_meta_.set_with_str(compaction_scn_val, column_meta_str))) {
+                LOG_WARN("fail to set column meta", KR(ret), K(compaction_scn_val));
+              }
+#ifdef ERRSIM
+              if (OB_SUCC(ret)) {
+                ret = OB_E(EventTable::EN_MOCK_LARGE_COLUMN_META) ret;
+                if (OB_FAIL(ret)) {
+                  ret = OB_SUCCESS;
+                  if (OB_FAIL(ObTabletReplicaChecksumOperator::recover_mock_column_meta(item.column_meta_))) {
+                    LOG_WARN("fail to recover mock large column meta", KR(ret));
+                  } else {
+                    LOG_INFO("ERRSIM EN_MOCK_LARGE_COLUMN_META", K(ret));
+                  }
+                }
+              }
+#endif
+              if (FAILEDx(items.push_back(item))) {
                 LOG_WARN("fail to push back item", KR(ret), K(item));
               }
             }
@@ -355,7 +358,6 @@ int ObTabletChecksumOperator::construct_load_sql_str_(
       compaction_scn.get_val_for_inner_table_field()))) {
     LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
   } else {
-    ObSqlString order_by_sql;
     for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
       const ObTabletLSPair &pair = pairs.at(idx);
       if (OB_UNLIKELY(!pair.is_valid())) {
@@ -367,30 +369,11 @@ int ObTabletChecksumOperator::construct_load_sql_str_(
           pair.get_ls_id().id(),
           ((idx == end_idx - 1) ? ")" : ", ")))) {
         LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(pair));
-      } else if (OB_FAIL(order_by_sql.append_fmt(
-          ",%ld",
-          pair.get_tablet_id().id()))) {
-        SHARE_LOG(WARN, "fail to assign sql", KR(ret), K(tenant_id), K(pair));
       }
     }
-    if (FAILEDx(sql.append_fmt(" ORDER BY FIELD(tablet_id%s)", order_by_sql.string().ptr()))) {
+    if (FAILEDx(sql.append_fmt(" ORDER BY tablet_id"))) {
       SHARE_LOG(WARN, "fail to assign sql string", KR(ret), K(tenant_id), K(compaction_scn), K(pairs_cnt));
     }
-  }
-  return ret;
-}
-
-int ObTabletChecksumOperator::insert_tablet_checksum_item(
-    ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObTabletChecksumItem &item)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObTabletChecksumItem> items;
-  if (OB_FAIL(items.push_back(item))) {
-    LOG_WARN("fail to add item into array", KR(ret), K(item));
-  } else if (OB_FAIL(insert_tablet_checksum_items(sql_client, tenant_id, items))) {
-    LOG_WARN("fail to insert tablet checksum items", KR(ret), K(item));
   }
   return ret;
 }
@@ -443,15 +426,24 @@ int ObTabletChecksumOperator::insert_or_update_tablet_checksum_items_(
         for (int64_t i = 0; OB_SUCC(ret) && (i < cur_batch_cnt); ++i) {
           const ObTabletChecksumItem &item = items.at(bias + i);
           const uint64_t compaction_scn_val = item.compaction_scn_.get_val_for_inner_table_field();
-          ObString hex_column_meta;
-
-          if (OB_FAIL(ObTabletReplicaChecksumOperator::get_hex_column_meta(
-              item.column_meta_, allocator, hex_column_meta))) {
-            LOG_WARN("fail to serialize column meta to hex str", KR(ret), K(item));
-          } else if (OB_FAIL(sql.append_fmt("('%lu', %lu, '%lu', %ld, %ld, %ld, '%.*s', now(6), now(6))%s",
+          ObString b_column_meta;
+          share::ObFreezeInfo freeze_info;
+          uint64_t compaction_data_version = 0;
+          if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(compaction_scn_val, freeze_info))) {
+            LOG_WARN("failed to get freeze info", K(ret), K(compaction_scn_val));
+          } else if (FALSE_IT(compaction_data_version = freeze_info.data_version_)) {
+          } else if (OB_FAIL(sql.append_fmt("('%lu', %lu, '%lu', %ld, %ld, %ld, ",
               extract_tenant_id, compaction_scn_val, item.tablet_id_.id(), item.ls_id_.id(),
-              item.data_checksum_, item.row_count_, hex_column_meta.length(), hex_column_meta.ptr(),
-              ((i == cur_batch_cnt - 1) ? " " : ", ")))) {
+              item.data_checksum_, item.row_count_))) {
+            LOG_WARN("fail to assign sql", KR(ret), K(i), K(bias), K(item));
+          } else if (OB_FAIL(item.column_meta_.get_hex_str(allocator, b_column_meta))) {
+            LOG_WARN("fail to get column meta str", K(ret));
+          } else if (compaction_data_version >= DATA_VERSION_4_3_5_2 && OB_FAIL(sql.append_fmt("X"))) {
+            LOG_WARN("fail to assign sql", KR(ret), K(i), K(sql), K(b_column_meta));
+          } else if (OB_FAIL(sql.append_fmt("'%.*s', ", b_column_meta.length(), b_column_meta.ptr()))) {
+            LOG_WARN("fail to assign sql", KR(ret), K(i), K(sql), K(b_column_meta));
+          }
+          if (FAILEDx(sql.append_fmt("now(6), now(6))%s", ((i == cur_batch_cnt - 1) ? " " : ", ")))) {
             LOG_WARN("fail to assign sql", KR(ret), K(i), K(bias), K(item));
           }
         }

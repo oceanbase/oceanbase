@@ -13,21 +13,11 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "ob_transform_temp_table.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/hash/ob_hashmap.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_common_utility.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/rewrite/ob_predicate_deduce.h"
-#include "common/ob_smart_call.h"
-#include "sql/optimizer/ob_optimizer.h"
-#include "sql/optimizer/ob_optimizer_context.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "ob_transform_min_max.h"
+#include "sql/rewrite/ob_transformer_impl.h"
+#include "sql/optimizer/ob_log_join.h"
+#include "sql/optimizer/ob_log_subplan_scan.h"
 
 using namespace oceanbase::common;
 
@@ -91,13 +81,19 @@ int ObTransformTempTable::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
         LOG_TRACE("succeed to do project pruning for temp table", K(temp_table_infos),  K(is_happened));
       }
     }
+    if (OB_SUCC(ret) && trans_happened) {
+      temp_table_infos.reuse();
+      if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+        LOG_WARN("failed to collect temp table infos", K(ret));
+      }
+    }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(expand_temp_table(temp_table_infos, is_happened))) {
-        LOG_WARN("failed to expand temp table", K(ret));
+      if (OB_FAIL(try_inline_temp_table(stmt, temp_table_infos, is_happened))) {
+        LOG_WARN("failed to inline temp table", K(ret));
       } else {
         trans_happened |= is_happened;
-        OPT_TRACE("expand temp table:", is_happened);
-        LOG_TRACE("succeed to expand temp table",  K(is_happened));
+        OPT_TRACE("inline temp table:", is_happened);
+        LOG_TRACE("succeed to inline temp table",  K(is_happened));
       }
     }
   }
@@ -136,11 +132,11 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 8> child_stmts;
   ObSEArray<ObSelectStmt*, 8> non_correlated_stmts;
+  ObSEArray<ObSelectStmt*, 8> view_stmts;
   ObArray<TempTableInfo> temp_table_infos;
-  hash::ObHashMap<uint64_t, ObParentDMLStmt> parent_map;
+  hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> parent_map;
   trans_happened = false;
   bool enable_temp_table_transform = false;
-  bool force_temp_table_inline = false;
   bool has_hint = false;
   bool is_hint_enabled = false;
   ObSQLSessionInfo *session_info = NULL;
@@ -150,8 +146,6 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
     LOG_WARN("unexpect null param", K(ctx_), K(ret));
   } else if (OB_FAIL(session_info->is_temp_table_transformation_enabled(enable_temp_table_transform))) {
     LOG_WARN("failed to check temp table transform enabled", K(ret));
-  } else if (OB_FAIL(session_info->is_force_temp_table_inline(force_temp_table_inline))) {
-    LOG_WARN("failed to check temp table force inline", K(ret));
   } else if (OB_FAIL(stmt->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
               ObOptParamHint::XSOLAPI_GENERATE_WITH_CLAUSE, is_hint_enabled, has_hint))) {
     LOG_WARN("failed to check has opt param", K(ret));
@@ -159,9 +153,11 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
     enable_temp_table_transform = is_hint_enabled;
   }
   if (OB_FAIL(ret)) {
+  } else if (ctx_->eval_cost_) {
+    OPT_TRACE("disable CTE extraction during cost evaluation");
   } else if (ctx_->is_set_stmt_oversize_) {
     OPT_TRACE("stmt containt oversize set stmt");
-  } else if (!enable_temp_table_transform || force_temp_table_inline) {
+  } else if (!enable_temp_table_transform || ctx_->is_force_inline_) {
     OPT_TRACE("session variable disable temp table transform");
   } else if (stmt->has_for_update()) {
     OPT_TRACE("stmt has for update, can not extract CTE");
@@ -170,11 +166,22 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
   } else if (!ObOptimizerUtil::find_item(ctx_->temp_table_ignore_stmts_, stmt) &&
              OB_FAIL(ObTransformUtils::get_all_child_stmts(stmt, child_stmts, &parent_map, &ctx_->temp_table_ignore_stmts_))) {
     LOG_WARN("failed to get all child stmts", K(ret));
-  } else if (OB_FAIL(get_non_correlated_subquery(stmt, non_correlated_stmts))) {
-    LOG_WARN("failed to get non correlated subquery", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::intersect(child_stmts, non_correlated_stmts, child_stmts))) {
-    LOG_WARN("failed to intersect child stmts", K(ret));
-  } else if (OB_FAIL(extract_common_subquery_as_cte(stmt, child_stmts, parent_map, trans_happened))) {
+  } else if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5, COMPAT_VERSION_4_3_0, COMPAT_VERSION_4_3_5)) {
+    if (OB_FAIL(get_all_view_stmts(stmt, view_stmts))) {
+      LOG_WARN("failed to get non correlated subquery", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::intersect(child_stmts, view_stmts, child_stmts))) {
+      LOG_WARN("failed to intersect child stmts", K(ret));
+    }
+  } else {
+    if (OB_FAIL(get_non_correlated_subquery(stmt, non_correlated_stmts))) {
+      LOG_WARN("failed to get non correlated subquery", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::intersect(child_stmts, non_correlated_stmts, child_stmts))) {
+      LOG_WARN("failed to intersect child stmts", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(extract_common_table_expression(stmt, child_stmts, parent_map, trans_happened))) {
     LOG_WARN("failed to extract common subquery as cte", K(ret));
   } else if (OB_FAIL(parent_map.destroy())) {
     LOG_WARN("failed to destroy map", K(ret));
@@ -184,26 +191,21 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
 
 /**
  * @brief expand_temp_table
- * 如果temp table只被引用一次或者temp table是一个简单的查询
- * 例如单表查询，那么需要展开temp table，还原成generate table
+ * 尝试基于规则和代价的 inline 判定
+ * 规则：单表无聚合，只被引用一次，不满足物化条件...
  */
-int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_info,
-                                            bool &trans_happened)
+int ObTransformTempTable::try_inline_temp_table(ObDMLStmt *stmt,
+                                                ObIArray<TempTableInfo> &temp_table_info,
+                                                bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
-  bool system_force_inline_cte = false;
-  bool system_force_materialize_cte = false;
   ObSQLSessionInfo *session_info = NULL;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) ||
       OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->expr_factory_) ||
       OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ctx_), K(ret));
-  } else if (OB_FAIL(session_info->is_force_temp_table_inline(system_force_inline_cte))) {
-    LOG_WARN("failed to check temp table force inline", K(ret));
-  } else if (OB_FAIL(session_info->is_force_temp_table_materialize(system_force_materialize_cte))) {
-    LOG_WARN("failed to check temp table force materialize", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_info.count(); ++i) {
     TempTableInfo &helper = temp_table_info.at(i);
@@ -213,56 +215,78 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
     bool is_oversize_stmt = false;
     bool has_for_update = false;
     int64_t stmt_size = 0;
-    bool need_expand = false;
-    bool can_expand = true;
-    OPT_TRACE("try to expand temp table:", helper.temp_table_query_);
+    bool need_inline = false;
+    bool can_inline = true;
+    bool need_check_cost = false;
+    bool in_blacklist = false;
+    OPT_TRACE("try to inline temp table:", helper.temp_table_query_);
     if (OB_ISNULL(helper.temp_table_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null ref query", K(helper), K(ret));
     } else if (OB_FAIL(check_stmt_size(helper.temp_table_query_, stmt_size, is_oversize_stmt))) {
       LOG_WARN("check stmt size failed", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::check_expand_temp_table_valid(helper.temp_table_query_, can_expand))) {
-      LOG_WARN("failed to check expand temp table valid", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::check_inline_temp_table_valid(helper.temp_table_query_, can_inline))) {
+      LOG_WARN("failed to check inline temp table valid", K(ret));
+    } else if (OB_FAIL(helper.temp_table_query_->is_query_deterministic(can_inline))) {
+      LOG_WARN("failed to check stmt is deterministic", K(ret));
     } else if (OB_FAIL(check_has_for_update(helper, has_for_update))) {
       LOG_WARN("failed to check has for update", K(ret));
-    } else if (!can_expand) {
+    } else if (!can_inline) {
       // do nothing
-      OPT_TRACE("CTE can not be expanded");
+      OPT_TRACE("CTE can not be inlined");
     } else if (OB_FAIL(check_hint_allowed_trans(*helper.temp_table_query_,
                                                 force_inline,
                                                 force_materia))) {
       LOG_WARN("failed to check force materialize", K(ret));
     } else if (force_inline) {
-      need_expand = true;
+      need_inline = true;
       OPT_TRACE("hint force inline CTE");
     } else if (lib::is_oracle_mode() && has_for_update) {
-      need_expand = true;
+      need_inline = true;
       OPT_TRACE("stmt has FOR UPDATE, force inline CTE");
     } else if (force_materia) {
       //do nothing
       OPT_TRACE("hint force materialize CTE");
     } else if (is_oversize_stmt) {
       //do nothing
-      OPT_TRACE("CTE too large to expand");
-    } else if (system_force_materialize_cte) {
+      OPT_TRACE("CTE too large to inline");
+    } else if (ctx_->is_force_materialize_) {
       //do nothing
       OPT_TRACE("system variable force materialize CTE");
-    } else if (system_force_inline_cte) {
-      need_expand = true;
+    } else if (ctx_->is_force_inline_) {
+      need_inline = true;
       OPT_TRACE("system variable force inline CTE");
     } else if (1 == helper.table_items_.count()) {
-      need_expand = true;
+      need_inline = true;
       OPT_TRACE("CTE`s refer once, force inline");
     } else if (OB_FAIL(check_stmt_can_materialize(helper.temp_table_query_, true, can_materia))) {
       LOG_WARN("failed to check extract cte valid", K(ret));
     } else if (!can_materia) {
-      need_expand = true;
+      need_inline = true;
       OPT_TRACE("transform rule force inline CTE");
+    } else if (OB_FAIL(check_stmt_in_blacklist(helper.temp_table_query_,
+                                               ctx_->inline_blacklist_,
+                                               in_blacklist))) {
+      LOG_WARN("failed to check cte in blacklist", K(ret));
+    } else if (in_blacklist) {
+      OPT_TRACE("reject inline CTE due to blacklist");
+    } else if (ctx_->eval_cost_ || helper.temp_table_query_->is_recursive_union()) {
+      // only try inline by rule
+    } else {
+      need_check_cost = true;
     }
-    if (OB_SUCC(ret) && need_expand) {
+
+    if (OB_FAIL(ret)) {
+    } else if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5, COMPAT_VERSION_4_3_0, COMPAT_VERSION_4_3_5) &&
+               need_check_cost &&
+               OB_FAIL(check_inline_temp_table_by_cost(stmt, helper, need_inline))) {
+      LOG_WARN("failed to check inline temp table by cost", K(ret));
+    } else if (!need_inline) {
+      // do nothing
+    } else {
       //深拷贝每一份查询，还原成generate table
       ObDMLStmt *orig_stmt = helper.temp_table_query_;
-      if (OB_FAIL(ObTransformUtils::expand_temp_table(ctx_, helper))) {
+      if (OB_FAIL(ObTransformUtils::inline_temp_table(ctx_, helper))) {
         LOG_WARN("failed to extend temp table", K(ret));
       } else if (OB_FAIL(add_normal_temp_table_trans_hint(*orig_stmt, T_INLINE))) {
         LOG_WARN("failed to add transform hint", K(ret));
@@ -437,13 +461,13 @@ int ObTransformTempTable::check_has_for_update(const ObDMLStmt::TempTableInfo &h
 }
 
 /**
- * @brief extract_common_subquery_as_cte
+ * @brief extract_common_table_expression
  * 比较当前stmt的所有child stmt，
  * 把所有相似的stmt分为一组，抽离最大的公共部分作为temp table
  */
-int ObTransformTempTable::extract_common_subquery_as_cte(ObDMLStmt *stmt,
+int ObTransformTempTable::extract_common_table_expression(ObDMLStmt *stmt,
                                                          ObIArray<ObSelectStmt*> &stmts,
-                                                         hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                                                         hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                                          bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -462,7 +486,7 @@ int ObTransformTempTable::extract_common_subquery_as_cte(ObDMLStmt *stmt,
   //对每一组stmt抽离公共部分
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt_groups.count(); ++i) {
     bool is_happened = false;
-    if (OB_FAIL(inner_extract_common_subquery_as_cte(*stmt,
+    if (OB_FAIL(inner_extract_common_table_expression(*stmt,
                                                      stmt_groups.at(i).stmts_, 
                                                      parent_map,
                                                      is_happened))) {
@@ -483,117 +507,125 @@ int ObTransformTempTable::extract_common_subquery_as_cte(ObDMLStmt *stmt,
 }
 
 /**
- * @brief inner_extract_common_subquery_as_cte
+ * @brief inner_extract_common_table_expression
  * stmt之间两两比较，分成多个相似组，
  * 对每组相似stmt创建temp table
  */
-int ObTransformTempTable::inner_extract_common_subquery_as_cte(ObDMLStmt &root_stmt,
+int ObTransformTempTable::inner_extract_common_table_expression(ObDMLStmt &root_stmt,
                                                                ObIArray<ObSelectStmt*> &stmts,
-                                                               hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                                                               hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                                                bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   ObStmtMapInfo map_info;
   QueryRelation relation;
-  typedef ObSEArray<StmtCompareHelper, 8> StmtCompareHelperArray;
-  SMART_VAR(StmtCompareHelperArray, compare_info) {
-    //计算相似stmt分组
-    if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_)) {
+  ObSEArray<StmtCompareHelper*, 8> compare_infos;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); ++i) {
+    bool find_similar = false;
+    ObSelectStmt *stmt = stmts.at(i);
+    if (OB_ISNULL(stmt)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null param", K(ret));
+      LOG_WARN("unexpect null stmt ", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); ++i) {
-      bool find_similar = false;
-      ObSelectStmt *stmt = stmts.at(i);
-      if (OB_ISNULL(stmt)) {
+    for (int64_t j = 0; OB_SUCC(ret) && !find_similar && j < compare_infos.count(); ++j) {
+      bool has_stmt = false;
+      bool is_valid = false;
+      StmtCompareHelper *helper = compare_infos.at(j);
+      map_info.reset();
+      if (OB_ISNULL(helper)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null stmt ", K(ret));
-      }
-      for (int64_t j = 0; OB_SUCC(ret) && !find_similar && j < compare_info.count(); ++j) {
-        map_info.reset();
-        bool has_stmt = false;
-        bool is_valid = false;
-        StmtCompareHelper &helper = compare_info.at(j);
-        bool check_basic_similarity = !helper.hint_force_stmt_set_.empty() &&
-                                      helper.hint_force_stmt_set_.has_qb_name(stmt);
-        if (OB_FAIL(check_has_stmt(helper.similar_stmts_,
-                                   stmt,
-                                   parent_map,
-                                   has_stmt))) {
-          LOG_WARN("failed to check has stmt", K(ret));
-        } else if (has_stmt) {
-          //do nothing
-        } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(helper.stmt_,
-                                                                  stmt,
-                                                                  map_info,
-                                                                  relation))) {
-          LOG_WARN("failed to check stmt containment", K(ret));
-        } else if (OB_FAIL(check_stmt_can_extract_temp_table(helper.stmt_,
-                                                             stmt,
-                                                             map_info,
-                                                             relation,
-                                                             check_basic_similarity,
-                                                             is_valid))) {
-          LOG_WARN("failed to check is similar stmt");
-        } else if (!is_valid) {
-          //do nothing
-        } else if (OB_FAIL(helper.similar_stmts_.push_back(stmt))) {
-          LOG_WARN("failed to push back stmt", K(ret));
-        } else if (OB_FAIL(helper.stmt_map_infos_.push_back(map_info))) {
-          LOG_WARN("failed to push back map info", K(ret));
-        } else {
-          find_similar = true;
-        }
-      }
-      if (OB_SUCC(ret) && !find_similar) {
-        SMART_VAR(StmtCompareHelper, helper) {
-          map_info.reset();
-          bool force_no_trans = false;
-          QbNameList qb_names;
-          if (OB_FAIL(get_hint_force_set(root_stmt,
-                                         *stmt, 
-                                         qb_names, 
-                                         force_no_trans))) {
-            LOG_WARN("failed to get hint set", K(ret));
-          } else if (force_no_trans) {
-            //do nothing
-            OPT_TRACE("hint reject materialize:", stmt);
-          } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(stmt,
-                                                                    stmt,
-                                                                    map_info,
-                                                                    relation))) {
-            LOG_WARN("failed to check stmt containment", K(ret));
-          } else if (OB_FAIL(helper.similar_stmts_.push_back(stmt))) {
-            LOG_WARN("failed to push back stmt", K(ret));
-          } else if (OB_FAIL(helper.stmt_map_infos_.push_back(map_info))) {
-            LOG_WARN("failed to push back map info", K(ret));
-          } else if (OB_FAIL(helper.hint_force_stmt_set_.assign(qb_names))) {
-            LOG_WARN("failed to assign qb names", K(ret));
-          } else if (OB_FALSE_IT(helper.stmt_ = stmt)) {
-          } else if (OB_FAIL(compare_info.push_back(helper))) {
-            LOG_WARN("failed to push back compare info", K(ret));
-          }
-        }
+        LOG_WARN("got unexpected NULL ptr", K(ret));
+      } else if (OB_FAIL(check_has_stmt(helper->similar_stmts_, stmt, parent_map, has_stmt))) {
+        LOG_WARN("failed to check has stmt", K(ret));
+      } else if (has_stmt) {
+        //do nothing
+      } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(helper->stmt_,
+                                                                stmt,
+                                                                map_info,
+                                                                relation))) {
+        LOG_WARN("failed to check stmt containment", K(ret));
+      } else if (OB_FAIL(check_stmt_can_extract_temp_table(helper->stmt_,
+                                                           stmt,
+                                                           map_info,
+                                                           relation,
+                                                           !helper->hint_force_stmt_set_.empty() &&
+                                                           helper->hint_force_stmt_set_.has_qb_name(stmt),
+                                                           is_valid))) {
+        LOG_WARN("failed to check is similar stmt");
+      } else if (!is_valid) {
+        //do nothing
+      } else if (OB_FAIL(helper->similar_stmts_.push_back(stmt))) {
+        LOG_WARN("failed to push back stmt", K(ret));
+      } else if (OB_FAIL(helper->stmt_map_infos_.push_back(map_info))) {
+        LOG_WARN("failed to push back map info", K(ret));
+      } else {
+        find_similar = true;
       }
     }
-    //对每组相似stmt创建temp table
-    for (int64_t i = 0; OB_SUCC(ret) && i < compare_info.count(); ++i) {
-      StmtCompareHelper &helper = compare_info.at(i);
-      bool is_happened = false;
-      OPT_TRACE("try to materialize:", helper.stmt_);
-      if (!helper.hint_force_stmt_set_.empty() &&
-          !helper.hint_force_stmt_set_.is_subset(helper.similar_stmts_)) {
+    if (OB_SUCC(ret) && !find_similar) {
+      StmtCompareHelper *new_helper = NULL;
+      bool force_no_trans = false;
+      QbNameList qb_names;
+      map_info.reset();
+      if (OB_FAIL(get_hint_force_set(root_stmt, *stmt, qb_names, force_no_trans))) {
+        LOG_WARN("failed to get hint set", K(ret));
+      } else if (force_no_trans) {
+        //do nothing
+        OPT_TRACE("hint reject materialize:", stmt);
+      } else if (OB_FAIL(StmtCompareHelper::alloc_compare_helper(*ctx_->allocator_, new_helper))) {
+        LOG_WARN("failed to alloc compare helper", K(ret));
+      } else if (OB_ISNULL(new_helper)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null compare helper", K(ret));
+      } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(stmt, stmt, map_info, relation))) {
+        LOG_WARN("failed to check stmt containment", K(ret));
+      } else if (OB_FAIL(new_helper->similar_stmts_.push_back(stmt))) {
+        LOG_WARN("failed to push back stmt", K(ret));
+      } else if (OB_FAIL(new_helper->stmt_map_infos_.push_back(map_info))) {
+        LOG_WARN("failed to push back map info", K(ret));
+      } else if (OB_FAIL(new_helper->hint_force_stmt_set_.assign(qb_names))) {
+        LOG_WARN("failed to assign qb names", K(ret));
+      } else if (OB_FALSE_IT(new_helper->stmt_ = stmt)) {
+      } else if (OB_FAIL(compare_infos.push_back(new_helper))) {
+        LOG_WARN("failed to push back compare info", K(ret));
+      }
+      if (OB_FAIL(ret) && OB_NOT_NULL(new_helper)) {
+        new_helper->~StmtCompareHelper();
+      }
+    }
+  }
+  //对每组相似stmt创建temp table
+  for (int64_t i = 0; OB_SUCC(ret) && i < compare_infos.count(); ++i) {
+    StmtCompareHelper *helper = compare_infos.at(i);
+    bool is_happened = false;
+    if (OB_ISNULL(helper)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("got unexpected NULL ptr", K(ret));
+    } else {
+      OPT_TRACE("try to materialize:", helper->stmt_);
+      if (!helper->hint_force_stmt_set_.empty() &&
+          !helper->hint_force_stmt_set_.is_subset(helper->similar_stmts_)) {
         //hint forbid, do nothing
         OPT_TRACE("hint reject transform");
-      } else if (helper.hint_force_stmt_set_.empty() && 
-                (helper.similar_stmts_.count() < 2)) {
-        OPT_TRACE("no other similar stmts");
+      } else if (helper->hint_force_stmt_set_.empty() && helper->similar_stmts_.count() < 2) {
         //do nothing
-      } else if (OB_FAIL(create_temp_table(root_stmt, helper, parent_map, is_happened))) {
+        OPT_TRACE("no other similar stmts");
+      } else if (OB_FAIL(create_temp_table(root_stmt, *helper, parent_map, is_happened))) {
         LOG_WARN("failed to create temp table", K(ret));
       } else {
         trans_happened |= is_happened;
       }
+    }
+  }
+  // always destruct StmtCompareHelper regardless of ret code to avoid memory leak
+  for (int64_t i = 0; i < compare_infos.count(); ++i) {
+    if (NULL != compare_infos.at(i)) {
+      compare_infos.at(i)->~StmtCompareHelper();
+      compare_infos.at(i) = NULL;
     }
   }
   return ret;
@@ -620,7 +652,7 @@ int ObTransformTempTable::add_materialize_stmts(const ObIArray<ObSelectStmt*> &s
 
 int ObTransformTempTable::check_has_stmt(ObSelectStmt *left_stmt,
                                          ObSelectStmt *right_stmt,
-                                         hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                                         hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                          bool &has_stmt)
 {
   int ret = OB_SUCCESS;
@@ -667,7 +699,7 @@ int ObTransformTempTable::check_has_stmt(ObSelectStmt *left_stmt,
 
 int ObTransformTempTable::check_has_stmt(const ObIArray<ObSelectStmt *> &stmts,
                                          ObSelectStmt *right_stmt,
-                                         hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                                         hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                          bool &has_stmt)
 {
   int ret = OB_SUCCESS;
@@ -702,7 +734,8 @@ int ObTransformTempTable::check_stmt_can_extract_temp_table(ObSelectStmt *first,
     is_valid = QueryRelation::QUERY_EQUAL == relation && map_info.is_order_equal_;
   } else if (second->get_table_size() < 2) {
     if (second->get_group_expr_size() > 0 ||
-        second->get_rollup_expr_size() > 0) {
+        second->get_rollup_expr_size() > 0 ||
+        second->has_grouping_sets()) {
       is_valid = map_info.is_group_equal_ && map_info.is_cond_equal_;
     } else if (second->get_aggr_item_size() > 0) {
       is_valid = map_info.is_table_equal_ && map_info.is_from_equal_ && map_info.is_semi_info_equal_ && map_info.is_cond_equal_;
@@ -1103,7 +1136,7 @@ int ObTransformTempTable::classify_stmts(ObIArray<ObSelectStmt*> &stmts,
 
 int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
                                             StmtCompareHelper& compare_info,
-                                            hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                                            hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                             bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -1240,7 +1273,7 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
   if (OB_SUCC(ret) && is_valid && OB_NOT_NULL(temp_table_query)) {
     if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*temp_table_query))) {
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
-    } else if (OB_FAIL(temp_table_query->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(temp_table_query->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     } else if (OB_FAIL(temp_table_query->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                        ctx_->session_info_))) {
@@ -1251,20 +1284,34 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
   if (OB_SUCC(ret) && is_valid) {
     trans_happened = false;
     common::ObSEArray<ObSelectStmt *, 2> accept_stmts;
-    if (OB_FAIL(accept_cte_transform(root_stmt, temp_table,
-                                     origin_stmts, trans_stmts,
-                                     accept_stmts, parent_map,
-                                     !compare_info.hint_force_stmt_set_.empty(),
-                                     trans_happened))) {
+    ObString temp_query_name;
+    bool use_new_accept_func = root_stmt.get_query_ctx()->check_opt_compat_version(
+                          COMPAT_VERSION_4_2_5, COMPAT_VERSION_4_3_0, COMPAT_VERSION_4_3_5);
+    if (!use_new_accept_func &&
+        OB_FAIL(accept_cte_transform(root_stmt, temp_table,
+                                    origin_stmts, trans_stmts,
+                                    accept_stmts, parent_map,
+                                    !compare_info.hint_force_stmt_set_.empty(),
+                                    trans_happened))) {
       LOG_WARN("failed to accept transform", K(ret));
+    } else if (use_new_accept_func &&
+               OB_FAIL(accept_cte_transform_v2(root_stmt, temp_table,
+                                              origin_stmts, trans_stmts,
+                                              accept_stmts, parent_map,
+                                              !compare_info.hint_force_stmt_set_.empty(),
+                                              trans_happened))) {
+      LOG_WARN("failed to accept transform", K(ret));
+    } else if (OB_FAIL(try_trans_helper.finish(trans_happened, root_stmt.get_query_ctx(), ctx_))) {
+      LOG_WARN("failed to finish try_trans_helper", K(ret));
     } else if (!trans_happened) {
-      if (OB_FAIL(try_trans_helper.recover(root_stmt.get_query_ctx()))) {
-        LOG_WARN("failed to recover params", K(ret));
-      }
     } else if (OB_FAIL(append(ctx_->equal_param_constraints_, common_map_info.equal_param_map_))) {
       LOG_WARN("failed to append equal param constraints", K(ret));
     } else if (OB_FAIL(add_materialize_stmts(accept_stmts))) {
       LOG_WARN("failed to add stmts", K(ret));
+    } else if (OB_FAIL(temp_table_query->get_qb_name(temp_query_name))) {
+      LOG_WARN("failed to get qb name", K(ret));
+    } else if (OB_FAIL(ctx_->inline_blacklist_.push_back(temp_query_name))) {
+      LOG_WARN("failed to push back", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < compare_info.stmt_map_infos_.count(); i ++) {
         if (OB_FAIL(append(ctx_->equal_param_constraints_,
@@ -1386,7 +1433,7 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (parent_stmt->is_set_stmt()) {
-    if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, parent_stmt))) {
+    if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, parent_stmt, true))) {
       LOG_WARN("failed to create temp table for set stmt", K(ret));
     } else {
       LOG_TRACE("succeed to create temp table", KPC(parent_stmt));
@@ -1467,7 +1514,7 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
       LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(view_table->ref_query_->update_column_item_rel_id())) {
       LOG_WARN("failed to update column item by id", K(ret));
-    } else if (OB_FAIL(view_table->ref_query_->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(view_table->ref_query_->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     }
   }
@@ -1583,51 +1630,63 @@ int ObTransformTempTable::pushdown_having_conditions(ObSelectStmt *parent_stmt,
  * 如果有聚合函数，需要添加到temp table query中
  */
 int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
-                                          TableItem *view_table,
-                                          ObSelectStmt *temp_table_query,
-                                          ObStmtMapInfo& map_info)
+                                           TableItem *view_table,
+                                           ObSelectStmt *temp_table_query,
+                                           ObStmtMapInfo& map_info)
 {
   int ret = OB_SUCCESS;
-  //视图的select items
-  ObSEArray<ObRawExpr*, 16> view_select_list;
-  //视图的select items转换为temp table对应的select items
-  ObSEArray<ObRawExpr*, 16> new_select_list;
-  //temp table的select items
-  ObSEArray<ObRawExpr*, 16> temp_table_select_list;
-  //视图的column items
-  ObSEArray<ObRawExpr*, 16> view_column_list;
-  //temp table的column items
-  ObSEArray<ObRawExpr*, 16> temp_table_column_list;
-  //视图的column item转换为temp table对应的column items
-  ObSEArray<ObRawExpr*, 16> new_column_list;
-  //不存在于temp table中的column item
-  ObSEArray<ColumnItem, 16> new_column_items;
-  ObSEArray<ObRawExpr*, 16> old_column_exprs;
+  ObSEArray<ObRawExpr*, 4> old_view_columns;
+  ObSEArray<ObRawExpr*, 4> new_temp_columns;
   ObSelectStmt *view = NULL;
   SMART_VAR(ObStmtCompareContext, context) {
-    if (OB_ISNULL(parent_stmt) || OB_ISNULL(temp_table_query) ||
-        OB_ISNULL(view_table)) {
+    if (OB_ISNULL(parent_stmt) || OB_ISNULL(parent_stmt->get_query_ctx()) ||
+        OB_ISNULL(temp_table_query) || OB_ISNULL(view_table) ||
+        OB_UNLIKELY(!view_table->is_generated_table()) ||
+        OB_ISNULL(view = view_table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null param", K(ret));
-    } else if (!view_table->is_generated_table()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expect generate table", KPC(view_table), K(ret));
-    } else if (OB_ISNULL(view = view_table->ref_query_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null ref query", KPC(view_table), K(ret));
-    } else if (OB_FAIL(view->get_select_exprs(view_select_list))) {
-      LOG_WARN("failed to get select exprs", K(ret));
-    } else if (OB_FAIL(view->get_column_exprs(view_column_list))) {
-      LOG_WARN("failed to get column exprs", K(ret));
-    } else if (OB_FAIL(temp_table_query->get_select_exprs(temp_table_select_list))) {
-      LOG_WARN("failed to get select exprs", K(ret));
-    } else if (OB_FAIL(temp_table_query->get_column_exprs(temp_table_column_list))) {
-      LOG_WARN("failed to get column exprs", K(ret));
-    } else {
-      context.init(temp_table_query, view, map_info,
-                  &parent_stmt->get_query_ctx()->calculable_items_);
+      LOG_WARN("unexpect null param", K(ret), KP(parent_stmt), KP(temp_table_query), KP(view_table));
+    } else if (OB_FAIL(context.init(temp_table_query, view, map_info,
+                                    &parent_stmt->get_query_ctx()->calculable_items_))) {
+      LOG_WARN("failed to init context", K(ret));
+    } else if (OB_FAIL(apply_temp_table_columns(context, map_info, temp_table_query, view,
+                                                old_view_columns, new_temp_columns))) {
+      LOG_WARN("failed to apply temp table columns", K(ret));
+    } else if (OB_FAIL(update_table_id_for_pseudo_columns(view, temp_table_query, map_info))) {
+      // Since the mapping of pseudo-columns is not established in map_info,
+      // and the same_as interface currently cannot correct it either, the table information
+      // recorded in the pseudo-columns added to the temp table during merge is incorrect and needs to be corrected.
+      LOG_WARN("failed to update table id for pseudo columns", K(ret));
+    } else if (OB_FAIL(apply_temp_table_select_list(context, map_info, parent_stmt,
+                                                    temp_table_query, view, view_table,
+                                                    old_view_columns, new_temp_columns))) {
+      LOG_WARN("failed to apply temp table select list", K(ret));
     }
-    //找到对应的column item，不存在于temp table的column需要添加到temp table
+  } // end smart var
+  return ret;
+}
+
+/*
+build a mapping relations between columns of view and columns of temp_table_query.
+But if there is no corresponding columns in temp_table_query, then add a new ObColumnItem into temp_table_query
+*/
+int ObTransformTempTable::apply_temp_table_columns(ObStmtCompareContext &context,
+                                                   const ObStmtMapInfo& map_info,
+                                                   ObSelectStmt *temp_table_query,
+                                                   ObSelectStmt *view,
+                                                   ObIArray<ObRawExpr *> &view_column_list,
+                                                   ObIArray<ObRawExpr *> &new_column_list)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> temp_table_column_list;
+  if (OB_ISNULL(view) || OB_ISNULL(temp_table_query) ||
+      OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (OB_FAIL(view->get_column_exprs(view_column_list))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else if (OB_FAIL(temp_table_query->get_column_exprs(temp_table_column_list))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < view_column_list.count(); ++i) {
       ObRawExpr *view_column = view_column_list.at(i);
       bool find = false;
@@ -1655,40 +1714,122 @@ int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
         ColumnItem *column_item = NULL;
         ObColumnRefRawExpr *col_ref = static_cast<ObColumnRefRawExpr*>(view_column);
         uint64_t table_id = OB_INVALID_ID;
-        if (!view_column->is_column_ref_expr()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("expect column ref expr", KPC(view_column), K(ret));
-        } else if (OB_ISNULL(column_item = view->get_column_item_by_id(col_ref->get_table_id(),
-                                                                      col_ref->get_column_id()))) {
+        uint64_t column_id = OB_INVALID_ID;
+        if (OB_ISNULL(column_item = view->get_column_item_by_id(col_ref->get_table_id(),
+                                                                col_ref->get_column_id()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null column item", K(ret));
-        } else if (OB_FAIL(get_map_table_id(view,
-                                            temp_table_query,
-                                            map_info,
-                                            col_ref->get_table_id(),
-                                            table_id))) {
-          LOG_WARN("failed to get map table id", K(ret));
-        } else if (OB_FALSE_IT(column_item->table_id_ = table_id)) {
-        } else if (OB_FALSE_IT(col_ref->set_table_id(table_id))) {
-        } else if (OB_FAIL(new_column_items.push_back(*column_item))) {
-          LOG_WARN("failed to push back column item", K(ret));
-        } else if (OB_FAIL(new_column_list.push_back(view_column))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        } else if (OB_ISNULL(table = temp_table_query->get_table_item_by_id(table_id))) {
+        } else if (OB_FAIL(ObStmtComparer::get_map_column(map_info, view, temp_table_query,
+                                                          col_ref->get_table_id(),
+                                                          col_ref->get_column_id(),
+                                                          true,
+                                                          table_id, column_id))) {
+          LOG_WARN("failed to get map column", K(ret));
+        } else if (OB_UNLIKELY(OB_INVALID_ID == table_id) ||
+                   OB_UNLIKELY(OB_INVALID_ID == column_id) ||
+                   OB_ISNULL(table = temp_table_query->get_table_item_by_id(table_id))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpect null table item", K(ret));
+          LOG_WARN("unexpect null column id", K(ret));
+        } else if (table->is_generated_table() && OB_ISNULL(table->ref_query_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null column id", K(ret));
         } else {
+          col_ref->set_ref_id(table_id, column_id);
           col_ref->set_table_name(table->get_table_name());
+          if (table->is_generated_table()) {
+            const SelectItem &select_item = table->ref_query_->get_select_item(column_id - OB_APP_MIN_COLUMN_ID);
+            col_ref->set_column_name(select_item.alias_name_);
+          }
+          column_item->table_id_ = table_id;
+          column_item->column_id_ = column_id;
+          if (OB_FAIL(temp_table_query->add_column_item(*column_item))) {
+            LOG_WARN("failed to add column item", K(ret));
+          } else if (OB_FAIL(new_column_list.push_back(col_ref))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          }
         }
       }
     }
-    //添加新的column item
-    if (OB_SUCC(ret) && !new_column_items.empty()) {
-      if (OB_FAIL(temp_table_query->add_column_item(new_column_items))) {
-        LOG_WARN("failed to add table item", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformTempTable::update_table_id_for_pseudo_columns(ObSelectStmt *view,
+                                                             ObSelectStmt *temp_table_query,
+                                                             const ObStmtMapInfo& map_info)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 8> relation_exprs;
+  ObSEArray<ObRawExpr *, 8> pseudo_column_like_exprs;
+  if (OB_ISNULL(temp_table_query)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret), K(temp_table_query));
+  } else if (OB_FAIL(view->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_pseudo_column_like_expr(relation_exprs,
+                                                                       pseudo_column_like_exprs))) {
+    LOG_WARN("failed to extract pseudo column like expr", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < pseudo_column_like_exprs.count(); ++i) {
+      ObPseudoColumnRawExpr *pseudo_column_like_expr = NULL;
+      TableItem *table_item = NULL;
+      if (OB_ISNULL(pseudo_column_like_exprs.at(i)) ||
+          OB_UNLIKELY(!pseudo_column_like_exprs.at(i)->is_pseudo_column_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret), K(pseudo_column_like_expr));
+      } else if (OB_FALSE_IT(pseudo_column_like_expr =
+                 static_cast<ObPseudoColumnRawExpr *>(pseudo_column_like_exprs.at(i)))) {
+      } else {
+        uint64_t table_id = OB_INVALID_ID;
+        ObRelIds table_set;
+        if (OB_FAIL(ObStmtComparer::get_map_table(map_info, view, temp_table_query,
+                                                  pseudo_column_like_expr->get_table_id(), table_id))) {
+          LOG_WARN("failed to get map table", K(ret));
+        } else if (OB_INVALID_ID == table_id) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect invalid table id", K(ret));
+        } else if (OB_FAIL(temp_table_query->get_table_rel_ids(table_id, table_set))) {
+          LOG_WARN("failed to get table rel ids", K(ret));
+        } else {
+          pseudo_column_like_expr->set_table_id(table_id);
+          pseudo_column_like_expr->get_relation_ids().reuse();
+          if (OB_FAIL(pseudo_column_like_expr->get_relation_ids().add_members(table_set))) {
+            LOG_WARN("failed to add members", K(ret));
+          }
+        }
       }
     }
-    //找到不同的select item
+  }
+  return ret;
+}
+
+int ObTransformTempTable::apply_temp_table_select_list(ObStmtCompareContext &context,
+                                                       const ObStmtMapInfo& map_info,
+                                                       ObSelectStmt *parent_stmt,
+                                                       ObSelectStmt *temp_table_query,
+                                                       ObSelectStmt *view,
+                                                       TableItem *view_table,
+                                                       ObIArray<ObRawExpr *> &old_view_columns,
+                                                       ObIArray<ObRawExpr *> &new_temp_columns)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> view_select_list;
+  ObSEArray<ObRawExpr*, 4> temp_table_select_list;
+  ObSEArray<ObRawExpr*, 4> new_select_list;
+  ObSEArray<ObRawExpr*, 4> old_column_exprs;  // used in parent stmt
+  ObSEArray<ObRawExpr*, 4> new_column_exprs;  // used in parent stmt
+  ObSEArray<ObAggFunRawExpr*, 2> aggr_items;
+  ObSEArray<ObWinFunRawExpr*, 2> win_func_exprs;
+  if (OB_ISNULL(view) || OB_ISNULL(temp_table_query) || OB_ISNULL(parent_stmt) ||
+      OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(view_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (OB_FAIL(view->get_select_exprs(view_select_list))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(temp_table_query->get_select_exprs(temp_table_select_list))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else {
+    // use select_expr in temp_table_query directly
     for (int64_t i = 0; OB_SUCC(ret) && i < view_select_list.count(); ++i) {
       ObRawExpr *view_select = view_select_list.at(i);
       ObColumnRefRawExpr *col_expr = NULL;
@@ -1719,9 +1860,9 @@ int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
       }
       //不存在于temp table中的select expr需要转换成temp table的select item
       if (OB_SUCC(ret) && !find) {
-        ObSEArray<ObAggFunRawExpr*, 8> aggr_items;
-        ObSEArray<ObWinFunRawExpr*, 8> win_func_exprs;
-        if (OB_FAIL(ObTransformUtils::replace_expr(view_column_list, new_column_list, view_select))) {
+        aggr_items.reset();
+        win_func_exprs.reset();
+        if (OB_FAIL(ObTransformUtils::replace_expr(old_view_columns, new_temp_columns, view_select))) {
           LOG_WARN("failed to replace expr", K(ret));
         } else if (OB_FAIL(new_select_list.push_back(view_select))) {
           LOG_WARN("failed to push back expr", K(ret));
@@ -1736,77 +1877,19 @@ int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
         }
       }
     }
-    //为temp table创建新的select item，并替换parent stmt的引用
-    if (OB_SUCC(ret)) {
-      ObSEArray<ObRawExpr*, 16> new_column_exprs;
-      view_table->ref_query_ = temp_table_query;
-      if (OB_FALSE_IT(parent_stmt->clear_column_items())) {
-      } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
-                                                                  *view_table,
-                                                                  parent_stmt,
-                                                                  new_select_list,
-                                                                  new_column_exprs))) {
-        LOG_WARN("failed to create column for view", K(ret));
-      } else if (OB_FAIL(parent_stmt->replace_relation_exprs(old_column_exprs, new_column_exprs))) {
-        LOG_WARN("failed to replace inner stmt expr", K(ret));
-      } else if (OB_FAIL(temp_table_query->adjust_subquery_list())) {
-        LOG_WARN("failed to adjust subquery list", K(ret));
-      }
-    }
-  } // end smart var
-  return ret;
-}
-
-/**
- * @brief get_map_table_id
- * 找到视图中的table id对应temp table中的table id
- */
-int ObTransformTempTable::get_map_table_id(ObSelectStmt *view,
-                                          ObSelectStmt *temp_table_query,
-                                          ObStmtMapInfo& map_info,
-                                          const uint64_t &view_table_id,
-                                          uint64_t &table_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(view) || OB_ISNULL(temp_table_query)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
   }
-  bool find = false;
-  int64_t idx = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && !find && i < view->get_table_size(); ++i) {
-    TableItem *table = view->get_table_item(i);
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (view_table_id == table->table_id_) {
-      find =  true;
-      idx = i;
-    }
-  }
-  if (OB_SUCC(ret) && (!find || OB_INVALID_ID == idx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table shoud be found in view" ,K(view_table_id), K(ret));
-  }
-  find = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !find && i < map_info.table_map_.count(); ++i) {
-    if (idx == map_info.table_map_.at(i)) {
-      idx = i;
-      find = true;
-    }
-  }
-  if (OB_SUCC(ret) && (!find || OB_INVALID_ID == idx ||
-      idx < 0 || idx > temp_table_query->get_table_size())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("incorrect table idx" ,K(idx), K(ret));
-  }
+  // Create a new select item for the temp table and replace the reference to the parent stmt
   if (OB_SUCC(ret)) {
-    TableItem *table = temp_table_query->get_table_item(idx);
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else {
-      table_id = table->table_id_;
+    view_table->ref_query_ = temp_table_query;
+    parent_stmt->clear_column_items();
+    if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *view_table, parent_stmt,
+                                                          new_select_list,
+                                                          new_column_exprs))) {
+      LOG_WARN("failed to create column for view", K(ret));
+    } else if (OB_FAIL(parent_stmt->replace_relation_exprs(old_column_exprs, new_column_exprs))) {
+      LOG_WARN("failed to replace inner stmt expr", K(ret));
+    } else if (OB_FAIL(temp_table_query->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
     }
   }
   return ret;
@@ -1854,6 +1937,9 @@ int ObTransformTempTable::project_pruning(ObIArray<TempTableInfo> &temp_table_in
       LOG_WARN("failed to rempve select item", K(ret));
     } else if (OB_FAIL(add_normal_temp_table_trans_hint(*info.temp_table_query_, T_PROJECT_PRUNE))) {
       LOG_WARN("failed to add transform hint", K(ret));
+    } else if (OB_FAIL(info.temp_table_query_->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                                             ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt reference", K(ret));
     } else {
       trans_happened = true;
     }
@@ -2079,14 +2165,21 @@ int ObTransformTempTable::need_transform(const common::ObIArray<ObParentDMLStmt>
   need_trans = false;
   const ObQueryHint *query_hint = NULL;
   const ObHint *trans_hint = NULL;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
+  bool bypass = false;
+  if (OB_FAIL(check_rule_bypass(stmt, bypass))) {
+    LOG_WARN("fail check stmt validity", K(ret));
+  } else if (bypass) {
+    need_trans = false;
+    OPT_TRACE("transform rule bypassed");
+  } else if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
   } else if (!parent_stmts.empty() || current_level != 0 ||
              is_normal_disabled_transform(stmt)) {
     need_trans = false;
   } else if (!query_hint->has_outline_data()) {
-    need_trans = true;
+    // TODO: sean.yyj make the priority of rule hint higher than cost based hint
+    need_trans = ObTransformUtils::is_cost_based_trans_enable(*ctx_, query_hint->global_hint_);
   } else if (NULL == (trans_hint = query_hint->get_outline_trans_hint(ctx_->trans_list_loc_))) {
     /*do nothing*/
     OPT_TRACE("outline reject transform");
@@ -2202,7 +2295,7 @@ int ObTransformTempTable::sort_materialize_stmts(Ob2DArray<MaterializeStmts *> &
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null stmts", K(ret));
     } else {
-      std::sort(subqueries->begin(), subqueries->end(), cmp_func1);
+      lib::ob_sort(subqueries->begin(), subqueries->end(), cmp_func1);
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < materialize_stmts.count(); ++i) {
@@ -2217,7 +2310,7 @@ int ObTransformTempTable::sort_materialize_stmts(Ob2DArray<MaterializeStmts *> &
       LOG_WARN("failed to push back index", K(ret));
     }
   }
-  std::sort(index_map.begin(), index_map.end(), cmp_func2);
+  lib::ob_sort(index_map.begin(), index_map.end(), cmp_func2);
   for (int64_t i = 0; OB_SUCC(ret) && i < index_map.count(); ++i) {
     int index = index_map.at(i).first;
     if (index < 0 || index >= materialize_stmts.count()) {
@@ -2275,7 +2368,7 @@ int ObTransformTempTable::check_hint_allowed_trans(const ObSelectStmt &ref_query
 
 int ObTransformTempTable::get_stmt_pointers(ObDMLStmt &root_stmt,
                                             ObIArray<ObSelectStmt *> &stmts,
-                                            hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                                            hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                             ObIArray<ObSelectStmtPointer> &stmt_ptrs)
 {
   int ret = OB_SUCCESS;
@@ -2381,7 +2474,7 @@ int ObTransformTempTable::accept_cte_transform(ObDMLStmt &origin_root_stmt,
                                                common::ObIArray<ObSelectStmt *> &origin_stmts,
                                                common::ObIArray<ObSelectStmt *> &trans_stmts,
                                                common::ObIArray<ObSelectStmt *> &accept_stmts,
-                                               hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                                               hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                                bool force_accept,
                                                bool &trans_happened)
 {
@@ -2395,7 +2488,7 @@ int ObTransformTempTable::accept_cte_transform(ObDMLStmt &origin_root_stmt,
   double temp_table_costs = 0.0;
   double dummy = 0.0;
   double temp_table_profit = 0.0;
-  STOP_OPT_TRACE;
+  BEGIN_OPT_TRACE_EVA_COST;
   if (OB_ISNULL(ctx_) || OB_UNLIKELY(origin_stmts.count() != trans_stmts.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret), K(ctx_));
@@ -2416,7 +2509,7 @@ int ObTransformTempTable::accept_cte_transform(ObDMLStmt &origin_root_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected array size", K(origin_costs), K(trans_costs), K(trans_happened));
   }
-  RESUME_OPT_TRACE;
+  END_OPT_TRACE_EVA_COST;
   if (OB_SUCC(ret)) {
     if (!force_accept) {
       // Only consider stmt whose cost is reduced after extracting cte.
@@ -2519,6 +2612,7 @@ int ObTransformTempTable::evaluate_cte_cost(ObDMLStmt &root_stmt,
     } else {
       CREATE_WITH_TEMP_CONTEXT(param) {
         ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+        eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
         HEAP_VAR(ObOptimizerContext, optctx,
                 ctx_->session_info_,
                 ctx_->exec_ctx_,
@@ -2552,6 +2646,777 @@ int ObTransformTempTable::evaluate_cte_cost(ObDMLStmt &root_stmt,
             LOG_WARN("failed to free stmt", K(ret));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::accept_cte_transform_v2(ObDMLStmt &origin_root_stmt,
+                                                  TableItem *temp_table,
+                                                  common::ObIArray<ObSelectStmt *> &origin_stmts,
+                                                  common::ObIArray<ObSelectStmt *> &trans_stmts,
+                                                  common::ObIArray<ObSelectStmt *> &accept_stmts,
+                                                  hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
+                                                  bool force_accept,
+                                                  bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  cost_based_trans_tried_ = true;
+  ObDMLStmt *copy_inline_root;
+  ObDMLStmt *copy_materialize_root;
+  ObSEArray<ObSelectStmt*, 4> copy_inline_stmts;
+  ObSEArray<ObSelectStmt*, 4> copy_materialize_stmts;
+  ObSEArray<ObSelectStmtPointer, 2> stmt_ptrs;
+  ObSelectStmt *dummy_stmt = NULL;
+  ObSelectStmt *copy_cte_query = NULL;
+  ObTryTransHelper inline_trans_helper;
+  ObTryTransHelper materialize_trans_helper;
+  ObSEArray<int64_t, 4> choosed_inline_idxs;
+  ObSEArray<int64_t, 4> choosed_materialize_idxs;
+  if (OB_ISNULL(ctx_) || OB_UNLIKELY(origin_stmts.count() != trans_stmts.count()) ||
+      OB_ISNULL(temp_table) || OB_ISNULL(temp_table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret), K(ctx_));
+  } else if (OB_FAIL(get_stmt_pointers(origin_root_stmt, origin_stmts, parent_map, stmt_ptrs))) {
+    LOG_WARN("failed to get stmt pointers", K(ret));
+  } else if (origin_stmts.count() != stmt_ptrs.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt pointers", K(ret), K(origin_stmts.count()), K(stmt_ptrs.count()));
+  } else if (force_accept) {
+    OPT_TRACE("accept cte because of the hint");
+    trans_happened = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < origin_stmts.count(); i++) {
+      if (OB_FAIL(stmt_ptrs.at(i).set(trans_stmts.at(i)))) {
+        LOG_WARN("failed to set ptr", K(ret));
+      } else if (OB_FAIL(accept_stmts.push_back(origin_stmts.at(i)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+      OPT_TRACE("Materialize stmt :", trans_stmts.at(i));
+    }
+  } else if (ctx_->is_set_stmt_oversize_) {
+    LOG_TRACE("not accept transform because large set stmt", K(ctx_->is_set_stmt_oversize_));
+  } else if (OB_FAIL(pick_out_stmts_in_blacklist(ctx_->materialize_blacklist_,
+                                                 origin_stmts,
+                                                 trans_stmts,
+                                                 stmt_ptrs))) {
+    LOG_WARN("failed to pick out stmts in blacklist", K(ret));
+  } else if (origin_stmts.count() < 2) {
+    OPT_TRACE("reject materialize CTE due to blacklist");
+    trans_happened = false;
+  } else if (OB_FAIL(inline_trans_helper.fill_helper(origin_root_stmt.get_query_ctx()))) {
+    LOG_WARN("failed to fill helper", K(ret));
+  } else if (OB_FAIL(materialize_trans_helper.fill_helper(origin_root_stmt.get_query_ctx()))) {
+    LOG_WARN("failed to fill helper", K(ret));
+  } else if (OB_FAIL(copy_and_replace_trans_root(origin_root_stmt,
+                                                origin_stmts,
+                                                NULL,
+                                                stmt_ptrs,
+                                                copy_inline_root,
+                                                copy_inline_stmts,
+                                                dummy_stmt,
+                                                false))) {
+    LOG_WARN("failed to prepare eval cte cost stmt", K(ret));
+  } else if (OB_FAIL(copy_and_replace_trans_root(origin_root_stmt,
+                                                trans_stmts,
+                                                temp_table->ref_query_,
+                                                stmt_ptrs,
+                                                copy_materialize_root,
+                                                copy_materialize_stmts,
+                                                copy_cte_query,
+                                                true))) {
+    LOG_WARN("failed to prepare eval cte cost stmt", K(ret));
+  } else if (OB_FAIL(evaluate_inline_materialize_costs(&origin_root_stmt,
+                                                      true,
+                                                      copy_inline_root,
+                                                      copy_inline_stmts,
+                                                      copy_materialize_root,
+                                                      copy_materialize_stmts,
+                                                      copy_cte_query,
+                                                      choosed_inline_idxs,
+                                                      choosed_materialize_idxs))) {
+    LOG_WARN("failed to evaluate inline materialize costs", K(ret));
+  } else if (choosed_materialize_idxs.count() > 1) {
+    OPT_TRACE("accept materialize cte due to cost");
+    trans_happened = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < choosed_materialize_idxs.count(); i++) {
+      int64_t stmt_idx = choosed_materialize_idxs.at(i);
+      if (OB_UNLIKELY(stmt_idx < 0 || stmt_idx >= origin_stmts.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected idx", K(ret), K(stmt_idx));
+      } else if (OB_FAIL(stmt_ptrs.at(stmt_idx).set(trans_stmts.at(stmt_idx)))) {
+        LOG_WARN("failed to set ptr", K(ret));
+      } else if (OB_FAIL(accept_stmts.push_back(origin_stmts.at(stmt_idx)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  } else {
+    OPT_TRACE("reject materialize cte due to cost");
+    for (int64_t i = 0; OB_SUCC(ret) && i < origin_stmts.count(); i++) {
+      ObString qb_name;
+      if (OB_ISNULL(origin_stmts.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null stmt", K(ret));
+      } else if (OB_FAIL(origin_stmts.at(i)->get_qb_name(qb_name))) {
+        LOG_WARN("failed to get qb name", K(ret));
+      } else if (OB_FAIL(ctx_->materialize_blacklist_.push_back(qb_name))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::evaluate_cte_cost_partially(ObDMLStmt *root_stmt,
+                                                      ObIArray<ObSelectStmt *> &stmts,
+                                                      ObIArray<double> &costs,
+                                                      ObSelectStmt *cte_query,
+                                                      double &temp_table_cost)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCostHelper eval_cost_helper;
+  temp_table_cost = 0.0;
+  bool can_eval = false;
+  if (OB_ISNULL(ctx_) || OB_UNLIKELY(!ctx_->is_valid()) || OB_ISNULL(root_stmt)
+      || OB_ISNULL(ctx_->exec_ctx_->get_physical_plan_ctx())
+      || OB_ISNULL(ctx_->exec_ctx_->get_stmt_factory())
+      || OB_ISNULL(ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx())
+      || OB_ISNULL(root_stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params are invalid", K(ret), K(ctx_), K(root_stmt));
+  } else if (OB_FAIL(eval_cost_helper.fill_helper(*ctx_->exec_ctx_->get_physical_plan_ctx(),
+                                                  *root_stmt->get_query_ctx(), *ctx_))) {
+    LOG_WARN("failed to fill eval cost helper", K(ret));
+  } else {
+    BEGIN_OPT_TRACE_EVA_COST;
+    ctx_->eval_cost_ = true;
+    ParamStore &param_store = ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store_for_update();
+    lib::ContextParam param;
+    ObTransformerImpl trans(ctx_);
+    bool trans_happended = false;
+    uint64_t trans_rules = ALL_EXPR_LEVEL_HEURISTICS_RULES;
+    param.set_mem_attr(ctx_->session_info_->get_effective_tenant_id(),
+                       "TempTableCost",
+                       ObCtxIds::DEFAULT_CTX_ID)
+       .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+       .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
+    if (OB_FAIL(trans.transform_rule_set(root_stmt,
+                                        trans_rules,
+                                        trans.get_max_iteration_count(),
+                                        trans_happended))) {
+      LOG_WARN("failed to transform heuristic rule", K(ret));
+    } else if (OB_NOT_NULL(root_stmt) && OB_FAIL(root_stmt->formalize_stmt(ctx_->session_info_, true))) {
+      // jinmao TODO: defensive code, remove it later
+      LOG_WARN("failed to formalize stmt", K(ret));
+    } else if (OB_FAIL(check_evaluate_after_transform(root_stmt, stmts, can_eval))) {
+      LOG_WARN("failed to check after transform", K(ret));
+    } else if (!can_eval) {
+      temp_table_cost = std::numeric_limits<double>::max();
+      for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); i++) {
+        if (OB_FAIL(costs.push_back(0.0))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(eval_cost_helper.recover_context(*ctx_->exec_ctx_->get_physical_plan_ctx(),
+                                                    *ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx(),
+                                                    *ctx_))) {
+          LOG_WARN("failed to recover context", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, root_stmt))) {
+          LOG_WARN("failed to free stmt", K(ret));
+        }
+      }
+    } else {
+      CREATE_WITH_TEMP_CONTEXT(param) {
+        ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+        eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
+        HEAP_VAR(ObOptimizerContext, optctx,
+                ctx_->session_info_,
+                ctx_->exec_ctx_,
+                ctx_->sql_schema_guard_,
+                ctx_->opt_stat_mgr_,
+                CURRENT_CONTEXT->get_arena_allocator(),
+                &ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
+                *ctx_->self_addr_,
+                GCTX.srv_rpc_proxy_,
+                root_stmt->get_query_ctx()->get_global_hint(),
+                tmp_expr_factory,
+                root_stmt,
+                false,
+                ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx()) {
+          // optctx.set_only_ds_basic_stat(true);
+          ObOptimizer optimizer(optctx);
+          if (OB_FAIL(optimizer.get_cte_optimization_cost(*root_stmt,
+                                                          cte_query,
+                                                          stmts,
+                                                          temp_table_cost,
+                                                          costs))) {
+            LOG_WARN("failed to get cost", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(eval_cost_helper.recover_context(*ctx_->exec_ctx_->get_physical_plan_ctx(),
+                                                      *ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx(),
+                                                      *ctx_))) {
+            LOG_WARN("failed to recover context", K(ret));
+          } else if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, root_stmt))) {
+            LOG_WARN("failed to free stmt", K(ret));
+          }
+        }
+      }
+    }
+    END_OPT_TRACE_EVA_COST;
+  }
+  return ret;
+}
+
+int ObTransformTempTable::evaluate_cte_cost_globally(ObDMLStmt *origin_root,
+                                                     ObDMLStmt *root_stmt,
+                                                     ObIArray<int64_t> &semi_join_stmt_ids,
+                                                     bool need_check_plan,
+                                                     double &global_cost)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *copy_cte_stmt = NULL;
+  ObEvalCostHelper eval_cost_helper;
+  common::ObSEArray<ObSelectStmt *, 2> copy_stmts;
+  if (OB_ISNULL(ctx_) || OB_UNLIKELY(!ctx_->is_valid()) || OB_ISNULL(root_stmt) ||
+      OB_ISNULL(ctx_->exec_ctx_->get_physical_plan_ctx()) ||
+      OB_ISNULL(ctx_->exec_ctx_->get_stmt_factory()) ||
+      OB_ISNULL(ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params are invalid", K(ret), K(ctx_));
+  } else if (OB_FAIL(eval_cost_helper.fill_helper(*ctx_->exec_ctx_->get_physical_plan_ctx(),
+                                                  *root_stmt->get_query_ctx(), *ctx_))) {
+    LOG_WARN("failed to fill eval cost helper", K(ret));
+  } else {
+    BEGIN_OPT_TRACE_EVA_COST;
+    ctx_->eval_cost_ = true;
+    ParamStore &param_store = ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store_for_update();
+    lib::ContextParam param;
+    ObTransformerImpl trans(ctx_);
+    bool trans_happended = false;
+    uint64_t trans_rules = ALL_HEURISTICS_RULES | (1L << TEMP_TABLE_OPTIMIZATION);
+    param.set_mem_attr(ctx_->session_info_->get_effective_tenant_id(),
+                       "TempTableCost",
+                       ObCtxIds::DEFAULT_CTX_ID)
+       .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+       .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
+    if (OB_FAIL(add_semi_to_inner_hint_if_need(root_stmt, semi_join_stmt_ids))) {
+      LOG_WARN("failed to add semi to inner hint", K(ret));
+    } else if (OB_FAIL(trans.transform_rule_set(root_stmt,
+                                                trans_rules,
+                                                trans.get_max_iteration_count(),
+                                                trans_happended))) {
+      LOG_WARN("failed to transform heuristic rule", K(ret));
+    } else if (OB_NOT_NULL(root_stmt) && OB_FAIL(root_stmt->formalize_stmt(ctx_->session_info_, true))) {
+      // jinmao TODO: defensive code, remove it later
+      LOG_WARN("failed to formalize stmt", K(ret));
+    } else {
+      CREATE_WITH_TEMP_CONTEXT(param) {
+        ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+        eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
+        HEAP_VAR(ObOptimizerContext, optctx,
+                ctx_->session_info_,
+                ctx_->exec_ctx_,
+                ctx_->sql_schema_guard_,
+                ctx_->opt_stat_mgr_,
+                CURRENT_CONTEXT->get_arena_allocator(),
+                &ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
+                *ctx_->self_addr_,
+                GCTX.srv_rpc_proxy_,
+                root_stmt->get_query_ctx()->get_global_hint(),
+                tmp_expr_factory,
+                root_stmt,
+                false,
+                ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx()) {
+          ObOptimizer optimizer(optctx);
+          ObLogPlan *plan = NULL;
+          if (OB_FAIL(optimizer.get_optimization_cost(*root_stmt, plan, global_cost))) {
+            LOG_WARN("failed to get optimization cost", K(ret));
+          } else if (need_check_plan && OB_NOT_NULL(plan)) {
+            ObSEArray<uint64_t, 4> blacklist;
+            if (OB_FAIL(gather_materialize_blacklist(plan->get_plan_root(), blacklist))) {
+              LOG_WARN("failed to gather materialize blacklist", K(ret));
+            }
+            for (int64_t i = 0; OB_SUCC(ret) && i < blacklist.count(); ++i) {
+              ObDMLStmt *stmt = NULL;
+              ObString qb_name;
+              if (OB_FAIL(origin_root->get_stmt_by_stmt_id(blacklist.at(i), stmt))) {
+                LOG_WARN("failed to get stmt by stmt id", K(ret));
+              } else if (OB_ISNULL(stmt)) {
+                // do nothing, may generate new stmt after rewrite
+              } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
+                LOG_WARN("failed to get qb name", K(ret));
+              } else if (OB_FAIL(ctx_->materialize_blacklist_.push_back(qb_name))) {
+                LOG_WARN("failed to push back", K(ret));
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(eval_cost_helper.recover_context(*ctx_->exec_ctx_->get_physical_plan_ctx(),
+                                                       *ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx(),
+                                                       *ctx_))) {
+            LOG_WARN("failed to recover context", K(ret));
+          } else if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, root_stmt))) {
+            LOG_WARN("failed to free stmt", K(ret));
+          }
+        }
+      }
+    }
+    END_OPT_TRACE_EVA_COST;
+  }
+  return ret;
+}
+
+int ObTransformTempTable::need_check_global_cte_cost(const ObDMLStmt *root_stmt,
+                                                     const ObIArray<ObSelectStmt *> &origin_stmts,
+                                                     const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
+                                                     const ObSelectStmt *temp_table_query,
+                                                     ObIArray<int64_t> &semi_join_stmt_ids,
+                                                     bool &check_global_cost)
+{
+  int ret = OB_SUCCESS;
+  check_global_cost = false;
+  if (OB_ISNULL(root_stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->sql_schema_guard_) ||
+      OB_ISNULL(temp_table_query)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params are invalid", K(ret));
+  } else {
+    // 1. can pushdown dynamic filter
+    for (int64_t i = 0; OB_SUCC(ret) && !check_global_cost && i < origin_stmts.count(); ++i) {
+      const ObSelectStmt *stmt = origin_stmts.at(i);
+      bool has_nlj_opportunity = false;
+      if (OB_FAIL(ObTransformUtils::check_nlj_opportunity(*ctx_,
+                                                          root_stmt,
+                                                          stmt,
+                                                          parent_map,
+                                                          semi_join_stmt_ids,
+                                                          has_nlj_opportunity))) {
+        LOG_WARN("failed to check nlj opportunity", K(ret));
+      } else if (has_nlj_opportunity) {
+        check_global_cost = true;
+      }
+    }
+    // 2. current temp table references another temp table（may inline after extraction）
+    for (int64_t i = 0; OB_SUCC(ret) && !check_global_cost && i < temp_table_query->get_table_size(); ++i) {
+      const TableItem *table_item = temp_table_query->get_table_items().at(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null", K(ret));
+      } else if (table_item->is_temp_table()) {
+        check_global_cost = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::add_semi_to_inner_hint_if_need(ObDMLStmt *copy_root_stmt,
+                                                         ObIArray<int64_t> &semi_join_stmt_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(copy_root_stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("copy_root_stmt is NULL", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < semi_join_stmt_ids.count(); ++i) {
+      ObDMLStmt *dml_stmt = NULL;
+      ObSelectStmt *sub_stmt = NULL;
+      ObString qb_name;
+      ObSemiToInnerHint *hint = NULL;
+      const ObQueryHint *query_hint = NULL;
+      if (OB_FAIL(copy_root_stmt->get_stmt_by_stmt_id(semi_join_stmt_ids.at(i), dml_stmt))) {
+        LOG_WARN("failed to get stmt by stmt id", K(ret));
+      } else if (OB_ISNULL(dml_stmt) || !dml_stmt->is_select_stmt()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected stmt", K(ret));
+      } else if (OB_FALSE_IT(sub_stmt = static_cast<ObSelectStmt *>(dml_stmt))) {
+      } else if (OB_ISNULL(query_hint = sub_stmt->get_stmt_hint().query_hint_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(query_hint));
+      } else if (query_hint->has_outline_data() || query_hint->has_user_def_outline()) {
+        // do nothing
+      } else if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_SEMI_TO_INNER, hint))) {
+        LOG_WARN("failed to create hint", K(ret));
+      } else if (OB_ISNULL(hint)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(sub_stmt->get_qb_name(qb_name))) {
+        LOG_WARN("failed to get qb name", K(ret));
+      } else if (OB_FAIL(sub_stmt->get_stmt_hint().normal_hints_.push_back(hint))) {
+        LOG_WARN("failed to push back hint", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::check_inline_temp_table_by_cost(ObDMLStmt *root_stmt,
+                                                          TempTableInfo &temp_table_info,
+                                                          bool &need_inline)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> inline_stmts;
+  ObSEArray<ObSelectStmt*, 4> copy_inline_stmts;
+  ObDMLStmt *inline_root = NULL;
+  ObSEArray<ObSelectStmt*, 4> materialize_stmts;
+  ObSEArray<ObSelectStmt*, 4> copy_materialize_stmts;
+  ObSelectStmt *packed_temp_table_query = NULL;
+  ObDMLStmt *materialize_root = NULL;
+  ObSelectStmt *copy_cte_stmt = NULL;
+  ObTryTransHelper trans_helper;
+  ObSelectStmt *dummy = NULL;
+  ObSEArray<ObSelectStmtPointer, 4> stmt_ptrs;
+  ObSEArray<int64_t, 4> choosed_inline_idxs;
+  ObSEArray<int64_t, 4> choosed_materialize_idxs;
+  OPT_TRACE("try cost based inline");
+  if (OB_ISNULL(root_stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) ||
+      OB_ISNULL(temp_table_info.temp_table_query_) || OB_ISNULL(ctx_->expr_factory_) ||
+      temp_table_info.table_items_.count() != temp_table_info.upper_stmts_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpect", K(ret));
+  } else if (OB_FAIL(trans_helper.fill_helper(root_stmt->get_query_ctx()))) {
+    LOG_WARN("failed to fill helper", K(ret));
+  } else if(OB_FAIL(prepare_inline_materialize_stmts(root_stmt,
+                                                     temp_table_info,
+                                                     stmt_ptrs,
+                                                     inline_stmts,
+                                                     materialize_stmts,
+                                                     packed_temp_table_query))) {
+    LOG_WARN("failed to prepare inline materialize stmts", K(ret));
+  }
+  // to facilitate the copying and replacement of inline_stmts and materialize_stmts,
+  // temporarily change the table type from TEMP_TABLE to GENERATED_TABLE.
+  for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_info.table_items_.count(); i++) {
+    if (OB_ISNULL(temp_table_info.table_items_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else {
+      temp_table_info.table_items_.at(i)->type_ = TableItem::GENERATED_TABLE;
+    }
+  }
+  // deep copy root and replace inline_stmts and materialize_stmts
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(copy_and_replace_trans_root(*root_stmt,
+                                                inline_stmts,
+                                                NULL,
+                                                stmt_ptrs,
+                                                inline_root,
+                                                copy_inline_stmts,
+                                                dummy,
+                                                false))) {
+    LOG_WARN("failed to prepare eval cte cost stmt", K(ret));
+  } else if (OB_FAIL(copy_and_replace_trans_root(*root_stmt,
+                                                materialize_stmts,
+                                                packed_temp_table_query,
+                                                stmt_ptrs,
+                                                materialize_root,
+                                                copy_materialize_stmts,
+                                                copy_cte_stmt,
+                                                false))) {
+    LOG_WARN("failed to prepare eval cte cost stmt", K(ret));
+  }
+  // evaluate cost
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(evaluate_inline_materialize_costs(root_stmt,
+                                                      false,
+                                                      inline_root,
+                                                      copy_inline_stmts,
+                                                      materialize_root,
+                                                      copy_materialize_stmts,
+                                                      copy_cte_stmt,
+                                                      choosed_inline_idxs,
+                                                      choosed_materialize_idxs))) {
+    LOG_WARN("failed to evaluate inline materialize cost", K(ret));
+  } else if (choosed_inline_idxs.count() > 0) {
+    need_inline = true;
+    OPT_TRACE("accept inline CTE due to cost");
+  } else {
+    need_inline = false;
+    OPT_TRACE("reject inline CTE due to cost");
+    ObString qb_name;
+    if (OB_FAIL(temp_table_info.temp_table_query_->get_qb_name(qb_name))) {
+      LOG_WARN("failed to get qb name", K(ret));
+    } else if (OB_FAIL(ctx_->inline_blacklist_.push_back(qb_name))) {
+      LOG_WARN("failed to push back qb name", K(ret));
+    }
+  }
+  // recover origin table item type back to TEMP_TABLE
+  for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_info.table_items_.count(); i++) {
+    if (OB_ISNULL(temp_table_info.table_items_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else {
+      temp_table_info.table_items_.at(i)->type_ = TableItem::TEMP_TABLE;
+    }
+  }
+  // recover context
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(trans_helper.recover(root_stmt->get_query_ctx()))) {
+    LOG_WARN("failed to recover helper", K(ret));
+  }
+  // free inline_stmts and materialize_stmts
+  // note: inline_root, materialize_root, copy_inline_stmts and copy_materialize_stmts
+  //       are already freed after cost evaluation
+  for (int64_t i = 0; OB_SUCC(ret) && i < inline_stmts.count(); ++i) {
+    if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, inline_stmts.at(i)))) {
+      LOG_WARN("failed to free stmt", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < materialize_stmts.count(); ++i) {
+    if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, materialize_stmts.at(i)))) {
+      LOG_WARN("failed to free stmt", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::prepare_inline_materialize_stmts(ObDMLStmt *root_stmt,
+                                                           TempTableInfo &temp_table_info,
+                                                           ObIArray<ObSelectStmtPointer> &stmt_ptrs,
+                                                           ObIArray<ObSelectStmt *> &inline_stmts,
+                                                           ObIArray<ObSelectStmt *> &materialize_stmts,
+                                                           ObSelectStmt *&packed_temp_table_query)
+{
+  int ret = OB_SUCCESS;
+  ObDMLStmt *copied_temp_stmt = NULL;
+  ObSelectStmt *temp_view = NULL;
+  TableItem *temp_table = NULL;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_) ||
+      OB_ISNULL(ctx_->allocator_) || OB_ISNULL(temp_table_info.temp_table_query_) || OB_ISNULL(root_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null ctx", K(ret));
+  }
+
+  // prepare materialize stmts
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_,
+                                                      *ctx_->expr_factory_,
+                                                      temp_table_info.temp_table_query_,
+                                                      copied_temp_stmt))) {
+    LOG_WARN("failed to deep copy stmt", K(ret));
+  } else if (OB_ISNULL(copied_temp_stmt) || !copied_temp_stmt->is_select_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect stmt", K(ret));
+  } else if (OB_FALSE_IT(temp_view = static_cast<ObSelectStmt *>(copied_temp_stmt))) {
+    // 在 temp table query 上封一层视图（用以获取 temp table access 的代价）
+  } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, temp_view))) {
+    LOG_WARN("failed to create simple view", K(ret));
+  } else if (1 != temp_view->get_table_size()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect one table item in stmt", KPC(temp_view), K(ret));
+  } else if (OB_ISNULL(temp_table = temp_view->get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null table item", K(ret));
+  } else if (!temp_table->is_generated_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect generate table item", KPC(temp_table), K(ret));
+  } else if (OB_ISNULL(temp_table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null ref query", K(ret));
+  } else {
+    temp_table->type_ = TableItem::TEMP_TABLE;
+    packed_temp_table_query = temp_table->ref_query_;
+    if (OB_FAIL(temp_view->generate_view_name(*ctx_->allocator_,
+                                              temp_table->table_name_,
+                                              true))) {
+      LOG_WARN("failed to generate view name", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_info.table_items_.count(); ++i) {
+      TableItem *table_item = temp_table_info.table_items_.at(i);
+      ObDMLStmt *materialize_stmt = NULL;
+      if (i == 0) {
+        materialize_stmt = temp_view;
+        if (OB_FAIL(materialize_stmts.push_back(static_cast<ObSelectStmt *>(materialize_stmt)))) {
+          LOG_WARN("failed to push back stmt", K(ret));
+        }
+      } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_,
+                                                          *ctx_->expr_factory_,
+                                                          temp_view,
+                                                          materialize_stmt))) {
+        LOG_WARN("failed to deep copy stmt", K(ret));
+      } else if (OB_ISNULL(materialize_stmt) || !materialize_stmt->is_select_stmt()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect stmt", K(ret));
+      } else if (OB_FAIL(materialize_stmt->recursive_adjust_statement_id(ctx_->allocator_,
+                                                                        ctx_->src_hash_val_,
+                                                                        i))) {
+        LOG_WARN("failed to recursive adjust statement id", K(ret));
+      } else if (OB_FAIL(materialize_stmt->formalize_stmt(ctx_->session_info_, false))) {
+        LOG_WARN("failed to formalize stmt", K(ret));
+      } else if (OB_FAIL(materialize_stmt->update_stmt_table_id(ctx_->allocator_, *temp_view))) {
+        LOG_WARN("failed to update table id", K(ret));
+      } else if (OB_FAIL(materialize_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                                        ctx_->session_info_))) {
+        LOG_WARN("failed to formalize stmt reference", K(ret));
+      } else if (OB_FAIL(materialize_stmts.push_back(static_cast<ObSelectStmt *>(materialize_stmt)))) {
+        LOG_WARN("failed to push back stmt", K(ret));
+      }
+    }
+  }
+
+  // prepare inline stmts
+  for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_info.table_items_.count(); ++i) {
+    TableItem *table_item = temp_table_info.table_items_.at(i);
+    ObSelectStmtPointer stmt_ptr;
+    ObDMLStmt *materialize_stmt = NULL;
+    ObDMLStmt *inline_stmt = NULL;
+    if (OB_ISNULL(table_item) || OB_ISNULL(table_item->ref_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null", K(ret));
+    } else if (OB_FAIL(stmt_ptr.add_ref(&table_item->ref_query_))) {
+      LOG_WARN("failed to add ref query", K(ret));
+    } else if (OB_FAIL(stmt_ptrs.push_back(stmt_ptr))) {
+      LOG_WARN("failed to push back stmt ptr", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_,
+                                                        *ctx_->expr_factory_,
+                                                        temp_table_info.temp_table_query_,
+                                                        inline_stmt))) {
+      LOG_WARN("failed to deep copy stmt", K(ret));
+    } else if (OB_ISNULL(inline_stmt) || !inline_stmt->is_select_stmt()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect stmt", K(ret));
+    } else if (OB_FAIL(inline_stmt->recursive_adjust_statement_id(ctx_->allocator_,
+                                                                  ctx_->src_hash_val_,
+                                                                  i))) {
+      LOG_WARN("failed to recursive adjust statement id", K(ret));
+    } else if (OB_FAIL(inline_stmt->update_stmt_table_id(ctx_->allocator_, *temp_table_info.temp_table_query_))) {
+      LOG_WARN("failed to update table id", K(ret));
+    } else if (OB_FAIL(inline_stmt->formalize_stmt(ctx_->session_info_, false))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
+    } else if (OB_FAIL(inline_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                                  ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt reference", K(ret));
+    } else if (OB_FAIL(inline_stmts.push_back(static_cast<ObSelectStmt *>(inline_stmt)))) {
+      LOG_WARN("failed to push back stmt", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::evaluate_inline_materialize_costs(ObDMLStmt *origin_root,
+                                                            bool need_check_plan,
+                                                            ObDMLStmt *inline_root,
+                                                            ObIArray<ObSelectStmt *> &copy_inline_stmts,
+                                                            ObDMLStmt *materialize_root,
+                                                            ObIArray<ObSelectStmt *> &copy_materialize_stmts,
+                                                            ObSelectStmt *copy_cte_stmt,
+                                                            ObIArray<int64_t> &choosed_inline_idxs,
+                                                            ObIArray<int64_t> &choosed_materialize_idxs)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> parent_map;
+  ObSEArray<ObSelectStmt*, 8> dummy;
+  ObSEArray<int64_t, 4> semi_join_stmt_ids;
+  bool check_global_cost = false;
+  if (OB_ISNULL(inline_root) || OB_ISNULL(materialize_root) || OB_ISNULL(ctx_) ||
+      OB_ISNULL(copy_cte_stmt) || OB_UNLIKELY(copy_inline_stmts.count() != copy_materialize_stmts.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect error", K(ret));
+  } else if (OB_FAIL(parent_map.create(128, "TempTable"))) {
+    LOG_WARN("failed to init stmt map", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::get_all_child_stmts(inline_root, dummy, &parent_map))) {
+    LOG_WARN("failed to get all child stmts", K(ret));
+  } else if (OB_FAIL(need_check_global_cte_cost(inline_root,
+                                                copy_inline_stmts,
+                                                parent_map,
+                                                copy_cte_stmt,
+                                                semi_join_stmt_ids,
+                                                check_global_cost))) {
+    LOG_WARN("failed to check need global cost check", K(ret));
+  } else if (OB_FAIL(parent_map.destroy())) {
+    LOG_WARN("failed to destroy map", K(ret));
+  }
+  // evaluate cost globally
+  if (OB_SUCC(ret) && check_global_cost) {
+    double inline_global_cost = 0.0;
+    double materialize_global_cost = 0.0;
+    if (OB_FAIL(evaluate_cte_cost_globally(origin_root,
+                                           inline_root,
+                                           semi_join_stmt_ids,
+                                           need_check_plan,
+                                           inline_global_cost))) {
+      LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
+    } else if (OB_FAIL(evaluate_cte_cost_globally(origin_root,
+                                                  materialize_root,
+                                                  semi_join_stmt_ids,
+                                                  false,
+                                                  materialize_global_cost))) {
+      LOG_WARN("failed to evaluate cost for the transform stmt", K(ret));
+    } else {
+      OPT_TRACE("The global cost of inline stmt:", inline_global_cost);
+      OPT_TRACE("The global cost of materialize stmt:", materialize_global_cost);
+      if (materialize_global_cost >= inline_global_cost) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < copy_inline_stmts.count(); ++i) {
+          if (OB_FAIL(choosed_inline_idxs.push_back(i))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+        OPT_TRACE("choose `inline` due to global cost check");
+        LOG_TRACE("choose `inline` due to global cost check", K(inline_global_cost), K(materialize_global_cost));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < copy_materialize_stmts.count(); ++i) {
+          if (OB_FAIL(choosed_materialize_idxs.push_back(i))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+        OPT_TRACE("choose `materialize` due to global cost check");
+        LOG_TRACE("choose `materialize` due to global cost check", K(inline_global_cost), K(materialize_global_cost));
+      }
+    }
+  }
+  // evaluate cost partially
+  if (OB_SUCC(ret) && !check_global_cost) {
+    ObSEArray<double, 2> inline_costs;
+    ObSEArray<double, 2> materialize_costs;
+    double dummy = 0.0;
+    double cte_cost = 0.0;
+    double cte_profit = 0.0;
+    if (OB_FAIL(evaluate_cte_cost_partially(inline_root,
+                                            copy_inline_stmts,
+                                            inline_costs,
+                                            NULL,
+                                            dummy))) {
+      LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
+    } else if (OB_FAIL(evaluate_cte_cost_partially(materialize_root,
+                                                  copy_materialize_stmts,
+                                                  materialize_costs,
+                                                  copy_cte_stmt,
+                                                  cte_cost))) {
+      LOG_WARN("failed to evaluate cost for the transform stmt", K(ret));
+    } else if (OB_UNLIKELY(inline_costs.count() != materialize_costs.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected array size", K(inline_costs), K(materialize_costs));
+    } else {
+      // accumulate materialize profit
+      for (int64_t i = 0; OB_SUCC(ret) && i < inline_costs.count(); i++) {
+        if (inline_costs.at(i) > materialize_costs.at(i)) {
+          cte_profit += inline_costs.at(i) - materialize_costs.at(i);
+          if (OB_FAIL(choosed_materialize_idxs.push_back(i))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        } else if (OB_FAIL(choosed_inline_idxs.push_back(i))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+      OPT_TRACE("The cost of materialize cte :", cte_cost);
+      OPT_TRACE("The profit of materialize cte :", cte_profit);
+      // inline all references if the profit of materialize cte is less than the cost
+      if (OB_FAIL(ret)) {
+      } else if (cte_profit <= cte_cost || choosed_materialize_idxs.count() <= 1) {
+        if (OB_FAIL(append(choosed_inline_idxs, choosed_materialize_idxs))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else {
+          choosed_materialize_idxs.reset();
+          OPT_TRACE("choose `inline` due to partial cost check");
+          LOG_TRACE("choose `inline` due to partial cost check", K(cte_cost), K(cte_profit));
+        }
+      } else {
+        OPT_TRACE("choose `materialize` due to partial cost check");
+        LOG_TRACE("choose `materialize` due to partial cost check", K(cte_cost), K(cte_profit));
       }
     }
   }
@@ -2652,11 +3517,271 @@ int ObTransformTempTable::prepare_eval_cte_cost_stmt(ObDMLStmt &root_stmt,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
+  } else if (OB_FAIL(copied_stmt->formalize_special_domain_index_fields())) {
+    LOG_WARN("failed to formalize special domain index fields", K(ret));
   } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                 ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformTempTable::copy_and_replace_trans_root(ObDMLStmt &root_stmt,
+                                                      ObIArray<ObSelectStmt *> &trans_stmts,
+                                                      ObSelectStmt *cte_query,
+                                                      ObIArray<ObSelectStmtPointer> &stmt_ptrs,
+                                                      ObDMLStmt *&copied_stmt,
+                                                      ObIArray<ObSelectStmt *> &copied_trans_stmts,
+                                                      ObSelectStmt *&copied_cte_query,
+                                                      bool is_trans_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 2> old_temp_table_stmts;
+  ObSEArray<ObSelectStmt*, 2> new_temp_table_stmts;
+  ObSEArray<ObSelectStmt*, 2> origin_stmts;
+  ObDMLStmt *copied_trans_stmt = NULL;
+  ObString cur_qb_name;
+  ObDMLStmt *temp = NULL;
+  hash::ObHashMap<uint64_t, ObDMLStmt *> copy_stmt_map;
+  ObDMLStmt *dml_stmt_val = NULL;
+  if (OB_ISNULL(ctx_) || OB_UNLIKELY(!ctx_->is_valid()) || OB_ISNULL(root_stmt.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params are invalid", K(ret), K(ctx_), K(root_stmt.get_query_ctx()));
+  } else if (OB_FAIL(adjust_transformed_stmt(stmt_ptrs, trans_stmts, &origin_stmts))) {
+    LOG_WARN("failed to adjust transformed stmt", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_,
+                                                      &root_stmt, copied_stmt))) {
+    LOG_WARN("failed to deep copy stmt", K(ret));
+  } else if (OB_FAIL(deep_copy_temp_table(*copied_stmt,
+                                          *ctx_->stmt_factory_,
+                                          *ctx_->expr_factory_,
+                                          old_temp_table_stmts,
+                                          new_temp_table_stmts))) {
+    LOG_WARN("failed to deep copy temp table", K(ret));
+  } else if (OB_FAIL(copy_stmt_map.create(128, "TempTable"))) {
+    LOG_WARN("failed to init stmt map", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::get_stmt_map_after_copy(&root_stmt, copied_stmt, copy_stmt_map))) {
+    LOG_WARN("failed to get stmt map", K(ret));
+  } else if (NULL != cte_query) {
+    uint64_t key = reinterpret_cast<uint64_t>(cte_query);
+    if (OB_FAIL(copy_stmt_map.get_refactored(key, dml_stmt_val))) {
+      LOG_WARN("failed to get hash map", K(ret));
+    } else if (OB_ISNULL(dml_stmt_val) || OB_UNLIKELY(!dml_stmt_val->is_select_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected stmt", K(ret), KPC(dml_stmt_val));
+    } else {
+      copied_cte_query = static_cast<ObSelectStmt *>(dml_stmt_val);
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < trans_stmts.count(); i ++) {
+    dml_stmt_val = NULL;
+    uint64_t key = reinterpret_cast<uint64_t>(trans_stmts.at(i));
+    if (OB_FAIL(copy_stmt_map.get_refactored(key, dml_stmt_val))) {
+      LOG_WARN("failed to get stmt from hash map", K(ret));
+    } else if (OB_ISNULL(dml_stmt_val) || OB_UNLIKELY(!dml_stmt_val->is_select_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected stmt", K(ret), KPC(dml_stmt_val));
+    } else if (OB_FAIL(copied_trans_stmts.push_back(static_cast<ObSelectStmt *>(dml_stmt_val)))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(copy_stmt_map.destroy())) {
+    LOG_WARN("failed to destroy map", K(ret));
+  } else if (OB_FAIL(adjust_transformed_stmt(stmt_ptrs, origin_stmts, NULL))) {
+      LOG_WARN("failed to adjust transformed stmt", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_, false))) {
+    LOG_WARN("failed to formalize stmt", K(ret));
+  } else if (OB_FAIL(copied_stmt->formalize_special_domain_index_fields())) {
+    LOG_WARN("failed to formalize special domain index fields", K(ret));
+  } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                                ctx_->session_info_))) {
+    LOG_WARN("failed to formalize stmt", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformTempTable::pick_out_stmts_in_blacklist(const ObIArray<ObString> &blacklist,
+                                                      ObIArray<ObSelectStmt *> &origin_stmts,
+                                                      ObIArray<ObSelectStmt *> &trans_stmts,
+                                                      ObIArray<ObSelectStmtPointer> &stmt_ptrs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> picked_origin_stmts;
+  ObSEArray<ObSelectStmt*, 4> picked_trans_stmts;
+  ObSEArray<ObSelectStmtPointer, 4> picked_stmt_ptrs;
+  if (OB_UNLIKELY(origin_stmts.count() != trans_stmts.count() ||
+                  origin_stmts.count() != stmt_ptrs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt count", K(ret), K(origin_stmts.count()), K(trans_stmts.count()), K(stmt_ptrs.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < origin_stmts.count(); i++) {
+    ObSelectStmt *origin_stmt = origin_stmts.at(i);
+    ObString qb_name;
+    if (OB_ISNULL(origin_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null stmt", K(ret));
+    } else if (OB_FAIL(origin_stmt->get_qb_name(qb_name))) {
+      LOG_WARN("failed to get qb name", K(ret));
+    } else if (ObOptimizerUtil::find_item(blacklist, qb_name)) {
+      //do nothing
+    } else if (OB_FAIL(picked_origin_stmts.push_back(origin_stmts.at(i)))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(picked_trans_stmts.push_back(trans_stmts.at(i)))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(picked_stmt_ptrs.push_back(stmt_ptrs.at(i)))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_FAIL(ret) || origin_stmts.count() == picked_origin_stmts.count()) {
+    // do nothing
+  } else if (OB_FAIL(origin_stmts.assign(picked_origin_stmts))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(trans_stmts.assign(picked_trans_stmts))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(stmt_ptrs.assign(picked_stmt_ptrs))) {
+    LOG_WARN("failed to assign", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformTempTable::gather_materialize_blacklist(ObLogicalOperator *op,
+                                                       ObIArray<uint64_t> &blacklist)
+{
+  int ret = OB_SUCCESS;
+  ObLogJoin *join_op = NULL;
+  ObLogSubPlanScan *subplan_scan_op = NULL;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret));
+  } else if (log_op_def::LOG_JOIN != op->get_type()) {
+    // do nothing
+  } else if (OB_FALSE_IT(join_op = static_cast<ObLogJoin*>(op))) {
+  } else if (!join_op->is_nlj_with_param_down()) {
+    // do nothing
+  } else if (OB_ISNULL(join_op->get_right_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret));
+  } else if (join_op->get_right_table()->get_type() != log_op_def::LOG_SUBPLAN_SCAN) {
+    // do nothing
+  } else if (OB_FALSE_IT(subplan_scan_op = static_cast<ObLogSubPlanScan*>(join_op->get_right_table()))) {
+  } else if (OB_FAIL(blacklist.push_back(subplan_scan_op->get_subquery_id()))) {
+    LOG_WARN("failed to push back", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
+    if (OB_FAIL(SMART_CALL(gather_materialize_blacklist(op->get_child(i), blacklist)))) {
+      LOG_WARN("failed to inner gather materialize blacklist", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::get_all_view_stmts(ObDMLStmt *stmt,
+                                             ObIArray<ObSelectStmt*> &view_stmts)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (stmt->is_set_stmt()) {
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    } else if (OB_FAIL(append_array_no_dup(view_stmts, child_stmts))) {
+      LOG_WARN("failed to append array", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(get_all_view_stmts(child_stmts.at(i), view_stmts)))) {
+        LOG_WARN("failed to get all view stmts", K(ret));
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); i++) {
+      if (OB_ISNULL(stmt->get_table_item(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null table item", K(ret));
+      } else if (!stmt->get_table_item(i)->is_generated_table() &&
+                 !stmt->get_table_item(i)->is_temp_table()) {
+        // do nothing
+      } else if (OB_FAIL(add_var_to_array_no_dup(view_stmts, stmt->get_table_item(i)->ref_query_))) {
+        LOG_WARN("failed to add var to array", K(ret));
+      } else if (OB_FAIL(add_var_to_array_no_dup(child_stmts, stmt->get_table_item(i)->ref_query_))) {
+        LOG_WARN("failed to add var to array", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(get_all_view_stmts(child_stmts.at(i), view_stmts)))) {
+        LOG_WARN("failed to get all view stmts", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::check_stmt_in_blacklist(const ObSelectStmt *stmt,
+                                                 const ObIArray<ObString> &blacklist,
+                                                 bool &in_blacklist)
+{
+  int ret = OB_SUCCESS;
+  in_blacklist = false;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null ctx", K(ret));
+  } else {
+    const ObIArray<QbNames> &stmt_id_map = stmt->get_query_ctx()->get_query_hint().stmt_id_map_;
+    if (stmt->get_stmt_id() < 0 || stmt->get_stmt_id() >= stmt_id_map.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect stmt id", K(ret), K(stmt->get_stmt_id()), K(stmt_id_map.count()));
+    } else {
+      const ObIArray<ObString> &qb_names = stmt_id_map.at(stmt->get_stmt_id()).qb_names_;
+      for (int64_t i = 0; OB_SUCC(ret) && !in_blacklist && i < qb_names.count(); i++) {
+        if (ObOptimizerUtil::find_item(blacklist, qb_names.at(i))) {
+          in_blacklist = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::check_evaluate_after_transform(ObDMLStmt *root_stmt,
+                                                         ObIArray<ObSelectStmt *> &stmts,
+                                                         bool &can_eval)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<TempTableInfo, 4> root_cte_infos;
+  ObSEArray<ObSelectStmt*, 4> all_ctes;
+  can_eval = true;
+  if (OB_ISNULL(root_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (OB_FAIL(root_stmt->collect_temp_table_infos(root_cte_infos))) {
+    LOG_WARN("failed to collect temp table infos", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < root_cte_infos.count(); ++i) {
+      if (OB_FAIL(all_ctes.push_back(root_cte_infos.at(i).temp_table_query_))) {
+        LOG_WARN("failed to add var to array", K(ret));
+      }
+    }
+  }
+  for (int64_t i = 0; can_eval && OB_SUCC(ret) && i < stmts.count(); ++i) {
+    ObSEArray<TempTableInfo, 4> tmp_cte_infos;
+    if (OB_ISNULL(stmts.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null stmt", K(ret));
+    } else if (OB_FAIL(stmts.at(i)->collect_temp_table_infos(tmp_cte_infos))) {
+      LOG_WARN("failed to collect temp table infos", K(ret));
+    } else {
+      for (int64_t j = 0; can_eval && OB_SUCC(ret) && j < tmp_cte_infos.count(); ++j) {
+        if (!ObOptimizerUtil::find_item(all_ctes, tmp_cte_infos.at(j).temp_table_query_)) {
+          can_eval = false;
+        }
+      }
+    }
   }
   return ret;
 }

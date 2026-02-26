@@ -13,15 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_delete_log_plan.h"
 #include "sql/optimizer/ob_log_delete.h"
-#include "sql/optimizer/ob_log_group_by.h"
-#include "sql/optimizer/ob_log_link_dml.h"
-#include "ob_log_operator_factory.h"
-#include "ob_log_table_scan.h"
-#include "ob_log_sort.h"
-#include "ob_log_limit.h"
-#include "ob_log_table_scan.h"
-#include "ob_join_order.h"
-#include "ob_opt_est_cost.h"
 /**
  * DELETE syntax from MySQL 5.7
  *
@@ -116,10 +107,10 @@ int ObDeleteLogPlan::generate_normal_raw_plan()
     
     // 4. allocate delete operator
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(compute_dml_parallel())) {  // compute parallel before call prepare_dml_infos
-        LOG_WARN("failed to compute dml parallel", K(ret));
-      } else if (OB_FAIL(prepare_dml_infos())) {
+      if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));
+      } else if (OB_FAIL(compute_dml_parallel())) {
+        LOG_WARN("failed to compute dml parallel", K(ret));
       } else if (use_pdml()) {
         if (OB_FAIL(candi_allocate_pdml_delete())) {
           LOG_WARN("failed to allocate pdml as top", K(ret));
@@ -156,6 +147,14 @@ int ObDeleteLogPlan::generate_normal_raw_plan()
       }
     }
 
+    if (OB_SUCC(ret) && delete_stmt->is_returning() && delete_stmt->get_returning_aggr_item_size() <= 0) {
+      if (OB_FAIL(candi_allocate_material_for_dml())) {
+        LOG_WARN("failed to allocate material operator", K(ret));
+      } else {
+        LOG_TRACE("succeed to allocate material op for dml returning", K(candidates_.candidate_plans_.count()));
+      }
+    }
+
     // allocate root exchange
     if (OB_SUCC(ret)) {
       if (OB_FAIL(candi_allocate_root_exchange())) {
@@ -180,12 +179,13 @@ int ObDeleteLogPlan::candi_allocate_delete()
   int ret = OB_SUCCESS;
   ObSEArray<CandidatePlan, 8> candi_plans;
   ObSEArray<CandidatePlan, 8> delete_plans;
+  bool need_duplicate_date = false;
   const bool force_no_multi_part = get_log_plan_hint().no_use_distributed_dml();
   const bool force_multi_part = get_log_plan_hint().use_distributed_dml();
   OPT_TRACE("start generate normal insert plan");
   OPT_TRACE("force no multi part:", force_no_multi_part);
   OPT_TRACE("force multi part:", force_multi_part);
-  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_))) {
+  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_, need_duplicate_date))) {
     LOG_WARN("failed to check table rowkey distinct", K(ret));
   } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, candi_plans))) {
     LOG_WARN("failed to get minimal cost candidates", K(ret));
@@ -235,6 +235,7 @@ int ObDeleteLogPlan::create_delete_plans(ObIArray<CandidatePlan> &candi_plans,
                OB_FAIL(check_need_multi_partition_dml(*get_stmt(),
                                                       *candi_plan.plan_tree_,
                                                       index_dml_infos_,
+                                                      use_parallel_das_dml_,
                                                       is_multi_part_dml,
                                                       is_result_local))) {
       LOG_WARN("failed to check need multi-partition dml", K(ret));
@@ -270,6 +271,9 @@ int ObDeleteLogPlan::allocate_delete_as_top(ObLogicalOperator *&top,
     delete_op->set_is_returning(delete_stmt->is_returning());
     delete_op->set_is_multi_part_dml(is_multi_part_dml);
     delete_op->set_has_instead_of_trigger(delete_stmt->has_instead_of_trigger());
+    if (get_can_use_parallel_das_dml()) {
+      delete_op->set_das_dop(max_dml_parallel_);
+    }
     if (OB_FAIL(delete_op->assign_dml_infos(index_dml_infos_))) {
       LOG_WARN("failed to assign dml infos", K(ret));
     } else if (delete_stmt->is_error_logging() && OB_FAIL(delete_op->extract_err_log_info())) {

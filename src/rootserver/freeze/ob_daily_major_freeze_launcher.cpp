@@ -15,14 +15,8 @@
 #include "rootserver/freeze/ob_daily_major_freeze_launcher.h"
 
 #include "rootserver/freeze/ob_major_freeze_helper.h"
-#include "share/ob_freeze_info_manager.h"
-#include "rootserver/freeze/ob_major_merge_info_manager.h"
-#include "share/ob_debug_sync.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_tablet_checksum_operator.h"
 #include "observer/ob_srv_network_frame.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -145,6 +139,7 @@ int ObDailyMajorFreezeLauncher::try_launch_major_freeze()
         do {
           ObMajorFreezeParam param;
           param.transport_ = GCTX.net_frame_->get_req_transport();
+          param.freeze_reason_ = MF_DAILY_MERGE;
           if (OB_FAIL(param.add_freeze_info(tenant_id_))) {
             LOG_WARN("fail to push_back", KR(ret), K_(tenant_id));
           } else if (OB_FAIL(ObMajorFreezeHelper::major_freeze(param))) {

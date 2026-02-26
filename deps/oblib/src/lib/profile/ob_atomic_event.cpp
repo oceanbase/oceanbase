@@ -13,8 +13,7 @@
 #if PERF_ATOMIC_OP
 #define USING_LOG_PREFIX LIB
 #include "ob_atomic_event.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_print_utils.h"
+
 namespace oceanbase
 {
 namespace common

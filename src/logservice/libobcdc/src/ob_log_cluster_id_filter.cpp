@@ -127,7 +127,7 @@ void ObLogClusterIDFilter::stat_ignored_tps()
   if (last_stat_time_ > 0 && delta_time > 0) {
     double tps = static_cast<double>(cur_count - last_count) / static_cast<double>(delta_time);
 
-    _LOG_INFO("[TPS_STAT] CLUSTER_ID_IGNORED_PART_TPS=%.3lf", tps);
+    _LOG_INFO("[TPS_STAT] CLUSTER_ID_IGNORED_LOG_ENTRY_TPS=%.3lf", tps);
   }
 
   last_cluster_id_ignored_part_trans_count_ = cur_count;

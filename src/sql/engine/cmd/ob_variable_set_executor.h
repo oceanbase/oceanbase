@@ -121,7 +121,16 @@ private:
                                     common::ObIAllocator &calc_buf,
                                     common::ObMySQLProxy &sql_proxy,
                                     const ObValidatePasswordCtx &password_ctx);
+  int is_support(const share::ObSetVar &set_var);
   int do_set_names(ObExecContext &ctx, ObSetNamesStmt &stmt);
+  int check_protected_sys_variable(ObSQLSessionInfo *session,
+                                   const share::ObSetVar &set_var,
+                                   int &ret);
+#ifdef OB_BUILD_CLOSE_MODULES
+  int do_early_lock_release(ObExecContext &ctx,
+                            ObSQLSessionInfo &session,
+                            const bool enable_early_lock_release);
+#endif
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetExecutor);
 };

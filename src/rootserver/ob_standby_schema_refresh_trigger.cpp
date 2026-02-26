@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_standby_schema_refresh_trigger.h"
-#include "observer/ob_server_struct.h" // GCTX
 #include "observer/ob_service.h" // ObService
-#include "share/rc/ob_tenant_base.h" // MTL
 #include "share/ob_schema_status_proxy.h" // ObSchemaStatusProxy
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 
@@ -146,7 +144,7 @@ int ObStandbySchemaRefreshTrigger::submit_tenant_refresh_schema_task_()
       } else if (OB_FAIL(GCTX.ob_service_->submit_async_refresh_schema_task(tenant_id_, version_in_inner_table))) {
         LOG_WARN("failed to submit_async_refresh_schema_task", KR(ret), K_(tenant_id));
       }
-    } else if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000)) {
+    } else if (REACH_THREAD_TIME_INTERVAL(1 * 1000 * 1000)) {
       LOG_INFO("standby tenant can not refresh schema", K(schema_status));
     }
   }

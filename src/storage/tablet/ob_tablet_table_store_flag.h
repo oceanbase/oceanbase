@@ -44,17 +44,20 @@ public:
   bool with_major_sstable() const { return ObTabletTableStoreWithMajorFlag::WITH_MAJOR_SSTABLE == with_major_sstable_; }
   void set_with_major_sstable() { with_major_sstable_ = ObTabletTableStoreWithMajorFlag::WITH_MAJOR_SSTABLE; }
   void set_without_major_sstable() { with_major_sstable_ = ObTabletTableStoreWithMajorFlag::WITHOUT_MAJOR_SSTABLE; }
-  TO_STRING_KV(K_(with_major_sstable));
+  void set_is_user_data_table(const bool is_user_data_table) { is_user_data_table_ = is_user_data_table; }
+  bool is_user_data_table() const { return is_user_data_table_; }
+  TO_STRING_KV(K_(with_major_sstable), K_(is_user_data_table));
 
 public:
-  static const uint64_t SF_BIT_WITH_MAJOR_SSTABLE = 1;
-  static const uint64_t SF_BIT_RESERVED = 63;
+  static const uint64_t SF_ONE_BIT = 1;
+  static const uint64_t SF_BIT_RESERVED = 62;
 
 private:
   union {
     int64_t status_;
     struct {
-      ObTabletTableStoreWithMajorFlag::FLAG with_major_sstable_ : SF_BIT_WITH_MAJOR_SSTABLE;
+      ObTabletTableStoreWithMajorFlag::FLAG with_major_sstable_ : SF_ONE_BIT;
+      int64_t is_user_data_table_ : SF_ONE_BIT;
       int64_t reserved_: SF_BIT_RESERVED;
     };
   };

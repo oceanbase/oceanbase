@@ -201,6 +201,7 @@ private:
   int inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx);
   int check_clog_disk_full_();
   int check_gc_handler_();
+  OB_INLINE void lock_for_read_end_(const uint64_t lock_start_time, const int ret) const;
 public:
   const transaction::ObLockForReadArg &lock_for_read_arg_;
   bool &can_read_;

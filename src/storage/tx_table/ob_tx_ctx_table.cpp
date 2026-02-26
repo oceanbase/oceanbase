@@ -10,12 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx_table/ob_tx_ctx_table.h"
+#include "ob_tx_ctx_table.h"
 #include "storage/tx/ob_trans_service.h"
-#include "lib/oblog/ob_log_module.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx_table/ob_tx_table_iterator.h"
-#include "storage/ls/ob_ls.h"
 
 namespace oceanbase
 {
@@ -114,6 +111,8 @@ int ObTxCtxTableRecoverHelper::recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls
                                  ctx_info.cluster_id_,     /* cluster_id */
                                  cluster_version,
                                  0, /*session_id*/
+                                 0, /*client_sid*/
+                                 0, /*associated_session_id*/
                                  scheduler,
                                  INT64_MAX,
                                  MTL(ObTransService*));
@@ -216,8 +215,11 @@ int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
     int64_t pos = 0;
     bool tx_ctx_existed = true;
     ctx_info_.set_compatible_version(curr_meta.get_version());
-    if (OB_FAIL(ctx_info_.deserialize(deserialize_buf, deserialize_buf_length, pos, tx_data_table))) {
+    if (FALSE_IT(TLOCAL_P_TX_BUFFER_NODE_ARRAY = &ctx_info_.exec_info_.multi_data_source_)) {// FIXME: for compat issue, should be removed after barrier version
+    } else if (OB_FAIL(ctx_info_.deserialize(deserialize_buf, deserialize_buf_length, pos, tx_data_table))) {
       STORAGE_LOG(WARN, "failed to deserialize status_info", K(ret), K_(ctx_info));
+      TLOCAL_P_TX_BUFFER_NODE_ARRAY = nullptr;// FIXME: for compat issue, should be removed after barrier version
+    } else if (FALSE_IT(TLOCAL_P_TX_BUFFER_NODE_ARRAY = nullptr)) {// FIXME: for compat issue, should be removed after barrier version
     } else if (FALSE_IT(ctx_info_.exec_info_.mrege_buffer_ctx_array_to_multi_data_source())) {
     } else if (OB_FAIL(recover_one_tx_ctx_(ls_tx_ctx_mgr, ctx_info_))) {
       // heap memory needed be freed, but can not do this in destruction, cause tx_buffer_node has no value sematics
@@ -228,6 +230,9 @@ int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
       ctx_info_.exec_info_.clear_buffer_ctx_in_multi_data_source();
       finish_recover_one_tx_ctx_();
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+    ctx_info_.notify_task_queue_view_.release();
+#endif
   }
 
   if (OB_SUCC(ret)) {

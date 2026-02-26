@@ -11,7 +11,6 @@
  */
 
 #include "observer/virtual_table/ob_virtual_sql_monitor_statname.h"
-#include "share/diagnosis/ob_sql_monitor_statname.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;

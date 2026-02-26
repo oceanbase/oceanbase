@@ -16,8 +16,6 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "rootserver/ddl_task/ob_ddl_task.h"
 
 namespace oceanbase
 {

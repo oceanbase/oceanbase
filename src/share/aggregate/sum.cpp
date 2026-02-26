@@ -250,6 +250,20 @@ int init_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
     }
     break;
   }
+  case VEC_TC_COLLECTION: {
+    if (out_tc != VEC_TC_COLLECTION) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "unexpected in & out type class", K(in_tc), K(out_tc));
+    } else {
+      if (tmp_res_size != nullptr) {
+        *tmp_res_size = 0;
+      } else {
+        ret = init_agg_func<SumVectorAggregate>(agg_ctx, agg_col_id, aggr_info.has_distinct_,
+                                                allocator, agg);
+      }
+    }
+    break;
+  }
   default: {
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "unexpected in & out type class", K(in_tc), K(out_tc));

@@ -14,16 +14,13 @@
 #define _OB_SQL_ENGINE_PX_DATAHUB_DH_MSG_H__
 
 #include "sql/dtl/ob_dtl_msg.h"
-#include "sql/engine/expr/ob_expr.h"
-#include "sql/engine/sort/ob_sort_basic_info.h"
-#include "sql/engine/ob_io_event_observer.h"
-#include "sql/engine/px/ob_dfo.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 
+class ObDfo;
 /* base header for all piece and whole msgs*/
 
 template <dtl::ObDtlMsgType T>
@@ -40,7 +37,29 @@ public:
         child_dfo_(nullptr)
     {}
   virtual ~ObDatahubPieceMsg() = default;
-  VIRTUAL_TO_STRING_KV(K_(op_id), K_(source_dfo_id), K_(thread_id), K_(target_dfo_id));
+  int assign(const ObDatahubPieceMsg<T> &other) {
+    op_id_ = other.op_id_;
+    source_dfo_id_ = other.source_dfo_id_;
+    target_dfo_id_ = other.target_dfo_id_;
+    thread_id_ = other.thread_id_;
+    piece_count_ = other.piece_count_;
+    return OB_SUCCESS;
+  }
+
+  /*
+    This interface is for merge all piece msgs in one sqc into a big piece
+          SQC
+    worker 1  piece ---\
+                        \         rpc
+                       big piece -----> QC
+                        /
+    worker 2  piece ---/
+    ....              /
+    worker N  piece -/
+   */
+  virtual int aggregate_piece(const dtl::ObDtlMsg &other_piece) { return OB_NOT_IMPLEMENT; }
+  VIRTUAL_TO_STRING_KV(K_(op_id), K_(source_dfo_id), K_(thread_id), K_(target_dfo_id),
+                       K_(piece_count));
   uint64_t op_id_;   // 在 piece 消息处理中，用于寻址 QC 端 ctx
   /*
               piece     whole
@@ -64,6 +83,20 @@ class ObDatahubWholeMsg : public dtl::ObDtlMsgTemp<T>
 public:
   ObDatahubWholeMsg() : op_id_(common::OB_INVALID_ID) {}
   virtual ~ObDatahubWholeMsg() = default;
+
+  /*
+    This interface is for merge all piece msgs to a whole if there is only one sqc.
+            SQC
+    worker 1  piece ---\
+                        \
+                        whole
+                        /
+    worker 2  piece ---/
+    ....              /
+    worker N  piece -/
+   */
+  virtual int aggregate_piece(const dtl::ObDtlMsg &piece) { return OB_NOT_IMPLEMENT; }
+  virtual int after_aggregate_piece() { return OB_NOT_IMPLEMENT; }
   VIRTUAL_TO_STRING_KV(K_(op_id));
   uint64_t op_id_;   // 在 whole 消息处理中，用于寻址 SQC 端 msg provider
 };

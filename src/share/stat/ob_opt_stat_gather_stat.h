@@ -26,7 +26,8 @@ namespace common
 enum ObOptStatGatherType {
   INVALID_GATHER_TYPE = -1,
   MANUAL_GATHER,
-  AUTO_GATHER
+  AUTO_GATHER,
+  AYSNC_GATHER
 };
 
 enum ObOptStatRunningPhase {
@@ -81,7 +82,8 @@ struct ObOptStatTaskInfo
     ret_code_(0),
     failed_count_(0),
     completed_table_count_(0),
-    session_(NULL)
+    session_(NULL),
+    success_part_count_(0)
   {}
   int64_t size() const { return trace_id_.length() + task_id_.length(); }
   int init(common::ObIAllocator &allocator,
@@ -114,6 +116,7 @@ struct ObOptStatTaskInfo
   int64_t failed_count_;
   int64_t completed_table_count_;
   sql::ObSQLSessionInfo *session_;//no deep copy
+  int64_t success_part_count_;
 };
 
 class ObOptStatGatherStat : public common::ObDLinkBase<ObOptStatGatherStat>
@@ -169,7 +172,13 @@ public:
   inline int64_t get_completed_table_count() { return task_info_.completed_table_count_; }
   inline const ObString &get_table_gather_progress() const { return table_gather_progress_; }
   inline void set_table_gather_progress(const char *ptr, int32_t len) { table_gather_progress_.assign_ptr(ptr, len); }
+  inline void set_gather_audit(const char *ptr, int32_t len) { gather_audit_.assign_ptr(ptr, len); }
+  inline const ObString &get_gather_audit() const { return gather_audit_; }
   sql::ObSQLSessionInfo *get_session() { return task_info_.session_; }
+  inline int64_t get_consecutive_failed_count() { return consecutive_failed_count_;}
+
+  inline void set_consecutive_failed_count(int64_t failed_count) { consecutive_failed_count_ = failed_count; }
+
   TO_STRING_KV(K(task_info_),
                K(database_name_),
                K(table_id_),
@@ -194,6 +203,8 @@ private:
   ObString stat_refresh_failed_list_;
   ObString properties_;
   ObString table_gather_progress_;
+  int64_t consecutive_failed_count_;
+  ObString gather_audit_;
 };
 
 struct ObOptStatRunningMonitor
@@ -201,11 +212,15 @@ struct ObOptStatRunningMonitor
   explicit ObOptStatRunningMonitor(common::ObIAllocator &allocator,
                                    int64_t current_time,
                                    int64_t current_memory_used,
-                                   ObOptStatGatherStat &opt_stat_gather_stat) :
+                                   ObOptStatGatherStat &opt_stat_gather_stat,
+                                   ObOptStatGatherAudit &audit) :
     allocator_(allocator),
     last_start_time_(current_time),
     last_memory_used_(current_memory_used),
-    opt_stat_gather_stat_(opt_stat_gather_stat)
+    opt_stat_gather_stat_(opt_stat_gather_stat),
+    audit_(audit),
+    failed_part_ids_(),
+    success_part_ids_cnt_(0)
   {
     opt_stat_gather_stat_.set_start_time(current_time);
   }
@@ -213,7 +228,7 @@ struct ObOptStatRunningMonitor
   void init(int64_t current_time,
             int64_t current_memory_used,
             ObOptStatGatherStat &opt_stat_gather_stat);
-  int add_table_info(common::ObTableStatParam &table_param,
+  int add_table_info(const common::ObTableStatParam &table_param,
                      double stale_percent = -1.0);
   int add_monitor_info(ObOptStatRunningPhase current_phase, double extra_progress_ratio = 0);
   double get_monitor_extra_progress_ratio(ObOptStatRunningPhase current_phase,
@@ -222,6 +237,10 @@ struct ObOptStatRunningMonitor
   void set_monitor_result(int ret_code,
                           int64_t current_time,
                           int64_t current_memory_used);
+
+  int flush_gather_audit();
+  void add_success_part_ids_cnt(int64_t cnt) { success_part_ids_cnt_ += cnt; }
+
   TO_STRING_KV(K(last_start_time_),
                K(last_memory_used_),
                K(opt_stat_gather_stat_));
@@ -229,6 +248,10 @@ struct ObOptStatRunningMonitor
   int64_t last_start_time_;
   int64_t last_memory_used_;
   ObOptStatGatherStat &opt_stat_gather_stat_;
+  ObOptStatGatherAudit &audit_;
+
+  ObSEArray<int64_t, 4> failed_part_ids_;
+  int64_t success_part_ids_cnt_;
 };
 
 class ObOptStatGatherStatList
@@ -246,6 +269,8 @@ public:
   int cancel_gather_stats(const uint64_t tenant_id, const ObString &task_id);
   void update_gather_stat_refresh_failed_list(ObString &failed_list,
                                               ObOptStatGatherStat &stat_value);
+  void update_gather_stat_audit(const ObString &audit,
+                                ObOptStatGatherStat &stat_value);
   // param[in] tenant_id  if tenant is sys, list all tenant stat, else list target tenant stat
   int list_to_array(common::ObIAllocator &allocator,
                     const uint64_t target_tenant_id,

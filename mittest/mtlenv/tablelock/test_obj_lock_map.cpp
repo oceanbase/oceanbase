@@ -1,3 +1,6 @@
+// owner: cxf262476
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -17,13 +20,21 @@
 #define UNITTEST
 
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/tablelock/ob_obj_lock.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "table_lock_common_env.h"
 #include "table_lock_tx_common_env.h"
 
 namespace oceanbase
 {
+
+namespace storage
+{
+void ObTxData::dec_ref()
+{
+  return;
+}
+} // namespace storage
+
 namespace transaction
 {
 namespace tablelock

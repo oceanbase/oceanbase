@@ -11,23 +11,8 @@
  */
 
 #define USING_LOG_PREFIX CLOG
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/net/ob_addr.h"
-#include "lib/time/ob_time_utility.h"         // ObTimeUtility
-#include "storage/tx_storage/ob_ls_map.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/ob_ls_id.h"                     // ObLSID
-#include "common/ob_role.h"                 // ObRole
-#include "logservice/palf_handle_guard.h"   // PalfHandleGuard
-#include "share/scn.h"   // SCN
-#include "share/restore/ob_ls_restore_status.h" // ObLSRestoreStatus
-#include "share/restore/ob_log_restore_source.h"  // ObLogRestoreSourceItem
-#include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
-#include "share/rc/ob_tenant_base.h"                  // ObTenantRole
-#include "storage/ls/ob_ls.h"                   // ObLS
 #include "storage/tx_storage/ob_ls_service.h"   // ObLSService
 #include "ob_remote_location_adaptor.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

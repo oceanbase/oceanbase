@@ -12,30 +12,20 @@
 
 #define USING_LOG_PREFIX SERVER_OMT
 #include "ob_tenant_node_balancer.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/ob_debug_sync.h"
-#include "share/system_variable/ob_sys_var_class_type.h"
-#include "observer/ob_inner_sql_result.h"
 #include "ob_tenant.h"
-#include "ob_multi_tenant.h"
-#include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "share/config/ob_server_config.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "logservice/palf/palf_options.h"
 #include "logservice/ob_server_log_block_mgr.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
+#include "share/resource_manager/ob_resource_manager.h"
+#include "share/resource_manager/ob_resource_mapping_rule_manager.h"
+#include "share/resource_manager/ob_resource_col_mapping_rule_manager.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_disk_space_manager.h"
+#endif
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "lib/ash/ob_active_session_guard.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -86,7 +76,7 @@ void ObTenantNodeBalancer::run1()
     TenantUnits units;
     int64_t sys_unit_cnt = 0;
     ObCurTraceId::init(GCONF.self_addr_);
-    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (!SERVER_STORAGE_META_SERVICE.is_started()) {
       // do nothing if not finish replaying slog
       LOG_INFO("server slog not finish replaying, need wait");
       ret = OB_NEED_RETRY;
@@ -116,7 +106,7 @@ void ObTenantNodeBalancer::run1()
 
     // check whether tenant unit is changed, try to update unit config of tenant
     ObSEArray<uint64_t, 10> tenants;
-    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (!SERVER_STORAGE_META_SERVICE.is_started()) {
       // do nothing if not finish replaying slog
       LOG_INFO("server slog not finish replaying, need wait");
       ret = OB_NEED_RETRY;
@@ -131,8 +121,14 @@ void ObTenantNodeBalancer::run1()
 
     FLOG_INFO("refresh tenant config", K(tenants), K(ret));
 
-
-    USLEEP(refresh_interval_);  // sleep 10s
+    {
+      common::ObBKGDSessInActiveGuard inactive_guard;
+      if (GCTX.in_bootstrap_) {
+        USLEEP(1_s);  // sleep 1s
+      } else {
+        USLEEP(refresh_interval_);  // sleep 10s
+      }
+    }
   }
 }
 
@@ -161,7 +157,7 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
   if (!unit.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(unit));
-  } else if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+  } else if (!SERVER_STORAGE_META_SERVICE.is_started()) {
     ret = OB_SERVER_IS_INIT;
     LOG_WARN("slog replay not finish", KR(ret),K(unit));
   } else if (is_meta_tenant(unit.tenant_id_)) {
@@ -189,10 +185,22 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
     const int64_t create_timestamp = ObTimeUtility::current_time();
     basic_tenant_unit.unit_status_ = ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL;
     const int64_t create_tenant_timeout_ts = THIS_WORKER.get_timeout_ts();
-
+    int64_t hidden_sys_data_disk_config_size = 0;
+#ifdef OB_BUILD_SHARED_STORAGE
+    if ((OB_SYS_TENANT_ID == tenant_id) &&  // only sys_tenant_unit_meta record hidden_sys_data_disk_config_size value
+        GCTX.is_shared_storage_mode()) {
+      hidden_sys_data_disk_config_size = OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
+    }
+#endif
     if (create_tenant_timeout_ts < create_timestamp) {
       ret = OB_TIMEOUT;
       LOG_WARN("notify_create_tenant has timeout", K(ret), K(create_timestamp), K(create_tenant_timeout_ts));
+    } else if (0 != unit.data_version_
+        && OB_FAIL(ODV_MGR.set(unit.tenant_id_, unit.data_version_))) {
+      LOG_WARN("fail to set tenant data version", KR(ret), K(unit));
+    } else if (0 != unit.meta_tenant_data_version_
+        && OB_FAIL(ODV_MGR.set(gen_meta_tenant_id(unit.tenant_id_), unit.meta_tenant_data_version_))) {
+      LOG_WARN("fail to set meta tenant data version", KR(ret), K(unit));
     } else if (OB_FAIL(basic_tenant_unit.init(tenant_id,
                                        unit.unit_id_,
                                        ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL,
@@ -200,7 +208,10 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
                                        unit.compat_mode_,
                                        create_timestamp,
                                        has_memstore,
-                                       false /*is_removed*/))) {
+                                       false /*is_removed*/,
+                                       hidden_sys_data_disk_config_size,
+                                       basic_tenant_unit.gen_init_actual_data_disk_size(unit.unit_config_),
+                                       unit.replica_type_))) {
       LOG_WARN("fail to init user tenant config", KR(ret), K(unit));
     } else if (is_user_tenant(tenant_id)
         && OB_FAIL(basic_tenant_unit.divide_meta_tenant(meta_tenant_unit))) {
@@ -222,8 +233,26 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
       } else {
         const obrpc::ObRootKeyResult &root_key = unit.root_key_;
         if (obrpc::RootKeyType::INVALID == root_key.key_type_) {
+#ifdef OB_BUILD_SHARED_STORAGE
+          if (!GCTX.is_shared_storage_mode()) {
+            // do nothing
+            LOG_INFO("root_key got from RS is INVALID, won't set now");
+          } else if (is_sys_tenant(tenant_id)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("sys tenant root_key should not be INVALID", KR(ret));
+          } else {
+            MTL_SWITCH(tenant_id) {
+              if (OB_FAIL(ObMasterKeyUtil::ss_get_root_key(tenant_id))) {
+                LOG_WARN("failed to get root_key from ss", K(ret), K(tenant_id));
+              } else {
+                LOG_INFO("got root_key from ss", K(tenant_id));
+              }
+            }
+          }
+#else
           // do nothing
-          LOG_INFO("root_key got from RS is INVALID, won't set now", KR(ret));
+          LOG_INFO("root_key got from RS is INVALID, won't set now");
+#endif
         } else if (OB_FAIL(ObMasterKeyGetter::instance().set_root_key(
                             tenant_id, root_key.key_type_, root_key.root_key_))) {
           LOG_WARN("failed to set root_key", KR(ret));
@@ -239,13 +268,6 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
         ret = OB_SUCCESS;
         LOG_INFO("succ to create meta tenant", KR(ret), K(meta_tenant_unit), K(create_tenant_timeout_ts));
       }
-    }
-  }
-
-  // In standby cluster, may repeat create tenant, if if_not_grant_ is true, ignore OB_TENANT_EXIST
-  if (OB_TENANT_EXIST == ret && unit.if_not_grant_) {
-    if (GCTX.is_standby_cluster()) {
-      ret = OB_SUCCESS;
     }
   }
 
@@ -302,6 +324,7 @@ int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource &server_r
       server_resource.memory_size_ += max(ObMallocAllocator::get_instance()->get_tenant_limit(tenant_units.at(i).tenant_id_) - extra_memory,
                                           tenant_units.at(i).config_.memory_size());
       server_resource.log_disk_size_ += tenant_units.at(i).config_.log_disk_size();
+      server_resource.data_disk_size_ += tenant_units.at(i).get_effective_actual_data_disk_size();
     }
   }
   return ret;
@@ -331,7 +354,8 @@ int ObTenantNodeBalancer::check_del_tenants(const TenantUnits &local_units, Tena
         break;
       }
     }
-    if (!tenant_exists) {
+    if (!tenant_exists ||
+        ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER == local_unit.unit_status_) {
       LOG_INFO("[DELETE_TENANT] begin to delete tenant", K(local_unit));
       if (OB_SYS_TENANT_ID == local_unit.tenant_id_) {
         LOG_INFO("[DELETE_TENANT] need convert_real_to_hidden_sys_tenant");
@@ -372,7 +396,7 @@ int ObTenantNodeBalancer::check_new_tenant(
 {
   int ret = OB_SUCCESS;
 
-  const int64_t tenant_id = unit.tenant_id_;
+  const uint64_t tenant_id = unit.tenant_id_;
   ObTenant *tenant = nullptr;
 
   if (OB_FAIL(omt_->get_tenant(tenant_id, tenant))) {
@@ -381,29 +405,38 @@ int ObTenantNodeBalancer::check_new_tenant(
       LOG_ERROR("real or hidden sys tenant must be exist", K(ret));
     } else {
       ret = OB_SUCCESS;
-      ObTenantMeta tenant_meta;
-      ObTenantSuperBlock super_block(tenant_id, false /*is_hidden*/);  // empty super block
-      const bool should_check_data_version = check_data_version && is_user_tenant(tenant_id);
-      uint64_t data_version = 0;
-      if (should_check_data_version && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_EAGAIN;
-          LOG_WARN("data_version not refreshed yet, create tenant later", KR(ret), K(tenant_id));
-        } else {
-          LOG_WARN("fail to get data_version", KR(ret), K(tenant_id));
+      HEAP_VARS_2((ObTenantMeta, tenant_meta),
+          (ObTenantSuperBlock, super_block, tenant_id, false/*is_hidden*/)) {
+        const bool should_check_data_version = check_data_version && is_user_tenant(tenant_id);
+        uint64_t data_version = 0;
+        if (should_check_data_version && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            ret = OB_EAGAIN;
+            LOG_WARN("data_version not refreshed yet, create tenant later", KR(ret), K(tenant_id));
+          } else {
+            LOG_WARN("fail to get data_version", KR(ret), K(tenant_id));
+          }
+        } else if (OB_FAIL(tenant_meta.build(unit, super_block))) {
+          LOG_WARN("fail to build tenant meta", K(ret));
+        } else if (OB_FAIL(omt_->create_tenant(tenant_meta, true /* write_slog */, abs_timeout_us))) {
+          LOG_WARN("fail to create new tenant", K(ret), K(tenant_id));
         }
-      } else if (OB_FAIL(tenant_meta.build(unit, super_block))) {
-        LOG_WARN("fail to build tenant meta", K(ret));
-      } else if (OB_FAIL(omt_->create_tenant(tenant_meta, true /* write_slog */, abs_timeout_us))) {
-        LOG_WARN("fail to create new tenant", K(ret), K(tenant_id));
+      }
+      if (FAILEDx(omt_->get_tenant(tenant_id, tenant))) {
+        LOG_WARN("fail to get tenant after create tenant", KR(ret), K(tenant_id));
       }
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(tenant)) {
-      ret = omt_->get_tenant(tenant_id, tenant);
-    }
+  if (OB_FAIL(ret)) {
+    // failed
+  } else if (OB_ISNULL(tenant)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant should not be null here", KR(ret), K(tenant_id));
+  } else if (tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER
+             || tenant->has_stopped()) {
+    LOG_INFO("tenant has been stopped, no need to update", KR(ret), K(tenant_id));
+  } else {
     int64_t extra_memory = 0;
     if (is_sys_tenant(tenant_id)) {
       if (OB_SUCC(ret) && tenant->is_hidden() && OB_FAIL(omt_->convert_hidden_to_real_sys_tenant(unit, abs_timeout_us))) {
@@ -419,13 +452,27 @@ int ObTenantNodeBalancer::check_new_tenant(
     if (OB_SUCC(ret) && OB_FAIL(omt_->update_tenant_memory(unit, extra_memory))) {
       LOG_ERROR("fail to update tenant memory", K(ret), K(tenant_id));
     }
-  }
-
-  if (OB_SUCC(ret) && !is_virtual_tenant_id(tenant_id)) {
-    if (OB_FAIL(omt_->modify_tenant_io(tenant_id, unit.config_))) {
-      LOG_WARN("modify tenant io config failed", K(ret), K(tenant_id), K(unit.config_));
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (OB_FAIL(ret)) {
+    } else if (!GCTX.is_shared_storage_mode() || unit.config_.data_disk_size() == 0) {
+      // do nothing
+    } else {
+      int64_t data_disk_size = unit.config_.data_disk_size();
+      if (is_sys_tenant(tenant_id)) { // real_sys_tenant's data_disk_size = sys_unit_config + hidden_sys_data_disk_size
+        data_disk_size += OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
+      }
+      if (OB_FAIL(omt_->update_tenant_data_disk_size(tenant_id, data_disk_size))) {
+        LOG_WARN("fail to update tenant data disk size", K(ret), K(tenant_id), K(data_disk_size));
+      }
+    }
+#endif
+    if (OB_SUCC(ret) && !is_virtual_tenant_id(tenant_id)) {
+      if (OB_FAIL(omt_->modify_tenant_io(tenant_id, unit.config_))) {
+        LOG_WARN("modify tenant io config failed", K(ret), K(tenant_id), K(unit.config_));
+      }
     }
   }
+
   return ret;
 }
 
@@ -486,6 +533,7 @@ void ObTenantNodeBalancer::periodically_check_tenant()
   }
   omt_->unlock_tenant_list();
 
+  G_RES_MGR.get_plan_mgr().refresh_global_background_cpu();
   int i = 0;
   for (auto it = pairs.begin();
        it != pairs.end();
@@ -493,94 +541,78 @@ void ObTenantNodeBalancer::periodically_check_tenant()
     (*it).tenant_->periodically_check();
     IGNORE_RETURN (*it).tenant_->unlock(*(*it).handle_);
   }
+  ObResourcePlanManager &plan_mgr = G_RES_MGR.get_plan_mgr();
+  ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+  ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
+  LOG_INFO("refresh resource manager plan", K(plan_mgr), K(rule_mgr), K(col_rule_mgr));
 }
 
 // Although unit has been deleted, the local cached unit cannot be deleted if the tenant still holds resource
 int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants, TenantUnits &new_tenants)
 {
   int ret = OB_SUCCESS;
-  bool found = false;
-  bool is_released = false;
+  // tenants that are not in inner-table but CAN NOT be deleted locally yet
   TenantUnits tenants;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < old_tenants.count(); i++) {
-    found = false;
+    bool found = false;
     const ObUnitInfoGetter::ObTenantConfig &tenant_config = old_tenants.at(i);
     const ObUnitInfoGetter::ObUnitStatus local_unit_status = tenant_config.unit_status_;
     for (int64_t j = 0; j < new_tenants.count(); j++) {
       if (tenant_config.tenant_id_ == new_tenants.at(j).tenant_id_) {
         new_tenants.at(j).create_timestamp_ = tenant_config.create_timestamp_;
         new_tenants.at(j).is_removed_ = tenant_config.is_removed_;
+        new_tenants.at(j).actual_data_disk_size_ = tenant_config.actual_data_disk_size_;
         found = true;
         break;
       }
     }
 
     if (!found) {
-      ObTenant *tenant = nullptr;
-      MTL_SWITCH(tenant_config.tenant_id_) {
-        if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->check_all_meta_mem_released(is_released, "[DELETE_TENANT]"))) {
-          LOG_WARN("fail to check_all_meta_mem_released", K(ret), K(tenant_config));
-        } else if (!is_released) {
-          // can not release now. dump some debug info
-          const uint64_t interval = 180 * 1000 * 1000; // 180s
-          if (!is_released && REACH_TIME_INTERVAL(interval)) {
-            MTL(ObTenantMetaMemMgr*)->dump_tablet_info();
-            MTL(ObLSService *)->dump_ls_info();
-            PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_MAX_NUM);
-          }
+      const int64_t now_time = ObTimeUtility::current_time();
+      const int64_t life_time = now_time - tenant_config.create_timestamp_;
+      if (life_time < RECYCLE_LATENCY && !tenant_config.is_removed_) {
+        // tenant-unit is only allowed to update to WAIT_GC after reaching RECYCLE_LATENCY,
+        // to avoid accidentally deleting tenants that haven't yet been persisted in inner-table.
+        // UNLESS the tenant is marked removed during this period.
+        if (OB_FAIL(tenants.push_back(tenant_config))) {
+          LOG_WARN("failed to push back tenant", KR(ret));
         } else {
-          // check ls service is empty.
-          is_released = MTL(ObLSService *)->is_empty();
+          LOG_INFO("[DELETE_TENANT] tenant has not reached the RECYCLE_LATENCY yet "
+              "and not marked removed, can not delete tenant",
+              "create_timestamp", tenant_config.create_timestamp_,
+              "is_removed", tenant_config.is_removed_,
+              "local_unit_status", ObUnitInfoGetter::get_unit_status_str(local_unit_status),
+              K(life_time), K(tenant_config));
         }
-
-        bool is_tenant_snapshot_released = false;
+      } else {
+        // tenant-unit has been deleted in inner-table or marked removed, and ready to be recycled.
+        // Notify tenant snapshot can start gc
         if (is_user_tenant(tenant_config.tenant_id_)) {
-          const int64_t now_time = ObTimeUtility::current_time();
-          const int64_t life_time = now_time - tenant_config.create_timestamp_;
-          if (tenant_config.is_removed_ || life_time >= RECYCLE_LATENCY) {
+          MTL_SWITCH(tenant_config.tenant_id_) {
             MTL(ObTenantSnapshotService*)->notify_unit_is_deleting();
           }
-          if (OB_FAIL(MTL(ObTenantSnapshotService*)->
-                check_all_tenant_snapshot_released(is_tenant_snapshot_released))) {
-            LOG_WARN("fail to check_all_tenant_snapshot_released", K(ret), K(tenant_config));
-          } else if (!is_tenant_snapshot_released) {
-            // can not release now. dump some debug info
-            const uint64_t interval = 180 * 1000 * 1000; // 180s
-            if (!is_tenant_snapshot_released && REACH_TIME_INTERVAL(interval)) {
-              MTL(ObTenantSnapshotService*)->dump_all_tenant_snapshot_info();
-            }
-            LOG_INFO("[DELETE_TENANT] tenant has been dropped, tenant snapshot is still waiting for gc",
-                K(tenant_config));
-          }
-          if (OB_SUCC(ret)) {
-            is_released = is_released && is_tenant_snapshot_released;
-          } else {
-            is_released = false;
-          }
         }
-      }
-
-      if (OB_SUCC(ret)) {
-        // remove local units after RECYCLE_LATENCY to avoid removing by mistake
-        // but if marked removed, remove it directly without waiting
-        const int64_t now_time = ObTimeUtility::current_time();
-        const int64_t life_time = now_time - tenant_config.create_timestamp_;
-        if ((!tenant_config.is_removed_ && life_time < RECYCLE_LATENCY) || !is_released) {
+        // Check if resources are already released:
+        // 1. if not released, update status to WAIT_GC if status is not WAIT_GC or DELETING,
+        //    and push it back to effective tenants to avoid starting deleting.
+        // 2. if released, ignore this tenant, let it be deleted in subsequent process.
+        bool is_released = false;
+        if (FAILEDx(check_tenant_resource_released(tenant_config.tenant_id_, is_released))) {
+          LOG_WARN("failed to check_tenant_resource_released", KR(ret), K(tenant_config));
+        } else if (!is_released) {
           if (OB_FAIL(tenants.push_back(tenant_config))) {
             LOG_WARN("failed to push back tenant", KR(ret));
           } else {
             // update tenant unit status which need be deleted
             // need wait gc in observer
             // NOTE: only update unit status when can not release resource
-            if (!is_released) {
-              tenants.at(tenants.count() - 1).unit_status_ = ObUnitInfoGetter::UNIT_WAIT_GC_IN_OBSERVER;
-              // add a event when try to gc for the first time
-              if (local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_WAIT_GC_IN_OBSERVER &&
-                  local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER) {
-                SERVER_EVENT_ADD("unit", "start unit gc", "tenant_id", tenant_config.tenant_id_,
-                    "unit_id", tenant_config.unit_id_, "unit_status", "WAIT GC");
-              }
+            tenants.at(tenants.count() - 1).unit_status_ = ObUnitInfoGetter::UNIT_WAIT_GC_IN_OBSERVER;
+            // add a event when try to gc for the first time
+            if (local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_WAIT_GC_IN_OBSERVER &&
+                local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER) {
+              SERVER_EVENT_ADD("unit", "start unit gc", "tenant_id", tenant_config.tenant_id_,
+                  "unit_id", tenant_config.unit_id_, "unit_status", "WAIT GC");
             }
 
             LOG_INFO("[DELETE_TENANT] tenant has been dropped. can not delete tenant",
@@ -589,12 +621,12 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
                 "create_timestamp", tenant_config.create_timestamp_,
                 K(life_time), K(tenant_config));
           }
-        } else {
-            LOG_INFO("[DELETE_TENANT] tenant has been dropped. can delete tenant",
-                K(is_released), "local_unit_status", ObUnitInfoGetter::get_unit_status_str(local_unit_status),
-                "is_removed", tenant_config.is_removed_,
-                "create_timestamp", tenant_config.create_timestamp_,
-                K(life_time), K(tenant_config));
+        } else { // released
+          LOG_INFO("[DELETE_TENANT] tenant has been dropped. can delete tenant",
+              K(is_released), "local_unit_status", ObUnitInfoGetter::get_unit_status_str(local_unit_status),
+              "is_removed", tenant_config.is_removed_,
+              "create_timestamp", tenant_config.create_timestamp_,
+              K(life_time), K(tenant_config));
         }
       }
     }
@@ -606,6 +638,54 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
     }
   }
 
+  return ret;
+}
+
+int ObTenantNodeBalancer::check_tenant_resource_released(const uint64_t tenant_id, bool &is_released) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t dump_info_interval = 180 * 1000 * 1000; // 180s
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    is_released = false;
+    MTL_SWITCH(tenant_id) {
+      if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->check_all_meta_mem_released(is_released, "[DELETE_TENANT]"))) {
+        LOG_WARN("fail to check_all_meta_mem_released", K(ret), K(tenant_id));
+      } else if (!is_released) {
+        // can not release now. dump some debug info
+        if (!is_released && REACH_TIME_INTERVAL(dump_info_interval)) {
+          MTL(ObTenantMetaMemMgr*)->dump_tablet_info();
+          MTL(ObLSService *)->dump_ls_info();
+          PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_MAX_NUM);
+        }
+      } else {
+        // check ls service is empty.
+        is_released = MTL(ObLSService *)->is_empty();
+      }
+
+      if (is_user_tenant(tenant_id)) {
+        bool is_tenant_snapshot_released = false;
+        if (OB_FAIL(MTL(ObTenantSnapshotService*)->
+              check_all_tenant_snapshot_released(is_tenant_snapshot_released))) {
+          LOG_WARN("fail to check_all_tenant_snapshot_released", K(ret), K(tenant_id));
+        } else if (!is_tenant_snapshot_released) {
+          // can not release now. dump some debug info
+          if (!is_tenant_snapshot_released && REACH_TIME_INTERVAL(dump_info_interval)) {
+            MTL(ObTenantSnapshotService*)->dump_all_tenant_snapshot_info();
+          }
+          LOG_INFO("[DELETE_TENANT] tenant has been dropped, tenant snapshot is still waiting for gc",
+              K(tenant_id));
+        }
+        if (OB_SUCC(ret)) {
+          is_released = is_released && is_tenant_snapshot_released;
+        } else {
+          is_released = false;
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -667,6 +747,8 @@ int ObTenantNodeBalancer::update_tenant_memory(const obrpc::ObTenantMemoryArg &t
     LOG_WARN("failed to update tenant memory", K(ret), K(tenant_id), K(memory_size));
   } else if (OB_FAIL(omt_->update_tenant_freezer_mem_limit(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
     LOG_WARN("set_tenant_freezer_mem_limit failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(omt_->update_tenant_decode_resource(tenant_id))) {
+    LOG_WARN("update_tenant_decode_resource failed", K(ret), K(tenant_id));
   } else {
     refresh_interval_ = refresh_interval * 1000L * 1000L;
     LOG_INFO("succ to admin update tenant memory", K(tenant_id), K(memory_size));

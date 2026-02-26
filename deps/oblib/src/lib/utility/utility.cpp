@@ -12,20 +12,13 @@
 
 #define USING_LOG_PREFIX LIB
 
+#include "utility.h"
 #include "dirent.h"
-#include <dlfcn.h>
-#include "lib/utility/utility.h"
-#include "lib/ob_define.h"
-#include "util/easy_inet.h"
-#include "common/rowkey/ob_rowkey.h"
-#include "lib/time/ob_time_utility.h"
+#include <gnu/libc-version.h>
 #include "lib/file/file_directory_utils.h"
-#include "common/ob_range.h"
+#include "deps/oblib/src/common/ob_string_buf.h"
 #include "lib/string/ob_sql_string.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "common/object/ob_object.h"
-#include "lib/net/ob_addr.h"
-#include "lib/json/ob_yson.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -365,24 +358,26 @@ const char *inet_ntoa_s(char *buffer, size_t n, const uint32_t ip)
   return buffer;
 }
 
-const char *time2str(const int64_t time_us, const char *format)
+const char *time2str(const int64_t time_us, char *buf, const int64_t buf_len, const char *format)
 {
-  // FIXME: To Be Removed
-  static const int32_t BUFFER_SIZE = 256;
-  thread_local char buffer[4 * BUFFER_SIZE];
-  RLOCAL(uint64_t, i);
-  uint64_t cur = i++ % 4;
-  buffer[cur * BUFFER_SIZE] = '\0';
-  struct tm time_struct;
-  int64_t time_s = time_us / 1000000;
-  int64_t cur_second_time_us = time_us % 1000000;
-  if (NULL != localtime_r(&time_s, &time_struct)) {
-    int64_t pos = strftime(&buffer[cur * BUFFER_SIZE], BUFFER_SIZE, format, &time_struct);
-    if (pos < BUFFER_SIZE) {
-      IGNORE_RETURN snprintf(&buffer[cur * BUFFER_SIZE + pos], BUFFER_SIZE - pos, ".%ld %ld", cur_second_time_us, time_us);
+  if (nullptr != buf && buf_len > 0) {
+    struct tm time_struct;
+    int64_t time_s = time_us / 1000000;
+    int64_t cur_second_time_us = time_us % 1000000;
+    if (nullptr != localtime_r(&time_s, &time_struct)) {
+      int64_t pos = strftime(buf, buf_len, format, &time_struct);
+      // since libc 4.4.4, strftime returns 0 if failed
+      if (pos > 0) {
+        // 25 = 1(.) + 6(cur_second_time_u) + 1(' ') + 16(time_us) + 1('\0')
+        if (pos <= buf_len - 25) {
+          IGNORE_RETURN snprintf(buf + pos, buf_len - pos, ".%ld %ld", cur_second_time_us, time_us);
+        }
+      } else {
+        buf[0] = '\0';
+      }
     }
   }
-  return &buffer[cur * BUFFER_SIZE];
+  return buf;
 }
 
 void print_rowkey(FILE *fd, ObString &rowkey)
@@ -599,7 +594,7 @@ int deep_copy_obj(ObIAllocator &allocator, const ObObj &src, ObObj &dst)
     if (size > 0) {
       if (NULL == (buf = static_cast<char *>(allocator.alloc(size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("Fail to allocate memory, ", K(size), K(ret));
+        LOG_WARN("Fail to allocate memory, ", K(size), K(ret));
       } else if (OB_FAIL(dst.deep_copy(src, buf, size, pos))){
         LOG_WARN("Fail to deep copy obj, ", K(ret));
       } else { }//do nothing
@@ -1162,10 +1157,17 @@ static int use_daemon()
 {
   int ret = OB_SUCCESS;
   const int nochdir = 1;
-  const int noclose = 0;
+  const int noclose = 1;
   if (daemon(nochdir, noclose) < 0) {
     LOG_ERROR("create daemon process fail", K(errno));
     ret = OB_ERR_SYS;
+  } else {
+    int fd = open("/dev/null", O_RDONLY);
+    if (fd >= 0) {
+      dup2(fd, STDIN_FILENO);
+      close(fd);
+    }
+    // stdout and stderr will be redirected to file when execute OBLOGGER.set_file_name
   }
   reset_tid_cache();
   // bt("enable_preload_bt") = 1;
@@ -1658,33 +1660,6 @@ int long_to_str10(int64_t val,char *dst, const int64_t buf_len, const bool is_si
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const char *replica_type_to_str(const ObReplicaType &type)
-{
-  const char *str = "";
-
-  switch (type) {
-  case REPLICA_TYPE_FULL:
-    str = "REPLICA_TYPE_FULL";
-    break;
-  case REPLICA_TYPE_BACKUP:
-    str = "REPLICA_TYPE_BACKUP";
-    break;
-  case REPLICA_TYPE_LOGONLY:
-    str = "REPLICA_TYPE_LOGONLY";
-    break;
-  case REPLICA_TYPE_READONLY:
-    str = "REPLICA_TYPE_READONLY";
-    break;
-  case REPLICA_TYPE_MEMONLY:
-    str = "REPLICA_TYPE_MEMONLY";
-    break;
-  default:
-    str = "REPLICA_TYPE_UNKNOWN";
-  }
-  return str;
-}
-
 bool ez2ob_addr(ObAddr &addr, easy_addr_t& ez)
 {
   bool ret = false;
@@ -1710,12 +1685,15 @@ int ob_strtoll(const char *str, char *&endptr, int64_t &res)
 {
   int ret = OB_SUCCESS;
   res = 0;
+  errno = 0;
   if (OB_ISNULL(str)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     res = strtoll(str, &endptr, 10);
-    if (INT64_MAX == res) {
+    if (ERANGE == errno) {
       ret = OB_SIZE_OVERFLOW;
+    } else if (errno != 0) {
+      ret = OB_INVALID_ARGUMENT;
     }
   }
   return ret;
@@ -1726,12 +1704,15 @@ int ob_strtoull(const char *str, char *&endptr, uint64_t &res)
   int ret = OB_SUCCESS;
   res = 0;
   int64_t tmp_res = 0;
+  errno = 0;
   if (OB_ISNULL(str)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     tmp_res = strtoull(str, &endptr, 10);
-    if (UINT64_MAX == tmp_res) {
+    if (ERANGE == errno) {
       ret = OB_SIZE_OVERFLOW;
+    } else if (errno != 0) {
+      ret = OB_INVALID_ARGUMENT;
     } else {
       res = tmp_res;
     }
@@ -1747,6 +1728,23 @@ int ob_atoll(const char *str, int64_t &res)
   if (OB_ISNULL(str)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(ob_strtoll(str, endptr, val))) {
+    LIB_LOG(WARN, "failed to strtoll", K(ret), KCSTRING(str));
+  } else if (str == endptr || OB_ISNULL(endptr) || OB_UNLIKELY('\0' != *endptr)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    res = val;
+  }
+  return ret;
+}
+
+int ob_atoull(const char *str, uint64_t &res)
+{
+  int ret = OB_SUCCESS;
+  char *endptr = NULL;
+  uint64_t val = 0;
+  if (OB_ISNULL(str)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(ob_strtoull(str, endptr, val))) {
     LIB_LOG(WARN, "failed to strtoll", K(ret), KCSTRING(str));
   } else if (str == endptr || OB_ISNULL(endptr) || OB_UNLIKELY('\0' != *endptr)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1949,6 +1947,141 @@ int extract_cert_expired_time(const char* cert, const int64_t cert_len, int64_t 
   return ret;
 }
 
+enum CAP_UNIT
+{
+  // shift bits between unit of byte and that
+  CAP_B = 0,
+  CAP_KB = 10,
+  CAP_MB = 20,
+  CAP_GB = 30,
+  CAP_TB = 40,
+  CAP_PB = 50,
+};
+
+int64_t parse_config_capacity(const char *str, bool &valid, bool check_unit /* = true */, bool use_byte /* = false*/)
+{
+  char *p_unit = NULL;
+  int64_t value = 0;
+
+  if (OB_ISNULL(str) || '\0' == str[0]) {
+    valid = false;
+  } else {
+    valid = true;
+    value = strtol(str, &p_unit, 0);
+
+    if (OB_ISNULL(p_unit)) {
+      valid = false;
+    } else if (value < 0) {
+      valid = false;
+    } else if ('\0' == *p_unit) {
+      if (check_unit) {
+        valid = false;
+      } else if (!use_byte) {
+        value <<= CAP_MB;
+      }
+    } else if (0 == STRCASECMP("b", p_unit) || 0 == STRCASECMP("byte", p_unit)) {
+      // do nothing
+    } else if (0 == STRCASECMP("kb", p_unit) || 0 == STRCASECMP("k", p_unit)) {
+      value <<= CAP_KB;
+    } else if (0 == STRCASECMP("mb", p_unit) || 0 == STRCASECMP("m", p_unit)) {
+      value <<= CAP_MB;
+    } else if (0 == STRCASECMP("gb", p_unit) || 0 == STRCASECMP("g", p_unit)) {
+      value <<= CAP_GB;
+    } else if (0 == STRCASECMP("tb", p_unit) || 0 == STRCASECMP("t", p_unit)) {
+      value <<= CAP_TB;
+    } else if (0 == STRCASECMP("pb", p_unit) || 0 == STRCASECMP("p", p_unit)) {
+      value <<= CAP_PB;
+    } else {
+      valid = false;
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get capacity error", K(str), K(p_unit));
+    }
+  }
+  return value;
+}
+
+void get_glibc_version(int &major, int &minor)
+{
+  major = 0;
+  minor = 0;
+  const char *glibc_version = gnu_get_libc_version();
+  if (NULL != glibc_version) {
+    sscanf(glibc_version, "%d.%d", &major, &minor);
+  }
+}
+
+bool glibc_prereq(int major, int minor)
+{
+  int cur_major = 0;
+  int cur_minor = 0;
+  get_glibc_version(cur_major, cur_minor);
+  return (cur_major > major) || (cur_major == major && cur_minor >= minor);
+}
+
+const char *extract_demangled_class_name(const char *full_class_name, const char *prefix, char *buffer, int64_t &len)
+{
+  int ti_status = 0;
+  char *tmp_name = abi::__cxa_demangle(full_class_name, nullptr, nullptr, &ti_status);
+  const char *demangled_name = ti_status != 0 ? full_class_name : tmp_name;
+  const char *sub_name = nullptr;
+  if (prefix != nullptr) {
+    sub_name = strstr(demangled_name, prefix);
+  }
+  if (nullptr == sub_name) {
+    sub_name = demangled_name;
+  }
+  if (sub_name != nullptr && buffer != nullptr) {
+    STRNCPY(buffer, sub_name, len);
+    len = std::min(static_cast<int64_t>(strlen(sub_name)), len);
+    sub_name = buffer;
+  } else {
+    sub_name = nullptr;
+    len = 0;
+  }
+  if (tmp_name != nullptr) {
+    //tmp_name malloc by abi::__cxa_demangle,
+    //truncate class name to buffer len and free the tmp name
+    free(tmp_name);
+  }
+  return sub_name;
+}
+
+const char *get_transparent_hugepage_status()
+{
+  char buf[32];
+  const char *status = "unknown";
+  FILE *file = fopen("/sys/kernel/mm/transparent_hugepage/enabled", "r");
+  if (NULL != file) {
+    if (NULL != fgets(buf, sizeof(buf), file)) {
+      if (NULL != STRSTR(buf, "[never]")) {
+        status = "never";
+      } else if (NULL != STRSTR(buf, "[always]")) {
+        status = "always";
+      } else if (NULL != STRSTR(buf, "[madvise]")) {
+        status = "madvise";
+      }
+    }
+    fclose(file);
+  }
+
+  return status;
+}
+
+int read_one_int(const char *file_name, int64_t &value)
+{
+  int ret = OB_SUCCESS;
+  FILE *fp = fopen(file_name, "r");
+  if (fp != nullptr) {
+    if (1 != fscanf(fp, "%ld", &value)) {
+      ret = OB_IO_ERROR;
+      LOG_ERROR("Failed to read integer from file", K(ret));
+    }
+    fclose(fp);
+  } else {
+    ret = OB_FILE_NOT_EXIST;
+    LOG_WARN("File does not exist", K(ret));
+  }
+  return ret;
+}
 
 } // end namespace common
 } // end namespace oceanbase

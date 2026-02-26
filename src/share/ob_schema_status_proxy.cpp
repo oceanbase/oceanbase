@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_schema_status_proxy.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_core_table_proxy.h"
-#include "share/ob_dml_sql_splicer.h"
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase

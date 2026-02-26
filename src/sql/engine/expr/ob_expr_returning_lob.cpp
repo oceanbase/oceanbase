@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_returning_lob.h"
-#include "ob_expr_lob_utils.h"
 namespace oceanbase
 {
 using namespace common;

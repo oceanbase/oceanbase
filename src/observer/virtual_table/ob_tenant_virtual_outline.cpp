@@ -14,8 +14,6 @@
 
 #include "observer/virtual_table/ob_tenant_virtual_outline.h"
 #include "share/schema/ob_schema_getter_guard.h"
-#include "common/row/ob_row.h"
-#include "lib/utility/utility.h"
 namespace oceanbase
 {
 namespace observer
@@ -268,20 +266,32 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo *outline_info)
           break;
         }
         case FORMAT_SQL_TEXT : {
-          ObString str("");
-          cells[cell_idx].set_lob_value(ObLongTextType, str.ptr(), 0);
-          cells[cell_idx].set_collation_type(
-              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          ObString format_sql_text;
+          if (OB_FAIL(ob_write_string(*allocator_, outline_info->get_format_sql_text_str(), format_sql_text))) {
+            LOG_WARN("fail to deep copy obstring", K(ret),
+                      K(outline_info->get_format_sql_text_str()), K(format_sql_text));
+          } else {
+            cells[cell_idx].set_lob_value(ObLongTextType, format_sql_text.ptr(),
+                                          static_cast<int32_t>(format_sql_text.length()));
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
           break;
         }
         case FORMAT_SQL_ID : {
-          cells[cell_idx].set_varchar("");
-          cells[cell_idx].set_collation_type(
-              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          ObString format_sql_id;
+          if (OB_FAIL(ob_write_string(*allocator_, outline_info->get_format_sql_id_str(), format_sql_id))) {
+            LOG_WARN("fail to deep copy obstring", K(ret),
+                      K(outline_info->get_format_sql_id_str()), K(format_sql_id));
+          } else {
+            cells[cell_idx].set_varchar(format_sql_id);
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
           break;
         }
         case FORMAT_OUTLINE : {
-          cells[cell_idx].set_int(static_cast<int64_t>(false));
+          cells[cell_idx].set_int(static_cast<int64_t>(outline_info->is_format()));
           break;
         }
         default: {
@@ -326,25 +336,26 @@ int ObTenantVirtualOutline::inner_get_next_row(common::ObNewRow *&row)
     LOG_WARN("invalid array idx", K(ret), K(outline_info_idx_));
   } else if (outline_info_idx_ >= outline_infos_.count()) {
     ret = OB_ITER_END;
-  } else if (OB_ISNULL(outline_info = outline_infos_.at(outline_info_idx_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("outline info is NULL", K(ret), K(outline_info_idx_));
-  } else if (OB_FAIL(is_output_outline(outline_info, is_output))) {
-    LOG_WARN("fail to judge output", K(ret), KPC(outline_info));
-  } else if (is_output) {
-    if (OB_FAIL(fill_cells(outline_info))) {
-      LOG_WARN("fail to fill cells", K(ret), K(outline_info), K(outline_info_idx_));
-    } else {
-      ++outline_info_idx_;
-      row = &cur_row_;
-    }
   } else {
-    ++outline_info_idx_;
-    if (OB_FAIL(inner_get_next_row(row))) {
-      LOG_WARN("fail to get_next_row", K(ret));
+    while (OB_SUCC(ret) && outline_info_idx_ < outline_infos_.count() && !is_output) {
+      if (OB_ISNULL(outline_info = outline_infos_.at(outline_info_idx_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("outline info is NULL", K(ret), K(outline_info_idx_));
+      } else if (OB_FAIL(is_output_outline(outline_info, is_output))) {
+        LOG_WARN("fail to judge output", K(ret), KPC(outline_info));
+      } else if (is_output) {
+        if (OB_FAIL(fill_cells(outline_info))) {
+          LOG_WARN("fail to fill cells", K(ret), K(outline_info), K(outline_info_idx_));
+        } else {
+          row = &cur_row_;
+        }
+      }
+      outline_info_idx_++;
     }
   }
-
+  if (OB_SUCC(ret) && !is_output) {
+    ret = OB_ITER_END;
+  }
   return ret;
 }
 }

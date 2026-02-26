@@ -14,6 +14,8 @@
 #define OCEANBASE_SQL_OB_EXPR_ST_ASGEOJSON_
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
+
 using namespace oceanbase::common;
 namespace oceanbase
 {
@@ -31,7 +33,7 @@ public:
       ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
 
 private:
-  static int process_input_params(const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator,
+  static int process_input_params(const ObExpr &expr, ObEvalCtx &ctx, MultimodeAlloctor &allocator,
       ObGeometry *&geo, bool &is_null_res, ObGeoSrid& srid, uint32_t &max_dec_digits,
       uint8_t &flag);
   DISALLOW_COPY_AND_ASSIGN(ObExprSTAsGeoJson);

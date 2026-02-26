@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_profile_stmt.h"
 
-#include "share/ob_define.h"
-#include "lib/string/ob_string.h"
-#include "lib/string/ob_strings.h"
-#include "lib/utility/ob_print_utils.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

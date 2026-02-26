@@ -14,29 +14,9 @@
 
 #include "rootserver/freeze/ob_major_merge_scheduler.h"
 
-#include "rootserver/ob_root_service.h"
-#include "rootserver/freeze/ob_major_merge_progress_checker.h"
-#include "rootserver/freeze/ob_major_merge_info_manager.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/freeze/ob_tenant_all_zone_merge_strategy.h"
-#include "rootserver/freeze/ob_major_freeze_util.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/time/ob_time_utility.h"
-#include "share/ob_errno.h"
-#include "share/config/ob_server_config.h"
-#include "share/tablet/ob_tablet_table_iterator.h"
-#include "share/ob_global_stat_proxy.h"
 #include "share/ob_service_epoch_proxy.h"
-#include "share/ob_column_checksum_error_operator.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
-#include "share/ob_server_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -72,9 +52,20 @@ int64_t ObMajorMergeIdling::get_idle_interval_us()
 ///////////////////////////////////////////////////////////////////////////////
 
 ObMajorMergeScheduler::ObMajorMergeScheduler(const uint64_t tenant_id)
-  : ObFreezeReentrantThread(tenant_id), is_inited_(false), is_primary_service_(true), fail_count_(0),
-    first_check_merge_us_(0), idling_(stop_), merge_info_mgr_(nullptr),
-    config_(nullptr), merge_strategy_(), progress_checker_(tenant_id, stop_)
+  : ObFreezeReentrantThread(tenant_id),
+    is_inited_(false),
+    is_primary_service_(true),
+    fail_count_(0),
+    first_check_merge_us_(0),
+    idling_(stop_),
+    merge_info_mgr_(nullptr),
+    config_(nullptr),
+    merge_strategy_(),
+    progress_checker_(tenant_id, stop_)
+{
+}
+
+ObMajorMergeScheduler::~ObMajorMergeScheduler()
 {
 }
 
@@ -87,6 +78,8 @@ int ObMajorMergeScheduler::init(
     common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
+  void *buf = nullptr;
+
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret), K_(tenant_id));
@@ -95,8 +88,11 @@ int ObMajorMergeScheduler::init(
     LOG_WARN("invalid tenant id", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(merge_strategy_.init(tenant_id_, &merge_info_mgr.get_zone_merge_mgr()))) {
     LOG_WARN("fail to init tenant zone merge strategy", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(progress_checker_.init(is_primary_service, sql_proxy,
-                schema_service, server_trace, merge_info_mgr))) {
+  } else if (OB_FAIL(progress_checker_.init(is_primary_service,
+                                      sql_proxy,
+                                      schema_service,
+                                      server_trace,
+                                      merge_info_mgr))) {
     LOG_WARN("fail to init progress_checker", KR(ret));
   } else if (OB_FAIL(idling_.init(tenant_id_))) {
     LOG_WARN("fail to init idling", KR(ret), K_(tenant_id));
@@ -291,7 +287,7 @@ int ObMajorMergeScheduler::do_work()
 
     LOG_TRACE("finish do merge scheduler work", KR(ret), K(curr_round_epoch), K(global_info));
     // is_merging = false, except for switchover
-    check_merge_interval_time(false);
+    check_merge_interval_time(false, curr_round_epoch);
   }
   return ret;
 }
@@ -300,15 +296,20 @@ int ObMajorMergeScheduler::do_before_major_merge(const int64_t expected_epoch, c
 {
   int ret = OB_SUCCESS;
   share::SCN global_broadcast_scn;
+  share::ObFreezeInfo freeze_info;
   global_broadcast_scn.set_min();
   FREEZE_TIME_GUARD;
   if (OB_FAIL(merge_info_mgr_->get_zone_merge_mgr().get_global_broadcast_scn(global_broadcast_scn))) {
     LOG_WARN("fail to get global broadcast scn", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(progress_checker_.set_basic_info(global_broadcast_scn, expected_epoch))) {
+  } else if (OB_FAIL(merge_info_mgr_->get_freeze_info_mgr().get_freeze_info(global_broadcast_scn, freeze_info))) {
+    LOG_WARN("fail to get freeze info", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(progress_checker_.set_basic_info(freeze_info, expected_epoch))) {
     LOG_WARN("failed to set basic info of progress checker", KR(ret), K(global_broadcast_scn), K(expected_epoch));
-  } else if (start_merge && OB_FAIL(ObColumnChecksumErrorOperator::delete_column_checksum_err_info(
-      *sql_proxy_, tenant_id_, global_broadcast_scn))) {
-    LOG_WARN("fail to delete column checksum error info", KR(ret), K(global_broadcast_scn));
+  } else if (start_merge) {
+    if (OB_FAIL(ObColumnChecksumErrorOperator::delete_column_checksum_err_info(
+        *sql_proxy_, tenant_id_, global_broadcast_scn))) {
+      LOG_WARN("fail to delete column checksum error info", KR(ret), K(global_broadcast_scn));
+    }
   }
   return ret;
 }
@@ -367,7 +368,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
 
       ret = OB_SUCCESS;
       // treat as is_merging = true, even though last merge complete
-      check_merge_interval_time(true);
+      check_merge_interval_time(true, expected_epoch);
       LOG_INFO("finish one round of loop in do_one_round_major_merge", K(expected_epoch), K(global_info));
     }
   }
@@ -492,20 +493,19 @@ int ObMajorMergeScheduler::update_merge_status(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  compaction::ObMergeProgress progress;
   DEBUG_SYNC(RS_VALIDATE_CHECKSUM);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
-  } else if (OB_FAIL(progress_checker_.check_progress(progress))) {
+  } else if (OB_FAIL(progress_checker_.check_progress())) {
     LOG_WARN("fail to check merge status", KR(ret), K_(tenant_id), K(expected_epoch));
     if (OB_CHECKSUM_ERROR == ret) {
-      if (OB_TMP_FAIL(merge_info_mgr_->get_zone_merge_mgr().set_merge_error(ObZoneMergeInfo::ObMergeErrorType::CHECKSUM_ERROR,
-          expected_epoch))) {
+      if (OB_TMP_FAIL(merge_info_mgr_->get_zone_merge_mgr().set_merge_status(ObZoneMergeInfo::CHECKSUM_ERROR, expected_epoch))) {
         LOG_WARN("fail to set merge error", KR(ret), KR(tmp_ret), K_(tenant_id), K(expected_epoch));
       }
     }
   } else {
+    const compaction::ObBasicMergeProgress &progress = progress_checker_.get_merge_progress();
     LOG_INFO("succcess to update merge status", K(ret), K(global_broadcast_scn), K(progress), K(expected_epoch));
     if (OB_FAIL(handle_merge_progress(progress, global_broadcast_scn, expected_epoch))) {
       LOG_WARN("fail to handle all zone merge", KR(ret), K(global_broadcast_scn), K(expected_epoch));
@@ -516,7 +516,7 @@ int ObMajorMergeScheduler::update_merge_status(
 }
 
 int ObMajorMergeScheduler::handle_merge_progress(
-    const compaction::ObMergeProgress &progress,
+    const compaction::ObBasicMergeProgress &progress,
     const share::SCN &global_broadcast_scn,
     const int64_t expected_epoch)
 {
@@ -711,10 +711,10 @@ int ObMajorMergeScheduler::get_epoch_with_retry(int64_t &freeze_service_epoch)
     FREEZE_TIME_GUARD;
     if (OB_FAIL(ObServiceEpochProxy::get_service_epoch(*sql_proxy_, tenant_id_,
                 ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, freeze_service_epoch))) {
-      const int64_t idle_time_us = 100 * 1000 * (i + 1);
+      const int32_t idle_time_us = 100 * 1000 * (i + 1);
       LOG_WARN("fail to get freeze_service_epoch, will retry", KR(ret), K_(tenant_id),
                K(idle_time_us), "cur_retry_count", i + 1, K(MAX_RETRY_COUNT));
-      USLEEP(idle_time_us);
+      ob_throttle_usleep(idle_time_us, ret, i + 1);
       final_ret = ret;
       ret = OB_SUCCESS;
     } else {
@@ -736,7 +736,6 @@ int ObMajorMergeScheduler::do_update_and_reload(const int64_t epoch)
     LOG_WARN("merge info mgr is null", KR(ret));
   } else {
     FREEZE_TIME_GUARD;
-    share::SCN global_broadcast_scn;
     if (OB_FAIL(set_epoch(epoch))) {
       LOG_WARN("fail to set epoch", KR(ret), K(epoch));
     } else if (OB_FAIL(merge_info_mgr_->reload(true/*reload_zone_mereg_info*/))) {
@@ -767,7 +766,7 @@ int ObMajorMergeScheduler::update_all_tablets_report_scn(
   return ret;
 }
 
-void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
+void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging, const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   int64_t now = ObTimeUtility::current_time();
@@ -785,6 +784,7 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
     LOG_WARN("fail to get global merge start time", KR(ret), K_(tenant_id));
   } else {
     const int64_t MAX_NO_MERGE_INTERVAL = 36 * 3600 * 1000 * 1000L;  // 36 hours
+    const int64_t MAX_REFRESH_EPOCH_IN_MERGE_INTERVAL = 6 * 3600 * 1000 * 1000L; // 6 hours
     if ((global_last_merged_time < 0) || (global_merge_start_time < 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected global_last_merged_time and global_merge_start_time", KR(ret),
@@ -821,9 +821,15 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
       if (is_merging) {
         if ((now - max_merge_time) > MAX_NO_MERGE_INTERVAL) {
           if (TC_REACH_TIME_INTERVAL(30 * 60 * 1000 * 1000)) {
-            LOG_ERROR("long time major freeze not finish, please check it", KR(ret),
-              K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
-              K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
+            bool is_match = true;
+            if (OB_FAIL(share::ObServiceEpochProxy::check_service_epoch(*sql_proxy_, tenant_id_,
+                        share::ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
+              LOG_WARN("fail to check freeze service epoch", KR(ret), K_(tenant_id), K(expected_epoch));
+            } else if (is_match) {
+              LOG_ERROR("long time major freeze not finish, please check it", KR(ret), K(expected_epoch),
+                        K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
+                        K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
+            }
           }
         }
       } else {
@@ -844,16 +850,28 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
                                                                false, tenant_info))) {
               LOG_WARN("fail to load tenant info", KR(ret), K_(tenant_id));
             } else if (tenant_info.is_standby()
-                       && (tenant_info.get_standby_scn() >= tenant_info.get_recovery_until_scn())) {
+                       && (tenant_info.get_readable_scn() >= tenant_info.get_recovery_until_scn())) {
               LOG_INFO("standby tenant do not sync from primary tenant any more, and do not"
                        " major freeze any more");
             } else {
-              LOG_ERROR("long time no major freeze, please check it", KR(ret),
-                K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
-                K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
+              bool is_match = true;
+              if (OB_FAIL(share::ObServiceEpochProxy::check_service_epoch(*sql_proxy_, tenant_id_,
+                          share::ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
+                LOG_WARN("fail to check freeze service epoch", KR(ret), K_(tenant_id), K(expected_epoch));
+              } else if (is_match) {
+                LOG_ERROR("long time no major freeze, please check it", KR(ret), K(expected_epoch),
+                  K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
+                  K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
+              }
             }
           }
         }
+      }
+    }
+    if (OB_SUCC(ret) && !is_paused() && (start_service_time > 0) &&
+        is_merging && (now - max_merge_time) > MAX_REFRESH_EPOCH_IN_MERGE_INTERVAL) {
+      if (OB_FAIL(try_update_epoch_and_reload())) {
+        LOG_WARN("fail to try_update_epoch_and_reload", KR(ret), "cur_epoch", get_epoch());
       }
     }
   }

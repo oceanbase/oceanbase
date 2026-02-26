@@ -27,13 +27,6 @@ namespace meta
 template <typename T>
 class MetaSerializer
 {
-  template <typename T2 = T,
-            typename std::enable_if<!OB_TRAIT_SERIALIZEABLE(T2) &&
-                                    !OB_TRAIT_DEEP_SERIALIZEABLE(T2), bool>::type = true>
-  void requires() {
-    static_assert(!(!OB_TRAIT_SERIALIZEABLE(T2) && !OB_TRAIT_DEEP_SERIALIZEABLE(T2)),
-                  "your type is not serializable");
-  }
 public:
   MetaSerializer(ObIAllocator &alloc, const T &data)
   : alloc_(alloc),

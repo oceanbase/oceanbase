@@ -14,8 +14,6 @@
 
 #include "sql/engine/expr/ob_expr_benchmark.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "common/ob_smart_call.h"
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 
 namespace oceanbase
@@ -141,7 +139,7 @@ int ObExprBenchmark::collect_exprs(common::ObIArray<ObExpr *> &exprs,
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < root_expr.arg_cnt_; ++i) {
     ObEvalInfo &eval_flag = root_expr.args_[i]->get_eval_info(ctx);
-    if (!eval_flag.evaluated_) {
+    if (!eval_flag.is_evaluated(ctx)) {
       OZ (exprs.push_back(root_expr.args_[i]));
       OZ (SMART_CALL(collect_exprs(exprs, *root_expr.args_[i], ctx)));
     }

@@ -25,7 +25,7 @@
 #include "common/ob_zone_type.h"                          // ObZoneType
 #include "share/ob_server_status.h"                       // ObServerStatus
 
-
+#include "ob_cdc_tenant_checkpoint.h"                     // TenantInfo
 #include "ob_log_mysql_connector.h"                       // MySQLQueryBase
 
 namespace oceanbase
@@ -134,11 +134,12 @@ private:
 // query all tenant_id
 class QueryAllTenantStrategy : public ISQLStrategy {
 public:
-  QueryAllTenantStrategy() {}
+  QueryAllTenantStrategy(const uint64_t tenant_id = common::OB_INVALID_TENANT_ID) : tenant_id_(tenant_id) {}
   ~QueryAllTenantStrategy() {}
 public:
   int build_sql_statement(char *sql_buf, const int64_t mul_statement_buf_len, int64_t &pos);
 private:
+  uint64_t tenant_id_;
   DISALLOW_COPY_AND_ASSIGN(QueryAllTenantStrategy);
 };
 
@@ -193,7 +194,6 @@ public:
   static const int64_t ALL_SERVER_DEFAULT_RECORDS_NUM = 32;
 
   struct ClusterInfo;
-  struct TenantInfo;
 
   struct ObServerVersionInfo;
   typedef common::ObSEArray<ObServerVersionInfo, DEFAULT_RECORDS_NUM> ObServerVersionInfoArray;
@@ -231,6 +231,7 @@ public:
       common::ObIArray<common::ObAddr> &sql_server_list) = 0;
 
   virtual int query_tenant_info_list(common::ObIArray<TenantInfo> &tenant_info_list) = 0;
+  virtual int query_tenant_info(const uint64_t tenant_id, TenantInfo &tenant_info) = 0;
 
   // query tenant_id list
   virtual int query_tenant_id_list(common::ObIArray<uint64_t> &tenant_id_list) = 0;
@@ -333,6 +334,12 @@ public:
      * Error codes
      * - OB_NEED_RETRY: Connection error encountered
      */
+    int get_records(TenantInfo &record);
+
+    /*
+     * Error codes
+     * - OB_NEED_RETRY: Connection error encountered
+     */
     int get_records(common::ObIArray<common::ObAddr> &record);
 
     /*
@@ -354,6 +361,7 @@ public:
         const ObLogSvrBlacklist &server_blacklist,
         common::ObIArray<common::ObAddr> &records);
     int parse_record_from_row_(common::ObIArray<TenantInfo> &records);
+    int parse_record_from_row_(TenantInfo &records);
     int parse_record_from_row_(common::ObIArray<common::ObAddr> &records);
     int parse_record_from_row_(share::schema::TenantStatus &records);
 
@@ -391,17 +399,6 @@ public:
 
     TO_STRING_KV(K_(cluster_id));
   };
-
-  struct TenantInfo {
-  public:
-    TenantInfo(): tenant_id(OB_INVALID_TENANT_ID), tenant_name() {}
-    TenantInfo(const uint64_t id, const ObString &name): tenant_id(id), tenant_name(name) {}
-    TO_STRING_KV(K(tenant_id), K(tenant_name));
-
-    uint64_t tenant_id;
-    ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name;
-  };
-
 
   struct ObServerVersionInfo
   {
@@ -480,6 +477,7 @@ public:
       common::ObIArray<ObAddr> &sql_server_list);
   virtual int query_tenant_id_list(common::ObIArray<uint64_t> &tenant_id_list);
   virtual int query_tenant_info_list(common::ObIArray<TenantInfo> &tenant_info_list);
+  virtual int query_tenant_info(const uint64_t tenant_id, TenantInfo &tenant_info);
   virtual int query_tenant_sql_server_list(
       const uint64_t tenant_id,
       common::ObIArray<common::ObAddr> &tenant_server_list);

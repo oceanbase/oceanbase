@@ -58,7 +58,7 @@ public:
 
 private:
   typedef common::hash::ObHashMap<uint64_t, lib::Worker::CompatMode, common::hash::SpinReadWriteDefendMode> MAP;
-  static const int64_t bucket_num = common::OB_DEFAULT_TENANT_COUNT;
+  static const int64_t bucket_num = 100000; //normally tenant count would not bigger than 10w
 
 private:
   MAP id_mode_map_;

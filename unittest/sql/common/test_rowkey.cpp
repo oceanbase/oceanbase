@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "common/rowkey/ob_rowkey.h"
 #include "sql/ob_sql_init.h"
 
 using namespace oceanbase;

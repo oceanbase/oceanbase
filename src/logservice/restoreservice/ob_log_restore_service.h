@@ -48,10 +48,13 @@ using oceanbase::storage::ObLSService;
 // provide the ability to fetch log from remote cluster and backups
 class ObLogRestoreService : public share::ObThreadPool
 {
-  const int64_t SCHEDULE_INTERVAL = 1000 * 1000L;   // 1s
-  const int64_t UPDATE_RESTORE_UPPER_LIMIT_INTERVAL = 100 * 1000L;  // 100ms
-  const int64_t PRIMARY_THREAD_RUN_INTERVAL = 1000 * 1000L;   // 1s
-  const int64_t STANDBY_THREAD_RUN_INTERVAL = 100 * 1000L;  // 100ms
+  static const int64_t SCHEDULE_INTERVAL = 1000 * 1000L;   // 1s
+  static const int64_t UPDATE_RESTORE_UPPER_LIMIT_INTERVAL = 100 * 1000L;  // 100ms
+  static const int64_t PRIMARY_THREAD_RUN_INTERVAL = 1000 * 1000L;   // 1s
+  static const int64_t STANDBY_THREAD_RUN_INTERVAL = 10 * 1000L;  // 10ms
+  static const int64_t SCHEDULE_FETCH_LOG_INTERVAL = 1 * STANDBY_THREAD_RUN_INTERVAL; // 10ms
+  static const int64_t UPDATE_UPSTREAM_INTERVAL = 10 * STANDBY_THREAD_RUN_INTERVAL; // 100ms
+  static const int64_t COMMON_EVENT_SCHEDULE_INTERVAL = 10 * STANDBY_THREAD_RUN_INTERVAL; // 100ms
 public:
   ObLogRestoreService();
   ~ObLogRestoreService();
@@ -65,6 +68,7 @@ public:
            ObLogService *log_service);
   void destroy();
   int start();
+  int restart();
   void stop();
   void wait();
   void signal();
@@ -81,6 +85,8 @@ private:
   void update_restore_upper_limit_();
   void set_compressor_type_();
   void refresh_error_context_();
+  void reset_restore_source_();
+  bool reach_time_interval_(const int64_t current_ts, const int64_t time_interval, int64_t &time_us);
 
 private:
   bool inited_;
@@ -93,9 +99,18 @@ private:
   ObRemoteFetchWorker fetch_log_worker_;
   ObRemoteLogWriter writer_;
   ObRemoteErrorReporter error_reporter_;
+  ObLogRestoreSourceItem restore_source_;
+  int64_t query_restore_source_ts_;
+  int64_t schedule_fetch_log_ts_;
+  int64_t common_event_schedule_ts_;
   ObLogRestoreAllocator allocator_;
   ObLogRestoreScheduler scheduler_;
   common::ObCond cond_;
+  // for restart
+  common::ObSpinLock lock_;
+  rpc::frame::ObReqTransport *init_transport_;
+  ObLSService *init_ls_svr_;
+  ObLogService *init_log_service_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreService);

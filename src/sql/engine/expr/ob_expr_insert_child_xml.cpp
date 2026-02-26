@@ -12,12 +12,7 @@
  */
 
 #include "ob_expr_insert_child_xml.h"
-#include "ob_expr_lob_utils.h"
-#include "lib/xml/ob_xml_parser.h"
-#include "lib/xml/ob_xml_util.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#include "lib/utility/utility.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -103,7 +98,8 @@ int ObExprInsertChildXml::eval_insert_child_xml(const ObExpr &expr, ObEvalCtx &c
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObDatum *xml_datum = NULL;
   ObIMulModeBase *xml_tree = NULL;
   ObString xpath_str;
@@ -118,7 +114,6 @@ int ObExprInsertChildXml::eval_insert_child_xml(const ObExpr &expr, ObEvalCtx &c
   bool is_insert_attributes = false;
 
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (OB_UNLIKELY(expr.arg_cnt_ != 5)) {
@@ -127,7 +122,7 @@ int ObExprInsertChildXml::eval_insert_child_xml(const ObExpr &expr, ObEvalCtx &c
   } else if (ObNullType == expr.args_[1]->datum_meta_.type_) {
     ret = OB_ERR_INVALID_XPATH_EXPRESSION;
     LOG_WARN("invalid xpath expression", K(ret));
-  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum))) {
+  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum, allocator))) {
     LOG_WARN("fail to get xmltype value", K(ret));
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[1], ctx, xpath_str, allocator))) {
     LOG_WARN("fail to get xpath str", K(ret));
@@ -140,6 +135,7 @@ int ObExprInsertChildXml::eval_insert_child_xml(const ObExpr &expr, ObEvalCtx &c
     LOG_WARN("fail to construct namespace params", K(ret), K(namespace_str));
   }
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   if (OB_FAIL(ret)) {
   } else if (xpath_str.empty()) {
     // do nothing
@@ -204,7 +200,7 @@ int ObExprInsertChildXml::eval_insert_child_xml(const ObExpr &expr, ObEvalCtx &c
 int ObExprInsertChildXml::insert_child_xml(const ObExpr &expr,
                                            ObEvalCtx &ctx,
                                            ObMulModeMemCtx* mem_ctx,
-                                           ObArenaAllocator &allocator,
+                                           MultimodeAlloctor &allocator,
                                            ObPathExprIter &xpath_iter,
                                            ObString child_str,
                                            ObString value_str,
@@ -219,7 +215,8 @@ int ObExprInsertChildXml::insert_child_xml(const ObExpr &expr,
   uint64_t ele_index = 0;
   ObDatum *value_datum = NULL;
   CK(OB_NOT_NULL(expr.args_[3]));
-  if (expr.args_[3]->datum_meta_.type_ == ObUserDefinedSQLType) {
+  ObObjType type = expr.args_[3]->datum_meta_.type_;
+  if (type == ObUserDefinedSQLType) {
     if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[3], ctx, value_datum))) {
       LOG_WARN("fail to get xmltype value", K(ret));
     } else if (OB_FAIL(ObXMLExprHelper::get_xml_base(mem_ctx, value_datum, CS_TYPE_INVALID, ObNodeMemType::TREE_TYPE, value_doc))) {
@@ -280,6 +277,17 @@ int ObExprInsertChildXml::insert_child_xml(const ObExpr &expr,
     ret = OB_SUCCESS;
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (type == ObUserDefinedSQLType) {
+    if (OB_FAIL(allocator.add_baseline_size(value_datum, true, res_array.size()))) {
+      LOG_WARN("failed to add base line size", K(ret));
+    }
+  } else {
+    if (OB_FAIL(allocator.add_baseline_size(expr.args_[3], ctx, res_array.size()))) {
+      LOG_WARN("failed to add base line size", K(ret));
+    }
+  }
+
   for (int i = 0; OB_SUCC(ret) && i < res_array.size(); i++) {
     ObIMulModeBase* insert_node = res_array[i];
     if (OB_ISNULL(insert_node)) {
@@ -290,10 +298,13 @@ int ObExprInsertChildXml::insert_child_xml(const ObExpr &expr,
         LOG_WARN("fail to insert attributes node", K(ret), K(child_str), K(value_str));
       }
     } else {
-      ObIMulModeBase *value_doc = NULL;
-      if (OB_FAIL(ObXMLExprHelper::get_xml_base(mem_ctx, value_datum, CS_TYPE_INVALID, ObNodeMemType::TREE_TYPE, value_doc))) {
-        LOG_WARN("fail to parse xml doc", K(ret));
-      } else if (OB_FAIL(insert_element_node(allocator, insert_node, value_doc->at(ele_index)))) {
+      ObXmlNode *value_clone = nullptr;
+      if (OB_ISNULL(value_doc->at(ele_index))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get index is null", K(ret), K(ele_index), KP(value_doc));
+      } else if (OB_FAIL(value_doc->at(ele_index)->clone(mem_ctx, value_clone))) {
+        LOG_WARN("failed to clone.", K(ret), K(value_doc));
+      } else if (OB_FAIL(insert_element_node(allocator, insert_node, value_clone))) {
         LOG_WARN("fail to insert element node", K(ret));
       }
     }
@@ -308,7 +319,7 @@ int ObExprInsertChildXml::insert_child_xml(const ObExpr &expr,
   return ret;
 }
 
-int ObExprInsertChildXml::insert_element_node(ObArenaAllocator &allocator,
+int ObExprInsertChildXml::insert_element_node(ObIAllocator &allocator,
                                               ObIMulModeBase *insert_node,
                                               ObIMulModeBase *value_node)
 {
@@ -389,7 +400,7 @@ int ObExprInsertChildXml::insert_attributes_node(ObString key_str,
 
 int ObExprInsertChildXml::check_child_expr(const ObExpr &expr,
                                            ObEvalCtx &ctx,
-                                           ObArenaAllocator &allocator,
+                                           ObIAllocator &allocator,
                                            ObMulModeMemCtx* mem_ctx,
                                            ObString &child_str,
                                            ObString &value_str,

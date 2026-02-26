@@ -11,13 +11,9 @@
  */
 
 #include "ob_mysql_request_utils.h"
-#include "lib/allocator/ob_malloc.h"
 #include "lib/compress/zlib/ob_zlib_compressor.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "rpc/ob_request.h"
 #include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/ob_packet_record.h"
 #include "rpc/obmysql/obsm_struct.h"
 
 using namespace oceanbase::common;
@@ -81,7 +77,8 @@ static int build_compressed_packet(ObEasyBuffer &src_buf,
     ObZlibCompressor compressor;
     bool use_real_compress = true;
     if (context.use_checksum()) {
-      compressor.set_compress_level(0);
+      int64_t com_level = context.conn_->proxy_cap_flags_.is_ob_protocol_v2_compress() ? 6 : 0;
+      compressor.set_compress_level(com_level);
       use_real_compress = !context.is_checksum_off_;
     }
     int64_t dst_data_size = 0;
@@ -126,7 +123,7 @@ static int build_compressed_packet(ObEasyBuffer &src_buf,
       }
       SERVER_LOG(DEBUG, "succ to build compressed pkt", "comp_len", dst_data_size,
                  "comp_seq", context.seq_, K(len_before_compress), K(next_compress_size),
-                 K(src_buf), K(dst_buf), K(context));
+                 K(src_buf), K(dst_buf), K(context), K(context.conn_->sessid_));
       src_buf.read(next_compress_size);
       dst_buf.write(dst_data_size + OB_MYSQL_COMPRESSED_HEADER_SIZE);
       ++context.seq_;
@@ -139,14 +136,19 @@ static int build_compressed_buffer(ObEasyBuffer &orig_send_buf,
     ObCompressionContext &context)
 {
   int ret = OB_SUCCESS;
-  if (NULL != context.send_buf_) {
+  if (OB_ISNULL(context.conn_)) {
+    ret = OB_INVALID_ARGUMENT;
+    SERVER_LOG(WARN, "conn_ is null", K(context), K(ret));
+  } else if (NULL != context.send_buf_) {
     ObEasyBuffer comp_send_buf(*context.send_buf_);
     if (OB_UNLIKELY(!orig_send_buf.is_valid()) || OB_UNLIKELY(!comp_send_buf.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(ERROR, "orig_send_buf or comp_send_buf is invalid", K(orig_send_buf), K(comp_send_buf), K(ret));
     } else {
       const int64_t max_read_step = context.get_max_read_step();
-      int64_t next_read_size = orig_send_buf.get_next_read_size(context.last_pkt_pos_, max_read_step);
+      bool is_v2_compress = context.conn_->proxy_cap_flags_.is_ob_protocol_v2_compress();
+      char * proxy_pos = is_v2_compress ? NULL : context.last_pkt_pos_;
+      int64_t next_read_size = orig_send_buf.get_next_read_size(proxy_pos, max_read_step);
       int64_t last_read_size = 0;
       if (next_read_size > (comp_send_buf.write_avail_size() - OB_MYSQL_COMPRESSED_HEADER_SIZE)) {
         next_read_size = max_read_step;
@@ -155,8 +157,9 @@ static int build_compressed_buffer(ObEasyBuffer &orig_send_buf,
       while (OB_SUCC(ret)
              && next_read_size > 0
              && max_comp_pkt_size <= comp_send_buf.write_avail_size()) {
+        // v2 compress protocol not do this check
         //error+ok/ok packet should use last seq
-        if (context.last_pkt_pos_ == orig_send_buf.read_pos() && context.is_proxy_compress_based()) {
+        if (!is_v2_compress && context.last_pkt_pos_ == orig_send_buf.read_pos() && context.is_proxy_compress_based()) {
           --context.seq_;
         }
 
@@ -165,7 +168,7 @@ static int build_compressed_buffer(ObEasyBuffer &orig_send_buf,
         } else {
           //optimize for multi packet
           last_read_size = next_read_size;
-          next_read_size = orig_send_buf.get_next_read_size(context.last_pkt_pos_, max_read_step);
+          next_read_size = orig_send_buf.get_next_read_size(proxy_pos, max_read_step);
           if (next_read_size > (comp_send_buf.write_avail_size() - OB_MYSQL_COMPRESSED_HEADER_SIZE)) {
             next_read_size = max_read_step;
           }
@@ -297,7 +300,7 @@ int ObMySQLRequestUtils::flush_buffer_internal(easy_buf_t *send_buf,
 
       // wait for wake up by IO thread in `process' callback
       {
-        ObWaitEventGuard guard(ObWaitEventIds::MYSQL_RESPONSE_WAIT_CLIENT, 0, 0, 0);
+        ObWaitEventGuard guard(ObWaitEventIds::MYSQL_RESPONSE_WAIT_CLIENT, 0);
         easy_client_wait(&wait_obj, 1);
       }
 
@@ -325,6 +328,11 @@ int ObMySQLRequestUtils::check_flush_param(ObFlushBufferParam &param)
   } else if (OB_UNLIKELY(!param.orig_send_buf_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "orig_send_buf_ is invalid", K(param.orig_send_buf_), K(ret));
+  } else if (OB_ISNULL(param.comp_context_.conn_)) {
+    ret = OB_INVALID_ARGUMENT;
+    SERVER_LOG(WARN, "conn_ is null", K(param.comp_context_), K(ret));
+  } else if (param.comp_context_.conn_->proxy_cap_flags_.is_ob_protocol_v2_compress()){
+    // not check last pkt_pos and send_buf_
   } else if (!param.comp_context_.use_compress()) {
     if (OB_NOT_NULL(param.comp_context_.last_pkt_pos_)
         || OB_NOT_NULL(param.comp_context_.send_buf_)) {
@@ -575,8 +583,12 @@ int ObMysqlPktContext::save_fragment_mysql_packet(const char *start, const int64
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(ERROR, "invalid alloc size", K(alloc_size), K(ret));
       } else {
+        ObMemAttr attr;
+        attr.label_ = "LibMultiPackets";
+        attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
+        attr.tenant_id_ = tenant_id_;
         alloc_size += payload_buffered_total_len_;
-        char *tmp_buffer = reinterpret_cast<char *>(arena_.alloc(alloc_size));
+        char *tmp_buffer = reinterpret_cast<char *>(ob_malloc(alloc_size, attr));
         if (OB_ISNULL(tmp_buffer)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "fail to alloc memory", K(alloc_size), K(ret));
@@ -585,6 +597,9 @@ int ObMysqlPktContext::save_fragment_mysql_packet(const char *start, const int64
             MEMCPY(tmp_buffer, payload_buf_, payload_buffered_total_len_);
           }
           payload_buf_alloc_len_ = alloc_size;
+          if (OB_NOT_NULL(payload_buf_)) {
+            ob_free(payload_buf_);
+          }
           payload_buf_ = tmp_buffer;
         }
       }
@@ -612,7 +627,13 @@ int ObMySQLRequestUtils::flush_compressed_buffer(bool pkt_has_completed, ObCompr
   int ret = OB_SUCCESS;
   int64_t need_hold_size = 0;
 
-  if (comp_context.need_hold_last_pkt(pkt_has_completed)) {
+
+  if (OB_ISNULL(comp_context.conn_)) {
+    ret = OB_INVALID_ARGUMENT;
+    SERVER_LOG(WARN, "conn_ is null", K(comp_context), K(ret));
+  } else if (comp_context.conn_->proxy_cap_flags_.is_ob_protocol_v2_compress()){
+    // do nothing
+  } else if (comp_context.need_hold_last_pkt(pkt_has_completed)) {
     need_hold_size = orig_send_buf.proxy_read_avail_size(comp_context.last_pkt_pos_);
     orig_send_buf.write(0 - need_hold_size);
     SERVER_LOG(DEBUG, "need hold uncompleted proxy pkt", K(need_hold_size),
@@ -634,10 +655,17 @@ int ObMySQLRequestUtils::flush_compressed_buffer(bool pkt_has_completed, ObCompr
     }
   }
 
-  if (OB_SUCC(ret) && false == pkt_has_completed) {
-    const bool need_reset_last_pkt_pos = (comp_context.last_pkt_pos_ == orig_send_buf.last());
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (false == pkt_has_completed) {
+    bool need_reset_last_pkt_pos = (comp_context.last_pkt_pos_ == orig_send_buf.last());
     init_easy_buf(&orig_send_buf.buf_, reinterpret_cast<char *>(&orig_send_buf.buf_ + 1),
                   NULL, orig_send_buf.orig_buf_size());
+
+    // v2 compression not check
+    if (comp_context.conn_->proxy_cap_flags_.is_ob_protocol_v2_compress()) {
+      need_reset_last_pkt_pos = false;
+    }
 
     if (need_reset_last_pkt_pos) {
       if (need_hold_size > 0) {

@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log.h"
-#include "lib/alloc/alloc_func.h"
+#include "ob_tenant_freezer_common.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "share/ob_force_print_log.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/tx_storage/ob_tenant_freezer_common.h"
 
 namespace oceanbase
 {
@@ -37,9 +33,7 @@ OB_SERIALIZE_MEMBER(ObTenantFreezeArg,
                     try_frozen_scn_);
 
 ObTenantFreezeCtx::ObTenantFreezeCtx()
-  : mem_lower_limit_(0),
-    mem_upper_limit_(0),
-    mem_memstore_limit_(0),
+  : mem_memstore_limit_(0),
     memstore_freeze_trigger_(0),
     max_mem_memstore_can_get_now_(0),
     active_memstore_used_(0),
@@ -52,8 +46,6 @@ ObTenantFreezeCtx::ObTenantFreezeCtx()
 
 void ObTenantFreezeCtx::reset()
 {
-  mem_lower_limit_ = 0;
-  mem_upper_limit_ = 0;
   mem_memstore_limit_ = 0;
   memstore_freeze_trigger_ = 0;
   max_mem_memstore_can_get_now_ = 0;
@@ -181,8 +173,6 @@ bool ObTenantInfo::is_memstore_limit_changed(const int64_t curr_memstore_limit_p
 void ObTenantInfo::get_freeze_ctx(ObTenantFreezeCtx &ctx) const
 {
   SpinRLockGuard guard(lock_);
-  ctx.mem_lower_limit_ = mem_lower_limit_;
-  ctx.mem_upper_limit_ = mem_upper_limit_;
   ctx.mem_memstore_limit_ = mem_memstore_limit_;
 }
 

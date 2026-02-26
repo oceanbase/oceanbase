@@ -1,3 +1,4 @@
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -12,6 +13,7 @@
 
 #ifndef ENABLE_SANITY
 #else
+
 #include "objit/ob_llvm_symbolizer.h"
 #include "llvm/DebugInfo/Symbolize/Symbolize.h"
 #include "llvm/Support/COM.h"

@@ -11,7 +11,6 @@
  */
 
 #include "storage/tablet/ob_batch_create_tablet_pretty_arg.h"
-#include "lib/utility/ob_print_utils.h"
 #include "share/ob_rpc_struct.h"
 
 using namespace oceanbase::obrpc;
@@ -44,13 +43,14 @@ int64_t ObBatchCreateTabletPrettyArg::to_string(char *buf, const int64_t buf_len
       const ObCreateTabletInfo &info = arg_.tablets_.at(i);
       ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
       J_NEWLINE();
-      BUF_PRINTF("[%ld] [", GETTID());
+      BUF_PRINTF("[%ld][%s][T%ld] [", GETTID(), GETTNAME(), GET_TENANT_ID());
       BUF_PRINTO(PC(trace_id));
       BUF_PRINTF("] ");
       J_KV("data_tablet_id", info.data_tablet_id_,
            "tablet_ids", info.tablet_ids_,
            "compat_mode", info.compat_mode_,
-           "is_create_bind_hidden_tablets", info.is_create_bind_hidden_tablets_);
+           "is_create_bind_hidden_tablets", info.is_create_bind_hidden_tablets_,
+           "has_cs_replica", info.has_cs_replica_);
     }
     J_NEWLINE();
     J_OBJ_END();

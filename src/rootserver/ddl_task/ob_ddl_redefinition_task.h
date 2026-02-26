@@ -38,13 +38,13 @@ public:
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
       const bool use_heap_table_ddl_plan,
-      const bool is_mview_complete_refresh,
-      const int64_t mview_table_id,
       ObRootService *root_service,
       const common::ObAddr &inner_sql_exec_addr,
       const int64_t data_format_version,
-      const bool is_retryable_ddl);
+      const bool is_retryable_ddl,
+      const obrpc::ObMViewRefreshInfo &mview_refresh_info);
   int init(
+      const share::ObDDLType task_type,
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
       const AlterTableSchema &alter_table_schema,
@@ -56,6 +56,8 @@ public:
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
   void add_event_info(const int ret, const ObString &ddl_event_stmt);
+private:
+  int procress_mview_complete_refresh_(const bool oracle_mode);
 private:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -72,13 +74,13 @@ private:
   common::ObCurTraceId::TraceId trace_id_;
   int64_t parallelism_;
   bool use_heap_table_ddl_plan_;
-  bool is_mview_complete_refresh_;
   bool is_retryable_ddl_;
-  int64_t mview_table_id_;
   common::ObArray<share::schema::ObBasedSchemaObjectInfo> based_schema_object_infos_;
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
   int64_t data_format_version_;
+  bool is_alter_clustering_key_tbl_partition_by_;
+  obrpc::ObMViewRefreshInfo mview_refresh_info_;
 };
 
 class ObSyncTabletAutoincSeqCtx final
@@ -128,9 +130,9 @@ class ObDDLRedefinitionTask : public ObDDLTask
 {
 public:
   explicit ObDDLRedefinitionTask(const share::ObDDLType task_type):
-    ObDDLTask(task_type), wait_trans_ctx_(), sync_tablet_autoinc_seq_ctx_(),
+    ObDDLTask(task_type), sync_tablet_autoinc_seq_ctx_(),
     build_replica_request_time_(0), complete_sstable_job_ret_code_(INT64_MAX), alter_table_arg_(),
-    dependent_task_result_map_(), snapshot_held_(false), has_synced_autoincrement_(false),
+    dependent_task_result_map_(), has_synced_autoincrement_(false),
     has_synced_stats_info_(false), update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0),
     check_table_empty_job_ret_code_(INT64_MAX), check_table_empty_job_time_(0),
     is_sstable_complete_task_submitted_(false), sstable_complete_request_time_(0), replica_builder_(),
@@ -140,6 +142,7 @@ public:
   virtual int process() = 0;
   virtual int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
+      const ObAddr &addr,
       const int64_t snapshot_version,
       const int64_t execution_id,
       const int ret_code,
@@ -148,13 +151,10 @@ public:
       const uint64_t child_task_key,
       const int ret_code) override;
   int notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code);
-  virtual void flt_set_task_span_tag() const = 0;
-  virtual void flt_set_status_span_tag() const = 0;
-  virtual int cleanup_impl() override;
   int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask,
       K(wait_trans_ctx_), K(sync_tablet_autoinc_seq_ctx_), K(build_replica_request_time_),
-      K(complete_sstable_job_ret_code_), K(snapshot_held_), K(has_synced_autoincrement_),
+      K(complete_sstable_job_ret_code_), K(has_synced_autoincrement_),
       K(has_synced_stats_info_), K(update_autoinc_job_ret_code_), K(update_autoinc_job_time_),
       K(check_table_empty_job_ret_code_), K(check_table_empty_job_time_));
 protected:
@@ -254,6 +254,8 @@ protected:
 
   bool check_need_sync_stats_history();
   bool check_need_sync_stats();
+  int sync_table_prefs(common::ObMySQLTransaction &trans);
+  int check_and_do_sync_tablet_autoinc_seq(ObSchemaGetterGuard &new_schema_guard);
   int sync_tablet_autoinc_seq();
   int check_need_rebuild_constraint(const ObTableSchema &table_schema,
                                     ObIArray<uint64_t> &constraint_ids,
@@ -262,7 +264,18 @@ protected:
   int get_child_task_ids(char *buf, int64_t len);
   int get_estimated_timeout(const share::schema::ObTableSchema *dst_table_schema, int64_t &estimated_timeout);
   int get_orig_all_index_tablet_count(ObSchemaGetterGuard &schema_guard, int64_t &all_tablet_count);
+
+  int generate_rebuild_index_arg_list(const int64_t tenant_id,
+                                      const int64_t table_id,
+                                      ObSchemaGetterGuard &schema_guard,
+                                      obrpc::ObAlterTableArg &alter_table_arg);
   int64_t get_build_replica_request_time();
+private:
+  int add_table_tablets_for_snapshot_(const uint64_t table_id, ObSchemaGetterGuard &schema_guard,
+                                      common::ObIArray<common::ObTabletID> &tablet_ids);
+  int prepare_tablets_for_major_refresh_mv_(common::ObIArray<common::ObTabletID> &tablet_ids);
+
+  virtual int cleanup_impl() override;
 protected:
   static const int64_t MAP_BUCKET_NUM = 1024;
   struct DependTaskStatus final
@@ -281,13 +294,11 @@ protected:
   static const int64_t MAX_DEPEND_OBJECT_COUNT = 100L;
   static const int64_t RETRY_INTERVAL = 1 * 1000 * 1000; // 1s
   static const int64_t RETRY_LIMIT = 100;   
-  ObDDLWaitTransEndCtx wait_trans_ctx_;
   ObSyncTabletAutoincSeqCtx sync_tablet_autoinc_seq_ctx_;
   int64_t build_replica_request_time_;
   int64_t complete_sstable_job_ret_code_;
   obrpc::ObAlterTableArg alter_table_arg_;
   common::hash::ObHashMap<uint64_t, DependTaskStatus> dependent_task_result_map_;
-  bool snapshot_held_;
   bool has_synced_autoincrement_;
   bool has_synced_stats_info_;
   int64_t update_autoinc_job_ret_code_;
@@ -296,7 +307,7 @@ protected:
   int64_t check_table_empty_job_time_;
   bool is_sstable_complete_task_submitted_;
   int64_t sstable_complete_request_time_;
-  ObDDLSingleReplicaExecutor replica_builder_;
+  ObDDLReplicaBuildExecutor replica_builder_;
   common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> check_dag_exit_tablets_map_; // for dag complement data ddl only.
   int64_t check_dag_exit_retry_cnt_;
 };

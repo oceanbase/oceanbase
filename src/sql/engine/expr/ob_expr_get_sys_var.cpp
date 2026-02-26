@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_get_sys_var.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/number/ob_number_v2.h"
-#include "share/object/ob_obj_cast.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_cur_time.h"
-#include "observer/ob_server_struct.h"
-#include "share/system_variable/ob_system_variable.h"
 
 namespace oceanbase
 {
@@ -238,23 +232,24 @@ int ObExprGetSysVar::get_sys_var_disp_obj(common::ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ObBasicSysVar *sys_var = NULL;
-  ObSysVarFactory sysvar_fac;
   ObObj value;
   ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
-  if (OB_FAIL(ObBasicSessionInfo::get_global_sys_variable(&session, allocator, var_name, value))) {
-    LOG_WARN("get sys var disp obj failed", K(ret));
-  } else if (SYS_VAR_INVALID == (sys_var_id = ObSysVarFactory::find_sys_var_id_by_name(var_name, false))) {
-    ret = OB_ERR_SYS_VARIABLE_UNKNOWN;
-    LOG_WARN("unknown system variable", K(var_name));
-  } else if (OB_FAIL(sysvar_fac.create_sys_var(sys_var_id, sys_var))) {
-    LOG_WARN("create system variable obj failed", K(ret));
-  } else if (OB_ISNULL(sys_var)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("system variable is null");
-  } else {
-    sys_var->set_value(value);
-    if (OB_FAIL(sys_var->to_select_obj(allocator, session, disp_obj))) {
-      LOG_WARN("to select obj in sys_var failed", K(ret), K(var_name));
+  SMART_VAR(ObSysVarFactory, sysvar_fac) {
+    if (OB_FAIL(ObBasicSessionInfo::get_global_sys_variable(&session, allocator, var_name, value))) {
+      LOG_WARN("get sys var disp obj failed", K(ret));
+    } else if (SYS_VAR_INVALID == (sys_var_id = ObSysVarFactory::find_sys_var_id_by_name(var_name, false))) {
+      ret = OB_ERR_SYS_VARIABLE_UNKNOWN;
+      LOG_WARN("unknown system variable", K(var_name));
+    } else if (OB_FAIL(sysvar_fac.create_sys_var(sys_var_id, sys_var))) {
+      LOG_WARN("create system variable obj failed", K(ret));
+    } else if (OB_ISNULL(sys_var)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("system variable is null");
+    } else {
+      sys_var->set_value(value);
+      if (OB_FAIL(sys_var->to_select_obj(allocator, session, disp_obj))) {
+        LOG_WARN("to select obj in sys_var failed", K(ret), K(var_name));
+      }
     }
   }
   if (OB_SUCC(ret) && lib::is_oracle_mode() && disp_obj.is_null_oracle()) {
@@ -275,14 +270,59 @@ int ObExprGetSysVar::calc_get_sys_val_expr(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("invalid arg cnt", K(ret), K(expr.arg_cnt_));
   } else if (OB_FAIL(expr.eval_param_value(ctx, name, scope))) {
     LOG_WARN("eval param failed", K(ret));
+  } else if (OB_ISNULL(name) || OB_ISNULL(scope)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL name or scope", K(ret), KPC(name), KPC(scope), K(expr));
   } else {
     const ObString &var_name = name->get_string();
-    int64_t var_scope = scope->get_int();
+    int64_t var_scope = OB_INVALID_COUNT;
+    ObObjType scope_type = expr.args_[1]->datum_meta_.get_type();
     ObObj result;
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-    if (OB_FAIL(calc_(result, var_name, var_scope, ctx.exec_ctx_.get_my_session(),
-                      &ctx.exec_ctx_, calc_alloc))) {
+
+    if (ObIntType == scope_type) {
+      var_scope = scope->get_int();
+    } else if (ObDecimalIntType == scope_type) {
+      int32_t int_bytes = scope->get_int_bytes();
+      const ObDecimalInt *dec_int = scope->get_decimal_int();
+      switch (int_bytes) {
+      case sizeof(int32_t): {
+        var_scope = *dec_int->int32_v_;
+        break;
+      }
+      case sizeof(int64_t): {
+        var_scope = *dec_int->int64_v_;
+        break;
+      }
+      case sizeof(int128_t): {
+        var_scope = *dec_int->int128_v_;
+        break;
+      }
+      case sizeof(int256_t): {
+        var_scope = *dec_int->int256_v_;
+        break;
+      }
+      case sizeof(int512_t): {
+        var_scope = *dec_int->int512_v_;
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected decimalint bytes",
+                 K(ret), K(int_bytes), KPC(scope));
+      }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected scope type",
+               K(ret), K(scope_type), KPC(scope), K(expr), K(lbt()));
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(calc_(result, var_name, var_scope, ctx.exec_ctx_.get_my_session(),
+                             &ctx.exec_ctx_, calc_alloc))) {
       LOG_WARN("calc_ failed", K(ret), K(name), K(scope));
     } else {
       const ObObjType &obj_type = result.get_type();

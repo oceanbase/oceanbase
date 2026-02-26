@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <sys/time.h>
 #include "lib/lock/cond.h"
-#include "lib/oblog/ob_log.h"
 
 using namespace oceanbase::common;
 

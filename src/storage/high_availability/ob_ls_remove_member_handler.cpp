@@ -65,6 +65,26 @@ void ObLSChangeMemberType::reset()
   type_ = MAX;
 }
 
+int ObLSChangeMemberType::convert_to_dr_type(
+    const bool is_paxos_member,
+    obrpc::ObDRTaskType &dr_type) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(type));
+  } else if (is_modify_replica_number()) {
+    dr_type = obrpc::ObDRTaskType::LS_MODIFY_PAXOS_REPLICA_NUMBER;
+  } else if (is_remove_member()) {
+    dr_type = is_paxos_member ? obrpc::ObDRTaskType::LS_REMOVE_PAXOS_REPLICA : obrpc::ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;
+  } else if (is_transform_member()) {
+    dr_type = obrpc::ObDRTaskType::LS_TYPE_TRANSFORM;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no valid task type", KR(ret), K(is_paxos_member), K_(type));
+  }
+  return ret;
+}
 
 ObLSRemoveMemberArg::ObLSRemoveMemberArg()
   : task_id_(),
@@ -294,7 +314,7 @@ int ObLSRemoveMemberHandler::generate_remove_member_dag_(
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant dag scheduler should not be NULL", K(ret), KP(scheduler));
-  } else if (OB_FAIL(scheduler->create_dag(&param, ls_remove_member_dag))) {
+  } else if (OB_FAIL(scheduler->create_dag(&param, ls_remove_member_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to create ls remove member dag", K(ret));
   } else if (OB_FAIL(scheduler->add_dag(ls_remove_member_dag))) {
     LOG_WARN("fail to add dag into dag_scheduler", K(ret));
@@ -326,7 +346,6 @@ int ObLSRemoveMemberHandler::check_task_exist(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant dag scheduler should not be NULL", K(ret), KP(scheduler));
   } else {
-    ObMember mock_member(MYADDR, OB_INVALID_TIMESTAMP);
     mock_remove_member_arg.tenant_id_ = MTL_ID();
     mock_remove_member_arg.ls_id_ = ls_->get_ls_id();
     mock_remove_member_arg.task_id_ = task_id;
@@ -334,11 +353,12 @@ int ObLSRemoveMemberHandler::check_task_exist(
     mock_remove_member_arg.type_ = ObLSChangeMemberType::LS_REMOVE_MEMBER;
     param.arg_ = mock_remove_member_arg;
 
-    if (OB_FAIL(mock_remove_member_arg.remove_member_.set_member(mock_member))) {
-      LOG_WARN("failed to set member", K(ret), K(mock_member), K(mock_remove_member_arg));
-    } else if (OB_FAIL(scheduler->create_dag(&param, exist_dag))) {
+    bool unused_is_emergency = false;
+    if (OB_FAIL(mock_remove_member_arg.remove_member_.init(MYADDR, OB_INVALID_TIMESTAMP, REPLICA_TYPE_FULL))) {
+      LOG_WARN("failed to init remove_member_", K(ret), K(MYADDR), K(mock_remove_member_arg));
+    } else if (OB_FAIL(scheduler->create_dag(&param, exist_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to create ls remove member dag", K(ret));
-    } else if (OB_FAIL(scheduler->check_dag_exist(exist_dag, is_exist))) {
+    } else if (OB_FAIL(scheduler->check_dag_exist(exist_dag, is_exist, unused_is_emergency))) {
       LOG_WARN("failed to check dag exist", K(ret), KPC(exist_dag));
     }
 

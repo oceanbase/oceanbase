@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "share/ob_define.h"
 #include "sql/resolver/ddl/ob_flashback_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "rootserver/ob_ddl_service.h"
 
 namespace oceanbase
 {
@@ -103,12 +100,20 @@ int ObFlashBackTableFromRecyclebinResolver::resolve(const ParseNode &parser_tree
         flashback_table_from_recyclebin_stmt->set_origin_db_name(origin_db_name);
       }
     }
+
     if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
       OZ (schema_checker_->check_ora_ddl_priv(
                             session_info_->get_effective_tenant_id(),
                             session_info_->get_priv_user_id(),
                             origin_db_name,
                             stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN,
+                            session_info_->get_enable_role_array()));
+      // need to check if user has create table priv on the new db
+      OZ (schema_checker_->check_ora_ddl_priv(
+                            session_info_->get_effective_tenant_id(),
+                            session_info_->get_priv_user_id(),
+                            flashback_table_from_recyclebin_stmt->get_new_db_name(),
+                            stmt::T_CREATE_TABLE,
                             session_info_->get_enable_role_array()));
     }
   }
@@ -254,7 +259,9 @@ int ObFlashBackIndexResolver::resolve(const ParseNode &parser_tree)
       LOG_WARN("failed to resolve_table_relation_node", K(ret));
     } else if (!origin_db_name.empty() && origin_db_name != OB_RECYCLEBIN_SCHEMA_NAME) {
       ret = OB_TABLE_NOT_EXIST;
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(origin_db_name), to_cstring(origin_table_name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(origin_db_name),
+          helper.convert(origin_table_name));
       LOG_WARN("flashback index db.xx should not specified with db name", K(ret));
     } else {
       UNUSED(schema_checker_->get_table_schema(flashback_index_stmt->get_tenant_id(),
@@ -292,6 +299,12 @@ int ObFlashBackDatabaseResolver::resolve(const ParseNode &parser_tree)
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info is null", K(ret));
+  } else if (OB_UNLIKELY(is_external_catalog_id(session_info_->get_current_default_catalog()))) {
+    // 这里之所以需要额外拦截，是因为 flashback database 没有走 resolve ParseNode 逻辑，直接赋值了
+    // 所以在 resolve 处的拦截无效
+    // 如果将来需要支持 flashback database catalog.db 这种语法，那就需要走 resolve ParseNode 逻辑，那么此时这里的拦截可以删除
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "flashback database in catalog is");
   } else if (T_FLASHBACK_DATABASE != parser_tree.type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree",  K(parser_tree.type_));

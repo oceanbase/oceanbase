@@ -28,7 +28,7 @@ def gen_all_privilege_init_data(h_f):
   const char* const SUPER_MSG = "To use KILL thread, SET GLOBAL, CHANGE MASTER, etc.";
   const char* const UPDATE_MSG = "To update existing rows";
   const char* const USAGE_MSG = "No privileges - allow connect only";
-""") 
+""")
   h_f.write("""static const PrivilegeRow all_privileges[] =
 {
   {"Alter", "Tables",  ALTER_TB_MSG},

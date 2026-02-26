@@ -1,3 +1,6 @@
+// owner: handora.qc
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -11,7 +14,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <iostream>
 #define protected public
 #define private public
 
@@ -19,9 +21,7 @@
 #include "rootserver/ob_tenant_balance_service.h"
 #include "share/balance/ob_balance_job_table_operator.h"
 #include "mittest/env/ob_simple_server_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_tx_loop_worker.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
 {
@@ -29,6 +29,7 @@ namespace oceanbase
 namespace storage
 {
 int64_t ObTxTable::UPDATE_MIN_START_SCN_INTERVAL = 0;
+
 
 int ObTransferHandler::wait_src_ls_advance_weak_read_ts_(
   const share::ObTransferTaskInfo &task_info,
@@ -82,7 +83,6 @@ public:
     WRITE_SQL_BY_CONN(connection, "set GLOBAL ob_query_timeout = 10000000000");
     WRITE_SQL_BY_CONN(connection, "alter system set enable_early_lock_release = False;");
     WRITE_SQL_BY_CONN(connection, "alter system set undo_retention = 1800;");
-    WRITE_SQL_BY_CONN(connection, "alter system set partition_balance_schedule_interval = '10s';");
     sleep(5);
   }
 
@@ -164,12 +164,15 @@ public:
     MTL_SWITCH(tenant_id) {
       TRANS_LOG(INFO, "worker to do partition_balance");
       auto b_svr = MTL(rootserver::ObTenantBalanceService*);
+      b_svr->stop();
       b_svr->reset();
       int64_t job_cnt = 0;
       int64_t start_time = OB_INVALID_TIMESTAMP, finish_time = OB_INVALID_TIMESTAMP;
       ObBalanceJob job;
       if (OB_FAIL(b_svr->gather_stat_())) {
         TRANS_LOG(WARN, "failed to gather stat", KR(ret));
+      } else if (OB_FAIL(b_svr->gather_ls_status_stat(tenant_id, b_svr->ls_array_, true))) {
+        TRANS_LOG(WARN, "failed to gather ls stat", KR(ret));
       } else if (OB_FAIL(ObBalanceJobTableOperator::get_balance_job(
                            tenant_id, false, *GCTX.sql_proxy_, job, start_time, finish_time))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
@@ -320,7 +323,7 @@ TEST_F(ObTransferWithSmallerStartSCN, smaller_start_scn)
   ASSERT_EQ(0, SSH::submit_redo(tenant_id, loc1));
 
   ObTxLoopWorker *worker = MTL(ObTxLoopWorker *);
-  worker->scan_all_ls_(true, true, false);
+  worker->scan_all_ls_(true, true, false, false, false);
   usleep(1 * 1000 * 1000);
 
   // Step4: let the tx data table update upper info
@@ -398,7 +401,7 @@ TEST_F(ObTransferWithSmallerStartSCN, smaller_start_scn)
   }
   ASSERT_EQ(loc1, loc2);
 
-  worker->scan_all_ls_(true, true, false);
+  worker->scan_all_ls_(true, true, false, false, false);
   usleep(1 * 1000 * 1000);
 
   fprintf(stdout, "start update upper info the second time\n");
@@ -408,7 +411,7 @@ TEST_F(ObTransferWithSmallerStartSCN, smaller_start_scn)
   fprintf(stdout, "end update upper info the second time %lu\n", second_min_start_scn);
   TRANS_LOG(INFO, "end update upper info the second time");
 
-  ASSERT_EQ(true, first_min_start_scn > second_min_start_scn);
+  ASSERT_GT(first_min_start_scn, second_min_start_scn);
 
   min_start_scn_in_tx_data.set_max();
   fprintf(stdout, "start get min start in tx data table second time\n");
@@ -418,8 +421,8 @@ TEST_F(ObTransferWithSmallerStartSCN, smaller_start_scn)
   fprintf(stdout, "end get min start in tx data table second time, %lu\n", min_start_scn_in_tx_data.val_);
   TRANS_LOG(INFO, "end get min start in tx data table second time");
 
-  ASSERT_EQ(true, first_min_start_scn > second_min_start_scn);
-  ASSERT_EQ(true, first_min_start_scn_in_tx_data > second_min_start_scn_in_tx_data);
+  ASSERT_GT(first_min_start_scn, second_min_start_scn);
+  ASSERT_GT(first_min_start_scn_in_tx_data, second_min_start_scn_in_tx_data);
 
   inject_tx_fault_helper.release();
   th.join();

@@ -79,8 +79,7 @@ public:
   MacroBlockType get_type() const { return static_cast<MacroBlockType>(attr_); }
   int32_t get_payload_size() const { return payload_size_; }
   int32_t get_payload_checksum() const { return payload_checksum_; }
-  void set_attr(const MacroBlockType type) { attr_ = type; }
-  void set_attr(const int64_t seq);
+  int set_attr(const MacroBlockType type);
   void set_payload_size(const int32_t payload_size) { payload_size_ = payload_size; }
   void set_payload_checksum(const int32_t payload_checksum) { payload_checksum_ = payload_checksum; }
 

@@ -14,12 +14,7 @@
 
 #include "ob_virtual_core_inner_table.h"
 
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_column_schema.h"
 #include "share/ob_core_table_proxy.h"
-#include "observer/omt/ob_tenant_timezone_mgr.h" //OTTZ_MGR
-#include "share/schema/ob_schema_mgr.h"
 
 namespace oceanbase
 {

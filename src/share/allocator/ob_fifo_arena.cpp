@@ -11,16 +11,11 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include "ob_fifo_arena.h"
 #ifdef OB_USE_ASAN
+#include "ob_fifo_arena.h"
 #include <malloc.h>
 #endif
-#include "math.h"
-#include "lib/alloc/alloc_struct.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "share/ob_tenant_mgr.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::omt;

@@ -12,10 +12,7 @@
 
 #include "gtest/gtest.h"
 
-#include "lib/allocator/page_arena.h"
-#include "lib/string/ob_string_buffer.h"
 #include "ob_log_miner_args.h"
-#include "lib/oblog/ob_log.h"
 
 
 using namespace oceanbase;
@@ -62,7 +59,7 @@ struct CmdArgs {
       argv[i] = nullptr;
     }
     argc = 0;
-    optind = 1;
+    optind = 0;
   }
 
   ObIAllocator &allocator;

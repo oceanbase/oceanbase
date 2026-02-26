@@ -14,7 +14,6 @@
 
 #include "ob_all_server_checker.h"
 
-#include "share/config/ob_server_config.h"
 #include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_heartbeat_service.h"
 

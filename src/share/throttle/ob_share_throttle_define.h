@@ -75,7 +75,7 @@ namespace share {
 //                                                         ObMemstoreAllocator,
 //                                                         ObTenantTxDataAllocator,
 //                                                         ObTenantMdsAllocator>;
-DEFINE_SHARE_THROTTLE(TxShare, ObMemstoreAllocator, ObTenantTxDataAllocator, ObTenantMdsAllocator)
+DEFINE_SHARE_THROTTLE(TxShare, ObMemstoreAllocator, ObTenantTxDataAllocator, ObTenantMdsAllocator, ObTenantVectorAllocator)
 
 
 class ObThrottleInfoGuard;

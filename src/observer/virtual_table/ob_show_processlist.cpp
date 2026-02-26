@@ -10,14 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/string/ob_string.h"
-#include "share/config/ob_server_config.h"
 #include "observer/virtual_table/ob_show_processlist.h"
 #include "observer/ob_server.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "lib/utility/ob_print_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -151,9 +146,8 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
     //Otherwise, you can show only the threads at the same Tenant with you.
     //If you have the PROCESS privilege, you can show all threads at your Tenant.
     //Otherwise, you can show only your own threads.
-    // if session is marked killed, no display to user.
-    if (sess_info->is_shadow() || sess_info->is_mark_killed()) {
-      //this session info is logical free, shouldn't be added to scanner
+    if (sess_info->is_shadow()) {
+      // do not show shadow session
     } else if ((OB_SYS_TENANT_ID == my_session_->get_priv_tenant_id())
         || (sess_info->get_priv_tenant_id() == my_session_->get_priv_tenant_id()
             && (has_process_privilege()
@@ -168,7 +162,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
         switch(col_id) {
           case ID: {
             cur_row_->cells_[cell_idx].set_uint64(static_cast<uint64_t>(
-                                  sess_info->get_compatibility_sessid()));
+                                  sess_info->get_sid()));
             break;
           }
           case USER: {
@@ -229,11 +223,21 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
           }
           case TIME: {
             if (type_is_double) {
-              double time_sec = (static_cast<double> (current_time - sess_info->get_cur_state_start_time())) / 1000000;
+              double time_sec;
+              if (0 != sess_info->get_pl_internal_time_split_point()) {
+                time_sec = (static_cast<double> (current_time - sess_info->get_pl_internal_time_split_point())) / 1000000;
+              } else {
+                time_sec = (static_cast<double> (current_time - sess_info->get_cur_state_start_time())) / 1000000;
+              }
               cur_row_->cells_[cell_idx].set_double(time_sec);
               cur_row_->cells_[cell_idx].set_scale(6);
             } else {
-              int64_t time_sec = (current_time - sess_info->get_cur_state_start_time()) / 1000000;
+              int64_t time_sec;
+              if (0 != sess_info->get_pl_internal_time_split_point()) {
+                time_sec = (current_time - sess_info->get_pl_internal_time_split_point()) / 1000000;
+              } else {
+                time_sec = (current_time - sess_info->get_cur_state_start_time()) / 1000000;
+              }
               cur_row_->cells_[cell_idx].set_int(time_sec);
             }
 
@@ -249,7 +253,15 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
                 obmysql::COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
                 obmysql::COM_STMT_PREPARE == sess_info->get_mysql_cmd() ||
                 obmysql::COM_STMT_PREXECUTE == sess_info->get_mysql_cmd()) {
-              cur_row_->cells_[cell_idx].set_varchar(sess_info->get_current_query_string());
+                if(true == sess_info->get_use_pl_inner_info_string()) {
+                  cur_row_->cells_[cell_idx].set_varchar(pl_info_string_);
+                } else {
+                  ObString query_string = sess_info->get_current_query_string();
+                  if (query_string.length() > ObBasicSessionInfo::MAX_QUERY_STRING_LEN) {
+                    query_string.clip(query_string.ptr() + ObBasicSessionInfo::MAX_QUERY_STRING_LEN);
+                  }
+                  cur_row_->cells_[cell_idx].set_varchar(query_string);
+                }
               cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             } else {
               cur_row_->cells_[cell_idx].set_null();
@@ -343,6 +355,27 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             }
             break;
           }
+          case TOP_TRACE_ID: {
+            if (obmysql::COM_QUERY == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_PREPARE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_PREXECUTE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_FETCH == sess_info->get_mysql_cmd()) {
+              // 获取最外层的trace_id，优先使用top_trace_id，如果不存在则使用current_trace_id
+              const common::ObCurTraceId::TraceId &top_trace_id =
+                sess_info->get_top_trace_id().is_valid() ?
+                sess_info->get_top_trace_id() :
+                sess_info->get_current_trace_id();
+              int len = top_trace_id.to_string(top_trace_id_, sizeof(top_trace_id_));
+              cur_row_->cells_[cell_idx].set_varchar(top_trace_id_, len);
+              cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            } else {
+              // when cmd=Sleep, we don't want to display its last query trace id
+              // as it is weird, not the meaning for 'processlist'
+              cur_row_->cells_[cell_idx].set_null();
+            }
+            break;
+          }
           case TRANS_STATE: {
             if (sess_info->is_in_transaction()) {
               cur_row_->cells_[cell_idx].set_varchar(
@@ -358,7 +391,12 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
               // indicates that the request is in progress
               if (!sess_info->get_is_request_end()) {
                 // time_sec = current time - sql packet received from easy time
-                double time_sec = (static_cast<double> (current_time - sess_info->get_query_start_time())) / 1000000;
+                double time_sec;
+                if(0 != sess_info->get_pl_cur_query_start_time_bak()) {
+                  time_sec = (static_cast<double> (current_time - sess_info->get_pl_cur_query_start_time_bak())) / 1000000;
+                } else {
+                  time_sec = (static_cast<double> (current_time - sess_info->get_query_start_time())) / 1000000;
+                }
                 cur_row_->cells_[cell_idx].set_double(time_sec);
               } else {
                 double time_sec = (static_cast<double> (current_time - sess_info->get_cur_state_start_time())) / 1000000;
@@ -368,7 +406,12 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             } else {
               if (ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
                 // time_sec = current time - sql packet received from easy time
-                int64_t time_sec = (current_time - sess_info->get_query_start_time()) / 1000000;
+                int64_t time_sec;
+                if(0 != sess_info->get_pl_cur_query_start_time_bak()) {
+                  time_sec = (current_time - sess_info->get_pl_cur_query_start_time_bak()) / 1000000;
+                } else {
+                  time_sec = (current_time - sess_info->get_query_start_time()) / 1000000;
+                }
                 cur_row_->cells_[cell_idx].set_int(time_sec);
               } else {
                 int64_t time_sec = (current_time - sess_info->get_cur_state_start_time()) / 1000000;
@@ -487,7 +530,12 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             break;
           }
           case SERVICE_NAME: {
-            cur_row_->cells_[cell_idx].set_null();
+            if (!sess_info->get_service_name().is_empty()) {
+              cur_row_->cells_[cell_idx].set_varchar(sess_info->get_service_name().ptr());
+              cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            } else {
+              cur_row_->cells_[cell_idx].set_null();
+            }
             break;
           }
           case TOTAL_CPU_TIME: {
@@ -500,6 +548,48 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
               cur_row_->cells_[cell_idx].set_double(time_sec);
             }
             cur_row_->cells_[cell_idx].set_scale(6);
+            break;
+          }
+          case TOP_INFO: {
+            if ((obmysql::COM_QUERY == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_PREPARE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_PREXECUTE == sess_info->get_mysql_cmd()) &&
+                !sess_info->get_top_query_string().empty()) {
+              cur_row_->cells_[cell_idx].set_varchar(sess_info->get_top_query_string());
+              cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            } else {
+              cur_row_->cells_[cell_idx].set_null();
+            }
+            break;
+          }
+          case MEMORY_USAGE: {
+            if (ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
+              cur_row_->cells_[cell_idx].set_int(sess_info->get_sql_mem_used());
+            } else {
+              cur_row_->cells_[cell_idx].set_int(0);
+            }
+            break;
+          }
+          case TOP_TIME: {
+            if (type_is_double) {
+              double time_sec;
+              if (!sess_info->get_top_query_string().empty()) {
+                time_sec = (static_cast<double> (current_time - sess_info->get_cur_state_start_time())) / 1000000;
+              } else {
+                time_sec = 0;
+              }
+              cur_row_->cells_[cell_idx].set_double(time_sec);
+              cur_row_->cells_[cell_idx].set_scale(6);
+            } else {
+              int64_t time_sec;
+              if (!sess_info->get_top_query_string().empty()) {
+                time_sec = (current_time - sess_info->get_cur_state_start_time()) / 1000000;
+              } else {
+                time_sec = 0;
+              }
+              cur_row_->cells_[cell_idx].set_int(time_sec);
+            }
             break;
           }
           default: {
@@ -528,6 +618,7 @@ void ObShowProcesslist::FillScanner::reset()
   cur_row_ = NULL;
   my_session_ = NULL;
   trace_id_[0] = '\0';
+  top_trace_id_[0] = '\0';
   output_column_ids_.reset();
 }
 

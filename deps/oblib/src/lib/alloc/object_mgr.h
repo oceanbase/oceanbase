@@ -30,6 +30,27 @@ namespace oceanbase
 {
 namespace lib
 {
+class ObjectMgrV2
+{
+  static const int OBJECT_SET_CNT = 32;
+public:
+  ObjectMgrV2(int parallel, IBlockMgr *blk_mgr);
+  AObject *alloc_object(uint64_t size, const ObMemAttr &attr)
+  {
+    static int64_t global_idx = 0;
+    static thread_local int idx = ATOMIC_FAA(&global_idx, 1);
+    return obj_sets_[idx & (parallel_ - 1)].alloc_object(size, attr);
+  }
+  AObject *realloc_object(
+      AObject *obj, const uint64_t size, const ObMemAttr &attr);
+  void do_cleanup();
+  bool check_has_unfree(char *first_label, char *first_bt);
+
+public:
+  const int parallel_;
+  ObjectSetV2 obj_sets_[OBJECT_SET_CNT];
+}; // end of class ObjectMgrV2
+
 // object_set needs to be lightweight, and some large or logically optional members need to be stripped out
 // SubObjectMgr is a combination of object_set and attributes stripped from object_set, such as block_set, mutex, etc.
 class SubObjectMgr : public IBlockMgr
@@ -111,6 +132,7 @@ public:
   AObject *alloc_object(uint64_t size, const ObMemAttr &attr);
   AObject *realloc_object(
       AObject *obj, const uint64_t size, const ObMemAttr &attr);
+
   void free_object(AObject *obj);
 
   ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override;
@@ -121,6 +143,7 @@ public:
   Stat get_stat();
   bool check_has_unfree();
   bool check_has_unfree(char *first_label, char *first_bt);
+  void do_cleanup() { obj_mgr_v2_.do_cleanup(); }
 private:
   SubObjectMgr *create_sub_mgr();
   void destroy_sub_mgr(SubObjectMgr *sub_mgr);
@@ -135,10 +158,10 @@ public:
   int sub_cnt_;
   SubObjectMgr root_mgr_;
   SubObjectMgr *sub_mgrs_[N];
+  ObjectMgrV2 obj_mgr_v2_;
   int64_t last_wash_ts_;
   int64_t last_washed_size_;
 }; // end of class ObjectMgr
-
 } // end of namespace lib
 } // end of namespace oceanbase
 

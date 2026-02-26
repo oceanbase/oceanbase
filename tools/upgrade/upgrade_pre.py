@@ -17,6 +17,7 @@
 #import mysql.connector
 #from mysql.connector import errorcode
 #from my_error import MyError
+#from my_utils import SetSessionTimeout
 #import logging
 #
 #class SqlItem:
@@ -26,8 +27,8 @@
 #    self.action_sql = action_sql
 #    self.rollback_sql = rollback_sql
 #
-#current_cluster_version = "4.3.2.0"
-#current_data_version = "4.3.2.0"
+#current_cluster_version = "4.5.1.0"
+#current_data_version = "4.5.1.0"
 #g_succ_sql_list = []
 #g_commit_sql_list = []
 #
@@ -121,10 +122,10 @@
 #  results = cur.fetchall()
 #  if len(results) != 1:
 #    logging.exception('min_observer_version is not sync')
-#    raise e
+#    raise MyError('min_observer_version is not sync')
 #  elif len(results[0]) != 1:
 #    logging.exception('column cnt not match')
-#    raise e
+#    raise MyError('column cnt not match')
 #  else:
 #    min_cluster_version = get_version(results[0][0])
 #  return min_cluster_version
@@ -134,11 +135,6 @@
 #  logging.info(sql)
 #  cur.execute(sql)
 #  wait_parameter_sync(cur, False, parameter, value, timeout)
-#
-#def set_session_timeout(cur, seconds):
-#  sql = "set @@session.ob_query_timeout = {0}".format(seconds * 1000 * 1000)
-#  logging.info(sql)
-#  cur.execute(sql)
 #
 #def set_default_timeout_by_tenant(cur, timeout, timeout_per_tenant, min_timeout):
 #  if timeout > 0:
@@ -167,14 +163,11 @@
 #
 #  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 #
-#  set_session_timeout(cur, query_timeout)
-#
-#  for tenants in tenants_list:
-#    sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
-#    logging.info(sql)
-#    cur.execute(sql)
-#
-#  set_session_timeout(cur, 10)
+#  with SetSessionTimeout(cur, query_timeout):
+#    for tenants in tenants_list:
+#      sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
+#      logging.info(sql)
+#      cur.execute(sql)
 #
 #  wait_parameter_sync(cur, True, parameter, value, timeout, only_sys_tenant)
 #
@@ -197,17 +190,17 @@
 #    ori_value = 'True'
 #  elif len(result) != 1 or len(result[0]) != 1:
 #    logging.exception('result cnt not match')
-#    raise e
+#    raise MyError('result cnt not match')
 #  elif result[0][0].lower() in ["1", "true", "on", "yes", 't']:
 #    ori_value = 'True'
 #  elif result[0][0].lower() in ["0", "false", "off", "no", 'f']:
 #    ori_value = 'False'
 #  else:
 #    logging.exception("""result value is invalid, result:{0}""".format(result[0][0]))
-#    raise e
+#    raise MyError("""result value is invalid, result:{0}""".format(result[0][0]))
 #  return ori_value
 #
-## print version like "x.x.x.x"
+## print(version like "x.x.x.x")
 #def print_version(version):
 #  version = int(version)
 #  major = (version >> 32) & 0xffffffff
@@ -222,7 +215,7 @@
 #
 #  if len(versions) != 4:
 #    logging.exception("""version:{0} is invalid""".format(version_str))
-#    raise e
+#    raise MyError("""version:{0} is invalid""".format(version_str))
 #
 #  major = int(versions[0])
 #  minor = int(versions[1])
@@ -231,7 +224,7 @@
 #
 #  if major > 0xffffffff or minor > 0xffff or major_patch > 0xff or minor_patch > 0xff:
 #    logging.exception("""version:{0} is invalid""".format(version_str))
-#    raise e
+#    raise MyError("""version:{0} is invalid""".format(version_str))
 #
 #  version = (major << 32) | (minor << 16) | (major_patch << 8) | (minor_patch)
 #  return version
@@ -276,29 +269,26 @@
 #    wait_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 #    query_timeout = set_default_timeout_by_tenant(cur, timeout, 2, 60)
 #
-#  set_session_timeout(cur, query_timeout)
+#  with SetSessionTimeout(cur, query_timeout):
+#    times = wait_timeout / 5
+#    while times >= 0:
+#      logging.info(sql)
+#      cur.execute(sql)
+#      result = cur.fetchall()
+#      if len(result) != 1 or len(result[0]) != 1:
+#        logging.exception('result cnt not match')
+#        raise MyError('result cnt not match')
+#      elif result[0][0] == 0:
+#        logging.info("""{0} is sync, value is {1}""".format(key, value))
+#        break
+#      else:
+#        logging.info("""{0} is not sync, value should be {1}""".format(key, value))
 #
-#  times = wait_timeout / 5
-#  while times >= 0:
-#    logging.info(sql)
-#    cur.execute(sql)
-#    result = cur.fetchall()
-#    if len(result) != 1 or len(result[0]) != 1:
-#      logging.exception('result cnt not match')
-#      raise e
-#    elif result[0][0] == 0:
-#      logging.info("""{0} is sync, value is {1}""".format(key, value))
-#      break
-#    else:
-#      logging.info("""{0} is not sync, value should be {1}""".format(key, value))
-#
-#    times -= 1
-#    if times == -1:
-#      logging.exception("""check {0}:{1} sync timeout""".format(key, value))
-#      raise e
-#    time.sleep(5)
-#
-#  set_session_timeout(cur, 10)
+#      times -= 1
+#      if times == -1:
+#        logging.exception("""check {0}:{1} sync timeout""".format(key, value))
+#        raise MyError("""check {0}:{1} sync timeout""".format(key, value))
+#      time.sleep(5)
 #
 #def do_begin_upgrade(cur, timeout):
 #
@@ -374,15 +364,12 @@
 #
 #  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 #
-#  set_session_timeout(cur, query_timeout)
-#
-#  for tenants in tenants_list:
-#    action_sql = "alter system suspend merge tenant = {0}".format(tenants)
-#    rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
-#    logging.info(action_sql)
-#    cur.execute(action_sql)
-#
-#  set_session_timeout(cur, 10)
+#  with SetSessionTimeout(cur, query_timeout):
+#    for tenants in tenants_list:
+#      action_sql = "alter system suspend merge tenant = {0}".format(tenants)
+#      rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
+#      logging.info(action_sql)
+#      cur.execute(action_sql)
 #
 #def do_resume_merge(cur, timeout):
 #  tenants_list = []
@@ -393,15 +380,12 @@
 #
 #  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 #
-#  set_session_timeout(cur, query_timeout)
-#
-#  for tenants in tenants_list:
-#    action_sql = "alter system resume merge tenant = {0}".format(tenants)
-#    rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
-#    logging.info(action_sql)
-#    cur.execute(action_sql)
-#
-#  set_session_timeout(cur, 10)
+#  with SetSessionTimeout(cur, query_timeout):
+#    for tenants in tenants_list:
+#      action_sql = "alter system resume merge tenant = {0}".format(tenants)
+#      rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
+#      logging.info(action_sql)
+#      cur.execute(action_sql)
 #
 #class Cursor:
 #  __cursor = None
@@ -414,12 +398,12 @@
 #      if True == print_when_succ:
 #        logging.info('succeed to execute sql: %s, rowcount = %d', sql, rowcount)
 #      return rowcount
-#    except mysql.connector.Error, e:
+#    except mysql.connector.Error as e:
 #      logging.exception('mysql connector error, fail to execute sql: %s', sql)
-#      raise e
-#    except Exception, e:
+#      raise
+#    except Exception as e:
 #      logging.exception('normal error, fail to execute sql: %s', sql)
-#      raise e
+#      raise
 #  def exec_query(self, sql, print_when_succ = True):
 #    try:
 #      self.__cursor.execute(sql)
@@ -428,12 +412,12 @@
 #      if True == print_when_succ:
 #        logging.info('succeed to execute query: %s, rowcount = %d', sql, rowcount)
 #      return (self.__cursor.description, results)
-#    except mysql.connector.Error, e:
+#    except mysql.connector.Error as e:
 #      logging.exception('mysql connector error, fail to execute sql: %s', sql)
-#      raise e
-#    except Exception, e:
+#      raise
+#    except Exception as e:
 #      logging.exception('normal error, fail to execute sql: %s', sql)
-#      raise e
+#      raise
 #
 #class DDLCursor:
 #  _cursor = None
@@ -444,9 +428,9 @@
 #      # 这里检查是不是ddl，不是ddl就抛错
 #      check_is_ddl_sql(sql)
 #      return self._cursor.exec_sql(sql, print_when_succ)
-#    except Exception, e:
+#    except Exception as e:
 #      logging.exception('fail to execute ddl: %s', sql)
-#      raise e
+#      raise
 #
 #class QueryCursor:
 #  _cursor = None
@@ -457,9 +441,9 @@
 #      # 这里检查是不是query，不是query就抛错
 #      check_is_query_sql(sql)
 #      return self._cursor.exec_query(sql, print_when_succ)
-#    except Exception, e:
+#    except Exception as e:
 #      logging.exception('fail to execute dml query: %s', sql)
-#      raise e
+#      raise
 #
 #class DMLCursor(QueryCursor):
 #  def exec_update(self, sql, print_when_succ = True):
@@ -467,9 +451,9 @@
 #      # 这里检查是不是update，不是update就抛错
 #      check_is_update_sql(sql)
 #      return self._cursor.exec_sql(sql, print_when_succ)
-#    except Exception, e:
+#    except Exception as e:
 #      logging.exception('fail to execute dml update: %s', sql)
-#      raise e
+#      raise
 #
 #class BaseDDLAction():
 #  __ddl_cursor = None
@@ -579,9 +563,9 @@
 #    for r in results:
 #      tenant_id_list.append(r[0])
 #    return tenant_id_list
-#  except Exception, e:
+#  except Exception as e:
 #    logging.exception('fail to fetch distinct tenant ids')
-#    raise e
+#    raise
 #
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:config.py
@@ -605,6 +589,7 @@
 #import sys
 #import mysql.connector
 #from mysql.connector import errorcode
+#from my_utils import set_session_timeout_for_upgrade
 #import logging
 #import json
 #import config
@@ -626,14 +611,11 @@
 #class PasswordMaskingFormatter(logging.Formatter):
 #  def format(self, record):
 #    s = super(PasswordMaskingFormatter, self).format(record)
-#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+#    return re.sub(r'password="(?:[^"\\]|\\.)*"', 'password="******"', s)
 #
 #def config_logging_module(log_filenamme):
-#  logging.basicConfig(level=logging.INFO,\
-#      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
-#      datefmt='%Y-%m-%d %H:%M:%S',\
-#      filename=log_filenamme,\
-#      filemode='w')
+#  logger = logging.getLogger('')
+#  logger.setLevel(logging.INFO)
 #  # 定义日志打印格式
 #  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
@@ -669,6 +651,8 @@
 #    cur = conn.cursor(buffered=True)
 #    try:
 #      query_cur = actions.QueryCursor(cur)
+#      if timeout != 0:
+#        set_session_timeout_for_upgrade(query_cur, timeout)
 #      actions.check_server_version_by_cluster(cur)
 #      conn.commit()
 #
@@ -709,9 +693,9 @@
 #        actions.refresh_commit_sql_list()
 #        logging.info('================succeed to run post check action ===============')
 #
-#    except Exception, e:
+#    except Exception as e:
 #      logging.exception('run error')
-#      raise e
+#      raise
 #    finally:
 #      # 打印统计信息
 #      print_stats()
@@ -719,12 +703,12 @@
 #      # actions.dump_rollback_sql_to_file(upgrade_params.rollback_sql_filename)
 #      cur.close()
 #      conn.close()
-#  except mysql.connector.Error, e:
+#  except mysql.connector.Error as e:
 #    logging.exception('connection error')
-#    raise e
-#  except Exception, e:
+#    raise
+#  except Exception as e:
 #    logging.exception('normal error')
-#    raise e
+#    raise
 #
 #def do_upgrade_by_argv(argv):
 #  upgrade_params = UpgradeParams()
@@ -758,14 +742,14 @@
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
 #          host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
 #      do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
-#    except mysql.connector.Error, e:
+#    except mysql.connector.Error as e:
 #      logging.exception('mysql connctor error')
 #      logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-#      raise e
-#    except Exception, e:
+#      raise
+#    except Exception as e:
 #      logging.exception('normal error')
 #      logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-#      raise e
+#      raise
 #
 #
 #
@@ -780,7 +764,7 @@
 #from mysql.connector import errorcode
 #import logging
 #import re
-#
+#from my_utils import set_session_timeout_for_upgrade
 #import config
 #import opts
 #import run_modules
@@ -798,14 +782,11 @@
 #class PasswordMaskingFormatter(logging.Formatter):
 #  def format(self, record):
 #    s = super(PasswordMaskingFormatter, self).format(record)
-#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+#    return re.sub(r'password="(?:[^"\\]|\\.)*"', 'password="******"', s)
 #
 #def config_logging_module(log_filenamme):
-#  logging.basicConfig(level=logging.INFO,\
-#      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
-#      datefmt='%Y-%m-%d %H:%M:%S',\
-#      filename=log_filenamme,\
-#      filemode='w')
+#  logger = logging.getLogger('')
+#  logger.setLevel(logging.INFO)
 #  # 定义日志打印格式
 #  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
@@ -841,6 +822,8 @@
 #    cur = conn.cursor(buffered=True)
 #    try:
 #      query_cur = actions.QueryCursor(cur)
+#      if timeout != 0:
+#        set_session_timeout_for_upgrade(cur, timeout)
 #      actions.check_server_version_by_cluster(cur)
 #
 #      if run_modules.MODULE_BEGIN_UPGRADE in my_module_set:
@@ -869,12 +852,12 @@
 #
 #      if run_modules.MODULE_HEALTH_CHECK in my_module_set:
 #        logging.info('================begin to run health check action ===============')
-#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, True) # need_check_major_status = True
+#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, False) # need_check_major_status = False
 #        logging.info('================succeed to run health check action ===============')
 #
-#    except Exception, e:
+#    except Exception as e:
 #      logging.exception('run error')
-#      raise e
+#      raise
 #    finally:
 #      # 打印统计信息
 #      print_stats()
@@ -882,12 +865,12 @@
 #      # actions.dump_rollback_sql_to_file(upgrade_params.rollback_sql_filename)
 #      cur.close()
 #      conn.close()
-#  except mysql.connector.Error, e:
+#  except mysql.connector.Error as e:
 #    logging.exception('connection error')
-#    raise e
-#  except Exception, e:
+#    raise
+#  except Exception as e:
 #    logging.exception('normal error')
-#    raise e
+#    raise
 #
 #def do_upgrade_by_argv(argv):
 #  upgrade_params = UpgradeParams()
@@ -921,14 +904,14 @@
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
 #          host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
 #      do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
-#    except mysql.connector.Error, e:
+#    except mysql.connector.Error as e:
 #      logging.exception('mysql connctor error')
 #      logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-#      raise e
-#    except Exception, e:
+#      raise
+#    except Exception as e:
 #      logging.exception('normal error')
 #      logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-#      raise e
+#      raise
 #
 #
 #
@@ -950,7 +933,6 @@
 #import mysql.connector
 #from mysql.connector import errorcode
 #from my_error import MyError
-#from actions import QueryCursor
 #import logging
 #
 #def results_to_str(desc, results):
@@ -991,6 +973,50 @@
 #  result_str = results_to_str(desc, results)
 #  logging.info('dump query results, sql: %s, results:\n%s', sql, result_str)
 #
+#upgrade_session_timeout_set = False
+#
+## set_session_timeout_for_upgrade这个函数只能被调用一次，设置当前升级流程里所有SQL的timeout，单个步骤需要改timeout请使用SetSessionTimeout
+## 用法：
+## with SetSessionTimeout(cur, timeout):
+##   # some code here
+##   pass
+#def set_session_timeout_for_upgrade(cur, time):
+#  global upgrade_session_timeout_set
+#  if upgrade_session_timeout_set:
+#    raise MyError('error in upgrade script, set_session_timeout_for_upgrade should only be called once')
+#  upgrade_session_timeout_set = True
+#  sql = "set @@session.ob_query_timeout = {0}".format(time * 1000 * 1000)
+#  logging.info(sql)
+#  cur.execute(sql)
+#
+#class SetSessionTimeout:
+#  def set_session_timeout(self, cur, time):
+#    sql = "set @@session.ob_query_timeout = {0}".format(time)
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#  def get_session_timeout(self, cur):
+#    sql = "select @@session.ob_query_timeout"
+#    cur.execute(sql)
+#    results = cur.fetchall()
+#    if len(results) != 1 or len(results[0]) != 1:
+#      logging.exception('results unexpected')
+#    else:
+#      return int(results[0][0])
+#
+#  def __init__(self, cur, seconds):
+#    self.cur = cur
+#    self.query_timeout_before = self.get_session_timeout(cur)
+#    self.timeout_overall = seconds * 1000 * 1000
+#
+#  # 类似于C++里的RAII，会在with语句入口处调用__enter__，出口处调用__exit__
+#  def __enter__(self):
+#    if self.timeout_overall != 0:
+#      self.set_session_timeout(self.cur, self.timeout_overall)
+#
+#  def __exit__(self, exc_type, exc_val, exc_tb):
+#    if self.timeout_overall != 0:
+#      self.set_session_timeout(self.cur, self.query_timeout_before)
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:opts.py
 ##!/usr/bin/env python
@@ -1168,15 +1194,15 @@
 #  if 'help' == opt.get_long_name():
 #    if 'upgrade_pre' == filename:
 #      global pre_help_str
-#      print pre_help_str
+#      print(pre_help_str)
 #    elif 'upgrade_post' == filename:
 #      global post_help_str
-#      print post_help_str
+#      print(post_help_str)
 #    else:
 #            raise MyError('not supported filename:{0} for help option'.format(filename))
 #  elif 'version' == opt.get_long_name():
 #    global version_str
-#    print version_str
+#    print(version_str)
 #
 #def deal_with_local_opts(filename):
 #  global g_opts
@@ -1352,17 +1378,11 @@
 ##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
 #  current_version = actions.fetch_observer_version(cur)
 #  target_version = actions.get_current_cluster_version()
-#  # when upgrade across version, disable enable_ddl/major_freeze
+#  # when upgrade across version, disable enable_ddl/major_freeze/direct_load
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
 #    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
-#    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
-#    # wait scheduler in storage to notice adaptive_compaction is switched to false
-#    time.sleep(60 * 2)
-#    query_cur = actions.QueryCursor(cur)
-#    wait_major_timeout = 600
-#    upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
-#    actions.do_suspend_merge(cur, timeout)
+#    actions.set_parameter(cur, '_ob_enable_direct_load', 'False', timeout)
 #  # When upgrading from a version prior to 4.2 to version 4.2, the bloom_filter should be disabled.
 #  # The param _bloom_filter_enabled is no longer in use as of version 4.2, there is no need to enable it again.
 #  if actions.get_version(current_version) < actions.get_version('4.2.0.0')\
@@ -1376,6 +1396,14 @@
 #  else:
 #    only_sys_tenant = True
 #    actions.set_tenant_parameter(cur, 'enable_rebalance', 'False', timeout, only_sys_tenant)
+#
+#  if actions.get_version(current_version) < actions.get_version('4.5.0.0'):
+#    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+#    # wait scheduler in storage to notice adaptive_compaction is switched to false
+#    time.sleep(60 * 2)
+#    query_cur = actions.QueryCursor(cur)
+#    wait_major_timeout = 600
+#    upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
 #
 #####========******####======== actions begin ========####******========####
 #  return
@@ -1401,11 +1429,13 @@
 ##!/usr/bin/env python
 ## -*- coding: utf-8 -*-
 #
+#from my_error import MyError
 #import logging
 #import time
 #from actions import Cursor
 #from actions import DMLCursor
 #from actions import QueryCursor
+#from my_utils import SetSessionTimeout
 #import mysql.connector
 #from mysql.connector import errorcode
 #import actions
@@ -1418,8 +1448,6 @@
 #  across_version = upgrade_across_version(cur)
 #  if across_version:
 #    run_upgrade_job(conn, cur, "UPGRADE_ALL", timeout)
-#  else:
-#    run_upgrade_job(conn, cur, "UPGRADE_VIRTUAL_SCHEMA", timeout)
 #
 #  run_root_inspection(cur, timeout)
 #####========******####======== actions begin ========####******========####
@@ -1437,9 +1465,9 @@
 #    info_cnt = result[0][0]
 #    if info_cnt > 0:
 #      actions.set_parameter(cur, "syslog_level", "WDIAG")
-#  except Exception, e:
+#  except Exception as e:
 #    logging.warn("upgrade syslog level failed!")
-#    raise e
+#    raise
 #####========******####========= actions end =========####******========####
 #
 #def query(cur, sql):
@@ -1452,16 +1480,20 @@
 #  return [_[0] for _ in query(cur, 'select tenant_id from oceanbase.__all_tenant')]
 #
 #def run_root_inspection(cur, timeout):
-#
-#  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 600)
-#
-#  actions.set_session_timeout(cur, query_timeout)
-#
-#  sql = "alter system run job 'root_inspection'"
-#  logging.info(sql)
-#  cur.execute(sql)
-#
-#  actions.set_session_timeout(cur, 10)
+#  sql = "select count(*) from oceanbase.__all_virtual_upgrade_inspection where info != 'succeed'"
+#  results = query(cur, sql)
+#  if len(results) != 1 or len(results[0]) != 1:
+#    warn_text = 'result not match, sql:"{}", results:{}'.format(sql, results)
+#    logging.warn(warn_text)
+#    raise MyError(warn_text)
+#  elif results[0][0] != 0:
+#    query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 100, 600)
+#    with SetSessionTimeout(cur, query_timeout):
+#      sql = "alter system run job 'root_inspection'"
+#      logging.info(sql)
+#      cur.execute(sql)
+#  else:
+#    logging.info("skip run 'root_inspection', results:{}".format(results))
 #
 #def upgrade_across_version(cur):
 #  current_data_version = actions.get_current_data_version()
@@ -1470,12 +1502,12 @@
 #  across_version = False
 #  sys_tenant_id = 1
 #
-#  # 1. check if target_data_version/current_data_version match with current_data_version
+#  # 1. check if target_data_version/current_data_version/upgrade_begin_data_version match with current_data_version
 #  sql = "select count(*) from oceanbase.__all_table where table_name = '__all_virtual_core_table'"
 #  results = query(cur, sql)
 #  if len(results) < 1 or len(results[0]) < 1:
 #    logging.warn("row/column cnt not match")
-#    raise e
+#    raise MyError("row/column cnt not match")
 #  elif results[0][0] <= 0:
 #    # __all_virtual_core_table doesn't exist, this cluster is upgraded from 4.0.0.0
 #    across_version = True
@@ -1484,20 +1516,26 @@
 #    tenant_ids = get_tenant_ids(cur)
 #    if len(tenant_ids) <= 0:
 #      logging.warn("tenant_ids count is unexpected")
-#      raise e
+#      raise MyError("tenant_ids count is unexpected")
 #    tenant_count = len(tenant_ids)
 #
-#    sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(int_current_data_version)
-#    results = query(cur, sql)
-#    if len(results) != 1 or len(results[0]) != 1:
-#      logging.warn('result cnt not match')
-#      raise e
-#    elif 2 * tenant_count != results[0][0]:
-#      logging.info('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
-#      across_version = True
-#    else:
-#      logging.info("all tenant's target_data_version/current_data_version are match with {0}".format(current_data_version))
-#      across_version = False
+#    # 10 second per tenant
+#    # at least 100 seconds
+#    # ignore default timeout
+#    query_timeout = actions.set_default_timeout_by_tenant(cur, 0, 10, 100)
+#    with SetSessionTimeout(cur, query_timeout):
+#      tenant_id_str = ','.join(map(str, tenant_ids))
+#      sql = "select count(*) from __all_virtual_core_table where table_name = '__all_global_stat' and column_name in ('target_data_version', 'current_data_version', 'upgrade_begin_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_id_str)
+#      results = query(cur, sql)
+#      if len(results) != 1 or len(results[0]) != 1:
+#        logging.warn('result cnt not match')
+#        raise MyError('result cnt not match')
+#      elif 3 * tenant_count != results[0][0]:
+#        logging.info('target_data_version/current_data_version/upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
+#        across_version = True
+#      else:
+#        logging.info("all tenant's target_data_version/current_data_version/upgrade_begin_data_version are match with {0}".format(current_data_version))
+#        across_version = False
 #
 #  # 2. check if compatible match with current_data_version
 #  if not across_version:
@@ -1505,7 +1543,7 @@
 #    results = query(cur, sql)
 #    if len(results) < 1 or len(results[0]) < 1:
 #      logging.warn("row/column cnt not match")
-#      raise e
+#      raise MyError("row/column cnt not match")
 #    elif results[0][0] == 0:
 #      logging.info("compatible are all matched")
 #    else:
@@ -1524,16 +1562,16 @@
 #      max_job_id = 0
 #    elif (len(results) != 1 or len(results[0]) != 1):
 #      logging.warn("row cnt not match")
-#      raise e
+#      raise MyError("row cnt not match")
 #    else:
 #      max_job_id = results[0][0]
 #
 #    logging.info("get max_used_job_id:{0}".format(max_job_id))
 #
 #    return max_job_id
-#  except Exception, e:
+#  except Exception as e:
 #    logging.warn("failed to get max_used_job_id")
-#    raise e
+#    raise
 #
 #def check_can_run_upgrade_job(cur, job_name):
 #  try:
@@ -1547,10 +1585,10 @@
 #      logging.info("upgrade job not created yet, should run upgrade job")
 #    elif (len(results) != 1 or len(results[0]) != 1):
 #      logging.warn("row cnt not match")
-#      raise e
+#      raise MyError("row cnt not match")
 #    elif ("INPROGRESS" == results[0][0]):
 #      logging.warn("upgrade job still running, should wait")
-#      raise e
+#      raise MyError("upgrade job still running, should wait")
 #    elif ("SUCCESS" == results[0][0]):
 #      bret = True
 #      logging.info("maybe upgrade job remained, can run again")
@@ -1559,12 +1597,12 @@
 #      logging.info("execute upgrade job failed, should run again")
 #    else:
 #      logging.warn("invalid job status: {0}".format(results[0][0]))
-#      raise e
+#      raise MyError("invalid job status: {0}".format(results[0][0]))
 #
 #    return bret
-#  except Exception, e:
+#  except Exception as e:
 #    logging.warn("failed to check if upgrade job can run")
-#    raise e
+#    raise
 #
 #def check_upgrade_job_result(cur, job_name, timeout, max_used_job_id):
 #  try:
@@ -1581,7 +1619,7 @@
 #        logging.info("upgrade job not created yet")
 #      elif (len(results) != 1 or len(results[0]) != 4):
 #        logging.warn("row cnt not match")
-#        raise e
+#        raise MyError("row cnt not match")
 #      elif ("INPROGRESS" == results[0][0]):
 #        logging.info("upgrade job is still running")
 #        # check if rs change
@@ -1593,39 +1631,39 @@
 #          results = query(cur, sql)
 #          if (len(results) != 1 or len(results[0]) != 1):
 #            logging.warn("row/column cnt not match")
-#            raise e
+#            raise MyError("row/column cnt not match")
 #          elif results[0][0] == 1:
 #            sql = """select count(*) from oceanbase.__all_rootservice_event_history where gmt_create > '{0}' and event = 'full_rootservice'""".format(gmt_create)
 #            results = query(cur, sql)
 #            if (len(results) != 1 or len(results[0]) != 1):
 #              logging.warn("row/column cnt not match")
-#              raise e
+#              raise MyError("row/column cnt not match")
 #            elif results[0][0] > 0:
 #              logging.warn("rs changed, should check if upgrade job is still running")
-#              raise e
+#              raise MyError("rs changed, should check if upgrade job is still running")
 #            else:
 #              logging.info("rs[{0}:{1}] still exist, keep waiting".format(ip, port))
 #          else:
 #            logging.warn("rs changed or not exist, should check if upgrade job is still running")
-#            raise e
+#            raise MyError("rs changed or not exist, should check if upgrade job is still running")
 #      elif ("SUCCESS" == results[0][0]):
 #        logging.info("execute upgrade job successfully")
 #        break;
 #      elif ("FAILED" == results[0][0]):
 #        logging.warn("execute upgrade job failed")
-#        raise e
+#        raise MyError("execute upgrade job failed")
 #      else:
 #        logging.warn("invalid job status: {0}".format(results[0][0]))
-#        raise e
+#        raise MyError("invalid job status: {0}".format(results[0][0]))
 #
 #      times = times - 1
 #      if times == -1:
 #        logging.warn("""check {0} job timeout""".format(job_name))
-#        raise e
+#        raise MyError("""check {0} job timeout""".format(job_name))
 #      time.sleep(10)
-#  except Exception, e:
+#  except Exception as e:
 #    logging.warn("failed to check upgrade job result")
-#    raise e
+#    raise
 #
 #def run_upgrade_job(conn, cur, job_name, timeout):
 #  try:
@@ -1637,8 +1675,6 @@
 #      ori_enable_ddl = actions.get_ori_enable_ddl(cur, timeout)
 #      if ori_enable_ddl == 0:
 #        actions.set_parameter(cur, 'enable_ddl', 'True', timeout)
-#      # enable_sys_table_ddl
-#      actions.set_parameter(cur, 'enable_sys_table_ddl', 'True', timeout)
 #      # get max_used_job_id
 #      max_used_job_id = get_max_used_job_id(cur)
 #      # run upgrade job
@@ -1647,20 +1683,19 @@
 #      cur.execute(sql)
 #      # check upgrade job result
 #      check_upgrade_job_result(cur, job_name, timeout, max_used_job_id)
-#      # reset enable_sys_table_ddl
-#      actions.set_parameter(cur, 'enable_sys_table_ddl', 'False', timeout)
 #      # reset enable_ddl
 #      if ori_enable_ddl == 0:
 #        actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
-#  except Exception, e:
+#  except Exception as e:
 #    logging.warn("run upgrade job failed, :{0}".format(job_name))
-#    raise e
+#    raise
 #  logging.info("run upgrade job success, job_name:{0}".format(job_name))
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:upgrade_checker.py
 ##!/usr/bin/env python
 ## -*- coding: utf-8 -*-
 #
+#from __future__ import print_function
 #import sys
 #import os
 #import mysql.connector
@@ -1669,15 +1704,20 @@
 #import getopt
 #import time
 #import re
+#import ctypes
+#
+#if sys.version_info.major == 3:
+#    def cmp(a, b):
+#        return (a > b) - (a < b)
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_checker.log'
-#  old_version = '4.0.0.0'
+#  old_version = '4.2.5.1'
 #
 #class PasswordMaskingFormatter(logging.Formatter):
 #  def format(self, record):
 #    s = super(PasswordMaskingFormatter, self).format(record)
-#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+#    return re.sub(r'password="(?:[^"\\]|\\.)*"', 'password="******"', s)
 #
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
@@ -1697,12 +1737,12 @@
 #      if True == print_when_succ:
 #        logging.info('succeed to execute sql: %s, rowcount = %d', sql, rowcount)
 #      return rowcount
-#    except mysql.connector.Error, e:
+#    except mysql.connector.Error as e:
 #      logging.exception('mysql connector error, fail to execute sql: %s', sql)
-#      raise e
-#    except Exception, e:
+#      raise
+#    except Exception as e:
 #      logging.exception('normal error, fail to execute sql: %s', sql)
-#      raise e
+#      raise
 #  def exec_query(self, sql, print_when_succ = True):
 #    try:
 #      self.__cursor.execute(sql)
@@ -1711,12 +1751,12 @@
 #      if True == print_when_succ:
 #        logging.info('succeed to execute query: %s, rowcount = %d', sql, rowcount)
 #      return (self.__cursor.description, results)
-#    except mysql.connector.Error, e:
+#    except mysql.connector.Error as e:
 #      logging.exception('mysql connector error, fail to execute sql: %s', sql)
-#      raise e
-#    except Exception, e:
+#      raise
+#    except Exception as e:
 #      logging.exception('normal error, fail to execute sql: %s', sql)
-#      raise e
+#      raise
 #
 #def set_parameter(cur, parameter, value):
 #  sql = """alter system set {0} = '{1}'""".format(parameter, value)
@@ -1734,7 +1774,7 @@
 #    result = cur.fetchall()
 #    if len(result) != 1 or len(result[0]) != 1:
 #      logging.exception('result cnt not match')
-#      raise e
+#      raise MyError('result cnt not match')
 #    elif result[0][0] == 0:
 #      logging.info("""{0} is sync, value is {1}""".format(key, value))
 #      break
@@ -1744,7 +1784,7 @@
 #    times -= 1
 #    if times == 0:
 #      logging.exception("""check {0}:{1} sync timeout""".format(key, value))
-#      raise e
+#      raise MyError("""check {0}:{1} sync timeout""".format(key, value))
 #    time.sleep(5)
 #
 ##### --------------start :  opt.py --------------
@@ -1768,6 +1808,9 @@
 #'                    that all modules should be run. They are splitted by ",".\n' +\
 #'                    For example: -m all, or --module=ddl,normal_dml,special_action\n' +\
 #'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
+#'-arc, --cpu-arch=name CPU architecture. Whether machine in cluster support AVX2 arch or not.\n' +\
+#'                      \'avx2\' for x86 avx2 instruction set supported\n' +\
+#'                      \'avx2_not_support\' for x86 avx2 instruction set not supported\n' +\
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
 #sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
@@ -1827,7 +1870,8 @@
 ## 要跑哪个模块，默认全跑
 #Option('m', 'module', True, False, 'all'),\
 ## 日志文件路径，不同脚本的main函数中中会改成不同的默认值
-#Option('l', 'log-file', True, False)
+#Option('l', 'log-file', True, False),\
+#Option('C', 'cpu-arch', True, False, 'unknown')
 #]\
 #
 #def change_opt_defult_value(opt_long_name, opt_default_val):
@@ -1881,10 +1925,10 @@
 #def deal_with_local_opt(opt):
 #  if 'help' == opt.get_long_name():
 #    global help_str
-#    print help_str
+#    print(help_str)
 #  elif 'version' == opt.get_long_name():
 #    global version_str
-#    print version_str
+#    print(version_str)
 #
 #def deal_with_local_opts():
 #  global g_opts
@@ -1938,15 +1982,18 @@
 #  for opt in g_opts:
 #    if 'log-file' == opt.get_long_name():
 #      return opt.get_value()
+#
+#def get_opt_cpu_arch():
+#  global g_opts
+#  for opt in g_opts:
+#    if 'cpu-arch' == opt.get_long_name():
+#      return opt.get_value()
 ##### ---------------end----------------------
 #
 ##### --------------start :  do_upgrade_pre.py--------------
 #def config_logging_module(log_filenamme):
-#  logging.basicConfig(level=logging.INFO,\
-#      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
-#      datefmt='%Y-%m-%d %H:%M:%S',\
-#      filename=log_filenamme,\
-#      filemode='w')
+#  logger = logging.getLogger('')
+#  logger.setLevel(logging.INFO)
 #  # 定义日志打印格式
 #  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
@@ -1970,7 +2017,7 @@
 #
 #  if len(versions) != 4:
 #    logging.exception("""version:{0} is invalid""".format(version_str))
-#    raise e
+#    raise MyError("""version:{0} is invalid""".format(version_str))
 #
 #  major = int(versions[0])
 #  minor = int(versions[1])
@@ -1979,7 +2026,7 @@
 #
 #  if major > 0xffffffff or minor > 0xffff or major_patch > 0xff or minor_patch > 0xff:
 #    logging.exception("""version:{0} is invalid""".format(version_str))
-#    raise e
+#    raise MyError("""version:{0} is invalid""".format(version_str))
 #
 #  version = (major << 32) | (minor << 16) | (major_patch << 8) | (minor_patch)
 #  return version
@@ -1991,7 +2038,7 @@
 #  if len(results) != 1:
 #    fail_list.append('min_observer_version is not sync')
 #  elif cmp(results[0][0], upgrade_params.old_version) < 0 :
-#    fail_list.append('old observer version is expected equal or higher then: {0}, actual version:{1}'.format(upgrade_params.old_version, results[0][0]))
+#    fail_list.append('old observer version is expected equal or higher than: {0}, actual version:{1}'.format(upgrade_params.old_version, results[0][0]))
 #  logging.info('check observer version success, version = {0}'.format(results[0][0]))
 #
 #def check_data_version(query_cur):
@@ -2028,21 +2075,32 @@
 #          fail_list.append('last barrier data version is 4.1.0.0. prohibit cluster upgrade from data version less than 4.1.0.0')
 #        else:
 #          # check target_data_version/current_data_version
-#          sql = "select count(*) from oceanbase.__all_tenant"
+#          sql = "select tenant_id from oceanbase.__all_tenant"
+#          (desc, results) = query_cur.exec_query(sql)
+#          tenant_ids = [_[0] for _ in results]
+#          # check upgrade_begin_data_version
+#          tenant_count = len(tenant_ids)
+#          tenant_id_str = ','.join(map(str, tenant_ids))
+#
+#          sql = "select count(*) from __all_virtual_core_table where table_name = '__all_global_stat' and column_name in ('target_data_version', 'current_data_version') and column_value = {0} and tenant_id in ({1})".format(data_version, tenant_id_str)
 #          (desc, results) = query_cur.exec_query(sql)
 #          if len(results) != 1 or len(results[0]) != 1:
 #            fail_list.append('result cnt not match')
+#          elif 2 * tenant_count != results[0][0]:
+#            fail_list.append('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
 #          else:
-#            tenant_count = results[0][0]
+#            logging.info("check data version success, all tenant's compatible/target_data_version/current_data_version is {0}".format(data_version_str))
 #
-#            sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(data_version)
+#          if data_version >= get_version("4.3.5.1"):
+#            # check upgrade_begin_data_version
+#            sql = "select count(*) from __all_virtual_core_table where table_name = '__all_global_stat' and column_name in ('upgrade_begin_data_version') and column_value = {0} and tenant_id in ({1})".format(data_version, tenant_id_str)
 #            (desc, results) = query_cur.exec_query(sql)
 #            if len(results) != 1 or len(results[0]) != 1:
 #              fail_list.append('result cnt not match')
-#            elif 2 * tenant_count != results[0][0]:
-#              fail_list.append('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
+#            elif tenant_count != results[0][0]:
+#              fail_list.append('upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
 #            else:
-#              logging.info("check data version success, all tenant's compatible/target_data_version/current_data_version is {0}".format(data_version_str))
+#              logging.info("check data version success, all tenant's upgrade_begin_data_version is {0}".format(data_version_str))
 #
 ## 2. 检查paxos副本是否同步, paxos副本是否缺失
 #def check_paxos_replica(query_cur):
@@ -2071,12 +2129,33 @@
 #  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
-#  if results[0][0] > 0 :
-#    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
+#
+#  # check adaptive compaction
+#  min_cluster_version = 0
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#  if min_cluster_version < get_version("4.5.0.0"):
+#    get_data_version_sql = """select distinct value from oceanbase.__all_virtual_tenant_parameter_info where name='compatible'"""
+#    (desc, results) = query_cur.exec_query(sql)
+#    if len(results) != 1:
+#      fail_list.append('compatible is not sync')
+#    elif len(results[0]) != 1:
+#      fail_list.append('column cnt not match')
+#    else:
+#      data_version = get_version(results[0][0])
+#      if (data_version < get_version("4.5.0.0")):
+#        (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
+#        if results[0][0] > 0 :
+#          fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
 #
-## 5. 检查是否有异常租户(creating，延迟删除，恢复中)
+## 5. 检查是否有异常租户(creating，延迟删除，恢复中，租户unit有残留)
 #def check_tenant_status(query_cur):
 #
 #  # check tenant schema
@@ -2106,6 +2185,16 @@
 #    fail_list.append('has locked tenant, should unlock')
 #  else:
 #    logging.info('check tenant lock status success')
+#
+#  # check all deleted tenant's unit is freed
+#  (desc, results) = query_cur.exec_query("select count(*) from oceanbase.gv$ob_units a, oceanbase.__all_tenant_history b where b.is_deleted = 1 and a.tenant_id = b.tenant_id")
+#  if len(results) != 1 or len(results[0]) != 1:
+#    fail_list.append('results len not match')
+#  elif 0 != results[0][0]:
+#    fail_list.append('has deleted tenant with unit not freed')
+#  else:
+#    logging.info('check deleted tenant unit gc success')
+#
 #
 ## 6. 检查无恢复任务
 #def check_restore_job_exist(query_cur):
@@ -2386,13 +2475,316 @@
 #     error_msg ="upgrade checker failed with " + str(len(fail_list)) + " reasons: " + ", ".join(['['+x+"] " for x in fail_list])
 #     raise MyError(error_msg)
 #
+## 检查升级到4.3.2或更高版本时，剩余的磁盘空间是否足够做多源数据格式转换
+#def check_disk_space_for_mds_sstable_compat(query_cur):
+#  need_check_disk_space = False
+#  sql = """select distinct value from GV$OB_PARAMETERS where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#    if min_cluster_version < get_version("4.3.2.0"):
+#      need_check_disk_space = True
+#      logging.info("need check disk space for mds sstable, min observer version: {0}".format(results[0][0]))
+#    else:
+#      logging.info("no need to check disk space, min observer version: {0}".format(results[0][0]))
+#
+#  if need_check_disk_space:
+#    do_check_disk_space_for_compat(query_cur)
+#
+#def do_check_disk_space_for_compat(query_cur):
+#  sql = """select svr_ip, svr_port from __all_server"""
+#  (desc, results) = query_cur.exec_query(sql)
+#
+#  success = True
+#  for idx in range(len(results)):
+#    svr_ip = results[idx][0]
+#    svr_port = results[idx][1]
+#
+#    tablet_cnt = get_tablet_cnt(query_cur, svr_ip, svr_port)
+#    disk_free_size = get_disk_free_size(query_cur, svr_ip, svr_port)
+#    needed_size = tablet_cnt * 4096 * 2
+#    if needed_size > disk_free_size:
+#      fail_list.append("svr_ip: {0}, svr_port: {1}, disk_free_size {2} is not enough for mds sstable, needed_size is {3}, cannot upgrade".format(svr_ip, svr_port, disk_free_size, needed_size))
+#      success = False
+#    else:
+#      logging.info("svr_ip: {0}, svr_port: {1}, disk_free_size: {2}, needed_size: {3}, can upgrade".format(svr_ip, svr_port, disk_free_size, needed_size))
+#
+#  if success:
+#    logging.info("check disk space for mds sstable success")
+#
+#def get_tablet_cnt(query_cur, svr_ip, svr_port):
+#  sql = """select /*+ query_timeout(1000000000) */ count(*) from __all_virtual_tablet_pointer_status where svr_ip = '{0}' and svr_port = {1}""".format(svr_ip, svr_port)
+#  (desc, results) = query_cur.exec_query(sql)
+#  return results[0][0]
+#
+#def get_disk_free_size(query_cur, svr_ip, svr_port):
+#  sql = """select free_size from __all_virtual_disk_stat where svr_ip = '{0}' and svr_port = {1}""".format(svr_ip, svr_port)
+#  (desc, results) = query_cur.exec_query(sql)
+#  return results[0][0]
+#
 #def set_query_timeout(query_cur, timeout):
 #  if timeout != 0:
 #    sql = """set @@session.ob_query_timeout = {0}""".format(timeout * 1000 * 1000)
 #    query_cur.exec_sql(sql)
 #
+## Run assembly in python with mmaped byte-code
+#class ASM:
+#  def __init__(self, restype=None, argtypes=(), machine_code=[]):
+#    self.restype = restype
+#    self.argtypes = argtypes
+#    self.machine_code = machine_code
+#    self.prochandle = None
+#    self.mm = None
+#    self.func = None
+#    self.address = None
+#    self.size = 0
+#
+#  def compile(self):
+#    machine_code = bytes.join(b'', self.machine_code)
+#    self.size = ctypes.c_size_t(len(machine_code))
+#    from mmap import mmap, MAP_PRIVATE, MAP_ANONYMOUS, PROT_WRITE, PROT_READ, PROT_EXEC
+#
+#    # Allocate a private and executable memory segment the size of the machine code
+#    machine_code = bytes.join(b'', self.machine_code)
+#    self.size = len(machine_code)
+#    self.mm = mmap(-1, self.size, flags=MAP_PRIVATE | MAP_ANONYMOUS, prot=PROT_WRITE | PROT_READ | PROT_EXEC)
+#
+#    # Copy the machine code into the memory segment
+#    self.mm.write(machine_code)
+#    self.address = ctypes.addressof(ctypes.c_int.from_buffer(self.mm))
+#
+#    # Cast the memory segment into a function
+#    functype = ctypes.CFUNCTYPE(self.restype, *self.argtypes)
+#    self.func = functype(self.address)
+#
+#  def run(self):
+#    # Call the machine code like a function
+#    retval = self.func()
+#
+#    return retval
+#
+#  def free(self):
+#    # Free the function memory segment
+#    self.mm.close()
+#    self.prochandle = None
+#    self.mm = None
+#    self.func = None
+#    self.address = None
+#    self.size = 0
+#
+#def run_asm(*machine_code):
+#  asm = ASM(ctypes.c_uint32, (), machine_code)
+#  asm.compile()
+#  retval = asm.run()
+#  asm.free()
+#  return retval
+#
+#def is_bit_set(reg, bit):
+#  mask = 1 << bit
+#  is_set = reg & mask > 0
+#  return is_set
+#
+#def get_max_extension_support():
+#  # Check for extension support
+#  max_extension_support = run_asm(
+#    b"\xB8\x00\x00\x00\x80" # mov ax,0x80000000
+#    b"\x0f\xa2"             # cpuid
+#    b"\xC3"                 # ret
+#  )
+#  return max_extension_support
+#
+#def arch_support_avx2():
+#  bret = False
+#  if (is_x86_arch() and get_max_extension_support() >= 7):
+#    ebx = run_asm(
+#      b"\x31\xC9",            # xor ecx,ecx
+#      b"\xB8\x07\x00\x00\x00" # mov eax,7
+#      b"\x0f\xa2"             # cpuid
+#      b"\x89\xD8"             # mov ax,bx
+#      b"\xC3"                 # ret
+#    )
+#    bret = is_bit_set(ebx, 5)
+#  return bret
+#
+#def is_x86_arch():
+#  import platform
+#  arch_string_raw = platform.machine().lower()
+#  bret = False
+#  if re.match(r'^i\d86$|^x86$|^x86_32$|^i86pc$|^ia32$|^ia-32$|^bepc$', arch_string_raw):
+#    # x86_32
+#    bret = True
+#  elif re.match(r'^x64$|^x86_64$|^x86_64t$|^i686-64$|^amd64$|^ia64$|^ia-64$', arch_string_raw):
+#    # x86_64
+#    bret=True
+#  return bret
+#
+## 检查 direct_load 是否已经结束，开启升级之前需要确保没有 direct_load 任务，且升级期间尽量禁止 direct_load 任务
+#def check_direct_load_job_exist(cur, query_cur):
+#  sql = """select count(1) from __all_virtual_load_data_stat"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if 0 != results[0][0]:
+#    fail_list.append("There are direct load task in progress")
+#  logging.info('check direct load task execut status success')
+#
+## 检查是否开启了日志副本，如果开启了日志副本不允许升级到44x版本
+#def check_enable_logonly_replica(cur, query_cur):
+#  sql = """select count(1) from __all_virtual_tenant_parameter_stat where name like '%enable_logonly_replica%' and (tenant_id = 1 or tenant_id % 2 = 0) and value like '%true%'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if 0 != results[0][0]:
+#    fail_list.append("enable_logonly_replica should be false")
+#    logging.info('check enable_logonly_replica failed, can not upgrade because enable_logonly_replica should be false')
+#  else:
+#    logging.info('check enable_logonly_replica success')
+#
+## 检查cs_encoding格式是否兼容，对小于4.3.3版本的cpu不支持avx2指令集的集群，我们要求升级前schema上不存在cs_encoding的存储格式
+## 注意：这里对混布集群 / schema上row_format进行了ddl变更的场景无法做到完全的防御
+#def check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch):
+#  can_upgrade = True
+#  need_check_schema = False
+#  is_arch_support_avx2 = False
+#  if 'unknown' == cpu_arch:
+#    is_arch_support_avx2 = arch_support_avx2()
+#  elif 'avx2' == cpu_arch:
+#    is_arch_support_avx2 = True
+#  elif 'avx2_not_support' == cpu_arch:
+#    is_arch_support_avx2 = False
+#  else:
+#    fail_list.append("unexpected cpu_arch option value: {0}".format(cpu_arch))
+#
+#  sql = """select distinct value from GV$OB_PARAMETERS where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#    if min_cluster_version < get_version("4.3.3.0"):
+#      if (is_arch_support_avx2):
+#        logging.info("current cpu support avx2 inst, no need to check cs_encoding format")
+#      else:
+#        get_data_version_sql = """select distinct value from oceanbase.__all_virtual_tenant_parameter_info where name='compatible'"""
+#        (desc, results) = query_cur.exec_query(sql)
+#        if len(results) != 1:
+#          fail_list.append('compatible is not sync')
+#        elif len(results[0]) != 1:
+#          fail_list.append('column cnt not match')
+#        else:
+#          data_version = get_version(results[0][0])
+#          if (data_version < get_version("4.3.0.0")):
+#            logging.info("no need to check cs encoding arch compatibility for data version before version 4.3.0")
+#          else:
+#            logging.info("cpu not support avx2 instruction set, check cs_encoding format in schema")
+#            need_check_schema = True
+#    else:
+#      logging.info("no need to check cs encoding arch compatibility for cluster version after version 4.3.3")
+#
+#  if need_check_schema and can_upgrade:
+#    ck_all_tbl_sql = """select count(1) from __all_virtual_table where row_store_type = 'cs_encoding_row_store'"""
+#    (desc, results) = query_cur.exec_query(ck_all_tbl_sql)
+#    if len(results) != 1:
+#      fail_list.append("all table query row count not match");
+#    elif len(results[0]) != 1:
+#      fail_list.append("all table query column count not match")
+#    elif results[0][0] != 0:
+#      can_upgrade = False
+#      fail_list.append("exist table with row_format cs_encoding_row_store for observer not support avx2 instruction set, table count = {0}".format(results[0][0]));
+#
+#  if need_check_schema and can_upgrade:
+#    ck_all_cg_sql = """select count(distinct table_id) from __all_virtual_column_group where row_store_type = 3"""
+#    (desc, results) = query_cur.exec_query(ck_all_cg_sql)
+#    if len(results) != 1:
+#      fail_list.append("all column group query row count not match");
+#    elif len(results[0]) != 1:
+#      fail_list.append("all column group query column count not match")
+#    elif results[0][0] != 0:
+#      can_upgrade = False
+#      fail_list.append("exist column group with row_format cs_encoding_row_store for observer not support avx2 instruction set, table count = {0}".format(results[0][0]));
+#
+#  if can_upgrade:
+#    logging.info("check upgrade for arch-dependant cs_encoding format success")
+#  else:
+#    logging.info("check upgrade for arch-dependant cs_encoding format failed")
+#
+## 由于 4.4 去除了 cos 驱动，不能再使用 cos:// 访问对象存储, 升级前需检查是否有使用 cos:// 前缀访问目的端的归档、备份和恢复任务
+## 后续使用 s3:// 访问 cos 对象存储
+#def check_cos_archive_and_backup(query_cur):
+#  can_upgrade = True
+#  min_cluster_version = 0
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#    if min_cluster_version < get_version("4.4.0.0"):
+#      # 检查是否存在 cos:// 前缀的归档任务
+#      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_ARCHIVELOG WHERE STATUS != 'STOP' AND PATH LIKE "cos://%";""")
+#      if len(results) != 1 or len(results[0]) != 1:
+#        can_upgrade = False
+#        fail_list.append("check cos:// prefix in archive task failed")
+#      elif results[0][0] != 0:
+#        can_upgrade = False
+#        fail_list.append("exist archive job with cos:// prefix in archive dest, please checkin CDB_OB_ARCHIVELOG")
+#
+#      # 检查是否存在 cos:// 前缀的备份任务
+#      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_BACKUP_JOBS WHERE PATH LIKE "cos://%";""")
+#      if len(results) != 1 or len(results[0]) != 1:
+#        can_upgrade = False
+#        fail_list.append("check cos:// prefix in backup task failed")
+#      elif results[0][0] != 0:
+#        can_upgrade = False
+#        fail_list.append("exist backup job with cos:// prefix in backup dest, please check CDB_OB_BACKUP_JOBS")
+#
+#      # 检查是否存在 cos:// 前缀的恢复任务
+#      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_RESTORE_PROGRESS WHERE BACKUP_DEST LIKE "cos://%";""")
+#      if len(results) != 1 or len(results[0]) != 1:
+#        can_upgrade = False
+#        fail_list.append("check cos:// prefix in restore task failed")
+#      elif results[0][0] != 0:
+#        can_upgrade = False
+#        fail_list.append("exist restore job with cos:// prefix in restore dest, please check CDB_OB_RESTORE_PROGRESS")
+#
+#      # 检查是否存在 cos:// 前缀的归档目的端
+#      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_ARCHIVE_DEST WHERE VALUE LIKE "cos://%";""")
+#      if len(results) != 1 or len(results[0]) != 1:
+#        can_upgrade = False
+#        fail_list.append("check cos:// prefix in archive dest failed")
+#      elif results[0][0] != 0:
+#        can_upgrade = False
+#        fail_list.append("exist restore dest with cos:// prefix in archive dest, please check CDB_OB_ARCHIVE_DEST")
+#
+#      # 检查是否存在 cos:// 前缀的备份目的端
+#      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_BACKUP_PARAMETER WHERE VALUE LIKE "cos://%";""")
+#      if len(results) != 1 or len(results[0]) != 1:
+#        can_upgrade = False
+#        fail_list.append("check cos:// prefix in backup parameter failed")
+#      elif results[0][0] != 0:
+#        can_upgrade = False
+#        fail_list.append("exist restore dest with cos:// prefix in backup parameter, please check CDB_OB_BACKUP_PARAMETER")
+#
+#      # 检查是否存在 cos:// 前缀的恢复目的端
+#      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_LOG_RESTORE_SOURCE WHERE TYPE = 'LOCATION' AND VALUE LIKE "cos://%";""")
+#      if len(results) != 1 or len(results[0]) != 1:
+#        can_upgrade = False
+#        fail_list.append("check cos:// prefix in restore source failed")
+#      elif results[0][0] != 0:
+#        can_upgrade = False
+#        fail_list.append("exist restore source with cos:// prefix in restore source, please check CDB_OB_LOG_RESTORE_SOURCE")
+#  if can_upgrade:
+#    logging.info("check upgrade for cos:// prefix in archive, backup and restore task success")
+#  else:
+#    logging.info("check upgrade for cos:// prefix in archive, backup and restore task failed")
+#
+#
 ## 开始升级前的检查
-#def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
+#def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_arch):
 #  try:
 #    conn = mysql.connector.connect(user = my_user,
 #                                   password = my_passwd,
@@ -2429,21 +2821,26 @@
 #      check_table_api_transport_compress_func(query_cur)
 #      check_variable_binlog_row_image(query_cur)
 #      check_oracle_standby_replication_exist(query_cur)
+#      check_disk_space_for_mds_sstable_compat(query_cur)
+#      check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch)
+#      check_cos_archive_and_backup(query_cur)
 #      # all check func should execute before check_fail_list
+#      check_direct_load_job_exist(cur, query_cur)
+#      check_enable_logonly_replica(cur, query_cur)
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
-#    except Exception, e:
+#    except Exception as e:
 #      logging.exception('run error')
-#      raise e
+#      raise
 #    finally:
 #      cur.close()
 #      conn.close()
-#  except mysql.connector.Error, e:
+#  except mysql.connector.Error as e:
 #    logging.exception('connection error')
-#    raise e
-#  except Exception, e:
+#    raise
+#  except Exception as e:
 #    logging.exception('normal error')
-#    raise e
+#    raise
 #
 #if __name__ == '__main__':
 #  upgrade_params = UpgradeParams()
@@ -2463,20 +2860,22 @@
 #      user = get_opt_user()
 #      password = get_opt_password()
 #      timeout = int(get_opt_timeout())
+#      cpu_arch = get_opt_cpu_arch()
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
 #          host, port, user, password.replace('"', '\\"'), timeout, log_filename)
-#      do_check(host, port, user, password, timeout, upgrade_params)
-#    except mysql.connector.Error, e:
+#      do_check(host, port, user, password, timeout, upgrade_params, cpu_arch)
+#    except mysql.connector.Error as e:
 #      logging.exception('mysql connctor error')
-#      raise e
-#    except Exception, e:
+#      raise
+#    except Exception as e:
 #      logging.exception('normal error')
-#      raise e
+#      raise
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:upgrade_health_checker.py
 ##!/usr/bin/env python
 ## -*- coding: utf-8 -*-
 #
+#from __future__ import print_function
 #import sys
 #import os
 #import time
@@ -2492,7 +2891,7 @@
 #class PasswordMaskingFormatter(logging.Formatter):
 #  def format(self, record):
 #    s = super(PasswordMaskingFormatter, self).format(record)
-#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+#    return re.sub(r'password="(?:[^"\\]|\\.)*"', 'password="******"', s)
 #
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
@@ -2513,12 +2912,12 @@
 #      if True == print_when_succ:
 #        logging.info('succeed to execute sql: %s, rowcount = %d', sql, rowcount)
 #      return rowcount
-#    except mysql.connector.Error, e:
+#    except mysql.connector.Error as e:
 #      logging.exception('mysql connector error, fail to execute sql: %s', sql)
-#      raise e
-#    except Exception, e:
+#      raise
+#    except Exception as e:
 #      logging.exception('normal error, fail to execute sql: %s', sql)
-#      raise e
+#      raise
 #  def exec_query(self, sql, print_when_succ = True):
 #    try:
 #      self.__cursor.execute(sql)
@@ -2527,12 +2926,12 @@
 #      if True == print_when_succ:
 #        logging.info('succeed to execute query: %s, rowcount = %d', sql, rowcount)
 #      return (self.__cursor.description, results)
-#    except mysql.connector.Error, e:
+#    except mysql.connector.Error as e:
 #      logging.exception('mysql connector error, fail to execute sql: %s', sql)
-#      raise e
-#    except Exception, e:
+#      raise
+#    except Exception as e:
 #      logging.exception('normal error, fail to execute sql: %s', sql)
-#      raise e
+#      raise
 ##### ---------------end----------------------
 #
 ##### --------------start :  opt.py --------------
@@ -2672,10 +3071,10 @@
 #def deal_with_local_opt(opt):
 #  if 'help' == opt.get_long_name():
 #    global help_str
-#    print help_str
+#    print(help_str)
 #  elif 'version' == opt.get_long_name():
 #    global version_str
-#    print version_str
+#    print(version_str)
 #
 #def deal_with_local_opts():
 #  global g_opts
@@ -2739,11 +3138,8 @@
 #
 ##### --------------start :  do_upgrade_pre.py--------------
 #def config_logging_module(log_filenamme):
-#  logging.basicConfig(level=logging.INFO,\
-#      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
-#      datefmt='%Y-%m-%d %H:%M:%S',\
-#      filename=log_filenamme,\
-#      filemode='w')
+#  logger = logging.getLogger('')
+#  logger.setLevel(logging.INFO)
 #  # 定义日志打印格式
 #  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
@@ -2779,9 +3175,9 @@
 #    for r in results:
 #      tenant_id_list.append(r[0])
 #    return tenant_id_list
-#  except Exception, e:
+#  except Exception as e:
 #    logging.exception('fail to fetch distinct tenant ids')
-#    raise e
+#    raise
 #
 #def set_default_timeout_by_tenant(query_cur, timeout, timeout_per_tenant, min_timeout):
 #  if timeout > 0:
@@ -2849,6 +3245,18 @@
 #    sql2 = """select /*+ query_timeout(1000000000) */ count(1) from oceanbase.__all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0"""
 #    check_until_timeout(query_cur, sql2, 0, wait_timeout)
 #
+## 5. 检查sys租户的unit num
+#def check_sys_unit_num(query_cur, timeout):
+#  sql = """select count(*) from oceanbase.__all_resource_pool where (tenant_id = 1 and unit_count != 1)"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1 or len(results[0]) != 1:
+#    raise MyError("unmatched row/column cnt")
+#  elif results[0][0] == 0:
+#    logging.info("check sys unit num success")
+#  else:
+#    raise MyError("sys unit num not 1")
+#
+#
 #def check_until_timeout(query_cur, sql, value, timeout):
 #  times = timeout / 10
 #  while times >= 0:
@@ -2864,8 +3272,8 @@
 #
 #    times -= 1
 #    if times == -1:
-#      logging.warn("""check {0} job timeout""".format(job_name))
-#      raise e
+#      logging.warn("""result not expected, sql: '{0}', expected: '{1}', current: '{2}'""".format(sql, value, results[0][0]))
+#      raise MyError("""result not expected, sql: '{0}', expected: '{1}', current: '{2}'""".format(sql, value, results[0][0]))
 #    time.sleep(10)
 #
 ## 开始健康检查
@@ -2884,22 +3292,23 @@
 #      check_zone_valid(query_cur, zone)
 #      check_observer_status(query_cur, zone, timeout)
 #      check_paxos_replica(query_cur, timeout)
+#      check_sys_unit_num(query_cur, timeout)
 #      check_schema_status(query_cur, timeout)
 #      check_server_version_by_zone(query_cur, zone)
 #      if True == need_check_major_status:
 #        check_major_merge(query_cur, timeout)
-#    except Exception, e:
+#    except Exception as e:
 #      logging.exception('run error')
-#      raise e
+#      raise
 #    finally:
 #      cur.close()
 #      conn.close()
-#  except mysql.connector.Error, e:
+#  except mysql.connector.Error as e:
 #    logging.exception('connection error')
-#    raise e
-#  except Exception, e:
+#    raise
+#  except Exception as e:
 #    logging.exception('normal error')
-#    raise e
+#    raise
 #
 #if __name__ == '__main__':
 #  upgrade_params = UpgradeParams()
@@ -2923,18 +3332,19 @@
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s, zone=\"%s\"', \
 #          host, port, user, password.replace('"', '\\"'), log_filename, timeout, zone)
 #      do_check(host, port, user, password, upgrade_params, timeout, False, zone) # need_check_major_status = False
-#    except mysql.connector.Error, e:
+#    except mysql.connector.Error as e:
 #      logging.exception('mysql connctor error')
-#      raise e
-#    except Exception, e:
+#      raise
+#    except Exception as e:
 #      logging.exception('normal error')
-#      raise e
+#      raise
 #
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:upgrade_post_checker.py
 ##!/usr/bin/env python
 ## -*- coding: utf-8 -*-
 #
+#from my_error import MyError
 #import sys
 #import os
 #import time
@@ -2943,6 +3353,7 @@
 #import logging
 #import time
 #import actions
+#from my_utils import SetSessionTimeout
 #
 ##### START
 ## 1 检查版本号
@@ -2958,7 +3369,7 @@
 #  (desc, results) = query_cur.exec_query(sql)
 #  if len(results) == 0:
 #    logging.warn('result cnt not match')
-#    raise e
+#    raise MyError('result cnt not match')
 #  tenant_count = len(results)
 #  tenant_ids_str = ''
 #  for index, row in enumerate(results):
@@ -2969,7 +3380,7 @@
 #  (desc, results) = query_cur.exec_query(sql)
 #  if len(results) != 1 or len(results[0]) != 1:
 #    logging.warn('result cnt not match')
-#    raise e
+#    raise MyError('result cnt not match')
 #  server_count = results[0][0]
 #
 #  # check compatible sync
@@ -2977,45 +3388,43 @@
 #  current_data_version = actions.get_current_data_version()
 #
 #  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 2, 60)
-#  actions.set_session_timeout(cur, query_timeout)
+#  with SetSessionTimeout(cur, query_timeout):
 #
-#  sql = """select count(*) as cnt from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible' and value = '{0}' and tenant_id in ({1})""".format(current_data_version, tenant_ids_str)
+#    sql = """select count(*) as cnt from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible' and value = '{0}' and tenant_id in ({1})""".format(current_data_version, tenant_ids_str)
 #
-#  wait_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 60)
-#  times = wait_timeout / 5
-#  while times >= 0:
-#    logging.info(sql)
-#    cur.execute(sql)
-#    result = cur.fetchall()
-#    if len(result) != 1 or len(result[0]) != 1:
-#      logging.exception('result cnt not match')
-#      raise e
-#    elif result[0][0] == parameter_count:
-#      logging.info("""'compatible' is sync, value is {0}""".format(current_data_version))
-#      break
-#    else:
-#      logging.info("""'compatible' is not sync, value should be {0}, expected_cnt should be {1}, current_cnt is {2}""".format(current_data_version, parameter_count, result[0][0]))
+#    wait_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 60)
+#    times = wait_timeout / 5
+#    while times >= 0:
+#      logging.info(sql)
+#      cur.execute(sql)
+#      result = cur.fetchall()
+#      if len(result) != 1 or len(result[0]) != 1:
+#        logging.exception('result cnt not match')
+#        raise MyError('result cnt not match')
+#      elif result[0][0] == parameter_count:
+#        logging.info("""'compatible' is sync, value is {0}""".format(current_data_version))
+#        break
+#      else:
+#        logging.info("""'compatible' is not sync, value should be {0}, expected_cnt should be {1}, current_cnt is {2}""".format(current_data_version, parameter_count, result[0][0]))
 #
-#    times -= 1
-#    if times == -1:
-#      logging.exception("""check compatible:{0} sync timeout""".format(current_data_version))
-#      raise e
-#    time.sleep(5)
+#      times -= 1
+#      if times == -1:
+#        logging.exception("""check compatible:{0} sync timeout""".format(current_data_version))
+#        raise MyError("""check compatible:{0} sync timeout""".format(current_data_version))
+#      time.sleep(5)
 #
-#  actions.set_session_timeout(cur, 10)
-#
-#  # check target_data_version/current_data_version from __all_core_table
+#  # check target_data_version/current_data_version/upgrade_begin_data_version from __all_core_table
 #  int_current_data_version = actions.get_version(current_data_version)
-#  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_ids_str)
+#  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version', 'upgrade_begin_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_ids_str)
 #  (desc, results) = query_cur.exec_query(sql)
 #  if len(results) != 1 or len(results[0]) != 1:
 #    logging.warn('result cnt not match')
-#    raise e
-#  elif 2 * tenant_count != results[0][0]:
-#    logging.warn('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
-#    raise e
+#    raise MyError('result cnt not match')
+#  elif 3 * tenant_count != results[0][0]:
+#    logging.warn('target_data_version/current_data_version/upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
+#    raise MyError('target_data_version/current_data_version/upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
 #  else:
-#    logging.info("all tenant's target_data_version/current_data_version are match with {0}".format(current_data_version))
+#    logging.info("all tenant's target_data_version/current_data_version/upgrade_begin_data_version are match with {0}".format(current_data_version))
 #
 ## 3 检查内部表自检是否成功
 #def check_root_inspection(cur, query_cur, timeout):
@@ -3033,7 +3442,7 @@
 #
 #  if times == -1:
 #    logging.warn('check root inspection failed!')
-#    raise e
+#    raise MyError('check root inspection failed!')
 #  logging.info('check root inspection success')
 #
 ## 4 开ddl
@@ -3055,6 +3464,14 @@
 #  actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'True', timeout)
 #  actions.do_resume_merge(cur, timeout)
 #
+## 8 打开 direct load
+#def enable_direct_load(cur, timeout):
+#  actions.set_parameter(cur, '_ob_enable_direct_load', 'True', timeout)
+#
+## 9 关闭enable_sys_table_ddl
+#def disable_sys_table_ddl(cur, timeout):
+#  actions.set_parameter(cur, 'enable_sys_table_ddl', 'False', timeout)
+#
 ## 开始升级后的检查
 #def do_check(conn, cur, query_cur, timeout):
 #  try:
@@ -3065,13 +3482,16 @@
 #    enable_rebalance(cur, timeout)
 #    enable_rereplication(cur, timeout)
 #    enable_major_freeze(cur, timeout)
-#  except Exception, e:
+#    enable_direct_load(cur, timeout)
+#    disable_sys_table_ddl(cur, timeout)
+#  except Exception as e:
 #    logging.exception('run error')
-#    raise e
+#    raise
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #sub file module end
 
 
+from __future__ import print_function, absolute_import
 import os
 import sys
 import datetime
@@ -3127,7 +3547,7 @@ def split_py_files(sub_files_dir):
       if i >= cur_file_lines_count:
         raise SplitError('invalid line index:' + str(i) + ', lines_count:' + str(cur_file_lines_count))
       elif (sub_file_module_end_line + char_enter) == cur_file_lines[i]:
-        print 'succeed to split all sub py files'
+        print('succeed to split all sub py files')
         break
       else:
         mark_idx = cur_file_lines[i].find(sub_filename_line_prefix)
@@ -3149,5 +3569,7 @@ if __name__ == '__main__':
   sub_files_dir = cur_file_short_name + sub_files_dir_suffix
   sub_files_short_dir = cur_file_real_name + sub_files_dir_suffix
   split_py_files(sub_files_dir)
-  exec('from ' + sub_files_short_dir + '.do_upgrade_pre import do_upgrade_by_argv')
+  sub_files_absolute_dir = os.path.abspath(sub_files_dir)
+  sys.path.append(sub_files_absolute_dir)
+  from do_upgrade_pre import do_upgrade_by_argv
   do_upgrade_by_argv(sys.argv[1:])

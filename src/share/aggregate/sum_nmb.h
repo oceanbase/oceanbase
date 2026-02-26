@@ -35,6 +35,25 @@
     }                                                                                              \
   }
 
+#define ADD_OR_SUB_NMB(fmt)                                                                        \
+  do {                                                                                             \
+    fmt *columns = static_cast<fmt *>(input_vec);                                                  \
+    if (row_sel.is_empty()) {                                                                      \
+      for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {                          \
+        if (skip.at(i)) {                                                                          \
+        } else {                                                                                   \
+          ret = add_or_sub_row<fmt>(agg_ctx, *columns, i, agg_col_id, agg_cell, nullptr,           \
+                                    mock_calc_info);                                               \
+        }                                                                                          \
+      }                                                                                            \
+    } else {                                                                                       \
+      for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {                                   \
+        ret = add_or_sub_row<fmt>(agg_ctx, *columns, row_sel.index(i), agg_col_id, agg_cell,       \
+                                  nullptr, mock_calc_info);                                        \
+      }                                                                                            \
+    }                                                                                              \
+  } while (false)
+
 namespace oceanbase
 {
 namespace share
@@ -87,8 +106,8 @@ public:
     return ret;
   }
   inline int add_batch_rows(RuntimeContext &agg_ctx, const int32_t agg_col_id,
-                     const sql::ObBitVector &skip, const sql::EvalBound &bound, char *agg_cell,
-                     const RowSelector row_sel = RowSelector{}) override
+                            const sql::ObBitVector &skip, const sql::EvalBound &bound,
+                            char *agg_cell, const RowSelector row_sel = RowSelector{}) override
   {
     int ret = OB_SUCCESS;
 #ifndef NDEBUG
@@ -100,50 +119,75 @@ public:
     OB_ASSERT(param_expr != NULL);
     ObIVector *input_vec = param_expr->get_vector(agg_ctx.eval_ctx_);
     VectorFormat in_fmt = param_expr->get_format(agg_ctx.eval_ctx_);
-    uint32_t sum_digits[number::ObNumber::OB_CALC_BUFFER_SIZE] = {0};
-    char buf_alloc1[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
-    char buf_alloc2[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
-    ObDataBuffer allocator1(buf_alloc1, number::ObNumber::MAX_CALC_BYTE_LEN);
-    ObDataBuffer allocator2(buf_alloc2, number::ObNumber::MAX_CALC_BYTE_LEN);
-    number::ObNumber result(*reinterpret_cast<number::ObCompactNumber *>(agg_cell));
-    bool all_skip = true;
-    switch (in_fmt) {
-    case common::VEC_UNIFORM: {
-      ACCUMULATE_NMB(ObUniformFormat<false>);
-      break;
+    if (OB_LIKELY(!agg_ctx.removal_info_.enable_removal_opt_)) {
+      uint32_t sum_digits[number::ObNumber::OB_CALC_BUFFER_SIZE] = {0};
+      char buf_alloc1[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
+      char buf_alloc2[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
+      ObDataBuffer allocator1(buf_alloc1, number::ObNumber::MAX_CALC_BYTE_LEN);
+      ObDataBuffer allocator2(buf_alloc2, number::ObNumber::MAX_CALC_BYTE_LEN);
+      number::ObNumber result(*reinterpret_cast<number::ObCompactNumber *>(agg_cell));
+      bool all_skip = true;
+      switch (in_fmt) {
+      case common::VEC_UNIFORM: {
+        ACCUMULATE_NMB(ObUniformFormat<false>);
+        break;
+      }
+      case common::VEC_UNIFORM_CONST: {
+        ACCUMULATE_NMB(ObUniformFormat<true>);
+        break;
+      }
+      case common::VEC_DISCRETE: {
+        ACCUMULATE_NMB(ObDiscreteFormat);
+        break;
+      }
+      case common::VEC_CONTINUOUS: {
+        ACCUMULATE_NMB(ObContinuousFormat);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "unexpected format for sum aggregate", K(ret), K(*this), K(in_fmt));
+      }
+      }
+      if (OB_FAIL(ret)) {
+        SQL_LOG(WARN, "accumulate number failed", K(ret));
+      } else if (OB_LIKELY(!all_skip)) {
+        NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
+        not_nulls.set(agg_col_id);
+        number::ObCompactNumber *cnum = reinterpret_cast<number::ObCompactNumber *>(agg_cell);
+        cnum->desc_ = result.d_;
+        MEMCPY(&(cnum->digits_[0]), result.get_digits(), result.d_.len_ * sizeof(uint32_t));
+      }
+      SQL_LOG(DEBUG, "number result", K(result), K(all_skip), K(ret));
+    } else {
+      int64_t mock_calc_info = 0;
+      switch(in_fmt) {
+      case common::VEC_UNIFORM: {
+        ADD_OR_SUB_NMB(ObUniformFormat<false>);
+        break;
+      }
+      case common::VEC_DISCRETE: {
+        ADD_OR_SUB_NMB(ObDiscreteFormat);
+        break;
+      }
+      case common::VEC_UNIFORM_CONST: {
+        ADD_OR_SUB_NMB(ObUniformFormat<true>);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "invalid input format", K(ret), K(in_fmt));
+      }
+      }
+      if (OB_FAIL(ret)) {
+        SQL_LOG(WARN, "add or sub rows failed", K(ret));
+      }
     }
-    case common::VEC_UNIFORM_CONST: {
-      ACCUMULATE_NMB(ObUniformFormat<true>);
-      break;
-    }
-    case common::VEC_DISCRETE: {
-      ACCUMULATE_NMB(ObDiscreteFormat);
-      break;
-    }
-    case common::VEC_CONTINUOUS: {
-      ACCUMULATE_NMB(ObContinuousFormat);
-      break;
-    }
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "unexpected format for sum aggregate", K(ret), K(*this), K(in_fmt));
-    }
-    }
-    if (OB_FAIL(ret)) {
-      SQL_LOG(WARN, "accumulate number failed", K(ret));
-    } else if (OB_LIKELY(!all_skip)) {
-      NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
-      not_nulls.set(agg_col_id);
-      number::ObCompactNumber *cnum = reinterpret_cast<number::ObCompactNumber *>(agg_cell);
-      cnum->desc_ = result.d_;
-      MEMCPY(&(cnum->digits_[0]), result.get_digits(), result.d_.len_ * sizeof(uint32_t));
-    }
-    SQL_LOG(DEBUG, "number result", K(result), K(all_skip), K(ret));
     return ret;
   }
 
   template <typename ColumnFmt>
-  inline int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *aggr_cell, void *tmp_res, int64_t &calc_info)
   {
     UNUSEDx(agg_ctx, columns, row_num, agg_col_id, aggr_cell, tmp_res, calc_info);
@@ -152,7 +196,7 @@ public:
   }
 
   template <typename ColumnFmt>
-  inline int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                               const int32_t agg_col_id, char *agg_cell, void *tmp_res,
                               int64_t &calc_info)
   {
@@ -178,6 +222,84 @@ public:
       static_cast<ColumnFmt *>(output_vec)->set_payload(output_idx, &zero, sizeof(ObNumberDesc));
     } else {
       static_cast<ColumnFmt *>(output_vec)->set_null(output_idx);
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
+  OB_INLINE int add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                     const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(tmp_res, calc_info);
+    bool is_trans = !agg_ctx.removal_info_.is_inverse_agg_;
+    if (!columns.is_null(row_num)) {
+      const number::ObCompactNumber *param_cnum =
+        reinterpret_cast<const number::ObCompactNumber *>(columns.get_payload(row_num));
+      number::ObCompactNumber *res_cnum = reinterpret_cast<number::ObCompactNumber *>(agg_cell);
+      number::ObNumber param1(*param_cnum);
+      number::ObNumber param2(*reinterpret_cast<number::ObCompactNumber *>(agg_cell));
+      number::ObNumber res_nmb;
+      ObNumStackOnceAlloc tmp_alloc;
+      if (is_trans) {
+        if (OB_FAIL(param2.add_v3(param1, res_nmb, tmp_alloc))) {
+          SQL_LOG(WARN, "add number failed", K(ret));
+        }
+      } else if (OB_FAIL(param2.sub_v3(param1, res_nmb, tmp_alloc))){
+        SQL_LOG(WARN, "sub number failed", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        res_cnum->desc_ = res_nmb.d_;
+        MEMCPY(&(res_cnum->digits_[0]), res_nmb.get_digits(), res_nmb.d_.len_ * sizeof(uint32_t));
+      }
+    } else if (is_trans){
+      agg_ctx.removal_info_.null_cnt_++;
+    } else {
+      agg_ctx.removal_info_.null_cnt_--;
+    }
+    return ret;
+  }
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const NotNullBitVector &curr_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (curr_not_nulls.at(agg_col_idx) && rollup_not_nulls.at(agg_col_idx)) {
+      ObNumber curr_num(*reinterpret_cast<const ObCompactNumber *>(curr_agg_cell));
+      ObNumber rollup_num(*reinterpret_cast<const ObCompactNumber *>(rollup_agg_cell));
+      char res_buf[ObNumber::MAX_CALC_BYTE_LEN] = {0};
+      ObCompactNumber *res_cnum = reinterpret_cast<ObCompactNumber *>(res_buf);
+      ObNumber::Desc &res_desc = res_cnum->desc_;
+      uint32_t *res_digits = res_cnum->digits_;
+      if (ObNumber::try_fast_add(curr_num, rollup_num, res_digits, res_desc)) {
+        int32_t cp_len = sizeof(ObNumberDesc) + res_desc.len_ * sizeof(uint32_t);
+        MEMCPY(rollup_agg_cell, res_buf, cp_len);
+      } else {
+        const ObCompactNumber *curr_num = reinterpret_cast<const ObCompactNumber *>(curr_agg_cell);
+        const ObCompactNumber *rollup_num = reinterpret_cast<const ObCompactNumber *>(rollup_agg_cell);
+        ret = add_values(*curr_num, *rollup_num, rollup_agg_cell, ObNumber::MAX_CALC_BYTE_LEN);
+        if (OB_FAIL(ret)) {
+          SQL_LOG(WARN, "adder number failed", K(ret));
+        }
+      }
+    } else if (OB_LIKELY(curr_not_nulls.at(agg_col_idx))) {
+      rollup_not_nulls.set(agg_col_idx);
+      const number::ObCompactNumber *curr_cnum =
+        reinterpret_cast<const number::ObCompactNumber *>(curr_agg_cell);
+      number::ObCompactNumber *rollup_cnum =
+        reinterpret_cast<number::ObCompactNumber *>(rollup_agg_cell);
+      rollup_cnum->desc_ = curr_cnum->desc_;
+      MEMCPY(&(rollup_cnum->digits_[0]), &(curr_cnum->digits_[0]),
+             curr_cnum->desc_.len_ * sizeof(uint32_t));
+      rollup_not_nulls.set(agg_col_idx);
+    } else {
+      // do nothing
     }
     return ret;
   }
@@ -275,4 +397,5 @@ private:
 } // end share
 } // end oceanbase
 #undef ACCUMULATE_NMB
+#undef ADD_OR_SUB_NMB
 #endif // OCEANBASE_SHARE_AGGREGATE_SUM_NMB_H_

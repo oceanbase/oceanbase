@@ -1,3 +1,6 @@
+// owner: zjf225077
+// owner group: clog
+
 // Copyright (c) 2021 OceanBase  cxf262476, 2021-10-18 - add interface of logstream
 // OceanBase is licensed under Mulan PubL v2.
 // You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -13,10 +16,7 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
 #include "logservice/ob_log_service.h"
-#include "logservice/rcservice/ob_role_change_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 
 namespace oceanbase
 {

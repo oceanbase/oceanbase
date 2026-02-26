@@ -12,7 +12,6 @@
 #ifndef OB_BUILD_AUDIT_SECURITY
 #define USING_LOG_PREFIX SQL_MONITOR
 
-#include "sql/monitor/ob_security_audit_utils.h"
 
 namespace oceanbase
 {

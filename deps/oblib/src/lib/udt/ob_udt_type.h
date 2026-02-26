@@ -65,6 +65,10 @@ typedef struct ObSqlUDTMeta
 {
   OB_UNIS_VERSION(1);
 public:
+  ObSqlUDTMeta(common::ObIAllocator *alloc = NULL)
+  {
+    reset();
+  }
   void set_name(ObString &name)
   {
     udt_name_ = name.ptr();
@@ -114,6 +118,7 @@ public:
 
   int deep_copy(ObIAllocator &allocator, ObSqlUDTMeta *&dst) const;
 
+  inline uint64_t get_signature() const { return udt_id_; }
   TO_STRING_KV(K_(attribute_cnt),
                K_(fixed_attr_cnt),
                K_(fixed_offset),

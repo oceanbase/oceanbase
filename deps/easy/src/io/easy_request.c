@@ -2,8 +2,6 @@
 #include "io/easy_request.h"
 #include "io/easy_message.h"
 #include "io/easy_connection.h"
-#include "io/easy_file.h"
-#include <netinet/in.h>
 #include <arpa/inet.h>
 
 static void easy_request_on_wakeup(struct ev_loop *loop, ev_async *w, int revents);

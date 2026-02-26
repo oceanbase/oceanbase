@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX OBLOG
-#include "share/ob_errno.h"                                     // KR
 #include "ob_all_units_info.h"
 
 using namespace oceanbase::common;

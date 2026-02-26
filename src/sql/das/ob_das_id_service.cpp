@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_id_service.h"
-#include "observer/ob_server_struct.h"
-#include "share/location_cache/ob_location_service.h"
 namespace oceanbase
 {
 namespace sql

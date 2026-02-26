@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_geo_grid_visitor.h"
-#include "lib/ob_errno.h"
 
 namespace oceanbase
 {

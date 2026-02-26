@@ -53,7 +53,7 @@ public:
   //            iteraotr should be inited again to follow this change
   ObRemoteLogRawReader(GetSourceFunc &get_source_func,
       UpdateSourceFunc &update_source_func = DefaultUpdateSourceFunctor(),
-       RefreshStorageInfoFunc &refresh_storage_info_func = DefaultRefreshStorageInfoFunctor());
+      RefreshStorageInfoFunc &refresh_storage_info_func = DefaultRefreshStorageInfoFunctor());
   virtual ~ObRemoteLogRawReader();
 public:
   // init remote log raw reader, as archive log directory is splitted by scn, the pre_scn is indispensable to help locate directory
@@ -85,6 +85,8 @@ public:
       void *buffer,
       const int64_t nbytes,
       int64_t &read_size);
+
+  void update_source_cb();
 
   TO_STRING_KV(K_(inited), K_(tenant_id), K_(id), K_(pre_scn), K_(start_lsn), K_(cur_lsn), K_(max_lsn), K_(log_ext_handler));
 

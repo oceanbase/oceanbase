@@ -30,6 +30,14 @@ public:
   virtual ~ObBootstrapStmt() {}
 
   void set_cluster_role(common::ObClusterRole type) { bootstrap_arg_.cluster_role_ = type; }
+  void set_shared_storage_info(const ObString &shared_storage_info)
+  {
+    bootstrap_arg_.shared_storage_info_ = shared_storage_info;
+  }
+  void set_logservice_access_point(const ObString &logservice_access_point)
+  {
+    bootstrap_arg_.logservice_access_point_ = logservice_access_point;
+  }
   common::ObClusterRole get_cluster_role() const { return bootstrap_arg_.cluster_role_; }
   obrpc::ObServerInfoList &get_server_info_list() { return bootstrap_arg_.server_list_; }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(bootstrap_arg));

@@ -37,9 +37,15 @@
 #include "share/schema/ob_security_audit_mgr.h"
 #include "share/schema/ob_dblink_mgr.h"
 #include "share/schema/ob_directory_mgr.h"
+#include "share/schema/ob_location_mgr.h"
 #include "share/schema/ob_context_mgr.h"
 #include "share/schema/ob_mock_fk_parent_table_mgr.h"
 #include "share/schema/ob_rls_mgr.h"
+#include "share/schema/ob_catalog_mgr.h"
+#include "share/schema/ob_external_resource_mgr.h"
+#include "share/schema/ob_ai_model_mgr.h"
+#include "share/schema/ob_ccl_rule_mgr.h"
+#include "share/schema/ob_sensitive_rule_mgr.h"
 
 namespace oceanbase
 {
@@ -729,6 +735,10 @@ public:
       const uint64_t tenant_id,
       const uint64_t schema_id,
       const ObDirectorySchema *&schema) const;
+  int get_location_schema(
+      const uint64_t tenant_id,
+      const uint64_t schema_id,
+      const ObLocationSchema *&schema) const;
 
   int get_keystore_schema(
       const uint64_t tenant_id,
@@ -750,6 +760,29 @@ public:
   // {
   //   return rls_context_mgr_.get_rls_context_schema_by_id(schema_id, schema);
   // }
+
+  // external resource
+  int get_external_resource_schema(
+      const uint64_t &tenant_id,
+      const uint64_t &external_resource_id,
+      const ObSimpleExternalResourceSchema *&external_resource_schema) const;
+    // external resource
+  int get_external_resource_schema(
+      const uint64_t &tenant_id,
+      const uint64_t &database_id,
+      const ObString &external_resource_name,
+      const ObSimpleExternalResourceSchema *&external_resource_schema) const;
+
+  // ai model
+  int get_ai_model_schema(
+      const uint64_t &tenant_id,
+      const uint64_t &ai_model_id,
+      const ObAiModelSchema *&ai_model_schema) const;
+  int get_ai_model_schema(
+      const uint64_t &tenant_id,
+      const ObString &ai_model_name,
+      const common::ObNameCaseMode &case_mode,
+      const ObAiModelSchema *&ai_model_schema) const;
 
   // other
   int get_tenant_schemas(common::ObIArray<const ObSimpleTenantSchema *> &tenant_schemas) const;
@@ -915,6 +948,26 @@ private:
   {
     return is_built_in ? built_in_index_name_map_ : normal_index_name_map_;
   }
+  // catalog
+  int add_catalogs(const common::ObIArray<ObCatalogSchema> &catalog_schemas);
+  int add_catalog(const ObCatalogSchema &catalog_schema);
+  int del_catalog(const ObTenantCatalogId &id);
+  // location
+  int add_locations(const common::ObIArray<ObLocationSchema> &location_schemas);
+  int add_location(const ObLocationSchema &location_schema);
+  int del_location(const ObTenantLocationId &id);
+  // ai model
+  int add_ai_models(const common::ObIArray<ObAiModelSchema> &ai_model_schemas);
+  int add_ai_model(const ObAiModelSchema &ai_model_schema);
+  int del_ai_model(const ObTenantAiModelId &tenant_ai_model_id);
+  // ccl
+  int add_ccl_rules(const common::ObIArray<ObSimpleCCLRuleSchema> &ccl_schemas);
+  int add_ccl_rule(const ObSimpleCCLRuleSchema &ccl_schema);
+  int del_ccl_rule(const ObTenantCCLRuleId &id);
+  // sensitive rule
+  int add_sensitive_rules(const common::ObIArray<ObSensitiveRuleSchema> &sensitive_rule_schemas);
+  int add_sensitive_rule(const ObSensitiveRuleSchema &sensitive_rule_schema);
+  int del_sensitive_rule(const ObTenantSensitiveRuleId &id);
 private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator &allocator_;
@@ -966,14 +1019,20 @@ private:
   IndexNameMap built_in_index_name_map_;
   ObDbLinkMgr dblink_mgr_;
   ObDirectoryMgr directory_mgr_;
+  ObLocationMgr location_mgr_;
   ObContextMgr context_mgr_;
   ObMockFKParentTableMgr mock_fk_parent_table_mgr_;
   ObRlsPolicyMgr rls_policy_mgr_;
   ObRlsGroupMgr rls_group_mgr_;
   ObRlsContextMgr rls_context_mgr_;
+  ObCatalogMgr catalog_mgr_;
+  ObCCLRuleMgr ccl_rule_mgr_;
+  ObSensitiveRuleMgr sensitive_rule_mgr_;
   int64_t timestamp_in_slot_; // when schema mgr put in slot, we will set the timestamp
   int64_t allocator_idx_;
   TableInfos mlog_infos_;
+  ObExternalResourceMgr external_resource_mgr_;
+  ObAiModelMgr ai_model_mgr_;
 };
 
 }//end of namespace schema

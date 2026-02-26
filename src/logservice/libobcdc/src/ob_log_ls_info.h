@@ -23,11 +23,12 @@
 #define LS_STAT(level, ls_info, fmt, arg...) \
     do { \
       if (NULL != ls_info) { \
+        ObCStringHelper helper; \
         _OBLOG_LOG(level, "[STAT] [LS_INFO] " fmt " TENANT=%lu LS=%s IS_SYS=%d STATE=%s TRANS_COUNT=%ld " \
             "START_TSTAMP=%s START_FROM_CREATE=%d", \
             ##arg, \
             ls_info->tls_id_.get_tenant_id(), \
-            to_cstring(ls_info->tls_id_), \
+            helper.convert(ls_info->tls_id_), \
             ls_info->tls_id_.is_sys_log_stream(), \
             ls_info->print_state(), \
             ls_info->ctx_.sv_.trans_count_, \

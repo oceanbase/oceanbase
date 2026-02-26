@@ -32,7 +32,7 @@ public:
 
 typedef IAlloc IArrayAlloc;
 // it's dangerous to change CPU_NUM, maybe oom
-enum { MAX_THREAD_NUM = OB_MAX_THREAD_NUM, MAX_CPU_NUM = 64};
+enum { MAX_THREAD_NUM = OB_MAX_THREAD_NUM_DO_NOT_USE, MAX_CPU_NUM = 64};
 
 struct EstimateCounter
 {
@@ -491,9 +491,11 @@ public:
       int err = 0;
       root_level_ = (NULL == root) ? 0 : root->get_level();
       do {
-        path_[path_size_].slot_idx_ = (idx % node_size);
-        path_[path_size_].node_idx_ = (idx /= node_size);
-        path_size_++;
+        if (OB_LIKELY(path_size_ < MAX_LEVEL)) {
+          path_[path_size_].slot_idx_ = (idx % node_size);
+          path_[path_size_].node_idx_ = (idx /= node_size);
+          path_size_++;
+        }
         if (OB_UNLIKELY(path_size_ >= MAX_LEVEL)) {
           err = -EOVERFLOW;
           COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "path size over flow, idx is too large",

@@ -1,6 +1,4 @@
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <pthread.h>
 #include "io/easy_ssl.h"
 #include "io/easy_log.h"
 #include "io/easy_connection.h"

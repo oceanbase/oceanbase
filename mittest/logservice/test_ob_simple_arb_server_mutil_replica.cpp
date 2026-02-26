@@ -1,3 +1,6 @@
+// owner: zjf225077
+// owner group: log
+
 // Copyright (c) 2021 OceanBase
 // OceanBase is licensed under Mulan PubL v2.
 // You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -7,13 +10,9 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
 #define private public
 #define protected public
 #include "env/ob_simple_log_cluster_env.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"
 #undef private
 #undef protected
 
@@ -39,6 +38,7 @@ public:
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 3;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_ = true;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 
 bool check_dir_exist(const char *base_dir, const int64_t id)

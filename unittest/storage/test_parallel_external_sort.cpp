@@ -10,20 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define private public
-#include "storage/ob_parallel_external_sort.h"
+#define protected public
+#include "deps/oblib/src/common/storage/ob_device_common.h"
 #undef private
-#include <algorithm>
-#include "lib/hash/ob_hashmap.h"
-#include "lib/container/ob_vector.h"
-#include "lib/lock/ob_mutex.h"
-#include "lib/random/ob_random.h"
-#include "lib/string/ob_string.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/ob_srv_rpc_proxy.h"
 #include "./blocksstable/ob_data_file_prepare.h"
-#include "share/ob_simple_mem_limit_getter.h"
+#include "mtlenv/mock_tenant_module_env.h"
 
 namespace oceanbase
 {
@@ -169,6 +161,16 @@ public:
   void test_multi_task_sort(const int64_t buf_mem_limit, const int64_t file_buf_size, const int64_t items_cnt, const int64_t task_cnt);
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 public:
   static const int64_t MACRO_BLOCK_SIZE = 2 * 1024 * 1024;
   static const int64_t MACRO_BLOCK_COUNT = 15* 1024;
@@ -186,7 +188,8 @@ void TestParallelExternalSort::SetUp()
 {
   TestDataFilePrepare::SetUp();
   ASSERT_EQ(OB_SUCCESS, init_tenant_mgr());
-  ASSERT_EQ(OB_SUCCESS, ObTmpFileManager::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, common::ObClockGenerator::init());
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
   static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
   ObTenantIOManager *io_service = nullptr;
@@ -194,15 +197,44 @@ void TestParallelExternalSort::SetUp()
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
   EXPECT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
+
+  ObTimerService *timer_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_start(timer_service));
+  tenant_ctx.set(timer_service);
+  tenant_ctx.set(timer_service);
+
+  tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
+  EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
+  tenant_ctx.set(tf_mgr);
+  EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
+  tf_mgr->get_sn_file_manager().write_cache_.default_memory_limit_ = 40*1024*1024;
+  EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
+
   ObTenantEnv::set_tenant(&tenant_ctx);
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 }
 
 void TestParallelExternalSort::TearDown()
 {
   allocator_.reuse();
-  ObTmpFileManager::get_instance().destroy();
+  // ObTenantTmpFileManager uses ObServerBlockManager, which is destroyed in TestDataFilePrepare::TearDown()
+  // so we need to destroy ObTenantTmpFileManager first
+  tmp_file::ObTenantTmpFileManager *tmp_file_mgr = MTL(tmp_file::ObTenantTmpFileManager *);
+  if (OB_NOT_NULL(tmp_file_mgr)) {
+    tmp_file_mgr->stop();
+    tmp_file_mgr->wait();
+    tmp_file_mgr->destroy();
+  }
+  tmp_file::ObTmpPageCache::get_instance().destroy();
   TestDataFilePrepare::TearDown();
+  common::ObClockGenerator::destroy();
   destroy_tenant_mgr();
+  ObTimerService *timer_service = MTL(ObTimerService *);
+  ASSERT_NE(nullptr, timer_service);
+  timer_service->stop();
+  timer_service->wait();
+  timer_service->destroy();
 }
 
 int TestParallelExternalSort::init_tenant_mgr()
@@ -350,7 +382,7 @@ int TestParallelExternalSort::build_reader(const ObVector<TestItem *> &items, co
     ObFragmentWriterV2<TestItem> writer;
     int64_t dir_id = -1;
     std::sort(items.begin(), items.end(), compare);
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(OB_SYS_TENANT_ID, dir_id))) {
       COMMON_LOG(WARN, "fail to allocate file directory", K(ret));
     } else if (OB_FAIL(writer.open(buf_cap, expire_timestamp, OB_SYS_TENANT_ID, dir_id))) {
       COMMON_LOG(WARN, "fail to open writer", K(ret));
@@ -661,7 +693,7 @@ TEST_F(TestParallelExternalSort, test_writer)
   int ret = OB_SUCCESS;
   int64_t dir_id = -1;
 
-  ret = FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id);
+  ret = FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(OB_SYS_TENANT_ID, dir_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // single macro buffer, total write bytes is less than single macro buffer length
   ret = writer.open(buf_cap, expire_timestamp, OB_SYS_TENANT_ID, dir_id);
@@ -718,7 +750,7 @@ TEST_F(TestParallelExternalSort, test_reader)
   int ret = OB_SUCCESS;
   int64_t dir_id = -1;
 
-  ret = FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id);
+  ret = FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(OB_SYS_TENANT_ID, dir_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // single macro buffer, total write bytes is less than single macro buffer length
   ret = writer.open(buf_cap, expire_timestamp, OB_SYS_TENANT_ID, dir_id);
@@ -974,6 +1006,34 @@ TEST_F(TestParallelExternalSort, test_get_before_sort)
     ASSERT_EQ(OB_SUCCESS, ret);
   }
   const TestItem *item = NULL;
+  ret = external_sort.get_next_item(item);
+  ASSERT_EQ(OB_ITER_END, ret);
+}
+
+TEST_F(TestParallelExternalSort, test_sort_then_get)
+{
+  int ret = OB_SUCCESS;
+  const int64_t file_buf_size = MACRO_BLOCK_SIZE;
+  const int64_t buf_mem_limit = 8 * 1024 * 1024L;
+  typedef ObExternalSort<TestItem, TestItemCompare> ExternalSort;
+  ExternalSort external_sort;
+  ObVector<TestItem *>total_items;
+  TestItemCompare compare(ret);
+  const int64_t expire_timestamp = 0;
+  ret = external_sort.init(buf_mem_limit, file_buf_size, expire_timestamp, OB_SYS_TENANT_ID, &compare);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = generate_items(81920, false, total_items);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
+    ret = external_sort.add_item(*total_items.at(i));
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+  ASSERT_EQ(OB_SUCCESS, external_sort.do_sort(true));
+  const TestItem *item = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
+    ret = external_sort.get_next_item(item);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
   ret = external_sort.get_next_item(item);
   ASSERT_EQ(OB_ITER_END, ret);
 }

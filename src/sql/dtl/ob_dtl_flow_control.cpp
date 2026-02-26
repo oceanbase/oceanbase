@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX SQL_DTL
 
 #include "ob_dtl_flow_control.h"
-#include "share/ob_errno.h"
-#include "ob_dtl_basic_channel.h"
 #include "sql/engine/px/ob_sqc_ctx.h"
-#include "ob_dtl_channel_loop.h"
 #include "ob_dtl_utils.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
@@ -288,6 +284,9 @@ int ObDtlFlowControl::notify_channel_unblocking(
     } else if (!asyn_send && OB_FAIL(ch->wait_response())) {
       LOG_TRACE("failed to wait response", K(ret), K(ch->get_peer()));
     }
+    if (!is_block()) {
+      end_block_time_counting();
+    }
   }
   LOG_TRACE("channel status", K(this), K(ret), KP(ch->get_id()), K(ch->get_peer()), K(idx),
     K(is_block(idx)), K(get_nth_block(idx)), K(get_blocked_cnt()));
@@ -428,3 +427,16 @@ bool ObDtlFlowControl::is_drain(ObDtlBasicChannel *channel)
   return channel->is_drain();
 }
 
+void ObDtlFlowControl::begin_block_time_counting() {
+  if (last_block_start_time_ == 0) {
+    last_block_start_time_ = ObTimeUtility::current_time();
+  }
+}
+
+void ObDtlFlowControl::end_block_time_counting() {
+  if (last_block_start_time_ != 0) {
+    int64_t end_time = ObTimeUtility::current_time();
+    total_block_time_ += (end_time - last_block_start_time_);
+    last_block_start_time_ = 0;
+  }
+}

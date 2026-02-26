@@ -84,8 +84,6 @@ enum TX_CTX_SSTABLE_COL_IDX : int64_t
 class ObTxDataMemtableScanIterator : public memtable::ObIMemtableIterator
 {
 private:
-  static const int64_t BUF_LENGTH = 1024;
-
   class TxData2DatumRowConverter {
   public:
     TxData2DatumRowConverter() :
@@ -97,11 +95,15 @@ private:
     TO_STRING_KV(KP_(serialize_buffer), K_(buffer_len), KPC_(tx_data),
                  K_(generate_size), K_(datum_row));
   private:
+    void alloc_serialize_buffer_(const int64_t serialize_size);
+  private:
+    static const int64_t DEFAULT_BUFFER_LEN = common::OB_MAX_VARCHAR_LENGTH;
     char *serialize_buffer_;
     int64_t buffer_len_;
     ObTxData *tx_data_;
     int64_t generate_size_;
     blocksstable::ObDatumRow datum_row_;
+    char default_serialize_buffer_[DEFAULT_BUFFER_LEN];
   };
 
 public:

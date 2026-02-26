@@ -21,15 +21,20 @@
 
 namespace oceanbase
 {
+namespace blocksstable
+{
+class ObMicroBlockCacheKey;
+}
 namespace common
 {
 class ObKVCacheIterator;
+class HazptrHolder;
 class ObKVCacheMap
 {
   static constexpr int64_t DEFAULT_BUCKET_SIZE = (16L << 20); // 16M
   static constexpr int64_t MIN_BUCKET_SIZE     = ( 4L << 10); //  4K
   static const int64_t HAZARD_STATION_WAITING_THRESHOLD = 512;
-  static const int64_t HAZARD_STATION_SLOT_NUM = 1L << 10; //  1K
+  static const int64_t HAZARD_STATION_SLOT_NUM = 2L << 10; //  2K
   static constexpr int64_t BUCKET_SIZE_ARRAY_LEN = 4;
   static constexpr int64_t BUCKET_SIZE_ARRAY[BUCKET_SIZE_ARRAY_LEN] = {MIN_BUCKET_SIZE, MIN_BUCKET_SIZE << 4,  MIN_BUCKET_SIZE << 8, DEFAULT_BUCKET_SIZE};
   static const int64_t DEFAULT_LFU_THRESHOLD_BASE = 2;
@@ -48,14 +53,16 @@ public:
     ObKVCacheInst &inst,
     const ObIKVCacheKey &key,
     const ObKVCachePair *kvpair,
-    ObKVMemBlockHandle *mb_handle,
+    HazptrHolder &hazptr_holder,
     bool overwrite = true);
   int get(
     const int64_t cache_id,
     const ObIKVCacheKey &key,
     const ObIKVCacheValue *&pvalue,
-    ObKVMemBlockHandle *&out_handle);
+    HazptrHolder &hazptr_holder);
   int erase(const int64_t cache_id, const ObIKVCacheKey &key);
+  int get_batch_data_block_cache_key(const int bucket_count, ObIArray<blocksstable::ObMicroBlockCacheKey> &keys);
+  OB_INLINE int64_t get_bucket_num() const { return bucket_num_; }
   void print_hazard_version_info();
 private:
   friend class ObKVCacheIterator;
@@ -109,6 +116,7 @@ private:
 
   bool is_inited_;
   ObMalloc bucket_allocator_;
+  int64_t bucket_start_pos_;
   int64_t bucket_num_;
   int64_t bucket_size_;
   Bucket *buckets_;

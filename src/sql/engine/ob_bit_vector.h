@@ -50,20 +50,36 @@ public:
   ~ObBitVectorImpl() = default;
   inline static int64_t word_count(const int64_t size);
   inline static int64_t memory_size(const int64_t size);
-  inline static int64_t byte_count(const int64_t size);
   // The unit of "size" is bit.
   void init(const int64_t size) { MEMSET(data_, 0, memory_size(size)); }
-  void reset(const int64_t size) { init(size); }
+  void reset(const int64_t size)
+  {
+    MEMSET(data_, 0, BYTES_PER_WORD * (size / WORD_BITS));
+    if (0 != size % WORD_BITS) {
+      data_[size/WORD_BITS] &= ~((1UL << (size%WORD_BITS)) - 1);
+    }
+  }
 
   inline bool at(const int64_t idx) const;
   bool contain(const int64_t idx) const { return at(idx); }
   bool exist(const int64_t idx) const { return at(idx); }
   void deep_copy(const ObBitVectorImpl<WordType> &src, const int64_t size)
   {
-    MEMCPY(data_, src.data_, byte_count(size));
+    MEMCPY(data_, src.data_, BYTES_PER_WORD * (size / WORD_BITS));
+    if (0 != size % WORD_BITS) {
+      const int64_t last_word_idx = size / WORD_BITS;
+      const int64_t remain_bits = size % WORD_BITS;
+      data_[last_word_idx] &= ~((1UL << (remain_bits)) - 1); // low bit reset
+      data_[last_word_idx] |= src.data_[last_word_idx] & ((1UL << (remain_bits)) - 1); // copy low bit and keep high bit remain
+    }
   }
   inline void set(const int64_t idx);
+  OB_INLINE void atomic_set(const int64_t idx);
   inline void unset(const int64_t idx);
+  OB_INLINE WordType *align_at(const int64_t idx)
+  {
+    return &data_[idx / WORD_BITS];
+  }
     // at(i) |= v;
   inline void bit_or_assign(const int64_t idx, const bool v);
 
@@ -115,6 +131,7 @@ public:
   inline int64_t accumulate_bit_cnt(const int64_t size) const;
 
   inline int64_t accumulate_bit_cnt(const EvalBound &bound) const;
+  inline int64_t accumulate_bit_cnt(const int64_t start_idx, const int64_t end_idx) const;
 
   inline void set_all(const int64_t size);
 
@@ -133,10 +150,12 @@ public:
   inline void unset_all(const int64_t start_idx, const int64_t end_idx);
 
   inline bool is_all_true(const int64_t start_idx, const int64_t end_idx) const;
+  inline bool is_all_false(const int64_t start_idx, const int64_t end_idx) const;
 
   inline void deep_copy(const ObBitVectorImpl<WordType> &src, const int64_t start_idx, const int64_t end_idx);
 
   inline void bit_or(const ObBitVectorImpl<WordType> &src, const int64_t start_idx, const int64_t end_idx);
+  inline void bit_or(const ObBitVectorImpl<WordType> &src, const EvalBound &bound);
 
 
   // You should known how ObBitVectorImpl<WordType> implemented, when reinterpret data.
@@ -175,6 +194,7 @@ private:
   template <typename OP>
   static OB_INLINE int inner_foreach_one_word(const WordType &s_word, const int64_t step_size,
                                               int64_t &step, OP op);
+  inline static int64_t byte_count(const int64_t size);
 
 public:
   WordType data_[0];
@@ -232,6 +252,18 @@ inline void ObBitVectorImpl<WordType>::set(const int64_t idx)
 {
   OB_ASSERT(idx >= 0);
   data_[idx / WORD_BITS] |= 1LU << (idx % WORD_BITS);
+}
+
+template<typename WordType>
+OB_INLINE void ObBitVectorImpl<WordType>::atomic_set(const int64_t idx)
+{
+  OB_ASSERT(idx >= 0);
+  WordType val = data_[idx / WORD_BITS];
+  WordType new_val = val | (1LU << (idx % WORD_BITS));
+  while (!ATOMIC_BCAS(&data_[idx / WORD_BITS], val, new_val)) {
+    val = ATOMIC_LOAD(&data_[idx / WORD_BITS]);
+    new_val = val | (1LU << (idx % WORD_BITS));
+  }
 }
 
 template<typename WordType>
@@ -300,14 +332,15 @@ OB_INLINE bool ObBitVectorImpl<WordType>::bit_op_zero(const ObBitVectorImpl<Word
 
   if (start_cnt == end_cnt) {
     WordType only_mask = start_mask & end_mask;
-    passed = 0 == (op(l.data_[start_cnt], r.data_[start_cnt]) & only_mask);
+    passed = 0 == (op(l.data_[start_cnt] & only_mask, r.data_[start_cnt] & only_mask) & only_mask);
   } else {
-    passed = 0 == (op(l.data_[start_cnt], r.data_[start_cnt]) & start_mask);
+    passed =
+      0 == (op(l.data_[start_cnt] & start_mask, r.data_[start_cnt] & start_mask) & start_mask);
     for (int64_t i = start_cnt + 1; passed && i < end_cnt; i++) {
       passed = 0 == (op(l.data_[i], r.data_[i]));
     }
     if (passed && end_mask > 0) {
-      passed = 0 == (op(l.data_[end_cnt], r.data_[end_cnt]) & end_mask);
+      passed = 0 == (op(l.data_[end_cnt] & end_mask, r.data_[end_cnt] & end_mask) & end_mask);
     }
   }
   return passed;
@@ -450,18 +483,24 @@ inline int64_t ObBitVectorImpl<WordType>::accumulate_bit_cnt(const int64_t size)
 template<typename WordType>
 inline int64_t ObBitVectorImpl<WordType>::accumulate_bit_cnt(const EvalBound &bound) const
 {
+  return accumulate_bit_cnt(bound.start(), bound.end());
+}
+
+template<typename WordType>
+inline int64_t ObBitVectorImpl<WordType>::accumulate_bit_cnt(const int64_t start_idx, const int64_t end_idx) const
+{
   int64_t bit_cnt = 0;
-  const int64_t start = bound.start() / WORD_BITS;
-  const int64_t end = bound.end() / WORD_BITS;
+  const int64_t start = start_idx / WORD_BITS;
+  const int64_t end = end_idx / WORD_BITS;
   for (int64_t i = start; i < end; ++i) {
     WordType v = data_[i];
     bit_cnt += popcount64(v);
   }
-  const int64_t front = bound.start() % WORD_BITS;
+  const int64_t front = start_idx % WORD_BITS;
   if (front > 0) {
     bit_cnt -= popcount64(data_[start] & ((1LU << front) - 1));
   }
-  const int64_t back = bound.end() % WORD_BITS;
+  const int64_t back = end_idx % WORD_BITS;
   if (back > 0) {
     bit_cnt += popcount64(data_[end] & ((1LU << back) - 1));
   }
@@ -549,6 +588,33 @@ inline bool ObBitVectorImpl<WordType>::is_all_true(const int64_t start_idx, cons
     }
   }
   return is_all_true;
+}
+
+template<typename WordType>
+inline bool ObBitVectorImpl<WordType>::is_all_false(const int64_t start_idx, const int64_t end_idx) const
+{
+  bool is_all_false = true;
+
+  int64_t start_cnt = 0;
+  int64_t end_cnt = 0;
+  WordType start_mask = 0;
+  WordType end_mask = 0;
+  get_start_end_mask(start_idx, end_idx, start_mask, end_mask,
+                                                      start_cnt, end_cnt);
+
+  if (start_cnt == end_cnt) {
+    WordType one_word_mask = start_mask & end_mask;
+    is_all_false = ((data_[start_cnt] & one_word_mask) == 0);
+  } else {
+    is_all_false = ((data_[start_cnt] & start_mask) == 0);
+    for (int64_t i = start_cnt + 1; is_all_false && i < end_cnt; i++) {
+      is_all_false = (0 == data_[i]);
+    }
+    if (is_all_false && end_mask > 0) {
+      is_all_false = ((data_[end_cnt] & end_mask) == 0);
+    }
+  }
+  return is_all_false;
 }
 
 template<typename WordType>
@@ -641,6 +707,12 @@ inline void ObBitVectorImpl<WordType>::bit_or(const ObBitVectorImpl<WordType> &s
       data_[end_cnt] |= src_data[end_cnt] & end_mask;
     }
   }
+}
+
+template<typename WordType>
+inline void ObBitVectorImpl<WordType>::bit_or(const ObBitVectorImpl<WordType> &src, const EvalBound &bound)
+{
+  bit_or(src, bound.start(), bound.end());
 }
 
 template <typename WordType>

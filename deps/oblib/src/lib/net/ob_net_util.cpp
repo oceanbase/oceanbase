@@ -11,14 +11,8 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
 
 #include "lib/charset/ob_charset.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/net/ob_net_util.h"
 
 using namespace oceanbase::common;
@@ -132,28 +126,6 @@ int ObNetUtil::get_local_addr_ipv4(const char *dev_name, uint32_t &addr)
   }
 
   return ret;
-}
-
-std::string ObNetUtil::addr_to_string(uint64_t ipport)
-{
-    char str[32];
-    uint32_t ip = (uint32_t)(ipport & 0xffffffff);
-    int port = (int)((ipport >> 32 ) & 0xffff);
-    unsigned char *bytes = (unsigned char *) &ip;
-    if (port > 0) {
-        snprintf(str, sizeof(str), "%d.%d.%d.%d:%d", bytes[0], bytes[1], bytes[2], bytes[3], port);
-    } else {
-        snprintf(str, sizeof(str), "%d.%d.%d.%d", bytes[0], bytes[1], bytes[2], bytes[3]);
-    }
-    return str;
-}
-
-uint64_t ObNetUtil::ip_to_addr(uint32_t ip, int port)
-{
-    uint64_t ipport = port;
-    ipport <<= 32;
-    ipport |= ip;
-    return ipport;
 }
 
 struct sockaddr_storage* ObNetUtil::make_unix_sockaddr_any(bool is_ipv6,

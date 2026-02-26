@@ -16,13 +16,6 @@
 #include <regex>
 #include "ob_json_bin.h"
 #include "ob_json_parse.h"
-#include "lib/encode/ob_base64_encode.h" // for ObBase64Encoder
-#include "lib/utility/ob_fast_convert.h" // ObFastFormatInt::format_unsigned
-#include "lib/charset/ob_dtoa.h" // ob_gcvt_opt
-#include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
-#include "lib/charset/ob_charset.h" // for strntod
-#include "common/ob_smart_var.h" // for SMART_VAR
-#include <rapidjson/internal/regex.h>
 
 namespace oceanbase {
 namespace common {
@@ -2781,6 +2774,8 @@ int ObJsonSchemaValidator::check_all_schema_def(ObIJsonBase *json_doc, ObIArray<
         case ObJsonNodeType::J_DATE:
         case ObJsonNodeType::J_TIME:
         case ObJsonNodeType::J_DATETIME:
+        case ObJsonNodeType::J_MYSQL_DATE:
+        case ObJsonNodeType::J_MYSQL_DATETIME:
         case ObJsonNodeType::J_TIMESTAMP:
         case ObJsonNodeType::J_STRING:
         case ObJsonNodeType::J_OBINARY:
@@ -2938,6 +2933,8 @@ int ObJsonSchemaValidator::check_all_composition_def(ObIJsonBase *json_doc, ObIA
       case ObJsonNodeType::J_DATE:
       case ObJsonNodeType::J_TIME:
       case ObJsonNodeType::J_DATETIME:
+      case ObJsonNodeType::J_MYSQL_DATE:
+      case ObJsonNodeType::J_MYSQL_DATETIME:
       case ObJsonNodeType::J_TIMESTAMP:
       case ObJsonNodeType::J_STRING:
       case ObJsonNodeType::J_OBINARY:
@@ -4182,13 +4179,16 @@ int ObJsonSchemaCache::find_and_add_cache(ObIJsonBase*& out_schema, ObString& in
       LOG_WARN("fail to get json base", K(ret), K(in_type));
     } else {
       ObJsonSchemaTree json_schema(allocator_);
+      ObString dst_str;
       if (OB_FAIL(json_schema.build_schema_tree(in_json))) {
         LOG_WARN("invalid json schema", K(ret));
       } else if (OB_ISNULL(out_schema = json_schema.get_schema_map())) {
         ret = OB_BAD_NULL_ERROR;
         LOG_WARN("should not be null", K(ret));
+      } else if (OB_FAIL(ob_write_string(*allocator_, in_str, dst_str))) {
+        LOG_WARN("fail to copy string", K(ret));
       } else {
-        ret = set_schema(out_schema, in_str, arg_idx, arg_idx);
+        ret = set_schema(out_schema, dst_str, arg_idx, arg_idx);
       }
     }
   } else {

@@ -23,6 +23,7 @@
 #include "sql/engine/aggregate/ob_groupby_vec_op.h"
 #include "sql/engine/basic/ob_hp_infras_vec_op.h"
 #include "src/sql/engine/expr/ob_expr_estimate_ndv.h"
+#include "sql/engine/basic/ob_temp_row_store.h"
 
 namespace oceanbase
 {
@@ -65,7 +66,11 @@ public:
       org_dup_cols_(alloc),
       new_dup_cols_(alloc),
       dist_col_group_idxs_(alloc),
-      distinct_exprs_(alloc)
+      distinct_exprs_(alloc),
+      grouping_id_(nullptr),
+      group_distinct_exprs_(alloc),
+      group_sort_collations_(alloc),
+      limit_expr_(nullptr)
     {
     }
 
@@ -88,6 +93,10 @@ public:
   common::ObFixedArray<ObExpr*, common::ObIAllocator> new_dup_cols_;
   common::ObFixedArray<int64_t, common::ObIAllocator> dist_col_group_idxs_;
   ExprFixedArray distinct_exprs_; // the distinct arguments of aggregate function
+  ObExpr *grouping_id_;
+  ObFixedArray<ExprFixedArray, common::ObIAllocator> group_distinct_exprs_;
+  ObFixedArray<ObSortCollations, common::ObIAllocator> group_sort_collations_;
+  ObExpr *limit_expr_;
 };
 
 // 输入数据已经按照groupby列排序
@@ -109,6 +118,7 @@ public:
 public:
   static const int64_t MIN_PARTITION_CNT = 8;
   static const int64_t MAX_PARTITION_CNT = 256;
+  static const int64_t MAX_BATCH_DUMP_PART_CNT = 64;
   static const int64_t INIT_BKT_SIZE_FOR_ADAPTIVE_GBY = 256;
 
   // min in memory groups
@@ -120,7 +130,12 @@ public:
   static const int64_t MIN_BATCH_SIZE_REORDER_AGGR_ROWS = 256;
   static const int64_t FIX_SIZE_PER_PART = sizeof(DatumStoreLinkPartition) + ObTempRowStore::BLOCK_SIZE;
   static const uint64_t HASH_SEED = 99194853094755497L;
-
+  // used for data skew :
+  static const int64_t SKEW_TEST_STEP_SIZE = 5;
+  static const uint64_t MIN_CHECK_POPULAR_VALID_ROWS = 10000;
+  constexpr static const float SKEW_POPULAR_MAX_RATIO = 0.5;
+  const static int64_t SKEW_HEAP_SIZE = 36;
+  static const int64_t ADAPTIVE_GBY_MEM_ESTIMATE_SIZE = 2 << 20; // 2MB
 
 public:
   ObHashGroupByVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
@@ -144,7 +159,7 @@ public:
       first_batch_from_store_(true),
       dup_groupby_exprs_(),
       is_dumped_(nullptr),
-      no_non_distinct_aggr_(false),
+      can_skip_last_group_(false),
       start_calc_hash_idx_(0),
       base_hash_vals_(nullptr),
       has_calc_base_hash_(false),
@@ -174,9 +189,22 @@ public:
       use_sstr_aggr_(false),
       aggr_vectors_(nullptr),
       reorder_aggr_rows_(false),
-      old_row_selector_(nullptr),
       batch_aggr_rows_table_(),
-      llc_est_()
+      llc_est_(),
+      dump_vectors_(nullptr),
+      dump_rows_(nullptr),
+      need_reinit_vectors_(true),
+      new_row_selector_(nullptr),
+      old_row_selector_(nullptr),
+      new_row_selector_cnt_(0),
+      old_row_selector_cnt_(0),
+      skew_detection_enabled_(false),
+      by_pass_rows_(0),
+      total_load_rows_(0),
+      popular_map_(),
+      by_pass_agg_rows_(0),
+      stores_mgr_(),
+      part_idxes_(nullptr)
   {
   }
   void reset(bool for_rescan);
@@ -218,8 +246,8 @@ public:
   { return get_aggr_used_size() + sql_mem_processor_.get_data_size(); }
   OB_INLINE int64_t get_mem_used_size() const
   {
-    // Hash table used is double counted here to reserve memory for hash table extension
-    return get_aggr_used_size() + get_extra_size() + get_hash_table_used_size();
+    // Hash table used is 3 times counted here to reserve memory for hash table extension
+    return get_aggr_used_size() + get_extra_size() + 2 * get_hash_table_used_size();
   }
   OB_INLINE int64_t get_actual_mem_used_size() const
   {
@@ -330,6 +358,10 @@ private:
   void check_groupby_exprs(const common::ObIArray<ObExpr *> &groupby_exprs, bool &nullable, bool &all_int64);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHashGroupByVecOp);
+  int init_popular_values(); // Data skew constructs the initial popular map based on the data
+                            // during the loaddata sampling period and use in the bypass phase.
+  int by_pass_return_batch(int64_t op_max_batch_size);
+  int update_popular_map();
 
 private:
   int by_pass_prepare_one_batch(const int64_t batch_size);
@@ -337,6 +369,9 @@ private:
                                          const ObBatchRows *child_brs, ObBatchRows &my_brs,
                                          const int64_t batch_size, bool &insert_group_ht);
   int init_by_pass_op();
+
+  int process_multi_groups(aggregate::AggrRowPtr *agg_rows, const ObBatchRows &brs,
+                           uint16_t *selector, int64_t selector_cnt);
   // Alloc one batch group_row_item at a time
   static const int64_t BATCH_GROUP_ITEM_SIZE = 16;
   // const int64_t EXTEND_BKT_NUM_PUSH_DOWN = INIT_L3_CACHE_SIZE / ObExtendHashTableVec<ObGroupRowBucket>::get_sizeof_aggr_row();
@@ -372,7 +407,7 @@ private:
   ObSEArray<ObExpr*, 4> dup_groupby_exprs_;
   ObSEArray<ObExpr*, 4> all_groupby_exprs_;
   bool *is_dumped_;
-  bool no_non_distinct_aggr_;
+  bool can_skip_last_group_;
   int64_t start_calc_hash_idx_;
   uint64_t *base_hash_vals_;
   bool has_calc_base_hash_;
@@ -414,9 +449,27 @@ private:
   bool use_sstr_aggr_;
   ObIVector **aggr_vectors_;
   bool reorder_aggr_rows_;
-  uint16_t *old_row_selector_;
   BatchAggrRowsTable batch_aggr_rows_table_;
   LlcEstimate llc_est_;
+  common::ObFixedArray<ObIVector *, common::ObIAllocator> dump_vectors_;
+  ObCompactRow **dump_rows_;
+  bool need_reinit_vectors_;
+  uint16_t *new_row_selector_;
+  uint16_t *old_row_selector_;
+  int64_t new_row_selector_cnt_;
+  int64_t old_row_selector_cnt_;
+  // for data skew :
+  bool skew_detection_enabled_;
+  uint64_t by_pass_rows_;
+  uint64_t total_load_rows_;
+  typedef common::hash::ObHashMap<uint64_t, uint64_t, hash::NoPthreadDefendMode> PopularMapType;
+  PopularMapType popular_map_;
+  uint64_t by_pass_agg_rows_;
+  common::ObArray<std::pair<const ObCompactRow *, int32_t>> popular_array_temp_;
+  common::ObFixedArray<HashFuncTypeForTc, ObIAllocator> hash_func_for_expr_;
+  common::ObFixedArray<NullHashFuncTypeForTc, ObIAllocator> null_hash_func_for_expr_;
+  BatchTempRowStoresMgr stores_mgr_;
+  int64_t *part_idxes_;
 };
 
 } // end namespace sql

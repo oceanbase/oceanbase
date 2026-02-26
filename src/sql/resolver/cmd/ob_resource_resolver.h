@@ -19,6 +19,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "share/config/ob_config_helper.h"
 #include "share/unit/ob_unit_resource.h"          // ObUnitResource
+#include "share/ob_server_struct.h"
 #include "sql/resolver/cmd/ob_cmd_resolver.h"
 #include "sql/resolver/cmd/ob_resource_stmt.h"
 #include "sql/resolver/cmd/ob_alter_system_resolver.h"
@@ -236,6 +237,9 @@ public:
       case T_LOG_DISK_SIZE:
         name = "LOG_DISK_SIZE";
         break;
+      case T_DATA_DISK_SIZE:
+        name = "DATA_DISK_SIZE";
+        break;
       case T_MAX_IOPS:
         name = "MAX_IOPS";
         break;
@@ -244,6 +248,12 @@ public:
         break;
       case T_IOPS_WEIGHT:
         name = "IOPS_WEIGHT";
+        break;
+      case T_MAX_NET_BANDWIDTH:
+        name = "MAX_NET_BANDWIDTH";
+        break;
+      case T_NET_BANDWIDTH_WEIGHT:
+        name = "NET_BANDWIDTH_WEIGHT";
         break;
       default:
         LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid item type for RESOURCE UNIT", K(type));
@@ -269,7 +279,7 @@ int ObResourceUnitOptionResolver<T>::resolve_options(ParseNode *node, share::ObU
 {
   int ret = common::OB_SUCCESS;
   // first reset all resources
-  share::ObUnitResource::reset();
+  ObUnitResource::reset_all_invalid();
 
   if (node) {
     if (OB_UNLIKELY(node->type_ != T_RESOURCE_UNIT_OPTION_LIST)
@@ -295,7 +305,7 @@ int ObResourceUnitOptionResolver<T>::resolve_options(ParseNode *node, share::ObU
   }
 
   // at last, reset anyway
-  ObUnitResource::reset();
+  ObUnitResource::reset_all_invalid();
   return ret;
 }
 
@@ -314,9 +324,25 @@ int ObResourceUnitOptionResolver<T>::check_value_(const ValueT value,
     const ObItemType type) const
 {
   int ret = OB_SUCCESS;
-  if (T_IOPS_WEIGHT != type) {
+  if (T_DATA_DISK_SIZE == type) {
+    // data_disk_size should be >= 0, and 0 is supported after 4.3.5.2
+    if (OB_UNLIKELY(value < 0)) {
+      print_invalid_argument_user_error_(type, ", value can not be negative");
+      ret = common::OB_INVALID_ARGUMENT;
+      LOG_WARN("param can not be negative", KR(ret), K(type), K(value));
+    } else if (0 == value) {
+      uint64_t sys_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+        LOG_WARN("failed to get sys tenant min data version", KR(ret));
+      } else if (sys_data_version < DATA_VERSION_4_3_5_2) {
+        ret = common::OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "SYS tenant data version is below 4.3.5.2, DATA_DISK_SIZE being 0");
+      }
+    }
+  } else if (T_IOPS_WEIGHT != type
+      && T_NET_BANDWIDTH_WEIGHT != type) {
     if (OB_UNLIKELY(value <= 0)) {
-      // iops weight is allowed to set zero
+      // iops weight and net_bandwidth_weight are allowed to set zero
       print_invalid_argument_user_error_(type, ", value should be positive");
       ret = common::OB_INVALID_ARGUMENT;
       LOG_WARN("param can't be zero", KR(ret), K(type), K(value));
@@ -387,12 +413,15 @@ int ObResourceUnitOptionResolver<T>::resolve_varchar_(ParseNode *child, const Ob
         T_MAX_CPU == type ||
         T_MIN_IOPS == type ||
         T_MAX_IOPS == type ||
-        T_IOPS_WEIGHT == type) {
+        T_IOPS_WEIGHT == type ||
+        T_NET_BANDWIDTH_WEIGHT == type) {
       //  '3' = 3, '3k' = 3000, '3m' = 3000000
       //  not support: 3kb, 3mb, 3gb, 3g, 3t, 3tb etc
       parse_int_value = common::ObConfigReadableIntParser::get(buf.ptr(), valid);
     } else if (T_MEMORY_SIZE == type ||
-               T_LOG_DISK_SIZE == type) {
+               T_LOG_DISK_SIZE == type ||
+               T_DATA_DISK_SIZE == type ||
+               T_MAX_NET_BANDWIDTH == type) {
       // '3' = '3mb' = 3*1024*1024
       parse_int_value = common::ObConfigCapacityParser::get(buf.ptr(), valid);
     } else {
@@ -428,7 +457,21 @@ int ObResourceUnitOptionResolver<T>::resolve_option_(ParseNode *option_node, sha
       ParseNode *child = option_node->children_[0];
       ObItemType option_type = option_node->type_;
 
-      if (T_NUMBER == child->type_) {
+      // check if option type is supported
+      if (OB_FAIL(ret)) {
+      } else if (T_DATA_DISK_SIZE == option_type) {
+        if (OB_FAIL(check_data_disk_size_supported())) {
+          LOG_WARN("failed to check data_disk_size supported", KR(ret), KPC(this));
+        }
+      } else if (T_MAX_NET_BANDWIDTH == option_type || T_NET_BANDWIDTH_WEIGHT == option_type) {
+        if (OB_FAIL(check_net_bandwidth_supported())) {
+          LOG_WARN("failed to check net_bandwidth supported", KR(ret), KPC(this));
+        }
+      }
+
+      // check if value is valid
+      if (OB_FAIL(ret)) {
+      } else if (T_NUMBER == child->type_) {
         // handle NUMBER value only for CPU
         if (OB_FAIL(resolve_number_(option_node->type_, child, parse_double_value))) {
           LOG_WARN("resolve number value fail", KR(ret), K(option_node->type_));
@@ -466,12 +509,18 @@ int ObResourceUnitOptionResolver<T>::resolve_option_(ParseNode *option_node, sha
           memory_size_ = parse_int_value;
         } else if (T_LOG_DISK_SIZE == option_type) {
           log_disk_size_ = parse_int_value;
+        } else if (T_DATA_DISK_SIZE == option_type) {
+          data_disk_size_ = parse_int_value;
         } else if (T_MIN_IOPS == option_type) {
           min_iops_ = parse_int_value;
         } else if (T_MAX_IOPS == option_type) {
           max_iops_ = parse_int_value;
         } else if (T_IOPS_WEIGHT == option_type) {
           iops_weight_ = parse_int_value;
+        } else if (T_MAX_NET_BANDWIDTH == option_type) {
+          max_net_bandwidth_ = parse_int_value;
+        } else if (T_NET_BANDWIDTH_WEIGHT == option_type) {
+          net_bandwidth_weight_ = parse_int_value;
         } else {
           /* won't be here */
           ret = common::OB_ERR_UNEXPECTED;

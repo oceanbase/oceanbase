@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX OBLOG
 #include "ob_log_ls_mgr.h"
-#include "ob_log_config.h"                            // TCONF
 #include "ob_log_tenant.h"                            // ObLogTenant
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [LSMgr] " fmt, ##args)
@@ -634,11 +633,13 @@ int ObLogLSMgr::inc_ls_trans_count_on_serving(bool &is_serving,
           is_serving = false;
 
           if (print_ls_not_serve_info) {
+            ObCStringHelper helper;
             _ISTAT("[INC_TRANS_COUNT] [LS_NOT_SERVE] TENANT=%lu LS=%s COMMIT_LSN=%s",
-                tenant_id_, to_cstring(tls_id), to_cstring(commit_log_lsn));
+                tenant_id_, helper.convert(tls_id), helper.convert(commit_log_lsn));
           } else if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+            ObCStringHelper helper;
             _ISTAT("[INC_TRANS_COUNT] [PART_NOT_SERVE] TENANT=%lu LS=%s COMMIT_LSN=%s",
-                tenant_id_, to_cstring(tls_id), to_cstring(commit_log_lsn));
+                tenant_id_, helper.convert(tls_id), helper.convert(commit_log_lsn));
           } else {}
         } else {
           LOG_INFO("[INC_TRANS_COUNT] [FUTURE_LS] wait for future ls begin", K(tls_id));

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX RPC
 #include "common/data_buffer.h"
 #include "lib/utility/utility.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {

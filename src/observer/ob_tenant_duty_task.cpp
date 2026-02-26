@@ -12,17 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_tenant_duty_task.h"
-#include "lib/alloc/alloc_func.h"
-#include "lib/thread/thread_mgr.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/system_variable/ob_system_variable_alias.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/rc/ob_tenant_base.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "sql/engine/ob_tenant_sql_memory_manager.h"
 #include "observer/omt/ob_tenant.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::common;
 

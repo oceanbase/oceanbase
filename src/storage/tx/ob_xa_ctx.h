@@ -147,6 +147,27 @@ public:
     return xa_ref_count_;
   }
 public:
+  // for mysql xa
+  int xa_start_for_mysql(const ObXATransID &xid, ObTxDesc *tx_desc);
+  int xa_end_for_mysql(const ObXATransID &xid, ObTxDesc *tx_desc);
+  int pre_xa_prepare_for_mysql(const ObXATransID &xid,
+                               ObTxDesc *tx_desc,
+                               bool &need_exit,
+                               bool &is_read_only,
+                               share::ObLSID &coord_id);
+  int xa_prepare_for_mysql(const ObXATransID &xid, const int64_t timeout_us);
+  int wait_xa_prepare_for_mysql(const ObXATransID &xid, const int64_t timeout_us);
+  int one_phase_end_trans_for_mysql(const ObXATransID &xid,
+                                    const bool is_rollback,
+                                    const int64_t timeout_us,
+                                    ObTxDesc *tx_desc,
+                                    bool &need_exit);
+  int wait_one_phase_end_trans_for_mysql(const bool is_rollback,
+                                         const int64_t timeout_us);
+  bool is_mysql_mode() const { return is_mysql_mode_; }
+  int handle_abort_for_mysql(int cause);
+  int32_t get_state() const { return xa_trans_state_; }
+public:
   // for 4.0 dblink
   int xa_start_for_dblink(const ObXATransID &xid,
                           const int64_t flags,
@@ -172,7 +193,8 @@ public:
                K_(xa_branch_count), K_(xa_ref_count), K_(lock_grant),
                K_(is_tightly_coupled), K_(lock_xid), K_(xa_stmt_info),
                K_(is_terminated), K_(executing_xid), "uref", get_uref(),
-               K_(has_tx_level_temp_table), K_(local_lock_level), K_(need_stmt_lock));
+               K_(has_tx_level_temp_table), K_(local_lock_level), K_(need_stmt_lock),
+               K_(is_mysql_mode));
 private:
   int register_timeout_task_(const int64_t interval_us);
   int unregister_timeout_task_();
@@ -337,6 +359,7 @@ private:
   //    4.2 if local_lock_level == 0, execute the normal global lock release processing
   int64_t local_lock_level_;
   bool need_stmt_lock_;
+  bool is_mysql_mode_;
 };
 
 }//transaction

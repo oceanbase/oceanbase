@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
+#include "sql/resolver/dml/ob_select_stmt.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -68,6 +70,12 @@ int ObRawExprInfoExtractor::visit(ObConstRawExpr &expr)
 int ObRawExprInfoExtractor::visit(ObVarRawExpr &expr)
 {
   int ret = OB_SUCCESS;
+  // lambda param will set value in array_map function in execution
+  if (OB_FAIL(expr.add_flag(IS_CONST))) {
+    LOG_WARN("failed to add is const", K(ret));
+  } else if (OB_FAIL(expr.add_flag(IS_DYNAMIC_PARAM))) {
+    LOG_WARN("failed to add is exec param", K(ret));
+  }
   return ret;
 }
 
@@ -98,18 +106,17 @@ int ObRawExprInfoExtractor::visit(ObQueryRefRawExpr &expr)
 int ObRawExprInfoExtractor::visit(ObExecParamRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(expr.add_flag(IS_CONST))) {
+  if (!expr.is_eval_by_storage() && OB_ISNULL(expr.get_ref_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed", K(ret), K(expr.is_eval_by_storage()));
+  } else if (OB_FAIL(expr.add_flag(IS_CONST))) {
     LOG_WARN("failed to add is const", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_DYNAMIC_PARAM))) {
     LOG_WARN("failed to add is exec param", K(ret));
-  } else if (!expr.is_onetime()) {
-    // do nothing
-  } else if (OB_FAIL(expr.add_flag(IS_ONETIME))) {
+  } else if (expr.is_onetime() && OB_FAIL(expr.add_flag(IS_ONETIME))) {
     LOG_WARN("failed to add is onetime", K(ret));
-  }
-  if (OB_SUCC(ret) && expr.get_ref_expr()->has_enum_set_column()) {
+  } else if (!expr.is_eval_by_storage() && expr.get_ref_expr()->has_enum_set_column()) {
     OZ(expr.add_flag(CNT_ENUM_OR_SET));
-    OZ(expr.set_enum_set_values(expr.get_ref_expr()->get_enum_set_values()));
   }
   return ret;
 }
@@ -141,15 +148,28 @@ int ObRawExprInfoExtractor::visit(ObColumnRefRawExpr &expr)
 int ObRawExprInfoExtractor::clear_info(ObRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  ObExprInfo &expr_info = expr.get_expr_info();
+  const ObExprInfo &expr_info = expr.get_expr_info();
   bool is_implicit_cast = expr_info.has_member(IS_OP_OPERAND_IMPLICIT_CAST);
   bool is_self_param = expr_info.has_member(IS_UDT_UDF_SELF_PARAM);
-  expr_info.reset();
+  bool is_auto_part_expr = expr_info.has_member(IS_AUTO_PART_EXPR);
+  bool is_pl_sql_transpiled = expr_info.has_member(IS_PL_SQL_TRANSPILED);
+  bool is_fake_deterministic_udf = expr_info.has_member(IS_FAKE_CONST_UDF);
+  expr.reset_flag();
   if (is_implicit_cast) {
-    OZ(expr_info.add_member(IS_OP_OPERAND_IMPLICIT_CAST));
+    OZ(expr.add_flag(IS_OP_OPERAND_IMPLICIT_CAST));
   }
   if (is_self_param) {
-    OZ(expr_info.add_member(IS_UDT_UDF_SELF_PARAM));
+    OZ(expr.add_flag(IS_UDT_UDF_SELF_PARAM));
+  }
+  if (is_auto_part_expr) {
+    OZ(expr.add_flag(IS_AUTO_PART_EXPR));
+  }
+  if (is_pl_sql_transpiled) {
+    OZ(expr.add_flag(IS_PL_SQL_TRANSPILED));
+    OZ(expr.add_flag(CNT_PL_UDF));
+  }
+  if (is_fake_deterministic_udf) { // this flag is only used in range converter for non-deterministic udf filter
+    OZ(expr.add_flag(IS_FAKE_CONST_UDF));
   }
   return ret;
 }
@@ -157,6 +177,7 @@ int ObRawExprInfoExtractor::clear_info(ObRawExpr &expr)
 int ObRawExprInfoExtractor::pull_info(ObRawExpr &expr)
 {
   int ret = OB_SUCCESS;
+  bool lost_deterministic = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); i++) {
     ObRawExpr *param_expr = expr.get_param_expr(i);
     if (OB_ISNULL(param_expr)) {
@@ -164,6 +185,15 @@ int ObRawExprInfoExtractor::pull_info(ObRawExpr &expr)
       LOG_WARN("param expr is null", K(i));
     } else if (OB_FAIL(expr.add_child_flags(param_expr->get_expr_info()))) {
       LOG_WARN("fail to add child flags", K(ret));
+    } else if (!param_expr->is_deterministic()) {
+      lost_deterministic = true;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (lost_deterministic) {
+      expr.set_is_deterministic(false);
+    } else if (OB_FAIL(add_deterministic(expr))) {
+      LOG_WARN("failed to add deterministic", K(ret));
     }
   }
   return ret;
@@ -207,8 +237,6 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
   const bool is_inner_added = expr.has_flag(IS_INNER_ADDED_EXPR);
   if (OB_FAIL(clear_info(expr))) {
     LOG_WARN("fail to clear info", K(ret));
-  } else if (OB_FAIL(pull_info(expr))) {
-    LOG_WARN("fail to add pull info", K(ret));
   } else if (is_inner_added && OB_FAIL(expr.add_flag(IS_INNER_ADDED_EXPR))) {
     LOG_WARN("add flag failed", K(ret));
   } else if (T_OP_ORACLE_OUTER_JOIN_SYMBOL == expr.get_expr_type() &&
@@ -232,6 +260,12 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
       case T_OP_CONNECT_BY_ROOT:
         if (OB_FAIL(expr.add_flag(IS_CONNECT_BY_ROOT))) {
           LOG_WARN("failed to add flag IS_CONNECT_BY_ROOT", K(ret));
+        }
+        break;
+      case T_OP_EXISTS:
+      case T_OP_NOT_EXISTS:
+        if (OB_FAIL(expr.add_flag(IS_EXISTS))) {
+          LOG_WARN("failed to add flag IS_EXISTS", K(ret));
         }
         break;
       default:
@@ -317,12 +351,18 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
       LOG_WARN("failed to add flag IS_OR", K(ret));
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(visit_subquery_node(expr))) {
-    LOG_WARN("visit subquery node failed", K(ret));
-  }
   if (OB_SUCC(ret) && expr.get_expr_type() == T_OBJ_ACCESS_REF) {
     if (OB_FAIL(expr.add_flag(CNT_OBJ_ACCESS_EXPR))) {
       LOG_WARN("failed to add flag IS_OR", K(ret));
+    } else if (ob_is_enumset_tc(expr.get_data_type()) && OB_FAIL(expr.add_flag(IS_ENUM_OR_SET))) {
+      LOG_WARN("failed to add flag IS_ENUM_OR_SET", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(pull_info(expr))) {
+      LOG_WARN("fail to add pull info", K(ret));
+    } else if (OB_FAIL(visit_subquery_node(expr))) {
+      LOG_WARN("visit subquery node failed", K(ret));
     }
   }
   return ret;
@@ -374,7 +414,11 @@ int ObRawExprInfoExtractor::visit_subquery_node(ObOpRawExpr &expr)
           //子查询的结果是向量或者集合，那么必须将比较操作符转换为对应的subquery expr operator
           expr.set_expr_type(get_subquery_comparison_type(expr.get_expr_type()));
         }
-        if (expr.get_subquery_key() == T_WITH_ALL) {
+        if (!IS_SUBQUERY_COMPARISON_OP(expr.get_expr_type())) {
+          if (OB_FAIL(expr.add_flag(IS_WITH_SUBQUERY))) {
+            LOG_WARN("failed to add flag IS_WITH_SUBQUERY", K(ret));
+          }
+        } else if (expr.get_subquery_key() == T_WITH_ALL) {
           if (OB_FAIL(expr.add_flag(IS_WITH_ALL))) {
             LOG_WARN("failed to add flag IS_WITH_ALL", K(ret));
           }
@@ -461,8 +505,6 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
   const bool is_inner_added = expr.has_flag(IS_INNER_ADDED_EXPR);
   if (OB_FAIL(clear_info(expr))) {
     LOG_WARN("fail to clear info", K(ret));
-  } else if (OB_FAIL(pull_info(expr))) {
-    LOG_WARN("fail to add pull info", K(ret));
   } else if (OB_FAIL(add_const(expr))) {
     LOG_WARN("fail to add const", K(expr), K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_FUNC))) {
@@ -474,7 +516,9 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
   } else {
     // these functions should not be calculated first
     if (T_FUN_SYS_AUTOINC_NEXTVAL == expr.get_expr_type()
+        || T_FUN_SYS_VEC_VID == expr.get_expr_type()
         || T_FUN_SYS_DOC_ID == expr.get_expr_type()
+        || T_PSEUDO_HIDDEN_CLUSTERING_KEY == expr.get_expr_type()
         || T_FUN_SYS_TABLET_AUTOINC_NEXTVAL == expr.get_expr_type()
         || T_FUN_SYS_SLEEP == expr.get_expr_type()
         || (T_FUN_SYS_LAST_INSERT_ID == expr.get_expr_type() && expr.get_param_count() > 0)
@@ -485,6 +529,10 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         || T_FUN_NORMAL_UDF == expr.get_expr_type()
         || T_FUN_SYS_GENERATOR == expr.get_expr_type()
         || T_FUN_SYS_LAST_REFRESH_SCN == expr.get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr.get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr.get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_SET_USER == expr.get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_REMOVE_USER == expr.get_expr_type()
         || (T_FUN_UDF == expr.get_expr_type()
             && !static_cast<ObUDFRawExpr&>(expr).is_deterministic())
         || T_FUN_SYS_GET_LOCK == expr.get_expr_type()
@@ -508,6 +556,10 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
               || T_FUN_SYS_UUID_SHORT == expr.get_expr_type()) {
       if (OB_FAIL(expr.add_flag(IS_RAND_FUNC))) {
         LOG_WARN("failed to add flag IS_RAND_FUNC", K(ret));
+      }
+    } else if (T_FUN_TMP_FILE_OPEN == expr.get_expr_type()) {
+      if (OB_FAIL(expr.add_flag(IS_RAND_FUNC))) {
+        LOG_WARN("failed to add flag IS_RAND_FUNC for T_FUN_TMP_FILE_OPEN", K(ret));
       }
     } else if (T_FUN_SYS_ROWNUM == expr.get_expr_type()) {
       if (OB_FAIL(expr.add_flag(IS_ROWNUM))) {
@@ -577,7 +629,9 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         }
       } else {}
     }
-
+  }
+  if (OB_SUCC(ret) && OB_FAIL(pull_info(expr))) {
+    LOG_WARN("fail to add pull info", K(ret));
   }
   return ret;
 }
@@ -609,6 +663,8 @@ int ObRawExprInfoExtractor::visit(ObAliasRefRawExpr &expr)
     }
   } else if (OB_FAIL(expr.add_child_flags(expr.get_ref_expr()->get_expr_info()))) {
     LOG_WARN("add child flags to expr failed", K(ret));
+  } else {
+    expr.set_is_deterministic(expr.get_ref_expr()->is_deterministic());
   }
   return ret;
 }
@@ -664,6 +720,59 @@ int ObRawExprInfoExtractor::visit(ObMatchFunRawExpr &expr)
     LOG_WARN("pull match against info failed", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_MATCH_EXPR))) {
     LOG_WARN("add flag to match against failed", K(ret));
+  }
+  return ret;
+}
+
+/*
+The definition of IS_EXPR_DETERMINISTIC:
+https://docs.oracle.com/en/database/oracle/oracle-database/23/lnpls/DETERMINISTIC-clause.html#GUID-6AECC957-27CC-4334-9F43-0FBE88F92654
+1. A deterministic must return the same value on two distinct invocations if the arguments provided to the two invocations are the same.
+2. A DETERMINISTIC may not have side effects.
+3. A DETERMINISTIC may not raise an unhandled exception.
+4. with a DETERMINISTIC clause violates any of these semantic rules, the results of its invocation, its value, and the effect on its invoker are all undefined.
+
+For some special cases, we also consider it's deterministic:
+1. for a query which has no order by with limit, the output may be different, but we also think this
+   case is satisfy the sql semantics, then is deterministic
+   eg: select * from t1 where t1.c1 > 10 limit 10;
+2. for a query which's select items has a part of group by columns, the outpue may be different.
+   eg: select c1, count(*) from t1 group by c2, c1;
+*/
+int ObRawExprInfoExtractor::add_deterministic(ObRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_deterministic = true;
+  if (OB_SUCC(ret)) {
+    if (expr.is_query_ref_expr()) {
+      ObRawExpr *query_ref = &expr;
+      ObSelectStmt *select_stmt = static_cast<ObQueryRefRawExpr*>(query_ref)->get_ref_stmt();
+      if (OB_ISNULL(select_stmt)) {
+        is_deterministic = false;
+      } else if (OB_FAIL(select_stmt->is_query_deterministic(is_deterministic))) {
+        LOG_WARN("failed to check is query deterministic", K(ret));
+      }
+    } else {
+      is_deterministic = expr.check_is_deterministic_expr();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    expr.set_is_deterministic(is_deterministic);
+  }
+  return ret;
+}
+
+int ObRawExprInfoExtractor::visit(ObUnpivotRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("failed to clear info", K(ret));
+  } else if (OB_FAIL(pull_info(expr))) {
+    LOG_WARN("pull match against info failed", K(ret));
+  } else if (OB_FAIL(expr.add_flag(IS_UNPIVOT_EXPR))) {
+    LOG_WARN("add flag failed", K(ret));
+  } else if (OB_FAIL(expr.add_flag(CNT_UNPIVOT_EXPR))) {
+    LOG_WARN("add flag failed", K(ret));
   }
   return ret;
 }

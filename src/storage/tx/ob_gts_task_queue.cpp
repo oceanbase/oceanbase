@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/rc/ob_tenant_base.h"
-#include "ob_gts_local_cache.h"
 #include "ob_gts_task_queue.h"
 #include "ob_ts_mgr.h"
 #include "ob_trans_event.h"

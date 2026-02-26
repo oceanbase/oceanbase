@@ -12,12 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_set.h"
-#include "sql/optimizer/ob_log_sort.h"
-#include "sql/optimizer/ob_log_granule_iterator.h"
-#include "ob_opt_est_cost.h"
-#include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "sql/optimizer/ob_log_distinct.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -340,30 +337,39 @@ int ObLogSet::compute_sharding_info()
   } else if (DistAlgo::DIST_SET_PARTITION_WISE == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
-  } else if (DistAlgo::DIST_NONE_HASH == set_dist_algo_) {
+  } else if (DistAlgo::DIST_NONE_HASH == set_dist_algo_
+             || DistAlgo::DIST_NONE_ALL == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = first_child->get_strong_sharding();
     inherit_sharding_index_ = ObLogicalOperator::first_child;
-  } else if (DistAlgo::DIST_HASH_NONE == set_dist_algo_) {
-    is_partition_wise_ = false;
-    strong_sharding_ = second_child->get_strong_sharding();
-    inherit_sharding_index_ = ObLogicalOperator::second_child;
-  } else if (DistAlgo::DIST_NONE_ALL == set_dist_algo_) {
-    is_partition_wise_ = false;
-    strong_sharding_ = first_child->get_strong_sharding();
-    inherit_sharding_index_ = ObLogicalOperator::first_child;
-  } else if (DistAlgo::DIST_ALL_NONE == set_dist_algo_) {
-    is_partition_wise_ = false;
-    strong_sharding_ = second_child->get_strong_sharding();
-    inherit_sharding_index_ = ObLogicalOperator::second_child;
-  } else if (DistAlgo::DIST_PARTITION_NONE == set_dist_algo_) {
+  } else if (DistAlgo::DIST_HASH_NONE == set_dist_algo_
+             || DistAlgo::DIST_ALL_NONE == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = second_child->get_strong_sharding();
     inherit_sharding_index_ = ObLogicalOperator::second_child;
   } else if (DistAlgo::DIST_NONE_PARTITION == set_dist_algo_) {
     is_partition_wise_ = false;
-    strong_sharding_ = first_child->get_strong_sharding();
-    inherit_sharding_index_ = ObLogicalOperator::first_child;
+    if (ObSelectStmt::INTERSECT == set_op_
+        || ObSelectStmt::EXCEPT == set_op_) {
+      strong_sharding_ = first_child->get_strong_sharding();
+      inherit_sharding_index_ = ObLogicalOperator::first_child;
+    } else {
+      strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();;
+      inherit_sharding_index_ = -1;
+    }
+  } else if (DistAlgo::DIST_PARTITION_NONE == set_dist_algo_) {
+    is_partition_wise_ = false;
+    if (ObSelectStmt::INTERSECT == set_op_) {
+      strong_sharding_ = second_child->get_strong_sharding();
+      inherit_sharding_index_ = ObLogicalOperator::second_child;
+    } else {
+      strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();;
+      inherit_sharding_index_ = -1;
+    }
+  } else if (DistAlgo::DIST_HASH_LOCAL_PARTITION == set_dist_algo_ ||
+             DistAlgo::DIST_PARTITION_HASH_LOCAL == set_dist_algo_) {
+    strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
+    inherit_sharding_index_ = -1;
   } else if (OB_FAIL(ObLogicalOperator::compute_sharding_info())) {
     LOG_WARN("failed to compute sharding info", K(ret));
   } else { /*do nothing*/ }
@@ -492,6 +498,12 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
   return ret;
 }
 
+int ObLogSet::est_ambient_card()
+{
+  // do nothing
+  return OB_SUCCESS;
+}
+
 int ObLogSet::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
@@ -601,7 +613,9 @@ int ObLogSet::allocate_granule_pre(AllocGIContext &ctx)
      */
     ctx.set_in_partition_wise_state(this);
     LOG_TRACE("in find partition wise state", K(ctx));
-  } else if (DistAlgo::DIST_SET_PARTITION_WISE == set_dist_algo_) {
+  } else if (DistAlgo::DIST_SET_PARTITION_WISE == set_dist_algo_
+             && CLUSTER_VERSION_4_3_5_2 > GET_MIN_CLUSTER_VERSION()) {
+    // BLOCK GI for set partition is not supported before version 4352
     if (!ctx.is_in_partition_wise_state() &&
         !ctx.is_in_pw_affinity_state()) {
       ctx.set_in_partition_wise_state(this);
@@ -699,7 +713,68 @@ uint64_t ObLogSet::hash(uint64_t seed) const
   return seed;
 }
 
+int ObLogSet::init_set_exprs()
+{
+  int ret = OB_SUCCESS;
+  set_exprs_.reset();
+  pure_set_exprs_.reset();
+  if (OB_FAIL(get_set_exprs_internal(set_exprs_))) {
+    LOG_WARN("failed to get set exprs", K(ret));
+  } else if (OB_FAIL(get_pure_set_exprs_internal(pure_set_exprs_))) {
+    LOG_WARN("failed to get set exprs", K(ret));
+  }
+  return ret;
+}
 int ObLogSet::get_set_exprs(ObIArray<ObRawExpr *> &set_exprs)
+{
+  int ret = OB_SUCCESS;
+  set_exprs.reset();
+  if (OB_FAIL(set_exprs.assign(set_exprs_))) {
+    LOG_WARN("failed to get set exprs", K(ret));
+  }
+  return ret;
+}
+int ObLogSet::get_pure_set_exprs(ObIArray<ObRawExpr *> &set_exprs)
+{
+  int ret = OB_SUCCESS;
+  set_exprs.reset();
+  if (OB_FAIL(set_exprs.assign(pure_set_exprs_))) {
+    LOG_WARN("failed to get set exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObLogSet::append_set_exprs(ObIArray<ObRawExpr *> &append_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *select_expr = NULL;
+  ObRawExpr *set_op_expr = NULL;
+  if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(get_stmt()), K(ret));
+  } else {
+    const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt *>(get_stmt());
+    for (int64_t i = 0; OB_SUCC(ret) && i < append_exprs.count(); ++i) {
+      if (OB_ISNULL(select_expr = append_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(i));
+      } else if (OB_FAIL(set_exprs_.push_back(append_exprs.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (!select_expr->has_flag(CNT_SET_OP)) {
+        /* do nothing, for recursive union all, exists search/cycle pseudo columns*/
+      } else if (OB_ISNULL(set_op_expr = sel_stmt->get_pure_set_expr(select_expr))
+                 || OB_UNLIKELY(!set_op_expr->is_set_op_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected expr", K(ret), K(i), K(*select_expr));
+      } else if (OB_FAIL(pure_set_exprs_.push_back(set_op_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogSet::get_set_exprs_internal(ObIArray<ObRawExpr *> &set_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
@@ -714,7 +789,7 @@ int ObLogSet::get_set_exprs(ObIArray<ObRawExpr *> &set_exprs)
   return ret;
 }
 
-int ObLogSet::get_pure_set_exprs(ObIArray<ObRawExpr *> &set_exprs)
+int ObLogSet::get_pure_set_exprs_internal(ObIArray<ObRawExpr *> &set_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
@@ -760,6 +835,13 @@ int ObLogSet::print_outline_data(PlanText &plan_text)
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
   } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
     LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
+  } else if (is_distinct_pushed_down() &&
+             OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
+                                ObQueryHint::get_outline_indent(plan_text.is_oneline_),
+                                ObHint::get_hint_name(T_DISTINCT_PUSHDOWN),
+                                qb_name.length(),
+                                qb_name.ptr()))) {
+    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
   } else if (HASH_SET == set_algo_ &&
              OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
                                 ObQueryHint::get_outline_indent(plan_text.is_oneline_),
@@ -785,6 +867,7 @@ int ObLogSet::print_used_hint(PlanText &plan_text)
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()));
   } else {
     const ObHint *use_hash = get_plan()->get_log_plan_hint().get_normal_hint(T_USE_HASH_SET);
+    const ObHint *pushdown = get_plan()->get_log_plan_hint().get_normal_hint(T_DISTINCT_PUSHDOWN);
     const bool algo_match = NULL != use_hash &&
                             ((HASH_SET == set_algo_ && use_hash->is_enable_hint())
                              || (MERGE_SET == set_algo_ && use_hash->is_disable_hint()));
@@ -795,6 +878,12 @@ int ObLogSet::print_used_hint(PlanText &plan_text)
       LOG_WARN("failed to get used pq set hint", K(ret));
     } else if (NULL != used_pq_hint && OB_FAIL(used_pq_hint->print_hint(plan_text))) {
       LOG_WARN("failed to print pq_set hint for set", K(ret), K(*used_pq_hint));
+    } else if (NULL != pushdown) {
+      bool pushdown_match = is_distinct_pushed_down() ? pushdown->is_enable_hint()
+                            : pushdown->is_disable_hint();
+      if (pushdown_match && OB_FAIL(pushdown->print_hint(plan_text))) {
+        LOG_WARN("failed to print used push down hint for set", K(ret), KPC(pushdown));
+      }
     }
   }
   return ret;
@@ -848,21 +937,34 @@ int ObLogSet::construct_pq_set_hint(ObPQSetHint &hint)
   }
 
   if (DistAlgo::DIST_BASIC_METHOD != set_dist_algo_) {
-    int64_t random_none_idx = OB_INVALID_INDEX;
-    if (DistAlgo::DIST_SET_RANDOM == set_dist_algo_) {
-      const ObLogicalOperator *child = NULL;
-      for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
-        if (OB_ISNULL(child = get_child(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(i), K(child));
-        } else if (DistAlgo::DIST_SET_RANDOM == set_dist_algo_
-                   && LOG_EXCHANGE != child->get_type()) {
-          random_none_idx = i;
-        }
-      }
+    if (OB_SUCC(ret) && OB_FAIL(hint.set_pq_set_hint(set_dist_algo_,
+                                                     get_num_of_child(),
+                                                     random_none_idx_))) {
+      LOG_WARN("failed to get dist methods", K(ret), K(set_dist_algo_), K(random_none_idx_));
     }
-    if (OB_SUCC(ret) && OB_FAIL(hint.set_pq_set_hint(set_dist_algo_, get_num_of_child(), random_none_idx))) {
-      LOG_WARN("failed to get dist methods", K(ret), K(set_dist_algo_), K(random_none_idx));
+  }
+  return ret;
+}
+
+int ObLogSet::check_has_push_down(bool &has_push_down)
+{
+  int ret = OB_SUCCESS;
+  has_push_down = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_push_down && i < get_num_of_child(); ++i) {
+    const ObLogicalOperator *child = NULL;
+    const ObLogicalOperator *pushdown_op = NULL;
+    if (OB_ISNULL(child = get_child(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i), K(child));
+    } else if (OB_FAIL(child->get_pushdown_op(log_op_def::LOG_DISTINCT, pushdown_op))) {
+      LOG_WARN("failed to get push down distinct", K(ret));
+    } else if (NULL == pushdown_op) {
+      // do nothing
+    } else if (OB_UNLIKELY(log_op_def::LOG_DISTINCT != pushdown_op->get_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected pushdown op", K(ret), K(pushdown_op->get_type()));
+    } else if (static_cast<const ObLogDistinct*>(pushdown_op)->is_push_down()) {
+      has_push_down = true;
     }
   }
   return ret;
@@ -873,6 +975,42 @@ int ObLogSet::compute_op_parallel_and_server_info()
   int ret = OB_SUCCESS;
   if (OB_FAIL(compute_normal_multi_child_parallel_and_server_info())) {
     LOG_WARN("failed to compute multi child parallel and server info", K(ret), K(get_distributed_algo()));
+  } else if (DistAlgo::DIST_PARTITION_WISE == get_distributed_algo()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
+  } else if (DistAlgo::DIST_PARTITION_NONE == get_distributed_algo()) {
+    ObLogicalOperator *child = get_child(second_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
+  } else if (DistAlgo::DIST_NONE_PARTITION == get_distributed_algo()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
   }
   return ret;
 }

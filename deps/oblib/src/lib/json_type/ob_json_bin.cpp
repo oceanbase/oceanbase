@@ -10,10 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX LIB
-#include "common/object/ob_obj_type.h"
 #include "ob_json_bin.h"
 #include "ob_json_tree.h"
 #include "ob_json_diff.h"
+#include "common/ob_smart_call.h"
 
 namespace oceanbase {
 namespace common {
@@ -30,6 +30,11 @@ int ObJsonBin::get_obtime(ObTime &t) const
       ret = ObTimeConverter::date_to_ob_time(int_val_, t);
       break;
     }
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      t.mode_ |= DT_TYPE_MYSQL_DATE;
+      ret = ObTimeConverter::mdate_to_ob_time(int_val_, t);
+      break;
+    }
     case ObJsonNodeType::J_TIME: {
       ret = ObTimeConverter::time_to_ob_time(int_val_, t);
       break;
@@ -40,6 +45,11 @@ int ObJsonBin::get_obtime(ObTime &t) const
     case ObJsonNodeType::J_OTIMESTAMP:
     case ObJsonNodeType::J_OTIMESTAMPTZ: {
       ret = ObTimeConverter::datetime_to_ob_time(int_val_, NULL, t);
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      t.mode_ |= DT_TYPE_MYSQL_DATETIME;
+      ret = ObTimeConverter::mdatetime_to_ob_time(int_val_, t);
       break;
     }
     default: {
@@ -112,7 +122,7 @@ int ObJsonBin::check_valid_array_op(uint64_t index) const
   if (index >= element_count()) { // check param
     ret = OB_OUT_OF_ELEMENT;
     LOG_WARN("index is out of range in array", K(ret), K(index), K(element_count()));
-  } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
+  } else if (json_type() != ObJsonNodeType::J_ARRAY && json_type() != ObJsonNodeType::J_SEMI_HETE_COL) { // check json node type
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid json node type", K(ret), K(json_type()));
   }
@@ -273,7 +283,8 @@ int ObJsonBin::create_new_binary(ObIJsonBase *value, ObJsonBin *&new_bin) const
 
   if (OB_FAIL(ret)) {
   } else if (OB_FALSE_IT(new_bin = new (buf) ObJsonBin(allocator))) {
-  } else if (!(json_type() == ObJsonNodeType::J_ARRAY || json_type() == ObJsonNodeType::J_OBJECT || ObJsonVerType::is_opaque_or_string(json_type()))) {
+  } else if (!(json_type() == ObJsonNodeType::J_ARRAY || json_type() == ObJsonNodeType::J_OBJECT
+                || json_type() == ObJsonNodeType::J_SEMI_HETE_COL || ObJsonVerType::is_opaque_or_string(json_type()))) {
     if (OB_FAIL(reset_child(*new_bin, meta_.type_, pos_, meta_.entry_size_))) {
       LOG_WARN("reset child value fail", K(ret), K(meta_));
     } else {
@@ -463,45 +474,63 @@ int ObJsonBin::get_object_value(const ObString &key, ObIJsonBase *&value) const
   return ret;
 }
 
-int ObJsonBinSerializer::serialize_json_object(ObJsonObject *object, ObJsonBuffer &result, uint32_t depth)
+int ObJsonBinSerializer::serialize_json_object(ObJsonNode *object, ObJsonBuffer &result, const bool enable_reserialize, uint32_t depth)
 {
   INIT_SUCC(ret);
+  const ObJsonNodeType json_type = object->json_type();
   uint64_t element_count = object->element_count();
   const int64_t start_pos = result.length();
-  ObJsonBin obj_bin;
+  char* buf_ptr = result.ptr() + start_pos;
   ObJsonBinMeta meta;
   uint64_t obj_size = object->get_serialize_size();
-  meta.set_type(ObJsonBin::get_object_vertype(), false);
-  meta.set_element_count(element_count);
-  meta.set_element_count_var_type(ObJsonVar::get_var_type(element_count));
-  meta.set_obj_size(obj_size);
-  meta.set_obj_size_var_type(ObJsonVar::get_var_type(obj_size));
-  meta.set_entry_var_type(meta.obj_size_var_type());
-  meta.set_is_continuous(true);
-  meta.calc_entry_array();
-
-  if (OB_FAIL(meta.to_header(result))) {
-    LOG_WARN("to obj header fail", K(ret));
-  } else if (OB_FAIL(obj_bin.reset(result.string(), start_pos, nullptr))) {
-    LOG_WARN("init bin with meta fail", K(ret), K(meta));
+  if (ObJsonNodeType::J_OBJECT == json_type) {
+    meta.set_type(ObJsonBin::get_object_vertype(), false);
+  } else if (ObJsonNodeType::J_ARRAY == json_type) {
+    meta.set_type(ObJsonBin::get_array_vertype(), false);
+  } else if (ObJsonNodeType::J_SEMI_HETE_COL == json_type) {
+    meta.set_type(ObJsonBin::get_semi_hete_vertype(), false);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input is not object or array", K(ret), K(json_type));
   }
 
-  ObString key;
-  for (int i = 0; OB_SUCC(ret) && i < element_count; i++) {
-    uint64_t key_offset = result.length() - start_pos;
-    uint64_t key_len = 0;
-    if (OB_FAIL(object->get_key(i, key))) {
-      LOG_WARN("get key failed.", K(ret), K(i));
-    } else if (OB_FALSE_IT(key_len = key.length())) {
-    } else if (OB_FAIL(obj_bin.set_key_entry(i, key_offset, key_len, false))) {
-      LOG_WARN("set_key_entry fail", K(ret), K(key));
-    } else if (OB_FAIL(result.append(key))) {
-      LOG_WARN("append key fail", K(ret), K(key));
+  if (OB_SUCC(ret)) {
+    meta.set_element_count(element_count);
+    meta.set_element_count_var_type(ObJsonVar::get_var_type(element_count));
+    meta.set_obj_size(obj_size);
+    meta.set_obj_size_var_type(ObJsonVar::get_var_type(obj_size));
+    meta.set_entry_var_type(meta.obj_size_var_type());
+    meta.set_is_continuous(true);
+    meta.calc_entry_array();
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(result.reserve(obj_size))) {
+    LOG_WARN("reserve buffer fail", K(ret), K(obj_size));
+  } else if (OB_FAIL(meta.to_header(result))) {
+    LOG_WARN("to obj header fail", K(ret));
+  } else {
     // result may realloc, so need ensure point same memory
-    } else if (OB_FALSE_IT(obj_bin.set_current(result.string(), start_pos))) {
+    buf_ptr = result.ptr() + start_pos;
+  }
+
+  if (OB_SUCC(ret) && ObJsonNodeType::J_OBJECT == json_type) {
+    ObString key;
+    for (int i = 0; OB_SUCC(ret) && i < element_count; i++) {
+      uint64_t key_offset = result.length() - start_pos;
+      uint64_t key_len = 0;
+      if (OB_FAIL(object->get_key(i, key))) {
+        LOG_WARN("get key failed.", K(ret), K(i));
+      } else if (OB_FALSE_IT(key_len = key.length())) {
+      } else if (OB_FAIL(set_key_entry(meta, buf_ptr, i, key_offset, key_len, !enable_reserialize/*check*/))) {
+        LOG_WARN("set_key_entry fail", K(ret), K(key));
+      } else if (OB_FAIL(result.append(key, 0/*flag*/))) {
+        LOG_WARN("append key fail", K(ret), K(key));
+      } else {
+        // result may realloc, so need ensure point same memory
+        buf_ptr = result.ptr() + start_pos;
+      }
     }
   }
-
 
   for (int i = 0; OB_SUCC(ret) && i < element_count; i++) {
     ObJsonNode *value = nullptr;
@@ -511,99 +540,46 @@ int ObJsonBinSerializer::serialize_json_object(ObJsonObject *object, ObJsonBuffe
     if (OB_ISNULL(value = object->get_value(i))) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("value is null", K(ret), K(i));
-    } else if (OB_FAIL(obj_bin.try_update_inline(i, value, is_update_inline))) {
+    } else if (OB_FAIL(try_update_inline(meta, buf_ptr, i, value, is_update_inline))) {
       LOG_WARN("try_update_inline fail", K(ret), K(i));
     } else if (is_update_inline) {
       LOG_DEBUG("try_update_inline success", K(i));
-    } else if (OB_FALSE_IT(value_type = ObJsonVerType::get_json_vertype(value->json_type()))) {
-    } else if (OB_FAIL(obj_bin.set_value_entry(i, value_offset, value_type, false))) {
-      LOG_WARN("set_value_entry fail", K(ret), K(value_offset), K(value_type));
-    } else if (OB_FAIL(serialize_json_value(value, result))) {
-      LOG_WARN("serialize_json_value fail", K(ret));
-    // result may realloc, so need ensure point same memory
-    } else if (OB_FALSE_IT(obj_bin.set_current(result.string(), start_pos))) {
+    } else if (value->json_type() == ObJsonNodeType::J_SEMI_BIN) {
+      value_type = ObJsonVerType::get_json_vertype(dynamic_cast<ObJsonSemiBin*>(value)->real_json_type());
+      if (OB_FAIL(set_value_entry(meta, buf_ptr, i, value_offset, value_type, !enable_reserialize/*check*/))) {
+        LOG_WARN("set_value_entry fail", K(ret), K(value_offset), K(value_type));
+      } else if (OB_FAIL(result.append(value->get_data(), value->get_data_length()))) {
+        LOG_WARN("append value fail", K(ret), K(value));
+      }
+    } else {
+      value_type = ObJsonVerType::get_json_vertype(value->json_type());
+      if (OB_FAIL(set_value_entry(meta, buf_ptr, i, value_offset, value_type, !enable_reserialize/*check*/))) {
+        LOG_WARN("set_value_entry fail", K(ret), K(value_offset), K(value_type));
+      } else if (OB_FAIL(serialize_json_value(value, result))) {
+        LOG_WARN("serialize_json_value fail", K(ret));
+      }
     }
+    // result may realloc, so need ensure point same memory
+    buf_ptr = result.ptr() + start_pos;
   }
 
   // fill header obj size
   if (OB_SUCC(ret)) {
     uint64_t real_obj_size = static_cast<uint64_t>(result.length() - start_pos);
     if (ObJsonVar::get_var_type(real_obj_size) > ObJsonVar::get_var_type(obj_size)) {
-      if (depth >= OB_JSON_BIN_MAX_SERIALIZE_TIME) {
+      if (! enable_reserialize) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("object size invaild", K(ret), K(real_obj_size), K(obj_size));
+      } else if (depth >= OB_JSON_BIN_MAX_SERIALIZE_TIME) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to calc object size", K(ret), K(real_obj_size), K(obj_size));
       } else {
         int64_t delta_size = real_obj_size - obj_size;
         object->set_serialize_delta_size(delta_size);
         result.set_length(start_pos);
-        ret = serialize_json_object(object, result, depth + 1);
+        ret = SMART_CALL(serialize_json_object(object, result, enable_reserialize, depth + 1));
       }
-    } else if (OB_FAIL(obj_bin.set_obj_size(real_obj_size))) {
-      LOG_WARN("set_obj_size fail", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObJsonBinSerializer::serialize_json_array(ObJsonArray *array, ObJsonBuffer &result, uint32_t depth)
-{
-  INIT_SUCC(ret);
-  uint64_t element_count = array->element_count();
-  const int64_t start_pos = result.length();
-  ObJsonBin array_bin;
-  ObJsonBinMeta meta;
-  uint64_t array_size = array->get_serialize_size();
-  meta.set_type(ObJsonBin::get_array_vertype(), false);
-  meta.set_element_count(element_count);
-  meta.set_element_count_var_type(ObJsonVar::get_var_type(element_count));
-  meta.set_obj_size(array_size);
-  meta.set_obj_size_var_type(ObJsonVar::get_var_type(array_size));
-  meta.set_entry_var_type(meta.obj_size_var_type());
-  meta.set_is_continuous(true);
-  meta.calc_entry_array();
-
-  if (OB_FAIL(meta.to_header(result))) {
-    LOG_WARN("to obj header fail", K(ret));
-  } else if (OB_FAIL(array_bin.reset(result.string(), start_pos, nullptr))) {
-    LOG_WARN("init bin with meta fail", K(ret), K(meta));
-  }
-
-  for (int i = 0; OB_SUCC(ret) && i < element_count; i++) {
-    ObJsonNode *value = nullptr;
-    uint64_t value_offset = result.length() - start_pos;
-    uint8_t value_type = 0;
-    bool is_update_inline = false;
-    if (OB_ISNULL(value = (*array)[i])) {
-      ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("value is null", K(ret), K(i));
-    } else if (OB_FAIL(array_bin.try_update_inline(i, value, is_update_inline))) {
-      LOG_WARN("try_update_inline fail", K(ret), K(i));
-    } else if (is_update_inline) {
-      LOG_DEBUG("try_update_inline success", K(i));
-    } else if (OB_FALSE_IT(value_type = ObJsonVerType::get_json_vertype(value->json_type()))) {
-    } else if (OB_FAIL(array_bin.set_value_entry(i, value_offset, value_type, false))) {
-      LOG_WARN("set_value_entry fail", K(ret), K(value_offset), K(value_type));
-    } else if (OB_FAIL(serialize_json_value(value, result))) {
-      LOG_WARN("serialize_json_value fail", K(ret));
-    // result may realloc, so need ensure point same memory
-    } else if (OB_FALSE_IT(array_bin.set_current(result.string(), start_pos))) {
-    }
-  }
-
-  // fill header array size
-  if (OB_SUCC(ret)) {
-    uint64_t real_array_size = static_cast<uint64_t>(result.length() - start_pos);
-    if (ObJsonVar::get_var_type(real_array_size) > ObJsonVar::get_var_type(array_size)) {
-      if (depth >= OB_JSON_BIN_MAX_SERIALIZE_TIME) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to calc object size", K(ret), K(real_array_size), K(array_size));
-      } else {
-        int64_t delta_size = real_array_size - array_size;
-        array->set_serialize_delta_size(delta_size);
-        result.set_length(start_pos);
-        ret = serialize_json_array(array, result, depth + 1);
-      }
-    } else if (OB_FAIL(array_bin.set_obj_size(real_array_size))) {
+    } else if (OB_FAIL(set_obj_size(meta, buf_ptr, real_obj_size))) {
       LOG_WARN("set_obj_size fail", K(ret));
     }
   }
@@ -652,7 +628,38 @@ int ObJsonBinSerializer::serialize_json_decimal(ObJsonDecimal *json_dec, ObJsonB
   return ret;
 }
 
-int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result)
+int ObJsonBinSerializer::serialize_json_double(double value, ObJsonBuffer &result)
+{
+  INIT_SUCC(ret);
+  if (isnan(value) || isinf(value)) {
+    ret = OB_INVALID_NUMERIC;
+    LOG_WARN("invalid float value", K(ret), K(value));
+  } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(double), 0))) {
+    LOG_WARN("failed to append float json obj", K(ret));
+  }
+  return ret;
+}
+
+int ObJsonBinSerializer::serialize_json_string(ObJBVerType vertype, const ObString &value, ObJsonBuffer &result)
+{
+  INIT_SUCC(ret);
+  int64_t str_len_size = serialization::encoded_length_vi64(value.length());
+  int64_t pos = result.length() + sizeof(uint8_t);
+  if (OB_FAIL(result.append(reinterpret_cast<const char*>(&vertype), sizeof(uint8_t), 0))) {
+    LOG_WARN("failed to serialize type for str json obj", K(ret), K(str_len_size));
+  } else if (OB_FAIL(result.reserve(str_len_size))) {
+    LOG_WARN("failed to reserver serialize size for str json obj", K(ret), K(str_len_size));
+  } else if (OB_FAIL(serialization::encode_vi64(result.ptr(), result.capacity(), pos, value.length()))) {
+    LOG_WARN("failed to serialize for str json obj", K(ret), K(pos), K(value.length()));
+  } else if (OB_FAIL(result.set_length(pos))) {
+    LOG_WARN("failed to update len for str json obj", K(ret), K(pos));
+  } else if (OB_FAIL(result.append(value.ptr(), value.length(), 0))) {
+    LOG_WARN("failed to append string json obj value", K(ret));
+  }
+  return ret;
+}
+
+int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result, const bool enable_reserialize)
 {
   INIT_SUCC(ret);
   switch (json_tree->json_type()) {
@@ -692,11 +699,8 @@ int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffe
     case ObJsonNodeType::J_ODOUBLE: {
       const ObJsonDouble *d = static_cast<const ObJsonDouble*>(json_tree);
       double value = d->value();
-      if (isnan(value) || isinf(value)) {
-        ret = OB_INVALID_NUMERIC;
-        LOG_WARN("invalid double value", K(ret), K(value));
-      } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(double)))) {
-        LOG_WARN("failed to append double json obj", K(ret));
+      if (OB_FAIL(ObJsonBinSerializer::serialize_json_double(value, result))) {
+        LOG_WARN("failed to serialize json double", K(ret), K(value));
       }
       break;
     }
@@ -719,33 +723,17 @@ int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffe
     case ObJsonNodeType::J_OYEARMONTH:
     case ObJsonNodeType::J_STRING: { // [type][length][string]
       const ObJsonString *sub_obj = static_cast<const ObJsonString*>(json_tree);
-      int64_t ser_len = serialization::encoded_length_vi64(sub_obj->length());
-      int64_t pos = result.length() + sizeof(uint8_t);
       ObJBVerType vertype = ObJsonVerType::get_json_vertype(json_tree->json_type());
-      if (OB_FAIL(result.append(reinterpret_cast<const char*>(&vertype), sizeof(uint8_t)))) {
-        LOG_WARN("failed to serialize type for str json obj", K(ret), K(ser_len));
-      } else if (OB_FAIL(result.reserve(ser_len))) {
-        LOG_WARN("failed to reserver serialize size for str json obj", K(ret), K(ser_len));
-      } else if (OB_FAIL(serialization::encode_vi64(result.ptr(), result.capacity(), pos, sub_obj->length()))) {
-        LOG_WARN("failed to serialize for str json obj", K(ret), K(ser_len));
-      } else if (OB_FAIL(result.set_length(pos))) {
-        LOG_WARN("failed to update len for str json obj", K(ret), K(pos));
-      } else if (OB_FAIL(result.append(sub_obj->value().ptr(), sub_obj->length()))) {
-        LOG_WARN("failed to append string json obj value", K(ret));
+      if (OB_FAIL(ObJsonBinSerializer::serialize_json_string(vertype, sub_obj->value(), result))) {
+        LOG_WARN("failed to serialize json string", K(ret), K(sub_obj->value()));
       }
       break;
     }
-    case ObJsonNodeType::J_OBJECT: {
-      ObJsonObject *object = static_cast<ObJsonObject*>(json_tree);
-      if (OB_FAIL(serialize_json_object(object, result))) {
-        LOG_WARN("failed to append object json obj", K(ret));
-      }
-      break;
-    }
-    case ObJsonNodeType::J_ARRAY: {
-      ObJsonArray *array = static_cast<ObJsonArray*>(json_tree);
-      if (OB_FAIL(serialize_json_array(array, result))) {
-        LOG_WARN("failed to append array json obj", K(ret));
+    case ObJsonNodeType::J_OBJECT:
+    case ObJsonNodeType::J_ARRAY:
+    case ObJsonNodeType::J_SEMI_HETE_COL: {
+      if (OB_FAIL(SMART_CALL(serialize_json_object(json_tree, result, enable_reserialize)))) {
+        LOG_WARN("failed to append object json obj", K(ret), KPC(json_tree));
       }
       break;
     }
@@ -764,6 +752,15 @@ int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffe
       const ObJsonDatetime *sub_obj = static_cast<const ObJsonDatetime*>(json_tree);
       ObTime ob_time = sub_obj->value();
       int32_t value = ObTimeConverter::ob_time_to_date(ob_time);
+      if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(int32_t)))) {
+        LOG_WARN("failed to append date json obj value", K(ret));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      const ObJsonDatetime *sub_obj = static_cast<const ObJsonDatetime*>(json_tree);
+      ObTime ob_time = sub_obj->value();
+      ObMySQLDate value = ObTimeConverter::ob_time_to_mdate(ob_time);
       if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(int32_t)))) {
         LOG_WARN("failed to append date json obj value", K(ret));
       }
@@ -788,6 +785,17 @@ int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffe
       ObTimeConvertCtx crtx(NULL, false);
       int64_t value;
       if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, crtx, value))) {
+        LOG_WARN("failed to convert time to datetime", K(ret));
+      } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(int64_t)))) {
+        LOG_WARN("failed to append datetime json obj value", K(ret));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      const ObJsonDatetime *sub_obj = static_cast<const ObJsonDatetime*>(json_tree);
+      ObTime ob_time = sub_obj->value();
+      ObMySQLDateTime value;
+      if (OB_FAIL(ObTimeConverter::ob_time_to_mdatetime(ob_time, value))) {
         LOG_WARN("failed to convert time to datetime", K(ret));
       } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(int64_t)))) {
         LOG_WARN("failed to append datetime json obj value", K(ret));
@@ -832,6 +840,130 @@ int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffe
   return ret;
 }
 
+// need remove check argument, that't may be cause bug
+int ObJsonBinSerializer::set_key_entry(
+    const ObJsonBinMeta &meta, char* buf_ptr,
+    int index, uint64_t key_offset, uint64_t key_len, const bool check)
+{
+  int ret = OB_SUCCESS;
+  uint8_t var_type = meta.entry_var_type();
+  uint64_t offset = meta.get_key_entry_offset(index);
+  if (check && ObJsonVar::get_var_type(key_offset) > var_type) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("key_offset var type overflow", K(ret), K(key_offset), K(var_type));
+  } else if (check && ObJsonVar::get_var_type(key_len) > var_type) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("key_len var type overflow", K(ret), K(key_len), K(var_type));
+  } else if (OB_FAIL(ObJsonVar::set_var(key_offset, var_type, buf_ptr + offset))) {
+    LOG_WARN("read key_offset fail", K(ret));
+  } else if (OB_FAIL(ObJsonVar::set_var(key_len, var_type, buf_ptr + offset + ObJsonVar::get_var_size(var_type)))) {
+    LOG_WARN("read key_len fail", K(ret));
+  }
+  return ret;
+}
+
+// need remove check argument, that't may be cause bug
+int ObJsonBinSerializer::set_value_entry(
+    const ObJsonBinMeta &meta, char* buf_ptr,
+    int index, uint64_t value_offset, uint8_t value_type, const bool check)
+{
+  int ret = OB_SUCCESS;
+  uint8_t var_type = meta.entry_var_type();
+  uint64_t offset = meta.get_value_entry_offset(index);
+  if (check && (ObJsonVerType::is_signed_online_integer(value_type) ?
+      (ObJsonVar::get_var_type(ObJsonVar::var_uint2int(value_offset, var_type)) > var_type) :
+      (ObJsonVar::get_var_type(value_offset) > var_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("var type overflow", K(ret), K(value_offset), K(var_type), K(value_type));
+  } else if (OB_FAIL(ObJsonVar::set_var(value_offset, var_type, buf_ptr + offset))) {
+    LOG_WARN("set_var fail", K(ret));
+  } else {
+    *reinterpret_cast<uint8_t*>(buf_ptr + offset + ObJsonVar::get_var_size(var_type)) = value_type;
+  }
+  return ret;
+}
+
+int ObJsonBinSerializer::set_obj_size(ObJsonBinMeta &meta, char* buf_ptr, uint64_t obj_size)
+{
+  int ret = OB_SUCCESS;
+  uint64_t offset = meta.get_obj_size_offset();
+  if (OB_FAIL(ObJsonVar::set_var(obj_size, meta.obj_size_var_type(), buf_ptr + offset))) {
+    LOG_WARN("set_var fail", K(ret));
+  } else {
+    meta.set_obj_size(obj_size);
+  }
+  return ret;
+}
+
+int ObJsonBinSerializer::set_element_count(ObJsonBinMeta &meta, char* buf_ptr, uint64_t count)
+{
+  int ret = OB_SUCCESS;
+  uint64_t offset = meta.get_element_count_offset();
+  if (OB_FAIL(ObJsonVar::set_var(count, meta.element_count_var_type(), buf_ptr + offset))) {
+    LOG_WARN("set_var fail", K(ret));
+  } else {
+    meta.set_element_count(count);
+  }
+  return ret;
+}
+
+int ObJsonBinSerializer::try_update_inline(
+    ObJsonBinMeta &meta, char* buf_ptr,
+    const int index,
+    const ObIJsonBase *value,
+    bool &is_update_inline)
+{
+  INIT_SUCC(ret);
+  uint8_t var_type = meta.entry_var_type();
+  ObJsonNodeType j_type = value->json_type();
+  uint64_t inlined_val;
+  uint8_t inlined_type = 0;
+  switch (j_type) {
+    case ObJsonNodeType::J_NULL: {
+      inlined_val = 0;
+      is_update_inline = true;
+      inlined_type =  static_cast<uint8_t>(ObJsonBin::get_null_vertype());
+      break;
+    }
+    case ObJsonNodeType::J_INT:
+    case ObJsonNodeType::J_OINT: {
+      const int64_t v = value->get_int();
+      if (ObJsonVar::get_var_type(v) <= var_type) {
+        inlined_val = ObJsonVar::var_int2uint(v);
+        is_update_inline = true;
+        inlined_type =  static_cast<uint8_t>(ObJsonBin::get_int_vertype());
+      }
+      break;
+    }
+    case ObJsonNodeType::J_UINT:
+    case ObJsonNodeType::J_OLONG: {
+      const uint64_t v = value->get_uint();
+      if (ObJsonVar::get_var_type(v) <= var_type) {
+        inlined_val = v;
+        is_update_inline = true;
+        inlined_type = static_cast<uint8_t>(ObJsonBin::get_uint_vertype());
+      }
+      break;
+    }
+    case ObJsonNodeType::J_BOOLEAN: {
+      inlined_val = static_cast<uint64_t>(value->get_boolean());
+      is_update_inline = true;
+      inlined_type =  static_cast<uint8_t>(ObJsonBin::get_boolean_vertype());
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+
+  // set inline
+  if (! is_update_inline) {
+  } else if (OB_FAIL(set_value_entry(meta, buf_ptr, index, inlined_val, inlined_type | OB_JSON_TYPE_INLINE_MASK))) {
+    LOG_WARN("set_value_entry for inline fail", K(ret), K(inlined_val), K(var_type));
+  }
+  return ret;
+}
+
 int ObJsonBin::try_update_inline(
     const int index,
     const ObJsonNode *value,
@@ -850,9 +982,9 @@ int ObJsonBin::try_update_inline(
     }
     case ObJsonNodeType::J_INT:
     case ObJsonNodeType::J_OINT: {
-      const ObJsonInt *i = static_cast<const ObJsonInt*>(value);
-      if (ObJsonVar::get_var_type(i->value()) <= var_type) {
-        inlined_val = ObJsonVar::var_int2uint(i->value());
+      int64_t v = value->get_int();
+      if (ObJsonVar::get_var_type(v) <= var_type) {
+        inlined_val = ObJsonVar::var_int2uint(v);
         is_update_inline = true;
         inlined_type =  static_cast<uint8_t>(get_int_vertype());
       }
@@ -860,17 +992,16 @@ int ObJsonBin::try_update_inline(
     }
     case ObJsonNodeType::J_UINT:
     case ObJsonNodeType::J_OLONG: {
-      const ObJsonUint *i = static_cast<const ObJsonUint*>(value);
-      if (ObJsonVar::get_var_type(i->value()) <= var_type) {
-        inlined_val = i->value();
+      uint64_t v = value->get_uint();
+      if (ObJsonVar::get_var_type(v) <= var_type) {
+        inlined_val = v;
         is_update_inline = true;
         inlined_type =  static_cast<uint8_t>(get_uint_vertype());
       }
       break;
     }
     case ObJsonNodeType::J_BOOLEAN: {
-      const ObJsonBoolean *i = static_cast<const ObJsonBoolean*>(value);
-      inlined_val = static_cast<uint64_t>(i->value());
+      inlined_val = static_cast<uint64_t>(value->get_boolean());
       is_update_inline = true;
       inlined_type =  static_cast<uint8_t>(get_boolean_vertype());
       break;
@@ -949,9 +1080,9 @@ int ObJsonBinSerializer::serialize(ObJsonNode *json_tree, ObString &data)
   if (root_type == ObJsonNodeType::J_ARRAY || root_type == ObJsonNodeType::J_OBJECT) {
     if (OB_FAIL(ObJsonBin::add_doc_header_v0(result))) {
       LOG_WARN("add_doc_header_v0 fail", K(ret));
-    } else if (OB_FAIL(serialize_json_value(json_tree, result))) {
+    } else if (OB_FAIL(SMART_CALL(serialize_json_value(json_tree, result)))) {
       LOG_WARN("serialize json tree fail", K(ret), K(root_type));
-    } else if (OB_FAIL(ObJsonBin::set_doc_header_v0(result, result.length()))) {
+    } else if (OB_FAIL(ObJsonBin::set_doc_header_v0(result, result.length(), json_tree->use_lexicographical_order()))) {
       LOG_WARN("set_doc_header_v0 fail", K(ret));
     }
   } else {
@@ -959,7 +1090,7 @@ int ObJsonBinSerializer::serialize(ObJsonNode *json_tree, ObString &data)
     if (!ObJsonVerType::is_opaque_or_string(ver_type) &&
         OB_FAIL(result.append(reinterpret_cast<const char*>(&ver_type), sizeof(uint8_t)))) {
       LOG_WARN("failed to serialize json tree at append used size", K(ret), K(result.length()));
-    } else if (OB_FAIL(serialize_json_value(json_tree, result))) { // do recursion
+    } else if (OB_FAIL(SMART_CALL(serialize_json_value(json_tree, result)))) { // do recursion
       LOG_WARN("failed to serialize json tree at recursion", K(ret));
     }
   }
@@ -994,7 +1125,7 @@ int ObJsonBin::to_tree(ObJsonNode *&json_tree)
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("fail to deserialize with NULL alloctor.", K(ret));
-  } else if (OB_FAIL(deserialize_json_value(json_tree))) {
+  } else if (OB_FAIL(SMART_CALL(deserialize_json_value(json_tree)))) {
     LOG_WARN("deserialize failed", K(ret), K(pos_), K(get_type()));
   }
   return ret;
@@ -1183,7 +1314,7 @@ int ObJsonBin::deserialize_json_value(ObJsonNode *&json_tree)
         LOG_WARN("fail to alloc memory for obj json node", K(ret));
       } else {
         ObJsonObject *node = new(buf)ObJsonObject(allocator_);
-        ret = deserialize_json_object(node);
+        ret = SMART_CALL(deserialize_json_object(node));
         if (OB_SUCC(ret)) {
           json_tree = static_cast<ObJsonNode*>(node);
         } else {
@@ -1200,7 +1331,7 @@ int ObJsonBin::deserialize_json_value(ObJsonNode *&json_tree)
         LOG_WARN("fail to alloc memory for array json node", K(ret));
       } else {
         ObJsonArray *node = new(buf)ObJsonArray(allocator_);
-        ret = deserialize_json_array(node);
+        ret = SMART_CALL(deserialize_json_array(node));
         if (OB_SUCC(ret)) {
           json_tree = static_cast<ObJsonNode*>(node);
         } else {
@@ -1248,6 +1379,25 @@ int ObJsonBin::deserialize_json_value(ObJsonNode *&json_tree)
       }
       break;
     }
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      int32_t value = 0;
+      void *buf = allocator_->alloc(sizeof(ObJsonDatetime));
+      if (buf == NULL) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for date json node", K(ret));
+      } else if (OB_FAIL(cursor_->read_i32(pos_, &value))) {
+        LOG_WARN("read_i32 fail", K(ret), K(pos_), K(sizeof(int32_t)));
+      } else {
+        ObTime ob_time;
+        if (OB_FAIL(ObTimeConverter::mdate_to_ob_time(value, ob_time))) {
+          LOG_WARN("fail to convert date to ob time", K(ret));
+        } else {
+          ObJsonDatetime *node = new(buf)ObJsonDatetime(node_type, ob_time);
+          json_tree = static_cast<ObJsonNode*>(node);
+        }
+      }
+      break;
+    }
     case ObJsonNodeType::J_TIME: {
       int64_t value = 0;
       void *buf = allocator_->alloc(sizeof(ObJsonDatetime));
@@ -1276,6 +1426,25 @@ int ObJsonBin::deserialize_json_value(ObJsonNode *&json_tree)
       } else {
         ObTime ob_time;
         if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(value, NULL, ob_time))) {
+          LOG_WARN("fail to convert datetime to ob time", K(ret));
+        } else {
+          ObJsonDatetime *node = new(buf)ObJsonDatetime(node_type, ob_time);
+          json_tree = static_cast<ObJsonNode*>(node);
+        }
+      }
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      int64_t value = 0;
+      void *buf = allocator_->alloc(sizeof(ObJsonDatetime));
+      if (buf == NULL) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for datetime json node", K(ret));
+      } else if (OB_FAIL(cursor_->read_i64(pos_, &value))) {
+        LOG_WARN("read_i64 fail", K(ret), K(pos_), K(sizeof(int64_t)));
+      } else {
+        ObTime ob_time;
+        if (OB_FAIL(ObTimeConverter::mdatetime_to_ob_time(value, ob_time))) {
           LOG_WARN("fail to convert datetime to ob time", K(ret));
         } else {
           ObJsonDatetime *node = new(buf)ObJsonDatetime(node_type, ob_time);
@@ -1445,7 +1614,6 @@ int ObJsonBin::deserialize_json_object_v0(ObJsonObject *object)
 {
   INIT_SUCC(ret);
   uint64_t element_count = this->element_count();
-  object->set_serialize_size(obj_size());
   ObJsonBin child_bin(allocator_);
   for (uint64_t i = 0; OB_SUCC(ret) && i < element_count; i++) {
     ObJsonNode *node = nullptr;
@@ -1457,7 +1625,7 @@ int ObJsonBin::deserialize_json_object_v0(ObJsonObject *object)
       LOG_WARN("ob_write_string fail", K(ret), K(i), K(ori_key));
     } else if (OB_FAIL(get_value(i, child_bin))) {
       LOG_WARN("get child value fail", K(ret));
-    } else if (OB_FAIL(child_bin.deserialize_json_value(node))) {
+    } else if (OB_FAIL(SMART_CALL(child_bin.deserialize_json_value(node)))) {
       LOG_WARN("deserialize child node fail", K(ret), K(i), K(child_bin));
     } else if (OB_FAIL(object->add(key, node, false, true, false, is_schema_))) {
       LOG_WARN("add node to obj fail", K(ret), K(i));
@@ -1488,13 +1656,12 @@ int ObJsonBin::deserialize_json_array_v0(ObJsonArray *array)
 {
   INIT_SUCC(ret);
   uint64_t element_count = this->element_count();
-  array->set_serialize_size(this->obj_size());
   ObJsonBin child_bin(allocator_);
   for (uint64_t i = 0; OB_SUCC(ret) && i < element_count; i++) {
     ObJsonNode *node = nullptr;
     if (OB_FAIL(get_value(i, child_bin))) {
       LOG_WARN("get_value fail", K(ret), K(i));
-    } else if (OB_FAIL(child_bin.deserialize_json_value(node))) {
+    } else if (OB_FAIL(SMART_CALL(child_bin.deserialize_json_value(node)))) {
       LOG_WARN("failed to deserialize child node", K(ret), K(i), K(child_bin));
     } else if (OB_FAIL(array->append(node))) {
       LOG_WARN("failed to append node to array", K(ret), K(i));
@@ -1584,12 +1751,14 @@ int ObJsonBin::get_area_size(uint64_t& size) const
         break;
       }
       case ObJsonNodeType::J_DATE:
+      case ObJsonNodeType::J_MYSQL_DATE:
       case ObJsonNodeType::J_ORACLEDATE: {
         size = sizeof(int32_t);
         break;
       }
       case ObJsonNodeType::J_TIME:
       case ObJsonNodeType::J_DATETIME:
+      case ObJsonNodeType::J_MYSQL_DATETIME:
       case ObJsonNodeType::J_TIMESTAMP:
       case ObJsonNodeType::J_ODATE:
       case ObJsonNodeType::J_OTIMESTAMP:
@@ -1769,7 +1938,7 @@ int ObJsonBin::get_raw_binary(ObString &buf, ObIAllocator *allocator) const
       LOG_WARN("add_doc_header_v0 fail", K(ret));
     } else if (OB_FAIL(rebuild_json_value(result))) {
       LOG_WARN("failed to rebuild inline value", K(ret));
-    } else if (OB_FAIL(set_doc_header_v0(result, result.length()))) {
+    } else if (OB_FAIL(set_doc_header_v0(result, result.length(), use_lexicographical_order()))) {
       LOG_WARN("set_doc_header_v0 fail", K(ret));
     }
   } else {
@@ -1858,6 +2027,8 @@ int ObJsonBin::init_cursor(const ObString& data)
       cursor_ = ctx_->update_ctx_->cursor_;
     }
   } else if (OB_FAIL(local_cursor_.init(data))) {
+    LOG_WARN("init local cursor fail", K(ret));
+  } else {
     cursor_ = &local_cursor_;
   }
   return ret;
@@ -1935,6 +2106,7 @@ int ObJsonBin::skip_type_byte_()
   ObJBVerType vertype = get_vertype();
   if (ObJsonVerType::is_array(vertype)
       || ObJsonVerType::is_object(vertype)
+      || ObJsonVerType::is_semi_hete_col(vertype)
       || ObJsonVerType::is_opaque_or_string(vertype)) {
   } else {
     pos_ += sizeof(uint8_t);
@@ -2222,7 +2394,8 @@ int ObJsonBin::init_bin_data()
         break;
       }
       case ObJsonNodeType::J_OBJECT:
-      case ObJsonNodeType::J_ARRAY: {
+      case ObJsonNodeType::J_ARRAY:
+      case ObJsonNodeType::J_SEMI_HETE_COL: {
         if (OB_FAIL(init_meta())) {
           LOG_WARN("init meta fail", K(ret));
         } else {
@@ -2249,12 +2422,13 @@ int ObJsonBin::init_bin_data()
         break;
       }
       case ObJsonNodeType::J_DATE:
+      case ObJsonNodeType::J_MYSQL_DATE:
       case ObJsonNodeType::J_ORACLEDATE: {
         int32_t val = 0;
         if (OB_FAIL(cursor_->read_i32(pos_, &val))) {
           LOG_WARN("read_id32 fail", K(ret), K(pos_));
         } else {
-          meta_.field_type_ = ObDateType;
+          meta_.field_type_ = ObJsonBaseUtil::get_time_type(node_type);
           int_val_ = val;
           meta_.bytes_ = sizeof(int32_t);
         }
@@ -2271,6 +2445,7 @@ int ObJsonBin::init_bin_data()
       }
       case ObJsonNodeType::J_DATETIME:
       case ObJsonNodeType::J_ODATE:
+      case ObJsonNodeType::J_MYSQL_DATETIME:
       case ObJsonNodeType::J_OTIMESTAMP:
       case ObJsonNodeType::J_OTIMESTAMPTZ: {
         if (OB_FAIL(cursor_->read_i64(pos_, &int_val_))) {
@@ -2311,14 +2486,14 @@ int ObJsonBin::element(size_t index)
 {
   INIT_SUCC(ret);
   ObJsonNodeType node_type = this->json_type();
-  if (node_type != ObJsonNodeType::J_ARRAY && node_type != ObJsonNodeType::J_OBJECT) {
+  if (node_type != ObJsonNodeType::J_ARRAY && node_type != ObJsonNodeType::J_OBJECT && node_type != ObJsonNodeType::J_SEMI_HETE_COL) {
     ret = OB_OBJ_TYPE_ERROR;
     LOG_WARN("wrong node_type.", K(ret), K(node_type));
   } else if (index >= get_element_count()) {
     ret = OB_OUT_OF_ELEMENT;
     LOG_WARN("index out of range.", K(ret), K(index), K(get_element_count()));
   } else {
-    if (node_type == ObJsonNodeType::J_ARRAY) {
+    if (node_type == ObJsonNodeType::J_ARRAY || node_type == ObJsonNodeType::J_SEMI_HETE_COL) {
       ret = get_element_in_array(index);
     } else { // ObJsonNodeType::J_OBJECTs
       ret = get_element_in_object(index);
@@ -2340,7 +2515,7 @@ int ObJsonBin::lookup_index(const ObString &key, size_t *idx) const
     LOG_WARN("wrong node_type.", K(ret), K(node_type));
   }
 
-  ObJsonKeyCompare comparator;
+  ObJsonKeyCompare comparator(use_lexicographical_order());
   ObString key_iter;
   bool is_found = false;
   int64_t low = 0;
@@ -2379,7 +2554,7 @@ int ObJsonBin::lookup_insert_postion(const ObString &key, size_t &idx) const
     LOG_WARN("wrong node_type.", K(ret), K(node_type));
   }
 
-  ObJsonKeyCompare comparator;
+  ObJsonKeyCompare comparator(use_lexicographical_order());
   ObString key_iter;
   int64_t low = 0;
   int64_t high = get_element_count() - 1;
@@ -2467,6 +2642,7 @@ int ObJsonBin::get_element_in_array(size_t index, uint64_t *get_addr_only)
   switch (vertype)
   {
     case ObJBVerType::J_ARRAY_V0:
+    case ObJBVerType::J_SEMI_HETE_COL_V0:
     {
       ret = get_element_v0(index, get_addr_only);
       break;
@@ -2932,7 +3108,7 @@ int ObJsonBin::reset_root(const ObString &data)
     LOG_WARN("set_data fail", K(ret), K(pos_));
   } else if (OB_FAIL(cursor_->get_for_write(0, sizeof(ObJsonBinDocHeader), header_data))) {
     LOG_WARN("get header data fail", K(ret), K(pos_));
-  } else if (OB_FAIL(set_doc_header_v0(header_data, cursor_->get_length()))) {
+  } else if (OB_FAIL(set_doc_header_v0(header_data, cursor_->get_length(), use_lexicographical_order()))) {
     LOG_WARN("set_doc_header_v0 fail", K(ret), K(pos_));
   } else if (OB_FAIL(reset_iter())) {
     LOG_WARN("reset_iter fail", K(ret), K(pos_));
@@ -3576,6 +3752,7 @@ int ObJsonBin::rebuild_json_value(ObJsonBuffer &result) const
       break;
     }
     case ObJsonNodeType::J_DATE:
+    case ObJsonNodeType::J_MYSQL_DATE:
     case ObJsonNodeType::J_ORACLEDATE: {
       if (OB_FAIL(cursor_->get(pos_, sizeof(int32_t), data))) {
         LOG_WARN("get data fail", K(ret), K(pos_));
@@ -3586,6 +3763,7 @@ int ObJsonBin::rebuild_json_value(ObJsonBuffer &result) const
     }
     case ObJsonNodeType::J_TIME:
     case ObJsonNodeType::J_DATETIME:
+    case ObJsonNodeType::J_MYSQL_DATETIME:
     case ObJsonNodeType::J_TIMESTAMP:
     case ObJsonNodeType::J_ODATE:
     case ObJsonNodeType::J_OTIMESTAMP:
@@ -3756,7 +3934,7 @@ int ObJsonBin::rebuild(ObJsonBuffer &result) const
     LOG_WARN("add_doc_header_v0 fail", K(ret));
   } else if (OB_FAIL(rebuild_json_value(result))) {
     LOG_WARN("do rebuild recursion failed.", K(ret), K(get_type()));
-  } else if (OB_FAIL(set_doc_header_v0(result, result.length()))) {
+  } else if (OB_FAIL(set_doc_header_v0(result, result.length(), use_lexicographical_order()))) {
     LOG_WARN("set_doc_header_v0 fail", K(ret));
   }
   return ret;
@@ -3779,6 +3957,28 @@ int ObJsonBin::reset()
   INIT_SUCC(ret);
   destroy();
   return ret;
+}
+
+uint32_t ObJsonBin::depth() const
+{
+  INIT_SUCC(ret);
+  uint32_t max_child = 0;
+  if (is_json_scalar(meta_.json_type())) {
+    max_child = 0;
+  } else {
+    uint64_t count = meta_.element_count();
+    uint64_t value_entry_start = meta_.value_offset_start_;
+    for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+      ObJsonBin value(allocator_);
+      if (OB_FAIL(this->get_value(i, value))) {
+        LOG_WARN("get value failed.", K(ret), K(i), K(count));
+      } else {
+        max_child =  max(max_child, value.depth());
+      }
+    }
+  }
+
+  return max_child + 1;
 }
 
 int ObJsonBin::init_meta()
@@ -3922,6 +4122,10 @@ ObJBVerType ObJsonVerType::get_json_vertype(ObJsonNodeType in_type)
       ret_type = ObJsonBin::get_array_vertype();
       break;
     }
+    case ObJsonNodeType::J_SEMI_HETE_COL: {
+      ret_type = ObJsonBin::get_semi_hete_vertype();
+      break;
+    }
     case ObJsonNodeType::J_BOOLEAN: {
       ret_type = ObJsonBin::get_boolean_vertype();
       break;
@@ -3930,12 +4134,20 @@ ObJBVerType ObJsonVerType::get_json_vertype(ObJsonNodeType in_type)
       ret_type = ObJsonBin::get_date_vertype();
       break;
     }
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      ret_type = ObJsonBin::get_mdate_vertype();
+      break;
+    }
     case ObJsonNodeType::J_TIME: {
       ret_type = ObJsonBin::get_time_vertype();
       break;
     }
     case ObJsonNodeType::J_DATETIME: {
       ret_type = ObJsonBin::get_datetime_vertype();
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      ret_type = ObJsonBin::get_mdatetime_vertype();
       break;
     }
     case ObJsonNodeType::J_TIMESTAMP: {
@@ -4052,6 +4264,10 @@ ObJsonNodeType ObJsonVerType::get_json_type(ObJBVerType type)
       ret_type = ObJsonNodeType::J_ARRAY;
       break;
     }
+    case ObJBVerType::J_SEMI_HETE_COL_V0: {
+      ret_type = ObJsonNodeType::J_SEMI_HETE_COL;
+      break;
+    }
     case ObJBVerType::J_BOOLEAN_V0: {
       ret_type = ObJsonNodeType::J_BOOLEAN;
       break;
@@ -4060,12 +4276,20 @@ ObJsonNodeType ObJsonVerType::get_json_type(ObJBVerType type)
       ret_type = ObJsonNodeType::J_DATE;
       break;
     }
+    case ObJBVerType::J_MYSQL_DATE_V0: {
+      ret_type = ObJsonNodeType::J_MYSQL_DATE;
+      break;
+    }
     case ObJBVerType::J_TIME_V0: {
       ret_type = ObJsonNodeType::J_TIME;
       break;
     }
     case ObJBVerType::J_DATETIME_V0: {
       ret_type = ObJsonNodeType::J_DATETIME;
+      break;
+    }
+    case ObJBVerType::J_MYSQL_DATETIME_V0: {
+      ret_type = ObJsonNodeType::J_MYSQL_DATETIME;
       break;
     }
     case ObJBVerType::J_TIMESTAMP_V0: {
@@ -4150,6 +4374,11 @@ bool ObJsonVerType::is_array(ObJBVerType type)
   return (type == J_ARRAY_V0);
 }
 
+bool ObJsonVerType::is_semi_hete_col(ObJBVerType type)
+{
+  return (type == J_SEMI_HETE_COL_V0);
+}
+
 bool ObJsonVerType::is_object(ObJBVerType type)
 {
   return (type == J_OBJECT_V0);
@@ -4197,6 +4426,8 @@ bool ObJsonVerType::is_scalar(ObJBVerType type)
     case ObJsonNodeType::J_BOOLEAN :
     case ObJsonNodeType::J_DATE :
     case ObJsonNodeType::J_DATETIME :
+    case ObJsonNodeType::J_MYSQL_DATE :
+    case ObJsonNodeType::J_MYSQL_DATETIME :
     case ObJsonNodeType::J_TIMESTAMP :
     case ObJsonNodeType::J_OPAQUE :
     case ObJsonNodeType::J_OFLOAT :
@@ -4333,22 +4564,22 @@ int ObJsonVar::append_var(uint64_t var, uint8_t type, ObJsonBuffer &result)
   switch (size) {
     case JBLS_UINT8: {
       uint8_t var_trans = static_cast<uint8_t>(var);
-      ret = result.append(reinterpret_cast<const char*>(&var_trans), sizeof(uint8_t));
+      ret = result.append(reinterpret_cast<const char*>(&var_trans), sizeof(uint8_t), 0);
       break;
     }
     case JBLS_UINT16: {
       uint16_t var_trans = static_cast<uint16_t>(var);
-      ret = result.append(reinterpret_cast<const char*>(&var_trans), sizeof(uint16_t));
+      ret = result.append(reinterpret_cast<const char*>(&var_trans), sizeof(uint16_t), 0);
       break;
     }
     case JBLS_UINT32: {
       uint32_t var_trans = static_cast<uint32_t>(var);
-      ret = result.append(reinterpret_cast<const char*>(&var_trans), sizeof(uint32_t));
+      ret = result.append(reinterpret_cast<const char*>(&var_trans), sizeof(uint32_t), 0);
       break;
     }
     case JBLS_UINT64: {
       uint64_t var_trans = static_cast<uint64_t>(var);
-      ret = result.append(reinterpret_cast<const char*>(&var_trans), sizeof(uint64_t));
+      ret = result.append(reinterpret_cast<const char*>(&var_trans), sizeof(uint64_t), 0);
       break;
     }
     default: {
@@ -4728,7 +4959,7 @@ int ObJsonBin::get_value(int index, ObJsonBin &value) const
   uint64_t value_offset = 0;
   uint8_t value_type = 0;
   if (OB_FAIL(get_value_entry(index, value_offset, value_type))) {
-    LOG_WARN("get_value_entry fail", K(ret), K(index));;
+    LOG_WARN("get_value_entry fail", K(ret), K(index));
   } else if (OB_JSON_TYPE_IS_INLINE(value_type)) {
       offset += pos_;
   } else if (is_forward_v0(value_type)) {
@@ -4831,6 +5062,7 @@ int ObJsonBin::parse_doc_header_v0()
   } else {
     pos_ = sizeof(ObJsonBinDocHeader);
     ctx_->extend_seg_offset_ = header->extend_seg_offset_;
+    ctx_->use_lexicographical_order_ = header->use_lexicographical_order_;
   }
   return ret;
 }
@@ -4844,7 +5076,8 @@ int ObJsonBin::add_doc_header_v0(ObJsonBuffer &buffer)
 
 int ObJsonBin::set_doc_header_v0(
     ObJsonBuffer &buffer,
-    int64_t extend_seg_offset)
+    const int64_t extend_seg_offset,
+    const bool use_lexicographical_order)
 {
   INIT_SUCC(ret);
   ObJsonBinDocHeader *header = nullptr;
@@ -4856,13 +5089,15 @@ int ObJsonBin::set_doc_header_v0(
     LOG_WARN("header is null", K(ret));
   } else {
     header->extend_seg_offset_ = extend_seg_offset;
+    header->use_lexicographical_order_ = use_lexicographical_order;
   }
   return ret;
 }
 
 int ObJsonBin::set_doc_header_v0(
     ObString &buffer,
-    int64_t extend_seg_offset)
+    const int64_t extend_seg_offset,
+    const bool use_lexicographical_order)
 {
   INIT_SUCC(ret);
   ObJsonBinDocHeader *header = nullptr;
@@ -4874,6 +5109,7 @@ int ObJsonBin::set_doc_header_v0(
     LOG_WARN("header is null", K(ret));
   } else {
     header->extend_seg_offset_ = extend_seg_offset;
+    header->use_lexicographical_order_ = use_lexicographical_order;
   }
   return ret;
 }
@@ -5143,12 +5379,12 @@ int ObJsonBinMeta::to_header(ObJsonBuffer &buffer)
   ObJsonBinHeader header;
   uint64_t key_entry_size = 0;
   uint64_t value_entry_size = 0;
-  if (OB_UNLIKELY(ObJsonNodeType::J_OBJECT != json_type() && ObJsonNodeType::J_ARRAY != json_type())) {
+  if (OB_UNLIKELY(ObJsonNodeType::J_OBJECT != json_type() && ObJsonNodeType::J_ARRAY != json_type() && ObJsonNodeType::J_SEMI_HETE_COL != json_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type not object or array", K(ret), "json type", json_type());
   } else if (OB_FAIL(to_header(header))) {
     LOG_WARN("to_header fail", K(ret));
-  } else if (OB_FAIL(buffer.append(reinterpret_cast<char*>(&header), sizeof(header)))) {
+  } else if (OB_FAIL(buffer.append(reinterpret_cast<char*>(&header), sizeof(header), 0))) {
     LOG_WARN("append header to buffer fail", K(ret));
   } else if (OB_FAIL(ObJsonVar::append_var(element_count(), element_count_var_type(), buffer))) {
     LOG_WARN("failed to append array header member count", K(ret));
@@ -5245,8 +5481,10 @@ int ObJsonBinMetaParser::parse_type_()
 int ObJsonBinMetaParser::parse_header_()
 {
   INIT_SUCC(ret);
-  if (ObJsonNodeType::J_OBJECT != meta_.json_type() && ObJsonNodeType::J_ARRAY != meta_.json_type()) {
-  } else if (ObJBVerType::J_OBJECT_V0 == meta_.vertype() || ObJBVerType::J_ARRAY_V0 == meta_.vertype()) {
+  if (ObJsonNodeType::J_OBJECT != meta_.json_type() && ObJsonNodeType::J_ARRAY != meta_.json_type()
+         && ObJsonNodeType::J_SEMI_HETE_COL != meta_.json_type()) {
+  } else if (ObJBVerType::J_OBJECT_V0 == meta_.vertype() || ObJBVerType::J_ARRAY_V0 == meta_.vertype()
+         || ObJBVerType::J_SEMI_HETE_COL_V0 == meta_.vertype()) {
     ret = parse_header_v0_();
   } else {
     ret = OB_ERR_UNEXPECTED;

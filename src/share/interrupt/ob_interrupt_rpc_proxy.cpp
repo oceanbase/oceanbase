@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "lib/ob_errno.h"
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
+#include "ob_interrupt_rpc_proxy.h"
 #include "share/interrupt/ob_global_interrupt_call.h"
 
 using namespace oceanbase::common;

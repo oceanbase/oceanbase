@@ -11,15 +11,10 @@
  */
 
 #include <gtest/gtest.h>
-#include <random>
-#include <string>
-#include <pthread.h>
 
 #define private public
 #include "logservice/palf/palf_env_impl.h"
-#include "logservice/palf/log_io_worker.h"
 #undef private
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

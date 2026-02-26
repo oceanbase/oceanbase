@@ -29,6 +29,7 @@ public:
   { }
   virtual ~ObLogMerge() {}
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual int compute_sharding_info() override;
   const common::ObIArray<ObRawExpr *> &get_insert_condition() const;
 
@@ -55,6 +56,7 @@ public:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+  virtual int op_is_update_pk_with_dop(bool &is_update) override;
 protected:
   int generate_rowid_expr_for_trigger() override;
   virtual int generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs) override;

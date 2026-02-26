@@ -14,9 +14,6 @@
 
 #include "ob_integer_base_diff_decoder.h"
 #include "ob_encoding_query_util.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "ob_bit_stream.h"
-#include "ob_integer_array.h"
 
 namespace oceanbase
 {
@@ -130,7 +127,7 @@ int ObIntegerBaseDiffDecoder::update_pointer(const char *old_block, const char *
 
 int ObIntegerBaseDiffDecoder::batch_get_bitpacked_values(
     const ObColumnDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const int64_t datum_len,
     const int64_t data_offset,
@@ -163,7 +160,7 @@ int ObIntegerBaseDiffDecoder::batch_get_bitpacked_values(
 int ObIntegerBaseDiffDecoder::batch_decode(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const
@@ -249,6 +246,7 @@ int ObIntegerBaseDiffDecoder::decode_vector(
         break;
       }
       case VEC_TC_DATE:
+      case VEC_TC_MYSQL_DATE:
       case VEC_TC_DEC_INT32: {
         // int32_t
         FILL_VECTOR_FUNC(ObFixedLengthFormat<int32_t>, decoder_ctx.has_extend_value());
@@ -256,6 +254,7 @@ int ObIntegerBaseDiffDecoder::decode_vector(
       }
       case VEC_TC_INTEGER:
       case VEC_TC_DATETIME:
+      case VEC_TC_MYSQL_DATETIME:
       case VEC_TC_TIME:
       case VEC_TC_UNKNOWN:
       case VEC_TC_INTERVAL_YM:
@@ -521,9 +520,9 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
     ObGetFilterCmpRetFunc get_cmp_ret = get_filter_cmp_ret_func(op_type);
     int cmp_res = 0;
-    if (FAILEDx(cmp_func(ref_datum, base_datum, cmp_res))) {
+    if (FAILEDx(cmp_func(base_datum, ref_datum, cmp_res))) {
       LOG_WARN("Failed to compare datum", K(ret), K(ref_datum), K(base_datum));
-    } else if (FALSE_IT(filter_obj_smaller_than_base = cmp_res < 0)){
+    } else if (FALSE_IT(filter_obj_smaller_than_base = cmp_res > 0)){
     } else if (filter_obj_smaller_than_base) {
       // Do not need to decode the data
       if (op_type == sql::WHITE_OP_GE || op_type == sql::WHITE_OP_GT || op_type == sql::WHITE_OP_NE) {
@@ -679,7 +678,7 @@ int ObIntegerBaseDiffDecoder::in_operator(
                          const sql::ObWhiteFilterExecutor &filter,
                          bool &result) -> int {
                         int ret = OB_SUCCESS;
-                        if (OB_FAIL(filter.exist_in_datum_set(cur_datum, result))) {
+                        if (OB_FAIL(filter.exist_in_set(cur_datum, result))) {
                           LOG_WARN("Failed to check datum in hashset", K(ret), K(cur_datum));
                         }
                         return ret;
@@ -763,7 +762,7 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
 int ObIntegerBaseDiffDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {

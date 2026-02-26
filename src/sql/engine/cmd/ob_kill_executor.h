@@ -15,10 +15,6 @@
 #include "share/ob_srv_rpc_proxy.h"
 namespace oceanbase
 {
-namespace observer
-{
-struct ObGlobalContext;
-}
 namespace common
 {
 class ObSqlString;
@@ -58,6 +54,8 @@ private:
   int generate_read_sql(uint32_t sess_id, common::ObSqlString &sql);
   int generate_read_sql_from_session_info(uint32_t sess_id, common::ObSqlString &sql);
   int kill_remote_session(ObExecContext &ctx, const common::ObAddr &addr, const ObKillSessionArg &arg);
+  int kill_query_cs_id(const ObKillSessionArg &arg, ObSQLSessionMgr &sess_mgr,
+                        ObExecContext &ctx);
 
   DISALLOW_COPY_AND_ASSIGN(ObKillExecutor);
 };

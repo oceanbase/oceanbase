@@ -18,7 +18,6 @@
 #include "ob_thread_idling.h"                       // ObThreadIdling
 #include "ob_unit_stat_manager.h"                   // ObUnitStatManager
 #include "ob_server_balancer.h"                     // ObServerBalancer
-#include "rootserver/ob_disaster_recovery_worker.h" // ObDRWorker
 #include "rootserver/ob_rootservice_util_checker.h" // ObRootServiceUtilChecker
 
 namespace oceanbase
@@ -40,7 +39,6 @@ class ObUnitManager;
 class ObServerManager;
 class ObZoneManager;
 class ObRootBalancer;
-class ObDRTaskMgr;
 
 class ObRootBalanceIdling : public ObThreadIdling
 {
@@ -58,15 +56,13 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
 public:
   ObRootBalancer();
   virtual ~ObRootBalancer();
-  int init(common::ObServerConfig &cfg,
+  int init(
       share::schema::ObMultiVersionSchemaService &schema_service,
       ObUnitManager &unit_mgr,
       ObServerManager &server_mgr,
       ObZoneManager &zone_mgr,
-      obrpc::ObSrvRpcProxy &rpc_proxy,
       common::ObAddr &self_addr,
-      common::ObMySQLProxy &sql_proxy,
-      ObDRTaskMgr &dr_task_mgr);
+      common::ObMySQLProxy &sql_proxy);
 
   virtual void run3() override;
   virtual int blocking_run() { BLOCKING_RUN_IMPLEMENT(); }
@@ -87,17 +83,13 @@ public:
   int check_stop() const;
   int idle() const;
   int64_t get_schedule_interval() const;
-  ObDRWorker &get_disaster_recovery_worker() { return disaster_recovery_worker_; }
 private:
   static const int64_t LOG_INTERVAL = 30 * 1000 * 1000;
 private:
   bool inited_;
   volatile int64_t active_;
   mutable ObRootBalanceIdling idling_;
-
   ObServerBalancer server_balancer_;
-
-  ObDRWorker disaster_recovery_worker_;
   ObRootServiceUtilChecker rootservice_util_checker_;
 };
 } // end namespace rootserver

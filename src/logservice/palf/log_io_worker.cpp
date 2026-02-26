@@ -12,16 +12,7 @@
 #define USING_LOG_PREFIX PALF
 
 #include "log_io_worker.h"
-#include <time.h>                             // timespce
-#include <sys/prctl.h>                        // prctl
-#include "lib/ob_errno.h"                     // OB_SUCCESS
-#include "lib/stat/ob_session_stat.h"         // Session
-#include "lib/thread/ob_thread_name.h"        // set_thread_name
-#include "share/rc/ob_tenant_base.h"          // mtl_free
-#include "share/ob_throttling_utils.h"        //ObThrottlingUtils
-#include "log_io_task.h"                      // LogIOTask
 #include "palf_env_impl.h"                    // PalfEnvImpl
-#include "log_throttle.h"                     // LogWritingThrottle
 
 namespace oceanbase
 {
@@ -174,6 +165,7 @@ int LogIOWorker::notify_need_writing_throttling(const bool &need_throttling)
 
 void LogIOWorker::run1()
 {
+  ObDIActionGuard ag("LogService", "LogIOWorker", nullptr);
   lib::set_thread_name("IOWorker");
   (void) run_loop_();
 }
@@ -212,6 +204,7 @@ int LogIOWorker::handle_io_task_with_throttling_(LogIOTask *io_task)
 
 int LogIOWorker::handle_io_task_(LogIOTask *io_task)
 {
+  ObDIActionGuard ag(log_io_task_type_str(io_task->get_io_task_type()));
   int ret = OB_SUCCESS;
 	int64_t start_ts = ObTimeUtility::current_time();
   wait_cost_stat_.stat(start_ts - io_task->get_init_task_ts());
@@ -284,6 +277,7 @@ bool LogIOWorker::need_reduce_(LogIOTask *io_task)
 
 int LogIOWorker::reduce_io_task_(void *task)
 {
+  ObDIActionGuard ag("aggregate io task");
   OB_ASSERT(true == batch_io_task_mgr_.empty());
   int ret = OB_SUCCESS;
   LogIOTask *io_task = NULL;

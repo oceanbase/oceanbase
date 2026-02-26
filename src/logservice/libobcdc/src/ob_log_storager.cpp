@@ -14,12 +14,9 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include "lib/string/ob_string.h"                // ObString
 #include "ob_log_storager.h"
 #include "ob_log_instance.h"
 #include "ob_log_store_service.h"
-#include "ob_log_store_key.h"
-#include "ob_log_store_task.h"
 #include "ob_log_factory.h"                      // ObLogStoreTaskFactory
 #include "ob_log_trace_id.h"                     // ObLogTraceIdGuard
 

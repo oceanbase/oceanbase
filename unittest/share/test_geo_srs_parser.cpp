@@ -11,11 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include <boost/geometry.hpp>
 #define private public
 #define protected public
-#include "lib/geo/ob_srs_info.h"
-#include "lib/geo/ob_srs_wkt_parser.h"
 #include "observer/omt/ob_tenant_srs.h"
 #undef protected
 #undef private

@@ -11,9 +11,6 @@
  */
 
 #include "ob_all_virtual_ha_diagnose.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
@@ -274,6 +271,12 @@ int ObAllVirtualHADiagnose::insert_stat_(storage::DiagnoseInfo &diagnose_info)
         }
         cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
                                               ObCharset::get_default_charset()));
+        break;
+      case READ_TX:
+        cur_row_.cells_[i].set_varchar(diagnose_info.read_only_tx_info_);
+        cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+
         break;
       default:
         ret = OB_ERR_UNEXPECTED;

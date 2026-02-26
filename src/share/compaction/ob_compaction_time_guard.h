@@ -25,6 +25,7 @@ namespace compaction
  * -- ObRSCompactionTimeGuard
  * -- ObScheduleCompactionTimeGuard
  * -- ObStorageCompactionTimeGuard
+ * -- ObSSCompactionTimeGuard
  */
 class ObCompactionTimeGuard
 {
@@ -35,6 +36,7 @@ public:
     RS_COMPACT_TIME_GUARD = 1,
     SCHEDULE_COMPACT_TIME_GUARD = 2,
     STORAGE_COMPACT_TIME_GUARD = 3,
+    CO_MERGE_TIME_GUARD = 4,
     MAX_COMPACT_TIME_GUARD
   };
 public:
@@ -80,6 +82,7 @@ public:
        int64_t &pos,
        const char *lvalue,
        const int64_t ts) const;
+  virtual bool need_print() const { return true; }
 public:
   template <typename E>
   static constexpr uint16_t event_idx(E e) { return static_cast<uint16_t>(e); }
@@ -114,6 +117,7 @@ private:
   const static char *CompactionEventStr[];
   static const char *get_comp_event_str(const enum CompactionEvent event);
 };
+
 struct ObCompactionScheduleTimeGuard : public ObCompactionTimeGuard
 {
 public:
@@ -124,10 +128,10 @@ public:
   enum CompactionEvent : uint16_t {
     // medium scheduler
     GET_TABLET = 0,
-    UPDATE_TABLET_REPORT_STATUS,
+    INIT_TABLET_STATUS,
     READ_MEDIUM_INFO,
     SCHEDULE_NEXT_MEDIUM,
-    SCHEDULE_TABLET_MEDIUM,
+    SCHEDULE_TABLET_EXECUTE,
     FAST_FREEZE,
     // medium checker
     SEARCH_META_TABLE,
@@ -146,8 +150,8 @@ private:
 struct ObStorageCompactionTimeGuard : public ObCompactionTimeGuard
 {
 public:
-  ObStorageCompactionTimeGuard()
-    : ObCompactionTimeGuard(STORAGE_COMPACT_TIME_GUARD, COMPACTION_WARN_THRESHOLD_RATIO, "[STORAGE] ")
+  ObStorageCompactionTimeGuard(const int64_t warn_threshold = COMPACTION_WARN_THRESHOLD_RATIO)
+    : ObCompactionTimeGuard(STORAGE_COMPACT_TIME_GUARD, warn_threshold, "[STORAGE] ")
   {}
   virtual ~ObStorageCompactionTimeGuard() {}
   enum CompactionEvent : uint16_t {
@@ -162,9 +166,38 @@ public:
     RELEASE_MEMTABLE,
     SCHEDULE_OTHER_COMPACTION,
     DAG_FINISH,
+    PRE_WARM,
     COMPACTION_EVENT_MAX
   };
   virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
+  virtual bool need_print() const override;
+private:
+  const static char *CompactionEventStr[];
+  static const char *get_comp_event_str(const enum CompactionEvent event);
+  static const int64_t COMPACTION_WARN_THRESHOLD_RATIO = 60 * 1000L * 1000L; // 1 min
+  static constexpr float COMPACTION_SHOW_PERCENT_THRESHOLD = 0.3;
+  static constexpr float EXECUTE_PERCENT_THRESHOLD = 0.95;
+  static const int64_t COMPACTION_SHOW_TIME_THRESHOLD = 60 * 1000L * 1000L; // 30s
+};
+
+struct ObSSCompactionTimeGuard : public ObCompactionTimeGuard
+{
+public:
+  ObSSCompactionTimeGuard()
+    : ObCompactionTimeGuard(STORAGE_COMPACT_TIME_GUARD, COMPACTION_WARN_THRESHOLD_RATIO, "[SS_Merge] ")
+  {}
+  virtual ~ObSSCompactionTimeGuard() {}
+  enum CompactionEvent : uint16_t {
+    // ls merge scheduler
+    GET_SCHEDULE_TABLET,
+    PREPARE_CLOG,
+    UPDATE_TABLET_OBJ,
+    GET_TABLET,
+    SCHEDULE_MERGE,
+    REFRESH,
+    FORCE_FREEZE,
+    COMPACTION_EVENT_MAX
+  };
 private:
   const static char *CompactionEventStr[];
   static const char *get_comp_event_str(const enum CompactionEvent event);
@@ -173,7 +206,27 @@ private:
   static const int64_t COMPACTION_SHOW_TIME_THRESHOLD = 1 * 1000L * 1000L; // 1s
 };
 
-
+struct ObCOMergeTimeGuard : public ObCompactionTimeGuard
+{
+public:
+  ObCOMergeTimeGuard()
+    : ObCompactionTimeGuard(CO_MERGE_TIME_GUARD, UINT64_MAX, "[CO_Merge] ")
+  {}
+  virtual ~ObCOMergeTimeGuard() {}
+  enum CompactionEvent : uint16_t {
+    MOVE_NEXT = 0,
+    COMPARE,
+    BUILD_LOG,
+    REPLAY_BASE_CG,
+    PERSIST_LOG,
+    REPLAY_LOG,
+    COMPACTION_EVENT_MAX
+  };
+  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
+private:
+  const static char *CompactionEventStr[];
+  static const char *get_comp_event_str(const enum CompactionEvent event);
+};
 } // namespace compaction
 } // namespace oceanbase
 

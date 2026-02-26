@@ -10,12 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdlib>
-#include <pthread.h>
 
 #include "gtest/gtest.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/hash_func/murmur_hash.h"
 #include "lib/allocator/page_arena.h"
 
 // Friend class injection.
@@ -1226,7 +1222,6 @@ TEST(ObLinearHashMap, PerfLoadFactor2)
 }
 
 // Test iterator.
-#include <algorithm>
 // Insert some keys and iterate them out.
 TEST(ObLinearHashMap, IteratorTest1)
 {

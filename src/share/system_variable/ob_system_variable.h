@@ -52,6 +52,16 @@ public:
   //OB_SV_SERVER_UUID:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
   const static int64_t SERVER_UUID_MAX_LEN = 37;
   static char server_uuid_[SERVER_UUID_MAX_LEN];
+
+  // OB_SV_PID_FILE
+  static char server_pid_file_str_[MAX_PATH_SIZE];
+
+  // OB_SV_SOCKET
+  static char server_socket_file_str_[MAX_PATH_SIZE];
+
+  // OB_SV_PORT
+  const static int64_t SERVER_PORT_INT_STR_MAX_LEN = 64;
+  static char server_port_int_str_[SERVER_PORT_INT_STR_MAX_LEN];
 public:
   ObSpecialSysVarValues();
 };
@@ -242,6 +252,25 @@ public:
   inline bool is_global_scope() const { return 0 != (flags_ & ObSysVarFlag::GLOBAL_SCOPE); }
   inline bool is_session_scope() const { return 0 != (flags_ & ObSysVarFlag::SESSION_SCOPE); }
   inline bool is_influence_plan() const { return 0 != (flags_ & ObSysVarFlag::INFLUENCE_PLAN); }
+  inline bool is_influence_pl() const { return 0 != (flags_ & ObSysVarFlag::INFLUENCE_PL); }
+  static bool is_influence_exec_env(ObSysVarClassType sys_var_id) {
+    bool is_influence = false;
+    switch (sys_var_id) {
+      case SYS_VAR_SQL_MODE:
+      case SYS_VAR_CHARACTER_SET_CLIENT:
+      case SYS_VAR_COLLATION_CONNECTION:
+      case SYS_VAR_COLLATION_DATABASE:
+      case SYS_VAR_PLSQL_CCFLAGS:
+      case SYS_VAR_PLSQL_OPTIMIZE_LEVEL:
+      case SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN:
+        is_influence = true;
+        break;
+      default:
+        is_influence = false;
+        break;
+    }
+    return is_influence;
+  }
   inline bool is_oracle_only() const { return 0 != (flags_ & ObSysVarFlag::ORACLE_ONLY); }
   inline bool is_enum_type() const { return is_enum_type_; }
   inline bool is_mysql_only() const { return 0 != (flags_ & ObSysVarFlag::MYSQL_ONLY); }
@@ -838,6 +867,11 @@ public:
                                                   const ObBasicSysVar &sys_var,
                                                   const common::ObObj &in_val,
                                                   common::ObObj &out_val);
+  static int check_default_value_for_utf8mb4(sql::ObExecContext &ctx,
+                                            const ObSetVar &set_var,
+                                            const ObBasicSysVar &sys_var,
+                                            const ObObj &in_val,
+                                            ObObj &out_val);
   static int check_and_convert_tx_isolation(sql::ObExecContext &ctx,
                                             const ObSetVar &set_var,
                                             const ObBasicSysVar &sys_var,
@@ -930,6 +964,11 @@ public:
                                                 const ObBasicSysVar &sys_var,
                                                 const common::ObObj &in_val,
                                                 common::ObObj &out_val);
+  static int check_and_convert_caching_sha2_password_digest_rounds(sql::ObExecContext &ctx,
+                                                                   const ObSetVar &set_var,
+                                                                   const ObBasicSysVar &sys_var,
+                                                                   const common::ObObj &in_val,
+                                                                   common::ObObj &out_val);
   static int check_locale_type_is_valid(sql::ObExecContext &ctx,
                                         const ObSetVar &set_var,
                                         const ObBasicSysVar &sys_var,
@@ -950,6 +989,16 @@ public:
                                        const common::ObObj &in_val,
                                        const uint64_t tenant_id,
                                        uint64_t &version);
+  static int check_and_convert_block_encryption_mode(sql::ObExecContext &ctx,
+                                                     const ObSetVar &set_var,
+                                                     const ObBasicSysVar &sys_var,
+                                                     const common::ObObj &in_val,
+                                                     common::ObObj &out_val);
+  static int check_and_convert_default_authentication_plugin(sql::ObExecContext &ctx,
+                                                              const ObSetVar &set_var,
+                                                              const ObBasicSysVar &sys_var,
+                                                              const common::ObObj &in_val,
+                                                              common::ObObj &out_val);
 private:
   static int check_session_readonly(sql::ObExecContext &ctx,
                                     const ObSetVar &set_var,
@@ -1116,6 +1165,7 @@ public:
   static int init_sys_var();
 
 private:
+  static int init_config_sys_vars(); //require observer deploy to determine value
   static int change_initial_value();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPreProcessSysVars);

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #ifdef ENABLE_SERIALIZATION_CHECK
 #include "ob_unify_serialize.h"
 namespace oceanbase

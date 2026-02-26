@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "share/schema/ob_part_mgr_util.h"
 #include "sql/resolver/ddl/ob_analyze_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_analyze_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "pl/sys_package/ob_dbms_stats.h"
+#include "share/catalog/ob_catalog_utils.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 
 using namespace oceanbase::common;
@@ -258,14 +256,20 @@ int ObAnalyzeStmtResolver::resolve_table_info(const ParseNode *table_node,
   int ret = OB_SUCCESS;
   ObString table_name;
   ObString database_name;
+  ObString catalog_name;
+  ObNameCaseMode case_mode = ObNameCaseMode::OB_NAME_CASE_INVALID;
   const ObTableSchema *table_schema = NULL;
   int64_t tenant_id = analyze_stmt.get_tenant_id();
   uint64_t database_id = OB_INVALID_ID;
   if (OB_ISNULL(table_node) || OB_ISNULL(schema_checker_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null point", K(table_node), K(schema_checker_), K(ret));
-  } else if (OB_FAIL(resolve_table_relation_node(table_node, table_name, database_name))) {
+  } else if (OB_FAIL(resolve_table_relation_node(table_node, table_name, database_name, catalog_name))) {
     LOG_WARN("failed to resolve table relation node", K(ret));
+  } else if (!ObCatalogUtils::is_internal_catalog_name(catalog_name)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("analyze table is not supported in catalog", K(ret), K(catalog_name));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "analyze table in catalog is");
   } else if (OB_FAIL(schema_checker_->get_database_id(tenant_id, database_name, database_id))) {
     LOG_WARN("failed to get database id", K(ret));
   } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id, database_name,
@@ -462,6 +466,7 @@ int ObAnalyzeStmtResolver::resolve_for_clause_element(const ParseNode *for_claus
   int ret = OB_SUCCESS;
   ObSEArray<ObString, 4> all_for_col;
   ObAnalyzeTableInfo &table_info = analyze_stmt.get_tables().at(0);
+  bool is_async_gather = false;
   if (OB_ISNULL(for_clause_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null parse node", K(ret));
@@ -474,6 +479,7 @@ int ObAnalyzeStmtResolver::resolve_for_clause_element(const ParseNode *for_claus
     bool use_size_auto = false;
     if (OB_FAIL(pl::ObDbmsStats::parser_for_all_clause(for_clause_node,
                                                        table_info.get_column_params(),
+                                                       is_async_gather,
                                                        use_size_auto))) {
       LOG_WARN("failed to resolve for all clause", K(ret));
     } else {

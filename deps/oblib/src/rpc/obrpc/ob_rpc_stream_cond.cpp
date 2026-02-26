@@ -14,7 +14,6 @@
 
 #include "rpc/obrpc/ob_rpc_stream_cond.h"
 
-#include "lib/oblog/ob_log.h"
 #include "rpc/obrpc/ob_rpc_session_handler.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "rpc/obrpc/ob_rpc_reverse_keepalive_struct.h"

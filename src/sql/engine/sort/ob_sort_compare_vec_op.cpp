@@ -61,6 +61,10 @@ int SortKeyColResult::init(int64_t max_batch_size)
                          allocator_.alloc(sizeof(char *) * max_batch_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SQL_ENG_LOG(WARN, "failed to alloc ptrs", K(ret));
+  }
+  if (OB_FAIL(ret) && nullptr != buffer) {
+    allocator_.free(buffer);
+    buffer = nullptr;
   } else {
     uniform_fmt_nulls_ = sql::to_bit_vector(buffer);
   }
@@ -154,7 +158,7 @@ int CompareBase::init(const ObIArray<ObExpr *> *cmp_sk_exprs, const RowMeta *sk_
 int CompareBase::fast_check_status()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY((cmp_count_++ & 8191) == 8191)) {
+  if (OB_UNLIKELY((++cmp_count_ & 8191) == 0)) {
     ret = exec_ctx_->check_status();
   }
   return ret;

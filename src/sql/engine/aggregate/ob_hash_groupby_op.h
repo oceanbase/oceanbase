@@ -82,7 +82,8 @@ public:
       group_row_(NULL),
       groupby_store_row_(NULL),
       group_row_count_in_batch_(0),
-      group_row_offset_in_selector_(0)
+      group_row_offset_in_selector_(0),
+      cnt_(1)
   {
   }
 
@@ -91,7 +92,7 @@ public:
   inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   ObGroupRowItem *&next() { return next_; }
 
-  TO_STRING_KV(KP(next_), K(hash_), KP_(group_row),
+  TO_STRING_KV(KP(next_), K(hash_), K(cnt_), KP_(group_row),
                K_(group_row_count_in_batch), K_(group_row_offset_in_selector));
 
 public:
@@ -110,6 +111,7 @@ public:
 
   uint16_t group_row_count_in_batch_;
   uint16_t group_row_offset_in_selector_;
+  uint32_t cnt_;
 };
 
 class ObGroupRowHashTable : public ObExtendHashTable<ObGroupRowItem>
@@ -219,7 +221,13 @@ public:
   static constexpr const double MAX_PART_MEM_RATIO = 0.5;
   static constexpr const double EXTRA_MEM_RATIO = 0.25;
   static const int64_t FIX_SIZE_PER_PART = sizeof(DatumStoreLinkPartition) + ObChunkRowStore::BLOCK_SIZE;
-
+  static const int8_t SKEW_TEST_STEP_SIZE = 5;
+  constexpr static const float SKEW_POPULAR_MAX_RATIO = 0.5;
+  constexpr static const float SKEW_POPULAR_MIN_RATIO = 0.3;
+  const static int8_t SKEW_HEAP_SIZE = 15;
+  const static int8_t SKEW_ITEM_CNT_TOLERANCE = 64;
+  const static int8_t INIT_BUCKET_COUNT_FOR_POPULAR = 32;
+  static const int64_t ADAPTIVE_GBY_MEM_ESTIMATE_SIZE = 2 << 20; // 2MB
 
 public:
   ObHashGroupByOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
@@ -247,7 +255,7 @@ public:
       selector_array_(NULL),
       dup_groupby_exprs_(),
       is_dumped_(nullptr),
-      no_non_distinct_aggr_(false),
+      can_skip_last_group_(false),
       start_calc_hash_idx_(0),
       base_hash_vals_(nullptr),
       has_calc_base_hash_(false),
@@ -272,7 +280,11 @@ public:
       last_child_row_(nullptr),
       by_pass_child_brs_(nullptr),
       force_by_pass_(false),
-      llc_est_()
+      llc_est_(),
+      by_pass_rows_(0),
+      total_load_rows_(0),
+      popular_map_(),
+      by_pass_agg_rows_(0)
   {
   }
   void reset();
@@ -284,6 +296,15 @@ public:
   virtual void destroy() override;
   int load_data();
   int load_one_row();
+  int process_popular_value(uint64_t hash_value, oceanbase::sql::ObBatchRows *child_brs,
+                            int64_t batch_idx, const int64_t batch_size, bool &is_popular_value);
+  int init_popular_values(); // Data skew constructs the initial popular map based on the data
+                             // during the loaddata sampling period and use in the bypass phase.
+  int popular_value_detect();
+  int check_popular_values_validity();
+  int bypass_process_popular_value(bool &is_popular_value);
+  int bypass_process_popular_value_batch();
+  static bool group_row_items_greater(const ObGroupRowItem *a, const ObGroupRowItem *b);
 
   // for batch
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
@@ -318,8 +339,8 @@ public:
   { return get_aggr_used_size() + sql_mem_processor_.get_data_size(); }
   OB_INLINE int64_t get_mem_used_size() const
   {
-    // Hash table used is double counted here to reserve memory for hash table extension
-    return get_aggr_used_size() + get_extra_size() + get_hash_table_used_size();
+    // Hash table used is 3 times counted here to reserve memory for hash table extension
+    return get_aggr_used_size() + get_extra_size() + 2 * get_hash_table_used_size();
   }
   OB_INLINE int64_t get_actual_mem_used_size() const
   {
@@ -582,7 +603,7 @@ private:
   ObSEArray<ObExpr*, 4> dup_groupby_exprs_;
   ObSEArray<ObExpr*, 4> all_groupby_exprs_;
   bool *is_dumped_;
-  bool no_non_distinct_aggr_;
+  bool can_skip_last_group_;
   int64_t start_calc_hash_idx_;
   uint64_t *base_hash_vals_;
   bool has_calc_base_hash_;
@@ -617,6 +638,10 @@ private:
   ObBatchResultHolder by_pass_brs_holder_;
   bool force_by_pass_;
   LlcEstimate llc_est_;
+  uint64_t by_pass_rows_;
+  uint64_t total_load_rows_;
+  common::hash::ObHashMap<uint64_t, uint64_t, hash::NoPthreadDefendMode> popular_map_;
+  uint64_t by_pass_agg_rows_;
 };
 
 } // end namespace sql

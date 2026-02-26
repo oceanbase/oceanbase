@@ -50,7 +50,6 @@ class ObPCVSet;
 class ObPhysicalPlan;
 struct ObSqlCtx;
 class ObTableLocation;
-class ObPhyTableLocation;
 class ObCandiTableLoc;
 class ObTablePartitionInfo;
 class ObPlanCacheValue;
@@ -307,10 +306,12 @@ struct ObPCParamEqualInfo
   ObPCParamEqualInfo():use_abs_cmp_(false) {}
   inline bool operator==(const ObPCParamEqualInfo &other) const
   {
-    bool cmp_ret = first_param_idx_ == other.first_param_idx_ &&
-                   second_param_idx_ == other.second_param_idx_ &&
-                   use_abs_cmp_ == other.use_abs_cmp_;
-
+    bool cmp_ret = (first_param_idx_ == other.first_param_idx_ &&
+                    second_param_idx_ == other.second_param_idx_ &&
+                    use_abs_cmp_ == other.use_abs_cmp_) ||
+                   (second_param_idx_ == other.first_param_idx_ &&
+                    first_param_idx_ == other.second_param_idx_ &&
+                    use_abs_cmp_ == other.use_abs_cmp_);
     return cmp_ret;
   }
 };
@@ -336,22 +337,37 @@ struct ObDupTabConstraint
 
 struct ObPCPrivInfo
 {
-  share::ObRawPriv sys_priv_;
+  enum PrivType
+  {
+    INVALID_TYPE = -1,
+    SYS_PRIV = 0,
+    SENSITIVE_RULE_PRIV = 1,
+  };
+  PrivType priv_type_;
+  share::ObRawPriv sys_priv_;   // for SYS_PRIV
+  uint64_t sensitive_rule_id_;  // for SENSITIVE_RULE_PRIV
   bool has_privilege_;
-  TO_STRING_KV(K_(sys_priv), K_(has_privilege));
-  ObPCPrivInfo() : sys_priv_(PRIV_ID_NONE), has_privilege_(false)
+  TO_STRING_KV(K_(sys_priv), K_(sensitive_rule_id), K_(has_privilege));
+
+  ObPCPrivInfo()
+      : priv_type_(INVALID_TYPE), sys_priv_(PRIV_ID_NONE), sensitive_rule_id_(OB_INVALID_ID), has_privilege_(false)
   {
   }
   int assign(const ObPCPrivInfo &other)
   {
     int ret = OB_SUCCESS;
+    priv_type_ = other.priv_type_;
     sys_priv_ = other.sys_priv_;
+    sensitive_rule_id_ = other.sensitive_rule_id_;
     has_privilege_ = other.has_privilege_;
     return ret;
   }
   inline bool operator==(const ObPCPrivInfo &other) const
   {
-    return sys_priv_ == other.sys_priv_ && has_privilege_ == other.has_privilege_;
+    return priv_type_ == other.priv_type_
+           && sys_priv_ == other.sys_priv_
+           && sensitive_rule_id_ == other.sensitive_rule_id_
+           && has_privilege_ == other.has_privilege_;
   }
 };
 
@@ -491,10 +507,91 @@ struct ObTableRowCount
   OB_UNIS_VERSION(1);
 };
 
+struct AdaptivePCConf
+{
+  AdaptivePCConf() :
+    enable_adaptive_plan_cache_(false), pc_adaptive_min_exec_time_threshold_(0),
+    pc_adaptive_effectiveness_ratio_threshold_(0)
+  {}
+  TO_STRING_KV(K_(enable_adaptive_plan_cache), K_(pc_adaptive_min_exec_time_threshold),
+               K_(pc_adaptive_effectiveness_ratio_threshold));
+  bool enable_adaptive_plan_cache_;
+  int64_t pc_adaptive_min_exec_time_threshold_;
+  int64_t pc_adaptive_effectiveness_ratio_threshold_;
+};
 
+enum ObPlanExpiredStat  {
+  NOT_EXPIRED = 0,
+  EXPIRED_BY_OPT_STAT,    //  expired by statistics
+  EXPIRED_BY_EXEC_ERROR,  //  expired by query exec error in ObPhysicalPlan::check_if_is_expired_by_error
+  EXPIRED_BY_TABLE_ACCESS_ROW_COUNT,  //  expired by unstable query range access row count
+  EXPIRED_BY_EXEC_TIME,   //  expired by unstable execution time
+};
+
+struct ObPlanExecutingStat
+{
+  static const int32_t MAX_EXECUTING_SIZE = 100;
+
+  int get_executing_info(int64_t &exec_time, int64_t &exec_cnt) const;
+  int set_executing_record(const int64_t exec_start_timestamp);
+  int erase_executing_record(const int64_t exec_start_timestamp);
+
+  ObPlanExecutingStat()
+    : exec_cnt_(0)
+    {
+      MEMSET(exec_start_timestamps_, 0, MAX_EXECUTING_SIZE * sizeof(int64_t));
+    }
+  ObPlanExecutingStat(const ObPlanExecutingStat &other)
+    : exec_cnt_(other.exec_cnt_)
+    {
+      MEMCPY(exec_start_timestamps_, other.exec_start_timestamps_, MAX_EXECUTING_SIZE * sizeof(int64_t));
+    }
+  private:
+  int64_t exec_cnt_;
+  int64_t exec_start_timestamps_[MAX_EXECUTING_SIZE];
+};
+
+struct ObVecIndexExecCtx {
+  ObVecIndexExecCtx()
+    : cur_path_(0),
+      pre_filter_chosen_times_(0),
+      iter_filter_chosen_times_(0),
+      in_filter_chosen_times_(0),
+      record_count_(0)
+  {}
+  TO_STRING_KV(K_(cur_path),
+               K_(pre_filter_chosen_times),
+               K_(iter_filter_chosen_times),
+               K_(in_filter_chosen_times),
+               K_(record_count));
+  uint8_t cur_path_;               // cur path
+  int64_t pre_filter_chosen_times_; // times of changing to pre-filter
+  int64_t iter_filter_chosen_times_;// times of changing to iter-filter
+  int64_t in_filter_chosen_times_;  // times of changing toin-filter
+  int32_t record_count_;            // window size
+};
 
 struct ObPlanStat
 {
+  enum PlanStatus
+  {
+    ACTIVE = 0,
+    INACTIVE = 1
+  };
+  struct AdaptivePCInfo
+  {
+    AdaptivePCInfo()
+      : positive_feedback_times_(0),
+        negative_feedback_times_(0),
+        status_(PlanStatus::ACTIVE)
+    {}
+    TO_STRING_KV(K_(positive_feedback_times),
+                 K_(negative_feedback_times),
+                 K_(status));
+    uint32_t positive_feedback_times_; // Continuous positive feedback times
+    uint32_t negative_feedback_times_; // Continuous negative feedback times
+    PlanStatus status_;
+  };
   static const int64_t DEFAULT_ADDR_NODE_NUM = 16;
   typedef common::hash::ObHashMap<ObAddr, int64_t,
         common::hash::LatchReadWriteDefendMode, common::hash::hash_func<ObAddr>,
@@ -509,6 +606,8 @@ struct ObPlanStat
   static const int64_t CACHE_ACCESS_THRESHOLD = 3000;
   static constexpr double ENABLE_BF_CACHE_THRESHOLD = 0.10;
   static constexpr double ENABLE_ROW_CACHE_THRESHOLD = 0.06;
+  static const int64_t BF_CACHE_GROWTH_SLOPE = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM / ENABLE_BF_CACHE_THRESHOLD;
+  static const int64_t ROW_CACHE_GROWTH_SLOPE = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM / ENABLE_ROW_CACHE_THRESHOLD;
 
   char exact_mode_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1]; // sql id for exact mode
   uint64_t plan_id_;              // plan id
@@ -577,7 +676,7 @@ struct ObPlanStat
   /** 记录第一次计划执行时计划涉及的各个表的行数的数组，数组应该有access_table_num_个元素 */
   ObTableRowCount *table_row_count_first_exec_;
   int64_t access_table_num_;         //plan访问的表的个数，目前只统计whole range扫描的表
-  bool is_expired_; // 这个计划是否已经由于数据的表行数变化和执行时间变化而失效
+  ObPlanExpiredStat is_expired_; // 这个计划是否已经由于数据的表行数变化和执行时间变化而失效
 
   // check whether plan has stable performance
   bool enable_plan_expiration_;
@@ -610,6 +709,9 @@ struct ObPlanStat
   int64_t cache_stat_update_times_; // 表示cache统计信息更新的次数，用于控制更新cache访问策略的频率
   int64_t block_cache_hit_cnt_; // 表示block cache命中次数
   int64_t block_cache_miss_cnt_; // 表示block cache不命中次数
+  int64_t in_bf_cache_threshold_; // 表示bf cache上限
+  int64_t in_fuse_row_cache_threshold_; // 表示fuse row cache上限
+  int64_t in_row_cache_threshold_; // 表示row cache上限
 
   // following fields will be used for plan set memory management
   PreCalcExprHandler* pre_cal_expr_handler_; //the handler that pre-calculable expression holds
@@ -619,7 +721,13 @@ struct ObPlanStat
   common::ObString outline_data_;
   common::ObString hints_info_;
   bool hints_all_worked_;
-
+  bool is_inner_;
+  bool is_use_auto_dop_;
+  AdaptivePCInfo adaptive_pc_info_;
+  ObVecIndexExecCtx vec_index_exec_ctx_;
+  ObPlanExecutingStat executing_stat_;
+  uint64_t gen_plan_usec_;  // plan generation time cost
+  ObCollationType collation_connection_;
 
   ObPlanStat()
     : plan_id_(0),
@@ -670,9 +778,13 @@ struct ObPlanStat
       ps_stmt_id_(common::OB_INVALID_ID),
       table_row_count_first_exec_(NULL),
       access_table_num_(0),
-      is_expired_(false),
+      is_expired_(NOT_EXPIRED),
       enable_plan_expiration_(false),
       first_exec_row_count_(-1),
+      first_exec_usec_(0),
+      sample_times_(0),
+      sample_exec_row_count_(0),
+      sample_exec_usec_(0),
       sessid_(0),
       plan_tmp_tbl_name_str_len_(0),
       is_use_jit_(false),
@@ -689,9 +801,19 @@ struct ObPlanStat
       cache_stat_update_times_(0),
       block_cache_hit_cnt_(0),
       block_cache_miss_cnt_(0),
+      in_bf_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
+      in_fuse_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
+      in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
       pre_cal_expr_handler_(NULL),
       plan_hash_value_(0),
-      hints_all_worked_(true)
+      hints_all_worked_(true),
+      is_inner_(false),
+      is_use_auto_dop_(false),
+      adaptive_pc_info_(),
+      vec_index_exec_ctx_(),
+      executing_stat_(),
+      gen_plan_usec_(0),
+      collation_connection_(CS_TYPE_INVALID)
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -744,9 +866,13 @@ struct ObPlanStat
       ps_stmt_id_(rhs.ps_stmt_id_),
       table_row_count_first_exec_(NULL),
       access_table_num_(0),
-      is_expired_(false),
+      is_expired_(NOT_EXPIRED),
       enable_plan_expiration_(rhs.enable_plan_expiration_),
       first_exec_row_count_(rhs.first_exec_row_count_),
+      first_exec_usec_(rhs.first_exec_usec_),
+      sample_times_(rhs.sample_times_),
+      sample_exec_row_count_(rhs.sample_exec_row_count_),
+      sample_exec_usec_(rhs.sample_exec_usec_),
       sessid_(rhs.sessid_),
       plan_tmp_tbl_name_str_len_(rhs.plan_tmp_tbl_name_str_len_),
       is_use_jit_(rhs.is_use_jit_),
@@ -763,9 +889,19 @@ struct ObPlanStat
       cache_stat_update_times_(rhs.cache_stat_update_times_),
       block_cache_hit_cnt_(rhs.block_cache_hit_cnt_),
       block_cache_miss_cnt_(rhs.block_cache_miss_cnt_),
+      in_bf_cache_threshold_(rhs.in_bf_cache_threshold_),
+      in_fuse_row_cache_threshold_(rhs.in_fuse_row_cache_threshold_),
+      in_row_cache_threshold_(rhs.in_row_cache_threshold_),
       pre_cal_expr_handler_(rhs.pre_cal_expr_handler_),
       plan_hash_value_(rhs.plan_hash_value_),
-      hints_all_worked_(rhs.hints_all_worked_)
+      hints_all_worked_(rhs.hints_all_worked_),
+      is_inner_(rhs.is_inner_),
+      is_use_auto_dop_(rhs.is_use_auto_dop_),
+      adaptive_pc_info_(rhs.adaptive_pc_info_),
+      vec_index_exec_ctx_(rhs.vec_index_exec_ctx_),
+      executing_stat_(rhs.executing_stat_),
+      gen_plan_usec_(rhs.gen_plan_usec_),
+      collation_connection_(rhs.collation_connection_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);
@@ -819,13 +955,18 @@ struct ObPlanStat
       ATOMIC_AAF(&fuse_row_cache_miss_cnt_, stat.fuse_row_cache_miss_cnt_);
       ATOMIC_AAF(&row_cache_hit_cnt_, stat.row_cache_hit_cnt_);
       ATOMIC_AAF(&row_cache_miss_cnt_, stat.row_cache_miss_cnt_);
-      if (0 == (update_times & CACHE_POLICY_UDPATE_THRESHOLD)) {
+      SQL_PC_LOG(DEBUG, "[CACHE_DYNAMIC_ADJUST] update cache stat", K(plan_id_), K(update_times), K(bf_filter_cnt_), K(bf_access_cnt_),
+                        K(fuse_row_cache_hit_cnt_), K(fuse_row_cache_miss_cnt_), K(row_cache_hit_cnt_), K(row_cache_miss_cnt_),
+                        K(in_bf_cache_threshold_), K(in_row_cache_threshold_), K(in_fuse_row_cache_threshold_));
+      if (1 == update_times || 0 == (update_times & CACHE_POLICY_UDPATE_THRESHOLD)) {
         if (bf_access_cnt_ > CACHE_ACCESS_THRESHOLD) {
           if (static_cast<double>(bf_filter_cnt_) / static_cast<double>(bf_access_cnt_)
               <= ENABLE_BF_CACHE_THRESHOLD) {
             enable_bf_cache_ = false;
           } else {
             enable_bf_cache_ = true;
+            // dynamically adjust the upper limit of Bloom Filter Cache Put based on filter rate
+            in_bf_cache_threshold_ = BF_CACHE_GROWTH_SLOPE * bf_filter_cnt_ / bf_access_cnt_;
           }
         }
         const int64_t row_cache_access_cnt = row_cache_miss_cnt_ + row_cache_hit_cnt_;
@@ -835,22 +976,32 @@ struct ObPlanStat
             enable_row_cache_ = false;
           } else {
             enable_row_cache_ = true;
+            // dynamically adjust the upper limit of Row Cache Put based on hit rate
+            in_row_cache_threshold_ = ROW_CACHE_GROWTH_SLOPE * row_cache_hit_cnt_ / row_cache_access_cnt;
           }
         }
+        int64_t tenant_id = MTL_ID();
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
         const int64_t fuse_row_cache_access_cnt = fuse_row_cache_hit_cnt_ + fuse_row_cache_miss_cnt_;
-        if (fuse_row_cache_access_cnt > CACHE_ACCESS_THRESHOLD) {
-          if (static_cast<double>(fuse_row_cache_hit_cnt_) / static_cast<double>(fuse_row_cache_access_cnt)
-              <= ENABLE_ROW_CACHE_THRESHOLD) {
+        if (tenant_config.is_valid() && 100 == tenant_config->_fuse_row_cache_activate_threshold) {
+          // close fuse row cache when tenant config is set to 100 at startup of the plan
+          enable_fuse_row_cache_ = false;
+        } else if (fuse_row_cache_access_cnt > CACHE_ACCESS_THRESHOLD) {
+          if (static_cast<double>(fuse_row_cache_hit_cnt_) / static_cast<double>(fuse_row_cache_access_cnt) * 100
+              <= tenant_config->_fuse_row_cache_activate_threshold) {
             enable_fuse_row_cache_ = false;
           } else {
             enable_fuse_row_cache_ = true;
+            // dynamically adjust the upper limit of Fuse Row Cache Put based on hit rate
+            in_fuse_row_cache_threshold_ = ROW_CACHE_GROWTH_SLOPE * fuse_row_cache_hit_cnt_ / fuse_row_cache_access_cnt;
           }
         }
-        SQL_PC_LOG(DEBUG, "update cache policy", K(sql_id_), K(exact_mode_sql_id_),
+        SQL_PC_LOG(DEBUG, "[CACHE_DYNAMIC_ADJUST] update cache policy", K(sql_id_), K(exact_mode_sql_id_),
             K(enable_bf_cache_), K(enable_row_cache_), K(enable_fuse_row_cache_),
             K(bf_filter_cnt_), K(bf_access_cnt_),
             K(row_cache_hit_cnt_), K(row_cache_access_cnt),
-            K(fuse_row_cache_hit_cnt_), K(fuse_row_cache_access_cnt));
+            K(fuse_row_cache_hit_cnt_), K(fuse_row_cache_access_cnt),
+            K(in_bf_cache_threshold_), K(in_fuse_row_cache_threshold_), K(in_row_cache_threshold_));
         row_cache_hit_cnt_ = 0;
         row_cache_miss_cnt_ = 0;
         bf_access_cnt_ = 0;
@@ -864,6 +1015,36 @@ struct ObPlanStat
   inline bool is_updated() const
   {
     return last_active_time_ != 0;
+  }
+
+  inline void set_executing_record(const int64_t exec_start_timestamp)
+  {
+    if (is_evolution_) {
+      executing_stat_.set_executing_record(exec_start_timestamp);
+    }
+  }
+  inline void erase_executing_record(const int64_t exec_start_timestamp)
+  {
+    if (is_evolution_) {
+      executing_stat_.erase_executing_record(exec_start_timestamp);
+    }
+  }
+
+  inline void get_evo_records(ObEvoRecordsGuard &guard)
+  {
+    guard.reset();
+    if (ATOMIC_LOAD(&is_evolution_)) {
+      ObEvolutionRecords *evo_records = ATOMIC_LOAD(&(evolution_stat_.records_));
+      if (NULL != evo_records) {
+        guard.set_evo_records(evo_records);
+        // Double-check: after incrementing ref_count, verify the pointer is still valid.
+        // If records_ has been set to NULL (by reset_evolution_stat), abandon this reference
+        // to avoid use-after-free when free_evolution_records is subsequently called.
+        if (evo_records != ATOMIC_LOAD(&(evolution_stat_.records_))) {
+          guard.reset();
+        }
+      }
+    }
   }
 
   /* XXX: support printing maxium 30 class members.
@@ -902,7 +1083,8 @@ struct ObPlanStat
                K_(timeout_count),
                K_(evolution_stat),
                K_(plan_hash_value),
-               K_(hints_all_worked));
+               K_(hints_all_worked),
+               K_(vec_index_exec_ctx));
 };
 
 struct SysVarNameVal
@@ -953,14 +1135,15 @@ struct ObPhyLocationGetter
 {
 public:
   // used for getting plan
-  // In this interface, we first process the table locations that were marked select_leader, the tablet
-  // locations of them will be added to das_ctx directly, without the need to construct candi_table_locs.
-  // For the remaining table locations that are not marked select_leader, continue to use the previous
-  // logic where a candi_table_loc is generated for each table location. These candi_table_locs will be
-  // added to das_ctx by @build_candi_table_locs().
-  static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
-                               const ObPlanCacheCtx &pc_ctx,
-                               ObIArray<ObCandiTableLoc> &phy_location_infos);
+  // In this interface, we will first verify whether all tables were marked select_leader.
+  // If confirmed, the fast path will be activated to directly select leader replicas for each table
+  // and add them to das ctx, without the need to construct candi table locs.
+  // Otherwise, fallback to the original path and add candi table locs to das ctx manually.
+  // NOTE: no matter which path is used, the table locations will be added to das ctx.
+  // use get_phy_locations instead if you only need to get phy locations.
+  static int get_phy_locations_and_add_to_das_ctx(const ObIArray<ObTableLocation> &table_locations,
+                                                  const ObPlanCacheCtx &pc_ctx,
+                                                  ObIArray<ObCandiTableLoc> &phy_location_infos);
 
   // used for matching plan
   static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
@@ -1025,7 +1208,27 @@ public:
     min_cluster_version_(0),
     is_enable_px_fast_reclaim_(false),
     enable_spf_batch_rescan_(false),
+    enable_distributed_das_scan_(false),
+    enable_das_batch_rescan_flag_(0),
     enable_var_assign_use_das_(false),
+    enable_das_keep_order_(false),
+    enable_nlj_spf_use_rich_format_(false),
+    enable_index_merge_(false),
+    bloom_filter_ratio_(0),
+    enable_hyperscan_regexp_engine_(false),
+    realistic_runtime_bloom_filter_size_(false),
+    enable_parallel_das_dml_(false),
+    direct_load_allow_fallback_(false),
+    default_load_mode_(0),
+    hash_rollup_policy_(0),
+    ndv_runtime_bloom_filter_size_(false),
+    enable_topn_runtime_filter_(false),
+    min_const_integer_precision_(1),
+    enable_runtime_filter_adaptive_apply_(false),
+    extend_sql_plan_monitor_metrics_(false),
+    enable_mysql_compatible_dates_(false),
+    enable_insertup_column_store_opt_(false),
+    enable_px_task_rebalance_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1068,7 +1271,27 @@ public:
   uint64_t min_cluster_version_;
   bool is_enable_px_fast_reclaim_;
   bool enable_spf_batch_rescan_;
+  bool enable_distributed_das_scan_;
+  int64_t enable_das_batch_rescan_flag_;
   bool enable_var_assign_use_das_;
+  bool enable_das_keep_order_;
+  bool enable_nlj_spf_use_rich_format_;
+  bool enable_index_merge_;
+  int bloom_filter_ratio_;
+  bool enable_hyperscan_regexp_engine_;
+  bool realistic_runtime_bloom_filter_size_;
+  bool enable_parallel_das_dml_;
+  bool direct_load_allow_fallback_;
+  int default_load_mode_;
+  int hash_rollup_policy_;
+  bool ndv_runtime_bloom_filter_size_;
+  bool enable_topn_runtime_filter_;
+  int8_t min_const_integer_precision_;
+  bool enable_runtime_filter_adaptive_apply_;
+  bool extend_sql_plan_monitor_metrics_;
+  bool enable_mysql_compatible_dates_;
+  bool enable_insertup_column_store_opt_;
+  bool enable_px_task_rebalance_;
 
 private:
   // current cluster config version_

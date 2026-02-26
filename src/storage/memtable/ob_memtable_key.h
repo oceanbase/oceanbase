@@ -113,14 +113,12 @@ public:
   {
     int64_t pos = 0;
     if (OB_NOT_NULL(rowkey_)) {
-      common::databuff_printf(buf, buf_len, pos, "%s",
-                              common::to_cstring(*rowkey_));
+      common::databuff_printf(buf, buf_len, pos, *rowkey_);
     } else {
       common::databuff_printf(buf, buf_len, pos, "NULL");
     }
     return pos;
   }
-  const char *repr() const { return common::to_cstring(*this); }
 
   template <class Allocator>
   int dup(ObMemtableKey *&new_key, Allocator &allocator) const
@@ -220,7 +218,13 @@ public:
       const common::ObObjMeta &schema_meta = columns.at(i).col_type_;
       if (common::ObNullType != value.get_type()
           && common::ObExtendType != value.get_type()
-          && schema_meta.get_type() != value.get_type()) {
+          && schema_meta.get_type() != value.get_type()
+          && !(lib::is_mysql_mode()
+            && (common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta())
+              || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta))) // small integer -> big integer; mysql mode;
+          && !(lib::is_oracle_mode()
+            && ((common::ObNumberType == schema_meta.get_type() && common::ObNumberFloatType == value.get_type())
+              || (common::ObNumberType == value.get_type() && common::ObNumberFloatType == schema_meta.get_type())))) { // number -> float; oracle mode;
         TRANS_LOG(WARN, "data/schema type does not match",
                   "index", i,
                   "data_type", value.get_type(),
@@ -283,7 +287,7 @@ public:
 private:
   common::ObStoreRowkey *rowkey_;
   mutable uint64_t hash_val_; // Perf optimization.
-  DISALLOW_COPY_AND_ASSIGN(ObMemtableKey);
+  //DISALLOW_COPY_AND_ASSIGN(ObMemtableKey);
 };
 
 class ObStoreRowkeyWrapper
@@ -303,36 +307,42 @@ public:
   int checksum(common::ObBatchChecksum &bc) const { return rowkey_->checksum(bc); }
   int64_t to_string(char *buf, const int64_t buf_len) const { return rowkey_->to_string(buf, buf_len); }
   const ObObj *get_ptr() const { return rowkey_->get_obj_ptr(); }
-  const char *repr() const { return rowkey_->repr(); }
 public:
   const common::ObStoreRowkey *rowkey_;
 };
 
-
-// this is for multi_set pre alloc memory to generate memtable key
-class ObMemtableKeyGenerator {// RAII
-  static constexpr int64_t STACK_BUFFER_SIZE = 32;
+// TODO(xuanxi): remove it later
+class ObMemtableKeyGenerator {
 public:
-  ObMemtableKeyGenerator() : p_extra_store_row_keys_(nullptr), p_extra_memtable_keys_(nullptr), size_(0) {}
-  ~ObMemtableKeyGenerator();
-  int init(const storage::ObStoreRow *rows,
-           const int64_t row_count,
-           const int64_t schema_rowkey_count,
-           const common::ObIArray<share::schema::ObColDesc> &columns);
-  void reset();
-  int64_t count() const { return size_; }
-  ObMemtableKey &operator[](int64_t idx);
-  const ObMemtableKey &operator[](int64_t idx) const;
+  using ObMemtableKeyBuffer = common::ObSEArray<ObMemtableKey, 16>;
+public:
+  ObMemtableKeyGenerator(
+    const int64_t rowkey_cnt,
+    const common::ObIArray<share::schema::ObColDesc> &columns,
+    ObMemtableKeyBuffer *memtable_key_buffer = nullptr)
+    : allocator_(common::ObMemAttr(MTL_ID(), "ObMemtableKey")),
+      rowkey_cnt_(rowkey_cnt),
+      columns_(columns),
+      memtable_key_buffer_(memtable_key_buffer),
+      is_inited_(false)
+  {}
+  ~ObMemtableKeyGenerator() = default;
+  int init();
+  int generate_memtable_key(const blocksstable::ObDatumRow &datum_row);
+  ObMemtableKey &get_memtable_key() { return memtable_key_; }
+  ObMemtableKeyBuffer *get_key_buffer() { return memtable_key_buffer_; }
 private:
-  // this is for avoid memory allocation when rows not so much
-  ObStoreRowkey store_row_key_buffer_[STACK_BUFFER_SIZE];
-  ObMemtableKey memtable_key_buffer_[STACK_BUFFER_SIZE];
-  ObStoreRowkey *p_extra_store_row_keys_;
-  ObMemtableKey *p_extra_memtable_keys_;
-  int64_t size_;
+  ObArenaAllocator allocator_;
+  int64_t rowkey_cnt_;
+  const common::ObIArray<share::schema::ObColDesc> &columns_;
+  storage::ObObjBufArray obj_buf_;
+  ObStoreRowkey store_rowkey_;
+  ObMemtableKey memtable_key_;
+  ObMemtableKeyBuffer *memtable_key_buffer_;
+  bool is_inited_;
 };
 
-}
-}
+} // namespace memtable
+} // namespace oceanbase
 
 #endif // OCEANBASE_MEMTABLE_OB_MEMTABLE_KEY2_

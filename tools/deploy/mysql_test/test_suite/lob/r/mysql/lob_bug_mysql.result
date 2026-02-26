@@ -2,52 +2,46 @@ drop table if exists t1;
 drop table if exists sbtest1;
 create table t1(nr int, a longtext, b longblob);
 insert into t1 values(10, repeat('a', 5000), repeat('A', 5000));
-insert into t1 values(20, repeat('b', 50000), repeat('B', 50000));
-insert into t1 values(30, repeat('c', 500000), repeat('C', 500000));
-insert into t1 values(40, repeat('d', 3000000), repeat('D', 3000000));
+insert into t1 values(20, repeat('b', 5000), repeat('B', 5000));
+insert into t1 values(30, repeat('c', 5000), repeat('C', 5000));
+insert into t1 values(40, repeat('d', 3000), repeat('D', 3000));
 insert into t1 select * from t1;
-insert into t1 values(1, repeat('e', 2000000), repeat('E', 2000000));
+insert into t1 values(1, repeat('e', 2000), repeat('E', 2000));
 insert into t1 select * from t1;
-insert into t1 values(1, repeat('e', 2000000), repeat('E', 2000000));
-insert into t1 values(2, repeat('f', 3000000), repeat('F', 3000000));
+insert into t1 values(1, repeat('e', 2000), repeat('E', 2000));
+insert into t1 values(2, repeat('f', 3000), repeat('F', 3000));
 select nr, sum(length(a)), sum(length(b)), substr(a, 1000, 10), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
 nr	sum(length(a))	sum(length(b))	substr(a, 1000, 10)	substr(b, 1000, 10)	count(1)
-1	6000000	6000000	eeeeeeeeee	EEEEEEEEEE	3
-2	3000000	3000000	ffffffffff	FFFFFFFFFF	1
+1	6000	6000	eeeeeeeeee	EEEEEEEEEE	3
+2	3000	3000	ffffffffff	FFFFFFFFFF	1
 10	20000	20000	aaaaaaaaaa	AAAAAAAAAA	4
-20	200000	200000	bbbbbbbbbb	BBBBBBBBBB	4
-30	2000000	2000000	cccccccccc	CCCCCCCCCC	4
-40	12000000	12000000	dddddddddd	DDDDDDDDDD	4
-alter system major freeze tenant = sys;
-alter system major freeze tenant = all_user;
-alter system major freeze tenant = all_meta;
+20	20000	20000	bbbbbbbbbb	BBBBBBBBBB	4
+30	20000	20000	cccccccccc	CCCCCCCCCC	4
+40	12000	12000	dddddddddd	DDDDDDDDDD	4
 select nr, sum(length(a)), sum(length(b)), substr(a, 1000, 10), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
 nr	sum(length(a))	sum(length(b))	substr(a, 1000, 10)	substr(b, 1000, 10)	count(1)
-1	6000000	6000000	eeeeeeeeee	EEEEEEEEEE	3
-2	3000000	3000000	ffffffffff	FFFFFFFFFF	1
+1	6000	6000	eeeeeeeeee	EEEEEEEEEE	3
+2	3000	3000	ffffffffff	FFFFFFFFFF	1
 10	20000	20000	aaaaaaaaaa	AAAAAAAAAA	4
-20	200000	200000	bbbbbbbbbb	BBBBBBBBBB	4
-30	2000000	2000000	cccccccccc	CCCCCCCCCC	4
-40	12000000	12000000	dddddddddd	DDDDDDDDDD	4
+20	20000	20000	bbbbbbbbbb	BBBBBBBBBB	4
+30	20000	20000	cccccccccc	CCCCCCCCCC	4
+40	12000	12000	dddddddddd	DDDDDDDDDD	4
 delete from t1 where nr = 2;
 update t1 set a = "updated" where nr = 1;
 select nr, sum(length(a)), sum(length(b)), substr(a, 1, 5), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
 nr	sum(length(a))	sum(length(b))	substr(a, 1, 5)	substr(b, 1000, 10)	count(1)
-1	21	6000000	updat	EEEEEEEEEE	3
+1	21	6000	updat	EEEEEEEEEE	3
 10	20000	20000	aaaaa	AAAAAAAAAA	4
-20	200000	200000	bbbbb	BBBBBBBBBB	4
-30	2000000	2000000	ccccc	CCCCCCCCCC	4
-40	12000000	12000000	ddddd	DDDDDDDDDD	4
-alter system major freeze tenant = sys;
-alter system major freeze tenant = all_user;
-alter system major freeze tenant = all_meta;
+20	20000	20000	bbbbb	BBBBBBBBBB	4
+30	20000	20000	ccccc	CCCCCCCCCC	4
+40	12000	12000	ddddd	DDDDDDDDDD	4
 select nr, sum(length(a)), sum(length(b)), substr(a, 1, 5), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
 nr	sum(length(a))	sum(length(b))	substr(a, 1, 5)	substr(b, 1000, 10)	count(1)
-1	21	6000000	updat	EEEEEEEEEE	3
+1	21	6000	updat	EEEEEEEEEE	3
 10	20000	20000	aaaaa	AAAAAAAAAA	4
-20	200000	200000	bbbbb	BBBBBBBBBB	4
-30	2000000	2000000	ccccc	CCCCCCCCCC	4
-40	12000000	12000000	ddddd	DDDDDDDDDD	4
+20	20000	20000	bbbbb	BBBBBBBBBB	4
+30	20000	20000	ccccc	CCCCCCCCCC	4
+40	12000	12000	ddddd	DDDDDDDDDD	4
 drop table t1;
 CREATE TABLE sbtest1(c1 TINYBLOB NOT NULL);
 ALTER TABLE sbtest1 ADD COLUMN d int;

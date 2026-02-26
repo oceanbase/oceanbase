@@ -1,3 +1,6 @@
+// owner: gengli.wzy
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,27 +13,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 
 #define protected public
 #define private public
 #define UNITTEST
 
-#include <iostream>
-#include <thread>
-#include "lib/oblog/ob_log.h"
-#include "storage/ls/ob_freezer.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/tx_table/ob_tx_data_memtable_mgr.h"
-#include "storage/tx_table/ob_tx_data_table.h"
-#include "storage/tx_table/ob_tx_table_iterator.h"
-#include "storage/checkpoint/ob_data_checkpoint.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
-#include "storage/blocksstable/ob_datum_row.h"
 #undef private
 #undef protected
 
@@ -60,6 +50,7 @@ int64_t ObTxDataMemtable::PERIODICAL_SELECT_INTERVAL_NS = 10LL;
 int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_commit_versions)
 {
   int ret = OB_SUCCESS;
+  ret = past_commit_versions.array_.push_back(ObCommitVersionsArray::Node(SCN::max_scn(), SCN::max_scn()));
   return ret;
 }
 
@@ -185,7 +176,6 @@ public:
   void do_repeat_insert_test();
 
   void do_print_leak_slice_test();
-
 
 private:
   void insert_tx_data_();
@@ -355,7 +345,9 @@ void TestTxDataTable::init_memtable_mgr_(ObTxDataMemtableMgr *memtable_mgr)
 {
   ASSERT_NE(nullptr, memtable_mgr);
   memtable_mgr->set_freezer(&tx_data_table_.freezer_);
-  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(CreateMemtableArg(1, SCN::min_scn(), SCN::min_scn(), false, false)));
+  CreateMemtableArg arg;
+  arg.schema_version_ = 1;
+  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(arg));
   ASSERT_EQ(1, memtable_mgr->get_memtable_count_());
 }
 
@@ -644,7 +636,9 @@ void TestTxDataTable::do_repeat_insert_test() {
   ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
   ASSERT_NE(nullptr, memtable_mgr);
   memtable_mgr->set_freezer(&tx_data_table_.freezer_);
-  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(CreateMemtableArg(1, SCN::min_scn(), SCN::min_scn(), false, false)));
+  CreateMemtableArg arg;
+  arg.schema_version_ = 1;
+  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(arg));
   ASSERT_EQ(1, memtable_mgr->get_memtable_count_());
 
   insert_start_scn.convert_for_logservice(ObTimeUtil::current_time_ns());
@@ -727,6 +721,7 @@ void TestTxDataTable::fake_ls_(ObLS &ls)
   ls.ls_meta_.migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
   ls.ls_meta_.restore_status_ = ObLSRestoreStatus::NONE;
   ls.ls_meta_.rebuild_seq_ = 0;
+  ls.ls_meta_.store_format_ = common::ObLSStoreType::OB_LS_STORE_NORMAL;
 }
 
 void TestTxDataTable::do_print_leak_slice_test()
@@ -788,7 +783,6 @@ int main(int argc, char **argv)
 {
   int ret = 1;
   system("rm -f test_tx_data_table.log*");
-  system("rm -fr run_*");
   ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_tx_data_table.log", true);
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);

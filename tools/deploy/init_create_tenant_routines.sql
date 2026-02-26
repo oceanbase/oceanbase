@@ -51,7 +51,7 @@ drop procedure if exists create_tenant_with_arg;/
 create procedure create_tenant_with_arg(tenant_name varchar(64), compat_mode varchar(10), unit_config varchar(64), arg_list varchar(64))
 begin
   declare num int;
-  declare zone_name varchar(20);
+  declare zone_name varchar(128);
 
   select count(*) from oceanbase.DBA_OB_SERVERS group by zone limit 1 into num;
   select zone from (select zone, count(*) as a from oceanbase.DBA_OB_ZONES group by region order by a desc limit 1) into zone_name;
@@ -131,17 +131,17 @@ begin
   call oceanbase.create_mysql_tenant_2c4g(tenant_name);
 end /
 
--- create_mysql_tenant_mini / create_mysql_tenant_mini_with_arg: 默认创建一个1c1g的mysql租户
+-- create_mysql_tenant_mini / create_mysql_tenant_mini_with_arg: 默认创建一个1c2g的mysql租户1G会内存不足
 drop procedure if exists create_mysql_tenant_mini;/
 create procedure create_mysql_tenant_mini(tenant_name varchar(64))
 begin
-  call oceanbase.create_mysql_tenant_1c1g(tenant_name);
+  call oceanbase.create_mysql_tenant_1c2g(tenant_name);
 end /
 
 drop procedure if exists create_mysql_tenant_mini_with_arg;/
 create procedure create_mysql_tenant_mini_with_arg(tenant_name varchar(64), arg_list varchar(64))
 begin
-  call oceanbase.create_mysql_tenant_1c1g_with_arg(tenant_name, arg_list);
+  call oceanbase.create_mysql_tenant_1c2g_with_arg(tenant_name, arg_list);
 end /
 
 -- create_mysql_tenant_1c1g / create_mysql_tenant_1c1g_with_arg: 创建一个1c1g的mysql租户
@@ -214,13 +214,13 @@ end /
 drop procedure if exists create_oracle_tenant_mini;/
 create procedure create_oracle_tenant_mini(tenant_name varchar(64))
 begin
-  call oceanbase.create_oracle_tenant_1c1g(tenant_name);
+  call oceanbase.create_oracle_tenant_1c2g(tenant_name);
 end /
 
 drop procedure if exists create_oracle_tenant_mini_with_arg;/
 create procedure create_oracle_tenant_mini_with_arg(tenant_name varchar(64), arg_list varchar(64))
 begin
-  call oceanbase.create_oracle_tenant_1c1g_with_arg(tenant_name, arg_list);
+  call oceanbase.create_oracle_tenant_1c2g_with_arg(tenant_name, arg_list);
 end /
 
 -- create_oracle_tenant_1c1g / create_oracle_tenant_1c1g_with_arg: 创建一个1c1g的oracle租户
@@ -301,8 +301,14 @@ drop procedure if exists adjust_sys_resource;/
 create procedure adjust_sys_resource()
 begin
   declare mem bigint;
+  declare startup_mode VARCHAR(255);
   select memory_limit from GV$OB_SERVERS limit 1 into mem;
-  set @sql_text = "alter resource unit sys_unit_config memory_size = 1073741824;";
+  select value from oceanbase.__all_virtual_tenant_parameter_stat where name = 'ob_startup_mode' limit 1 into startup_mode;
+  if (startup_mode = 'shared_storage') then
+    set @sql_text = "alter resource unit sys_unit_config memory_size = 1610612736;";
+  else
+    set @sql_text = "alter resource unit sys_unit_config memory_size = 1073741824;";
+  end if;
   if (mem < 17179869184) then
     prepare stmt from @sql_text;
     execute stmt;

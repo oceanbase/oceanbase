@@ -13,10 +13,7 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/geo/ob_geo_dispatcher.h"
-#include "lib/geo/ob_geo_func_touches.h"
-#include "lib/geo/ob_geo_func_disjoint.h"
-#include "lib/geo/ob_geo_utils.h"
+#include "ob_geo_func_touches.h"
 #include "lib/geo/ob_geo_func_utils.h"
 
 using namespace oceanbase::common;
@@ -605,7 +602,7 @@ private:
                 *context.get_allocator(), mpt1, mpt_bin, context.get_srs()))) {
           LOG_WARN("failed to convert geo tree to binary", K(ret));
         } else {
-          ObGeoEvalCtx intersects_context(context.get_allocator(), context.get_srs());
+          ObGeoEvalCtx intersects_context(context.get_mem_ctx(), context.get_srs());
           intersects_context.append_geo_arg(mpt_bin);
           intersects_context.append_geo_arg(g2);
           if (OB_FAIL(ObGeoFuncIntersects::eval(intersects_context, point_intersects))) {
@@ -617,7 +614,7 @@ private:
       }
 
       if (point_intersects || OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(*allocator, *context.get_srs(), mpt1, mls1, mpy1))) {
+      } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(context.get_mem_ctx(), *context.get_srs(), mpt1, mls1, mpy1))) {
         LOG_WARN("fail to do gc union", K(ret));
       } else {
         // Check that at least one part of g1 touches at least one part of g2.
@@ -676,7 +673,7 @@ private:
                 *context.get_allocator(), mpt1, mpt_bin, context.get_srs()))) {
           LOG_WARN("failed to convert geo tree to binary", K(ret));
         } else {
-          ObGeoEvalCtx intersects_context(context.get_allocator(), context.get_srs());
+          ObGeoEvalCtx intersects_context(context.get_mem_ctx(), context.get_srs());
           intersects_context.append_geo_arg(mpt_bin);
           intersects_context.append_geo_arg(g2);
           if (OB_FAIL(ObGeoFuncIntersects::eval(intersects_context, point_intersects))) {
@@ -688,7 +685,7 @@ private:
       }
 
       if (point_intersects || OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(*allocator, *context.get_srs(), mpt1, mls1, mpy1))) {
+      } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(context.get_mem_ctx(), *context.get_srs(), mpt1, mls1, mpy1))) {
         LOG_WARN("fail to do gc union", K(ret));
       } else {
         // Check that at least one part of g1 touches at least one part of g2.

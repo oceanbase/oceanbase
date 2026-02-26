@@ -11,16 +11,6 @@
  */
 
 #include "log_net_service.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"                   // For UNUSED
-#include "lib/net/ob_addr.h"                              // ObAddr
-#include "common/ob_member_list.h"                        // ObMemberList
-#include "log_req.h"
-#include "share/allocator/ob_tenant_mutil_allocator.h"    // ObILogAllocator
-#include "lsn.h"                                // LSN
-#include "log_rpc.h"                                   // ObLgRpc
-#include "log_meta_info.h"                             // LogPrepareMeta
-#include "log_writer_utils.h"                          // LogWriteBuf
 
 namespace oceanbase
 {

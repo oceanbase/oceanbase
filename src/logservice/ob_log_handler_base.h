@@ -15,6 +15,7 @@
 #include <cstdint>
 #include "lib/lock/ob_tc_rwlock.h"
 #include "common/ob_role.h"
+#include "ipalf/ipalf_handle.h"
 #include "palf/palf_handle.h"
 
 namespace oceanbase
@@ -23,9 +24,9 @@ namespace common
 {
 class ObAddr;
 }
-namespace palf
+namespace ipalf
 {
-class PalfEnv;
+class IPalfEnv;
 }
 namespace logservice
 {
@@ -49,7 +50,7 @@ public:
                                                      const char *reason);
   int change_leader_to(const common::ObAddr &dst_addr);
   int get_role_atomically(common::ObRole &role) const;
-
+  bool is_in_stop_state() const;
 protected:
   // @brief query role and proposal_id from ObLogHandler or ObLogRestoreHandler
   // @param[out], role:
@@ -69,8 +70,9 @@ public:
   common::ObRole role_;
   int64_t proposal_id_;
   int64_t id_;
-  palf::PalfHandle palf_handle_;
-  palf::PalfEnv *palf_env_;
+  ipalf::IPalfHandle *palf_handle_;
+  ipalf::IPalfEnv *palf_env_;
+  bool enable_logservice_;
   bool is_in_stop_state_;
   bool is_inited_;
 };

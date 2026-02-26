@@ -13,11 +13,8 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "ob_transform_count_to_exists.h"
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/resolver/dml/ob_merge_stmt.h"
 namespace oceanbase
 {
 using namespace common;
@@ -201,7 +198,7 @@ int ObTransformCountToExists::check_trans_valid(ObDMLStmt *stmt, ObRawExpr *expr
       LOG_WARN("failed to check if subquery has rownum", K(ret));
     } else if (has_rownum) {
       // do nothing
-    } else if (tmp_subquery_expr->get_ref_count() > 1 ||
+    } else if (tmp_subquery_expr->is_shared_reference() ||
                tmp_subquery->has_having() || !tmp_subquery->is_scala_group_by() ||
                tmp_subquery->has_order_by() || tmp_subquery->has_limit() ||
                tmp_subquery->has_window_function_filter()) {
@@ -435,6 +432,11 @@ int ObTransformCountToExists::do_transform(ObDMLStmt *stmt,
                                                                     true,
                                                                     not_null_cond))) {
             LOG_WARN("failed to build is not null expr", K(ret));
+          } else if (OB_ISNULL(not_null_cond)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("not null cond is null", K(ret));
+          } else if (OB_FAIL(not_null_cond->formalize(ctx_->session_info_))) {
+            LOG_WARN("failed to formalize expr", K(ret));
           } else if (OB_FAIL(subquery->get_condition_exprs().push_back(not_null_cond))) {
             LOG_WARN("failed to append not null cond expr", K(ret));
           }

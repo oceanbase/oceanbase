@@ -11,14 +11,10 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/ls/ob_ls_sync_tablet_seq_handler.h"
+#include "ob_ls_sync_tablet_seq_handler.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
 #include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
-#include "logservice/ob_log_base_header.h"
-#include "share/scn.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_tablet_autoincrement_service.h"
 
 namespace oceanbase
 {
@@ -72,6 +68,7 @@ int ObLSSyncTabletSeqHandler::replay(const void *buffer,
   } else if (OB_FAIL(autoinc_seq_handler.replay_update_tablet_autoinc_seq(ls_,
                                                                           log.get_tablet_id(),
                                                                           log.get_autoinc_seq(),
+                                                                          base_header.need_pre_replay_barrier(),
                                                                           scn))) {
     LOG_WARN("failed to update tablet auto inc seq", K(ret), K(log));
   }

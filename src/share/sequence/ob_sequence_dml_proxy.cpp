@@ -12,23 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_sequence_dml_proxy.h"
-#include "lib/string/ob_string.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/number/ob_number_v2.h"
-#include "common/ob_timeout_ctx.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/sequence/ob_sequence_cache.h"
-#include "share/sequence/ob_sequence_option_builder.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
-#include "share/ob_schema_status_proxy.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
 
 using namespace oceanbase::common;
@@ -97,8 +82,11 @@ int ObSequenceDMLProxy::set_pre_op_timeout(common::ObTimeoutCtx &ctx)
 int ObSequenceDMLProxy::next_batch(
     const uint64_t tenant_id,
     const uint64_t sequence_id,
+    const int64_t schema_version,
     const share::ObSequenceOption &option,
-    SequenceCacheNode &cache_range)
+    SequenceCacheNode &cache_range,
+    ObSequenceCacheItem &old_cache,
+    bool &wrap_around)
 {
   int ret = OB_SUCCESS;
   const char *tname = OB_ALL_SEQUENCE_VALUE_TNAME;
@@ -117,6 +105,7 @@ int ObSequenceDMLProxy::next_batch(
   bool order_flag = option.get_order_flag();
   bool cycle_flag = option.get_cycle_flag();
   ObSequenceCacheOrderMode cache_order_mode = option.get_cache_order_mode();
+  wrap_around = false;
 
   if (true == order_flag && OLD_ACTION == cache_order_mode) {
     // When the version is lower than 4.2.3, the cache order mode default cache size is 1 and the
@@ -127,6 +116,7 @@ int ObSequenceDMLProxy::next_batch(
     cache_size.shadow_copy(option.get_cache_size());
   }
 
+  old_cache.alloc_mutex_.unlock();
   if (OB_FAIL(ret)) {
     // pass
   } else if (!inited_) {
@@ -182,7 +172,36 @@ int ObSequenceDMLProxy::next_batch(
           ret = (OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret);
         } else {
           ret = OB_SUCCESS;
+          if (cycle_flag && !order_flag && cache_size > static_cast<int64_t>(1)) {
+            wrap_around = increment_by > static_cast<int64_t>(0) ? next_value == min_value :
+                                                                   next_value == max_value;
+          }
         }
+      }
+    }
+  }
+
+  old_cache.alloc_mutex_.lock();
+  if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res)
+    {
+      ObSqlString sql;
+      ObMySQLResult *result = NULL;
+      int64_t curr_version = OB_INVALID_VERSION;
+      if (OB_FAIL(sql.assign_fmt("SELECT schema_version "
+                                 "FROM %s WHERE sequence_id=%lu",
+                                 OB_ALL_SEQUENCE_OBJECT_TNAME, sequence_id))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(sequence_id));
+      } else if (OB_FAIL(sql_client->read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to read", KR(ret), K(tenant_id), K(sql));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret));
+      } else if (OB_FAIL((*result).get_int("schema_version", curr_version))) {
+        LOG_WARN("fail to get schema_version", K(ret), K(tenant_id), K(sql));
+      } else if (schema_version != curr_version) {
+        ret = OB_AUTOINC_CACHE_NOT_EQUAL;
+        LOG_WARN("schema is not up to date, need retry", K(ret));
       }
     }
   }
@@ -286,9 +305,6 @@ int ObSequenceDMLProxy::next_batch(
                 "WHERE SEQUENCE_ID = %lu",
                 tname, next_value.format(), sequence_id))) {
       LOG_WARN("format update sql fail", K(ret));
-    } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("can't write sys table now", K(ret), K(tenant_id));
     } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("fail to execute sql", K(sql), K(ret));
     } else {
@@ -309,16 +325,21 @@ int ObSequenceDMLProxy::next_batch(
   }
 
   if (OB_SUCC(ret)) {
-    OZ(cache_range.set_start(cache_inclusive_start));
-    OZ(cache_range.set_end(cache_exclusive_end));
-    LOG_INFO("get next sequence batch success",
-             K(tenant_id),
-             K(sequence_id),
-             "cache_inclusive_start", cache_inclusive_start.format(),
-             "cache_exclusive_end", cache_exclusive_end.format(),
-             "increment_by", increment_by.format(),
-             "cache_size", cache_size.format(),
-             K(ret));
+    if (OB_UNLIKELY(increment_by > static_cast<int64_t>(0) && cache_inclusive_start > max_value)
+        || OB_UNLIKELY(increment_by < static_cast<int64_t>(0) && cache_inclusive_start < min_value)) {
+      ret = OB_AUTOINC_CACHE_NOT_EQUAL;
+    } else {
+      OZ(cache_range.set_start(cache_inclusive_start));
+      OZ(cache_range.set_end(cache_exclusive_end));
+      LOG_INFO("get next sequence batch success",
+              K(tenant_id),
+              K(sequence_id),
+              "cache_inclusive_start", cache_inclusive_start.format(),
+              "cache_exclusive_end", cache_exclusive_end.format(),
+              "increment_by", increment_by.format(),
+              "cache_size", cache_size.format(),
+              K(ret));
+    }
   }
 
   return ret;
@@ -327,8 +348,11 @@ int ObSequenceDMLProxy::next_batch(
 int ObSequenceDMLProxy::prefetch_next_batch(
     const uint64_t tenant_id,
     const uint64_t sequence_id,
+    const int64_t schema_version,
     const share::ObSequenceOption &option,
-    SequenceCacheNode &cache_range)
+    SequenceCacheNode &cache_range,
+    ObSequenceCacheItem &old_cache,
+    bool &wrap_around)
 {
   int ret = OB_SUCCESS;
   // set timeout for prefetch
@@ -337,8 +361,11 @@ int ObSequenceDMLProxy::prefetch_next_batch(
     LOG_WARN("failed to set timeout", K(ret));
   } else if (OB_FAIL(next_batch(tenant_id,
                                 sequence_id,
+                                schema_version,
                                 option,
-                                cache_range))) {
+                                cache_range,
+                                old_cache,
+                                wrap_around))) {
     LOG_WARN("fail prefetch sequence batch",
              K(tenant_id), K(sequence_id), K(option), K(ret));
   }

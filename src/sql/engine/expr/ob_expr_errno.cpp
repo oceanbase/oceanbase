@@ -14,8 +14,6 @@
 
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_errno.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

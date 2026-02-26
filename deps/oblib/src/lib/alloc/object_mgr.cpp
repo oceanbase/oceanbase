@@ -11,10 +11,7 @@
  */
 
 #include "object_mgr.h"
-#include "lib/allocator/ob_ctx_define.h"
 #include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/alloc/memory_sanity.h"
-#include "lib/alloc/ob_tenant_ctx_allocator.h"
 
 using namespace oceanbase;
 using namespace lib;
@@ -24,7 +21,7 @@ SubObjectMgr::SubObjectMgr(ObTenantCtxAllocator &ta,
                            const uint32_t ablock_size,
                            const bool enable_dirty_list,
                            IBlockMgr *blk_mgr)
-  : IBlockMgr(ta.get_tenant_id(), ta.get_ctx_id()),
+  : IBlockMgr(ta.get_tenant_id(), ta.get_ctx_id(), ta.get_numa_id()),
     ta_(ta),
     mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK),
     normal_locker_(mutex_), no_log_locker_(mutex_),
@@ -48,7 +45,7 @@ void SubObjectMgr::free_object(AObject *object)
   abort_unless(block->is_valid());
   abort_unless(block->in_use_);
   abort_unless(block->obj_set_ != NULL);
-  ObjectSet *os = block->obj_set_;
+  ObjectSet *os = (ObjectSet *)block->obj_set_;
   abort_unless(&os_ == os);
   os->free_object(object);
 }
@@ -75,7 +72,7 @@ ObjectMgr::ObjectMgr(ObTenantCtxAllocator &ta,
                      int parallel,
                      bool enable_dirty_list,
                      IBlockMgr *blk_mgr)
-  : IBlockMgr(ta.get_tenant_id(), ta.get_ctx_id()),
+  : IBlockMgr(ta.get_tenant_id(), ta.get_ctx_id(), ta.get_numa_id()),
     ta_(ta),
     enable_no_log_(enable_no_log),
     ablock_size_(ablock_size),
@@ -85,6 +82,7 @@ ObjectMgr::ObjectMgr(ObTenantCtxAllocator &ta,
     sub_cnt_(1),
     root_mgr_(ta, enable_no_log, ablock_size_,
               enable_dirty_list, blk_mgr_),
+    obj_mgr_v2_(parallel, this),
     last_wash_ts_(0),
     last_washed_size_(0)
 {
@@ -109,6 +107,7 @@ void ObjectMgr::reset() {
 
 AObject *ObjectMgr::alloc_object(uint64_t size, const ObMemAttr &attr)
 {
+  if (OB_LIKELY(attr.use_malloc_v2_)) return obj_mgr_v2_.alloc_object(size, attr);
   AObject *obj = NULL;
   const uint64_t start = common::get_itid();
   SubObjectMgr *sub_mgr = nullptr;
@@ -146,6 +145,7 @@ AObject *ObjectMgr::alloc_object(uint64_t size, const ObMemAttr &attr)
 AObject *ObjectMgr::realloc_object(
     AObject *obj, const uint64_t size, const ObMemAttr &attr)
 {
+  if (OB_LIKELY(attr.use_malloc_v2_)) return obj_mgr_v2_.realloc_object(obj, size, attr);
   AObject *new_obj = NULL;
 
   if (NULL != obj) {
@@ -158,7 +158,7 @@ AObject *ObjectMgr::realloc_object(
     abort_unless(block->in_use_);
     abort_unless(block->obj_set_ != NULL);
 
-    ObjectSet *os = block->obj_set_;
+    ObjectSet *os = (ObjectSet *)block->obj_set_;
     abort_unless(os);
     if (os != NULL) {
       os->lock();
@@ -179,7 +179,7 @@ void ObjectMgr::free_object(AObject *obj)
   abort_unless(block->in_use_);
   abort_unless(block->obj_set_ != NULL);
 
-  ObjectSet *set = block->obj_set_;
+  ObjectSet *set = (ObjectSet *)block->obj_set_;
   set->free_object(obj);
   // TODO by fengshuo.fs: when object_set is empty, try free the sub_mgr of it.
 }
@@ -274,9 +274,6 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
 void ObjectMgr::destroy_sub_mgr(SubObjectMgr *sub_mgr)
 {
   if (sub_mgr != nullptr) {
-    auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID,
-                                                                          ObCtxIds::DEFAULT_CTX_ID);
-    auto &root_mgr = static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_;
     sub_mgr->~SubObjectMgr();
     ObTenantCtxAllocator::common_free(sub_mgr);
   }
@@ -345,7 +342,7 @@ bool ObjectMgr::check_has_unfree()
 
 bool ObjectMgr::check_has_unfree(char *first_label, char *first_bt)
 {
-  bool has_unfree = false;
+  bool has_unfree = obj_mgr_v2_.check_has_unfree(first_label, first_bt);
   for (uint64_t idx = 0; idx < ATOMIC_LOAD(&sub_cnt_) && !has_unfree; idx++) {
     auto sub_mgr = ATOMIC_LOAD(&sub_mgrs_[idx]);
     if (OB_ISNULL(sub_mgr)) {
@@ -357,4 +354,53 @@ bool ObjectMgr::check_has_unfree(char *first_label, char *first_bt)
     }
   }
   return has_unfree;
+}
+
+ObjectMgrV2::ObjectMgrV2(int parallel, IBlockMgr *blk_mgr)
+  : parallel_(blk_mgr->get_tenant_id() == OB_SERVER_TENANT_ID &&
+    blk_mgr->get_ctx_id() == ObCtxIds::GLIBC ? OBJECT_SET_CNT : parallel)
+{
+  for (int i = 0; i < parallel_; ++i) {
+    obj_sets_[i].set_block_mgr(blk_mgr);
+  }
+}
+
+void ObjectMgrV2::do_cleanup()
+{
+  for (uint64_t idx = 0; idx < parallel_; idx++) {
+    obj_sets_[idx].do_cleanup();
+  }
+}
+
+bool ObjectMgrV2::check_has_unfree(char *first_label, char *first_bt)
+{
+  bool has_unfree = false;
+  for (uint64_t idx = 0; idx < parallel_ && !has_unfree; idx++) {
+    has_unfree = obj_sets_[idx].check_has_unfree(first_label, first_bt);
+  }
+  return has_unfree;
+}
+
+AObject *ObjectMgrV2::realloc_object(
+      AObject *obj, const uint64_t size, const ObMemAttr &attr)
+{
+  AObject *new_obj = NULL;
+
+  if (NULL != obj) {
+    abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE
+                 || obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
+
+    ABlock *block = obj->block();
+
+    abort_unless(block->is_valid());
+    abort_unless(block->in_use_);
+
+    ObjectSetV2 *os = block->obj_set_v2_;
+    abort_unless(os);
+    new_obj = os->realloc_object(obj, size, attr);
+  } else {
+    new_obj = alloc_object(size, attr);
+  }
+
+  return new_obj;
 }

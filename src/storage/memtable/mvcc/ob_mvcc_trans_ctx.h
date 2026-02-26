@@ -188,7 +188,6 @@ public:
 
   friend class ObITransCallbackIterator;
   enum { MAX_CALLBACK_LIST_COUNT = transaction::MAX_CALLBACK_LIST_COUNT };
-  enum { MAX_CB_ALLOCATOR_COUNT = OB_MAX_CPU_NUM };
   enum {
     PARALLEL_STMT = -1
   };
@@ -218,8 +217,7 @@ public:
       callback_ext_info_log_count_(0),
       pending_log_size_(0),
       flushed_log_size_(0),
-      cb_allocator_(cb_allocator),
-      cb_allocators_(NULL)
+      cb_allocator_(cb_allocator)
   {
   }
   ~ObTransCallbackMgr() {}
@@ -228,6 +226,9 @@ public:
   void *alloc_mvcc_row_callback();
   void free_mvcc_row_callback(ObITransCallback *cb);
   int append(ObITransCallback *node);
+  int append(ObITransCallback *head,
+             ObITransCallback *tail,
+             const int64_t length);
   void before_append(ObITransCallback *node);
   void after_append(ObITransCallback *node, const int ret_code);
   void trans_start();
@@ -235,6 +236,7 @@ public:
   void print_callbacks();
   int get_callback_list_stat(ObIArray<ObTxCallbackListStat> &stats);
   void elr_trans_preparing();
+  void elr_trans_revoke();
   int trans_end(const bool commit);
   void replay_begin(const bool parallel_replay, share::SCN ccn);
 public:
@@ -253,6 +255,7 @@ public:
   int acquire_callback_list(const bool new_epoch);
   void revert_callback_list();
   int get_tx_seq_replay_idx(const transaction::ObTxSEQ seq) const;
+  int64_t get_write_epoch() const { return write_epoch_; }
   common::SpinRWLock& get_rwlock() { return rwlock_; }
 private:
   void wakeup_waiting_txns_();
@@ -272,15 +275,11 @@ public:
   int clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunction<void()> &before_remove);
   // when not inc, return -1
   int64_t inc_pending_log_size(const int64_t size);
-  void inc_flushed_log_size(const int64_t size) {
-    if (!serial_final_scn_.is_valid()) {
-      UNUSED(ATOMIC_FAA(&flushed_log_size_, size));
-    }
-  }
+  void inc_flushed_log_size(const int64_t size);
   void clear_pending_log_size() { ATOMIC_STORE(&pending_log_size_, 0); }
-  int64_t get_pending_log_size() const { return ATOMIC_LOAD(&pending_log_size_); }
+  int64_t get_pending_log_size() const;
   bool pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no, const int64_t limit);
-  int64_t get_flushed_log_size() const { return ATOMIC_LOAD(&flushed_log_size_); }
+  int64_t get_flushed_log_size() const;
   int get_log_guard(const transaction::ObTxSEQ &write_seq,
                     ObCallbackListLogGuard &log_guard,
                     int &cb_list_idx);
@@ -415,7 +414,6 @@ private:
   // current flushed log size in leader participant
   int64_t flushed_log_size_;
   ObMemtableCtxCbAllocator &cb_allocator_;
-  ObMemtableCtxCbAllocator *cb_allocators_;
 };
 
 //class ObIMvccCtx;
@@ -458,7 +456,7 @@ public:
   void set(const ObMemtableKey *key,
            ObMvccTransNode *node,
            const int64_t data_size,
-           const ObRowData *old_row,
+           const ObRowData &old_row,
            const bool is_replay,
            const transaction::ObTxSEQ seq_no,
            const int64_t column_cnt,
@@ -472,14 +470,7 @@ public:
 
     tnode_ = node;
     data_size_ = data_size;
-    if (NULL != old_row) {
-      old_row_ = *old_row;
-      if (old_row_.size_ == 0 && old_row_.data_ != NULL) {
-        ob_abort();
-      }
-    } else {
-      old_row_.reset();
-    }
+    old_row_ = old_row;
     seq_no_ = seq_no;
     if (tnode_) {
       tnode_->set_seq_no(seq_no_);
@@ -507,8 +498,12 @@ public:
   transaction::ObTransCtx *get_trans_ctx() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual int before_append(const bool is_replay) override;
-  virtual void after_append(const bool is_replay) override;
   virtual int log_submitted(const share::SCN scn, storage::ObIMemtable *&last_mt) override;
+  virtual void after_append_fail(const bool is_replay) override;
+  virtual int64_t get_old_row_data_size() override
+  {
+    return old_row_.size_;
+  }
   int64_t get_data_size()
   {
     return data_size_;
@@ -532,6 +527,7 @@ private:
   virtual int calc_checksum(const share::SCN checksum_scn,
                             TxChecksum *checksumer) override;
   virtual int elr_trans_preparing() override;
+  virtual void elr_trans_revoke() override;
 private:
   int link_and_get_next_node(ObMvccTransNode *&next);
   int row_delete();

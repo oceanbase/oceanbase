@@ -20,6 +20,7 @@ namespace oceanbase
 namespace common
 {
 typedef ObFixedLengthString<MAX_ZONE_LENGTH> ObZone;
+typedef ObFixedLengthString<MAX_ZONE_LIST_LENGTH> ObPriZone;
 }//end namespace common
 }//end namespace oceanbase
 #endif //OCEANBASE_COMMON_OB_ZONE_H_

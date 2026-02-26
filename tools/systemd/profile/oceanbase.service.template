@@ -1,0 +1,22 @@
+[Unit]
+Description=oceanbase
+
+[Service]
+User=root
+Type=forking
+KillMode=none
+ExecStart=/bin/bash @CPACK_PACKAGING_INSTALL_PREFIX@/profile/oceanbase-service.sh start
+ExecStop=/bin/bash @CPACK_PACKAGING_INSTALL_PREFIX@/profile/oceanbase-service.sh stop
+ExecReload=/bin/bash @CPACK_PACKAGING_INSTALL_PREFIX@/profile/oceanbase-service.sh reload
+PIDFile=@CPACK_PACKAGING_INSTALL_PREFIX@/run/observer.pid
+TimeoutSec=2000
+TimeoutStopSec=300
+SuccessExitStatus=SIGKILL
+SendSIGKILL=no
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+LimitSTACK=infinity
+
+[Install]
+WantedBy=multi-user.target

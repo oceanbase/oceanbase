@@ -13,18 +13,9 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_iterate_virtual_table.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/ob_i_tablet_scan.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/ob_schema_status_proxy.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_utils.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_inner_sql_result.h"
 #include "observer/ob_sql_client_decorator.h"
 
-#include "pl/ob_pl_stmt.h"
 
 namespace oceanbase
 {
@@ -116,9 +107,9 @@ int ObIterateVirtualTable::do_open()
     }
     if (OB_SUCC(ret)) {
       if (scan_flag_.is_reverse_scan()) {
-        std::sort(tenants_.begin(), tenants_.end(), std::greater<uint64_t>());
+        lib::ob_sort(tenants_.begin(), tenants_.end(), std::greater<uint64_t>());
       } else {
-        std::sort(tenants_.begin(), tenants_.end());
+        lib::ob_sort(tenants_.begin(), tenants_.end());
       }
       LOG_DEBUG("tenant id array", K(tenants_));
     }

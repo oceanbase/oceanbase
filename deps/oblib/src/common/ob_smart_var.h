@@ -163,19 +163,22 @@ public:
 #define EVAL_MACRO(macro, args...) macro(args)
 
 #ifndef ENABLE_SMART_VAR_CHECK
-#define __SMART_VAR(direct_heap, from_heap, s, buf, T, v, args...)                    \
-  bool from_heap = false;                                                             \
-  ret = OB_SUCCESS != ret ? ret : precheck<T>(direct_heap, from_heap);                \
-  char buf[OB_SUCCESS == ret && !from_heap ? sizeof(T) : 0];                          \
-  SV<T, direct_heap> s{ret, from_heap, [&](void *ptr) { return new (ptr) T{args}; }}; \
-  if (OB_SUCCESS == s.ret_ && !from_heap) {                                           \
+#define __SMART_VAR(independent_of_ret, direct_heap, from_heap, s, buf, T, v, args...)   \
+  bool from_heap = false;                                                                \
+  int v##tmp_ret = OB_SUCCESS;                                                           \
+  int &v##ret = !independent_of_ret ? ret : v##tmp_ret;                                  \
+  v##ret = OB_SUCCESS != v##ret ? v##ret : precheck<T>(direct_heap, from_heap);          \
+  char buf[OB_SUCCESS == v##ret && !from_heap ? sizeof(T) : 0];                          \
+  SV<T, direct_heap> s{v##ret, from_heap, [&](void *ptr) { return new (ptr) T{args}; }}; \
+  v##ret = s.ret_;                                                                    \
+  if (OB_SUCCESS == v##ret && !from_heap) {                                           \
     s.v_ = new (buf) T{args};                                                         \
   }                                                                                   \
   auto &v = s.get();                                                                  \
-  auto v##_ret = s.ret_;
 
-#define _SMART_VAR(direct_heap, T, v, args...)                  \
-  __SMART_VAR(direct_heap,                                      \
+#define _SMART_VAR(independent_of_ret, direct_heap, T, v, args...)  \
+  __SMART_VAR(independent_of_ret,                               \
+              direct_heap,                                      \
               v##_from_heap,                                    \
               v##_s,                                            \
               v##_buf,                                          \
@@ -183,23 +186,31 @@ public:
 
 #define SMART_VAR_HELPER(T, v, args...)                                         \
   STATIC_ASSERT(sizeof(T) < LOCAL_VARIABLE_SIZE_HARD_LIMIT, "large object!!!"); \
-  _SMART_VAR((sizeof(T) > SMART_VAR_MAX_SINGLE_STACK_USE_SIZE), T, v, ##args)
+  _SMART_VAR(false, (sizeof(T) > SMART_VAR_MAX_SINGLE_STACK_USE_SIZE), T, v, ##args)
+
+#define SMART_VAR_HELPER_INDEPENDENT(T, v, args...)                                \
+  STATIC_ASSERT(sizeof(T) < LOCAL_VARIABLE_SIZE_HARD_LIMIT, "large object!!!"); \
+  _SMART_VAR(true, (sizeof(T) > SMART_VAR_MAX_SINGLE_STACK_USE_SIZE), T, v, ##args)
 
 #define HEAP_VAR_HELPER(T, v, args...)          \
-  _SMART_VAR(true, T, v, ##args)
+  _SMART_VAR(false, true, T, v, ##args)
 
 #define SMART_VAR(T, v, args...)                \
   SMART_VAR_HELPER(T, v, ##args)                \
-  if (OB_SUCC(v##_ret))
+  if (OB_SUCCESS == v##ret)
+
+#define SMART_VAR_INDEPENDENT(T, v, args...)       \
+  SMART_VAR_HELPER_INDEPENDENT(T, v, ##args)       \
+  if (OB_SUCCESS == v##ret)
 
 #define HEAP_VAR(T, v, args...)                 \
   HEAP_VAR_HELPER(T, v, ##args)                 \
-  if (OB_SUCC(v##_ret))
+  if (OB_SUCCESS == v##ret)
 
 #define __SMART_or_HEAP_VARS_2(helper, v1, v2, tuple1, tuple2) \
   helper tuple1                                                \
   helper tuple2                                                \
-  if (OB_SUCC(v1##_ret) && OB_SUCC(v2##_ret))
+  if (OB_SUCCESS == v1##ret && OB_SUCCESS == v2##ret)
 
 #define _SMART_or_HEAP_VARS_2(type, v1, v2, tuple1, tuple2)             \
   __SMART_or_HEAP_VARS_2(type##_VAR_HELPER, v1, v2, tuple1, tuple2)
@@ -208,7 +219,7 @@ public:
   helper tuple1                                                            \
   helper tuple2                                                            \
   helper tuple3                                                            \
-  if (OB_SUCC(v1##_ret) && OB_SUCC(v2##_ret) && OB_SUCC(v3##_ret))
+  if (OB_SUCCESS == v1##ret && OB_SUCCESS == v2##ret && OB_SUCCESS == v3##ret)
 
 #define _SMART_or_HEAP_VARS_4(type, v1, v2, v3, v4, tuple1, tuple2, tuple3, tuple4) \
   __SMART_or_HEAP_VARS_4(type##_VAR_HELPER, v1, v2, v3, v4, tuple1, tuple2, tuple3, tuple4)
@@ -218,7 +229,7 @@ public:
   helper tuple2                                                       \
   helper tuple3                                                       \
   helper tuple4                                                       \
-  if (OB_SUCC(v1##_ret) && OB_SUCC(v2##_ret) && OB_SUCC(v3##_ret) && OB_SUCC(v4##_ret))
+  if (OB_SUCCESS == v1##ret && OB_SUCCESS == v2##ret && OB_SUCCESS == v3##ret && OB_SUCCESS == v4##ret)
 
 #define _SMART_or_HEAP_VARS_3(type, v1, v2, v3, tuple1, tuple2, tuple3) \
   __SMART_or_HEAP_VARS_3(type##_VAR_HELPER, v1, v2, v3, tuple1, tuple2, tuple3)

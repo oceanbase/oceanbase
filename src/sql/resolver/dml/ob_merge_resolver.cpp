@@ -12,18 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_merge_resolver.h"
-#include "share/ob_define.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/ob_autoincrement_param.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/resolver/dml/ob_default_value_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 namespace oceanbase
 {
@@ -60,8 +49,8 @@ int ObMergeResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(merge_stmt = create_stmt<ObMergeStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create insert stmt failed", K(merge_stmt));
-  } else if (OB_FAIL(resolve_outline_data_hints())) {
-    LOG_WARN("resolve outline data hints failed", K(ret));
+  } else if (OB_FAIL(pre_process_hints(parse_tree))) {
+    LOG_WARN("pre process hints failed", K(ret));
   } else {
     if (OB_NOT_NULL(parse_tree.children_[insert_idx]) &&
           parse_tree.children_[insert_idx]->type_ != T_INSERT) {
@@ -135,7 +124,8 @@ int ObMergeResolver::check_stmt_validity()
   const ObTableSchema *table_schema = NULL;
   ObSchemaGetterGuard *schema_guard = NULL;
   ObMergeStmt *merge_stmt = get_merge_stmt();
-  if (OB_ISNULL(merge_stmt) || OB_ISNULL(params_.schema_checker_) ||
+  bool enabled_merge_into = true;
+  if (OB_ISNULL(merge_stmt) || OB_ISNULL(params_.query_ctx_) || OB_ISNULL(params_.schema_checker_) ||
       OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard()) ||
       OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -146,6 +136,14 @@ int ObMergeResolver::check_stmt_validity()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("the behavior of rownum is undefined in merge stmt", K(ret), K(merge_stmt));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "the behavior of rownum in merge stmt");
+  } else if (lib::is_mysql_mode() && !session_info_->get_ddl_info().is_refreshing_mview()
+             && OB_FAIL(params_.query_ctx_->get_global_hint().opt_params_.has_enable_opt_param(ObOptParamHint::ENABLE_MERGE_INTO, enabled_merge_into))) {
+    LOG_WARN("failed to check has enable opt param", K(ret));
+  } else if (!enabled_merge_into) {
+    ret = OB_NOT_SUPPORTED;
+    // merge into can be enabled by hint /*+ opt_param('ENABLE_MERGE_INTO', 'true') */
+    LOG_WARN("The MERGE INTO syntax in mysql mode not supported");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "The MERGE INTO syntax in mysql mode");
   } else if (merge_stmt->get_subquery_exprs().empty()) {
     /*do nothing*/
   } else if (OB_FAIL(ObOptimizerUtil::check_expr_contain_subquery(merge_stmt->get_delete_condition_exprs(),
@@ -382,12 +380,29 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
         OZ (resolve_json_table_item(*table_node, table_item));
         break;
       }
+      case T_RB_ITERATE_EXPRESSION: {
+        OZ (resolve_rb_iterate_item(*table_node, table_item));
+        break;
+      }
+      case T_UNNEST_EXPRESSION: {
+        OZ (resolve_unnest_item(*table_node, table_item));
+        break;
+      }
+      case T_HYBRID_SEARCH_EXPRESSION: {
+        OZ (resolve_hybrid_search_item(*table_node, table_item));
+        break;
+      }
       default: {
         /* won't be here */
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("Unknown table type", "node_type", table_node->type_);
       }
     }
+  }
+  if (OB_ISNULL(table_item) || session_info_->is_inner()) {
+  } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));
   }
   return ret;
 }
@@ -766,8 +781,9 @@ int ObMergeResolver::add_assignment(ObIArray<ObTableAssignment> &assigns,
         // skip
       } else if (other.column_expr_ == assign.column_expr_) {
         ret = OB_ERR_FIELD_SPECIFIED_TWICE;
+        ObCStringHelper helper;
         LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
-                       to_cstring(assign.column_expr_->get_column_name()));
+                       helper.convert(assign.column_expr_->get_column_name()));
       }
     }
   }

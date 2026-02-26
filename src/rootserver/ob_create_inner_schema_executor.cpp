@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_create_inner_schema_executor.h"
-#include "rootserver/ob_rs_job_table_operator.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "sql/engine/ob_exec_context.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_common_rpc_proxy.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

@@ -12,23 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include <gtest/gtest.h>
-#include "lib/json/ob_json.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_select_log_plan.h"
 #include "sql/optimizer/ob_log_join.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_sort.h"
 #include "sql/optimizer/ob_log_group_by.h"
-#include "sql/optimizer/ob_log_exchange.h"
-#include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_log_limit.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/optimizer/ob_optimizer.h"
-#include "sql/ob_sql_context.h"
-#include "sql/ob_sql.h"
-#include "sql/resolver/ob_resolver.h"
 
 #define BUF_LEN 102400 // 100K
 

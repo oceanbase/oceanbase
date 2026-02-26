@@ -11,19 +11,9 @@
  */
 
 #include "observer/virtual_table/ob_gv_sql_audit.h"
-#include <stdint.h>
-#include "common/rowkey/ob_rowkey.h"
-#include "common/ob_smart_call.h"
-#include "share/ob_define.h"
 #include "observer/ob_server.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
-#include "lib/utility/utility.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
-#include "share/rc/ob_tenant_base.h"
 #include "sql/resolver/ob_resolver_utils.h"
 
-#include <algorithm> // std::sort
 
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
@@ -46,7 +36,9 @@ ObGvSqlAudit::ObGvSqlAudit() :
     is_use_index_(false),
     tenant_id_array_(),
     tenant_id_array_idx_(-1),
-    with_tenant_ctx_(nullptr)
+    with_tenant_ctx_(nullptr),
+    is_sys_tenant_(false),
+    enable_sql_audit_query_sql_(false)
 {
 }
 
@@ -57,7 +49,7 @@ ObGvSqlAudit::~ObGvSqlAudit() {
 void ObGvSqlAudit::reset()
 {
   if (with_tenant_ctx_ != nullptr && allocator_ != nullptr) {
-    if (cur_mysql_req_mgr_ != nullptr && ref_.idx_ != -1) {
+    if (cur_mysql_req_mgr_ != nullptr && ref_.is_not_null()) {
       cur_mysql_req_mgr_->revert(&ref_);
     }
     with_tenant_ctx_->~ObTenantSpaceFetcher();
@@ -76,6 +68,8 @@ void ObGvSqlAudit::reset()
   addr_ = nullptr;
   port_ = 0;
   ipstr_.reset();
+  is_sys_tenant_ = false;
+  enable_sql_audit_query_sql_ = false;
 }
 
 int ObGvSqlAudit::inner_open()
@@ -86,12 +80,22 @@ int ObGvSqlAudit::inner_open()
   if (is_sys_tenant(effective_tenant_id_)) {
     if (OB_FAIL(extract_tenant_ids())) {
       SERVER_LOG(WARN, "failed to extract tenant ids", KR(ret), K(effective_tenant_id_));
+    } else {
+      is_sys_tenant_ = true;
     }
   } else {
     // user tenant show self tenant sql audit
     if (OB_FAIL(tenant_id_array_.push_back(effective_tenant_id_))) {
       SERVER_LOG(WARN, "failed to push back tenant", KR(ret), K(effective_tenant_id_));
     }
+  }
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "fail to get tenant config", K(ret));
+  } else {
+    enable_sql_audit_query_sql_ = tenant_config->_enable_sql_audit_query_sql;
   }
 
   SERVER_LOG(DEBUG, "tenant ids", K(effective_tenant_id_), K(tenant_id_array_));
@@ -211,7 +215,7 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
           // inc ref count by 1
           if (with_tenant_ctx_ != nullptr) { // free old memory
             // before freeing tenant ctx, we must release ref_ if possible
-            if (nullptr != prev_req_mgr && ref_.idx_ != -1) {
+            if (nullptr != prev_req_mgr && ref_.is_not_null()) {
               prev_req_mgr->revert(&ref_);
             }
             with_tenant_ctx_->~ObTenantSpaceFetcher();
@@ -275,7 +279,7 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
       if (OB_ITER_END == ret) {
         // release last tenant's ctx
         if (with_tenant_ctx_ != nullptr) {
-          if (prev_req_mgr != nullptr && ref_.idx_ != -1) {
+          if (prev_req_mgr != nullptr && ref_.is_not_null()) {
             prev_req_mgr->revert(&ref_);
           }
           with_tenant_ctx_->~ObTenantSpaceFetcher();
@@ -288,7 +292,7 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
 
   if (OB_SUCC(ret)) {
     void *rec = NULL;
-    if (ref_.idx_ != -1) {
+    if (ref_.is_not_null()) {
       cur_mysql_req_mgr_->revert(&ref_);
     }
     do {
@@ -431,7 +435,7 @@ int ObGvSqlAudit::extract_tenant_ids()
       if (is_always_false) {
         tenant_id_array_.reset();
       } else {
-        std::sort(tenant_id_array_.begin(), tenant_id_array_.end());
+        lib::ob_sort(tenant_id_array_.begin(), tenant_id_array_.end());
         SERVER_LOG(DEBUG, "get tenant ids from req mgr map", K(tenant_id_array_));
       }
     }
@@ -499,7 +503,7 @@ int ObGvSqlAudit::extract_tenant_ids()
       if (is_always_false) {
         tenant_id_array_.reset();
       } else {
-        std::sort(tenant_id_array_.begin(), tenant_id_array_.end());
+        lib::ob_sort(tenant_id_array_.begin(), tenant_id_array_.end());
         SERVER_LOG(DEBUG, "get tenant ids from req mgr map", K(tenant_id_array_));
       }
     }
@@ -547,7 +551,9 @@ bool ObGvSqlAudit::is_perf_event_dep_field(uint64_t col_id) {
     case BLOCKSCAN_BLOCK_CNT:
     case BLOCKSCAN_ROW_CNT:
     case PUSHDOWN_STORAGE_FILTER_ROW_CNT:
-    case NETWORK_WAIT_TIME: {
+    case NETWORK_WAIT_TIME:
+    case TX_TABLE_READ_CNT:
+    case OUTROW_LOB_CNT: {
       is_contain = true;
       break;
     }
@@ -637,6 +643,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           }
           break;
         }
+        case USER_CLIENT_PORT: {
+          cells[cell_idx].set_int(record.data_.user_client_addr_.get_port());
+        } break;
         case TENANT_ID: {
           cells[cell_idx].set_int(record.data_.tenant_id_);
         } break;
@@ -686,22 +695,43 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
                                               ObCharset::get_default_charset()));
         } break;
         case QUERY_SQL: {
-          ObCollationType src_cs_type = ObCharset::is_valid_collation(record.data_.sql_cs_type_) ?
-                record.data_.sql_cs_type_ : ObCharset::get_system_collation();
-          ObString src_string(static_cast<int32_t>(record.data_.sql_len_), record.data_.sql_);
-          ObString dst_string;
-          if (OB_FAIL(ObCharset::charset_convert(row_calc_buf_,
-                                                        src_string,
-                                                        src_cs_type,
-                                                        ObCharset::get_system_collation(),
-                                                        dst_string,
-                                                        ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
-            SERVER_LOG(WARN, "fail to convert sql string", K(ret));
+          if (is_sys_tenant_ || enable_sql_audit_query_sql_) {
+            ObCollationType src_cs_type = ObCharset::is_valid_collation(record.data_.sql_cs_type_) ?
+            record.data_.sql_cs_type_ : ObCharset::get_system_collation();
+            ObString src_string(static_cast<int64_t>(record.data_.sql_len_), record.data_.sql_);
+            ObString dst_string;
+            if (OB_FAIL(ObCharset::charset_convert(row_calc_buf_,
+                                                          src_string,
+                                                          src_cs_type,
+                                                          ObCharset::get_system_collation(),
+                                                          dst_string,
+                                                          ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
+              SERVER_LOG(WARN, "fail to convert sql string", K(ret));
+            } else {
+              cells[cell_idx].set_lob_value(ObLongTextType, dst_string.ptr(),
+                                            min(dst_string.length(), OB_MAX_PACKET_LENGTH));
+              cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                                  ObCharset::get_default_charset()));
+            }
           } else {
-            cells[cell_idx].set_lob_value(ObLongTextType, dst_string.ptr(),
-                                          min(dst_string.length(), OB_MAX_PACKET_LENGTH));
+            cells[cell_idx].set_lob_value(ObLongTextType, "", 0);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                                ObCharset::get_default_charset()));
+                                              ObCharset::get_default_charset()));
+          }
+        } break;
+        case TRANS_STATUS: {
+          if (record.data_.trans_status_ == 1) {
+            cells[cell_idx].set_varchar("Transaction not opened");
+            cells[cell_idx].set_default_collation_type();
+          } else if (record.data_.trans_status_ == 2) {
+            cells[cell_idx].set_varchar("Enable implicit transactions");
+            cells[cell_idx].set_default_collation_type();
+          } else if (record.data_.trans_status_ == 3) {
+            cells[cell_idx].set_varchar("Enable committable transaction");
+            cells[cell_idx].set_default_collation_type();
+          } else {
+            cells[cell_idx].set_varchar("Unknown status");
+            cells[cell_idx].set_default_collation_type();
           }
         } break;
         case PLAN_ID: {
@@ -1063,10 +1093,17 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_int(record.data_.plsql_exec_time_);
         } break;
         case NETWORK_WAIT_TIME: {
-          cells[cell_idx].set_null();
+          cells[cell_idx].set_uint64(record.data_.exec_record_.network_wait_time_);
         } break;
         case STMT_TYPE: {
-          cells[cell_idx].set_null();
+          ObString stmt_type_name;
+          ObString tmp_type_name = ObResolverUtils::get_stmt_type_string(record.data_.stmt_type_);
+          if (!tmp_type_name.empty()) {
+            stmt_type_name = tmp_type_name.make_string(tmp_type_name.ptr() + 2);
+          } else {
+            stmt_type_name = tmp_type_name;
+          }
+          cells[cell_idx].set_varchar(stmt_type_name);
           cells[cell_idx].set_default_collation_type();
         } break;
         case SEQ_NUM: {
@@ -1097,12 +1134,40 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           int64_t len = min(record.data_.proxy_user_name_len_, OB_MAX_USER_NAME_LENGTH);
           cells[cell_idx].set_varchar(record.data_.proxy_user_name_,
                                       static_cast<ObString::obstr_size_t>(len));
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
         } break;
         //format_sql_id
         case FORMAT_SQL_ID: {
-          cells[cell_idx].set_varchar("");
+          if (OB_MAX_SQL_ID_LENGTH == strlen(record.data_.format_sql_id_)) {
+            cells[cell_idx].set_varchar(record.data_.format_sql_id_,
+                                        static_cast<ObString::obstr_size_t>(OB_MAX_SQL_ID_LENGTH));
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
           cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                               ObCharset::get_default_charset()));
+        } break;
+        case PLSQL_COMPILE_TIME: {
+          cells[cell_idx].set_int(record.data_.plsql_compile_time_);
+        } break;
+        case CCL_RULE_ID: {
+          cells[cell_idx].set_int(record.data_.ccl_rule_id_);
+        } break;
+        case CCL_MATCH_TIME: {
+          cells[cell_idx].set_int(record.data_.ccl_match_time_);
+        } break;
+        case INSERT_DUPLICATE_ROW_COUNT: {
+          cells[cell_idx].set_int(record.data_.insert_update_or_replace_duplicate_row_count_);
+        } break;
+        case COMMIT_TIME: {
+          cells[cell_idx].set_int(0);
+        } break;
+        case TX_TABLE_READ_CNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.tx_table_read_cnt_);
+        } break;
+        case OUTROW_LOB_CNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.outrow_lob_cnt_);
         } break;
         default: {
           ret = OB_ERR_UNEXPECTED;

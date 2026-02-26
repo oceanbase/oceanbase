@@ -36,13 +36,17 @@ typedef void (*ConvertUnitToDatumFunc)(
       const char *data,
       const ObIntegerStreamDecoderCtx &ctx,
       const char *ref_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums);
 
-extern  ObMultiDimArray_T<ConvertUnitToDatumFunc,
-    4, ObRefStoreWidthV::MAX_WIDTH_V, 4, ObBaseColumnDecoderCtx::ObNullFlag::MAX, 2> convert_uint_to_datum_funcs;
-
+extern ObMultiDimArray_T<ConvertUnitToDatumFunc,
+                         4,
+                         ObRefStoreWidthV::MAX_WIDTH_V,
+                         4,
+                         ObBaseColumnDecoderCtx::ObNullFlag::MAX,
+                         2>
+    convert_uint_to_datum_funcs;
 
 class ObIntegerStreamDecoder
 {
@@ -139,6 +143,7 @@ private:
     uint64_t in_pos = 0;
 
     codec.set_uint_bytes(sizeof(T));
+    codec.set_pfor_packing_type(ctx.meta_.get_pfor_packing_type());
     if (OB_FAIL(codec.decode(in, in_len, in_pos, uint_count, out, out_len, out_pos))) {
       STORAGE_LOG(WARN, "fail to deocde array", K(in_len), K(uint_count), K(out_len), KR(ret));
     }

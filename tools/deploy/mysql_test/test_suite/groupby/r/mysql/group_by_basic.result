@@ -117,7 +117,7 @@ group_concat(c2, c3)
 abc,abc,a2b3,a1b3,a3b2
 select group_concat(distinct c2, c3) from t1;
 group_concat(distinct c2, c3)
-abc,a1b3,a2b3,a3b2,abc
+abc,abc,a2b3,a1b3,a3b2
 select group_concat(c2, c3 order by c2) from t1;
 group_concat(c2, c3 order by c2)
 abc,a1b3,a2b3,a3b2,abc
@@ -139,7 +139,7 @@ a2b3,a3b2,a1b3
 abc,abc
 select group_concat(distinct c2, c3) from t1 group by c5;
 group_concat(distinct c2, c3)
-a1b3,a2b3,a3b2
+a2b3,a3b2,a1b3
 abc,abc
 select group_concat(c2, c3 order by c1) from t1 group by c5;
 group_concat(c2, c3 order by c1)
@@ -314,7 +314,7 @@ group_concat(c3 order by c3)
 a,A,B,b
 select group_concat(distinct c2) from t4;
 group_concat(distinct c2)
-A,B,a,b
+a,A,B,b
 select group_concat(distinct c3) from t4;
 group_concat(distinct c3)
 a,B
@@ -361,8 +361,8 @@ insert into t1 (c1, c2, c3) values (2, 3, 2);
 insert into t1 (c1, c2, c3) values (2, 3, 3);
 select c2, avg(distinct c3) from t1 group by c2;
 c2	avg(distinct c3)
-2	2.5000
 1	1.5000
+2	2.5000
 3	2.5000
 select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2;
 c1	c2	group_concat(distinct c3 order by c3 desc)
@@ -372,13 +372,13 @@ c1	c2	group_concat(distinct c3 order by c3 desc)
 1	2	3,2
 select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2 with rollup;
 c1	c2	group_concat(distinct c3 order by c3 desc)
+NULL	NULL	3,2,1
 1	1	1
-1	2	3,2
 1	NULL	3,2,1
 2	1	2
-2	3	3,2
+1	2	3,2
 2	NULL	3,2
-NULL	NULL	3,2,1
+2	3	3,2
 drop table t1, t2, t3, t4, t5;
 drop table if exists t1, t2;
 drop table if exists `rpup_list_mcs_asoc_b`, `bidprcu_mcs_regcert_b`, `rpup_mcs_list_info_b`;
@@ -449,9 +449,9 @@ Outputs & filters:
       range_key([t29_25.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t29_25.c1]), filter(nil), rowset=256
       sort_keys([t29_25.c1, DESC]), topn(1)
-  4 - output([t29_25.c1]), filter(nil), rowset=256
+  4 - output([t29_25.c1]), filter([TOPN_FILTER(t29_25.c1)]), rowset=256
       access([t29_25.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t29_25.__pk_increment]), range(MIN ; MAX)always true
 create table t2 as SELECT t29_25.c1, t29_25.c8
 FROM   (SELECT (SELECT t29_25.c1

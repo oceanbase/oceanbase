@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tablet_barrier_log.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {

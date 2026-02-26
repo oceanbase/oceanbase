@@ -3,16 +3,25 @@ cmake_minimum_required(VERSION 3.20)
 include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
+set(OB_BUILD_VERSION "4.5.1.0")
+
 if(OB_BUILD_OPENSOURCE)
   project("OceanBase_CE"
-    VERSION 4.3.2.0
+    VERSION ${OB_BUILD_VERSION}
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://open.oceanbase.com/"
     LANGUAGES CXX C ASM)
   message(STATUS "open source build enabled")
+elseif(OB_BUILD_STANDALONE)
+  project("OceanBase_standalone"
+    VERSION ${OB_BUILD_VERSION}
+    DESCRIPTION "OceanBase Standalone Edition"
+    HOMEPAGE_URL "https://www.oceanbase.com/"
+    LANGUAGES CXX C ASM)
+  message(STATUS "standalone build enabled")
 else()
   project(OceanBase
-    VERSION 4.3.2.0
+    VERSION ${OB_BUILD_VERSION}
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://www.oceanbase.com/"
     LANGUAGES CXX C ASM)
@@ -93,6 +102,13 @@ if (ENABLE_FATAL_ERROR_HANG)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFATAL_ERROR_HANG")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_500_MEMORY_LIMIT")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_500_MEMORY_LIMIT")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_DEBUG_ASSERT")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_DEBUG_ASSERT")
+endif()
+
+if (DETECT_RECURSION)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DDETECT_RECURSION")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDETECT_RECURSION")
 endif()
 
 if(OB_USE_ASAN)
@@ -110,10 +126,31 @@ if (OB_BUILD_PACKAGE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOB_BUILD_PACKAGE")
 endif()
 
+if (OB_ENABLE_MCMODEL)
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcmodel=large")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcmodel=large")
+  endif()
+endif()
+
 message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
 message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+set(STDC_SHARED_LIB "")
+set(STDC_SHARED_LIB_SYMLINK "${DEVTOOLS_DIR}/lib64/libstdc++.so")
+file(REAL_PATH ${STDC_SHARED_LIB_SYMLINK} STDC_SHARED_LIB)
+message(STATUS "STDC_SHARED_LIB: ${STDC_SHARED_LIB}")
+
+set(HYPERSCAN_LIB "")
+set(HYPERSCAN_SHARED_LIB "")
+if (${ARCHITECTURE} STREQUAL "x86_64")
+  set(HYPERSCAN_LIB "${DEP_DIR}/lib/libhs.a")
+  set(HYPERSCAN_SHARED_LIB_SYMLINK "${DEP_DIR}/lib/libhs.so")
+  file(REAL_PATH ${HYPERSCAN_SHARED_LIB_SYMLINK} HYPERSCAN_SHARED_LIB)
+  message(STATUS "HYPERSCAN_SHARED_LIB: ${HYPERSCAN_SHARED_LIB}")
+endif()
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/close_modules)
   message(STATUS "will add close_modules sub directory")
@@ -169,11 +206,13 @@ if (OB_BUILD_UNITTEST)
   add_subdirectory(unittest)
   if(OB_BUILD_CLOSE_MODULES)
     add_subdirectory(mittest)
+    add_subdirectory(sensitive_test)
   endif()
 elseif(OB_INCLUDE_UNITTEST)
   add_subdirectory(unittest EXCLUDE_FROM_ALL)
   if(OB_BUILD_CLOSE_MODULES)
     add_subdirectory(mittest EXCLUDE_FROM_ALL)
+    add_subdirectory(sensitive_test EXCLUDE_FROM_ALL)
   endif()
 endif()
 
@@ -217,7 +256,3 @@ else()
   endif()
 endif()
 
-if(EXISTS ${CMAKE_SOURCE_DIR}/sensitive_test)
-  message(STATUS "will add sensitive_test sub directory")
-  add_subdirectory(sensitive_test)
-endif()

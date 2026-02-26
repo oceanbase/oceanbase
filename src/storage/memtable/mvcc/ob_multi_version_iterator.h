@@ -58,6 +58,9 @@ public:
   void reset();
   bool is_exist() const { return nullptr != version_iter_; }
   int64_t get_committed_max_trans_version() const { return max_committed_trans_version_; }
+  bool is_first_delete_compact_node() const;
+  bool is_last_compact_node() const;
+  bool is_first_delete_multi_version_node() const;
   bool is_cur_multi_version_row_end() const ;
   bool is_node_compacted() const { return is_node_compacted_; }
   bool is_multi_version_iter_end() const;

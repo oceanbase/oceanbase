@@ -50,7 +50,7 @@ struct ObPLExecCtx;
 class ObPLResolveCtx;
 class ObPLResolver;
 class ObPLStmt;
-class ObPLCollAllocator;
+class ObPLAllocator1;
 
 class ObUserDefinedType : public ObPLDataType
 {
@@ -75,21 +75,26 @@ public:
     jit::ObLLVMValue &allocator, jit::ObLLVMValue &dest) const;
   virtual int generate_default_value(
     ObPLCodeGenerator &generator,const ObPLINS &ns,
-    const pl::ObPLStmt *stmt, jit::ObLLVMValue &value) const;
+    const pl::ObPLStmt *stmt, jit::ObLLVMValue &value, jit::ObLLVMValue &allocator, bool is_top_level) const;
   virtual int generate_copy(ObPLCodeGenerator &generator,
                             const ObPLBlockNS &ns,
                             jit::ObLLVMValue &allocator,
                             jit::ObLLVMValue &src,
                             jit::ObLLVMValue &dest,
+                            uint64_t location,
                             bool in_notfound,
                             bool in_warning,
                             uint64_t package_id = OB_INVALID_ID) const;
   virtual int generate_construct(ObPLCodeGenerator &generator, const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
+                                 jit::ObLLVMValue &allocator,
+                                 bool is_top_level,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int generate_new(ObPLCodeGenerator &generator,
                                             const ObPLINS &ns,
                                             jit::ObLLVMValue &value,
+                                            jit::ObLLVMValue &allocator,
+                                            bool is_top_level,
                                             const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                    const ObPLINS *ns,
@@ -102,11 +107,6 @@ public:
                                const sql::ObSqlExpression *default_expr,
                                bool default_construct,
                                common::ObObj &obj) const;
-  virtual int free_session_var(const ObPLResolveCtx &resolve_ctx,
-                               common::ObIAllocator &obj_allocator,
-                               common::ObObj &obj) const;
-  virtual int free_data(
-    const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &data_allocator, void *data) const;
 
   // --------- for session serialize/deserialize interface ---------
   virtual int get_serialize_size(
@@ -134,10 +134,12 @@ public:
                        common::ObObj &obj,
                        int64_t &init_size) const;
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                       const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,
@@ -151,12 +153,28 @@ public:
 
   static int deep_copy_obj(
     ObIAllocator &allocator, const ObObj &src, ObObj &dst, bool need_new_allocator = true, bool ignore_del_element = false);
-  static int destruct_obj(ObObj &src, sql::ObSQLSessionInfo *session = NULL);
+  static int destruct_objparam(ObIAllocator &alloc, ObObj &src, sql::ObSQLSessionInfo *session = nullptr, bool direct_use_alloc = false);
+  static int reset_composite(ObObj &value, sql::ObSQLSessionInfo *session);
+  static int reset_record(ObObj &src, sql::ObSQLSessionInfo *session);
+  static int destruct_obj(ObObj &src, sql::ObSQLSessionInfo *session = NULL, bool keep_composite_attr = false);
   static int alloc_sub_composite(ObObj &dest_element, ObIAllocator &allocator);
   static int alloc_for_second_level_composite(ObObj &src, ObIAllocator &allocator);
   static int serialize_obj(const ObObj &obj, char* buf, const int64_t len, int64_t& pos);
   static int deserialize_obj(ObObj &obj, const char* buf, const int64_t len, int64_t& pos);
   static int64_t get_serialize_obj_size(const ObObj &obj);
+
+  static int generate_init_composite(ObPLCodeGenerator &generator,
+                                      const ObPLINS &ns,
+                                      jit::ObLLVMValue &value,
+                                      const pl::ObPLStmt *stmt,
+                                      jit::ObLLVMValue &allocator,
+                                      bool is_record_type,
+                                      bool is_top_level);
+  static int generate_new_complex_type(ObPLCodeGenerator &generator,
+                                        jit::ObLLVMValue &allocator,
+                                        int64_t user_type_id,
+                                        jit::ObLLVMValue &value,
+                                        const pl::ObPLStmt *stmt);
 
   int text_protocol_prefix_info_for_each_item(share::schema::ObSchemaGetterGuard &schema_guard,
                                               const ObPLDataType &type,
@@ -175,7 +193,8 @@ public:
                                    char *dst,
                                    const int64_t dst_len,
                                    int64_t &dst_pos,
-                                   bool &has_serialized) const;
+                                   bool &has_serialized,
+                                   const sql::ObSQLSessionInfo &session) const;
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(user_type_id), K_(type_name));
 protected:
@@ -205,16 +224,21 @@ public:
                             jit::ObLLVMValue &allocator,
                             jit::ObLLVMValue &src,
                             jit::ObLLVMValue &dest,
+                            uint64_t location,
                             bool in_notfound,
                             bool in_warning,
                             uint64_t package_id = OB_INVALID_ID) const;
   virtual int generate_construct(ObPLCodeGenerator &generator,
                             const ObPLINS &ns,
                             jit::ObLLVMValue &value,
+                            jit::ObLLVMValue &allocator,
+                            bool is_top_level,
                             const pl::ObPLStmt *stmt = NULL) const;
   virtual int generate_new(ObPLCodeGenerator &generator,
                                                 const ObPLINS &ns,
                                                 jit::ObLLVMValue &value,
+                                                jit::ObLLVMValue &allocator,
+                                                bool is_top_level,
                                                 const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                    const ObPLINS *ns,
@@ -225,10 +249,12 @@ public:
 
   virtual int get_size(ObPLTypeSize type, int64_t &size) const;
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                       const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                           common::ObIAllocator &allocator,
+                          sql::ObSQLSessionInfo *session,
                           const common::ObCharsetType charset,
                           const common::ObCollationType cs_type,
                           const common::ObCollationType ncs_type,
@@ -275,10 +301,14 @@ public:
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
+                                 jit::ObLLVMValue &allocator,
+                                 bool is_top_level,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int generate_new(ObPLCodeGenerator &generator,
                                               const ObPLINS &ns,
                                               jit::ObLLVMValue &value,
+                                              jit::ObLLVMValue &allocator,
+                                              bool is_top_level,
                                               const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                      const ObPLINS *ns,
@@ -298,9 +328,6 @@ public:
     sql::ObExecContext &exec_ctx, const sql::ObSqlExpression *default_expr,
     bool default_construct, common::ObObj &obj) const;
 
-  virtual int free_session_var(
-    const ObPLResolveCtx &resolve_ctx,
-    common::ObIAllocator &obj_allocator, common::ObObj &obj) const;
 
   virtual int get_all_depended_user_type(
     const ObPLResolveCtx &resolve_ctx, const ObPLBlockNS &current_ns) const
@@ -384,9 +411,15 @@ public:
 
   int deep_copy(
     common::ObIAllocator &alloc, const ObRecordType &other, bool shaow_copy = true);
+  int deep_copy(
+    ObPLEnumSetCtx &enum_set_ctx, common::ObIAllocator &alloc, const ObRecordType &other, bool shaow_copy = true);
+
 
   int add_record_member(
     const common::ObString &record_name, const ObPLDataType &record_type,
+    int64_t default_idx = OB_INVALID_INDEX, sql::ObRawExpr *default_raw_expr = NULL, bool need_check_dup = false);
+  int add_record_member(
+    ObPLEnumSetCtx &enum_set_ctx, const common::ObString &record_name, const ObPLDataType &record_type,
     int64_t default_idx = OB_INVALID_INDEX, sql::ObRawExpr *default_raw_expr = NULL);
 
   int add_record_member(const ObRecordMember &record);
@@ -406,8 +439,17 @@ public:
   const ObRecordMember *get_record_member(int64_t index) const;
 
   int is_compatble(const ObRecordType &other, bool &is_comp) const;
+  int check_record_cursor_member() const;
   int record_members_init(common::ObIAllocator *alloc, int64_t size);
   void reset_record_member() { record_members_.reset(); }
+
+  static int generate_alloc_complex_addr(ObPLCodeGenerator &generator,
+                                          int8_t type,
+                                          int64_t user_type_id,
+                                          int64_t init_size,
+                                          jit::ObLLVMValue &value, //返回值是一个int64_t，代表extend的值
+                                          jit::ObLLVMValue &allocator,
+                                          const pl::ObPLStmt *s);
 
   static int64_t get_notnull_offset();
   static int64_t get_meta_offset(int64_t count);
@@ -426,15 +468,21 @@ public:
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
+                                 jit::ObLLVMValue &allocator,
+                                 bool is_top_level,
                                  const pl::ObPLStmt *stmt = NULL) const;
 
   virtual int generate_default_value(ObPLCodeGenerator &generator,
                                      const ObPLINS &ns,
                                      const pl::ObPLStmt *stmt,
-                                     jit::ObLLVMValue &value) const;
+                                     jit::ObLLVMValue &value,
+                                     jit::ObLLVMValue &allocator,
+                                     bool is_top_level) const;
   virtual int generate_new(ObPLCodeGenerator &generator,
                                                 const ObPLINS &ns,
                                                 jit::ObLLVMValue &value,
+                                                jit::ObLLVMValue &allocator,
+                                                bool is_top_level,
                                                 const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                      const ObPLINS *ns,
@@ -448,8 +496,6 @@ public:
                                const sql::ObSqlExpression *default_expr,
                                bool default_construct,
                                common::ObObj &obj) const;
-  virtual int free_session_var(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &obj_allocator, common::ObObj &obj) const;
-  virtual int free_data(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &data_allocator, void *data) const;
 
   // --------- for session serialize/deserialize interface ---------
   virtual int get_serialize_size(
@@ -476,10 +522,12 @@ public:
                        common::ObObj &obj,
                        int64_t &init_size) const;
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                       const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,
@@ -513,6 +561,8 @@ public:
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
+                                 jit::ObLLVMValue &allocator,
+                                 bool is_top_level,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int64_t get_member_count() const { return 0; }
   virtual const ObPLDataType *get_member(int64_t i) const { UNUSED(i); return NULL; }
@@ -538,6 +588,7 @@ public:
                                         const ObPLINS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
+  virtual int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 };
 #endif
 //---------- for ObCollectionType ----------
@@ -574,11 +625,16 @@ public:
   int deep_copy(common::ObIAllocator &alloc, const ObCollectionType &other);
 
   int get_init_size(int64_t &size) const;
+  int convert_anonymous_array(ObPLResolveCtx &ctx,
+                              ObObj *&src,
+                              ObObj *&dest) const;
 
 public:
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
+                                 jit::ObLLVMValue &allocator,
+                                 bool is_top_level,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
                                         const ObPLINS &ns,
@@ -587,6 +643,8 @@ public:
   virtual int generate_new(ObPLCodeGenerator &generator,
                            const ObPLINS &ns,
                            jit::ObLLVMValue &value,
+                           jit::ObLLVMValue &allocator,
+                           bool is_top_level,
                            const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                      const ObPLINS *ns,
@@ -600,8 +658,6 @@ public:
                                const sql::ObSqlExpression *default_expr,
                                bool default_construct,
                                common::ObObj &obj) const;
-  virtual int free_session_var(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &obj_allocator, common::ObObj &obj) const;
-  virtual int free_data(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &data_allocator, void *data) const;
 
   // --------- for session serialize/deserialize interface ---------
   virtual int get_serialize_size(
@@ -628,10 +684,12 @@ public:
                        common::ObObj &obj,
                        int64_t &init_size) const;
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                       const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,
@@ -662,6 +720,8 @@ public:
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
+                                 jit::ObLLVMValue &allocator,
+                                 bool is_top_level,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                        const ObPLINS *ns,
@@ -672,8 +732,6 @@ public:
                                const sql::ObSqlExpression *default_expr,
                                bool default_construct,
                                common::ObObj &obj) const;
-  virtual int free_session_var(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &obj_allocator, common::ObObj &obj) const;
-  virtual int free_data(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &data_allocator, void *data) const;
 
   // --------- for session serialize/deserialize interface ---------
   virtual int get_serialize_size(
@@ -700,10 +758,12 @@ public:
                        common::ObObj &obj,
                        int64_t &init_size) const;
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                       const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,
@@ -738,6 +798,8 @@ public:
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
+                                 jit::ObLLVMValue &allocator,
+                                 bool is_top_level,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                        const ObPLINS *ns,
@@ -778,6 +840,8 @@ public:
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
+                                 jit::ObLLVMValue &allocator,
+                                 bool is_top_level,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                        const ObPLINS *ns,
@@ -814,11 +878,19 @@ private:
 };
 #endif
 
+#define IDX_COMPOSITE_WRITE_ALLOC 0
+#define IDX_COMPOSITE_WRITE_VALUE 1
+struct ObPlCompiteWrite
+{
+  int64_t allocator_;
+  int64_t value_addr_;
+};
+
 class ObPLComposite
 {
 public:
-  ObPLComposite() : type_(PL_INVALID_TYPE), id_(OB_INVALID_ID), is_null_(false) {}
-  ObPLComposite(ObPLType type, uint64_t id, bool is_null = false) : type_(type), id_(id), is_null_(is_null)  {}
+  ObPLComposite() : type_(PL_INVALID_TYPE), id_(OB_INVALID_ID), is_null_(false), allocator_(nullptr) {}
+  ObPLComposite(ObPLType type, uint64_t id, bool is_null = false) : type_(type), id_(id), is_null_(is_null), allocator_(nullptr)  {}
 
   inline ObPLType get_type() const { return type_; }
   inline void set_type(ObPLType type) { type_ = type; }
@@ -833,6 +905,8 @@ public:
   inline bool is_varray() const { return PL_VARRAY_TYPE == type_; }
   inline bool is_cursor() const { return PL_CURSOR_TYPE == type_; }
   inline bool is_collection() const { return is_nested_table() || is_associative_array() || is_varray(); }
+  inline common::ObIAllocator *get_allocator() { return allocator_; }
+  inline void set_allocator(common::ObIAllocator *allocator) { allocator_ = allocator; }
 
   int assign(ObPLComposite *src, ObIAllocator *allocator);
   static int deep_copy(ObPLComposite &src,
@@ -846,6 +920,7 @@ public:
   static int copy_element(const ObObj &src,
                           ObObj &dest,
                           ObIAllocator &allocator,
+                          bool need_convert_basic_type,
                           const ObPLINS *ns = NULL,
                           sql::ObSQLSessionInfo *session = NULL,
                           const ObDataType *dest_type = NULL,
@@ -858,6 +933,7 @@ public:
   int deserialize(const char* buf, const int64_t len, int64_t &pos);
   void print() const;
   static bool obj_is_null(ObObj* obj);
+  static uint32_t allocator_offset_bits() { return offsetof(ObPLComposite, allocator_) * 8; }
 
   TO_STRING_KV(K_(type), K_(id), K_(is_null));
 
@@ -865,24 +941,26 @@ protected:
   ObPLType type_;
   uint64_t id_;
   bool is_null_;
+  common::ObIAllocator *allocator_;
 };
 
-#define RECORD_META_OFFSET 4
+#define RECORD_META_OFFSET 6
 #define IDX_RECORD_TYPE 0
 #define IDX_RECORD_ID 1
 #define IDX_RECORD_ISNULL 2
-#define IDX_RECORD_COUNT 3
+#define IDX_RECORD_ALLOCATOR 3
+#define IDX_RECORD_COUNT 4
+#define IDX_RECORD_DATA  5
 class ObPLRecord : public ObPLComposite
 {
 public:
-  ObPLRecord() : ObPLComposite(PL_RECORD_TYPE, OB_INVALID_ID), count_(OB_INVALID_COUNT) {}
-  ObPLRecord(uint64_t id, int32_t count) : ObPLComposite(PL_RECORD_TYPE, id), count_(count)
+  ObPLRecord() : ObPLComposite(PL_RECORD_TYPE, OB_INVALID_ID), count_(OB_INVALID_COUNT), data_(nullptr) {}
+  ObPLRecord(uint64_t id, int32_t count) : ObPLComposite(PL_RECORD_TYPE, id), count_(count), data_(nullptr)
   {
     MEMSET(get_not_null(), 0, get_init_size() - ObRecordType::get_notnull_offset());
-    for (int64_t i = 0; i < count_; ++i) {
-      new (get_element() + i) ObObj();
-    }
   }
+
+  int init_data(common::ObIAllocator &allocator, bool need_new_allocator);
 
   inline int32_t get_count() const { return count_; }
   inline void set_count(int32_t count) { count_ = count; }
@@ -898,7 +976,7 @@ public:
   }
   ObObj *get_element()
   {
-    return reinterpret_cast<ObObj*>((int64_t)this + ObRecordType::get_data_offset(get_count()));
+    return data_;
   }
 
   int get_element(int64_t i, ObObj &obj) const;
@@ -906,21 +984,24 @@ public:
 
   int assign(ObPLRecord *src, ObIAllocator *allocator);
   int deep_copy(ObPLRecord &src, ObIAllocator &allocator,
+                bool need_convert_basic_type,
                 const ObPLINS *ns = NULL, sql::ObSQLSessionInfo *session = NULL,
                 bool ignore_del_element = false);
 
   int set_data(const ObIArray<ObObj> &row);
+  inline void set_data(ObObj* data) { data_ = data; }
   int64_t get_init_size() const
   {
-    return ObRecordType::get_data_offset(count_) + sizeof(ObObj) * count_;
+    return ObRecordType::get_init_size(count_);
   }
-  inline bool is_inited() const { return count_ != OB_INVALID_COUNT; }
+  inline bool is_inited() const { return count_ != OB_INVALID_COUNT && data_ != nullptr; }
   void print() const;
 
   TO_STRING_KV(K_(type), K_(count), K(id_), K(is_null_));
 
 private:
   int32_t count_; //field count
+  ObObj *data_; // 指向自身allocator分配的数据域
   //后面紧跟每个FIELD的类型和NOTNULL信息以及每个FIELD的数据，由CG动态生成
 };
 
@@ -983,6 +1064,7 @@ public:
 #define IDX_COLLECTION_FIRST 6
 #define IDX_COLLECTION_LAST 7
 #define IDX_COLLECTION_DATA 8
+#define IDX_COLLECTION_INNER_CAPACITY 9
 class ObPLCollection : public ObPLComposite
 {
 public:
@@ -996,15 +1078,14 @@ public:
 public:
   ObPLCollection(ObPLType type, uint64_t id)
     : ObPLComposite(type, id),
-      allocator_(NULL),
       element_(),
       count_(OB_INVALID_COUNT),
       first_(OB_INVALID_INDEX),
       last_(OB_INVALID_INDEX),
-      data_(NULL) {}
+      data_(NULL),
+      inner_capacity_(0) {}
   common::ObIAllocator *get_coll_allocator();
-  inline common::ObIAllocator *get_allocator() { return allocator_; }
-  inline void set_allocator(common::ObIAllocator *allocator) { allocator_ = allocator; }
+  int init_allocator(common::ObIAllocator &allocator, bool need_new_allocator);
   inline const ObElemDesc &get_element_desc() const { return element_; }
   inline ObElemDesc &get_element_desc() { return element_; }
   inline void set_element_desc(const ObElemDesc &type) { element_ = type; }
@@ -1015,7 +1096,9 @@ public:
   inline int64_t get_column_count() const { return element_.field_cnt_; }
   inline void set_column_count(int64_t count) { element_.field_cnt_ = static_cast<int32_t>(count); }
   int64_t get_first();
+  inline int64_t get_pure_first() { return PL_ASSOCIATIVE_ARRAY_TYPE == type_ ? first_ : get_first(); }
   inline void set_first(int64_t first) { first_ = first; }
+  inline int64_t get_pure_last() { return PL_ASSOCIATIVE_ARRAY_TYPE == type_ ? last_ : get_last(); }
   int64_t get_last();
   inline void set_last(int64_t last) { last_ = last; }
   inline const ObObj *get_data() const { return data_; }
@@ -1023,7 +1106,7 @@ public:
   inline bool is_not_null() const { return element_.not_null_; }
   inline void set_element_pl_type(ObPLType type) { element_.type_ = type; }
   inline ObObj *get_data() { return data_; }
-  inline void set_data(ObObj* data) { data_ = data; }
+  inline void set_data(ObObj* data, int64_t capacity) { data_ = data; inner_capacity_ = capacity; }
   inline bool is_of_composite() { return element_.get_meta_type().is_ext(); }
   inline void set_inited() { count_ = 0; }
   inline bool is_inited() const { return count_ != -1; }
@@ -1040,7 +1123,6 @@ public:
   int update_first_impl();
   int update_last_impl();
   int64_t get_actual_count();
-  static uint32_t allocator_offset_bits() { return offsetof(ObPLCollection, allocator_) * 8; }
   static uint32_t type_offset_bits() { return offsetof(ObPLCollection, type_) * 4; }
   static uint32_t element_offset_bits() { return offsetof(ObPLCollection, element_) * 8; }
   static uint32_t count_offset_bits() { return offsetof(ObPLCollection, count_) * 8; }
@@ -1048,7 +1130,10 @@ public:
   static uint32_t last_offset_bits() { return offsetof(ObPLCollection, last_) * 8; }
   static uint32_t data_offset_bits() { return offsetof(ObPLCollection, data_) * 8; }
   void print() const;
-  int deep_copy(ObPLCollection *src, common::ObIAllocator *allocator, bool ignore_del_element = false);
+  int deep_copy(ObPLCollection *src,
+                common::ObIAllocator *allocator,
+                bool need_convert_basic_type,
+                bool ignore_del_element = false);
   int assign(ObPLCollection *src, ObIAllocator *allocator);
   int64_t get_init_size() const
   {
@@ -1072,16 +1157,19 @@ public:
   int prior(int64_t idx, ObObj &result);
   int exist(int64_t idx, ObObj &result);
 
+  int64_t get_inner_capacity() { return inner_capacity_; }
+  void set_inner_capacity(int64_t capacity) { inner_capacity_ = capacity; }
+
   TO_STRING_KV(
-    KP_(allocator), K_(type), K_(element), K_(count), K_(first), K_(last), K_(data));
+    KP_(allocator), K_(type), K_(element), K_(count), K_(inner_capacity), K_(first), K_(last), K_(data));
 
 protected:
-  common::ObIAllocator *allocator_;
   ObElemDesc element_;
   int64_t count_; // -1: 当前Collection未初始化 其他: 当前Collection中的元素个数
   int64_t first_; //Collection首元素下标，因为用户可以访问该属性，所以从1开始
   int64_t last_; //Collection末元素下标
   ObObj *data_;
+  int64_t inner_capacity_;
 };
 
 #ifdef OB_BUILD_ORACLE_PL
@@ -1097,8 +1185,8 @@ private:
 };
 #endif
 
-#define IDX_ASSOCARRAY_KEY 9
-#define IDX_ASSOCARRAY_SORT 10
+#define IDX_ASSOCARRAY_KEY 10
+#define IDX_ASSOCARRAY_SORT 11
 
 #ifdef OB_BUILD_ORACLE_PL
 class ObPLAssocArray : public ObPLCollection
@@ -1136,11 +1224,12 @@ public:
     return ret;
   }
 
-  int deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool ignore_del_element = false);
+  int deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool need_convert_basic_type, bool ignore_del_element = false);
   int64_t get_init_size() const
   {
     return sizeof(ObPLAssocArray);
   }
+  int update_first_last(int64_t new_update);
   int update_first();
   int update_last();
   int64_t get_first();
@@ -1161,14 +1250,23 @@ public:
   int prior(int64_t idx, ObObj &result);
   int exist(int64_t idx, ObObj &result);
 
+  int compare_key(const ObObj &key1, const ObObj &key2, int &comp_ret);
+  int search_key(const ObObj &key, int64_t &index, int64_t &search_end, int64_t sort_count);
+  int insert_sort(const ObObj &key, int64_t key_position, int64_t &sort_position, int64_t sort_count);
+  int reserve_assoc_key();
+  static int rebuild_sort(ObObj &obj);
+  int rebuild_sort();
+  int get_compatible_sort(ObIAllocator &allocator, int64_t *&compatible_sort);
+
   TO_STRING_KV(KP_(allocator), K_(type), K_(count), K_(first), K_(last), KP_(data), KP_(key), KP_(sort));
+
 private:
   common::ObObj *key_;
   int64_t *sort_; //每一个元素的sort属性存储的是排序在自己后面元素的下标，从0开始
 };
 #endif
 
-#define IDX_VARRAY_CAPACITY 9
+#define IDX_VARRAY_CAPACITY 10
 #ifdef OB_BUILD_ORACLE_PL
 class ObPLVArray : public ObPLNestedTable
 {
@@ -1180,7 +1278,7 @@ public:
 
   static uint32_t key_offset_bits() { return offsetof(ObPLVArray, capacity_) * 8; }
 
-  int deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool ignore_del_element = false);
+  int deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool need_convert_basic_type, bool ignore_del_element = false);
   int64_t get_init_size() const
   {
     return sizeof(ObPLVArray);

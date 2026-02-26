@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_last_refresh_scn.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -185,12 +183,18 @@ int ObExprLastRefreshScn::get_last_refresh_scn_sql(const share::SCN &scn,
   }
   if (OB_FAIL(ret)) {
   } else if (SCN::invalid_scn() == scn) {
-    if (OB_FAIL(sql.assign_fmt("SELECT MVIEW_ID, LAST_REFRESH_SCN FROM `%s`.`%s` WHERE TENANT_ID = 0 AND MVIEW_ID IN (%.*s)",
-                                    OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_TNAME,
-                                    (int)mview_id_array.length(), mview_id_array.ptr()))) {
+    if (OB_FAIL(sql.assign_fmt("SELECT CAST(MVIEW_ID AS UNSIGNED) AS MVIEW_ID, \
+                                LAST_REFRESH_SCN, \
+                                CAST(REFRESH_MODE AS UNSIGNED) AS REFRESH_MODE \
+                                FROM `%s`.`%s` WHERE TENANT_ID = 0 AND MVIEW_ID IN (%.*s)",
+                              OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_TNAME,
+                              (int)mview_id_array.length(), mview_id_array.ptr()))) {
       LOG_WARN("fail to assign sql", KR(ret));
     }
-  } else if (OB_FAIL(sql.assign_fmt("SELECT MVIEW_ID, LAST_REFRESH_SCN FROM `%s`.`%s` AS OF SNAPSHOT %ld WHERE TENANT_ID = 0 AND MVIEW_ID IN (%.*s)",
+  } else if (OB_FAIL(sql.assign_fmt("SELECT CAST(MVIEW_ID AS UNSIGNED) AS MVIEW_ID, \
+                                     LAST_REFRESH_SCN, \
+                                     CAST(REFRESH_MODE AS UNSIGNED) AS REFRESH_MODE \
+                                     FROM `%s`.`%s` AS OF SNAPSHOT %ld WHERE TENANT_ID = 0 AND MVIEW_ID IN (%.*s)",
                                     OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_TNAME, scn.get_val_for_sql(),
                                     (int)mview_id_array.length(), mview_id_array.ptr()))) {
     LOG_WARN("fail to assign sql", KR(ret), K(scn));

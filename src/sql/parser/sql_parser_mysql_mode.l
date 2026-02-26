@@ -53,6 +53,7 @@ select_hint_begin       (select{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/
 update_hint_begin       (update{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 delete_hint_begin       (delete{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 insert_hint_begin       (insert{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
+merge_hint_begin        (merge{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 replace_hint_begin      (replace{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 load_data_hint_begin    (load{space}+data{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 create_hint_begin    (create{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
@@ -65,7 +66,7 @@ comment          ({sql_comment})
 start_identifier        (([A-Za-z0-9$_]*[A-Za-z$_][A-Za-z0-9$_]*|{NOTASCII_GB_CHAR})+)
 identifier        (([A-Za-z0-9$_]|{NOTASCII_GB_CHAR})+)
 system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)|(@@[`][`A-Za-z_][`A-Za-z_]*)
-user_variable    (@[A-Za-z0-9_\.$]*)|(@[`'\"][`'\"A-Za-z0-9_\.$/%]*)
+user_variable    (@([A-Za-z0-9_\.$]|{NOTASCII_GB_CHAR})*)|(@[`'\"]([`'\"A-Za-z0-9_\.$/%]|{NOTASCII_GB_CHAR})*)
 version_num      ([0-9]+\.+[0-9]*)
 int_num          [0-9]+
 client_version   \([0-9]+(\.[0-9]+)*\)
@@ -112,12 +113,30 @@ INTERVAL {
 
 _UTF8                         { REPUT_TOKEN_NEG_SIGN(_UTF8); }
 _UTF8MB4                      { REPUT_TOKEN_NEG_SIGN(_UTF8MB4); }
+_UTF8MB3                      { REPUT_TOKEN_NEG_SIGN(_UTF8MB3); }
 _GBK                          { REPUT_TOKEN_NEG_SIGN(_GBK); }
+_GB2312                       { REPUT_TOKEN_NEG_SIGN(_GB2312); }
 _GB18030                      { REPUT_TOKEN_NEG_SIGN(_GB18030); }
 _GB18030_2022                 { REPUT_TOKEN_NEG_SIGN(_GB18030_2022); }
 _LATIN1                       { REPUT_TOKEN_NEG_SIGN(_LATIN1); }
+_ASCII                       { REPUT_TOKEN_NEG_SIGN(_ASCII); }
+_TIS620                       { REPUT_TOKEN_NEG_SIGN(_TIS620); }
+_UJIS                         { REPUT_TOKEN_NEG_SIGN(_UJIS); }
+_EUCKR                        { REPUT_TOKEN_NEG_SIGN(_EUCKR);}
+_EUCJPMS                      { REPUT_TOKEN_NEG_SIGN(_EUCJPMS);}
+_CP932                        { REPUT_TOKEN_NEG_SIGN(_CP932);}
 _BINARY                       { REPUT_TOKEN_NEG_SIGN(_BINARY); }
 _UTF16                        { REPUT_TOKEN_NEG_SIGN(_UTF16); }
+_UTF16LE                      { REPUT_TOKEN_NEG_SIGN(_UTF16LE); }
+_SJIS                         { REPUT_TOKEN_NEG_SIGN(_SJIS); }
+_BIG5                         { REPUT_TOKEN_NEG_SIGN(_BIG5); }
+_HKSCS                      { REPUT_TOKEN_NEG_SIGN(_HKSCS); }
+_HKSCS31                     { REPUT_TOKEN_NEG_SIGN(_HKSCS31); }
+_DEC8                        { REPUT_TOKEN_NEG_SIGN(_DEC8); }
+_CP850                       { REPUT_TOKEN_NEG_SIGN(_CP850); }
+_HP8                         { REPUT_TOKEN_NEG_SIGN(_HP8); }
+_MACROMAN                    { REPUT_TOKEN_NEG_SIGN(_MACROMAN); }
+_SWE7                        { REPUT_TOKEN_NEG_SIGN(_SWE7); }
 NOT {
   int32_t token_ret = NOT; /*fast parameterize don't care NOT or NOT2*/
   if (!(IS_FAST_PARAMETERIZE)) {
@@ -430,9 +449,7 @@ FALSE {
     tmp_literal[yylval->node->str_len_] = '\0';
     yylval->node->children_ = (ParseNode **)parse_malloc(sizeof(ParseNode *), p->malloc_pool_);
     if (OB_UNLIKELY(NULL == yylval->node->children_)) {
-      p->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;
-      yyerror(yylloc, yyextra, "No more space for mallocing '%s'\n", yytext);
-      return ERROR;
+      YY_FATAL_ERROR("No more space for mallocing '%s'\n", yytext);
     }
 
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
@@ -573,9 +590,7 @@ FALSE {
 
     yylval->node->children_ = (ParseNode **)parse_malloc(sizeof(ParseNode *), p->malloc_pool_);
     if (OB_UNLIKELY(NULL == yylval->node->children_)) {
-      p->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;
-      yyerror(yylloc, yyextra, "No more space for mallocing '%s'\n", yytext);
-      return ERROR;
+      YY_FATAL_ERROR("No more space for mallocing '%s'\n", yytext);
     }
 
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
@@ -809,7 +824,7 @@ B'([01])*'|0B([01])+ {
     STORE_PARAM_NODE();
   } else {
     yylval->node->sql_str_off_ = yylloc->first_column - 1;
-    return HEX_STRING_VALUE;
+    return BIN_STRING_VALUE;
   }
 }
 
@@ -948,6 +963,12 @@ Timestamp{whitespace}?\"[^\"]*\" {
   p->is_ignore_token_ = p->is_ignore_hint_;
   return INSERT_HINT_BEGIN;
 }
+{merge_hint_begin} {
+  BEGIN(hint);
+  ParseResult *p = (ParseResult *)yyextra;
+  p->is_ignore_token_ = p->is_ignore_hint_;
+  return MERGE_HINT_BEGIN;
+}
 {replace_hint_begin} {
   BEGIN(hint);
   ParseResult *p = (ParseResult *)yyextra;
@@ -989,7 +1010,12 @@ Timestamp{whitespace}?\"[^\"]*\" {
   }
 }
 <hint>INDEX { return INDEX_HINT; }
+<hint>INDEX_ASC { return INDEX_ASC_HINT; }
+<hint>INDEX_DESC { return INDEX_DESC_HINT; }
 <hint>NO_INDEX { return NO_INDEX_HINT; }
+<hint>UNION_MERGE { return UNION_MERGE_HINT; }
+<hint>INDEX_MERGE { return INDEX_MERGE_HINT; }
+<hint>NO_INDEX_MERGE { return NO_INDEX_MERGE_HINT; }
 <hint>USE_DAS { return USE_DAS_HINT; }
 <hint>NO_USE_DAS { return NO_USE_DAS_HINT; }
 <hint>INDEX_SS { return INDEX_SS_HINT; }
@@ -1006,12 +1032,16 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>WEAK  { return WEAK; }
 <hint>STRONG  { return STRONG; }
 <hint>FROZEN  { return FROZEN; }
+<hint>EXCLUSIVE { return EXCLUSIVE; }
+<hint>SHARE { return SHARE; }
+<hint>ROW { return ROW; }
 <hint>NONE  { return NONE; }
 <hint>DEFAULT  { return DEFAULT; }
 <hint>MAX_CONCURRENT { return MAX_CONCURRENT; }
 <hint>PARALLEL { return PARALLEL; }
 <hint>MANUAL { return MANUAL; }
 <hint>NO_PARALLEL { return NO_PARALLEL; }
+<hint>DML_PARALLEL { return DML_PARALLEL; }
 <hint>MONITOR  { return MONITOR; }
 <hint>AUTO { return AUTO; }
 <hint>FORCE { return FORCE; }
@@ -1051,8 +1081,13 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>WF_TOPN  { return WF_TOPN; }
 <hint>USE_LATE_MATERIALIZATION  { return USE_LATE_MATERIALIZATION; }
 <hint>NO_USE_LATE_MATERIALIZATION  { return NO_USE_LATE_MATERIALIZATION; }
+<hint>TRANSFORM_DISTINCT_AGG  { return TRANSFORM_DISTINCT_AGG; }
+<hint>NO_TRANSFORM_DISTINCT_AGG  { return NO_TRANSFORM_DISTINCT_AGG; }
+<hint>PUSH_SUBQ  { return PUSH_SUBQ; }
+<hint>NO_PUSH_SUBQ  { return NO_PUSH_SUBQ; }
 <hint>TRACE_LOG { return TRACE_LOG; }
 <hint>LOAD_BATCH_SIZE { return LOAD_BATCH_SIZE; }
+<hint>NO_DIRECT { return NO_DIRECT; }
 <hint>DIRECT { return DIRECT; }
 <hint>APPEND { return APPEND; }
 <hint>TRACING { return TRACING; }
@@ -1082,10 +1117,12 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PARTITION { return PARTITION; }
 <hint>ALL { return ALL; }
 <hint>HASH { return HASH; }
+<hint>HASH_LOCAL { return HASH_LOCAL; }
 <hint>LOCAL { return LOCAL; }
 <hint>BC2HOST { return BC2HOST; }
 <hint>RANGE { return RANGE; }
 <hint>LIST { return LIST; }
+<hint>BASIC { return BASIC; }
 <hint>[-] { return NEG_SIGN; }
 <hint>MERGE { return MERGE_HINT; }
 <hint>NO_MERGE { return NO_MERGE_HINT; }
@@ -1105,6 +1142,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_REPLACE_CONST { return NO_REPLACE_CONST; }
 <hint>ENABLE_PARALLEL_DML  { return ENABLE_PARALLEL_DML; }
 <hint>DISABLE_PARALLEL_DML  { return DISABLE_PARALLEL_DML; }
+<hint>ENABLE_PARALLEL_DAS_DML  { return ENABLE_PARALLEL_DAS_DML; }
+<hint>DISABLE_PARALLEL_DAS_DML  { return DISABLE_PARALLEL_DAS_DML; }
 <hint>INLINE { return INLINE; }
 <hint>MATERIALIZE { return MATERIALIZE; }
 <hint>SEMI_TO_INNER { return SEMI_TO_INNER; }
@@ -1171,6 +1210,15 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PUSHDOWN { return PUSHDOWN; }
 <hint>DECORRELATE { return DECORRELATE; }
 <hint>NO_DECORRELATE { return NO_DECORRELATE; }
+<hint>RESOURCE_GROUP { return RESOURCE_GROUP; }
+<hint>PQ_GBY { return PQ_GBY; }
+<hint>PQ_DISTINCT { return PQ_DISTINCT; }
+<hint>PX_NODE_POLICY {return PX_NODE_POLICY; }
+<hint>PX_NODE_ADDRS {return PX_NODE_ADDRS; }
+<hint>PX_NODE_COUNT {return PX_NODE_COUNT; }
+<hint>DISABLE_OP_RICH_FORMAT { return DISABLE_OP_RICH_FORMAT; }
+<hint>DISABLE_TRIGGER { return DISABLE_TRIGGER; }
+<hint>TABLE_LOCK_MODE { return TABLE_LOCK_MODE; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);
@@ -1456,7 +1504,7 @@ BEGIN(in_c_comment);
   ((ParseResult *)yyextra)->has_encount_comment_ = true;
 /* ignore */ }
 
-[-+&~|^/%*(),.:!{}] {
+[-+&~|^/%*(),.:!{}\[\]] {
   if (IS_FAST_PARAMETERIZE) {
     ParseResult *p = (ParseResult *)yyextra;
     // for 'select -   -1 from dual'
@@ -1615,8 +1663,6 @@ BEGIN(in_c_comment);
 ":"{identifier}"."{identifier} {
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);
-  char *header = str_toupper(yytext, 4);
-  bool is_for_trigger = (0 == strncmp(":NEW", header, 4)) || (0 == strncmp(":OLD", header, 4));
   if (IS_FOR_REMAP) {
     bool is_contain_colon = (0 == strncmp(":", yytext, 1));
     char *dot_p = strstr(yytext, ".");
@@ -1638,20 +1684,24 @@ BEGIN(in_c_comment);
       node->children_[1] = tb_node;
       return REMAP_DATABASE_TABLE_NAME;
     }
-  } else if (is_for_trigger) {
-    malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
-    yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
-    if (IS_FAST_PARAMETERIZE) {
-      yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
-      yylval->node->sql_str_off_ = yylloc->first_column - 1;
-      check_malloc(yylval->node->raw_text_);
-      STORE_PARAM_NODE();
-    } else {
-      yylval->node->sql_str_off_ = yylloc->first_column - 1;
-      return QUESTIONMARK;
-    }
   } else {
-    YY_UNEXPECTED_ERROR("Named binding is only for trigger\n");
+    char *header = str_toupper(yytext, 4);
+    bool is_for_trigger = (0 == strncmp(":NEW", header, 4)) || (0 == strncmp(":OLD", header, 4));
+    if (is_for_trigger) {
+      malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
+      yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
+      if (IS_FAST_PARAMETERIZE) {
+        yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+        yylval->node->sql_str_off_ = yylloc->first_column - 1;
+        check_malloc(yylval->node->raw_text_);
+        STORE_PARAM_NODE();
+      } else {
+        yylval->node->sql_str_off_ = yylloc->first_column - 1;
+        return QUESTIONMARK;
+      }
+    } else {
+      YY_UNEXPECTED_ERROR("Named binding is only for trigger\n");
+    }
   }
 }
 

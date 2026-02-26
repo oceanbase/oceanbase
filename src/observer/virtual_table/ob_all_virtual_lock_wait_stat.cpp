@@ -14,8 +14,6 @@
 
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/ob_server_utils.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::common;
@@ -79,8 +77,46 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
     get_lock_type(node_iter_->hash_, type);
     const int64_t col_count = output_column_ids_.count();
     ObString ipstr;
+
+    // resolve compatibility problem
+    const int column_id_fix_offset = BLOCK_SESSION_ID;
+    ObString column_name;
+    bool exist = false;
+    bool need_align = false;
+    if (OB_ISNULL(table_schema_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(ERROR, "table_schema of all_virtual_lock_wait_stat is NULL", K(ret));
+    } else {
+      table_schema_->get_column_name_by_column_id(column_id_fix_offset, column_name, exist);
+      if (!exist) {
+        // no need align
+      } else if (column_name == "holder_session_id" || column_name == "HOLDER_SESSION_ID") {
+        /*
+          *  ...
+          *  |     session_id    |
+          *  | holder_session_id |  <---- is here in the first version of 4.3.2
+          *  |  block_session_id |
+          *  ...
+          *
+          *  ...
+          *  |      trans_id     |
+          *  |  holder_trans_id  |
+          *  | holder_session_id |  <---- is here in later version
+          *  ...
+          * */
+        need_align = true;
+      }
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
+      if (need_align) {
+        if (col_id > column_id_fix_offset) {
+          col_id -= 1;
+        } else if (col_id == column_id_fix_offset) {
+          col_id = HOLDER_SESSION_ID;
+        }
+      }
       switch (col_id) {
         // svr_ip
         case SVR_IP: {
@@ -137,11 +173,13 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
             break;
           }
         case SESSION_ID:
-          cur_row_.cells_[i].set_int(node_iter_->sessid_);
-          break;
-        case HOLDER_SESSION_ID:
-          cur_row_.cells_[i].set_int(node_iter_->holder_sessid_);
-          break;
+          {
+            cur_row_.cells_[i].set_int(sql::ObSQLSessionInfo::INVALID_SESSID ==
+                                               node_iter_->client_sid_
+                                           ? node_iter_->sessid_
+                                           : node_iter_->client_sid_);
+            break;
+          }
         case BLOCK_SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->block_sessid_);
           break;
@@ -206,7 +244,7 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
           // If the waiter is waitting on the row, we need to get the
           // real holder from the hash_holder, instead of the holder_tx_id
           // on the ObLockWaitNode.
-          if (type == 2) {
+          if (type == 1) {
             // TODO(yangyifei.yyf): rowkey holder is unstable now, so we use
             // tmp ret to catch error code here. We we fix it in the future.
             if (OB_TMP_FAIL(get_rowkey_holder(node_iter_->hash_, holder_tx_id))) {
@@ -216,6 +254,42 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
             }
           }
           cur_row_.cells_[i].set_int(holder_tx_id.get_id());
+          break;
+        }
+        case HOLDER_SESSION_ID:
+          cur_row_.cells_[i].set_int(node_iter_->holder_sessid_);
+          break;
+        case LS_ID: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case ASSOC_SESS_ID: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case WAIT_TIMEOUT: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case TX_ACTIVE_TS: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case NODE_ID: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case NODE_TYPE: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case REMTOE_ADDR: {
+          cur_row_.cells_[i].set_varchar("0.0.0.0");
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
+        case IS_PLACEHOLDER: {
+          cur_row_.cells_[i].set_int(0);
           break;
         }
         default:

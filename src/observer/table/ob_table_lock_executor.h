@@ -23,16 +23,19 @@ namespace table
 class ObTableApiLockSpec : public ObTableApiModifySpec
 {
 public:
+  typedef common::ObArrayWrap<ObTableLockCtDef*> ObTableLockCtDefArray;
   ObTableApiLockSpec(common::ObIAllocator &alloc, const ObTableExecutorType type)
       : ObTableApiModifySpec(alloc, type),
-        lock_ctdef_(alloc)
+        lock_ctdefs_()
   {
   }
+  int init_ctdefs_array(int64_t size);
+  virtual ~ObTableApiLockSpec();
 public:
-  OB_INLINE const ObTableLockCtDef& get_ctdef() const { return lock_ctdef_; }
-  OB_INLINE ObTableLockCtDef& get_ctdef() { return lock_ctdef_; }
+  OB_INLINE const ObTableLockCtDefArray& get_ctdefs() const { return lock_ctdefs_; }
+  OB_INLINE ObTableLockCtDefArray& get_ctdefs() { return lock_ctdefs_; }
 private:
-  ObTableLockCtDef lock_ctdef_;
+  ObTableLockCtDefArray lock_ctdefs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiLockSpec);
 };
@@ -40,10 +43,11 @@ private:
 class ObTableApiLockExecutor : public ObTableApiModifyExecutor
 {
 public:
+  typedef common::ObArrayWrap<ObTableLockRtDef> ObTableLockRtDefArray;
   ObTableApiLockExecutor(ObTableCtx &ctx, const ObTableApiLockSpec &lock_spec)
       : ObTableApiModifyExecutor(ctx),
         lock_spec_(lock_spec),
-        lock_rtdef_(),
+        lock_rtdefs_(),
         cur_idx_(0)
   {
   }
@@ -59,13 +63,14 @@ public:
   virtual int get_next_row();
   virtual int close();
 private:
-  int generate_lock_rtdef();
+  int generate_lock_rtdef(const ObTableLockCtDef &lock_ctdef, ObTableLockRtDef &lock_rtdef);
+  int inner_open_with_das();
   int get_next_row_from_child();
   int lock_row_to_das();
   int lock_rows_post_proc();
 private:
   const ObTableApiLockSpec &lock_spec_;
-  ObTableLockRtDef lock_rtdef_;
+  ObTableLockRtDefArray lock_rtdefs_;
   int64_t cur_idx_;
 };
 

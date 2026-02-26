@@ -12,14 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_sequence_ddl_proxy.h"
-#include "lib/string/ob_string.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/sequence/ob_sequence_option_builder.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "rootserver/ob_ddl_operator.h"
 
@@ -252,15 +245,15 @@ int ObSequenceDDLProxy::alter_sequence(
       const ObSequenceOption &opt_old = cur_sequence_schema->get_sequence_option();
       bool alter_start_with = opt_bitset.has_member(ObSequenceArg::START_WITH) ||
                               opt_bitset.has_member(ObSequenceArg::RESTART);
-      bool need_clean_cache = opt_bitset.has_member(ObSequenceArg::START_WITH) ||
-                              opt_bitset.has_member(ObSequenceArg::RESTART) ||
-                              (opt_bitset.has_member(ObSequenceArg::INCREMENT_BY)
-                                && opt_old.get_cache_size() <= static_cast<int64_t>(1)) ||
-                              (opt_bitset.has_member(ObSequenceArg::ORDER) && !opt_old.get_order_flag());
+      // Only in nocache mode, when the step is not changed, there is no need to clear the cache
+      bool need_clean_cache = !(opt_old.get_cache_size() <= static_cast<int64_t>(1)
+                              && !opt_bitset.has_member(ObSequenceArg::INCREMENT_BY));
+      // in noorder cycle mode, cannot decide to write back which cache
+      bool need_write_back = !(opt_old.get_cycle_flag() && !opt_old.get_order_flag());
       seq_schema.set_sequence_id(sequence_id);
       seq_schema.set_schema_version(new_schema_version);
-      if (OB_FAIL(schema_service->get_sequence_sql_service().replace_sequence(
-                  seq_schema, false, &trans, alter_start_with, need_clean_cache, ddl_stmt_str))) {
+      if (OB_FAIL(schema_service->get_sequence_sql_service().replace_sequence(seq_schema,
+            false, &trans, alter_start_with, need_clean_cache, need_write_back, ddl_stmt_str))) {
         LOG_WARN("alter sequence info failed", K(seq_schema.get_sequence_name()), K(ret));
       } else {
         LOG_INFO("alter sequence", K(lbt()), K(seq_schema));
@@ -378,7 +371,7 @@ int ObSequenceDDLProxy::rename_sequence(share::schema::ObSequenceSchema &seq_sch
   } else {
     seq_schema.set_schema_version(new_schema_version);
     if (OB_FAIL(schema_service->get_sequence_sql_service().replace_sequence(
-                seq_schema, true, &trans, false, false, ddl_stmt_str))) {
+                seq_schema, true, &trans, false, false, false, ddl_stmt_str))) {
       LOG_WARN("rename sequence info failed", K(ret), K(seq_schema.get_sequence_name()));
     } else {
       LOG_INFO("rename sequence", K(lbt()), K(seq_schema));

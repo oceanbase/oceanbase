@@ -258,7 +258,7 @@ public:
   ConstIterator end() const { return lists_ + list_cnt_; }
 
   TO_STRING_KV(K_(is_created), K_(bucket_num), K_(node_num), K_(list_num), K_(node_cnt), K_(list_cnt),
-      KP_(buckets), KP_(nodes), KP_(lists), K_(null_nodes), K_(nope_nodes));
+               KP_(buckets), KP_(nodes), KP_(lists), K_(null_nodes), K_(nope_nodes), KP_(skip_bit), KP_(hash_val));
 
 protected:
   bool is_created_;
@@ -272,6 +272,8 @@ protected:
   NodeList *lists_;
   NodeList null_nodes_;
   NodeList nope_nodes_;
+  sql::ObBitVector *skip_bit_;
+  uint64_t *hash_val_;
   common::ObArenaAllocator alloc_;
 
 private:
@@ -290,7 +292,9 @@ private:
       bool &is_equal);
   static int hash(const ObDatum &datum, const ObHashFunc &hash_func, const bool need_binary, uint64_t &res);
 
-  static void add_to_list(NodeList &list, HashNode &node, const ObDatum &datum);
+  static void add_to_list(NodeList &list, HashNode &node, const ObDatum &datum, int64_t &node_cnt);
+
+  int add_to_table(const ObDatum &datum, const int64_t pos, const int64_t row_idx);
 };
 
 class ObEncodingHashTableFactory
@@ -301,7 +305,7 @@ public:
 
   int create(const int64_t bucket_num, const int64_t node_num,
              ObEncodingHashTable *&hashtable);
-  int recycle(ObEncodingHashTable *hashtable);
+  int recycle(const bool force_cache, ObEncodingHashTable *hashtable);
 private:
   void clear();
 

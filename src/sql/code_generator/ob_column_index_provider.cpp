@@ -64,13 +64,11 @@ int RowDesc::add_column(ObRawExpr *raw_expr)
     SQL_CG_LOG(WARN, "failed to add raw_expr", K(ret), K(*raw_expr));
   } else {
     int64_t idx = OB_INVALID_INDEX;
-    ret = expr_idx_map_.get_refactored(reinterpret_cast<int64_t>(
-                                       static_cast<jit::expr::ObIRawExpr *>(raw_expr)), idx);
+    ret = expr_idx_map_.get_refactored(reinterpret_cast<int64_t>(raw_expr), idx);
     if (OB_HASH_EXIST == ret) {
       ret = OB_SUCCESS;
     } else if (OB_HASH_NOT_EXIST == ret) {
-      if (OB_FAIL(expr_idx_map_.set_refactored(reinterpret_cast<int64_t>(
-                                                      static_cast<jit::expr::ObIRawExpr *>(raw_expr)),
+      if (OB_FAIL(expr_idx_map_.set_refactored(reinterpret_cast<int64_t>(raw_expr),
                                                                  exprs_.count() - 1))) {
         SQL_CG_LOG(WARN, "failed to set", K(ret), K(*raw_expr));
       } else {
@@ -99,9 +97,9 @@ int RowDesc::replace_column(ObRawExpr *old_expr, ObRawExpr *new_expr)
       ret = OB_HASH_NOT_EXIST;
     }
     SQL_CG_LOG(WARN, "get expr index failed", K(ret), KPC(old_expr), K_(exprs));
-  } else if (OB_FAIL(expr_idx_map_.erase_refactored(reinterpret_cast<int64_t>(static_cast<jit::expr::ObIRawExpr *>(old_expr))))) {
+  } else if (OB_FAIL(expr_idx_map_.erase_refactored(reinterpret_cast<int64_t>(old_expr)))) {
     SQL_CG_LOG(WARN, "erase old expr failed", K(ret), KPC(old_expr), K(idx));
-  } else if (OB_FAIL(expr_idx_map_.set_refactored(reinterpret_cast<int64_t>(static_cast<jit::expr::ObIRawExpr *>(new_expr)), idx))) {
+  } else if (OB_FAIL(expr_idx_map_.set_refactored(reinterpret_cast<int64_t>(new_expr), idx))) {
     SQL_CG_LOG(WARN, "set expr idx failed", K(ret), KPC(new_expr), K(idx));
   } else {
     exprs_.at(idx) = new_expr;
@@ -131,11 +129,11 @@ int RowDesc::swap_position(const ObRawExpr *expr1, const ObRawExpr *expr2)
       ret = OB_HASH_NOT_EXIST;
     }
     SQL_CG_LOG(WARN, "get expr index failed", K(ret), KPC(expr2), K_(exprs));
-  } else if (OB_FAIL(expr_idx_map_.set_refactored(reinterpret_cast<int64_t>(
-      static_cast<const jit::expr::ObIRawExpr *>(expr1)), idx2, 1/*overwrite value*/))) {
+  } else if (OB_FAIL(expr_idx_map_.set_refactored(reinterpret_cast<int64_t>(expr1),
+                                                  idx2, 1/*overwrite value*/))) {
     SQL_CG_LOG(WARN, "overwrite expr1 index failed", K(ret), KPC(expr1), K(idx2));
-  } else if (OB_FAIL(expr_idx_map_.set_refactored(reinterpret_cast<int64_t>(
-      static_cast<const jit::expr::ObIRawExpr *>(expr2)), idx1, 1/*overwrite value*/))) {
+  } else if (OB_FAIL(expr_idx_map_.set_refactored(reinterpret_cast<int64_t>(expr2),
+                                                  idx1, 1/*overwrite value*/))) {
     SQL_CG_LOG(WARN, "overwrite expr2 index failed", K(ret), KPC(expr2), K(idx1));
   } else {
     exprs_.at(idx1) = const_cast<ObRawExpr*>(expr2);
@@ -169,12 +167,11 @@ int RowDesc::get_column(int64_t idx, ObRawExpr *&raw_expr) const
   return ret;
 }
 
-int RowDesc::get_idx(const jit::expr::ObIRawExpr *raw_expr, int64_t &idx) const
+int RowDesc::get_idx(const ObRawExpr *raw_expr, int64_t &idx) const
 {
   idx = OB_INVALID_INDEX;
   int ret = OB_SUCCESS;
-  if (OB_FAIL(expr_idx_map_.get_refactored(reinterpret_cast<int64_t>(
-      static_cast<const jit::expr::ObIRawExpr *>(raw_expr)), idx))) {
+  if (OB_FAIL(expr_idx_map_.get_refactored(reinterpret_cast<int64_t>(raw_expr), idx))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_ENTRY_NOT_EXIST;
     }

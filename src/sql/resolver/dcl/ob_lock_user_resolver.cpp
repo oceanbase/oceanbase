@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dcl/ob_lock_user_resolver.h"
-#include "share/schema/ob_schema_struct.h"
 #include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

@@ -14,6 +14,7 @@
 
 #include "ob_icolumn_cs_encoder.h"
 #include "ob_cs_encoding_util.h"
+#include "storage/blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_encoding_util.h"
 
 namespace oceanbase
 {
@@ -45,21 +46,39 @@ int ObIColumnCSEncoder::init(const ObColumnCSEncodingCtx &ctx,
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
+  } else if (ctx.is_semistruct_sub_col_) {
+    ObObjMeta col_type;
+    if (OB_FAIL(ctx.semistruct_ctx_->get_sub_column_type(column_index, col_type))) {
+      LOG_WARN("get sub column type fail", K(ret), K(column_index), KPC(ctx.semistruct_ctx_));
+    } else if (OB_FAIL(init_common_(ctx, column_index, col_type, row_count))) {
+      LOG_WARN("sub column init common fail", K(ret), K(column_index), KPC(ctx.semistruct_ctx_));
+    }
   } else if (!ctx.encoding_ctx_->is_valid() || column_index < 0
       || column_index >= ctx.encoding_ctx_->column_cnt_ || 0 == row_count) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ctx), K(column_index), K(row_count));
-  } else {
-    const ObObjMeta& col_type = ctx.encoding_ctx_->col_descs_->at(column_index).col_type_;
-    store_class_ = get_store_class_map()[ob_obj_type_class(col_type.get_type())];
-    column_type_ = col_type;
-    ctx_ = &ctx;
-    column_index_ = column_index;
-    row_count_ = row_count;
-    column_header_.obj_type_ = column_type_.get_type();
-    is_force_raw_ = ctx.force_raw_encoding_;
+  } else if (OB_FAIL(init_common_(ctx, column_index, ctx.encoding_ctx_->col_descs_->at(column_index).col_type_, row_count))) {
+    LOG_WARN("init common fail", K(ret), K(column_index), K(ctx));
+  }
+  if (OB_SUCC(ret)) {
     is_inited_ = true;
   }
+  return ret;
+}
+
+int ObIColumnCSEncoder::init_common_(const ObColumnCSEncodingCtx &ctx,
+                                     const int64_t column_index,
+                                     const ObObjMeta& col_type,
+                                     const int64_t row_count)
+{
+  int ret = OB_SUCCESS;
+  store_class_ = get_store_class_map()[ob_obj_type_class(col_type.get_type())];
+  column_type_ = col_type;
+  ctx_ = &ctx;
+  column_index_ = column_index;
+  row_count_ = row_count;
+  column_header_.obj_type_ = column_type_.get_type();
+  is_force_raw_ = ctx.force_raw_encoding_;
   return ret;
 }
 
@@ -80,7 +99,7 @@ void ObIColumnCSEncoder::reuse()
 int ObIColumnCSEncoder::store_null_bitamp(ObMicroBufferWriter &buf_writer)
 {
   int ret = OB_SUCCESS;
-  if (!column_header_.has_null_bitmap()) {
+  if (!column_header_.has_null_or_nop_bitmap()) {
     // has no bitmap, do nothing
   } else {
     char *bitmap = buf_writer.current();
@@ -92,7 +111,32 @@ int ObIColumnCSEncoder::store_null_bitamp(ObMicroBufferWriter &buf_writer)
       MEMSET(bitmap, 0, bitmap_size);
       const ObColDatums &datums = *ctx_->col_datums_;
       for (int64_t row_id = 0; row_id < row_count_; ++row_id)  {
-        if (datums.at(row_id).is_null()) {
+        if (datums.at(row_id).is_null_or_nop()) {
+          bitmap[row_id / 8] |= (1 << (7 - row_id % 8));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObIColumnCSEncoder::store_nop_bitmap(ObMicroBufferWriter &buf_writer)
+{
+  int ret = OB_SUCCESS;
+  if (!column_header_.has_nop_bitmap()) {
+    // has no bitmap, do nothing
+  } else {
+    char *bitmap = buf_writer.current();
+    int64_t bitmap_size = ObCSEncodingUtil::get_bitmap_byte_size(row_count_);
+
+    if (OB_FAIL(buf_writer.advance(bitmap_size))) {
+      LOG_WARN("buffer advance failed", K(ret), K(bitmap_size), K(row_count_));
+    } else {
+      MEMSET(bitmap, 0, bitmap_size);
+      const ObColDatums &datums = *ctx_->col_datums_;
+      for (int64_t row_id = 0; row_id < row_count_; ++row_id)  {
+        if (datums.at(row_id).is_nop()) {
           bitmap[row_id / 8] |= (1 << (7 - row_id % 8));
         }
       }
@@ -115,6 +159,17 @@ int ObIColumnCSEncoder::get_stream_offsets(ObIArray<uint32_t> &offsets) const
         LOG_WARN("fail to push back", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObIColumnCSEncoder::get_previous_cs_encoding(ObPreviousColumnEncoding *&pre_col_encoding)
+{
+  int ret = OB_SUCCESS;
+  if (ctx_->is_semistruct_sub_col_) {
+    pre_col_encoding = ctx_->semistruct_ctx_->previous_cs_encoding_.get_column_encoding(column_index_);
+  } else {
+    pre_col_encoding = ctx_->encoding_ctx_->previous_cs_encoding_.get_column_encoding(column_index_);
   }
   return ret;
 }

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_sql_mem_mgr_processor.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase {
 
@@ -46,6 +45,7 @@ int ObSqlMemMgrProcessor::init(
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get allocator", K(ret));
+  } else if (cache_size < allocator->used() && FALSE_IT(cache_size = allocator->used())) {
   } else if (OB_FAIL(alloc_dir_id(dir_id_))) {
   } else if (OB_NOT_NULL(sql_mem_mgr)) {
     profile_.disable_auto_mem_mgr_ = exec_info.get_disable_auto_mem_mgr();
@@ -99,9 +99,7 @@ int ObSqlMemMgrProcessor::init(
       profile_.get_work_area_type(), tenant_id_, exec_info, max_mem_size))) {
     LOG_WARN("failed to get workarea size", K(ret), K(tenant_id_), K(max_mem_size));
   }
-  if (!profile_.get_auto_policy()) {
-    profile_.set_max_bound(max_mem_size);
-  }
+
   if (OB_SUCC(ret) && nullptr == dummy_alloc_) {
     dummy_alloc_ = allocator;
     if (OB_ISNULL(dummy_ptr_ = static_cast<char *> (dummy_alloc_->alloc(sizeof(char))))) {
@@ -316,7 +314,7 @@ int ObSqlMemMgrProcessor::alloc_dir_id(int64_t &dir_id)
 {
   int ret = OB_SUCCESS;
   if (0 == dir_id_) {
-    if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+    if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(tenant_id_, dir_id_))) {
       LOG_WARN("failed to alloc dir id", K(ret));
     }
   }

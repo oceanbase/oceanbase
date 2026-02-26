@@ -73,9 +73,9 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                                |NAME    |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR                          |        |26      |63          |
-|1 |└─EXCHANGE OUT DISTR                    |:EX10001|26      |37          |
-|2 |  └─NESTED-LOOP JOIN                    |        |26      |8           |
+|0 |PX COORDINATOR                          |        |26      |71          |
+|1 |└─EXCHANGE OUT DISTR                    |:EX10001|26      |45          |
+|2 |  └─NESTED-LOOP JOIN                    |        |26      |16          |
 |3 |    ├─PX BLOCK ITERATOR                 |        |28      |8           |
 |4 |    │ └─TABLE FULL SCAN                 |score   |28      |8           |
 |5 |    └─MATERIAL                          |        |1       |8           |

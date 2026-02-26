@@ -8,14 +8,9 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#include "lib/container/ob_bit_set.h"
-#include "ob_dup_table_lease.h"
-#include "ob_dup_table_tablets.h"
-#include "ob_dup_table_ts_sync.h"
 #include "ob_dup_table_util.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_tx_log_adapter.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
@@ -230,7 +225,9 @@ int ObDupTabletScanTask::execute_for_dup_ls_()
       DUP_TABLE_LOG(INFO, "ls not leader", K(cur_ls_ptr->get_ls_id()));
 #endif
     } else {
-      storage::ObHALSTabletIDIterator ls_tablet_id_iter(cur_ls_ptr->get_ls_id(), true);
+      storage::ObHALSTabletIDIterator ls_tablet_id_iter(cur_ls_ptr->get_ls_id(),
+                                                        true/*need_initial_state*/,
+                                                        false/*need_sorted_tablet_id*/);
       if (OB_FAIL(cur_ls_ptr->build_tablet_iter(ls_tablet_id_iter))) {
         DUP_TABLE_LOG(WARN, "build ls tablet iter failed", K(cur_ls_ptr->get_ls_id()));
       } else if (!ls_tablet_id_iter.is_valid()) {
@@ -313,7 +310,7 @@ int ObDupTableLSHandler::init(bool is_dup_table)
     if (is_inited()) {
       ret = OB_INIT_TWICE;
     } else {
-      SpinWLockGuard init_w_guard(init_rw_lock_);
+      TCRWLock::WLockGuard init_w_guard(init_rw_lock_);
       // init by dup_tablet_scan_task_.
 
       ObDupTableLogOperator *tmp_log_operator = static_cast<ObDupTableLogOperator *>(
@@ -454,7 +451,7 @@ int ObDupTableLSHandler::offline()
       ret = OB_SUCCESS;
     }
   } else {
-    SpinRLockGuard r_init_guard(init_rw_lock_);
+    TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
     if (is_inited_) {
       if (OB_NOT_NULL(log_operator_) && log_operator_->is_busy()) {
         ret = OB_EAGAIN;
@@ -529,7 +526,7 @@ void ObDupTableLSHandler::destroy() { reset(); }
 void ObDupTableLSHandler::reset()
 {
   // ATOMIC_STORE(&is_inited_, false);
-  SpinWLockGuard w_init_guard(init_rw_lock_);
+  TCRWLock::WLockGuard w_init_guard(init_rw_lock_);
   ls_state_helper_.reset();
 
   dup_ls_ckpt_.reset();
@@ -571,7 +568,7 @@ void ObDupTableLSHandler::reset()
 
 bool ObDupTableLSHandler::is_inited()
 {
-  SpinRLockGuard r_init_guard(init_rw_lock_);
+  TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
   return is_inited_;
 }
 
@@ -647,9 +644,10 @@ int ObDupTableLSHandler::ls_loop_handle()
 
     if (fast_cur_time - last_diag_info_print_us_[DupTableDiagStd::TypeIndex::LEASE_INDEX]
         >= DupTableDiagStd::DUP_DIAG_PRINT_INTERVAL[DupTableDiagStd::TypeIndex::LEASE_INDEX]) {
+      ObCStringHelper helper;
       _DUP_TABLE_LOG(INFO, "[%sDup Interface Stat] tenant: %lu, ls: %lu, is_master: %s, %s",
                      DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, MTL_ID(), ls_id_.id(),
-                     to_cstring(is_leader), to_cstring(interface_stat_));
+                     helper.convert(is_leader), helper.convert(interface_stat_));
     }
 
     if (fast_cur_time - last_diag_info_print_us_[DupTableDiagStd::TypeIndex::LEASE_INDEX]
@@ -1261,7 +1259,7 @@ void ObDupTableLSHandler::switch_to_follower_forcedly()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  SpinRLockGuard r_init_guard(init_rw_lock_);
+  TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
 
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_REVOKE_SUCC,
@@ -1287,7 +1285,7 @@ int ObDupTableLSHandler::switch_to_follower_gracefully()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  SpinRLockGuard r_init_guard(init_rw_lock_);
+  TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
 
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_REVOKE_SUCC,
@@ -1330,7 +1328,7 @@ int ObDupTableLSHandler::resume_leader()
 
   const bool is_resume = true;
 
-  SpinRLockGuard r_init_guard(init_rw_lock_);
+  TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
 
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
@@ -1368,7 +1366,7 @@ int ObDupTableLSHandler::switch_to_leader()
 
   const bool is_resume = false;
 
-  SpinRLockGuard r_init_guard(init_rw_lock_);
+  TCRWLock::RLockGuard r_init_guard(init_rw_lock_);
 
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
@@ -1742,6 +1740,7 @@ int ObDupTableLoopWorker::init()
     if (OB_FAIL(dup_ls_id_set_.create(8, "DUP_LS_SET", "DUP_LS_ID", MTL_ID()))) {
       DUP_TABLE_LOG(WARN, "create dup_ls_map_ error", K(ret));
     } else {
+      ATOMIC_STORE(&is_started_, false);
       is_inited_ = true;
     }
   }
@@ -1756,6 +1755,9 @@ int ObDupTableLoopWorker::start()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "dup_loop_worker has not inited", K(ret));
+  } else if (!ATOMIC_BCAS(&is_started_, false, true)) {
+    ret = OB_INIT_TWICE;
+    DUP_TABLE_LOG(WARN, "start dup_table_loop_worker twice", K(ret), K(is_started_));
   } else {
     lib::ThreadPool::set_run_wrapper(MTL_CTX());
     ret = lib::ThreadPool::start();
@@ -1770,6 +1772,7 @@ void ObDupTableLoopWorker::stop()
     DUP_TABLE_LOG(INFO, "stop ObDupTableLoopWorker");
   }
   lib::ThreadPool::stop();
+  // is_started_ = false; // start a threadpool and release it in the funticon of destroy
 }
 
 void ObDupTableLoopWorker::wait()
@@ -1782,6 +1785,7 @@ void ObDupTableLoopWorker::destroy()
 {
   lib::ThreadPool::destroy();
   (void)dup_ls_id_set_.destroy();
+  ATOMIC_STORE(&is_started_, false);
   DUP_TABLE_LOG(INFO, "destroy ObDupTableLoopWorker");
 }
 
@@ -1793,6 +1797,7 @@ void ObDupTableLoopWorker::reset()
     DUP_TABLE_LOG(WARN, "clear dup_ls_set failed", KR(ret));
   }
   is_inited_ = false;
+  ATOMIC_STORE(&is_started_, false);
 }
 
 void ObDupTableLoopWorker::run1()
@@ -1844,7 +1849,8 @@ void ObDupTableLoopWorker::run1()
 
       time_used = ObTimeUtility::current_time() - start_time;
       if (time_used < LOOP_INTERVAL) {
-        usleep(LOOP_INTERVAL - time_used);
+        ObBKGDSessInActiveGuard inactive_guard;
+        ob_usleep(LOOP_INTERVAL - time_used);
       }
     }
   }

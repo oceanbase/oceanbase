@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_assigned_task_manager.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

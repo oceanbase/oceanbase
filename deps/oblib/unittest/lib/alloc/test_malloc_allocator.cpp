@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/allocator/ob_malloc.h"
 
 using namespace oceanbase::lib;
@@ -54,7 +53,6 @@ TEST(TestMallocAllocator, idle)
   ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(tenant_id));
   auto ta = malloc_allocator->get_tenant_ctx_allocator(tenant_id, ctx_id);
   ASSERT_TRUE(NULL != ta);
-  ta->set_tenant_memory_mgr();
   ASSERT_EQ(OB_SUCCESS, malloc_allocator->set_tenant_limit(tenant_id, 1024 * 1024 * 1024));
 
   ASSERT_EQ(OB_SUCCESS, malloc_allocator->set_tenant_ctx_idle(tenant_id, ctx_id,

@@ -1,0 +1,69 @@
+[target-default]
+os=8
+arch=x86_64
+repo=https://mirrors.aliyun.com/oceanbase/development-kit/al/8/x86_64/
+
+
+[target-community]
+os=8
+arch=x86_64
+repo=http://mirrors.aliyun.com/oceanbase/community/stable/al/8/x86_64/
+
+[deps]
+obdal-0.2.2-302025082510.al8.x86_64.rpm target=community
+devdeps-gtest-1.8.0-192024092714.al8.x86_64.rpm
+devdeps-isa-l-static-2.22.0-52024092714.al8.x86_64.rpm
+devdeps-libcurl-static-8.12.1-132025040210.al8.x86_64.rpm
+devdeps-libunwind-static-1.6.2-342024092715.al8.x86_64.rpm
+devdeps-mariadb-connector-c-3.1.12-42024100814.al8.x86_64.rpm
+devdeps-libaio-0.3.112-42024092715.al8.x86_64.rpm
+devdeps-relaxed-rapidjson-1.0.0-132024092715.al8.x86_64.rpm
+devdeps-openssl-static-1.1.1u-132024092718.al8.x86_64.rpm
+devdeps-libxml2-2.13.6-22025032016.al8.x86_64.rpm
+devdeps-mxml-3.3.1-22025092517.al8.x86_64.rpm
+devdeps-apr-1.6.5-342024100911.al8.x86_64.rpm
+devdeps-xz-5.2.2-112024092715.al8.x86_64.rpm
+devdeps-lua-5.4.3-162024092718.al8.x86_64.rpm
+devdeps-oss-c-sdk-3.11.2-142025100915.al8.x86_64.rpm
+devdeps-zlib-static-1.2.13-82024102414.al8.x86_64.rpm
+devdeps-ncurses-static-6.5-62025040314.al8.x86_64.rpm
+devdeps-boost-1.74.0-72024092811.al8.x86_64.rpm
+devdeps-abseil-cpp-20211102.0-62024122014.al8.x86_64.rpm
+devdeps-s2geometry-0.10.0-122024122617.al8.x86_64.rpm
+devdeps-icu-69.1-232024120517.al8.x86_64.rpm
+devdeps-cloud-qpl-1.1.0-312024092814.al8.x86_64.rpm
+devdeps-s3-cpp-sdk-1.11.156-222024100811.al8.x86_64.rpm
+devdeps-protobuf-c-1.5.1-100000052025032810.al8.x86_64.rpm
+devdeps-roaringbitmap-croaring-3.0.0-92024092815.al8.x86_64.rpm
+devdeps-apache-arrow-20.0.0-42025082815.al8.x86_64.rpm
+devdeps-hyperscan-5.4.2-252024092817.al8.x86_64.rpm
+devdeps-vsag-1.1.0-882025110711.al8.x86_64.rpm
+devdeps-apache-orc-2.1.1-82025081116.al8.x86_64.rpm
+devdeps-fast-float-6.1.3-42024112122.al8.x86_64.rpm
+devdeps-hdfs-sdk-3.3.6-112024123116.al8.x86_64.rpm
+devdeps-apache-avro-cpp-1.12.0-72025062510.al8.x86_64.rpm
+devdeps-apache-thrift-0.16.0-132025070909.al8.x86_64.rpm
+devdeps-mit-krb5-1.21.3-212025063015.al8.x86_64.rpm
+devdeps-cyrus-sasl-2.1.28-102025070115.al8.x86_64.rpm
+devdeps-python3-3.13.3-132025070111.al8.x86_64.rpm
+
+[tools]
+obdevtools-binutils-2.30-82024092619.al8.x86_64.rpm
+obdevtools-bison-2.4.1-42024092621.al8.x86_64.rpm
+obdevtools-ccache-3.7.12-52024092621.al8.x86_64.rpm
+obdevtools-cmake-3.22.1-122024092710.al8.x86_64.rpm
+obdevtools-flex-2.5.35-42024092621.al8.x86_64.rpm
+obdevtools-gcc-12.3.0-32024122017.al8.x86_64.rpm
+obdevtools-llvm-17.0.6-72025060300.al8.x86_64.rpm
+
+[tools-deps]
+devdeps-oblogmsg-1.1-122024093010.al8.x86_64.rpm
+devdeps-rocksdb-6.22.1-32024123015.al8.x86_64.rpm
+obdevtools-obstack-2.0.4-42024101017.al8.x86_64.rpm
+obshell-4.3.2.0-52025092411.al8.x86_64.rpm target=community
+#obshell-4.3.2.1-12025101110.al8.x86_64.rpm target=community
+
+[test-utils]
+ob-deploy-3.6.0-3.al8.x86_64.rpm target=community
+obclient-2.2.3-202024102217.al8.x86_64.rpm target=community
+libobclient-2.2.3-152024102213.al8.x86_64.rpm target=community

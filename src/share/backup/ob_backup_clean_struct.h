@@ -72,6 +72,7 @@ struct ObBackupCleanTaskType final
   {
     BACKUP_SET = 0,
     BACKUP_PIECE = 1,
+    BACKUP_COMPLEMENT_LOG = 2,
     MAX,
   };
   static const char *get_str(const TYPE &type);
@@ -108,34 +109,39 @@ public:
   bool is_valid() const;
   int assign(const ObBackupCleanJobAttr &other);
   bool is_clean_copy() const { return dest_id_ > 0; }
-  bool is_delete_obsolete_backup() const { return ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP == clean_type_ || ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP_BACKUP == clean_type_; }
+  bool is_delete_obsolete_backup() const { return ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP == clean_type_; }
   bool is_delete_backup_set() const { return ObNewBackupCleanType::DELETE_BACKUP_SET == clean_type_; }
   bool is_delete_backup_piece() const { return ObNewBackupCleanType::DELETE_BACKUP_PIECE == clean_type_; }
-  int get_clean_parameter(int64_t &parameter) const;
-  int set_clean_parameter(const int64_t parameter);
+  bool is_delete_backup_all() const { return ObNewBackupCleanType::DELETE_BACKUP_ALL == clean_type_; }
+  int set_clean_parameter(const ObString &str);
+  int set_clean_parameter(const ObIArray<int64_t> &parameter_list);
   int check_backup_clean_job_match(const ObBackupCleanJobAttr &job_attr) const;
   int set_dest_id(const int64_t dest_id);
+  int get_parameter_list_str(char *buffer, int64_t buffer_size, int64_t &pos) const;
   int get_executor_tenant_id_str(share::ObDMLSqlSplicer &dml) const;
   int set_executor_tenant_id(const ObString &str);
 
+
+public:
   TO_STRING_KV(K_(job_id), K_(tenant_id), K_(incarnation_id), K_(initiator_job_id), K_(executor_tenant_id), K_(initiator_tenant_id),  K_(clean_type),
-      K_(expired_time), K_(backup_set_id), K_(backup_piece_id), K_(dest_id), K_(job_level), 
-      K_(backup_path), K_(start_ts), K_(end_ts), K_(status), K_(description), K_(result), K_(retry_count), K_(can_retry), K_(task_count),
-      K_(success_task_count)); 
+      K_(expired_time), K_(backup_set_ids), K_(backup_piece_ids), K_(dest_id), K_(job_level),
+      K_(backup_path), K_(backup_path_type), K_(start_ts), K_(end_ts), K_(status), K_(description), K_(result), K_(retry_count), K_(can_retry), K_(task_count),
+      K_(success_task_count), K_(failure_reason));
 
   int64_t job_id_; // pk
   uint64_t tenant_id_; // pk
   int64_t incarnation_id_;
   uint64_t initiator_tenant_id_;
   int64_t initiator_job_id_;
-  common::ObSArray<uint64_t> executor_tenant_id_;
+  common::ObArray<uint64_t> executor_tenant_id_;
   ObNewBackupCleanType::TYPE clean_type_;
   int64_t expired_time_;
-  int64_t backup_set_id_;
-  int64_t backup_piece_id_;
+  common::ObArray<int64_t> backup_set_ids_;
+  common::ObArray<int64_t> backup_piece_ids_;
   int64_t dest_id_;
   ObBackupLevel job_level_;
   ObBackupPathString backup_path_;
+  ObBackupDestType::TYPE backup_path_type_;
   int64_t start_ts_;
   int64_t end_ts_;
   ObBackupCleanStatus status_;
@@ -145,8 +151,9 @@ public:
   bool can_retry_;
   int64_t task_count_;
   int64_t success_task_count_;
+  common::ObFixedLengthString<OB_COMMENT_LENGTH> failure_reason_;
 };
-  // TODO(wenjinyu.wjy) 4.3 Split the structure of set and piece
+  // TODO(lyh444845) 4.4.1 Split the structure of set and piece
 
 struct ObBackupCleanTaskAttr final
 {
@@ -191,6 +198,9 @@ struct ObBackupCleanLSTaskAttr final
   bool is_valid() const;
   void reset(); 
   bool is_delete_backup_set_task() const { return ObBackupCleanTaskType::BACKUP_SET == task_type_; }
+  bool is_delete_backup_complement_task() const {
+    return ObBackupCleanTaskType::BACKUP_COMPLEMENT_LOG == task_type_;
+  }
   bool is_delete_backup_piece_task() const { return ObBackupCleanTaskType::BACKUP_PIECE == task_type_; }
   int assign(const ObBackupCleanLSTaskAttr &other);
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(ls_id), K_(job_id),  K_(backup_set_id),

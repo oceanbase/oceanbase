@@ -11,8 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/compaction/ob_medium_compaction_info.h"
-#include "storage/compaction/ob_partition_merge_policy.h"
+#include "ob_medium_compaction_info.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
@@ -26,27 +25,32 @@ namespace compaction
 /*
  * ObParallelMergeInfo
  * */
+ObParallelMergeInfo::~ObParallelMergeInfo()
+{
+  if (list_size_ > 0 || (nullptr != parallel_store_rowkey_list_ || nullptr != parallel_datum_rowkey_list_)) {
+    LOG_ERROR_RET(OB_ERR_SYS, "exist unfree buf", K_(list_size), KP_(parallel_store_rowkey_list), KP_(parallel_datum_rowkey_list));
+  }
+}
 
 template<typename T>
-void ObParallelMergeInfo::destroy(T *&array)
+void ObParallelMergeInfo::destroy(ObIAllocator &allocator, T *&array)
 {
-  if (nullptr != array && nullptr != allocator_) {
+  if (nullptr != array) {
     for (int i = 0; i < list_size_; ++i) {
-      array[i].destroy(*allocator_);
+      array[i].destroy(allocator);
     }
-    allocator_->free(array);
+    allocator.free(array);
     array = nullptr;
   }
 }
 
-void ObParallelMergeInfo::destroy()
+void ObParallelMergeInfo::destroy(ObIAllocator &allocator)
 {
   if (list_size_ > 0) {
-    destroy(parallel_store_rowkey_list_);
-    destroy(parallel_datum_rowkey_list_);
+    destroy(allocator, parallel_store_rowkey_list_);
+    destroy(allocator, parallel_datum_rowkey_list_);
     list_size_ = 0;
   }
-  allocator_ = nullptr;
   parallel_info_ = 0;
 }
 
@@ -110,7 +114,6 @@ int ObParallelMergeInfo::deserialize(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("list size is invalid", K(ret), K(list_size_));
     } else {
-      allocator_ = &allocator;
       if (OB_FAIL(ret)) {
       } else if (PARALLEL_INFO_VERSION_V0 == compat_) {
         ALLOC_ROWKEY_ARRAY(parallel_store_rowkey_list_, ObStoreRowkey);
@@ -137,7 +140,7 @@ int ObParallelMergeInfo::deserialize(
         LOG_WARN("invalid compat version", KR(ret), K_(compat));
       }
       if (OB_FAIL(ret)) {
-        destroy(); // free parallel_end_key_list_ in destroy
+        destroy(allocator); // free parallel_end_key_list_ in destroy
       }
     }
   }
@@ -178,13 +181,16 @@ int ObParallelMergeInfo::generate_from_range_array(
     for (int64_t i = 0; i < paral_range.count(); ++i) {
       sum_range_cnt += paral_range.at(i).count();
     }
-    if (sum_range_cnt <= VALID_CONCURRENT_CNT || sum_range_cnt > UINT8_MAX) {
+    if (sum_range_cnt < MIN_VALID_CONCURRENT_CNT || sum_range_cnt > UINT8_MAX) {
       // do nothing
+    } else if (1 == sum_range_cnt) {
+      list_size_ = 1; // whole range, don't need to split actually, but set list_size_ as 1 for compatibility
+      ret = generate_datum_rowkey_list(allocator, paral_range);
+      LOG_INFO("generate datum rowkey list for whole range", KR(ret), K(paral_range), K(list_size_));
     } else {
       list_size_ = sum_range_cnt - 1;
-      allocator_ = &allocator;
       uint64_t compat_version = 0;
-      if (OB_FAIL(MTL(ObTenantTabletScheduler*)->get_min_data_version(compat_version))) {
+      if (OB_FAIL(MERGE_SCHEDULER_PTR->get_min_data_version(compat_version))) {
         LOG_WARN("failed to get min data version", KR(ret));
       } else if (compat_version < DATA_VERSION_4_2_0_0) { // sync store_rowkey_list
         ret = generate_store_rowkey_list(allocator, paral_range);
@@ -195,7 +201,7 @@ int ObParallelMergeInfo::generate_from_range_array(
   }
   LOG_DEBUG("parallel range info", K(ret), KPC(this), K(paral_range), K(paral_range.count()), K(paral_range.at(0)));
   if (OB_FAIL(ret)) {
-    destroy();
+    destroy(allocator);
   }
   return ret;
 }
@@ -262,7 +268,6 @@ int ObParallelMergeInfo::init(
   } else {
     compat_ = other.compat_;
     list_size_ = other.list_size_;
-    allocator_ = &allocator;
     if (list_size_ > 0) {
       if (PARALLEL_INFO_VERSION_V0 == compat_) {
         ret = deep_copy_list(allocator, other.parallel_store_rowkey_list_, parallel_store_rowkey_list_);
@@ -273,7 +278,7 @@ int ObParallelMergeInfo::init(
         LOG_WARN("invalid compat version", KR(ret), K_(compat));
       }
       if (OB_FAIL(ret)) {
-        destroy();
+        destroy(allocator);
       }
     }
   }
@@ -315,22 +320,223 @@ int64_t ObParallelMergeInfo::to_string(char* buf, const int64_t buf_len) const
   } else {
     J_OBJ_START();
     J_KV(K_(list_size), K_(compat));
-    J_COMMA();
+    if (list_size_ > 0) {
+      J_COMMA();
+    }
+
     if (PARALLEL_INFO_VERSION_V0 == compat_) {
       for (int i = 0; i < list_size_; ++i) {
+        if (i > 0) {
+          J_COMMA();
+        }
         J_KV(K(i), "key", parallel_store_rowkey_list_[i]);
-        J_COMMA();
       }
     } else if (PARALLEL_INFO_VERSION_V1 == compat_) {
       for (int i = 0; i < list_size_; ++i) {
+        if (i > 0) {
+          J_COMMA();
+        }
         J_KV(K(i), "key", parallel_datum_rowkey_list_[i]);
-        J_COMMA();
       }
     }
     J_OBJ_END();
   }
   return pos;
 }
+
+
+/*
+ * ObIncMajorSSTableInfo
+ * */
+OB_SERIALIZE_MEMBER(ObIncMajorSSTableInfo::IncMajorInfo, start_scn_, end_scn_, data_checksum_, row_count_);
+
+ObIncMajorSSTableInfo::ObIncMajorSSTableInfo()
+  : version_(INC_MAJOR_INFO_VERSION_V0),
+    inc_major_type_(INVALID),
+    reserved_(0),
+    list_size_(0),
+    info_list_(nullptr)
+{}
+
+ObIncMajorSSTableInfo::~ObIncMajorSSTableInfo()
+{
+  if (list_size_ > 0 || nullptr != info_list_) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "exist unfree buf", K_(list_size), KP_(info_list));
+  }
+}
+
+void ObIncMajorSSTableInfo::destroy(common::ObIAllocator &allocator)
+{
+  if (nullptr != info_list_) {
+    allocator.free(info_list_);
+    info_list_ = nullptr;
+  }
+  list_size_ = 0;
+  inc_major_type_ = INVALID;
+}
+
+int ObIncMajorSSTableInfo::alloc_list(common::ObIAllocator &allocator, const int64_t list_size)
+{
+  int ret = OB_SUCCESS;
+  void *alloc_buf = nullptr;
+
+  if (OB_UNLIKELY(list_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), K(list_size));
+  } else if (OB_UNLIKELY(nullptr != info_list_ || list_size_ > 0)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("buf is already allocated", K(ret), KPC(this));
+  } else if (OB_ISNULL(alloc_buf = allocator.alloc(sizeof(IncMajorInfo) * list_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc array", K(ret), K(list_size));
+  } else {
+    info_list_ = new (alloc_buf) IncMajorInfo[list_size];
+    list_size_ = list_size;
+  }
+  return ret;
+}
+
+int ObIncMajorSSTableInfo::init(
+    common::ObIAllocator &allocator,
+    const int64_t boundary_snapshot,
+    const common::ObIArray<ObITable *> &inc_major_tables)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(inc_major_tables.empty() || boundary_snapshot <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), K(inc_major_tables));
+  } else {
+    int64_t end_pos = inc_major_tables.count();
+    for (int64_t i = 0; i < inc_major_tables.count(); ++i) {
+      ObSSTable *table = static_cast<ObSSTable *>(inc_major_tables.at(i));
+      if (OB_UNLIKELY(nullptr == table || !table->is_inc_major_type_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null table", K(ret), KPC(table));
+      } else if (table->get_upper_trans_version() > boundary_snapshot) {
+        end_pos = i;
+        break;
+      }
+    }
+
+    if (OB_FAIL(ret) || 0 == end_pos) {
+      // do nothing
+    } else if (OB_FAIL(alloc_list(allocator, end_pos))) {
+      LOG_WARN("failed to alloc buf for lists", K(ret));
+    } else {
+      inc_major_type_ = INVALID;
+      for (int64_t i = 0; i < list_size_; ++i) {
+        ObSSTable *table = static_cast<ObSSTable *>(inc_major_tables.at(i));
+        info_list_[i] = IncMajorInfo(table->get_key().get_start_scn().get_val_for_tx(),
+                                     table->get_key().get_end_scn().get_val_for_tx(),
+                                     table->is_co_sstable() ? static_cast<ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_ : table->get_data_checksum(),
+                                     table->get_row_count());
+        IncMajorType cur_type = table->is_inc_column_store_sstable() ? ALL_COLUMN_STORE : ALL_ROW_STORE;
+        if (INVALID == inc_major_type_) {
+          inc_major_type_ = cur_type;
+        } else if (MIXED == inc_major_type_) {
+          // do nothing
+        } else if (cur_type != inc_major_type_) {
+          inc_major_type_ = MIXED;
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      destroy(allocator);
+    }
+  }
+  return ret;
+}
+
+int ObIncMajorSSTableInfo::assign(common::ObIAllocator &allocator, const ObIncMajorSSTableInfo &other)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("other inc major info is invalid", K(ret), K(other));
+  } else if (OB_UNLIKELY(is_valid())) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("inc major info is already valid, cannot assign", K(ret), KPC(this));
+  } else if (OB_FAIL(alloc_list(allocator, other.list_size_))) {
+    LOG_WARN("failed to alloc buf for lists", K(ret));
+  } else {
+    MEMCPY(info_list_, other.info_list_, sizeof(IncMajorInfo) * list_size_);
+    inc_major_info_ = other.inc_major_info_;
+  }
+  return ret;
+}
+
+int ObIncMajorSSTableInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == buf || buf_len <= 0 || pos < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(buf), K(buf_len), K(pos));
+  } else {
+    LST_DO_CODE(OB_UNIS_ENCODE, inc_major_info_, list_size_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
+      LST_DO_CODE(OB_UNIS_ENCODE, info_list_[i]);
+    }
+  }
+  return ret;
+}
+
+int ObIncMajorSSTableInfo::deserialize(
+    common::ObIAllocator &allocator,
+    const char *buf,
+    const int64_t data_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(nullptr == buf || data_len <= 0 || pos < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(buf), K(data_len), K(pos));
+  } else {
+    int64_t list_size = 0;
+    LST_DO_CODE(OB_UNIS_DECODE, inc_major_info_, list_size);
+
+    if (OB_FAIL(ret) || 0 == list_size) {
+      // do nothing
+    } else if (OB_FAIL(alloc_list(allocator, list_size))) {
+      LOG_WARN("failed to alloc buf for lists", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
+        LST_DO_CODE(OB_UNIS_DECODE, info_list_[i]);
+      }
+    }
+  }
+  return ret;
+}
+
+int64_t ObIncMajorSSTableInfo::get_serialize_size() const
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, inc_major_info_, list_size_);
+  for (int64_t i = 0; i < list_size_; ++i) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, info_list_[i]);
+  }
+  return len;
+}
+
+int64_t ObIncMajorSSTableInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    J_KV(K_(version), K_(inc_major_type), K_(list_size));
+    for (int64_t i = 0; i < list_size_; ++i) {
+      J_COMMA();
+      J_KV(K(i), K(info_list_[i]));
+    }
+    J_OBJ_END();
+  }
+  return pos;
+}
+
 
 OB_SERIALIZE_MEMBER_SIMPLE(
     ObMediumCompactionInfoKey,
@@ -342,6 +548,7 @@ OB_SERIALIZE_MEMBER_SIMPLE(
 const char *ObMediumCompactionInfo::ObCompactionTypeStr[] = {
     "MEDIUM_COMPACTION",
     "MAJOR_COMPACTION",
+    "INC_MAJOR_COMPACTION",
 };
 
 const char *ObMediumCompactionInfo::get_compaction_type_str(enum ObCompactionType type)
@@ -356,23 +563,15 @@ const char *ObMediumCompactionInfo::get_compaction_type_str(enum ObCompactionTyp
 }
 
 ObMediumCompactionInfo::ObMediumCompactionInfo()
-  : medium_compat_version_(MEDIUM_COMPAT_VERSION_V4),
-    compaction_type_(COMPACTION_TYPE_MAX),
-    contain_parallel_range_(false),
-    medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
-    is_schema_changed_(false),
-    tenant_id_(0),
-    co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE),
-    is_skip_tenant_major_(false),
-    reserved_(0),
-    cluster_id_(0),
-    data_version_(0),
-    medium_snapshot_(0),
-    last_medium_snapshot_(0),
-    storage_schema_(),
-    parallel_merge_info_()
 {
+  reset();
   STATIC_ASSERT(static_cast<int64_t>(COMPACTION_TYPE_MAX) == ARRAYSIZEOF(ObCompactionTypeStr), "compaction type str len is mismatch");
+}
+
+ObMediumCompactionInfo::ObMediumCompactionInfo(ObIAllocator &allocator)
+{
+  reset();
+  allocator_ = &allocator;
 }
 
 ObMediumCompactionInfo::~ObMediumCompactionInfo()
@@ -380,8 +579,9 @@ ObMediumCompactionInfo::~ObMediumCompactionInfo()
   reset();
 }
 
-int ObMediumCompactionInfo::assign(ObIAllocator &allocator,
-                                   const ObMediumCompactionInfo &medium_info)
+int ObMediumCompactionInfo::assign(
+    ObIAllocator &allocator,
+    const ObMediumCompactionInfo &medium_info)
 {
   return init(allocator, medium_info);
 }
@@ -394,16 +594,28 @@ int ObMediumCompactionInfo::init(
   if (OB_UNLIKELY(!medium_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(medium_info));
-  } else if (OB_FAIL(storage_schema_.init(allocator, medium_info.storage_schema_))) {
+  } else if (FALSE_IT(allocator_ = &allocator)) {
+  } else if (medium_info.contain_storage_schema()
+          && OB_FAIL(storage_schema_.init(allocator, medium_info.storage_schema_))) {
     LOG_WARN("failed to init storage schema", K(ret), K(medium_info));
   } else if (OB_FAIL(parallel_merge_info_.init(allocator, medium_info.parallel_merge_info_))) {
     LOG_WARN("failed to init parallel merge info", K(ret), K(medium_info));
+  } else if (medium_info.contain_mds_filter_info_
+          && OB_FAIL(mds_filter_info_.assign(allocator, medium_info.mds_filter_info_))) {
+    LOG_WARN("failed to init mds filter info", K(ret), K(medium_info));
+  } else if (medium_info.contain_inc_major_info_
+          && OB_FAIL(inc_major_info_.assign(allocator, medium_info.inc_major_info_))) {
+    LOG_WARN("failed to init inc major info", K(ret), K(medium_info));
   } else {
     info_ = medium_info.info_;
     cluster_id_ = medium_info.cluster_id_;
     medium_snapshot_ = medium_info.medium_snapshot_;
     last_medium_snapshot_ = medium_info.last_medium_snapshot_;
     data_version_ = medium_info.data_version_;
+    encoding_granularity_ = medium_info.encoding_granularity_;
+  }
+  if (OB_FAIL(ret)) {
+    reset();
   }
   return ret;
 }
@@ -425,8 +637,10 @@ int ObMediumCompactionInfo::init_data_version(const uint64_t compat_version)
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
     } else if (compat_version < DATA_VERSION_4_2_1_2) {
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3;
-    } else {
+    } else if (compat_version < DATA_VERSION_4_3_3_0) {
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4;
+    } else {
+      medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V5;
     }
   }
   return ret;
@@ -437,28 +651,39 @@ bool ObMediumCompactionInfo::is_valid() const
   return COMPACTION_TYPE_MAX != compaction_type_
       && medium_snapshot_ > 0
       && data_version_ > 0
-      && storage_schema_.is_valid()
-      && parallel_merge_info_.is_valid()
+      && (!contain_storage_schema() || storage_schema_.is_valid())
+      && (!contain_parallel_range_ || (parallel_merge_info_.is_valid() && nullptr != allocator_))
       && (MEDIUM_COMPAT_VERSION == medium_compat_version_
-        || (MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version_ && last_medium_snapshot_ != 0));
+        || (MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version_ && last_medium_snapshot_ != 0))
+      && (!contain_mds_filter_info_ || (mds_filter_info_.is_valid() && nullptr != allocator_))
+      && ((contain_inc_major_info_ && inc_major_info_.is_valid() && nullptr != allocator_) || (!contain_inc_major_info_ && !is_inc_major_compaction()));
 }
 
 void ObMediumCompactionInfo::reset()
 {
-  info_ = 0;
-  medium_compat_version_ = 0;
+  medium_compat_version_ = MEDIUM_COMPAT_VERSION_LATEST;
   compaction_type_ = COMPACTION_TYPE_MAX;
   contain_parallel_range_ = false;
   medium_merge_reason_ = ObAdaptiveMergePolicy::NONE;
   is_schema_changed_ = false;
-  co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
   tenant_id_ = 0;
+  co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
+  is_skip_tenant_major_ = false;
+  contain_mds_filter_info_ = false;
+  contain_inc_major_info_ = false;
+  reserved_ = 0;
   cluster_id_ = 0;
+  data_version_ = 0;
   medium_snapshot_ = 0;
   last_medium_snapshot_ = 0;
-  data_version_ = 0;
+  encoding_granularity_ = 0;
   storage_schema_.reset();
-  parallel_merge_info_.destroy();
+  if (OB_NOT_NULL(allocator_)) {
+    parallel_merge_info_.destroy(*allocator_);
+    mds_filter_info_.destroy(*allocator_);
+    inc_major_info_.destroy(*allocator_);
+    allocator_ = nullptr;
+  }
 }
 
 bool ObMediumCompactionInfo::should_throw_for_standby_cluster() const
@@ -474,13 +699,14 @@ bool ObMediumCompactionInfo::should_throw_for_standby_cluster() const
   return bret;
 }
 
-int ObMediumCompactionInfo::gene_parallel_info(
-    ObIAllocator &allocator,
-    ObArrayArray<ObStoreRange> &paral_range)
+int ObMediumCompactionInfo::gene_parallel_info(ObArrayArray<ObStoreRange> &paral_range)
 {
   int ret = OB_SUCCESS;
   contain_parallel_range_ = false;
-  if (OB_FAIL(parallel_merge_info_.generate_from_range_array(allocator, paral_range))) {
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is not init", KR(ret), KP_(allocator));
+  } else if (OB_FAIL(parallel_merge_info_.generate_from_range_array(*allocator_, paral_range))) {
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
       LOG_WARN("failed to generate parallel merge info", K(ret), K(paral_range));
     }
@@ -489,6 +715,46 @@ int ObMediumCompactionInfo::gene_parallel_info(
     LOG_INFO("success to gene parallel info", K(ret), K(contain_parallel_range_), K(parallel_merge_info_));
   }
   return ret;
+}
+
+int ObMediumCompactionInfo::try_gene_inc_major_info(const storage::ObTablesHandleArray &table_array)
+{
+  int ret = OB_SUCCESS;
+  contain_inc_major_info_ = false;
+  ObSEArray<ObITable *, 16> inc_major_tables;
+
+  if (GCTX.is_shared_storage_mode()) {
+    // TODO(@ganxin) add inc major info for ss
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is not init", KR(ret), KP_(allocator));
+  } else if (OB_UNLIKELY(table_array.get_count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), K(table_array));
+  } else if (OB_FAIL(table_array.get_inc_major_tables(inc_major_tables))) {
+    LOG_WARN("failed to get inc major tables", K(ret));
+  } else if (inc_major_tables.empty()) {
+    // no inc major sstable, no need to gene inc major info
+  } else if (OB_FAIL(inc_major_info_.init(*allocator_, medium_snapshot_, inc_major_tables))) {
+    LOG_WARN("failed to init inc major info", K(ret));
+  } else if (inc_major_info_.get_size() == 0) {
+    // all inc major sstable are filtered by medium snapshot, no need to gene inc major info
+  } else {
+    contain_inc_major_info_ = true;
+  }
+  return ret;
+}
+
+bool ObMediumCompactionInfo::contain_storage_schema() const
+{
+  bool contain_schema = true;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode() &&
+      ObAdaptiveMergePolicy::is_skip_merge_reason((ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_merge_reason_)) {
+    contain_schema = false;
+  }
+#endif
+  return contain_schema;
 }
 
 int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -503,8 +769,12 @@ int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t 
         info_,
         cluster_id_,
         medium_snapshot_,
-        data_version_,
-        storage_schema_);
+        data_version_);
+
+    if (OB_SUCC(ret) && contain_storage_schema()) {
+      LST_DO_CODE(OB_UNIS_ENCODE, storage_schema_);
+    }
+
     if (OB_SUCC(ret) && contain_parallel_range_) {
       LST_DO_CODE(
           OB_UNIS_ENCODE,
@@ -515,7 +785,22 @@ int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t 
         OB_UNIS_ENCODE,
         last_medium_snapshot_);
     }
-    LOG_DEBUG("ObMediumCompactionInfo::serialize", K(ret), K(buf), K(buf_len), K(pos));
+    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V5 <= medium_compat_version_) {
+      LST_DO_CODE(
+        OB_UNIS_ENCODE,
+        encoding_granularity_);
+      if (OB_SUCC(ret) && contain_mds_filter_info_) {
+        LST_DO_CODE(
+          OB_UNIS_ENCODE,
+          mds_filter_info_);
+      }
+      if (OB_SUCC(ret) && contain_inc_major_info_) {
+        LST_DO_CODE(
+          OB_UNIS_ENCODE,
+          inc_major_info_);
+      }
+    }
+    LOG_DEBUG("ObMediumCompactionInfo::serialize", K(ret), KCSTRING(buf), K(buf_len), K(pos));
   }
   return ret;
 }
@@ -531,13 +816,14 @@ int ObMediumCompactionInfo::deserialize(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(buf), K(data_len), K(pos));
   } else {
+    allocator_ = &allocator;
     LST_DO_CODE(OB_UNIS_DECODE,
         info_,
         cluster_id_,
         medium_snapshot_,
         data_version_);
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(storage_schema_.deserialize(allocator, buf, data_len, pos))) {
+    } else if (contain_storage_schema() && OB_FAIL(storage_schema_.deserialize(allocator, buf, data_len, pos))) {
       LOG_WARN("failed to deserialize storage schema", K(ret), K(buf), K(data_len), K(pos));
     } else if (contain_parallel_range_) {
       if (OB_FAIL(parallel_merge_info_.deserialize(allocator, buf, data_len, pos))) {
@@ -545,12 +831,28 @@ int ObMediumCompactionInfo::deserialize(
       }
     } else {
       clear_parallel_range();
-      LOG_DEBUG("ObMediumCompactionInfo::deserialize", K(ret), K(buf), K(data_len), K(pos));
+      LOG_DEBUG("ObMediumCompactionInfo::deserialize", K(ret), KCSTRING(buf), K(data_len), K(pos));
     }
     if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version_) {
       LST_DO_CODE(
         OB_UNIS_DECODE,
         last_medium_snapshot_);
+    }
+    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V5 <= medium_compat_version_) {
+      LST_DO_CODE(
+        OB_UNIS_DECODE,
+        encoding_granularity_);
+      if (OB_FAIL(ret) || !contain_mds_filter_info_) {
+      } else if (OB_FAIL(mds_filter_info_.deserialize(allocator, buf, data_len, pos))) {
+        LOG_WARN("failed to deserialize mds filter info", K(ret), K(buf), K(data_len), K(pos));
+      }
+      if (OB_FAIL(ret) || !contain_inc_major_info_) {
+      } else if (OB_FAIL(inc_major_info_.deserialize(allocator, buf, data_len, pos))) {
+        LOG_WARN("failed to deserialize inc major info", K(ret), K(buf), K(data_len), K(pos));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      reset();
     }
   }
   return ret;
@@ -564,8 +866,10 @@ int64_t ObMediumCompactionInfo::get_serialize_size() const
       info_,
       cluster_id_,
       medium_snapshot_,
-      data_version_,
-      storage_schema_);
+      data_version_);
+  if (contain_storage_schema()) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, storage_schema_);
+  }
   if (contain_parallel_range_) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, parallel_merge_info_);
   }
@@ -574,14 +878,42 @@ int64_t ObMediumCompactionInfo::get_serialize_size() const
       OB_UNIS_ADD_LEN,
       last_medium_snapshot_);
   }
+  if (MEDIUM_COMPAT_VERSION_V5 <= medium_compat_version_) {
+    LST_DO_CODE(
+      OB_UNIS_ADD_LEN,
+      encoding_granularity_);
+    if (contain_mds_filter_info_) {
+      LST_DO_CODE(
+        OB_UNIS_ADD_LEN,
+        mds_filter_info_);
+    }
+    if (contain_inc_major_info_) {
+      LST_DO_CODE(
+        OB_UNIS_ADD_LEN,
+        inc_major_info_);
+    }
+  }
   return len;
 }
 
 void ObMediumCompactionInfo::gene_info(
     char* buf, const int64_t buf_len, int64_t &pos) const
 {
-  J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
-      K(medium_snapshot_), K_(last_medium_snapshot), K_(parallel_merge_info));
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    // do nothing
+  } else {
+    J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
+       "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
+       K(medium_snapshot_), K_(last_medium_snapshot), K_(parallel_merge_info), K_(encoding_granularity), K_(contain_mds_filter_info));
+    if (contain_mds_filter_info_) {
+      J_COMMA();
+      J_KV(K_(mds_filter_info));
+    }
+    if (contain_inc_major_info_) {
+      J_COMMA();
+      J_KV(K_(inc_major_info));
+    }
+  }
 }
 
 int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) const
@@ -591,11 +923,19 @@ int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) cons
   } else {
     J_OBJ_START();
     J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
-      "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
+      "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
       K_(medium_snapshot), K_(last_medium_snapshot), K_(tenant_id), K_(cluster_id),
       K_(medium_compat_version), K_(data_version), K_(is_schema_changed), K_(storage_schema),
       "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(co_major_merge_type_)),
-      K_(is_skip_tenant_major), K_(contain_parallel_range), K_(parallel_merge_info));
+      K_(is_skip_tenant_major), K_(contain_parallel_range), K_(parallel_merge_info), K_(encoding_granularity));
+    if (contain_mds_filter_info_) {
+      J_COMMA();
+      J_KV(K_(mds_filter_info));
+    }
+    if (contain_inc_major_info_) {
+      J_COMMA();
+      J_KV(K_(inc_major_info));
+    }
     J_OBJ_END();
   }
   return pos;

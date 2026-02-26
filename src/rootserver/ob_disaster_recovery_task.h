@@ -22,6 +22,7 @@
 #include "common/ob_zone.h"
 #include "common/ob_member_list.h"
 #include "share/ob_rpc_struct.h"
+#include "logservice/palf/log_meta_info.h"
 
 namespace oceanbase
 {
@@ -47,11 +48,29 @@ namespace drtask
   const static char * const TRANSFORM_LOCALITY_REPLICA_TYPE = "type transform according to locality";
   const static char * const MODIFY_PAXOS_REPLICA_NUMBER = "modify paxos replica number according to locality";
   const static char * const REMOVE_PERMANENT_OFFLINE_REPLICA = "remove permanent offline replica";
+  const static char * const REMOVE_REPLICA_DUE_TO_SERVER_NOT_EXIST = "remove replica due to replica not in __all_server";
   const static char * const REPLICATE_REPLICA = "replicate to unit task";
+  const static char * const REPLACE_LOCALITY_REPLACE_REPLIACE = "replace replica according to single replace locality";
   const static char * const CANCEL_MIGRATE_UNIT_WITH_PAXOS_REPLICA = "cancel migrate unit remove paxos replica";
   const static char * const CANCEL_MIGRATE_UNIT_WITH_NON_PAXOS_REPLICA = "cancel migrate unit remove non-paxos replica";
   const static char * const MIGRATE_REPLICA_DUE_TO_UNIT_GROUP_NOT_MATCH = "migrate replica due to unit group not match";
+  const static char * const TYPE_TRANSFORM_DUE_TO_ADD_SSLOG_REPLICA = "type transform due to add sslog replica";
+  const static char * const TYPE_TRANSFORM_DUE_TO_MIGRATE_SSLOG_REPLICA = "type transform due to migrate sslog replica";
+  const static char * const TYPE_TRANSFORM_DUE_TO_REMOVE_SSLOG_PAXOS_REPLICA = "type transform due to remove sslog paxos replica";
   const static char * const MIGRATE_REPLICA_DUE_TO_UNIT_NOT_MATCH = "migrate replica due to unit not match";
+  const static char * const ALTER_SYSTEM_COMMAND_ADD_REPLICA = "add replica by manual";
+  const static char * const ALTER_SYSTEM_COMMAND_REMOVE_REPLICA = "remove replica by manual";
+  const static char * const ALTER_SYSTEM_COMMAND_MODIFY_REPLICA_TYPE = "modify replica type by manual";
+  const static char * const ALTER_SYSTEM_COMMAND_MIGRATE_REPLICA = "migrate replica by manual";
+  const static char * const ALTER_SYSTEM_COMMAND_MODIFY_PAXOS_REPLICA_NUM = "modify paxos_replica_num by manual";
+  const static char * const TRANSFORM_DUE_TO_UNIT_DELETING = "transform replica type due to unit deleting";
+  const static char * const REMOVE_DUE_TO_UNIT_DELETING = "remove replica due to unit deleting";
+  const static char * const MIGRATE_DUE_TO_UNIT_DELETING = "migrate replica due to unit deleting";
+  const static char * const TRANSFORM_DUE_TO_UNIT_NOT_MATCH = "transform replica type due to unit not match";
+  const static char * const LOCAL_SSLOG_SERVICE_ADD_SSLOG_READONLY_REPLICA = "local sslog service add sslog readonly replica";
+  const static char * const TRANSFORM_DUE_TO_GTS_UNIT = "transform replica type due to gts unit";
+  const static char * const REMOVE_DUE_TO_GTS_UNIT = "remove replica due to gts unit";
+  const static char * const MIGRATE_DUE_TO_GTS_UNIT = "migrate replica due to gts unit";
 };
 
 namespace drtasklog
@@ -68,9 +87,43 @@ namespace drtasklog
   const static char * const FINISH_REMOVE_LS_NON_PAXOS_REPLICA_STR = "finish_remove_ls_non_paxos_replica";
   const static char * const START_MODIFY_PAXOS_REPLICA_NUMBER_STR = "start_modify_paxos_replica_number";
   const static char * const FINISH_MODIFY_PAXOS_REPLICA_NUMBER_STR = "finish_modify_paxos_replica_number";
+  const static char * const START_REPLACE_LS_REPLICA_STR = "start_replace_ls_replica";
+  const static char * const FINISH_REPLACE_LS_REPLICA_STR = "finish_replace_ls_replica";
 }
 
-enum class ObDRTaskType : int64_t;
+class ObDRLSReplicaTaskStatus
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum DRLSReplicaTaskStatus
+  {
+    INPROGRESS = 0,
+    COMPLETED,
+    FAILED,
+    CANCELED,
+    WAITING,
+    MAX_STATUS,
+  };
+public:
+  ObDRLSReplicaTaskStatus() : status_(MAX_STATUS) {}
+  ObDRLSReplicaTaskStatus(DRLSReplicaTaskStatus status) : status_(status) {}
+
+  ObDRLSReplicaTaskStatus &operator=(const DRLSReplicaTaskStatus status) { status_ = status; return *this; }
+  ObDRLSReplicaTaskStatus &operator=(const ObDRLSReplicaTaskStatus &other) { status_ = other.status_; return *this; }
+  void reset() { status_ = MAX_STATUS; }
+  void assign(const ObDRLSReplicaTaskStatus &other);
+  bool is_valid() const { return MAX_STATUS != status_; }
+  const DRLSReplicaTaskStatus &get_status() const { return status_; }
+  bool is_waiting_status() const { return WAITING == status_; }
+  bool is_inprogress_status() const { return INPROGRESS == status_; }
+  int parse_from_string(const ObString &status);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  const char* get_status_str() const;
+
+private:
+  DRLSReplicaTaskStatus status_;
+};
+
 enum class ObDRTaskPriority : int64_t;
 
 enum ObDRTaskRetComment
@@ -86,115 +139,54 @@ enum ObDRTaskRetComment
   CANNOT_EXECUTE_DUE_TO_REPLICA_NOT_INSERVICE = 8,
   CANNOT_EXECUTE_DUE_TO_SERVER_PERMANENT_OFFLINE = 9,
   CANNOT_PERSIST_TASK_DUE_TO_CLONE_CONFLICT = 10,
+  CANNOT_EXECUTE_DUE_TO_HAS_NO_SSLOG_LS_IN_DESTINATION = 11,
+  CANNOT_EXECUTE_DUE_TO_CONFIG_VERSION_NOT_MATCH = 12,
+  CANNOT_EXECUTE_DUE_TO_NEED_GENERATE_REPLACE_REPLACA_TASK = 13,
   MAX
 };
 
-class ObDRTaskQueue;
-const char *ob_disaster_recovery_task_type_strs(const rootserver::ObDRTaskType type);
+const char *ob_disaster_recovery_task_type_strs(const obrpc::ObDRTaskType type);
+int parse_disaster_recovery_task_type_from_string(const ObString &task_type_str, obrpc::ObDRTaskType& task_type);
 const char *ob_disaster_recovery_task_priority_strs(const rootserver::ObDRTaskPriority task_priority);
 const char* ob_disaster_recovery_task_ret_comment_strs(const rootserver::ObDRTaskRetComment ret_comment);
-const char *ob_replica_type_strs(const ObReplicaType type);
-
-class ObDstReplica
-{
-public:
-  ObDstReplica() : unit_id_(common::OB_INVALID_ID),
-                   unit_group_id_(common::OB_INVALID_ID),
-                   zone_(),
-                   member_() {}
-public:
-  int assign(
-      const uint64_t unit_id,
-      const uint64_t unit_group_id,
-      const common::ObZone &zone,
-      const common::ObReplicaMember &member);
-  int assign(
-      const ObDstReplica &that);
-public:
-  bool is_valid() const {
-    return unit_id_ != OB_INVALID_ID
-           && unit_group_id_ != OB_INVALID_ID
-           && member_.is_valid();
-  }
-  TO_STRING_KV(K_(unit_id),
-               K_(unit_group_id),
-               K_(zone),
-               K_(member));
-  const common::ObAddr &get_server() const { return member_.get_server(); }
-  common::ObReplicaType get_replica_type() const { return member_.get_replica_type(); }
-  uint64_t get_unit_id() const { return unit_id_; }
-  uint64_t get_unit_group_id() const { return unit_group_id_; }
-  const common::ObZone &get_zone() const { return zone_; }
-  int64_t get_memstore_percent() const { return member_.get_memstore_percent(); }
-  const common::ObReplicaMember &get_member() const { return member_; }
-public:
-  void reset();
-private:
-  uint64_t unit_id_;
-  uint64_t unit_group_id_;
-  common::ObZone zone_;
-  common::ObReplicaMember member_;
-};
-
-class ObDRTaskMgr;
-enum class ObDRTaskKeyType : int64_t
-{
-  INVALID = -1,
-  FORMAL_DR_KEY = 0,
-};
 
 class ObDRTaskKey
 {
 public:
-  ObDRTaskKey() : key_1_(-1),
-                  key_2_(-1),
-                  key_3_(-1),
-                  key_4_(-1),
-                  key_type_(ObDRTaskKeyType::INVALID),
-                  hash_value_(0) {}
+  ObDRTaskKey() : tenant_id_(OB_INVALID_TENANT_ID),
+                  ls_id_(),
+                  task_execute_zone_(),
+                  task_type_(obrpc::ObDRTaskType::MAX_TYPE) {}
   virtual ~ObDRTaskKey() {}
 public:
+  void reset();
   bool is_valid() const;
   bool operator==(const ObDRTaskKey &that) const;
-  ObDRTaskKey &operator=(const ObDRTaskKey &that);
-  uint64_t hash() const;
-  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
-  int init(const uint64_t key_1,
-           const uint64_t key_2,
-           const uint64_t key_3,
-           const uint64_t key_4,
-           const ObDRTaskKeyType key_type);
-  int init(const ObDRTaskKey &that);
-  ObDRTaskKeyType get_key_type() const { return key_type_; }
-  TO_STRING_KV(K_(key_1),
-               K_(key_2),
-               K_(key_3),
-               K_(key_4),
-               K_(key_type));
+  int init(const uint64_t tenant_id,
+           const share::ObLSID &ls_id,
+           const common::ObZone &task_execute_zone,
+           const obrpc::ObDRTaskType &task_type);
+  int assign(const ObDRTaskKey &that);
+  ObDRTaskKey& operator=(const ObDRTaskKey&) = delete;
+  TO_STRING_KV(K_(tenant_id),
+               K_(ls_id),
+               K_(task_execute_zone),
+               K_(task_type));
+
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  const common::ObZone &get_zone() const { return task_execute_zone_; }
+  const obrpc::ObDRTaskType &get_task_type() const { return task_type_; }
+  void set_task_type(const obrpc::ObDRTaskType &task_type) { task_type_ = task_type; }
+  int build_task_key_from_sql_result(const sqlclient::ObMySQLResult &res);
 private:
-  uint64_t inner_hash() const;
-private:
-  uint64_t key_1_;
-  uint64_t key_2_;
-  uint64_t key_3_;
-  uint64_t key_4_;
-  ObDRTaskKeyType key_type_;
-  uint64_t hash_value_;
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObZone task_execute_zone_;
+  obrpc::ObDRTaskType task_type_;
 };
 
-enum class ObDRTaskType : int64_t
-{
-  LS_MIGRATE_REPLICA = 0,
-  LS_ADD_REPLICA,
-  LS_BUILD_ONLY_IN_MEMBER_LIST,
-  LS_TYPE_TRANSFORM,
-  LS_REMOVE_PAXOS_REPLICA,
-  LS_REMOVE_NON_PAXOS_REPLICA,
-  LS_MODIFY_PAXOS_REPLICA_NUMBER,
-  MAX_TYPE,
-};
-
-enum class ObDRTaskPriority : int64_t 
+enum class ObDRTaskPriority : int64_t
 {
   HIGH_PRI = 0,
   LOW_PRI,
@@ -206,74 +198,51 @@ enum class ObDRTaskPriority : int64_t
  */
 class ObDRTask : public common::ObDLinkBase<ObDRTask>
 {
-
-public:
-  const char *const TASK_STATUS = "INPROGRESS";
 public:
   ObDRTask() : task_key_(),
-               tenant_id_(common::OB_INVALID_ID),
-               ls_id_(),
                cluster_id_(-1),
                transmit_data_size_(0),
-               sibling_in_schedule_(false),
-               invoked_source_(obrpc::ObAdminClearDRTaskArg::TaskType::AUTO),
-               generate_time_(common::ObTimeUtility::current_time()),
+               invoked_source_(obrpc::ObAdminClearDRTaskArg::TaskType::MAX_TYPE),
                priority_(ObDRTaskPriority::MAX_PRI),
-               comment_("DRTask"),
+               comment_(),
+               generate_time_(0),
                schedule_time_(0),
-               execute_time_(0),
-               task_id_() {}
+               task_id_(),
+               execute_result_(),
+               task_status_(ObDRLSReplicaTaskStatus::MAX_STATUS) {}
   virtual ~ObDRTask() {}
 public:
   bool is_valid() const {
-    return !task_id_.is_invalid()
-           && task_key_.is_valid()
-           && OB_INVALID_ID != tenant_id_
-           && ls_id_.is_valid();
+    return task_key_.is_valid()
+        && obrpc::ObAdminClearDRTaskArg::TaskType::MAX_TYPE != invoked_source_
+        && ObDRTaskPriority::MAX_PRI != priority_
+        && task_id_.is_valid()
+        && task_status_.is_valid();
   }
-  // operations of task_id_
-  const share::ObTaskId &get_task_id() const { return task_id_; }
-public:
+
   int build(
       const ObDRTaskKey &task_key,
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
+      const ObString &comment,
+      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
+      const ObDRTaskPriority priority,
+      const ObDRLSReplicaTaskStatus task_status,
       const int64_t schedule_time_us,
       const int64_t generate_time_us,
       const int64_t cluster_id,
-      const int64_t transmit_data_size,
-      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const ObDRTaskPriority priority,
-      const ObString &comment);
+      const int64_t transmit_data_size);
 
-  int build_execute_result(
-      const int ret_code,
-      const ObDRTaskRetComment &ret_comment,
-      ObSqlString &execute_result) const;
 public:
   virtual const common::ObAddr &get_dst_server() const = 0;
 
-  virtual ObDRTaskType get_disaster_recovery_task_type() const = 0;
-  /* rebalance task mgr related virtual interface
-   */
-  virtual int get_execute_transmit_size(int64_t &execute_transmit_size) const = 0;
-  /* rebalance task executor related virtual interface
-   */
+  virtual obrpc::ObDRTaskType get_disaster_recovery_task_type() const = 0;
+  bool is_remove_paxos_task() const { return obrpc::ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type(); };
+  bool is_remove_non_paxos_task() const { return obrpc::ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA == get_disaster_recovery_task_type(); };
+  bool is_migrate_task() const { return obrpc::ObDRTaskType::LS_MIGRATE_REPLICA == get_disaster_recovery_task_type(); };
+  bool is_add_task() const { return obrpc::ObDRTaskType::LS_ADD_REPLICA == get_disaster_recovery_task_type(); };
 
-  /* all_virtual_rebalance_task_stat pure interface
-   */
-  virtual int get_virtual_disaster_recovery_task_stat(
-      common::ObAddr &src,
-      common::ObAddr &data_src,
-      common::ObAddr &dest,
-      common::ObAddr &offline) const = 0;
-  /* rootservice_event_history related pure interface
-   */
   virtual int log_execute_start() const = 0;
-  virtual int log_execute_result(const int ret_code, const ObDRTaskRetComment &ret_comment) const = 0;
-  /* execute related
-   */
+  virtual int log_execute_result() const = 0;
 
   virtual int check_before_execute(
       share::ObLSTableOperator &lst_operator,
@@ -281,53 +250,48 @@ public:
 
   virtual int execute(
       obrpc::ObSrvRpcProxy &rpc_proxy,
-      int &ret_code,
       ObDRTaskRetComment &ret_comment) const = 0;
 
   virtual int fill_dml_splicer(
-      share::ObDMLSqlSplicer &dml_splicer) const = 0;
+      share::ObDMLSqlSplicer &dml_splicer,
+      const bool record_history) const;
 
-  // to string
+  int fill_dml_splicer_for_new_column(
+      share::ObDMLSqlSplicer &dml_splicer,
+      const common::ObAddr &force_data_src) const;
+
+  int fill_timestamp_and_flag(
+      const int64_t timestamp,
+      const int64_t flag,
+      share::ObDMLSqlSplicer &dml_splicer) const;
+
   virtual TO_STRING_KV(K_(task_key),
-                       K_(tenant_id),
-                       K_(ls_id),
                        K_(cluster_id),
                        K_(transmit_data_size),
-                       K_(sibling_in_schedule),
                        K_(invoked_source),
                        K_(generate_time),
                        K_(priority),
                        K_(comment),
                        K_(schedule_time),
-                       K_(execute_time),
-                       K_(task_id));
+                       K_(task_id),
+                       K_(execute_result),
+                       K_(task_status));
 public:
   bool is_already_timeout() const;
+  bool is_sslog_dr_task() const { return is_tenant_sslog_ls(task_key_.get_tenant_id(), task_key_.get_ls_id()); }
+  const share::ObTaskId &get_task_id() const { return task_id_; }
   // operations of task_key_
   const ObDRTaskKey &get_task_key() const { return task_key_; }
   int set_task_key(
       const ObDRTaskKey &task_key);
-  int set_task_key(
-      const uint64_t key_1,
-      const uint64_t key_2,
-      const uint64_t key_3,
-      const uint64_t key_4,
-      const ObDRTaskKeyType key_type);
-  // operations of tenant_id
-  uint64_t get_tenant_id() const { return tenant_id_; }
-  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
-  // operations of ls_id
-  const share::ObLSID &get_ls_id() const { return ls_id_; }
-  void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
+  uint64_t get_tenant_id() const { return task_key_.get_tenant_id(); }
+  const share::ObLSID &get_ls_id() const { return task_key_.get_ls_id(); }
   // operations of cluster_id
   int64_t get_cluster_id() const { return cluster_id_; }
   void set_cluster_id(const int64_t cluster_id) { cluster_id_ = cluster_id; }
   // operations of transmit_data_size
   int64_t get_transmit_data_size() const { return transmit_data_size_; }
   void set_transmit_data_size(const int64_t size) { transmit_data_size_ = size; }
-  // operations of sibling_in_schedule
-  bool is_sibling_in_schedule() const { return sibling_in_schedule_; }
-  void set_sibling_in_schedule(bool is_schedule) { sibling_in_schedule_ = is_schedule; }
   // operations of invoked_source_
   obrpc::ObAdminClearDRTaskArg::TaskType get_invoked_source() const { return invoked_source_; }
   void set_invoked_source(obrpc::ObAdminClearDRTaskArg::TaskType t) { invoked_source_ = t; }
@@ -348,24 +312,22 @@ public:
   int64_t get_schedule_time() const { return schedule_time_; }
   void set_schedule_time(const int64_t schedule_time) { schedule_time_ = schedule_time; }
   bool in_schedule() const { return schedule_time_ > 0; }
-  // operations of execute_time_
-  int64_t get_execute_time() const { return execute_time_; }
-  void set_execute_time(const int64_t execute_time) { execute_time_ = execute_time; }
+  ObDRLSReplicaTaskStatus get_task_status() const {return task_status_; }
+  void set_task_status(const ObDRLSReplicaTaskStatus task_status) { task_status_ = task_status; }
+  const ObSqlString& get_execute_result() const { return execute_result_; }
+  int set_execute_result(const ObString &execute_result) { return execute_result_.assign(execute_result); }
 public:
   virtual int64_t get_clone_size() const = 0;
   virtual int clone(void *input_ptr, ObDRTask *&output_task) const = 0;
   int deep_copy(const ObDRTask &that);
 public:
-  void set_schedule();
   bool is_manual_task() const { return obrpc::ObAdminClearDRTaskArg::TaskType::MANUAL == invoked_source_; }
 public:
   /* disallow copy constructor and operator= */
   ObDRTask(const ObDRTask &) = delete;
   ObDRTask &operator=(const ObDRTask &) = delete;
 protected:
-  ObDRTaskKey task_key_;
-  uint64_t tenant_id_;
-  share::ObLSID ls_id_;
+  ObDRTaskKey task_key_; // include tenant_id ls_id zone and task_type
   int64_t cluster_id_;
   /* transmit_data_size_ is the data transmission volumn when this task info is executed,
    * when a migrate/add task is executed, transmit_data_size_ is the data size of the replica,
@@ -373,77 +335,122 @@ protected:
    * transmitted, so the tranmit_data_size_ is set to zero.
    */
   int64_t transmit_data_size_;
-  bool sibling_in_schedule_;
   obrpc::ObAdminClearDRTaskArg::TaskType invoked_source_;
-  int64_t generate_time_;
   ObDRTaskPriority priority_;
   ObSqlString comment_;
+  int64_t generate_time_;
   int64_t schedule_time_;
-  int64_t execute_time_;
   share::ObTaskId task_id_;
+  ObSqlString execute_result_;
+  ObDRLSReplicaTaskStatus task_status_;
+};
+
+class ObReplaceLSReplicaTask : public ObDRTask
+{
+public:
+  ObReplaceLSReplicaTask() : ObDRTask(),
+                             dst_member_(),
+                             config_version_() {}
+  virtual ~ObReplaceLSReplicaTask() {}
+public:
+  virtual INHERIT_TO_STRING_KV("ObDRTask", ObDRTask,
+                                           K_(dst_member),
+                                           K_(config_version));
+  int build(
+      const ObDRTaskKey &task_key,
+      const share::ObTaskId &task_id,
+      const ObString &comment,
+      const common::ObReplicaMember &dst_member,
+      const palf::LogConfigVersion &config_version,
+      const ObDRTaskPriority priority = ObDRTaskPriority::HIGH_PRI,
+      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source = obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
+      const ObDRLSReplicaTaskStatus task_status = ObDRLSReplicaTaskStatus::WAITING,
+      const int64_t schedule_time_us = 0,
+      const int64_t generate_time_us = common::ObTimeUtility::current_time(),
+      const int64_t cluster_id = GCONF.cluster_id,
+      const int64_t transmit_data_size = 0);
+  int build_task_from_sql_result(const sqlclient::ObMySQLResult &res);
+  virtual int fill_dml_splicer(
+      share::ObDMLSqlSplicer &dml_splicer,
+      const bool record_history) const override;
+  virtual int log_execute_start() const override;
+  virtual int log_execute_result() const override;
+  virtual int64_t get_clone_size() const override;
+  virtual int clone(void *input_ptr, ObDRTask *&output_task) const override;
+  virtual int check_before_execute(
+      share::ObLSTableOperator &lst_operator,
+      ObDRTaskRetComment &ret_comment) const override;
+  virtual int execute(
+      obrpc::ObSrvRpcProxy &rpc_proxy,
+      ObDRTaskRetComment &ret_comment) const override;
+public:
+  void set_dst_member(const common::ObReplicaMember &dst_member) { dst_member_ = dst_member; }
+  const ObReplicaMember &get_dst_member() const { return dst_member_; }
+  virtual const common::ObAddr &get_dst_server() const override { return dst_member_.get_server(); }
+  void set_config_version(const palf::LogConfigVersion &config_version) { config_version_ = config_version; }
+  const palf::LogConfigVersion &get_config_version() const { return config_version_; }
+  virtual obrpc::ObDRTaskType get_disaster_recovery_task_type() const override { return obrpc::ObDRTaskType::LS_REPLACE_REPLICA; }
+  virtual const char* get_log_start_str() const override { return drtasklog::START_REPLACE_LS_REPLICA_STR; }
+  virtual const char* get_log_finish_str() const override { return drtasklog::FINISH_REPLACE_LS_REPLICA_STR; }
+private:
+  int add_config_version_column_(share::ObDMLSqlSplicer &dml_splicer) const;
+private:
+  common::ObReplicaMember dst_member_;
+  palf::LogConfigVersion config_version_;
 };
 
 class ObMigrateLSReplicaTask : public ObDRTask
 {
 public:
   ObMigrateLSReplicaTask() : ObDRTask(),
-                             dst_replica_(),
+                             dst_member_(),
                              src_member_(),
                              data_src_member_(),
                              force_data_src_member_(),
-                             paxos_replica_number_(0) {}
+                             paxos_replica_number_(0),
+                             prioritize_same_zone_src_(false) {}
   virtual ~ObMigrateLSReplicaTask() {}
 public:
   int build(
       const ObDRTaskKey &task_key,
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
-      const int64_t schedule_time_us,
-      const int64_t generate_time_us,
-      const int64_t cluster_id,
-      const int64_t transmit_data_size,
-      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const ObDRTaskPriority priority,
       const ObString &comment,
-      const ObDstReplica &dst_replica,
+      const common::ObReplicaMember &dst_member,
       const common::ObReplicaMember &src_member,
       const common::ObReplicaMember &data_src_member,
       const common::ObReplicaMember &force_data_src_member,
-      const int64_t paxos_replica_number
-      );
+      const int64_t paxos_replica_number,
+      const ObDRTaskPriority priority = ObDRTaskPriority::HIGH_PRI,
+      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source = obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
+      const ObDRLSReplicaTaskStatus task_status = ObDRLSReplicaTaskStatus::WAITING,
+      const int64_t schedule_time_us = 0,
+      const int64_t generate_time_us = common::ObTimeUtility::current_time(),
+      const int64_t cluster_id = GCONF.cluster_id,
+      const int64_t transmit_data_size = 0);
 
   // build a ObMigrateLSReplicaTask from sql result read from inner table
   // @param [in] res, sql result read from inner table
   int build_task_from_sql_result(const sqlclient::ObMySQLResult &res);
 public:
   virtual const common::ObAddr &get_dst_server() const override {
-    return dst_replica_.get_server();
+    return dst_member_.get_server();
   }
 
-  virtual ObDRTaskType get_disaster_recovery_task_type() const override {
-    return ObDRTaskType::LS_MIGRATE_REPLICA;
+  virtual obrpc::ObDRTaskType get_disaster_recovery_task_type() const override {
+    return obrpc::ObDRTaskType::LS_MIGRATE_REPLICA;
   }
 
   virtual INHERIT_TO_STRING_KV("ObDRTask", ObDRTask,
-                               K(dst_replica_),
+                               K(dst_member_),
                                K(src_member_),
                                K(data_src_member_),
                                K(force_data_src_member_),
-                               K(paxos_replica_number_));
+                               K(paxos_replica_number_),
+                               K(prioritize_same_zone_src_));
 
-  virtual int get_execute_transmit_size(
-      int64_t &execute_transmit_size) const override;
-
-  virtual int get_virtual_disaster_recovery_task_stat(
-      common::ObAddr &src,
-      common::ObAddr &data_src,
-      common::ObAddr &dest,
-      common::ObAddr &offline) const override;
-  
   virtual int log_execute_start() const override;
 
-  virtual int log_execute_result(const int ret_code, const ObDRTaskRetComment &ret_comment) const override;
+  virtual int log_execute_result() const override;
 
   virtual int check_before_execute(
       share::ObLSTableOperator &lst_operator,
@@ -451,11 +458,11 @@ public:
 
   virtual int execute(
       obrpc::ObSrvRpcProxy &rpc_proxy,
-      int &ret_code,
       ObDRTaskRetComment &ret_comment) const override;
 
   virtual int fill_dml_splicer(
-      share::ObDMLSqlSplicer &dml_splicer) const override;
+      share::ObDMLSqlSplicer &dml_splicer,
+      const bool record_history) const override;
 
   virtual const char* get_log_start_str() const override { return drtasklog::START_MIGRATE_LS_REPLICA_STR; }
   virtual const char* get_log_finish_str() const override { return drtasklog::FINISH_MIGRATE_LS_REPLICA_STR; }
@@ -464,15 +471,10 @@ public:
       void *input_ptr,
       ObDRTask *&output_task) const override;
 public:
-  // operations of dst_replica_
-  int set_dst_replica(
-      const ObDstReplica &that);
-  int set_dst_replica(
-      const uint64_t unit_id,
-      const uint64_t unit_group_id,
-      const common::ObZone &zone,
-      const common::ObReplicaMember &member);
-  const ObDstReplica &get_dst_replica() const { return dst_replica_; }
+  bool get_prioritize_same_zone_src() const { return prioritize_same_zone_src_; };
+  void set_prioritize_same_zone_src(bool p) { prioritize_same_zone_src_ = p; };
+  void set_dst_member(const common::ObReplicaMember &dst_member) { dst_member_ = dst_member; }
+  const ObReplicaMember &get_dst_member() const { return dst_member_; }
   // operations of src_member_
   void set_src_member(const common::ObReplicaMember &s) { src_member_ = s; }
   const common::ObReplicaMember &get_src_member() const { return src_member_; }
@@ -493,18 +495,19 @@ private:
       const share::ObLSInfo &ls_info,
       ObDRTaskRetComment &ret_comment) const;
 private:
-  ObDstReplica dst_replica_;
+  common::ObReplicaMember dst_member_;
   common::ObReplicaMember src_member_;
   common::ObReplicaMember data_src_member_;
   common::ObReplicaMember force_data_src_member_;
   int64_t paxos_replica_number_;
+  bool prioritize_same_zone_src_;
 };
 
 class ObAddLSReplicaTask : public ObDRTask
 {
 public:
   ObAddLSReplicaTask() : ObDRTask(),
-                         dst_replica_(),
+                         dst_member_(),
                          data_src_member_(),
                          force_data_src_member_(),
                          orig_paxos_replica_number_(0),
@@ -513,52 +516,43 @@ public:
 public:
   int build(
       const ObDRTaskKey &task_key,
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
-      const int64_t schedule_time_us,
-      const int64_t generate_time_us,
-      const int64_t cluster_id,
-      const int64_t transmit_data_size,
-      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const ObDRTaskPriority priority,
       const ObString &comment,
-      const ObDstReplica &dst_replica_,
+      const common::ObReplicaMember &dst_member,
       const common::ObReplicaMember &data_src_member,
       const common::ObReplicaMember &force_data_src_member,
       const int64_t orig_paxos_replica_number,
-      const int64_t paxos_replica_number);
-  
+      const int64_t paxos_replica_number,
+      const ObDRTaskPriority priority = ObDRTaskPriority::HIGH_PRI,
+      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source = obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
+      const ObDRLSReplicaTaskStatus task_status = ObDRLSReplicaTaskStatus::WAITING,
+      const int64_t schedule_time_us = 0,
+      const int64_t generate_time_us = common::ObTimeUtility::current_time(),
+      const int64_t cluster_id = GCONF.cluster_id,
+      const int64_t transmit_data_size = 0);
+
   // build a ObAddLSReplicaTask from sql result read from inner table
   // @param [in] res, sql result read from inner table
   int build_task_from_sql_result(const sqlclient::ObMySQLResult &res);
 public:
   virtual const common::ObAddr &get_dst_server() const override {
-    return dst_replica_.get_server();
+    return dst_member_.get_server();
   }
 
-  virtual ObDRTaskType get_disaster_recovery_task_type() const override {
-    return ObDRTaskType::LS_ADD_REPLICA;
+  virtual obrpc::ObDRTaskType get_disaster_recovery_task_type() const override {
+    return obrpc::ObDRTaskType::LS_ADD_REPLICA;
   }
 
   virtual INHERIT_TO_STRING_KV("ObDRTask", ObDRTask,
-                               K(dst_replica_),
+                               K(dst_member_),
                                K(data_src_member_),
                                K(force_data_src_member_),
                                K(orig_paxos_replica_number_),
                                K(paxos_replica_number_));
-  virtual int get_execute_transmit_size(
-      int64_t &execute_transmit_size) const override;
 
-  virtual int get_virtual_disaster_recovery_task_stat(
-      common::ObAddr &src,
-      common::ObAddr &data_src,
-      common::ObAddr &dest,
-      common::ObAddr &offline) const override;
-  
   virtual int log_execute_start() const override;
 
-  virtual int log_execute_result(const int ret_code, const ObDRTaskRetComment &ret_comment) const override;
+  virtual int log_execute_result() const override;
 
   virtual int check_before_execute(
       share::ObLSTableOperator &lst_operator,
@@ -566,11 +560,11 @@ public:
 
   virtual int execute(
       obrpc::ObSrvRpcProxy &rpc_proxy,
-      int &ret_code,
       ObDRTaskRetComment &ret_comment) const override;
 
   virtual int fill_dml_splicer(
-      share::ObDMLSqlSplicer &dml_splicer) const override;
+      share::ObDMLSqlSplicer &dml_splicer,
+      const bool record_history) const override;
 
   virtual const char* get_log_start_str() const override { return drtasklog::START_ADD_LS_REPLICA_STR; }
   virtual const char* get_log_finish_str() const override { return drtasklog::FINISH_ADD_LS_REPLICA_STR; }
@@ -579,15 +573,8 @@ public:
       void *input_ptr,
       ObDRTask *&output_task) const override;
 public:
-  // operations of dst_replica_
-  int set_dst_replica(
-      const ObDstReplica &that);
-  int set_dst_replica(
-      const uint64_t unit_id,
-      const uint64_t unit_group_id,
-      const common::ObZone &zone,
-      const common::ObReplicaMember &member);
-  const ObDstReplica &get_dst_replica() const { return dst_replica_; }
+  void set_dst_member(const common::ObReplicaMember &that) { dst_member_ = that; }
+  const common::ObReplicaMember &get_dst_member() const { return dst_member_; }
   // operations of data_src_member_;
   void set_data_src_member(const common::ObReplicaMember &s) { data_src_member_ = s; }
   const common::ObReplicaMember &get_data_src_member() const { return data_src_member_; }
@@ -608,7 +595,7 @@ private:
       const share::ObLSInfo &ls_info,
       ObDRTaskRetComment &ret_comment) const;
 private:
-  ObDstReplica dst_replica_;
+  common::ObReplicaMember dst_member_;
   common::ObReplicaMember data_src_member_;
   common::ObReplicaMember force_data_src_member_;
   int64_t orig_paxos_replica_number_;
@@ -619,61 +606,64 @@ class ObLSTypeTransformTask : public ObDRTask
 {
 public:
   ObLSTypeTransformTask() : ObDRTask(),
-                            dst_replica_(),
+                            dst_member_(),
                             src_member_(),
                             data_src_member_(),
                             orig_paxos_replica_number_(0),
-                            paxos_replica_number_(0) {}
+                            paxos_replica_number_(0),
+                            leader_() {}
   virtual ~ObLSTypeTransformTask() {}
 public:
   int build(
       const ObDRTaskKey &task_key,
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
-      const int64_t schedule_time_us,
-      const int64_t generate_time_us,
-      const int64_t cluster_id,
-      const int64_t transmit_data_size,
-      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const ObDRTaskPriority priority,
       const ObString &comment,
-      const ObDstReplica &dst_replica_,
+      const common::ObAddr &leader,
+      const common::ObReplicaMember &dst_member,
       const common::ObReplicaMember &src_member,
       const common::ObReplicaMember &data_src_member,
       const int64_t orig_paxos_replica_number,
-      const int64_t paxos_replica_number);
+      const int64_t paxos_replica_number,
+      const ObDRTaskPriority priority = ObDRTaskPriority::HIGH_PRI,
+      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source = obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
+      const ObDRLSReplicaTaskStatus task_status = ObDRLSReplicaTaskStatus::WAITING,
+      const int64_t schedule_time_us = 0,
+      const int64_t generate_time_us = common::ObTimeUtility::current_time(),
+      const int64_t cluster_id = GCONF.cluster_id,
+      const int64_t transmit_data_size = 0);
 
   // build a ObLSTypeTransformTask from sql result read from inner table
   // @param [in] res, sql result read from inner table
   int build_task_from_sql_result(const sqlclient::ObMySQLResult &res);
 public:
   virtual const common::ObAddr &get_dst_server() const override {
-    return dst_replica_.get_server();
+    // When removing a sslog replica, the task is not actually removed, Instead, it is converted into a type transform task.
+    // When removing sslog F, F is converted to R, and when removing R, this task is ignored.
+    // The same logic applies when an sslog replica is permanently offline. However, in the event of a machine shutdown,
+    // the type transform task cannot be completed, so it must be sent to the leader for execution.
+    // For normal LS, type transform requires various pre-checks like transfer requirements.
+    // Therefore, type transform tasks for normal LS still need to be sent to the corresponding server.
+    // For SSLog LS, it do not require transfer operation and can be sent directly to the leader for execution.
+    if (is_sslog_dr_task()) {
+      return leader_;
+    }
+    return dst_member_.get_server();
   }
 
-  virtual ObDRTaskType get_disaster_recovery_task_type() const override {
-    return ObDRTaskType::LS_TYPE_TRANSFORM;
+  virtual obrpc::ObDRTaskType get_disaster_recovery_task_type() const override {
+    return obrpc::ObDRTaskType::LS_TYPE_TRANSFORM;
   }
   virtual INHERIT_TO_STRING_KV("ObDRTask", ObDRTask,
-                               K(dst_replica_),
+                               K(dst_member_),
                                K(src_member_),
                                K(data_src_member_),
                                K(orig_paxos_replica_number_),
-                               K(paxos_replica_number_));
+                               K(paxos_replica_number_),
+                               K(leader_));
 
-  virtual int get_execute_transmit_size(
-      int64_t &execute_transmit_size) const override;
-
-  virtual int get_virtual_disaster_recovery_task_stat(
-      common::ObAddr &src,
-      common::ObAddr &data_src,
-      common::ObAddr &dest,
-      common::ObAddr &offline) const override;
-  
   virtual int log_execute_start() const override;
 
-  virtual int log_execute_result(const int ret_code, const ObDRTaskRetComment &ret_comment) const override;
+  virtual int log_execute_result() const override;
 
   virtual int check_before_execute(
       share::ObLSTableOperator &lst_operator,
@@ -681,11 +671,11 @@ public:
 
   virtual int execute(
       obrpc::ObSrvRpcProxy &rpc_proxy,
-      int &ret_code,
       ObDRTaskRetComment &ret_comment) const override;
 
   virtual int fill_dml_splicer(
-      share::ObDMLSqlSplicer &dml_splicer) const override;
+      share::ObDMLSqlSplicer &dml_splicer,
+      const bool record_history) const override;
 
   virtual const char* get_log_start_str() const override { return drtasklog::START_TYPE_TRANSFORM_LS_REPLICA_STR; }
   virtual const char* get_log_finish_str() const override { return drtasklog::FINISH_TYPE_TRANSFORM_LS_REPLICA_STR; }
@@ -694,15 +684,8 @@ public:
       void *input_ptr,
       ObDRTask *&output_task) const override;
 public:
-  // operations of dst_replica_
-  int set_dst_replica(
-      const ObDstReplica &that);
-  int set_dst_replica(
-      const uint64_t unit_id,
-      const uint64_t unit_group_id,
-      const common::ObZone &zone,
-      const common::ObReplicaMember &member);
-  const ObDstReplica &get_dst_replica() const { return dst_replica_; }
+  void set_dst_member(const common::ObReplicaMember &that)  { dst_member_ = that; }
+  const common::ObReplicaMember &get_dst_member() const { return dst_member_; }
   // operations of src_member_
   void set_src_member(const common::ObReplicaMember &s) { src_member_ = s; }
   const common::ObReplicaMember &get_src_member() const { return src_member_; }
@@ -715,6 +698,8 @@ public:
   // operations of paxos_replica_number_
   void set_paxos_replica_number(const int64_t paxos_replica_number) { paxos_replica_number_ = paxos_replica_number; }
   int64_t get_paxos_replica_number() const { return paxos_replica_number_; }
+  void set_leader(const common::ObAddr &leader) { leader_ = leader; };
+  const common::ObAddr &get_leader() const { return leader_; }
 private:
   int check_online(
       const share::ObLSInfo &ls_info,
@@ -724,41 +709,41 @@ private:
       const share::ObLSInfo &ls_info,
       ObDRTaskRetComment &ret_comment) const;
 private:
-  ObDstReplica dst_replica_;
+  common::ObReplicaMember dst_member_;
   common::ObReplicaMember src_member_;
   common::ObReplicaMember data_src_member_;
   int64_t orig_paxos_replica_number_;
   int64_t paxos_replica_number_;
+  common::ObAddr leader_;
 };
 
 class ObRemoveLSReplicaTask : public ObDRTask
 {
 public:
   ObRemoveLSReplicaTask() : ObDRTask(),
-                                 leader_(),
-                                 remove_server_(),
-                                 orig_paxos_replica_number_(0),
-                                 paxos_replica_number_(0),
-                                 replica_type_(REPLICA_TYPE_FULL) {}
+                            leader_(),
+                            remove_server_(),
+                            orig_paxos_replica_number_(0),
+                            paxos_replica_number_(0),
+                            replica_type_(REPLICA_TYPE_INVALID) {}
   virtual ~ObRemoveLSReplicaTask() {}
 public:
   int build(
       const ObDRTaskKey &task_key,
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
-      const int64_t schedule_time_us,
-      const int64_t generate_time_us,
-      const int64_t cluster_id,
-      const int64_t transmit_data_size,
-      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const ObDRTaskPriority priority,
       const ObString &comment,
       const common::ObAddr &leader,
       const common::ObReplicaMember &remove_server,
       const int64_t orig_paxos_replica_number,
       const int64_t paxos_replica_number,
-      const ObReplicaType &replica_type);
+      const ObReplicaType &replica_type,
+      const ObDRTaskPriority priority = ObDRTaskPriority::HIGH_PRI,
+      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source = obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
+      const ObDRLSReplicaTaskStatus task_status = ObDRLSReplicaTaskStatus::WAITING,
+      const int64_t schedule_time_us = 0,
+      const int64_t generate_time_us = common::ObTimeUtility::current_time(),
+      const int64_t cluster_id = GCONF.cluster_id,
+      const int64_t transmit_data_size = 0);
 
   // build a ObRemoveLSReplicaTask from sql result read from inner table
   // @param [in] res, sql result read from inner table
@@ -768,10 +753,10 @@ public:
     return leader_;
   }
 
-  virtual ObDRTaskType get_disaster_recovery_task_type() const override {
-    return ObReplicaTypeCheck::is_paxos_replica_V2(replica_type_)
-           ? ObDRTaskType::LS_REMOVE_PAXOS_REPLICA
-           : ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;
+  virtual obrpc::ObDRTaskType get_disaster_recovery_task_type() const override {
+    return ObReplicaTypeCheck::is_paxos_replica(replica_type_)
+           ? obrpc::ObDRTaskType::LS_REMOVE_PAXOS_REPLICA
+           : obrpc::ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;
   }
 
   virtual INHERIT_TO_STRING_KV("ObDRTask", ObDRTask,
@@ -781,18 +766,9 @@ public:
                                K(paxos_replica_number_),
                                K(replica_type_));
 
-  virtual int get_execute_transmit_size(
-      int64_t &execute_transmit_size) const override;
-
-  virtual int get_virtual_disaster_recovery_task_stat(
-      common::ObAddr &src,
-      common::ObAddr &data_src,
-      common::ObAddr &dest,
-      common::ObAddr &offline) const override;
-
   virtual int log_execute_start() const override;
 
-  virtual int log_execute_result(const int ret_code, const ObDRTaskRetComment &ret_comment) const override;
+  virtual int log_execute_result() const override;
 
   virtual int check_before_execute(
       share::ObLSTableOperator &lst_operator,
@@ -800,21 +776,21 @@ public:
 
   virtual int execute(
       obrpc::ObSrvRpcProxy &rpc_proxy,
-      int &ret_code,
       ObDRTaskRetComment &ret_comment) const override;
 
   virtual int fill_dml_splicer(
-      share::ObDMLSqlSplicer &dml_splicer) const override;
+      share::ObDMLSqlSplicer &dml_splicer,
+      const bool record_history) const override;
 
   virtual const char* get_log_start_str() const override
   {
-    return  ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type()
+    return  obrpc::ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type()
             ? drtasklog::START_REMOVE_LS_PAXOS_REPLICA_STR
             : drtasklog::START_REMOVE_LS_NON_PAXOS_REPLICA_STR;
   }
   virtual const char* get_log_finish_str() const override
   {
-    return  ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type()
+    return  obrpc::ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type()
             ? drtasklog::FINISH_REMOVE_LS_PAXOS_REPLICA_STR
             : drtasklog::FINISH_REMOVE_LS_NON_PAXOS_REPLICA_STR;
   }
@@ -829,7 +805,7 @@ public:
   const common::ObAddr &get_leader() const { return leader_; }
   // operations of remove_server_
   void set_remove_server(const common::ObReplicaMember &d) { remove_server_ = d; }
-  const common::ObReplicaMember &get_remove_server() const { return remove_server_; }
+  const common::ObReplicaMember &get_remove_member() const { return remove_server_; }
   // operations of orig_paxos_replica_number_
   void set_orig_paxos_replica_number(const int64_t q) { orig_paxos_replica_number_ = q; }
   int64_t get_orig_paxos_replica_number() const { return orig_paxos_replica_number_; }
@@ -851,28 +827,27 @@ class ObLSModifyPaxosReplicaNumberTask : public ObDRTask
 {
 public:
   ObLSModifyPaxosReplicaNumberTask() : ObDRTask(),
-                           server_(),
-                           orig_paxos_replica_number_(),
-                           paxos_replica_number_(),
-                           member_list_() {}
+                                       server_(),
+                                       orig_paxos_replica_number_(),
+                                       paxos_replica_number_(),
+                                       member_list_() {}
   virtual ~ObLSModifyPaxosReplicaNumberTask() {}
 public:
   int build(
       const ObDRTaskKey &task_key,
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
-      const int64_t schedule_time_us,
-      const int64_t generate_time_us,
-      const int64_t cluster_id,
-      const int64_t transmit_data_size,
-      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const ObDRTaskPriority priority,
       const ObString &comment,
       const common::ObAddr &dst_server,
       const int64_t orig_paxos_replica_number,
       const int64_t paxos_replica_number,
-      const common::ObMemberList &member_list);
+      const common::ObMemberList &member_list,
+      const ObDRTaskPriority priority = ObDRTaskPriority::HIGH_PRI,
+      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source = obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
+      const ObDRLSReplicaTaskStatus task_status = ObDRLSReplicaTaskStatus::WAITING,
+      const int64_t schedule_time_us = 0,
+      const int64_t generate_time_us = common::ObTimeUtility::current_time(),
+      const int64_t cluster_id = GCONF.cluster_id,
+      const int64_t transmit_data_size = 0);
 
   // build a ObLSModifyPaxosReplicaNumberTask from sql result read from inner table
   // @param [in] res, sql result read from inner table
@@ -882,8 +857,8 @@ public:
     return server_;
   }
 
-  virtual ObDRTaskType get_disaster_recovery_task_type() const override {
-    return ObDRTaskType::LS_MODIFY_PAXOS_REPLICA_NUMBER;
+  virtual obrpc::ObDRTaskType get_disaster_recovery_task_type() const override {
+    return obrpc::ObDRTaskType::LS_MODIFY_PAXOS_REPLICA_NUMBER;
   }
 
   virtual INHERIT_TO_STRING_KV("ObDRTask", ObDRTask,
@@ -891,18 +866,9 @@ public:
                                K(orig_paxos_replica_number_),
                                K(paxos_replica_number_));
 
-  virtual int get_execute_transmit_size(
-      int64_t &execute_transmit_size) const override;
-
-  virtual int get_virtual_disaster_recovery_task_stat(
-      common::ObAddr &src,
-      common::ObAddr &data_src,
-      common::ObAddr &dest,
-      common::ObAddr &offline) const override;
-  
   virtual int log_execute_start() const override;
 
-  virtual int log_execute_result(const int ret_code, const ObDRTaskRetComment &ret_comment) const override;
+  virtual int log_execute_result() const override;
 
   virtual int check_before_execute(
       share::ObLSTableOperator &lst_operator,
@@ -910,11 +876,11 @@ public:
 
   virtual int execute(
       obrpc::ObSrvRpcProxy &rpc_proxy,
-      int &ret_code,
       ObDRTaskRetComment &ret_comment) const override;
 
   virtual int fill_dml_splicer(
-      share::ObDMLSqlSplicer &dml_splicer) const override;
+      share::ObDMLSqlSplicer &dml_splicer,
+      const bool record_history) const override;
 
   virtual const char* get_log_start_str() const override { return drtasklog::START_MODIFY_PAXOS_REPLICA_NUMBER_STR; }
   virtual const char* get_log_finish_str() const override { return drtasklog::FINISH_MODIFY_PAXOS_REPLICA_NUMBER_STR; }
@@ -942,6 +908,7 @@ private:
   int64_t paxos_replica_number_;
   common::ObMemberList member_list_;
 };
+
 } // end namespace rootserver
 } // end namespace oceanbase
 #endif // OCEANBASE_ROOTSERVER_OB_DISASTER_RECOVERY_TASK_H_

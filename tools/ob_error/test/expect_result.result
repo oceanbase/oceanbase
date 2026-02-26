@@ -1,7 +1,7 @@
 $ob_error 1
 
 Oracle:
-	Oracle Error Code: ORA-00001
+	Oracle Error Code: OBE-00001
 	Message: unique constraint violated
 	Message: PL/SQL common error
 	Related OceanBase Error Code:
@@ -22,7 +22,7 @@ OceanBase:
 $ob_error 600
 
 Oracle:
-	Oracle Error Code: ORA-00600
+	Oracle Error Code: OBE-00600
 	Message: auto increment service busy
 	Message: rowid type mismatch
 	Message: rowid num mismatch
@@ -39,7 +39,7 @@ MySQL:
 		OB_FILE_NOT_EXIST(-4027)
 
 Oracle:
-	Oracle Error Code: ORA-01017
+	Oracle Error Code: OBE-01017
 	Message: invalid username/password; logon denied
 	Related OceanBase Error Code:
 		OB_ERR_LOGIN_DENIED(-5845)
@@ -61,7 +61,7 @@ OceanBase:
 	Solution: Contact OceanBase Support
 
 Oracle:
-	Oracle Error Code: ORA-04001
+	Oracle Error Code: OBE-04001
 	Message: sequence parameter must be an integer
 	Related OceanBase Error Code:
 		OB_ERR_SEQ_OPTION_MUST_BE_INTEGER(-4317)
@@ -74,14 +74,14 @@ OceanBase:
 	Solution: Contact OceanBase Support
 
 Oracle:
-	Oracle Error Code: ORA-20000
+	Oracle Error Code: OBE-20000
 	Message: The stored procedure 'raise_application_error' was called which causes this error to be generated
 	Related OceanBase Error Code:
 		OB_SP_RAISE_APPLICATION_ERROR(-20000)
 $ob_error 24761
 
 Oracle:
-	Oracle Error Code: ORA-24761
+	Oracle Error Code: OBE-24761
 	Message: transaction rolled back
 	Message: transaction rolled back: transaction is killed
 	Message: transaction rolled back: transaction context does not exist
@@ -136,7 +136,7 @@ OceanBase:
 	Cause: Internal Error
 	Solution: Contact OceanBase Support
 	Compatible Error Code:
-		Oracle: ORA-00600
+		Oracle: OBE-00600
 $ob_error 5870
 
 OceanBase:
@@ -145,7 +145,7 @@ OceanBase:
 	Cause: Internal Error
 	Solution: Contact OceanBase Support
 	Compatible Error Code:
-		Oracle: ORA-00600
+		Oracle: OBE-00600
 $ob_error 5871
 
 OceanBase:
@@ -154,7 +154,7 @@ OceanBase:
 	Cause: Internal Error
 	Solution: Contact OceanBase Support
 	Compatible Error Code:
-		Oracle: ORA-00600
+		Oracle: OBE-00600
 $ob_error 4228
 
 OceanBase:
@@ -164,7 +164,7 @@ OceanBase:
 	Solution: Contact OceanBase Support
 	Compatible Error Code:
 		MySQL: 1110(42000)
-		Oracle: ORA-00957
+		Oracle: OBE-00957
 $ob_error 700 -a 1000
 error: '-a ARG' is unsupport in this scene
 Use 'ob_error ora 600 -a ARG'.
@@ -177,7 +177,7 @@ OceanBase:
 	Cause: Internal Error
 	Solution: Contact OceanBase Support
 	Compatible Error Code:
-		Oracle: ORA-14757
+		Oracle: OBE-14757
 $ob_error my 4000
 
 OceanBase:
@@ -206,14 +206,14 @@ MySQL:
 $ob_error ora 00051
 
 Oracle:
-	Oracle Error Code: ORA-00051
+	Oracle Error Code: OBE-00051
 	Message: timeout occurred while waiting for a resource
 	Related OceanBase Error Code:
 		OB_ERR_TIMEOUT_ON_RESOURCE(-5848)
 $ob_error ora 900
 
 Oracle:
-	Oracle Error Code: ORA-00900
+	Oracle Error Code: OBE-00900
 	Message: invalid SQL statement
 	Message: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use
 	Related OceanBase Error Code:
@@ -230,7 +230,7 @@ OceanBase:
 		MySQL: 1302(42000)
 
 Oracle:
-	Oracle Error Code: ORA-00600
+	Oracle Error Code: OBE-00600
 	Message: internal error code, arguments: -5858, Conflicting declarations
 	Related OceanBase Error Code:
 		OB_ERR_CONFLICTING_DECLARATIONS(-5858)
@@ -243,7 +243,7 @@ OceanBase:
 	Solution: Contact OceanBase Support
 
 Oracle:
-	Oracle Error Code: ORA-00600
+	Oracle Error Code: OBE-00600
 	Message: internal error code, arguments: -5727, SQL request should be rerouted
 	Related OceanBase Error Code:
 		OB_ERR_PROXY_REROUTE(-5727)
@@ -261,7 +261,7 @@ OceanBase:
 	Error Code 100 not found.
 
 Oracle:
-	Error Code ORA-00600 arguments: -100 not found.
+	Error Code OBE-00600 arguments: -100 not found.
 $ob_error pls 100
 
 Oracle:

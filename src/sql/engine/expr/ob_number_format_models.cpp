@@ -13,11 +13,8 @@
 #define USING_LOG_PREFIX  SQL_ENG
 
 #include "ob_number_format_models.h"
-#include "lib/charset/ob_charset.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_func_round.h"
-#include "share/system_variable/ob_nls_system_variable.h"
 
 namespace oceanbase
 {
@@ -1527,10 +1524,16 @@ int ObNFMBase::cast_obj_to_num_str(
       if (fmt_desc_.pre_num_count_ != 0
           && 0 == fmt_desc_.post_num_count_) {
         num_str_buf[pos++] = '0';
+      } else if (ObNFMElem::has_type(NFM_FILLMODE_FLAG, fmt_desc_.elem_flag_)
+                  && fmt_desc_.pre_num_count_ != 0 && fmt_desc_.post_num_count_ != 0) {
+        // for 0 with fill mode, if the zero is before the decimal point, it should be displayed
+        num_str_buf[pos++] = '0';
       }
       num_str_buf[pos++] = '.';
-      if (fmt_desc_.post_num_count_ != 0) {
-        num_str_buf[pos++] = '0';
+      if (fmt_desc_.post_num_count_ != 0 &&
+          !(ObNFMElem::has_type(NFM_FILLMODE_FLAG, fmt_desc_.elem_flag_)
+            && fmt_desc_.zero_end_ < fmt_desc_.decimal_pos_)) {
+          num_str_buf[pos++] = '0';
       }
       num_str.assign_ptr(num_str_buf, pos);
     } else if (OB_FAIL(remove_leading_zero(num_str_buf, num_str_len))) {
@@ -1896,6 +1899,16 @@ int ObNFMToChar::process_tm_format(const ObNFMObj &nfm_obj, const int64_t in_sca
         MEMCPY(buf, num_str_buf, num_str_len);
         pos += num_str_len;
       } else if (num_str_len > 64) {
+        if (lib::is_mysql_mode()) {
+          // remove '0' before '.'
+          if (num_str_len > 2 && 0 == MEMCMP(num_str_buf, "0.", 2)) {
+            MEMMOVE(num_str_buf, num_str_buf + 1, num_str_len - 1);
+            num_str_len -= 1;
+          } else if (num_str_len > 3 &&  0 == MEMCMP(num_str_buf, "-0.", 3)) {
+            MEMMOVE(num_str_buf + 1, num_str_buf + 2, num_str_len - 2);
+            num_str_len -= 1;
+          }
+        }
         if (OB_FAIL(num_str_to_sci(num_str, out_scale, buf, buf_len, pos, true))) {
           LOG_WARN("failed to convert num to sci str", K(ret));
         }
@@ -1947,6 +1960,16 @@ int ObNFMToChar::process_tme_format(const ObNFMObj &nfm_obj, const int64_t in_sc
       LOG_WARN("invalid obj type", K(ret), K(obj_type));
     }
     if (OB_SUCC(ret)) {
+      if (lib::is_mysql_mode()) {
+        // remove '0' before '.'
+        if (num_str_len > 2 && 0 == MEMCMP(num_str_buf, "0.", 2)) {
+          MEMMOVE(num_str_buf, num_str_buf + 1, num_str_len - 1);
+          num_str_len -= 1;
+        } else if (num_str_len > 3 &&  0 == MEMCMP(num_str_buf, "-0.", 3)) {
+          MEMMOVE(num_str_buf + 1, num_str_buf + 2, num_str_len - 2);
+          num_str_len -= 1;
+        }
+      }
       num_str.assign_ptr(num_str_buf, static_cast<int32_t>(num_str_len));
       LOG_DEBUG("process_tme_format", K(ret), K(num_str_buf), K(num_str_len));
       if (OB_FAIL(num_str_to_sci(num_str, out_scale, buf, buf_len, pos, true))) {
@@ -2391,9 +2414,9 @@ int ObNFMToChar::convert_num_to_fmt_str(const common::ObObjMeta &obj_meta,
   if (OB_ISNULL(fmt_str) || OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(session));
-  } else if (fmt_len >= MAX_FMT_STR_LEN) {
+  } else if (fmt_len > MAX_FMT_STR_LEN) {
     ret = OB_ERR_INVALID_NUMBER_FORMAT_MODEL;
-    LOG_WARN("invalid fmt string", K(ret));
+    LOG_WARN("invalid fmt string", K(ret), K(fmt_len));
   } else if (OB_ISNULL(res_buf = static_cast<char *>(alloc.alloc(res_buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
@@ -2435,7 +2458,7 @@ int ObNFMToNumber::process_hex_format(const common::ObString &in_str,
     }
   }
   if (OB_FAIL(ret)) {
-  } else if ('-' == str[str_pos]) {
+  } else if (str_pos < str_len && '-' == str[str_pos]) {
     ret = OB_ERR_CAST_VARCHAR_TO_NUMBER;
     LOG_WARN("not support negative number", K(ret), K(in_str));
   } else if (ObNFMElem::has_type((~NFM_HEX_FLAG) & (~NFM_ZERO_FLAG)

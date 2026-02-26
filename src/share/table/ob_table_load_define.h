@@ -21,6 +21,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 
+
 namespace oceanbase
 {
 namespace table
@@ -35,17 +36,19 @@ public:
       batch_size_(0),
       max_error_row_count_(0),
       dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
-      is_need_sort_(false)
+      is_need_sort_(false),
+      is_task_need_sort_(false)
   {
   }
   TO_STRING_KV(K_(parallel), K_(batch_size), K_(max_error_row_count), K_(dup_action),
-               K_(is_need_sort));
+               K_(is_need_sort), K_(is_task_need_sort));
 public:
   int32_t parallel_;
   int32_t batch_size_;
   uint64_t max_error_row_count_;
   sql::ObLoadDupActionType dup_action_;
-  bool is_need_sort_;
+  bool is_need_sort_;         // 表示主表是否要排序
+  bool is_task_need_sort_;    // 表示导入任务是否会走到排序流程
 };
 
 struct ObTableLoadPartitionId
@@ -451,13 +454,19 @@ public:
   static const int32_t DATA_ID_SHIFT = 48;   // multi file sequence_no_ = [data_id << 48 | data_seq_no]
   static const int32_t CHUNK_ID_SHIFT = 32;  // single file sequence_no_ = [chunk_id << 32 | chunk_seq_no]
   static const int32_t BATCH_ID_SHIFT = 16;  // java client sequence_no_ = [batch_id << 16 | batch_seq_no]
+  // backup sequence_no_ = [ partition_idx << 40 | subpart_idx << 32 | seq_no ]
+  static const int32_t BACKUP_PARTITION_IDX_SHIFT = 40;
+  static const int32_t BACKUP_SUBPART_IDX_SHIFT = 32;
 
   static const uint64_t MAX_DATA_ID  = (1LL << (64 - DATA_ID_SHIFT)) - 1;
   static const uint64_t MAX_CHUNK_ID  = (1LL << (64 - CHUNK_ID_SHIFT)) - 1;
   static const uint64_t MAX_BATCH_ID  = (1LL << (64 - BATCH_ID_SHIFT)) - 1;
+  static const uint64_t MAX_BACKUP_PARTITION_IDX = (1LL << (64 - BACKUP_PARTITION_IDX_SHIFT)) -1;
+  static const uint64_t MAX_BACKUP_SUBPART_IDX = (1LL << (BACKUP_PARTITION_IDX_SHIFT - BACKUP_SUBPART_IDX_SHIFT)) - 1;
   static const uint64_t MAX_DATA_SEQ_NO  = (1LL << DATA_ID_SHIFT) - 1;
   static const uint64_t MAX_CHUNK_SEQ_NO  = (1LL << CHUNK_ID_SHIFT) - 1;
   static const uint64_t MAX_BATCH_SEQ_NO  = (1LL << BATCH_ID_SHIFT) - 1;
+  static const uint64_t MAX_BACKUP_SEQ_NO = (1LL << BACKUP_SUBPART_IDX_SHIFT) - 1;
   uint64_t sequence_no_;
 
   ObTableLoadSequenceNo() : sequence_no_(OB_INVALID_ID) {}

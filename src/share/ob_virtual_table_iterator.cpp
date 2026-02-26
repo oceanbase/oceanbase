@@ -12,19 +12,12 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "share/ob_virtual_table_iterator.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/config/ob_server_config.h"
-#include "share/object/ob_obj_cast.h"
-#include "common/rowkey/ob_rowkey_info.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "sql/engine/ob_operator.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
+
+#include "share/external_table/ob_external_object_ctx.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/das/ob_das_location_router.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "deps/oblib/src/lib/alloc/memory_sanity.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "sql/ob_sql_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -53,6 +46,7 @@ void ObVirtualTableIterator::reset()
   reset_convert_ctx();
   allocator_ = NULL;
   session_ = NULL;
+  sql_schema_guard_.reset();
 }
 
 void ObVirtualTableIterator::reset_convert_ctx()
@@ -96,7 +90,11 @@ int ObVirtualTableIterator::free_convert_ctx()
   return ret;
 }
 
-int ObVirtualTableIterator::convert_key(const ObRowkey &src, ObRowkey &dst, common::ObIArray<const ObColumnSchemaV2*> &key_cols)
+int ObVirtualTableIterator::convert_key(const ObRowkey &src,
+                                        ObRowkey &dst,
+                                        common::ObIArray<const ObColumnSchemaV2*> &key_cols,
+                                        bool is_start_key,
+                                        ObBorderFlag &border_flag)
 {
   int ret = OB_SUCCESS;
   if (src.get_obj_cnt() > 0) {
@@ -117,7 +115,7 @@ int ObVirtualTableIterator::convert_key(const ObRowkey &src, ObRowkey &dst, comm
     lib::CompatModeGuard g(lib::Worker::CompatMode::MYSQL);
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session_);
     ObCastCtx cast_ctx(allocator_, &dtc_params, CM_NONE, ObCharset::get_system_collation());
-    for (uint64_t nth_obj = 0; OB_SUCC(ret) && nth_obj < src.get_obj_cnt(); ++nth_obj) {
+    for (int64_t nth_obj = 0; OB_SUCC(ret) && nth_obj < src.get_obj_cnt(); ++nth_obj) {
       const ObObj &src_obj = src_key_objs[nth_obj];
       if (src_obj.is_min_value()) {
         new_key_obj[nth_obj].set_min_value();
@@ -125,6 +123,27 @@ int ObVirtualTableIterator::convert_key(const ObRowkey &src, ObRowkey &dst, comm
         new_key_obj[nth_obj].set_max_value();
       } else if (src_obj.is_null()) {
         new_key_obj[nth_obj].set_null();
+      } else if (ObIntType == key_cols.at(nth_obj)->get_data_type() &&
+                 src_key_objs[nth_obj].is_number()) {
+        const number::ObNumber &nmb = src_key_objs[nth_obj].get_number();
+        int64_t int_value = 0;
+        int cmp = 0;
+        if (nmb.is_valid_int64(int_value)) {
+          new_key_obj[nth_obj].set_int(int_value);
+        } else {
+          if (OB_FAIL(sql::ObSQLUtils::convert_number_to_int_with_trunc(nmb, int_value, cmp))) {
+            LOG_WARN("fail to convert number to int", K(ret), K(nmb));
+          } else {
+            new_key_obj[nth_obj].set_int(int_value);
+            if (OB_FAIL(sql::ObSQLUtils::adjust_key_border_for_number_convert(cmp, is_start_key,
+                                                                               nth_obj == src.get_obj_cnt() - 1,
+                                                                               nth_obj,
+                                                                               static_cast<int64_t>(src.get_obj_cnt()),
+                                                                               new_key_obj, border_flag))) {
+              LOG_WARN("fail to adjust key border", K(ret), K(cmp), K(is_start_key));
+            }
+          }
+        }
       } else {
         if (OB_FAIL(ObObjCaster::to_type(key_cols.at(nth_obj)->get_data_type(),
                                         cast_ctx,
@@ -227,9 +246,17 @@ int ObVirtualTableIterator::convert_key_ranges()
         ObNewRange new_range;
         new_range.table_id_ = key_ranges_.at(i).table_id_;
         new_range.border_flag_ = key_ranges_.at(i).border_flag_;
-        if (OB_FAIL(convert_key(key_ranges_.at(i).start_key_, new_range.start_key_, key_cols))) {
+        if (OB_FAIL(convert_key(key_ranges_.at(i).start_key_,
+                                new_range.start_key_,
+                                key_cols,
+                                true,
+                                new_range.border_flag_))) {
           LOG_WARN("fail to convert start key", K(ret), K(allocator_));
-        } else if (OB_FAIL(convert_key(key_ranges_.at(i).end_key_, new_range.end_key_, key_cols))) {
+        } else if (OB_FAIL(convert_key(key_ranges_.at(i).end_key_,
+                                       new_range.end_key_,
+                                       key_cols,
+                                       false,
+                                       new_range.border_flag_))) {
           LOG_WARN("fail to convert end key", K(ret), K(allocator_));
         } else if (OB_FAIL(tmp_range.push_back(new_range))) {
           LOG_WARN("fail to push back new range", K(ret), K(allocator_));
@@ -301,6 +328,8 @@ int ObVirtualTableIterator::open()
   } else if (OB_ISNULL(cells = new (tmp_ptr) ObObj[(reserved_column_cnt_ > 0 ? reserved_column_cnt_ : 1)])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to new cell array", K(ret), K(reserved_column_cnt_));
+  } else if (OB_FAIL(init_sql_schema_guard_())) {
+    LOG_WARN("failed to init SqlSchemaGuard", K(ret));
   } else {
     cur_row_.cells_ = cells;
     cur_row_.count_ = reserved_column_cnt_;
@@ -366,6 +395,8 @@ int ObVirtualTableIterator::convert_output_row(ObNewRow *&cur_row)
 int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(scan_param_ != nullptr? scan_param_->index_id_ : 0);
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, scan_param_ != nullptr? scan_param_->index_id_ : 0);
   int ret = OB_SUCCESS;
   ObNewRow *cur_row = NULL;
   row_calc_buf_.reuse();
@@ -437,7 +468,7 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
       ObObj output_obj;
       ObArray<ObString> *type_infos = NULL;
       const bool is_strict = false;
-      ObExprResType res_type;
+      ObRawExprResType res_type;
       res_type.set_accuracy(col_schema->get_accuracy());
       res_type.set_collation_type(col_schema->get_collation_type());
       res_type.set_type(col_schema->get_data_type());
@@ -463,9 +494,30 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
   return ret;
 }
 
+int ObVirtualTableIterator::get_next_rows(int64_t &count, int64_t capacity)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(capacity < 1)) {
+  } else if (OB_ISNULL(scan_param_) || OB_ISNULL(scan_param_->op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null arguments", K(ret));
+  } else {
+    ObEvalCtx::BatchInfoScopeGuard guard(scan_param_->op_->get_eval_ctx());
+    guard.set_batch_size(1);
+    guard.set_batch_idx(0);
+    if (OB_FAIL(get_next_row())) {
+      if (OB_ITER_END != ret) { LOG_WARN("get next row failed", K(ret)); }
+    } else {
+      count = 1;
+    }
+  }
+  return ret;
+}
 int ObVirtualTableIterator::get_next_row()
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(scan_param_ != nullptr? scan_param_->index_id_ : 0);
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, scan_param_ != nullptr? scan_param_->index_id_ : 0);
   int ret = OB_SUCCESS;
   ObNewRow *row = NULL;
   if (OB_ISNULL(scan_param_)
@@ -543,6 +595,7 @@ int ObVirtualTableIterator::check_priv(const ObString &level_str,
 {
   int ret = OB_SUCCESS;
   share::schema::ObSessionPrivInfo session_priv;
+  const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
   CK (OB_NOT_NULL(session_) && OB_NOT_NULL(schema_guard_));
   OZ (session_->get_session_priv_info(session_priv));
   // bool allow_show = true;
@@ -554,12 +607,12 @@ int ObVirtualTableIterator::check_priv(const ObString &level_str,
         && OB_INVALID_TENANT_ID != tenant_id) {
       //not current tenant's row
     } else if (0 == level_str.case_compare("db_acc")) {
-      if (OB_FAIL(schema_guard_->check_db_show(session_priv, db_name, passed))) {
+      if (OB_FAIL(schema_guard_->check_db_show(session_priv, enable_role_id_array, db_name, passed))) {
           LOG_WARN("Check db show failed", K(ret));
       }
     } else if (0 == level_str.case_compare("table_acc")) {
       //if (OB_FAIL(priv_mgr.check_table_show(session_priv,
-      if (OB_FAIL(schema_guard_->check_table_show(session_priv, db_name, table_name, passed))) {
+      if (OB_FAIL(schema_guard_->check_table_show(session_priv, enable_role_id_array, db_name, table_name, passed))) {
         LOG_WARN("Check table show failed", K(ret));
       }
     } else {
@@ -573,6 +626,19 @@ int ObVirtualTableIterator::check_priv(const ObString &level_str,
 void ObVirtualTableIterator::set_effective_tenant_id(const uint64_t tenant_id)
 {
   effective_tenant_id_ = tenant_id;
+}
+
+int ObVirtualTableIterator::init_sql_schema_guard_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_guard_) || OB_ISNULL(scan_param_) || OB_ISNULL(scan_param_->external_object_ctx_)) {
+    // don't do anything
+    // ignore ret
+  } else if (OB_FALSE_IT(sql_schema_guard_.set_schema_guard(schema_guard_))) {
+  } else if (OB_FAIL(sql_schema_guard_.recover_schema_from_external_objects(scan_param_->external_object_ctx_->get_external_objects()))) {
+    LOG_WARN("recover external objects failed", K(ret));
+  }
+  return ret;
 }
 
 }// common

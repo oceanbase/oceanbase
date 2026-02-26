@@ -11,16 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "lib/restore/ob_storage.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/backup/ob_log_restore_struct.h"
 #include "ob_log_restore_source_mgr.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/net/ob_addr.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_string.h"
 
 using namespace oceanbase::share;
 int ObLogRestoreSourceMgr::init(const uint64_t tenant_id, ObISQLClient *proxy)

@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_abs.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/config/ob_server_config.h"
 #include "share/datum/ob_datum_util.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -1083,7 +1081,9 @@ ObObjType ObExprAbs::calc_param_type(const ObObjType orig_param_type,
     case ObTextType:
     case ObTinyTextType:
     case ObMediumTextType:
-    case ObLongTextType: {
+    case ObLongTextType:
+    case ObMySQLDateType:
+    case ObMySQLDateTimeType: {
       calc_type = ObDoubleType;
       break;
     }

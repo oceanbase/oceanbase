@@ -15,7 +15,6 @@
 #include "sql/resolver/cmd/ob_tenant_snapshot_stmt.h"
 #include "sql/resolver/cmd/ob_tenant_snapshot_resolver.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/ob_share_util.h"
 
 namespace oceanbase
 {

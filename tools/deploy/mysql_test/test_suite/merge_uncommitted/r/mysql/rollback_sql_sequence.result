@@ -1,9 +1,9 @@
-set SESSION ob_query_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
-set SESSION ob_query_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
 alter system set minor_compact_trigger = 10;
 drop table if exists test_rollback_sql_sequence_t;
 create table test_rollback_sql_sequence_t(num int, str varchar(50), tag int);

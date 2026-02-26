@@ -149,7 +149,8 @@ TEST_F(TestStorageOss, test_del)
     STORAGE_LOG(INFO, "del file ", K(uri_del));
   }
   
-  ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, storage_info, test_content, strlen(test_content)));
+  ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, storage_info, test_content, strlen(test_content),
+                                               ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(OB_SUCCESS, util.get_file_length(uri, storage_info, read_size));
   
   ObArray <ObString> file_names;
@@ -188,22 +189,26 @@ TEST_F(TestStorageOss, test_get_file_size)
   int64_t file_length = -1;
   ObIODFileStat stat_info;
 
-  ASSERT_EQ(OB_SUCCESS, util.get_and_init_device(device_handle, storage_info, uri));
+  ASSERT_EQ(OB_SUCCESS, util.get_and_init_device(device_handle, storage_info, uri,
+                                                 ObStorageIdMod::get_default_id_mod()));
   //open with append mode
-  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd, storage_info, uri, OB_STORAGE_ACCESS_APPENDER));
+  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd, storage_info, uri, OB_STORAGE_ACCESS_APPENDER,
+                                                   ObStorageIdMod::get_default_id_mod()));
   for (int i = 0; i < max_repeat_times; i++ ) {
-    ASSERT_EQ(OB_SUCCESS, device_handle->write(fd, test_content, content_len, write_size));
+    ASSERT_EQ(OB_SUCCESS, device_handle->pwrite(fd, 0, content_len, test_content, write_size));
   }
   ASSERT_EQ(OB_SUCCESS, device_handle->stat(uri, stat_info));
   ASSERT_EQ(stat_info.size_, max_repeat_times*content_len);
   ASSERT_EQ(OB_SUCCESS, device_handle->close(fd));
-  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd_reader, storage_info, uri, OB_STORAGE_ACCESS_READER));
+  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd_reader, storage_info, uri, OB_STORAGE_ACCESS_READER,
+                                                   ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(OB_SUCCESS, device_handle->pread(fd_reader, 0, OB_MAX_URI_LENGTH, test_read_content, read_size));
   ASSERT_EQ(read_size, max_repeat_times*content_len);
   ASSERT_EQ(OB_SUCCESS, device_handle->close(fd_reader));
 
   //open with overwrite moed
-  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd, storage_info, uri, OB_STORAGE_ACCESS_OVERWRITER));
+  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd, storage_info, uri, OB_STORAGE_ACCESS_OVERWRITER,
+                                                   ObStorageIdMod::get_default_id_mod()));
   for (int i = 0; i < max_repeat_times; i++ ) {
     ASSERT_EQ(OB_SUCCESS, device_handle->write(fd, test_content, content_len, write_size));
   }
@@ -211,7 +216,8 @@ TEST_F(TestStorageOss, test_get_file_size)
   ASSERT_EQ(stat_info.size_, content_len);
   //fd, 0, buf_size, buf, read_size
   ASSERT_EQ(OB_SUCCESS, device_handle->close(fd));
-  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd_reader, storage_info, uri, OB_STORAGE_ACCESS_READER));
+  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(device_handle, fd_reader, storage_info, uri, OB_STORAGE_ACCESS_READER,
+                                                   ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(OB_SUCCESS, device_handle->pread(fd_reader, 0, OB_MAX_URI_LENGTH, test_read_content, read_size));
   ASSERT_EQ(read_size, content_len);
   ASSERT_EQ(OB_SUCCESS, device_handle->close(fd_reader));

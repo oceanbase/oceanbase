@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_pl_integer_checker.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -172,7 +171,7 @@ int ObExprPLIntegerChecker::calc(ObObj &result,
             OX (result.set_number(obj.get_type(), n));
           }
         } else {
-          result = obj;
+          OZ (deep_copy_obj(calc_buf, obj, result));
         }
       }
       break;
@@ -185,7 +184,7 @@ int ObExprPLIntegerChecker::calc(ObObj &result,
     case PL_POSITIVEN:
     case PL_SIGNTYPE: {
       OZ (check_range(obj, obj.get_type(), pls_range.range_));
-      OX (result = obj);
+      OZ (deep_copy_obj(calc_buf, obj, result));
       break;
     }
     default: {

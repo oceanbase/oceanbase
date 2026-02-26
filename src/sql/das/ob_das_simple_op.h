@@ -32,7 +32,8 @@ public:
   virtual int open_op() = 0;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) = 0;
   virtual int decode_task_result(ObIDASTaskResult *task_result) = 0;
-
+  virtual int record_task_result_to_rtdef() override { return OB_SUCCESS; }
+  virtual int assign_task_result(ObIDASTaskOp *other) override { return OB_SUCCESS; }
   virtual int release_op() override;
   virtual int init_task_info(uint32_t row_extend_size) override;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;

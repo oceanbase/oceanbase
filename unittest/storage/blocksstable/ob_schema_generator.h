@@ -48,6 +48,8 @@ int ObSchemaGenerator::generate_table(
   table_schema.set_block_size(2L * 1024);
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_micro_index_clustered(false);
+
   //init column
   char name[OB_MAX_FILE_NAME_LENGTH];
   memset(name, 0, sizeof(name));

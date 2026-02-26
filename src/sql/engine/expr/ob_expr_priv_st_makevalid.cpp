@@ -13,12 +13,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -64,27 +60,37 @@ int ObExprPrivSTMakeValid::eval_priv_st_makevalid(const ObExpr &expr, ObEvalCtx 
   int ret = OB_SUCCESS;
   bool is_null_result = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_ST_MAKEVALID);
   ObDatum *gis_datum1 = nullptr;
   omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs = nullptr;
   ObGeometry *geo = NULL;
-  if (OB_FAIL(expr.args_[0]->eval(ctx, gis_datum1))) {
+  if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[0], ctx, gis_datum1))) {
     LOG_WARN("eval geo args failed", K(ret));
+  }
+  ObGeoBoostAllocGuard guard(tenant_id);
+  lib::MemoryContext *mem_ctx = nullptr;
+  if (OB_FAIL(ret)) {
   } else if (gis_datum1->is_null()) {
     res.set_null();
-  } else if (OB_FAIL(ObGeoExprUtils::get_input_geometry(tmp_allocator, gis_datum1, ctx,
-                                                        expr.args_[0], srs_guard, N_PRIV_ST_MAKEVALID, srs, geo))) {
+  } else if (OB_FAIL(ObGeoExprUtils::get_input_geometry(N_PRIV_ST_MAKEVALID, tmp_allocator, gis_datum1, ctx,
+                                                        expr.args_[0], srs_guard, srs, geo))) {
     LOG_WARN("eval geo args failed", K(ret));
   } else if (geo->crs() != ObGeoCRS::Cartesian) {
     ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
     LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_MAKEVALID,
                   ObGeoTypeUtil::get_geo_name_by_type(geo->type()));
+  } else if (OB_FAIL(guard.init())) {
+    LOG_WARN("fail to init geo allocator guard", K(ret));
+  } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("fail to get mem ctx", K(ret));
   } else {
     bool isvalid_res = false;
     int correct_result;
     ObGeoNormalVal reason;
-    ObGeoEvalCtx gis_context(&tmp_allocator, srs);
+    ObGeoEvalCtx gis_context(*mem_ctx, srs);
     if (OB_FAIL(gis_context.append_geo_arg(geo))) {
       LOG_WARN("build geo gis context failed", K(ret));
     } else if (OB_FAIL(gis_context.append_val_arg(reason))) {
@@ -98,7 +104,7 @@ int ObExprPrivSTMakeValid::eval_priv_st_makevalid(const ObExpr &expr, ObEvalCtx 
         if (OB_FAIL(geo->do_visit(to_tree))) {
           LOG_WARN("fail to transfer geo1 to tree", K(ret));
         } else {
-          if (OB_FAIL(ObGeoExprUtils::make_valid_polygon(to_tree.get_geometry(), tmp_allocator, valid_geo))) {
+          if (OB_FAIL(ObGeoExprUtils::make_valid_polygon(to_tree.get_geometry(), *mem_ctx, valid_geo))) {
             LOG_WARN("make polygon valid failed", K(ret));
           } else if (OB_NOT_NULL(valid_geo) && !valid_geo->is_empty()) {
             geo = valid_geo;
@@ -121,6 +127,9 @@ int ObExprPrivSTMakeValid::eval_priv_st_makevalid(const ObExpr &expr, ObEvalCtx 
         res.set_string(res_wkb);
       }
     }
+  }
+  if (mem_ctx != nullptr) {
+    tmp_allocator.add_ext_used((*mem_ctx)->arena_used());
   }
 
   return ret;

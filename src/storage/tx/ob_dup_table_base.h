@@ -546,16 +546,27 @@ struct DupTableDurableLease
 {
   int64_t request_ts_;
   int64_t lease_interval_us_;
+  union  LeaseFlag {
+    int64_t flag_val_;
+    struct {
+      bool is_new_lease_;
+
+      TO_STRING_KV(K(is_new_lease_));
+    } flag_bit_;
+  } flag_;
 
   void reset()
   {
     request_ts_ = -1;
     lease_interval_us_ = -1;
+    memset(&flag_.flag_val_, 0, sizeof(flag_.flag_val_));
   }
+
+  bool is_valid() { return request_ts_ >= 0 && lease_interval_us_ >= 0; }
 
   DupTableDurableLease() { reset(); }
 
-  TO_STRING_KV(K(request_ts_), K(lease_interval_us_));
+  TO_STRING_KV(K(request_ts_), K(lease_interval_us_), K(flag_.flag_bit_));
 
   OB_UNIS_VERSION(1);
 };
@@ -866,7 +877,7 @@ public:
     OB_UNIS_VERSION(1);
   };
 
-  TO_STRING_KV(K(dup_ls_meta_), K(lease_log_rec_scn_), K(start_replay_scn_),
+  TO_STRING_KV(K(dup_ls_meta_), K(lease_log_rec_scn_), K(tablet_log_rec_scn_), K(start_replay_scn_),
                K(readable_ckpt_base_scn_is_accurate_));
 
 public:
@@ -895,6 +906,7 @@ public:
   {
     dup_ls_meta_.reset();
     lease_log_rec_scn_.reset();
+    tablet_log_rec_scn_.reset();
     start_replay_scn_.reset();
     readable_ckpt_base_scn_is_accurate_ = true;
   }
@@ -903,6 +915,7 @@ private:
   SpinRWLock ckpt_rw_lock_;
   ObLSDupTableMeta dup_ls_meta_;
   share::SCN lease_log_rec_scn_;
+  share::SCN tablet_log_rec_scn_;
   share::SCN start_replay_scn_;
   // ckpt_base_scn means, when replay dup log with base_scn,
   // this node cotain all readable set the same with leader.
@@ -1021,6 +1034,7 @@ public:
   int replay_succ();
 
   void print_statistics_log();
+  const char *get_cb_name() const override { return "DupTableLogOperator"; }
 
 public:
   void set_logging_scn(const share::SCN &scn);
@@ -1443,9 +1457,10 @@ public:
   {
     redo_sync_retry_set_.destroy();
     in_thread_pool_ = false;
+    is_created_ = false;
   }
   void destroy() { reset(); }
-  int init();
+  // int init();
   int iter_tx_retry_redo_sync();
   int push_back_redo_sync_object(ObTransID tx_id, share::ObLSID ls_id);
   void clear_in_thread_pool_flag() { ATOMIC_STORE(&in_thread_pool_, false);}
@@ -1453,6 +1468,7 @@ public:
 public:
   RedoSyncRetrySet redo_sync_retry_set_;
   bool in_thread_pool_;
+  bool is_created_;
 };
 
 } // namespace transaction

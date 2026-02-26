@@ -61,12 +61,12 @@ update t1 set a=a+100 where a > 0;
 
 EXPLAIN BASIC update t1 set a=a+100 where a=1 and a=2;
 Query Plan
-============================
-|ID|OPERATOR          |NAME|
-----------------------------
-|0 |UPDATE            |    |
-|1 |└─TABLE RANGE SCAN|t1  |
-============================
+=====================
+|ID|OPERATOR   |NAME|
+---------------------
+|0 |UPDATE     |    |
+|1 |└─TABLE GET|t1  |
+=====================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
@@ -311,29 +311,38 @@ Outputs & filters:
 insert into t1 values(1, 1), (2, 2);
 EXPLAIN BASIC update t1 set b=b+1 where a>0;
 Query Plan
-===========================================
-|ID|OPERATOR                     |NAME    |
--------------------------------------------
-|0 |DISTRIBUTED UPDATE           |        |
-|1 |└─DISTRIBUTED TABLE FULL SCAN|t1(gkey)|
-===========================================
+=========================================
+|ID|OPERATOR                   |NAME    |
+-----------------------------------------
+|0 |DISTRIBUTED UPDATE         |        |
+|1 |└─PX COORDINATOR           |        |
+|2 |  └─EXCHANGE OUT DISTR     |:EX10000|
+|3 |    └─PX PARTITION ITERATOR|        |
+|4 |      └─TABLE RANGE SCAN   |t1      |
+=========================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.a, t1.b)}, {gkey: (t1.b, t1.a)})}]),
       update([t1.b=column_conv(INT,PS:(11,0),NULL,cast(t1.b + 1, INT(-1, 0)))])
-  1 - output([t1.a], [t1.b]), filter([t1.a > 0]), rowset=16
-      access([t1.a], [t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=true, filter_before_indexback[false], 
-      range_key([t1.b], [t1.a]), range(MIN,MIN ; MAX,MAX)always true
+  1 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  2 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      dop=1
+  3 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      force partition granule
+  4 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      access([t1.a], [t1.b]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(0 ; MAX), 
+      range_cond([t1.a > 0])
 update t1 set b=b+1 where a>0;
 EXPLAIN BASIC select * from t1;
 Query Plan
-=========================================
-|ID|OPERATOR                   |NAME    |
------------------------------------------
-|0 |DISTRIBUTED TABLE FULL SCAN|t1(gkey)|
-=========================================
+=============================
+|ID|OPERATOR       |NAME    |
+-----------------------------
+|0 |TABLE FULL SCAN|t1(gkey)|
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), rowset=16
@@ -369,29 +378,38 @@ Outputs & filters:
 insert into t1 values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
 EXPLAIN BASIC update t1 set b=b+1 where a>0;
 Query Plan
-===========================================
-|ID|OPERATOR                     |NAME    |
--------------------------------------------
-|0 |DISTRIBUTED UPDATE           |        |
-|1 |└─DISTRIBUTED TABLE FULL SCAN|t1(gkey)|
-===========================================
+=========================================
+|ID|OPERATOR                   |NAME    |
+-----------------------------------------
+|0 |DISTRIBUTED UPDATE         |        |
+|1 |└─PX COORDINATOR           |        |
+|2 |  └─EXCHANGE OUT DISTR     |:EX10000|
+|3 |    └─PX PARTITION ITERATOR|        |
+|4 |      └─TABLE RANGE SCAN   |t1      |
+=========================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.a, t1.b)}, {gkey: (t1.b, t1.a)})}]),
       update([t1.b=column_conv(INT,PS:(11,0),NULL,cast(t1.b + 1, INT(-1, 0)))])
-  1 - output([t1.a], [t1.b]), filter([t1.a > 0]), rowset=16
-      access([t1.a], [t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=true, filter_before_indexback[false], 
-      range_key([t1.b], [t1.a]), range(MIN,MIN ; MAX,MAX)always true
+  1 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  2 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      dop=1
+  3 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      force partition granule
+  4 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      access([t1.a], [t1.b]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(0 ; MAX), 
+      range_cond([t1.a > 0])
 update t1 set b=b+1 where a>0;
 EXPLAIN BASIC select * from t1;
 Query Plan
-=========================================
-|ID|OPERATOR                   |NAME    |
------------------------------------------
-|0 |DISTRIBUTED TABLE FULL SCAN|t1(gkey)|
-=========================================
+=============================
+|ID|OPERATOR       |NAME    |
+-----------------------------
+|0 |TABLE FULL SCAN|t1(gkey)|
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), rowset=16
@@ -430,18 +448,26 @@ Outputs & filters:
 insert into t1 values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
 EXPLAIN BASIC update /*+index(t1 gkey)*/ t1 set b=b+1 where b>0 and b<5;
 Query Plan
-============================================
-|ID|OPERATOR                      |NAME    |
---------------------------------------------
-|0 |DISTRIBUTED UPDATE            |        |
-|1 |└─DISTRIBUTED TABLE RANGE SCAN|t1(gkey)|
-============================================
+=========================================
+|ID|OPERATOR                   |NAME    |
+-----------------------------------------
+|0 |DISTRIBUTED UPDATE         |        |
+|1 |└─PX COORDINATOR           |        |
+|2 |  └─EXCHANGE OUT DISTR     |:EX10000|
+|3 |    └─PX PARTITION ITERATOR|        |
+|4 |      └─TABLE RANGE SCAN   |t1(gkey)|
+=========================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.a, t1.b)}, {gkey: (t1.b, t1.a)})}]),
       update([t1.b=column_conv(INT,PS:(11,0),NULL,cast(t1.b + 1, INT(-1, 0)))])
   1 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  2 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      dop=1
+  3 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      force partition granule
+  4 - output([t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.a], [t1.b]), partitions(p[0-1])
       is_index_back=false, is_global_index=true, 
       range_key([t1.b], [t1.a]), range(0,MAX ; 5,MIN), 
@@ -706,8 +732,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.lfdnr, t1.ticket, t1.client, t1.replyto, t1.subject, t1.timestamp, t1.tstamp, t1.status, t1.type, t1.assignment, t1.fupcount,
        t1.parent, t1.activity, t1.priority, t1.cc, t1.bcc, t1.body, t1.comment, t1.header)})}]),
-      update([t1.status=column_conv(INT,PS:(3,0),NOT NULL,cast(1, INT(-1, 0)))], [t1.tstamp=column_conv(TIMESTAMP,PS:(19,0),NOT NULL,cast(current_timestamp(),
-       TIMESTAMP(19, 0)))])
+      update([t1.status=column_conv(INT,PS:(3,0),NOT NULL,1)], [t1.tstamp=column_conv(TIMESTAMP,PS:(19,0),NOT NULL,cast(current_timestamp(), TIMESTAMP(19,
+       0)))])
   1 - output([t1.lfdnr], [t1.status], [t1.tstamp], [t1.ticket], [t1.client], [t1.replyto], [t1.subject], [t1.timestamp], [t1.type], [t1.assignment], [t1.fupcount],
        [t1.parent], [t1.activity], [t1.priority], [t1.cc], [t1.bcc], [t1.body], [t1.comment], [t1.header]), filter(nil), rowset=16
       access([t1.lfdnr], [t1.status], [t1.tstamp], [t1.ticket], [t1.client], [t1.replyto], [t1.subject], [t1.timestamp], [t1.type], [t1.assignment], [t1.fupcount],
@@ -789,7 +815,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b)})}]),
-      update([t1.b=column_conv(INT,PS:(11,0),NOT NULL,cast(99, INT(-1, 0)))])
+      update([t1.b=column_conv(INT,PS:(11,0),NOT NULL,99)])
   1 - output([t1.__pk_increment], [t1.a], [t1.b]), filter(nil), rowset=16
       sort_keys([t1.b, ASC]), topn(1)
   2 - output([t1.__pk_increment], [t1.b], [t1.a]), filter(nil), rowset=16
@@ -844,7 +870,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b)})}]),
-      update([t1.b=column_conv(INT,PS:(11,0),NOT NULL,cast(100, INT(-1, 0)))])
+      update([t1.b=column_conv(INT,PS:(11,0),NOT NULL,100)])
   1 - output([t1.__pk_increment], [t1.a], [t1.b]), filter(nil), rowset=16
       sort_keys([t1.b, DESC]), topn(2)
   2 - output([t1.__pk_increment], [t1.b], [t1.a]), filter(nil), rowset=16
@@ -990,7 +1016,8 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.id_param, t1.nom_option, t1.valid)})}]),
-      update([t1.nom_option=column_conv(CHAR,utf8mb4_general_ci,length:40,NOT NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), 'test'), CHAR(1048576)))])
+      update([t1.nom_option=column_conv(CHAR,utf8mb4_general_ci,length:40,NOT NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast('test', VARCHAR(1048576))),
+       CHAR(1048576)))])
   1 - output([t1.__pk_increment], [t1.nom_option], [t1.id_param], [t1.valid]), filter([t1.valid = 1]), rowset=16
       access([t1.__pk_increment], [t1.nom_option], [t1.id_param], [t1.valid]), partitions(p0)
       limit(1), offset(nil), is_index_back=true, is_global_index=false, filter_before_indexback[false], 
@@ -1290,8 +1317,37 @@ Outputs & filters:
   1 - output([__values.colC], [__values.colA], [__values.colD], [__values.colE], [__values.colF]), filter(nil)
       values({3, 4433, 10005, 492, 500})
 INSERT INTO t2 VALUES (3,4433,10005,492,500);
+EXPLAIN BASIC UPDATE t2,t1 set t2.colE = t2.colE + 1,colF=0 WHERE t1.colA = t2.colA AND (t1.colB & 4096) > 0 AND (colE + 1) < colF;
+Query Plan
+===============================
+|ID|OPERATOR             |NAME|
+-------------------------------
+|0 |UPDATE               |    |
+|1 |└─MERGE JOIN         |    |
+|2 |  ├─TABLE FULL SCAN  |t1  |
+|3 |  └─SORT             |    |
+|4 |    └─TABLE FULL SCAN|t2  |
+===============================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{t2: ({t2: (t2.colC, t2.colA, t2.colD, t2.colE, t2.colF)})}]),
+      update([t2.colE=column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t2.colE + 1, INT UNSIGNED(-1, 0)))], [t2.colF=column_conv(INT UNSIGNED,PS:(10,0),
+      NOT NULL,0)])
+  1 - output([t2.colC], [t2.colA], [t2.colD], [t2.colE], [t2.colF]), filter(nil), rowset=16
+      equal_conds([t1.colA = t2.colA]), other_conds(nil)
+      merge_directions([ASC])
+  2 - output([t1.colA]), filter([(T_OP_BIT_AND, cast(t1.colB, BIGINT(-1, 0)), 4096) > 0]), rowset=16
+      access([t1.colA], [t1.colB]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.colA]), range(MIN ; MAX)always true
+  3 - output([t2.colC], [t2.colA], [t2.colD], [t2.colE], [t2.colF]), filter(nil), rowset=16
+      sort_keys([t2.colA, ASC])
+  4 - output([t2.colC], [t2.colA], [t2.colD], [t2.colE], [t2.colF]), filter([t2.colE + 1 < t2.colF]), rowset=16
+      access([t2.colC], [t2.colA], [t2.colD], [t2.colE], [t2.colF]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.colC], [t2.colA], [t2.colD], [t2.colE]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 UPDATE t2,t1 set t2.colE = t2.colE + 1,colF=0 WHERE t1.colA = t2.colA AND (t1.colB & 4096) > 0 AND (colE + 1) < colF;
-ERROR 23000: Duplicate entry '3-4433-10005-493' for key 'PRIMARY'
 
 EXPLAIN BASIC SELECT * FROM t2;
 Query Plan
@@ -1310,15 +1366,15 @@ SELECT * FROM t2;
 +------+------+-------+------+------+
 | colC | colA | colD  | colE | colF |
 +------+------+-------+------+------+
-|    3 | 4433 | 10005 |  492 |  500 |
-|    3 | 4433 | 10005 |  493 |  500 |
-|    3 | 4433 | 10005 |  494 |  500 |
-|    3 | 4433 | 10005 |  495 |  500 |
-|    3 | 4433 | 10005 |  496 |  500 |
-|    3 | 4433 | 10005 |  497 |  500 |
-|    3 | 4433 | 10009 |  494 |  500 |
-|    3 | 4433 | 10011 |  494 |  500 |
-|    3 | 4433 | 10013 |  489 |  500 |
+|    3 | 4433 | 10005 |  493 |    0 |
+|    3 | 4433 | 10005 |  494 |    0 |
+|    3 | 4433 | 10005 |  495 |    0 |
+|    3 | 4433 | 10005 |  496 |    0 |
+|    3 | 4433 | 10005 |  497 |    0 |
+|    3 | 4433 | 10005 |  498 |    0 |
+|    3 | 4433 | 10009 |  495 |    0 |
+|    3 | 4433 | 10011 |  495 |    0 |
+|    3 | 4433 | 10013 |  490 |    0 |
 +------+------+-------+------+------+
 DROP TABLE t1;
 DROP TABLE t2;
@@ -1356,7 +1412,8 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t2: ({t2: (t2.__pk_increment, t2.c1, t2.c2)}), hash_distinct}]),
-      update([t2.c2=column_conv(CHAR,utf8mb4_general_ci,length:6,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), 't2c2-1'), CHAR(1048576)))])
+      update([t2.c2=column_conv(CHAR,utf8mb4_general_ci,length:6,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast('t2c2-1', VARCHAR(1048576))),
+       CHAR(1048576)))])
   1 - output([t2.__pk_increment], [t2.c1], [t2.c2]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   2 - output([t2.__pk_increment], [t2.c1], [t2.c2]), filter(nil), rowset=16
@@ -1382,7 +1439,8 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t2: ({t2: (t2.__pk_increment, t2.c1, t2.c2)}), hash_distinct}]),
-      update([t2.c2=column_conv(CHAR,utf8mb4_general_ci,length:6,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), 't2c2-1'), CHAR(1048576)))])
+      update([t2.c2=column_conv(CHAR,utf8mb4_general_ci,length:6,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast('t2c2-1', VARCHAR(1048576))),
+       CHAR(1048576)))])
   1 - output([t2.__pk_increment], [t2.c1], [t2.c2]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   2 - output([t2.__pk_increment], [t2.c1], [t2.c2]), filter(nil), rowset=16
@@ -1533,7 +1591,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b, t1.__substr5_17)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.a)], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b)], [column_conv(VARCHAR,
-      utf8mb4_general_ci,length:5,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b), 1, 5))])
+      utf8mb4_general_ci,length:5,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:5,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b),
+       1, 5)))])
   1 - output([__values.a], [__values.b]), filter(nil)
       values({1, 'abcd1e'})
 insert into t1 values ( 1, 'abcd1e');
@@ -1550,7 +1609,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b, t1.__substr5_17)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.a)], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b)], [column_conv(VARCHAR,
-      utf8mb4_general_ci,length:5,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b), 1, 5))])
+      utf8mb4_general_ci,length:5,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:5,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b),
+       1, 5)))])
   1 - output([__values.a], [__values.b]), filter(nil)
       values({2, 'abcd2e'})
 insert into t1 values ( 2, 'abcd2e');
@@ -1601,9 +1661,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b, t1.__substr5_17)}), hash_distinct}]),
       update([t1.a=column_conv(INT,PS:(11,0),NULL,t2.a)])
-  1 - output([t1.__pk_increment], [t1.a], [t1.b], [substr(t1.b, 1, 5)], [t2.a]), filter(nil), rowset=16
+  1 - output([t1.__pk_increment], [t1.a], [t1.b], [column_conv(VARCHAR,utf8mb4_general_ci,length:5,NULL,substr(t1.b, 1, 5))], [t2.a]), filter(nil), rowset=16
       equal_conds([t2.b = t1.b]), other_conds(nil)
-  2 - output([t1.__pk_increment], [t1.b], [substr(t1.b, 1, 5)], [t1.a]), filter(nil), rowset=16
+  2 - output([t1.__pk_increment], [t1.b], [column_conv(VARCHAR,utf8mb4_general_ci,length:5,NULL,substr(t1.b, 1, 5))], [t1.a]), filter(nil), rowset=16
       access([t1.__pk_increment], [t1.b], [t1.a]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -1835,7 +1895,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b)})}]),
-      update([t1.a=column_conv(INT,PS:(11,0),NULL,cast(9999, INT(-1, 0)))])
+      update([t1.a=column_conv(INT,PS:(11,0),NULL,9999)])
   1 - output([t1.__pk_increment], [t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.__pk_increment], [t1.a], [t1.b]), partitions(p0)
       limit(1), offset(nil), is_index_back=true, is_global_index=false, 
@@ -1853,7 +1913,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b)})}]),
-      update([t1.b=column_conv(INT,PS:(11,0),NULL,cast(9999, INT(-1, 0)))])
+      update([t1.b=column_conv(INT,PS:(11,0),NULL,9999)])
   1 - output([t1.__pk_increment], [t1.b], [t1.a]), filter(nil), rowset=16
       access([t1.__pk_increment], [t1.b], [t1.a]), partitions(p0)
       limit(1), offset(nil), is_index_back=true, is_global_index=false, 
@@ -1945,7 +2005,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b)})}]),
-      update([t1.a=column_conv(INT,PS:(11,0),NULL,cast(t1.a + 10, INT(-1, 0)))], [t1.b=column_conv(INT,PS:(11,0),NULL,cast(1, INT(-1, 0)))])
+      update([t1.a=column_conv(INT,PS:(11,0),NULL,cast(t1.a + 10, INT(-1, 0)))], [t1.b=column_conv(INT,PS:(11,0),NULL,1)])
   1 - output([t1.__pk_increment], [t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.__pk_increment], [t1.a], [t1.b]), partitions(p0)
       limit(3), offset(nil), is_index_back=true, is_global_index=false, 
@@ -1963,7 +2023,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b)})}]),
-      update([t1.a=column_conv(INT,PS:(11,0),NULL,cast(t1.a + 11, INT(-1, 0)))], [t1.b=column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))])
+      update([t1.a=column_conv(INT,PS:(11,0),NULL,cast(t1.a + 11, INT(-1, 0)))], [t1.b=column_conv(INT,PS:(11,0),NULL,2)])
   1 - output([t1.__pk_increment], [t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.__pk_increment], [t1.a], [t1.b]), partitions(p0)
       limit(3), offset(nil), is_index_back=true, is_global_index=false, 
@@ -1981,7 +2041,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b)})}]),
-      update([t1.a=column_conv(INT,PS:(11,0),NULL,cast(t1.a + 12, INT(-1, 0)))], [t1.b=column_conv(INT,PS:(11,0),NULL,cast(3, INT(-1, 0)))])
+      update([t1.a=column_conv(INT,PS:(11,0),NULL,cast(t1.a + 12, INT(-1, 0)))], [t1.b=column_conv(INT,PS:(11,0),NULL,3)])
   1 - output([t1.__pk_increment], [t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.__pk_increment], [t1.a], [t1.b]), partitions(p0)
       limit(3), offset(nil), is_index_back=true, is_global_index=false, 
@@ -2029,7 +2089,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.f1)})}]), 
-      column_values([T_HIDDEN_PK], [column_conv(DATE,PS:(10,0),NOT NULL,__values.f1)])
+      column_values([T_HIDDEN_PK], [column_conv(MYSQL_DATE,PS:(10,0),NOT NULL,__values.f1)])
   1 - output([__values.f1]), filter(nil)
       values({'2000-01-01'}, {'0000-00-00'})
 insert into t1 values('2000-01-01'),('0000-00-00');
@@ -2045,7 +2105,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.f1)})}]),
-      update([t1.f1=column_conv(DATE,PS:(10,0),NOT NULL,cast('2002-02-02', DATE(-1, -1)))])
+      update([t1.f1=column_conv(MYSQL_DATE,PS:(10,0),NOT NULL,'2002-02-02')])
   1 - output([t1.__pk_increment], [t1.f1]), filter([t1.f1 = '0000-00-00']), rowset=16
       access([t1.__pk_increment], [t1.f1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
@@ -2119,7 +2179,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t2: ({t2: (t2.__pk_increment, t2.f2)})}]),
-      update([t2.f2=column_conv(INT,PS:(11,0),NULL,cast(1, INT(-1, 0)))])
+      update([t2.f2=column_conv(INT,PS:(11,0),NULL,1)])
   1 - output([t2.__pk_increment], [t2.f2]), filter(nil), rowset=16
       access([t2.__pk_increment], [t2.f2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -2137,7 +2197,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.f1)})}]),
-      update([t1.f1=column_conv(INT,PS:(11,0),NULL,cast(1, INT(-1, 0)))])
+      update([t1.f1=column_conv(INT,PS:(11,0),NULL,1)])
   1 - output([t1.__pk_increment], [t1.f1]), filter([t1.f1 = 3]), rowset=16
       access([t1.__pk_increment], [t1.f1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
@@ -2174,7 +2234,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.f1, t1.*f2)})}]),
-      update([t1.*f2=column_conv(INT,PS:(11,0),NULL,cast(1, INT(-1, 0)))])
+      update([t1.*f2=column_conv(INT,PS:(11,0),NULL,1)])
   1 - output([t1.__pk_increment], [t1.*f2], [t1.f1]), filter(nil), rowset=16
       access([t1.__pk_increment], [t1.*f2], [t1.f1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -2208,8 +2268,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]), 
       column_values([column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t1.request_id.nextval(), INT UNSIGNED(-1, 0)))], [column_conv(VARCHAR,utf8mb4_general_ci,
-      length:12,NULL,__values.user_id)], [column_conv(DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,NULL,
-      cast(NULL, VARCHAR(1048576)))])
+      length:12,NULL,__values.user_id)], [column_conv(MYSQL_DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,
+      NULL,cast(NULL, VARCHAR(1048576)))])
   1 - output([__values.user_id]), filter(nil)
       values({'user1'})
 INSERT INTO t1 (user_id) VALUES ('user1');
@@ -2226,8 +2286,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]), 
       column_values([column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t1.request_id.nextval(), INT UNSIGNED(-1, 0)))], [column_conv(VARCHAR,utf8mb4_general_ci,
-      length:12,NULL,__values.user_id)], [column_conv(DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,NULL,
-      cast(NULL, VARCHAR(1048576)))])
+      length:12,NULL,__values.user_id)], [column_conv(MYSQL_DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,
+      NULL,cast(NULL, VARCHAR(1048576)))])
   1 - output([__values.user_id]), filter(nil)
       values({'user1'})
 INSERT INTO t1 (user_id) VALUES ('user1');
@@ -2244,8 +2304,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]), 
       column_values([column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t1.request_id.nextval(), INT UNSIGNED(-1, 0)))], [column_conv(VARCHAR,utf8mb4_general_ci,
-      length:12,NULL,__values.user_id)], [column_conv(DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,NULL,
-      cast(NULL, VARCHAR(1048576)))])
+      length:12,NULL,__values.user_id)], [column_conv(MYSQL_DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,
+      NULL,cast(NULL, VARCHAR(1048576)))])
   1 - output([__values.user_id]), filter(nil)
       values({'user1'})
 INSERT INTO t1 (user_id) VALUES ('user1');
@@ -2262,8 +2322,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]), 
       column_values([column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t1.request_id.nextval(), INT UNSIGNED(-1, 0)))], [column_conv(VARCHAR,utf8mb4_general_ci,
-      length:12,NULL,__values.user_id)], [column_conv(DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,NULL,
-      cast(NULL, VARCHAR(1048576)))])
+      length:12,NULL,__values.user_id)], [column_conv(MYSQL_DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,
+      NULL,cast(NULL, VARCHAR(1048576)))])
   1 - output([__values.user_id]), filter(nil)
       values({'user1'})
 INSERT INTO t1 (user_id) VALUES ('user1');
@@ -2280,18 +2340,18 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]), 
       column_values([column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t1.request_id.nextval(), INT UNSIGNED(-1, 0)))], [column_conv(VARCHAR,utf8mb4_general_ci,
-      length:12,NULL,__values.user_id)], [column_conv(DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,NULL,
-      cast(NULL, VARCHAR(1048576)))])
+      length:12,NULL,__values.user_id)], [column_conv(MYSQL_DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,
+      NULL,cast(NULL, VARCHAR(1048576)))])
   1 - output([__values.user_id]), filter(nil)
       values({'user1'})
 INSERT INTO t1 (user_id) VALUES ('user1');
 EXPLAIN BASIC SELECT user_id FROM t1 WHERE request_id=9999999999999;
 Query Plan
-==========================
-|ID|OPERATOR        |NAME|
---------------------------
-|0 |TABLE RANGE SCAN|t1  |
-==========================
+===================
+|ID|OPERATOR |NAME|
+-------------------
+|0 |TABLE GET|t1  |
+===================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.user_id]), filter(nil), rowset=16
@@ -2306,11 +2366,11 @@ SELECT user_id FROM t1 WHERE request_id=9999999999999;
 +---------+
 EXPLAIN BASIC SELECT user_id FROM t1 WHERE request_id=999999999999999999999999999999;
 Query Plan
-==========================
-|ID|OPERATOR        |NAME|
---------------------------
-|0 |TABLE RANGE SCAN|t1  |
-==========================
+===================
+|ID|OPERATOR |NAME|
+-------------------
+|0 |TABLE GET|t1  |
+===================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.user_id]), filter(nil), rowset=16
@@ -2325,17 +2385,17 @@ SELECT user_id FROM t1 WHERE request_id=999999999999999999999999999999;
 +---------+
 EXPLAIN BASIC UPDATE t1 SET user_id=null WHERE request_id=9999999999999;
 Query Plan
-============================
-|ID|OPERATOR          |NAME|
-----------------------------
-|0 |UPDATE            |    |
-|1 |└─TABLE RANGE SCAN|t1  |
-============================
+=====================
+|ID|OPERATOR   |NAME|
+---------------------
+|0 |UPDATE     |    |
+|1 |└─TABLE GET|t1  |
+=====================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]),
-      update([t1.user_id=column_conv(VARCHAR,utf8mb4_general_ci,length:12,NULL,cast(NULL, VARCHAR(1048576)))])
+      update([t1.user_id=column_conv(VARCHAR,utf8mb4_general_ci,length:12,NULL,NULL)])
   1 - output([t1.request_id], [t1.user_id], [t1.time_stamp], [t1.ip_address]), filter(nil), rowset=16
       access([t1.request_id], [t1.user_id], [t1.time_stamp], [t1.ip_address]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -2344,17 +2404,17 @@ Outputs & filters:
 UPDATE t1 SET user_id=null WHERE request_id=9999999999999;
 EXPLAIN BASIC UPDATE t1 SET user_id=null WHERE request_id=999999999999999999999999999999;
 Query Plan
-============================
-|ID|OPERATOR          |NAME|
-----------------------------
-|0 |UPDATE            |    |
-|1 |└─TABLE RANGE SCAN|t1  |
-============================
+=====================
+|ID|OPERATOR   |NAME|
+---------------------
+|0 |UPDATE     |    |
+|1 |└─TABLE GET|t1  |
+=====================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]),
-      update([t1.user_id=column_conv(VARCHAR,utf8mb4_general_ci,length:12,NULL,cast(NULL, VARCHAR(1048576)))])
+      update([t1.user_id=column_conv(VARCHAR,utf8mb4_general_ci,length:12,NULL,NULL)])
   1 - output([t1.request_id], [t1.user_id], [t1.time_stamp], [t1.ip_address]), filter(nil), rowset=16
       access([t1.request_id], [t1.user_id], [t1.time_stamp], [t1.ip_address]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -2566,7 +2626,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t2: ({t2: (t2.__pk_increment, t2.a, t2.b, t2.c, t2.d)})}]),
       update([t2.d=column_conv(CHAR,utf8mb4_general_ci,length:2,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(10, VARCHAR(1048576))), CHAR(1048576)))])
-  1 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(2, 0))]), rowset=16
+  1 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(20, 0))]), rowset=16
       access([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), partitions(p0)
       limit(5), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
@@ -2589,7 +2649,7 @@ Outputs & filters:
       update([t2.d=column_conv(CHAR,utf8mb4_general_ci,length:2,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(10, VARCHAR(1048576))), CHAR(1048576)))])
   1 - output([t2.__pk_increment], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       sort_keys([t2.a, ASC], [t2.c, ASC]), topn(5)
-  2 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(2, 0))]), rowset=16
+  2 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(20, 0))]), rowset=16
       access([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
@@ -2622,24 +2682,24 @@ ROLLBACK;
 START TRANSACTION;
 EXPLAIN BASIC UPDATE t2 SET c = 10 ORDER BY a, b DESC LIMIT 5;
 Query Plan
-=================================
-|ID|OPERATOR           |NAME    |
----------------------------------
-|0 |UPDATE             |        |
-|1 |└─TOP-N SORT       |        |
-|2 |  └─TABLE FULL SCAN|t2(idx2)|
-=================================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |UPDATE             |    |
+|1 |└─TOP-N SORT       |    |
+|2 |  └─TABLE FULL SCAN|t2  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t2: ({t2: (t2.__pk_increment, t2.a, t2.b, t2.c, t2.d)})}]),
       update([t2.c=column_conv(CHAR,utf8mb4_general_ci,length:2,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(10, VARCHAR(1048576))), CHAR(1048576)))])
   1 - output([t2.__pk_increment], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      sort_keys([t2.a, ASC], [t2.b, DESC]), topn(5), prefix_pos(1)
+      sort_keys([t2.a, ASC], [t2.b, DESC]), topn(5)
   2 - output([t2.__pk_increment], [t2.c], [t2.a], [t2.b], [t2.d]), filter(nil), rowset=16
       access([t2.__pk_increment], [t2.c], [t2.a], [t2.b], [t2.d]), partitions(p0)
-      is_index_back=true, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 UPDATE t2 SET c = 10 ORDER BY a, b DESC LIMIT 5;
 ROLLBACK;
 DROP TABLE t1, t2;
@@ -2777,7 +2837,8 @@ Outputs & filters:
        table10_bigint.col_char_23_unique_index, table10_bigint.col_char_41_key, table10_bigint.col_char_38_unique_index, table10_bigint.col_char_44_unique_index,
        table10_bigint.col_bigint_key, table10_bigint.col_char_24_key, table10_bigint.col_char_27_key, table10_bigint.col_char_38_key, table10_bigint.col_char_47,
        table10_bigint.col_char_31_key, table10_bigint.col_char_34)})}]),
-      update([table10_bigint.col_char_20=column_conv(CHAR,utf8mb4_general_ci,length:20,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), 'a'), CHAR(1048576)))])
+      update([table10_bigint.col_char_20=column_conv(CHAR,utf8mb4_general_ci,length:20,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast('a', VARCHAR(1048576))),
+       CHAR(1048576)))])
   1 - output([table10_bigint.pk], [table10_bigint.col_char_20], [table10_bigint.col_char_34_key], [table10_bigint.col_char_24], [table10_bigint.col_char_48_unique_index],
        [table10_bigint.col_char_26_unique_index], [table10_bigint.col_char_36], [table10_bigint.col_char_26], [table10_bigint.col_char_37], [table10_bigint.col_char_29_key],
        [table10_bigint.col_char_20_unique_index], [table10_bigint.col_char_39], [table10_bigint.col_char_23], [table10_bigint.col_char_28_key], [table10_bigint.col_char_45],
@@ -3176,20 +3237,19 @@ Outputs & filters:
        gf_ar_mthly_bill.tp, gf_ar_mthly_bill.anl_dmsn4, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.bill_no)}, {idx_tnt_inst_id_inst_id_tp_anl_dmsn_2_bill_mth: 
       (gf_ar_mthly_bill.tnt_inst_id, gf_ar_mthly_bill.inst_id, gf_ar_mthly_bill.tp, gf_ar_mthly_bill.anl_dmsn2, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.bill_no)})}]),
       
-      update([gf_ar_mthly_bill.bill_st=column_conv(VARCHAR,utf8mb4_bin,length:2,NOT NULL,cast('01', VARCHAR(1048576)))], [gf_ar_mthly_bill.gmt_pay=column_conv(TIMESTAMP,
-      PS:(25,6),NULL,cast('2021-05-17 12:09:35', TIMESTAMP(-1, -1)))], [gf_ar_mthly_bill.clcn_bsc_amt=column_conv(DECIMAL_INT,PS:(25,4),NULL,cast('123.12', DECIMAL_INT(25,
-       4)))], [gf_ar_mthly_bill.bill_amt=column_conv(BIGINT,PS:(20,0),NOT NULL,1)], [gf_ar_mthly_bill.rcvd_amt=column_conv(BIGINT,PS:(20,0),NOT NULL,2)], [gf_ar_mthly_bill.tax_amt=column_conv(BIGINT,
-      PS:(20,0),NOT NULL,3)], [gf_ar_mthly_bill.exn_inf=column_conv(VARCHAR,utf8mb4_bin,length:4000,NULL,cast('123456', VARCHAR(1048576)))], [gf_ar_mthly_bill.anl_dmsn1=column_conv(VARCHAR,
-      utf8mb4_bin,length:1000,NULL,cast('123456', VARCHAR(1048576)))], [gf_ar_mthly_bill.anl_dmsn2=column_conv(VARCHAR,utf8mb4_bin,length:1000,NULL,cast('234567',
-       VARCHAR(1048576)))], [gf_ar_mthly_bill.anl_dmsn3=column_conv(VARCHAR,utf8mb4_bin,length:1000,NULL,cast('345678', VARCHAR(1048576)))], [gf_ar_mthly_bill.anl_dmsn4=column_conv(VARCHAR,
-      utf8mb4_bin,length:1000,NULL,cast('456789', VARCHAR(1048576)))], [gf_ar_mthly_bill.last_moder=column_conv(VARCHAR,utf8mb4_bin,length:32,NOT NULL,cast('ylc',
-       VARCHAR(1048576)))], [gf_ar_mthly_bill.adj_amt=column_conv(BIGINT,PS:(20,0),NOT NULL,4)], [gf_ar_mthly_bill.svc_amt=column_conv(BIGINT,PS:(20,0),NULL,5)],
-       [gf_ar_mthly_bill.chk_st=column_conv(VARCHAR,utf8mb4_bin,length:2,NULL,cast('06', VARCHAR(1048576)))], [gf_ar_mthly_bill.inv_amt=column_conv(BIGINT,PS:(20,
-      0),NULL,6)], [gf_ar_mthly_bill.writingoff_amt=column_conv(BIGINT,PS:(20,0),NULL,7)], [gf_ar_mthly_bill.wrtof_dtl_cnt=column_conv(BIGINT,PS:(20,0),NULL,9)],
+      update([gf_ar_mthly_bill.bill_st=column_conv(VARCHAR,utf8mb4_bin,length:2,NOT NULL,'01')], [gf_ar_mthly_bill.gmt_pay=column_conv(TIMESTAMP,PS:(25,
+      6),NULL,'2021-05-17 12:09:35')], [gf_ar_mthly_bill.clcn_bsc_amt=column_conv(DECIMAL_INT,PS:(25,4),NULL,'123.12')], [gf_ar_mthly_bill.bill_amt=column_conv(BIGINT,
+      PS:(20,0),NOT NULL,1)], [gf_ar_mthly_bill.rcvd_amt=column_conv(BIGINT,PS:(20,0),NOT NULL,2)], [gf_ar_mthly_bill.tax_amt=column_conv(BIGINT,PS:(20,0),NOT 
+      NULL,3)], [gf_ar_mthly_bill.exn_inf=column_conv(VARCHAR,utf8mb4_bin,length:4000,NULL,'123456')], [gf_ar_mthly_bill.anl_dmsn1=column_conv(VARCHAR,utf8mb4_bin,
+      length:1000,NULL,'123456')], [gf_ar_mthly_bill.anl_dmsn2=column_conv(VARCHAR,utf8mb4_bin,length:1000,NULL,'234567')], [gf_ar_mthly_bill.anl_dmsn3=column_conv(VARCHAR,
+      utf8mb4_bin,length:1000,NULL,'345678')], [gf_ar_mthly_bill.anl_dmsn4=column_conv(VARCHAR,utf8mb4_bin,length:1000,NULL,'456789')], [gf_ar_mthly_bill.last_moder=column_conv(VARCHAR,
+      utf8mb4_bin,length:32,NOT NULL,'ylc')], [gf_ar_mthly_bill.adj_amt=column_conv(BIGINT,PS:(20,0),NOT NULL,4)], [gf_ar_mthly_bill.svc_amt=column_conv(BIGINT,
+      PS:(20,0),NULL,5)], [gf_ar_mthly_bill.chk_st=column_conv(VARCHAR,utf8mb4_bin,length:2,NULL,'06')], [gf_ar_mthly_bill.inv_amt=column_conv(BIGINT,PS:(20,0),
+      NULL,6)], [gf_ar_mthly_bill.writingoff_amt=column_conv(BIGINT,PS:(20,0),NULL,7)], [gf_ar_mthly_bill.wrtof_dtl_cnt=column_conv(BIGINT,PS:(20,0),NULL,9)],
        [gf_ar_mthly_bill.to_wrtof_dtl_cnt=column_conv(BIGINT,PS:(20,0),NULL,8)], [gf_ar_mthly_bill.chking_amt=column_conv(BIGINT,PS:(20,0),NULL,10)], [gf_ar_mthly_bill.chked_amt=column_conv(BIGINT,
       PS:(20,0),NULL,11)], [gf_ar_mthly_bill.frz_amt=column_conv(BIGINT,PS:(20,0),NULL,12)], [gf_ar_mthly_bill.svc_bill_amt=column_conv(BIGINT,PS:(20,0),NULL,
-      13)], [gf_ar_mthly_bill.gmt_modified=column_conv(TIMESTAMP,PS:(25,6),NOT NULL,timestamp_nvl(cast('2021-05-17 12:09:34', TIMESTAMP(-1, -1)), cast(current_timestamp(),
-       TIMESTAMP(25, 6))))])
+      13)], [gf_ar_mthly_bill.gmt_modified=column_conv(TIMESTAMP,PS:(25,6),NOT NULL,timestamp_nvl('2021-05-17 12:09:34', cast(current_timestamp(), TIMESTAMP(25,
+       6))))])
   1 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no,
        23, 2))], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.clcn_bsc_amt], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.rcvd_amt],
        [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1], [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3], [gf_ar_mthly_bill.anl_dmsn4],
@@ -3250,26 +3310,70 @@ update gf_ar_mthly_bill
 
 EXPLAIN BASIC select * from gf_ar_mthly_bill;
 Query Plan
-=========================================================================
-|ID|OPERATOR                   |NAME                                    |
--------------------------------------------------------------------------
-|0 |DISTRIBUTED TABLE FULL SCAN|gf_ar_mthly_bill(uk_tnt_inst_id_rcrd_id)|
-=========================================================================
+===============================================
+|ID|OPERATOR                 |NAME            |
+-----------------------------------------------
+|0 |PX COORDINATOR           |                |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000        |
+|2 |  └─PX PARTITION ITERATOR|                |
+|3 |    └─TABLE FULL SCAN    |gf_ar_mthly_bill|
+===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id],
-       [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp], [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt],
-       [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt], [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac],
-       [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt], [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd],
-       [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt], [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp],
-       [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1], [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3],
-       [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt], [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder],
-       [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp], [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt],
-       [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt], [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp],
-       [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id], [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt],
-       [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt], [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source],
-       [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone], [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth],
-       [gf_ar_mthly_bill.auto_writeoff_group_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no, 23, 2))]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(gf_ar_mthly_bill.tnt_inst_id, gf_ar_mthly_bill.bill_no, gf_ar_mthly_bill.ip_id, gf_ar_mthly_bill.ip_role_id, gf_ar_mthly_bill.inst_id,
+       gf_ar_mthly_bill.pd_code, gf_ar_mthly_bill.ar_no, gf_ar_mthly_bill.bill_tp, gf_ar_mthly_bill.setl_tp, gf_ar_mthly_bill.bill_st, gf_ar_mthly_bill.bill_strt_dt,
+       gf_ar_mthly_bill.bill_end_dt, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.acrd_dt, gf_ar_mthly_bill.gmt_pay, gf_ar_mthly_bill.payee_ac, gf_ar_mthly_bill.payer_ac,
+       gf_ar_mthly_bill.pay_way, gf_ar_mthly_bill.pay_orig, gf_ar_mthly_bill.clcn_bsc_amt, gf_ar_mthly_bill.clcn_bsc_tp, gf_ar_mthly_bill.clcn_mthd, gf_ar_mthly_bill.chrg_itm_code,
+       gf_ar_mthly_bill.ccy, gf_ar_mthly_bill.bill_amt, gf_ar_mthly_bill.adj_amt, gf_ar_mthly_bill.rcvd_amt, gf_ar_mthly_bill.tax_tp, gf_ar_mthly_bill.tax_rate,
+       gf_ar_mthly_bill.tax_amt, gf_ar_mthly_bill.exn_inf, gf_ar_mthly_bill.anl_dmsn1, gf_ar_mthly_bill.anl_dmsn2, gf_ar_mthly_bill.anl_dmsn3, gf_ar_mthly_bill.anl_dmsn4,
+       gf_ar_mthly_bill.wrtof_dtl_cnt, gf_ar_mthly_bill.to_wrtof_dtl_cnt, gf_ar_mthly_bill.rcrd_id, gf_ar_mthly_bill.last_moder, gf_ar_mthly_bill.gmt_create, 
+      gf_ar_mthly_bill.gmt_modified, gf_ar_mthly_bill.charge_tp, gf_ar_mthly_bill.stl_ip_role_id, gf_ar_mthly_bill.svc_amt, gf_ar_mthly_bill.inved_amt, gf_ar_mthly_bill.chk_st,
+       gf_ar_mthly_bill.acnt_day, gf_ar_mthly_bill.inv_amt, gf_ar_mthly_bill.rel_inv_amt, gf_ar_mthly_bill.tp, gf_ar_mthly_bill.payer_ip_role_id, gf_ar_mthly_bill.sgn_ip_id,
+       gf_ar_mthly_bill.sgn_ip_role_id, gf_ar_mthly_bill.chking_amt, gf_ar_mthly_bill.frz_amt, gf_ar_mthly_bill.chked_amt, gf_ar_mthly_bill.writingoff_amt, gf_ar_mthly_bill.svc_bill_amt,
+       gf_ar_mthly_bill.svc_ccy, gf_ar_mthly_bill.env_source, gf_ar_mthly_bill.metadata_source, gf_ar_mthly_bill.setl_time_zone, gf_ar_mthly_bill.actg_time_zone,
+       gf_ar_mthly_bill.inter_trade_flag, gf_ar_mthly_bill.actg_bill_mth, gf_ar_mthly_bill.auto_writeoff_group_no, column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,
+      substr(gf_ar_mthly_bill.bill_no, 23, 2)))]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(gf_ar_mthly_bill.tnt_inst_id, gf_ar_mthly_bill.bill_no, gf_ar_mthly_bill.ip_id, gf_ar_mthly_bill.ip_role_id, gf_ar_mthly_bill.inst_id,
+       gf_ar_mthly_bill.pd_code, gf_ar_mthly_bill.ar_no, gf_ar_mthly_bill.bill_tp, gf_ar_mthly_bill.setl_tp, gf_ar_mthly_bill.bill_st, gf_ar_mthly_bill.bill_strt_dt,
+       gf_ar_mthly_bill.bill_end_dt, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.acrd_dt, gf_ar_mthly_bill.gmt_pay, gf_ar_mthly_bill.payee_ac, gf_ar_mthly_bill.payer_ac,
+       gf_ar_mthly_bill.pay_way, gf_ar_mthly_bill.pay_orig, gf_ar_mthly_bill.clcn_bsc_amt, gf_ar_mthly_bill.clcn_bsc_tp, gf_ar_mthly_bill.clcn_mthd, gf_ar_mthly_bill.chrg_itm_code,
+       gf_ar_mthly_bill.ccy, gf_ar_mthly_bill.bill_amt, gf_ar_mthly_bill.adj_amt, gf_ar_mthly_bill.rcvd_amt, gf_ar_mthly_bill.tax_tp, gf_ar_mthly_bill.tax_rate,
+       gf_ar_mthly_bill.tax_amt, gf_ar_mthly_bill.exn_inf, gf_ar_mthly_bill.anl_dmsn1, gf_ar_mthly_bill.anl_dmsn2, gf_ar_mthly_bill.anl_dmsn3, gf_ar_mthly_bill.anl_dmsn4,
+       gf_ar_mthly_bill.wrtof_dtl_cnt, gf_ar_mthly_bill.to_wrtof_dtl_cnt, gf_ar_mthly_bill.rcrd_id, gf_ar_mthly_bill.last_moder, gf_ar_mthly_bill.gmt_create, 
+      gf_ar_mthly_bill.gmt_modified, gf_ar_mthly_bill.charge_tp, gf_ar_mthly_bill.stl_ip_role_id, gf_ar_mthly_bill.svc_amt, gf_ar_mthly_bill.inved_amt, gf_ar_mthly_bill.chk_st,
+       gf_ar_mthly_bill.acnt_day, gf_ar_mthly_bill.inv_amt, gf_ar_mthly_bill.rel_inv_amt, gf_ar_mthly_bill.tp, gf_ar_mthly_bill.payer_ip_role_id, gf_ar_mthly_bill.sgn_ip_id,
+       gf_ar_mthly_bill.sgn_ip_role_id, gf_ar_mthly_bill.chking_amt, gf_ar_mthly_bill.frz_amt, gf_ar_mthly_bill.chked_amt, gf_ar_mthly_bill.writingoff_amt, gf_ar_mthly_bill.svc_bill_amt,
+       gf_ar_mthly_bill.svc_ccy, gf_ar_mthly_bill.env_source, gf_ar_mthly_bill.metadata_source, gf_ar_mthly_bill.setl_time_zone, gf_ar_mthly_bill.actg_time_zone,
+       gf_ar_mthly_bill.inter_trade_flag, gf_ar_mthly_bill.actg_bill_mth, gf_ar_mthly_bill.auto_writeoff_group_no, column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,
+      substr(gf_ar_mthly_bill.bill_no, 23, 2)))]), filter(nil), rowset=16
+      dop=1
+  2 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no,
+       23, 2))], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id], [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp],
+       [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt], [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt],
+       [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac], [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt],
+       [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd], [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt],
+       [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp], [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1],
+       [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3], [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt],
+       [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder], [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp],
+       [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt], [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt],
+       [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp], [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id],
+       [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt], [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt],
+       [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source], [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone],
+       [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth], [gf_ar_mthly_bill.auto_writeoff_group_no]), filter(nil), rowset=16
+      force partition granule
+  3 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no,
+       23, 2))], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id], [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp],
+       [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt], [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt],
+       [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac], [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt],
+       [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd], [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt],
+       [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp], [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1],
+       [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3], [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt],
+       [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder], [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp],
+       [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt], [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt],
+       [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp], [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id],
+       [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt], [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt],
+       [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source], [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone],
+       [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth], [gf_ar_mthly_bill.auto_writeoff_group_no]), filter(nil), rowset=16
       access([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id],
        [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp], [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt],
        [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt], [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac],
@@ -3282,10 +3386,9 @@ Outputs & filters:
        [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id], [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt],
        [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt], [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source],
        [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone], [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth],
-       [gf_ar_mthly_bill.auto_writeoff_group_no]), partitions(p0)
-      is_index_back=true, is_global_index=true, 
-      range_key([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.shadow_pk_0], [gf_ar_mthly_bill.shadow_pk_1]), range(MIN,MIN,
-      MIN,MIN ; MAX,MAX,MAX,MAX)always true
+       [gf_ar_mthly_bill.auto_writeoff_group_no]), partitions(p[0-8])
+      is_index_back=false, is_global_index=false, 
+      range_key([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no]), range(MIN,MIN ; MAX,MAX)always true
 select * from gf_ar_mthly_bill;
 +-------------+------------------------------------+-------+------------+---------+---------+-------+---------+---------+---------+--------------+-------------+----------+---------+----------------------------+----------+----------+---------+----------+--------------+-------------+-----------+---------------+-----+----------+---------+----------+--------+------------+---------+---------+-----------+-----------+-----------+-----------+---------------+------------------+---------+------------+----------------------------+----------------------------+-----------+----------------+---------+-----------+--------+----------+---------+-------------+------+------------------+-----------+----------------+------------+---------+-----------+----------------+--------------+---------+------------+-----------------+----------------+----------------+------------------+---------------+------------------------+--------------+
 | tnt_inst_id | bill_no                            | ip_id | ip_role_id | inst_id | pd_code | ar_no | bill_tp | setl_tp | bill_st | bill_strt_dt | bill_end_dt | bill_mth | acrd_dt | gmt_pay                    | payee_ac | payer_ac | pay_way | pay_orig | clcn_bsc_amt | clcn_bsc_tp | clcn_mthd | chrg_itm_code | ccy | bill_amt | adj_amt | rcvd_amt | tax_tp | tax_rate   | tax_amt | exn_inf | anl_dmsn1 | anl_dmsn2 | anl_dmsn3 | anl_dmsn4 | wrtof_dtl_cnt | to_wrtof_dtl_cnt | rcrd_id | last_moder | gmt_create                 | gmt_modified               | charge_tp | stl_ip_role_id | svc_amt | inved_amt | chk_st | acnt_day | inv_amt | rel_inv_amt | tp   | payer_ip_role_id | sgn_ip_id | sgn_ip_role_id | chking_amt | frz_amt | chked_amt | writingoff_amt | svc_bill_amt | svc_ccy | env_source | metadata_source | setl_time_zone | actg_time_zone | inter_trade_flag | actg_bill_mth | auto_writeoff_group_no | partition_id |
@@ -3354,20 +3457,19 @@ Outputs & filters:
        gf_ar_mthly_bill.tp, gf_ar_mthly_bill.anl_dmsn4, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.bill_no)}, {idx_tnt_inst_id_inst_id_tp_anl_dmsn_2_bill_mth: 
       (gf_ar_mthly_bill.tnt_inst_id, gf_ar_mthly_bill.inst_id, gf_ar_mthly_bill.tp, gf_ar_mthly_bill.anl_dmsn2, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.bill_no)})}]),
       
-      update([gf_ar_mthly_bill.bill_st=column_conv(VARCHAR,utf8mb4_bin,length:2,NOT NULL,cast('01', VARCHAR(1048576)))], [gf_ar_mthly_bill.gmt_pay=column_conv(TIMESTAMP,
-      PS:(25,6),NULL,cast('2021-05-17 12:09:35', TIMESTAMP(-1, -1)))], [gf_ar_mthly_bill.clcn_bsc_amt=column_conv(DECIMAL_INT,PS:(25,4),NULL,cast('123.12', DECIMAL_INT(25,
-       4)))], [gf_ar_mthly_bill.bill_amt=column_conv(BIGINT,PS:(20,0),NOT NULL,1)], [gf_ar_mthly_bill.rcvd_amt=column_conv(BIGINT,PS:(20,0),NOT NULL,2)], [gf_ar_mthly_bill.tax_amt=column_conv(BIGINT,
-      PS:(20,0),NOT NULL,3)], [gf_ar_mthly_bill.exn_inf=column_conv(VARCHAR,utf8mb4_bin,length:4000,NULL,cast('123456', VARCHAR(1048576)))], [gf_ar_mthly_bill.anl_dmsn1=column_conv(VARCHAR,
-      utf8mb4_bin,length:1000,NULL,cast('123456', VARCHAR(1048576)))], [gf_ar_mthly_bill.anl_dmsn2=column_conv(VARCHAR,utf8mb4_bin,length:1000,NULL,cast('234567',
-       VARCHAR(1048576)))], [gf_ar_mthly_bill.anl_dmsn3=column_conv(VARCHAR,utf8mb4_bin,length:1000,NULL,cast('345678', VARCHAR(1048576)))], [gf_ar_mthly_bill.anl_dmsn4=column_conv(VARCHAR,
-      utf8mb4_bin,length:1000,NULL,cast('456789', VARCHAR(1048576)))], [gf_ar_mthly_bill.last_moder=column_conv(VARCHAR,utf8mb4_bin,length:32,NOT NULL,cast('ylc',
-       VARCHAR(1048576)))], [gf_ar_mthly_bill.adj_amt=column_conv(BIGINT,PS:(20,0),NOT NULL,4)], [gf_ar_mthly_bill.svc_amt=column_conv(BIGINT,PS:(20,0),NULL,5)],
-       [gf_ar_mthly_bill.chk_st=column_conv(VARCHAR,utf8mb4_bin,length:2,NULL,cast('06', VARCHAR(1048576)))], [gf_ar_mthly_bill.inv_amt=column_conv(BIGINT,PS:(20,
-      0),NULL,6)], [gf_ar_mthly_bill.writingoff_amt=column_conv(BIGINT,PS:(20,0),NULL,7)], [gf_ar_mthly_bill.wrtof_dtl_cnt=column_conv(BIGINT,PS:(20,0),NULL,9)],
+      update([gf_ar_mthly_bill.bill_st=column_conv(VARCHAR,utf8mb4_bin,length:2,NOT NULL,'01')], [gf_ar_mthly_bill.gmt_pay=column_conv(TIMESTAMP,PS:(25,
+      6),NULL,'2021-05-17 12:09:35')], [gf_ar_mthly_bill.clcn_bsc_amt=column_conv(DECIMAL_INT,PS:(25,4),NULL,'123.12')], [gf_ar_mthly_bill.bill_amt=column_conv(BIGINT,
+      PS:(20,0),NOT NULL,1)], [gf_ar_mthly_bill.rcvd_amt=column_conv(BIGINT,PS:(20,0),NOT NULL,2)], [gf_ar_mthly_bill.tax_amt=column_conv(BIGINT,PS:(20,0),NOT 
+      NULL,3)], [gf_ar_mthly_bill.exn_inf=column_conv(VARCHAR,utf8mb4_bin,length:4000,NULL,'123456')], [gf_ar_mthly_bill.anl_dmsn1=column_conv(VARCHAR,utf8mb4_bin,
+      length:1000,NULL,'123456')], [gf_ar_mthly_bill.anl_dmsn2=column_conv(VARCHAR,utf8mb4_bin,length:1000,NULL,'234567')], [gf_ar_mthly_bill.anl_dmsn3=column_conv(VARCHAR,
+      utf8mb4_bin,length:1000,NULL,'345678')], [gf_ar_mthly_bill.anl_dmsn4=column_conv(VARCHAR,utf8mb4_bin,length:1000,NULL,'456789')], [gf_ar_mthly_bill.last_moder=column_conv(VARCHAR,
+      utf8mb4_bin,length:32,NOT NULL,'ylc')], [gf_ar_mthly_bill.adj_amt=column_conv(BIGINT,PS:(20,0),NOT NULL,4)], [gf_ar_mthly_bill.svc_amt=column_conv(BIGINT,
+      PS:(20,0),NULL,5)], [gf_ar_mthly_bill.chk_st=column_conv(VARCHAR,utf8mb4_bin,length:2,NULL,'06')], [gf_ar_mthly_bill.inv_amt=column_conv(BIGINT,PS:(20,0),
+      NULL,6)], [gf_ar_mthly_bill.writingoff_amt=column_conv(BIGINT,PS:(20,0),NULL,7)], [gf_ar_mthly_bill.wrtof_dtl_cnt=column_conv(BIGINT,PS:(20,0),NULL,9)],
        [gf_ar_mthly_bill.to_wrtof_dtl_cnt=column_conv(BIGINT,PS:(20,0),NULL,8)], [gf_ar_mthly_bill.chking_amt=column_conv(BIGINT,PS:(20,0),NULL,10)], [gf_ar_mthly_bill.chked_amt=column_conv(BIGINT,
       PS:(20,0),NULL,11)], [gf_ar_mthly_bill.frz_amt=column_conv(BIGINT,PS:(20,0),NULL,12)], [gf_ar_mthly_bill.svc_bill_amt=column_conv(BIGINT,PS:(20,0),NULL,
-      13)], [gf_ar_mthly_bill.gmt_modified=column_conv(TIMESTAMP,PS:(25,6),NOT NULL,timestamp_nvl(cast('2021-05-17 12:09:34', TIMESTAMP(-1, -1)), cast(current_timestamp(),
-       TIMESTAMP(25, 6))))])
+      13)], [gf_ar_mthly_bill.gmt_modified=column_conv(TIMESTAMP,PS:(25,6),NOT NULL,timestamp_nvl('2021-05-17 12:09:34', cast(current_timestamp(), TIMESTAMP(25,
+       6))))])
   1 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no,
        23, 2))], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.clcn_bsc_amt], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.rcvd_amt],
        [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1], [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3], [gf_ar_mthly_bill.anl_dmsn4],
@@ -3428,26 +3530,70 @@ update gf_ar_mthly_bill
 
 EXPLAIN BASIC select * from gf_ar_mthly_bill;
 Query Plan
-=========================================================================
-|ID|OPERATOR                   |NAME                                    |
--------------------------------------------------------------------------
-|0 |DISTRIBUTED TABLE FULL SCAN|gf_ar_mthly_bill(uk_tnt_inst_id_rcrd_id)|
-=========================================================================
+===============================================
+|ID|OPERATOR                 |NAME            |
+-----------------------------------------------
+|0 |PX COORDINATOR           |                |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000        |
+|2 |  └─PX PARTITION ITERATOR|                |
+|3 |    └─TABLE FULL SCAN    |gf_ar_mthly_bill|
+===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id],
-       [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp], [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt],
-       [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt], [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac],
-       [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt], [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd],
-       [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt], [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp],
-       [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1], [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3],
-       [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt], [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder],
-       [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp], [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt],
-       [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt], [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp],
-       [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id], [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt],
-       [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt], [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source],
-       [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone], [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth],
-       [gf_ar_mthly_bill.auto_writeoff_group_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no, 23, 2))]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(gf_ar_mthly_bill.tnt_inst_id, gf_ar_mthly_bill.bill_no, gf_ar_mthly_bill.ip_id, gf_ar_mthly_bill.ip_role_id, gf_ar_mthly_bill.inst_id,
+       gf_ar_mthly_bill.pd_code, gf_ar_mthly_bill.ar_no, gf_ar_mthly_bill.bill_tp, gf_ar_mthly_bill.setl_tp, gf_ar_mthly_bill.bill_st, gf_ar_mthly_bill.bill_strt_dt,
+       gf_ar_mthly_bill.bill_end_dt, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.acrd_dt, gf_ar_mthly_bill.gmt_pay, gf_ar_mthly_bill.payee_ac, gf_ar_mthly_bill.payer_ac,
+       gf_ar_mthly_bill.pay_way, gf_ar_mthly_bill.pay_orig, gf_ar_mthly_bill.clcn_bsc_amt, gf_ar_mthly_bill.clcn_bsc_tp, gf_ar_mthly_bill.clcn_mthd, gf_ar_mthly_bill.chrg_itm_code,
+       gf_ar_mthly_bill.ccy, gf_ar_mthly_bill.bill_amt, gf_ar_mthly_bill.adj_amt, gf_ar_mthly_bill.rcvd_amt, gf_ar_mthly_bill.tax_tp, gf_ar_mthly_bill.tax_rate,
+       gf_ar_mthly_bill.tax_amt, gf_ar_mthly_bill.exn_inf, gf_ar_mthly_bill.anl_dmsn1, gf_ar_mthly_bill.anl_dmsn2, gf_ar_mthly_bill.anl_dmsn3, gf_ar_mthly_bill.anl_dmsn4,
+       gf_ar_mthly_bill.wrtof_dtl_cnt, gf_ar_mthly_bill.to_wrtof_dtl_cnt, gf_ar_mthly_bill.rcrd_id, gf_ar_mthly_bill.last_moder, gf_ar_mthly_bill.gmt_create, 
+      gf_ar_mthly_bill.gmt_modified, gf_ar_mthly_bill.charge_tp, gf_ar_mthly_bill.stl_ip_role_id, gf_ar_mthly_bill.svc_amt, gf_ar_mthly_bill.inved_amt, gf_ar_mthly_bill.chk_st,
+       gf_ar_mthly_bill.acnt_day, gf_ar_mthly_bill.inv_amt, gf_ar_mthly_bill.rel_inv_amt, gf_ar_mthly_bill.tp, gf_ar_mthly_bill.payer_ip_role_id, gf_ar_mthly_bill.sgn_ip_id,
+       gf_ar_mthly_bill.sgn_ip_role_id, gf_ar_mthly_bill.chking_amt, gf_ar_mthly_bill.frz_amt, gf_ar_mthly_bill.chked_amt, gf_ar_mthly_bill.writingoff_amt, gf_ar_mthly_bill.svc_bill_amt,
+       gf_ar_mthly_bill.svc_ccy, gf_ar_mthly_bill.env_source, gf_ar_mthly_bill.metadata_source, gf_ar_mthly_bill.setl_time_zone, gf_ar_mthly_bill.actg_time_zone,
+       gf_ar_mthly_bill.inter_trade_flag, gf_ar_mthly_bill.actg_bill_mth, gf_ar_mthly_bill.auto_writeoff_group_no, column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,
+      substr(gf_ar_mthly_bill.bill_no, 23, 2)))]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(gf_ar_mthly_bill.tnt_inst_id, gf_ar_mthly_bill.bill_no, gf_ar_mthly_bill.ip_id, gf_ar_mthly_bill.ip_role_id, gf_ar_mthly_bill.inst_id,
+       gf_ar_mthly_bill.pd_code, gf_ar_mthly_bill.ar_no, gf_ar_mthly_bill.bill_tp, gf_ar_mthly_bill.setl_tp, gf_ar_mthly_bill.bill_st, gf_ar_mthly_bill.bill_strt_dt,
+       gf_ar_mthly_bill.bill_end_dt, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.acrd_dt, gf_ar_mthly_bill.gmt_pay, gf_ar_mthly_bill.payee_ac, gf_ar_mthly_bill.payer_ac,
+       gf_ar_mthly_bill.pay_way, gf_ar_mthly_bill.pay_orig, gf_ar_mthly_bill.clcn_bsc_amt, gf_ar_mthly_bill.clcn_bsc_tp, gf_ar_mthly_bill.clcn_mthd, gf_ar_mthly_bill.chrg_itm_code,
+       gf_ar_mthly_bill.ccy, gf_ar_mthly_bill.bill_amt, gf_ar_mthly_bill.adj_amt, gf_ar_mthly_bill.rcvd_amt, gf_ar_mthly_bill.tax_tp, gf_ar_mthly_bill.tax_rate,
+       gf_ar_mthly_bill.tax_amt, gf_ar_mthly_bill.exn_inf, gf_ar_mthly_bill.anl_dmsn1, gf_ar_mthly_bill.anl_dmsn2, gf_ar_mthly_bill.anl_dmsn3, gf_ar_mthly_bill.anl_dmsn4,
+       gf_ar_mthly_bill.wrtof_dtl_cnt, gf_ar_mthly_bill.to_wrtof_dtl_cnt, gf_ar_mthly_bill.rcrd_id, gf_ar_mthly_bill.last_moder, gf_ar_mthly_bill.gmt_create, 
+      gf_ar_mthly_bill.gmt_modified, gf_ar_mthly_bill.charge_tp, gf_ar_mthly_bill.stl_ip_role_id, gf_ar_mthly_bill.svc_amt, gf_ar_mthly_bill.inved_amt, gf_ar_mthly_bill.chk_st,
+       gf_ar_mthly_bill.acnt_day, gf_ar_mthly_bill.inv_amt, gf_ar_mthly_bill.rel_inv_amt, gf_ar_mthly_bill.tp, gf_ar_mthly_bill.payer_ip_role_id, gf_ar_mthly_bill.sgn_ip_id,
+       gf_ar_mthly_bill.sgn_ip_role_id, gf_ar_mthly_bill.chking_amt, gf_ar_mthly_bill.frz_amt, gf_ar_mthly_bill.chked_amt, gf_ar_mthly_bill.writingoff_amt, gf_ar_mthly_bill.svc_bill_amt,
+       gf_ar_mthly_bill.svc_ccy, gf_ar_mthly_bill.env_source, gf_ar_mthly_bill.metadata_source, gf_ar_mthly_bill.setl_time_zone, gf_ar_mthly_bill.actg_time_zone,
+       gf_ar_mthly_bill.inter_trade_flag, gf_ar_mthly_bill.actg_bill_mth, gf_ar_mthly_bill.auto_writeoff_group_no, column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,
+      substr(gf_ar_mthly_bill.bill_no, 23, 2)))]), filter(nil), rowset=16
+      dop=1
+  2 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no,
+       23, 2))], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id], [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp],
+       [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt], [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt],
+       [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac], [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt],
+       [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd], [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt],
+       [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp], [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1],
+       [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3], [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt],
+       [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder], [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp],
+       [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt], [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt],
+       [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp], [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id],
+       [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt], [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt],
+       [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source], [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone],
+       [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth], [gf_ar_mthly_bill.auto_writeoff_group_no]), filter(nil), rowset=16
+      force partition granule
+  3 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no,
+       23, 2))], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id], [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp],
+       [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt], [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt],
+       [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac], [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt],
+       [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd], [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt],
+       [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp], [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1],
+       [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3], [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt],
+       [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder], [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp],
+       [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt], [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt],
+       [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp], [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id],
+       [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt], [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt],
+       [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source], [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone],
+       [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth], [gf_ar_mthly_bill.auto_writeoff_group_no]), filter(nil), rowset=16
       access([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id],
        [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp], [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt],
        [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt], [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac],
@@ -3460,10 +3606,9 @@ Outputs & filters:
        [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id], [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt],
        [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt], [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source],
        [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone], [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth],
-       [gf_ar_mthly_bill.auto_writeoff_group_no]), partitions(p0)
-      is_index_back=true, is_global_index=true, 
-      range_key([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.shadow_pk_0], [gf_ar_mthly_bill.shadow_pk_1]), range(MIN,MIN,
-      MIN,MIN ; MAX,MAX,MAX,MAX)always true
+       [gf_ar_mthly_bill.auto_writeoff_group_no]), partitions(p[0-8])
+      is_index_back=false, is_global_index=false, 
+      range_key([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no]), range(MIN,MIN ; MAX,MAX)always true
 select * from gf_ar_mthly_bill;
 +-------------+------------------------------------+-------+------------+---------+---------+-------+---------+---------+---------+--------------+-------------+----------+---------+----------------------------+----------+----------+---------+----------+--------------+-------------+-----------+---------------+-----+----------+---------+----------+--------+------------+---------+---------+-----------+-----------+-----------+-----------+---------------+------------------+---------+------------+----------------------------+----------------------------+-----------+----------------+---------+-----------+--------+----------+---------+-------------+------+------------------+-----------+----------------+------------+---------+-----------+----------------+--------------+---------+------------+-----------------+----------------+----------------+------------------+---------------+------------------------+--------------+
 | tnt_inst_id | bill_no                            | ip_id | ip_role_id | inst_id | pd_code | ar_no | bill_tp | setl_tp | bill_st | bill_strt_dt | bill_end_dt | bill_mth | acrd_dt | gmt_pay                    | payee_ac | payer_ac | pay_way | pay_orig | clcn_bsc_amt | clcn_bsc_tp | clcn_mthd | chrg_itm_code | ccy | bill_amt | adj_amt | rcvd_amt | tax_tp | tax_rate   | tax_amt | exn_inf | anl_dmsn1 | anl_dmsn2 | anl_dmsn3 | anl_dmsn4 | wrtof_dtl_cnt | to_wrtof_dtl_cnt | rcrd_id | last_moder | gmt_create                 | gmt_modified               | charge_tp | stl_ip_role_id | svc_amt | inved_amt | chk_st | acnt_day | inv_amt | rel_inv_amt | tp   | payer_ip_role_id | sgn_ip_id | sgn_ip_role_id | chking_amt | frz_amt | chked_amt | writingoff_amt | svc_bill_amt | svc_ccy | env_source | metadata_source | setl_time_zone | actg_time_zone | inter_trade_flag | actg_bill_mth | auto_writeoff_group_no | partition_id |

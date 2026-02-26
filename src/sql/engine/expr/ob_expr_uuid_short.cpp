@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/engine/expr/ob_expr_uuid_short.h"
 #include "observer/ob_server_struct.h"
-#include "lib/time/ob_time_utility.h"
 
 using namespace oceanbase::common;
 
@@ -42,7 +41,7 @@ uint64_t ObExprUuidShort::generate_uuid_short()
   //                        uuid_short
   // |      <8>       |        <32>       |       <24>
   //     server_id      server_start_time   incremented_variable
-  static volatile uint64_t server_id_and_server_startup_time = ((GCTX.server_id_ & 255) << 56) |
+  static volatile uint64_t server_id_and_server_startup_time = ((GCTX.get_server_id() & 255) << 56) |
                                                                ((static_cast<uint64_t>(common::ObTimeUtility::current_time() / 1000000) << 24) &
                                                                ((static_cast<uint64_t>(1) << 56) - 1));
   uint64_t uuid_short = ATOMIC_AAF(&server_id_and_server_startup_time, 1);

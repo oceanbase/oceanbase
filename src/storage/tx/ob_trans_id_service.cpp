@@ -11,7 +11,6 @@
  */
 
 #include "ob_trans_id_service.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

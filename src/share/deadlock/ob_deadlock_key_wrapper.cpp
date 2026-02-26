@@ -11,10 +11,6 @@
  */
 
 #include "ob_deadlock_key_wrapper.h"
-#include "ob_deadlock_parameters.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/utility/serialization.h"
 #define NEED_DEFINE
 #include "ob_deadlock_key_register.h"
 #undef NEED_DEFINE

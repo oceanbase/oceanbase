@@ -14,15 +14,10 @@
 
 #include "ob_call_procedure_resolver.h"
 #include "ob_call_procedure_stmt.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/dml/ob_select_resolver.h"
-#include "pl/ob_pl_stmt.h"
+#include "src/sql/resolver/dml/ob_dml_resolver.h"
 #include "pl/ob_pl_package.h"
-#include "observer/ob_req_time_service.h"
-#include "pl/ob_pl_compile.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
-
+#include "pl/ob_pl_dependency_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -38,7 +33,7 @@ int ObCallProcedureResolver::check_param_expr_legal(ObRawExpr *param)
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "subqueries or stored function calls here");
     } else if (T_FUN_SYS_PL_SEQ_NEXT_VALUE == param->get_expr_type()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ORA-06576 : not a valid function or procedure name");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBE-06576 : not a valid function or procedure name");
     } /* else if (T_OP_GET_PACKAGE_VAR == param->get_expr_type()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "PLS-221: not procedure or not defined!");
@@ -52,7 +47,8 @@ int ObCallProcedureResolver::check_param_expr_legal(ObRawExpr *param)
 int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
                                              const ObRoutineInfo *routine_info,
                                              ObCallProcedureInfo *call_proc_info,
-                                             ObIArray<ObRawExpr*> &params)
+                                             ObIArray<ObRawExpr*> &params,
+                                             pl::ObPLDependencyTable &deps)
 {
   int ret = OB_SUCCESS;
   bool has_assign_param = false;
@@ -76,13 +72,13 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
         LOG_WARN("param node is NULL", K(i), K(ret));
       } else if (T_SP_CPARAM == params_node->children_[i]->type_) {
         has_assign_param = true;
-        if (OB_FAIL(resolve_cparam_with_assign(params_node->children_[i], routine_info, params))) {
+        if (OB_FAIL(resolve_cparam_with_assign(params_node->children_[i], routine_info, params, deps))) {
           LOG_WARN("failed to resolve cparam with assign", K(ret));
         }
       } else if (has_assign_param) {
         ret = OB_ERR_SP_WRONG_ARG_NUM;
         LOG_WARN("can not set param without assign after param with assign", K(ret));
-      } else if (OB_FAIL(resolve_cparam_without_assign(params_node->children_[i], i, params))) {
+      } else if (OB_FAIL(resolve_cparam_without_assign(params_node->children_[i], i, params, deps))) {
         LOG_WARN("failed to resolve cparam without assign", K(ret), K(i));
       }
     }
@@ -129,7 +125,8 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
 
 int ObCallProcedureResolver::resolve_cparam_without_assign(const ParseNode *param_node,
                                                            const int64_t position,
-                                                           ObIArray<ObRawExpr*> &params)
+                                                           ObIArray<ObRawExpr*> &params,
+                                                           pl::ObPLDependencyTable &deps)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(param_node));
@@ -141,7 +138,7 @@ int ObCallProcedureResolver::resolve_cparam_without_assign(const ParseNode *para
   } else if (OB_NOT_NULL(params.at(position))) {
     ret = OB_ERR_SP_DUP_PARAM;
     LOG_WARN("dup params", K(ret), K(position));
-  } else if (OB_FAIL(pl::ObPLResolver::resolve_raw_expr(*param_node, params_, param))) {
+  } else if (OB_FAIL(pl::ObPLResolver::resolve_raw_expr(*param_node, params_, param, false, nullptr, &deps))) {
     LOG_WARN("failed to resolve const expr", K(ret));
   } else if (OB_ISNULL(param)) {
     ret = OB_ERR_UNEXPECTED;
@@ -155,12 +152,14 @@ int ObCallProcedureResolver::resolve_cparam_without_assign(const ParseNode *para
   } else {
     params.at(position) = param;
   }
+
   return ret;
 }
 
 int ObCallProcedureResolver::resolve_cparam_with_assign(const ParseNode *param_node,
                                                         const ObRoutineInfo* routine_info,
-                                                        ObIArray<ObRawExpr*> &params)
+                                                        ObIArray<ObRawExpr*> &params,
+                                                        pl::ObPLDependencyTable &deps)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(param_node));
@@ -187,6 +186,8 @@ int ObCallProcedureResolver::resolve_cparam_with_assign(const ParseNode *param_n
     } else {
       ret = OB_ERR_CALL_WRONG_ARG;
       LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
+      LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, routine_info->get_routine_name().length(),
+                    routine_info->get_routine_name().ptr());
     }
 
     if (OB_SUCC(ret)) {
@@ -197,7 +198,7 @@ int ObCallProcedureResolver::resolve_cparam_with_assign(const ParseNode *param_n
       } else if (OB_UNLIKELY(-1 == position)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid postition value", K(ret), K(position));
-      } else if (OB_FAIL(resolve_cparam_without_assign(param_node->children_[1], position, params))) {
+      } else if (OB_FAIL(resolve_cparam_without_assign(param_node->children_[1], position, params, deps))) {
         LOG_WARN("failed to resolve cparam without assign", K(ret));
       }
     }
@@ -276,7 +277,7 @@ int ObCallProcedureResolver::add_call_proc_info(ObCallProcedureInfo *call_info)
       ret = OB_SUCCESS;
       LOG_DEBUG("plan cache don't support add this kind of plan now",  KPC(call_info));
     } else {
-      if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
+      if (OB_REACH_MAX_CONCURRENT_NUM != ret && OB_REACH_MAX_CCL_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
         ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
         LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
       }
@@ -302,7 +303,7 @@ int ObCallProcedureResolver::find_call_proc_info(ObCallProcedureStmt &stmt)
   } else if (OB_FAIL(pl::ObPLCacheMgr::get_pl_cache(plan_cache, stmt.get_cacheobj_guard(), pc_ctx))) {
       LOG_INFO("get pl function by sql failed, will ignore this error",
               K(ret), K(pc_ctx.key_));
-      ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
+      HANDLE_PL_CACHE_RET_VALUE(ret);
   } else {
     call_proc_info = static_cast<ObCallProcedureInfo*>(stmt.get_cacheobj_guard().get_cache_obj());
     if (OB_NOT_NULL(call_proc_info)) {
@@ -390,6 +391,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       }
     }
     ObSEArray<ObRawExpr*, 16> expr_params;
+    pl::ObPLDependencyTable deps;
     // 获取routine schem info
     if (OB_SUCC(ret)) {
       ObSynonymChecker synonym_checker;
@@ -439,18 +441,15 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
         OZ (schema_checker_->get_schema_mgr()->get_schema_version(OB_SYS_TENANT_ID, sys_schema_version));
         OX (call_proc_info->set_tenant_schema_version(tenant_schema_version));
         OX (call_proc_info->set_sys_schema_version(sys_schema_version));
-        OZ (call_proc_info->init_dependency_table_store(1 + (synonym_checker.has_synonym() ? synonym_checker.get_synonym_ids().count() : 0)));
-        OZ (call_proc_info->get_dependency_table().push_back(obj_version));
-        if (synonym_checker.has_synonym()) {
-          OZ (ObResolverUtils::add_dependency_synonym_object(schema_checker_->get_schema_mgr(),
-                                                              session_info_,
-                                                              synonym_checker,
-                                                              call_proc_info->get_dependency_table()));
-        }
+        OZ (deps.push_back(obj_version));
+        OZ (pl::ObPLDependencyUtil::collect_synonym_deps(tenant_id, session_info_->get_database_id(), synonym_checker,
+                                                         *schema_checker_->get_schema_mgr(), &deps));
       }
     }
     ObSEArray<ObRawExpr*, 16> params;
-    OZ (resolve_cparams(params_node, proc_info, call_proc_info, params));
+    OZ (resolve_cparams(params_node, proc_info, call_proc_info, params, deps));
+    OZ (call_proc_info->init_dependency_table_store(deps.count()));
+    OZ (call_proc_info->get_dependency_table().assign(deps));
 
     if (OB_SUCC(ret)) {
       if (OB_INVALID_ID == proc_info->get_package_id()) {
@@ -474,18 +473,22 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
           CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
           CK (OB_NOT_NULL(params_.sql_proxy_));
           CK (OB_NOT_NULL(session_info_));
+          OX (pl_type.set_enum_set_ctx(&call_proc_info->get_enum_set_ctx()));
           OZ (pl::ObPLDataType::transform_from_iparam(param_info,
                                                       *(schema_checker_->get_schema_mgr()),
                                                       *(session_info_),
-                                                      *(params_.allocator_),
                                                       *(params_.sql_proxy_),
                                                       pl_type,
                                                       NULL,
                                                       &params_.package_guard_->dblink_guard_));
         }
         if (OB_SUCC(ret)) {
+          const ObRawExpr* param = params.at(i);
+          CK (OB_NOT_NULL(param));
+          if (param->get_expr_type() == T_QUESTIONMARK) {
+            OZ (call_proc_info->add_question_mark_idx(i));
+          }
           if (param_info->is_out_sp_param() || param_info->is_inout_sp_param()) {
-            const ObRawExpr* param = params.at(i);
             if (lib::is_mysql_mode()
                 && param->get_expr_type() != T_OP_GET_USER_VAR
                 && param->get_expr_type() != T_OP_GET_SYS_VAR
@@ -551,12 +554,19 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
               LOG_WARN("not supported other type as out parameter except udt", K(ret), K(pl_type.is_user_type()));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "other complex type as out parameter except user define type");
             } else {
+              // no need to response parameters for client_non_standard when user/sys variable
+              bool is_client_out_param =
+                  !(lib::is_mysql_mode()
+                    && params_.session_info_->client_non_standard()
+                    && (param->get_expr_type() == T_OP_GET_USER_VAR
+                        || param->get_expr_type() == T_OP_GET_SYS_VAR));
               OZ (call_proc_info->add_out_param(i,
-                                      param_info->get_mode(),
-                                      param_info->get_param_name(),
-                                      pl_type,
-                                      param_info->get_type_name(),
-                                      ObString("")));
+                                                param_info->get_mode(),
+                                                param_info->get_param_name(),
+                                                pl_type,
+                                                param_info->get_type_name(),
+                                                ObString(""),
+                                                is_client_out_param));
             }
           }
         }
@@ -566,7 +576,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       stmt->set_dblink_routine_info(proc_info);
       if (proc_info->is_function()) {
         ret = OB_ERR_NOT_VALID_ROUTINE_NAME;
-        LOG_WARN("ORA-06576: not a valid function or procedure name", K(ret), KPC(proc_info));
+        LOG_WARN("OBE-06576: not a valid function or procedure name", K(ret), KPC(proc_info));
       }
     }
     // Step 4: cg raw expr
@@ -583,6 +593,8 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       }
       OX (call_proc_info->get_stat_for_update().type_ = pl::ObPLCacheObjectType::CALL_STMT_TYPE);
       OX (call_proc_info->get_stat_for_update().compile_time_ = compile_end - compile_start);
+      OX (call_proc_info->get_stat_for_update().raw_sql_ = params_.cur_sql_);
+      OX (session_info_->add_plsql_compile_time(compile_end - compile_start));
       OZ (add_call_proc_info(call_proc_info));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < call_proc_info->get_dependency_table().count(); ++i) {

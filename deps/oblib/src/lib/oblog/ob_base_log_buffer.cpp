@@ -11,16 +11,7 @@
  */
 
 #include "ob_base_log_buffer.h"
-#include <string.h>
-#include <errno.h>
-#include <new>
 #include <sys/mman.h>
-#include <sys/sysinfo.h>
-#include "lib/ob_define.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_utility.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/file/file_directory_utils.h"
 
 namespace oceanbase
 {

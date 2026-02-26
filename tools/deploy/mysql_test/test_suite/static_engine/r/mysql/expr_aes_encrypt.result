@@ -3,7 +3,7 @@ alter system flush plan cache global;
 
 set ob_enable_plan_cache = 0;
 set block_encryption_mode = 0;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-128-ecb
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -295,7 +295,7 @@ select aes_decrypt(aes_encrypt('没有什么好恐惧的, 除了恐惧本身', '
 | 没有什么好恐惧的, 除了恐惧本身                                                         |
 +----------------------------------------------------------------------------------------+
 set block_encryption_mode = 1;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-192-ecb
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -587,7 +587,7 @@ select aes_decrypt(aes_encrypt('没有什么好恐惧的, 除了恐惧本身', '
 | 没有什么好恐惧的, 除了恐惧本身                                                         |
 +----------------------------------------------------------------------------------------+
 set block_encryption_mode = 2;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-256-ecb
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -879,7 +879,7 @@ select aes_decrypt(aes_encrypt('没有什么好恐惧的, 除了恐惧本身', '
 | 没有什么好恐惧的, 除了恐惧本身                                                         |
 +----------------------------------------------------------------------------------------+
 set block_encryption_mode = 3;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-128-cbc
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -985,7 +985,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 4;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-192-cbc
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -1091,7 +1091,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 5;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-256-cbc
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -1197,7 +1197,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 6;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-128-cfb1
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -1303,7 +1303,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 7;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-192-cfb1
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -1409,7 +1409,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 8;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-256-cfb1
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -1515,7 +1515,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 9;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-128-cfb8
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -1621,7 +1621,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 10;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-192-cfb8
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -1727,7 +1727,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 11;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-256-cfb8
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -1833,7 +1833,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 12;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-128-cfb128
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -1939,7 +1939,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 13;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-192-cfb128
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -2045,7 +2045,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 14;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-256-cfb128
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -2151,7 +2151,7 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 set block_encryption_mode = 15;
-show variables like '%encrypt%mode';
+show variables like 'block_encryption_mode';
 Variable_name	Value
 block_encryption_mode	aes-128-ofb
 select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
@@ -2256,4 +2256,231 @@ select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asda
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | 午后的天气还不错                                                                                                                                                                     |
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+set block_encryption_mode = 16;
+show variables like 'block_encryption_mode';
+Variable_name	Value
+block_encryption_mode	aes-192-ofb
+select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
++------+
+| flag |
++------+
+|    1 |
++------+
+select hex(aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++--------------------------------------------------------------------------------------------------+
+| hex(aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')) |
++--------------------------------------------------------------------------------------------------+
+| 923FA777D4A67CCFE6280ADC                                                                         |
++--------------------------------------------------------------------------------------------------+
+select hex(aes_encrypt('asdas123123dasdasd', '12312313123', '$$&$(*&(%*&(*%&($&*%&(dkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++-------------------------------------------------------------------------------------------------------------------------+
+| hex(aes_encrypt('asdas123123dasdasd', '12312313123', '$$&$(*&(%*&(*%&($&*%&(dkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')) |
++-------------------------------------------------------------------------------------------------------------------------+
+| 0EBF15EF11345391A512133D7D5EB76C5536                                                                                    |
++-------------------------------------------------------------------------------------------------------------------------+
+select hex(aes_encrypt('asdasdasdasd', '', '1290380129038129038012938'))  from dual;
++-------------------------------------------------------------------+
+| hex(aes_encrypt('asdasdasdasd', '', '1290380129038129038012938')) |
++-------------------------------------------------------------------+
+| 909F82502BCB6342EEE03CF7                                          |
++-------------------------------------------------------------------+
+select hex(aes_encrypt('', 'abc', '121903810293801289301298301982301928'))  from dual;
++---------------------------------------------------------------------+
+| hex(aes_encrypt('', 'abc', '121903810293801289301298301982301928')) |
++---------------------------------------------------------------------+
+|                                                                     |
++---------------------------------------------------------------------+
+select hex(aes_encrypt('asdasdasdasd', 'asdasdas', '1230121231230381209380913820912830'))  from dual;
++------------------------------------------------------------------------------------+
+| hex(aes_encrypt('asdasdasdasd', 'asdasdas', '1230121231230381209380913820912830')) |
++------------------------------------------------------------------------------------+
+| 8FADC5A29B35D81339D014FB                                                           |
++------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('asdasdasdasd', '', '1290380129038129038012938'), '','1290380129038129038012938')  from dual;
++-----------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('asdasdasdasd', '', '1290380129038129038012938'), '','1290380129038129038012938') |
++-----------------------------------------------------------------------------------------------------------+
+| asdasdasdasd                                                                                              |
++-----------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('', 'abc', '121903810293801289301298301982301928'), 'abc', '121903810293801289301298301982301928')  from dual;
++----------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('', 'abc', '121903810293801289301298301982301928'), 'abc', '121903810293801289301298301982301928') |
++----------------------------------------------------------------------------------------------------------------------------+
+|                                                                                                                            |
++----------------------------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('asdasdasdasd', 'asdasdas', '1230121231230381209380913820912830'),'asdasdas', '1230121231230381209380913820912830') from dual;
++---------------------------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('asdasdasdasd', 'asdasdas', '1230121231230381209380913820912830'),'asdasdas', '1230121231230381209380913820912830') |
++---------------------------------------------------------------------------------------------------------------------------------------------+
+| asdasdasdasd                                                                                                                                |
++---------------------------------------------------------------------------------------------------------------------------------------------+
+select hex(aes_encrypt('中文字符加一点', '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++------------------------------------------------------------------------------------------------------+
+| hex(aes_encrypt('中文字符加一点', '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))          |
++------------------------------------------------------------------------------------------------------+
+| FF9FCD4F8E34B3066B313EA0CD085F39B498F6AA26                                                           |
++------------------------------------------------------------------------------------------------------+
+select hex(aes_encrypt('测试', '是不是', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++------------------------------------------------------------------------------------------+
+| hex(aes_encrypt('测试', '是不是', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))      |
++------------------------------------------------------------------------------------------+
+| 9AFB77C281C9                                                                             |
++------------------------------------------------------------------------------------------+
+select hex(aes_encrypt('意义', '周三', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++---------------------------------------------------------------------------------------+
+| hex(aes_encrypt('意义', '周三', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))     |
++---------------------------------------------------------------------------------------+
+| D619E761CA78                                                                          |
++---------------------------------------------------------------------------------------+
+select hex(aes_encrypt('午后的天气还不错', '莎士比亚', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++---------------------------------------------------------------------------------------------------------------+
+| hex(aes_encrypt('午后的天气还不错', '莎士比亚', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))             |
++---------------------------------------------------------------------------------------------------------------+
+| A9ECD837A6EFDBD963BD8485768F46B6C4C0643F3A50EEA6                                                              |
++---------------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('中文字符加一点', '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'), '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') from dual;
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('中文字符加一点', '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'), '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')            |
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 中文字符加一点                                                                                                                                                          |
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('测试', '是不是', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'是不是','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') from dual;
++--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('测试', '是不是', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'是不是','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')         |
++--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 测试                                                                                                                                                         |
++--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('意义', '周三', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'周三','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') from dual;
++--------------------------------------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('意义', '周三', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'周三','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')       |
++--------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 意义                                                                                                                                                   |
++--------------------------------------------------------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'莎士比亚','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') from dual;
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'莎士比亚','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')                 |
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 午后的天气还不错                                                                                                                                                                     |
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+set block_encryption_mode = 17;
+show variables like 'block_encryption_mode';
+Variable_name	Value
+block_encryption_mode	aes-256-ofb
+select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') = aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj');
++------+
+| flag |
++------+
+|    1 |
++------+
+select hex(aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++--------------------------------------------------------------------------------------------------+
+| hex(aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')) |
++--------------------------------------------------------------------------------------------------+
+| AE03F339448F21267D753840                                                                         |
++--------------------------------------------------------------------------------------------------+
+select hex(aes_encrypt('asdas123123dasdasd', '12312313123', '$$&$(*&(%*&(*%&($&*%&(dkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++-------------------------------------------------------------------------------------------------------------------------+
+| hex(aes_encrypt('asdas123123dasdasd', '12312313123', '$$&$(*&(%*&(*%&($&*%&(dkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')) |
++-------------------------------------------------------------------------------------------------------------------------+
+| 4AB0F361AA50F93A6525E8E2052806F06A7D                                                                                    |
++-------------------------------------------------------------------------------------------------------------------------+
+select hex(aes_encrypt('asdasdasdasd', '', '1290380129038129038012938'))  from dual;
++-------------------------------------------------------------------+
+| hex(aes_encrypt('asdasdasdasd', '', '1290380129038129038012938')) |
++-------------------------------------------------------------------+
+| 89F0DDEB484970BAFF2B986D                                          |
++-------------------------------------------------------------------+
+select hex(aes_encrypt('', 'abc', '121903810293801289301298301982301928'))  from dual;
++---------------------------------------------------------------------+
+| hex(aes_encrypt('', 'abc', '121903810293801289301298301982301928')) |
++---------------------------------------------------------------------+
+|                                                                     |
++---------------------------------------------------------------------+
+select hex(aes_encrypt('asdasdasdasd', 'asdasdas', '1230121231230381209380913820912830'))  from dual;
++------------------------------------------------------------------------------------+
+| hex(aes_encrypt('asdasdasdasd', 'asdasdas', '1230121231230381209380913820912830')) |
++------------------------------------------------------------------------------------+
+| 66C922BF6A279AFEE1A68181                                                           |
++------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('asdasdasdasd', '', '1290380129038129038012938'), '','1290380129038129038012938')  from dual;
++-----------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('asdasdasdasd', '', '1290380129038129038012938'), '','1290380129038129038012938') |
++-----------------------------------------------------------------------------------------------------------+
+| asdasdasdasd                                                                                              |
++-----------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('', 'abc', '121903810293801289301298301982301928'), 'abc', '121903810293801289301298301982301928')  from dual;
++----------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('', 'abc', '121903810293801289301298301982301928'), 'abc', '121903810293801289301298301982301928') |
++----------------------------------------------------------------------------------------------------------------------------+
+|                                                                                                                            |
++----------------------------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('asdasdasdasd', 'asdasdas', '1230121231230381209380913820912830'),'asdasdas', '1230121231230381209380913820912830') from dual;
++---------------------------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('asdasdasdasd', 'asdasdas', '1230121231230381209380913820912830'),'asdasdas', '1230121231230381209380913820912830') |
++---------------------------------------------------------------------------------------------------------------------------------------------+
+| asdasdasdasd                                                                                                                                |
++---------------------------------------------------------------------------------------------------------------------------------------------+
+select hex(aes_encrypt('中文字符加一点', '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++------------------------------------------------------------------------------------------------------+
+| hex(aes_encrypt('中文字符加一点', '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))          |
++------------------------------------------------------------------------------------------------------+
+| 69B7A8070388FFFDADF1AAE36B93E9FB4D3AF7DC20                                                           |
++------------------------------------------------------------------------------------------------------+
+select hex(aes_encrypt('测试', '是不是', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++------------------------------------------------------------------------------------------+
+| hex(aes_encrypt('测试', '是不是', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))      |
++------------------------------------------------------------------------------------------+
+| EBED2E7879EE                                                                             |
++------------------------------------------------------------------------------------------+
+select hex(aes_encrypt('意义', '周三', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++---------------------------------------------------------------------------------------+
+| hex(aes_encrypt('意义', '周三', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))     |
++---------------------------------------------------------------------------------------+
+| BDE73DC257C5                                                                          |
++---------------------------------------------------------------------------------------+
+select hex(aes_encrypt('午后的天气还不错', '莎士比亚', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
++---------------------------------------------------------------------------------------------------------------+
+| hex(aes_encrypt('午后的天气还不错', '莎士比亚', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))             |
++---------------------------------------------------------------------------------------------------------------+
+| 23FF28E7C58064F51F757F8C44C049652F70167B765EE07C                                                              |
++---------------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('中文字符加一点', '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'), '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') from dual;
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('中文字符加一点', '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'), '你好', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')            |
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 中文字符加一点                                                                                                                                                          |
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('测试', '是不是', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'是不是','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') from dual;
++--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('测试', '是不是', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'是不是','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')         |
++--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 测试                                                                                                                                                         |
++--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('意义', '周三', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'周三','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') from dual;
++--------------------------------------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('意义', '周三', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'周三','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')       |
++--------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 意义                                                                                                                                                   |
++--------------------------------------------------------------------------------------------------------------------------------------------------------+
+select aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'莎士比亚','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj') from dual;
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| aes_decrypt(aes_encrypt('午后的天气还不错', '莎士比亚', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'),'莎士比亚','asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')                 |
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 午后的天气还不错                                                                                                                                                                     |
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
+set block_encryption_mode = 18;
+show variables like 'block_encryption_mode';
+Variable_name	Value
+block_encryption_mode	sm4-ecb
+select hex(aes_encrypt('abcd', 'asd')) from dual;
+ERROR 0A000: using aes_encrypt with not aes block_encryption_mode not supported
+
+set block_encryption_mode = 21;
+show variables like 'block_encryption_mode';
+Variable_name	Value
+block_encryption_mode	sm4-ofb
+select hex(aes_encrypt('abcd', 'asd')) from dual;
+ERROR 0A000: using aes_encrypt with not aes block_encryption_mode not supported
+
+set block_encryption_mode = 0;

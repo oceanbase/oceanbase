@@ -43,9 +43,6 @@ public:
   virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, KP_(root_service));
-  virtual void flt_set_task_span_tag() const override;
-  virtual void flt_set_status_span_tag() const override;
-  virtual int cleanup_impl() override;
 private:
   int check_switch_succ();
 
@@ -57,6 +54,7 @@ private:
   int drop_index(const share::ObDDLTaskStatus new_status);
   int succ();
   int fail();
+  virtual int cleanup_impl() override;
   int deep_copy_index_arg(common::ObIAllocator &allocator,
                           const obrpc::ObDropIndexArg &src_index_arg,
                           obrpc::ObDropIndexArg &dst_index_arg);
@@ -69,7 +67,6 @@ private:
 private:
   static const int64_t OB_DROP_INDEX_TASK_VERSION = 1;
 private:
-  ObDDLWaitTransEndCtx wait_trans_ctx_;
   ObRootService *root_service_;
   obrpc::ObDropIndexArg drop_index_arg_;
 };

@@ -14,7 +14,6 @@
 #define private public
 #include "lib/container/ob_bit_set.h"
 #include "lib/utility/ob_test_util.h"
-#include "lib/container/ob_array.h"
 using namespace oceanbase::common;
 class TestBitSet: public ::testing::Test
 {

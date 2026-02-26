@@ -24,6 +24,7 @@
 #include "ob_log_meta_data_replayer.h" // ObLogMetaDataReplayer
 #include "ob_log_meta_data_fetcher.h"  // ObLogMetaDataFetcher
 #include "ob_log_meta_data_fetcher_dispatcher.h"  // ObLogMetaDataFetcherDispatcher
+#include "ob_cdc_tenant_checkpoint.h"
 
 namespace oceanbase
 {
@@ -58,24 +59,32 @@ public:
       const ObLogConfig &cfg,
       const int64_t start_seq,
       const bool enable_direct_load_inc);
+  void mark_stop_flag();
+  void stop();
   void destroy();
 
   static ObLogMetaDataService &get_instance();
   ObLogMetaDataBaselineLoader &get_baseline_loader() { return baseline_loader_; }
 
 public:
-  // Refresh baseline meta data based on Tenant ID
+  // Refresh baseline meta data based on TenantCheckpoint
   //
-  // @param [in]    tenant_id          Tenant ID
-  // @param [in]    start_timestamp_ns start timestamp(ns)
+  // @param [in]    tenant_checkpoint  tenant checkpoint info
   // @param [in]    timeout            Timeout
   //
   // @retval OB_SUCCESS        Success
   // @retval other error code  Fail
   int refresh_baseline_meta_data(
-      const uint64_t tenant_id,
-      const int64_t start_timestamp_ns,
+      TenantCheckpoint &tenant_checkpoint,
       const int64_t timeout);
+
+  // Finish fetch tenant baseline meta data, will replay incremental meta data
+  //
+  // @param [in]    tenant_id          Tenant ID
+  //
+  // @retval OB_SUCCESS        Success
+  // @retval other error code  Fail
+  int finish_fetch_tenant_baseline_meta_data(const uint64_t tenant_id);
 
   // Call the function when all tenants are referenced at statup time
   //
@@ -115,12 +124,14 @@ private:
       datadict::ObDataDictMetaInfo &data_dict_meta_info);
 
 private:
-  bool is_inited_;
-  ObLogMetaDataFetcher fetcher_;
-  ObLogMetaDataBaselineLoader baseline_loader_;
-  ObLogMetaDataReplayer incremental_replayer_;
-  ObLogMetaDataFetcherDispatcher fetcher_dispatcher_;
-  IObLogPartTransParser *part_trans_parser_;
+  bool                            is_inited_;
+  int64_t                         start_timestamp_ns_;
+  IObLogErrHandler                *err_handler_;
+  ObLogMetaDataFetcher            fetcher_;
+  ObLogMetaDataBaselineLoader     baseline_loader_;
+  ObLogMetaDataReplayer           incremental_replayer_;
+  ObLogMetaDataFetcherDispatcher  fetcher_dispatcher_;
+  IObLogPartTransParser           *part_trans_parser_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogMetaDataService);
 };

@@ -21,6 +21,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObColumnSchemaItem;
+} // namespace storage
 namespace sql
 {
 
@@ -55,22 +59,60 @@ public:
    */
   struct ColumnBlock : public Block
   {
+    static int calc_vector_size(const ObIVector *vector,
+                                const uint16_t *selector,
+                                const ObLength length,
+                                const int64_t size,
+                                int64_t &batch_mem_size);
+    static int vector_to_buf(const ObIVector *vector,
+                             const uint16_t *selector,
+                             const ObLength length,
+                             const int64_t size,
+                             char *head,
+                             int64_t &pos);
+    static int vector_from_buf(char *buf,
+                               int64_t &pos,
+                               const int64_t size,
+                               ObIVector *vector);
+
+    static int calc_rows_size(ObEvalCtx &ctx,
+                              const ObExprPtrIArray &exprs,
+                              const IVectorPtrs &vectors,
+                              const uint16_t *selector,
+                              const ObArray<ObLength> &lengths,
+                              const int64_t size,
+                              int64_t &batch_mem_size);
     static int calc_rows_size(const IVectorPtrs &vectors,
                               const uint16_t *selector,
                               const ObArray<ObLength> &lengths,
                               const int64_t size,
                               int64_t &batch_mem_size);
-    int add_batch(const IVectorPtrs &vectors,
+    int add_batch(ObEvalCtx &ctx,
+                  const ObExprPtrIArray &exprs,
+                  ShrinkBuffer &buf,
+                  const IVectorPtrs &vectors,
+                  const uint16_t *selector,
+                  const ObArray<ObLength> &lengths,
+                  const int64_t size,
+                  const int64_t batch_mem_size);
+    int add_batch(ShrinkBuffer &buf,
+                  const IVectorPtrs &vectors,
                   const uint16_t *selector,
                   const ObArray<ObLength> &lengths,
                   const int64_t size,
                   const int64_t batch_mem_size);
 
-    int get_next_batch(const IVectorPtrs &vectors,
-                       const ObArray<ObLength> &lengths,
+    int get_next_batch(const ObExprPtrIArray &exprs,
+                       ObEvalCtx &ctx,
+                       const IVectorPtrs &vectors,
                        const int32_t start_read_pos,
                        int32_t &batch_rows,
                        int32_t &batch_pos) const;
+    int get_next_batch(const IVectorPtrs &vectors,
+                       const int32_t start_read_pos,
+                       int32_t &batch_rows,
+                       int32_t &batch_pos) const;
+
   private:
     inline static int64_t get_header_size(const int64_t vec_cnt)
     {
@@ -89,13 +131,15 @@ public:
                  cur_blk_id_(0), rest_row_cnt_(0), read_pos_(0), vectors_(NULL) {}
     virtual ~Iterator() {}
 
-    int init(ObTempColumnStore *store);
+    int init(ObTempColumnStore *store, const bool async = true);
     inline bool has_next() const { return cur_blk_id_ < get_row_cnt(); }
     inline int64_t get_row_cnt() const { return column_store_->get_row_cnt(); }
     inline int64_t get_col_cnt() const { return column_store_->get_col_cnt(); }
     int get_next_batch(const ObExprPtrIArray &exprs,
                        ObEvalCtx &ctx,
                        const int64_t max_rows,
+                       int64_t &read_rows);
+    int get_next_batch(const IVectorPtrs &vectors,
                        int64_t &read_rows);
 
     inline bool has_rest_row_in_batch() const { return rest_row_cnt_ > 0; }
@@ -146,33 +190,54 @@ public:
   virtual ~ObTempColumnStore();
 
   void reset();
+  void reset_batch_ctx();
+  void reuse();
 
   int init(const ObExprPtrIArray &exprs,
            const int64_t max_batch_size,
            const lib::ObMemAttr &mem_attr,
            const int64_t mem_limit,
            const bool enable_dump,
-           const bool reuse_vector_array);
+           const bool reuse_vector_array,
+           const common::ObCompressorType compressor_type,
+           const int64_t tempstore_read_alignment_size = 0);
+  // for vector interface
+  int init(const IVectorPtrs &vectors,
+           const int64_t max_batch_size,
+           const lib::ObMemAttr &mem_attr,
+           const int64_t mem_limit,
+           const bool enable_dump,
+           const common::ObCompressorType compressor_type,
+           const int64_t tempstore_read_alignment_size = 0);
+  int init(const common::ObIArray<storage::ObColumnSchemaItem> &col_array,
+           const int64_t max_batch_size,
+           const lib::ObMemAttr &mem_attr,
+           const int64_t mem_limit,
+           const bool enable_dump,
+           const common::ObCompressorType compressor_type);
+  static int init_vectors(const common::ObIArray<storage::ObColumnSchemaItem> &col_array,
+                          common::ObIAllocator &allocator,
+                          IVectorPtrs &vectors);
 
   int init_batch_ctx(const ObExprPtrIArray &exprs);
+  int init_batch_ctx(const IVectorPtrs &vectors);
 
-  int begin(Iterator &it)
+  int begin(Iterator &it, const bool async = true)
   {
-    return it.init(this);
+    return it.init(this, async);
   }
   int add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx,
                 const ObBatchRows &brs, int64_t &stored_rows_count);
-
-  inline int64_t get_row_cnt() const { return block_id_cnt_; }
-  inline int64_t get_row_cnt_on_disk() const { return dumped_block_id_cnt_; }
-  inline int64_t get_row_cnt_in_memory() const { return get_row_cnt() - get_row_cnt_on_disk(); }
+  int add_batch(const IVectorPtrs &vectors,
+                const ObBatchRows &brs,
+                int64_t &stored_rows_count);
   inline int64_t get_col_cnt() const { return col_cnt_; }
 
 private:
   inline int ensure_write_blk(const int64_t mem_size)
   {
     int ret = common::OB_SUCCESS;
-    if (NULL == cur_blk_ || mem_size > cur_blk_->remain()) {
+    if (NULL == cur_blk_ || mem_size > blk_buf_.remain()) {
       if (OB_FAIL(new_block(mem_size))) {
         SQL_ENG_LOG(WARN, "fail to new block", K(ret), K(mem_size));
       } else {

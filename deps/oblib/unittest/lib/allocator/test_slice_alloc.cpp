@@ -10,14 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/allocator/ob_slice_alloc.h"
 #include "lib/allocator/ob_vslice_alloc.h"
 #include "lib/allocator/ob_small_allocator.h"
 #include "lib/allocator/ob_simple_fifo_alloc.h"
 #include "lib/objectpool/ob_concurrency_objpool.h"
-#include "lib/queue/ob_link_queue.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/metrics/ob_counter.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -202,7 +198,6 @@ void do_perf(AllocInterface* ga) {
 //int64_t get_us() { return ObTimeUtility::current_time(); }
 #define PERF(x) {fprintf(stderr, #x "\n"); x ## Wrapper ga; do_perf(&ga); }
 
-#include <locale.h>
 int main()
 {
   setlocale(LC_ALL, "");

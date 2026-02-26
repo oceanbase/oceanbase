@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_table_param.h"
 #include "ob_sstable_sec_meta_iterator.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
-#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
 {
@@ -252,12 +247,13 @@ int ObSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(micro_reader_->get_row(curr_block_idx_, row_))) {
-      LOG_WARN("Fail to get secondary meta row from block", K(ret));
+      LOG_WARN("Fail to get secondary meta row from block", K(ret), K_(curr_block_idx));
     } else if (OB_FAIL(macro_meta.parse_row(row_))) {
       LOG_WARN("Fail to parse macro meta", K(ret));
     } else {
       const ObSSTableMacroInfo &macro_info = sstable_meta_hdl_.get_sstable_meta().get_macro_info();
-      if (!macro_info.is_meta_root() && 0 == macro_info.get_other_block_count()) {
+      const int64_t data_block_count = sstable_meta_hdl_.get_sstable_meta().get_basic_meta().get_data_macro_block_count();
+      if (macro_meta.get_macro_id() == ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID) {
         // this means macro meta root block is larger than 16KB but read from the end of data block
         // So the macro id parsed from macro meta is empty, which actually should be same to the
         // data block id read in open_next_micro_block
@@ -517,44 +513,47 @@ int ObSSTableSecMetaIterator::get_micro_block(
     LOG_WARN("Invalid parameters to locate micro block", K(ret), K(macro_id), K(idx_row_header));
   }
 
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(block_cache_->get_cache_block(
-      tenant_id_,
-      macro_id,
-      idx_row_header.get_block_offset() + nested_offset,
-      idx_row_header.get_block_size(),
-      data_handle.cache_handle_))) {
-    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-      LOG_WARN("Fail to get micro block handle from cache", K(ret), K(idx_row_header));
-    } else {
-      // Cache miss, async IO
-      ObMicroIndexInfo idx_info;
-      idx_info.row_header_ = &idx_row_header;
-      idx_info.nested_offset_ = nested_offset;
-      data_handle.allocator_ = &io_allocator_;
-      // TODO: @saitong.zst not safe here, remove tablet_handle from SecMeta prefetch interface, disable cache decoders
-      if (OB_FAIL(block_cache_->prefetch(
-          tenant_id_,
-          macro_id,
-          idx_info,
-          prefetch_flag_.is_use_block_cache(),
-          data_handle.io_handle_,
-          &io_allocator_))) {
-        LOG_WARN("Fail to prefetch with async io", K(ret));
+  if (OB_SUCC(ret)) {
+    ObMicroBlockCacheKey key;
+    idx_row_header.has_valid_logic_micro_id() ?
+      key.set(tenant_id_, idx_row_header.get_logic_micro_id(), idx_row_header.get_data_checksum()) :
+      key.set(tenant_id_, macro_id, idx_row_header.get_block_offset() + nested_offset, idx_row_header.get_block_size());
+    if (OB_FAIL(block_cache_->get_cache_block(key, data_handle.cache_handle_))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        LOG_WARN("Fail to get micro block handle from cache", K(ret), K(idx_row_header));
       } else {
-        data_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
-        data_handle.need_release_data_buf_ = true;
+        // Cache miss, async IO
+        ObMicroIndexInfo idx_info;
+        idx_info.row_header_ = &idx_row_header;
+        idx_info.nested_offset_ = nested_offset;
+        data_handle.allocator_ = &io_allocator_;
+        // TODO: @saitong.zst not safe here, remove tablet_handle from SecMeta prefetch interface, disable cache decoders
+        if (OB_FAIL(block_cache_->prefetch(
+            tenant_id_,
+            macro_id,
+            idx_info,
+            prefetch_flag_.is_use_block_cache(),
+            // Note: no need to pass effective_tablet_id for ObSSTableSecMetaIterator
+            ObTabletID(ObTabletID::INVALID_TABLET_ID)/*effective_tablet_id*/,
+            data_handle.io_handle_,
+            &io_allocator_))) {
+          LOG_WARN("Fail to prefetch with async io", K(ret));
+        } else {
+          data_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
+        }
       }
+    } else {
+      data_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
     }
-  } else {
-    data_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
+    LOG_DEBUG("get cache block", K(ret), K(key), K(macro_id), K(idx_row_header));
   }
 
   if (OB_SUCC(ret)) {
     data_handle.macro_block_id_ = macro_id;
-    data_handle.micro_info_.offset_ = idx_row_header.get_block_offset() + nested_offset;
-    data_handle.micro_info_.size_ = idx_row_header.get_block_size();
+    data_handle.micro_info_.set(idx_row_header.get_block_offset() + nested_offset,
+                                idx_row_header.get_block_size(),
+                                idx_row_header.get_logic_micro_id(),
+                                idx_row_header.get_data_checksum());
     const bool deep_copy_key = true;
     if (OB_FAIL(idx_row_header.fill_micro_des_meta(deep_copy_key, data_handle.des_meta_))) {
       LOG_WARN("Fail to fill deserialize meta", K(ret));

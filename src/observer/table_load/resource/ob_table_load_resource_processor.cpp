@@ -14,8 +14,6 @@
 
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/resource/ob_table_load_resource_processor.h"
-#include "observer/table_load/resource/ob_table_load_resource_rpc_struct.h"
-#include "observer/table_load/resource/ob_table_load_resource_service.h"
 
 namespace oceanbase
 {

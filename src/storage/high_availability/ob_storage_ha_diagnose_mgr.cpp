@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_diagnose_mgr.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -248,7 +246,7 @@ int ObStorageHADiagMgr::add_or_update(
   } else if (is_report) {
     if (OB_FAIL(service_->add_task(task_key))) {
       LOG_WARN("failed to add task to service", K(ret), K(task_key));
-    } else if (REACH_TENANT_TIME_INTERVAL(1 * 100 * 1000L)) {
+    } else if (REACH_THREAD_TIME_INTERVAL(1 * 100 * 1000L)) {
       service_->wakeup();
     }
   }

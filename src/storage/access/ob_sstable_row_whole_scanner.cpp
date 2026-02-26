@@ -11,12 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/blocksstable/ob_sstable.h"
 #include "ob_sstable_row_whole_scanner.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "ob_table_access_context.h"
-#include "ob_table_access_param.h"
-#include "ob_dml_param.h"
 
 namespace oceanbase
 {
@@ -117,9 +112,22 @@ int ObSSTableRowWholeScanner::init_micro_scanner(const ObDatumRange *range)
   } else {
     const bool is_whole_macro_scan = access_ctx_->query_flag_.is_whole_macro_scan();
     const bool is_multi_version_minor_merge = access_ctx_->query_flag_.is_multi_version_minor_merge();
+    const bool is_bare_row_scan = access_ctx_->query_flag_.is_bare_row_scan();
     if (OB_UNLIKELY(!is_whole_macro_scan)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected query flag without whole macro scan", K(ret), KPC(access_ctx_));
+    } else if (is_bare_row_scan) {
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMicroBlockRowDirectScanner)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc mem for micro block scanner failed", K(ret));
+      } else {
+        micro_scanner_ = new(buf) ObMicroBlockRowDirectScanner(allocator_);
+        if (nullptr != range) {
+          query_range_ = *range;
+        } else {
+          query_range_.set_whole_range();
+        }
+      }
     } else if (nullptr != range && is_multi_version_minor_merge && sstable_->is_multi_version_minor_sstable()) {
       if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMultiVersionMicroBlockMinorMergeRowScanner)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -270,21 +278,24 @@ int ObSSTableRowWholeScanner::open(
     } else if (OB_FAIL(init_micro_scanner(&query_range))) {
       LOG_WARN("Fail to init micro scanner", K(ret));
     } else {
-      ObMacroBlockReadInfo read_info;
+      ObStorageObjectReadInfo read_info;
       scan_handle.start_row_offset_ = macro_desc.start_row_offset_;
       scan_handle.is_left_border_ = true;
       scan_handle.is_right_border_ = true;
       scan_handle.macro_block_desc_ = macro_desc;
+
       read_info.macro_block_id_ = macro_desc.macro_block_id_;
       read_info.offset_ = sstable_->get_macro_offset();
       read_info.size_ = sstable_->get_macro_read_size();
+      read_info.io_desc_.set_mode(ObIOMode::READ);
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
       read_info.buf_ = io_buf_[0].data();
+      read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
+      read_info.mtl_tenant_id_ = MTL_ID();
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
+      } else if (OB_FAIL(ObObjectManager::async_read_object(read_info, scan_handle.macro_io_handle_))) {
         LOG_WARN("Fail to read macro block", K(ret), K(read_info));
       } else {
         ++prefetch_macro_cursor_;
@@ -405,7 +416,7 @@ int ObSSTableRowWholeScanner::prefetch()
   int ret = OB_SUCCESS;
   if (is_macro_prefetch_end_) {
   } else {
-    blocksstable::ObMacroBlockReadInfo read_info;
+    blocksstable::ObStorageObjectReadInfo read_info;
     const bool is_left_border = 0 == prefetch_macro_cursor_;
     int64_t io_index = prefetch_macro_cursor_ % PREFETCH_DEPTH;
     MacroScanHandle &scan_handle = scan_handles_[io_index];
@@ -424,15 +435,19 @@ int ObSSTableRowWholeScanner::prefetch()
       scan_handle.is_left_border_ = (0 == prefetch_macro_cursor_);
       scan_handle.is_right_border_ = false; // set right border correctly when open macro block
       scan_handle.start_row_offset_ = scan_handle.macro_block_desc_.start_row_offset_;
+
       read_info.macro_block_id_ = scan_handle.macro_block_desc_.macro_block_id_;
       read_info.offset_ = sstable_->get_macro_offset();
       read_info.size_ = sstable_->get_macro_read_size();
+      read_info.io_desc_.set_mode(ObIOMode::READ);
       read_info.io_desc_.set_wait_event(common::ObWaitEventIds::DB_FILE_COMPACT_READ);
-      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
       read_info.buf_ = io_buf_[io_index].data();
+      read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
+      read_info.mtl_tenant_id_ = MTL_ID();
+
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
+      } else if (OB_FAIL(ObObjectManager::async_read_object(read_info, scan_handle.macro_io_handle_))) {
         LOG_WARN("Fail to read macro block, ", K(ret), K(read_info));
       } else {
         ++prefetch_macro_cursor_;
@@ -501,7 +516,7 @@ int ObSSTableRowWholeScanner::open_macro_block()
         LOG_WARN("failed to open micro block iter", K(ret), K(scan_handle.macro_io_handle_));
       } else {
         if (iter_macro_cnt_ < 10) {
-          FLOG_INFO("iter macro block id", K(scan_handle.macro_block_desc_.macro_block_id_), K(iter_macro_cnt_++), K(sstable_));
+          LOG_TRACE("iter macro block id", K(scan_handle.macro_block_desc_.macro_block_id_), K(iter_macro_cnt_++), K(sstable_));
         }
         break;
       }

@@ -10,17 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <pthread.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include "lib/hash/ob_hashmap.h"
-#include "lib/hash/ob_hashutils.h"
-#include "lib/allocator/ob_malloc.h"
-
 #include "gtest/gtest.h"
+#define private public
+#include "lib/hash/ob_hashmap.h"
+#undef private
 
 using namespace oceanbase;
 using namespace common;
@@ -29,6 +22,25 @@ using namespace hash;
 uint32_t gHashItemNum = 128;
 typedef uint64_t HashKey;
 typedef uint64_t HashValue;
+
+class SetCallback
+{
+  public:
+    SetCallback() : v_(-1) {}
+    virtual ~SetCallback() {}
+    int operator ()(const HashMapPair<HashKey, HashValue> &pair)
+    {
+      int ret = OB_SUCCESS;
+      v_ = pair.second;
+      return ret;
+    };
+    HashValue get_v() const
+    {
+      return v_;
+    };
+  private:
+    HashValue v_;
+};
 
 class CallBack
 {
@@ -315,6 +327,32 @@ TEST(TestObHashMap, set_or_update)
   EXPECT_EQ(value_update, value_tmp);
 }
 
+TEST(TestObHashMap, set_or_update_with_set_callback)
+{
+  ObHashMap<HashKey, HashValue> hm;
+  uint64_t key = 1;
+  uint64_t value = 100;
+  SetCallback set_callback;
+  CallBack update_callback;
+  HashValue value_tmp;
+
+  // 没有create
+  EXPECT_EQ(OB_NOT_INIT, hm.set_or_update(key, value, set_callback, update_callback));
+  hm.create(cal_next_prime(gHashItemNum), ObModIds::OB_HASH_BUCKET);
+
+  EXPECT_EQ(OB_HASH_NOT_EXIST, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(OB_SUCCESS, hm.set_or_update(key, value, set_callback, update_callback));
+  EXPECT_EQ(OB_SUCCESS, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(value, value_tmp);
+  EXPECT_EQ(set_callback.get_v(), value);
+
+  uint64_t value_update = 3000;
+  update_callback.set_v(value_update);
+  EXPECT_EQ(OB_SUCCESS, hm.set_or_update(key, value, set_callback, update_callback));
+  EXPECT_EQ(OB_SUCCESS, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(value_update, value_tmp);
+}
+
 TEST(TestObHashMap, erase_if)
 {
   ObHashMap<HashKey, HashValue> hm;
@@ -424,6 +462,96 @@ TEST(TestObHashMap, buckect_iterator)
     bucket_it++;
   }
   EXPECT_EQ(0, hm2.size());
+}
+
+class MockObMalloc: public ObIAllocator
+{
+public:
+  MockObMalloc(const oceanbase::lib::ObLabel &label = ObModIds::TEST,
+      int64_t tenant_id = OB_SERVER_TENANT_ID) : alloc_count_(0)
+  {
+    UNUSED(label);
+    UNUSED(tenant_id);
+  }
+  MockObMalloc(ObIAllocator &allocator)
+  {
+    UNUSED(allocator);
+  }
+  void *alloc(const int64_t sz)
+  {
+    void *ptr = nullptr;
+    // only the first memory allocation can succeed
+    if (0 == alloc_count_) {
+      ptr = ob_malloc(sz, "MockAlloc");
+      alloc_count_++;
+    }
+    return ptr;
+  }
+  void *alloc(const int64_t sz, const ObMemAttr &attr)
+  {
+    UNUSEDx(sz, attr);
+    return nullptr;
+  }
+  void free(void *p) { ob_free(p); }
+
+  int64_t alloc_count_;
+};
+
+TEST(TestObHashMap, extend_bucket_alloc_memory_failed)
+{
+  const int64_t extend_ratio = 2;
+  ObHashMap<HashKey,
+            HashValue,
+            NoPthreadDefendMode,
+            hash_func<HashKey>,
+            equal_to<HashKey>,
+            SimpleAllocer<HashMapTypes<HashKey, HashValue>::AllocType>,
+            NormalPointer,
+            MockObMalloc,
+            extend_ratio> hm;
+
+  int bucket_num = PRIME_LIST[0];
+  hm.create(bucket_num, ObModIds::OB_HASH_BUCKET);
+  void *bucket_ptr = hm.ht_.buckets_;
+
+  int i = 0;
+  for (; i < bucket_num; i++) {
+    EXPECT_EQ(OB_SUCCESS, hm.set_refactored(i, i, 0));
+  }
+
+  // when the size of hashmap is larger than bucket num, new buckets will be created
+  EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED, hm.set_refactored(i, i, 0));
+
+  // when memory allocation failed, the original bucket should be accessible
+  EXPECT_EQ(bucket_ptr, hm.ht_.buckets_);
+  EXPECT_EQ(bucket_num, hm.bucket_count());
+}
+
+TEST(TestObHashMap, extend_bucket)
+{
+  const int64_t extend_ratio = 2;
+  ObHashMap<HashKey,
+            HashValue,
+            NoPthreadDefendMode,
+            hash_func<HashKey>,
+            equal_to<HashKey>,
+            SimpleAllocer<HashMapTypes<HashKey, HashValue>::AllocType>,
+            NormalPointer,
+            ObMalloc,
+            extend_ratio> hm;
+
+  int bucket_num = PRIME_LIST[0];
+  hm.create(bucket_num, ObModIds::OB_HASH_BUCKET);
+
+  int i = 0;
+  for (; i < bucket_num; i++) {
+    EXPECT_EQ(OB_SUCCESS, hm.set_refactored(i, i, 0));
+  }
+
+  // when the size of hashmap is larger than bucket num, new buckets will be created
+  EXPECT_EQ(bucket_num, hm.bucket_count());
+  EXPECT_EQ(OB_SUCCESS, hm.set_refactored(i, i, 0));
+  EXPECT_EQ(bucket_num * extend_ratio, hm.bucket_count());
 }
 
 int main(int argc, char **argv)

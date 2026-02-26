@@ -12,19 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "ob_transform_min_max.h"
-#include "ob_transformer_impl.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_common_utility.h"
-#include "common/ob_smart_call.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_table_schema.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
-#include "sql/ob_sql_context.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 using namespace oceanbase::common;
@@ -253,7 +240,7 @@ int ObTransformMinMax::do_multi_minmax_transform(ObSelectStmt *select_stmt)
       select_stmt->get_column_items().reset();
       if (OB_FAIL(select_stmt->adjust_subquery_list())) {
         LOG_WARN("failed to adjust subquery list", K(ret));
-      } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_))) {
+      } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_, false))) {
         LOG_WARN("failed to formalize stmt", K(ret));
       } else {
         LOG_TRACE("succeed to do transform min max", KPC(select_stmt));
@@ -330,7 +317,7 @@ int ObTransformMinMax::deep_copy_subquery_for_aggr(const ObSelectStmt &copied_st
     LOG_WARN("failed to rebuild table hash", K(ret));
   } else if (OB_FAIL(child_stmt->update_column_item_rel_id())) {
     LOG_WARN("failed to update column item by id", K(ret));
-  } else if (OB_FAIL(child_stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(child_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
@@ -567,7 +554,7 @@ int ObTransformMinMax::set_child_order_item(ObSelectStmt *stmt,
 int ObTransformMinMax::set_child_condition(ObSelectStmt *stmt, ObRawExpr *aggr_param)
 {
   int ret = OB_SUCCESS;
-  ObOpRawExpr *not_null_expr = NULL;
+  ObRawExpr *not_null_expr = NULL;
   bool is_not_null = false;
   ObArray<ObRawExpr *> constraints;
   if (OB_ISNULL(stmt) || OB_ISNULL(aggr_param) || OB_ISNULL(ctx_)) {
@@ -580,7 +567,7 @@ int ObTransformMinMax::set_child_condition(ObSelectStmt *stmt, ObRawExpr *aggr_p
     if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
       LOG_WARN("failed to add param not null constraints", K(ret));
     }
-  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, stmt, aggr_param, not_null_expr))) {
+  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, aggr_param, not_null_expr))) {
     LOG_WARN("failed to add is not null", K(ret));
   } else if (OB_FAIL(stmt->add_condition_expr(not_null_expr))) {
     LOG_WARN("failed to add condition expr", K(ret));

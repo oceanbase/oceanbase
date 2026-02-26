@@ -362,5 +362,22 @@ protected:
   int process() override;
 };
 
+class ObDirectLoadControlInitEmptyTabletsExecutor
+  : public ObTableLoadControlRpcExecutor<ObDirectLoadControlCommandType::INIT_EMPTY_TABLETS>
+{
+  typedef ObTableLoadControlRpcExecutor<ObDirectLoadControlCommandType::INIT_EMPTY_TABLETS> ParentType;
+public:
+  ObDirectLoadControlInitEmptyTabletsExecutor(common::ObIAllocator &allocator,
+                                              const ObDirectLoadControlRequest &request,
+                                              ObDirectLoadControlResult &result)
+    : ParentType(allocator, request, result)
+  {
+  }
+  virtual ~ObDirectLoadControlInitEmptyTabletsExecutor() = default;
+protected:
+  int check_args() override;
+  int process() override;
+};
+
 } // namespace observer
 } // namespace oceanbase

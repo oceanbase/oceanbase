@@ -55,6 +55,7 @@ public:
   bool is_valid() const;
   void operator=(const PalfBaseInfo &base_info);
   void generate_by_default();
+  int generate(const LSN &lsn, const LogInfo &prev_log_info);
 
   TO_STRING_KV(K_(prev_log_info), K_(curr_lsn));
 

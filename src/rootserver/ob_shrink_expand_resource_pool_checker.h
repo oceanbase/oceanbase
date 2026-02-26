@@ -60,20 +60,22 @@ public:
   int check();
 private:
   virtual int check_stop() const override;
-  int check_shrink_resource_pool_finished_by_tenant_(
+  int check_alter_unit_num_finished_by_tenant_(
       const uint64_t tenant_id);
-  int extract_units_servers_and_ids_(
-      const ObIArray<share::ObUnit> &units,
-      ObIArray<common::ObAddr> &servers,
-      ObIArray<uint64_t> &unit_ids,
-      ObIArray<uint64_t> &unit_group_ids);
   int check_shrink_resource_pool_finished_by_ls_(
     const uint64_t tenant_id,
     const ObIArray<common::ObAddr> &servers,
     const ObIArray<uint64_t> &unit_ids,
     const ObIArray<uint64_t> &unit_group_ids,
     bool &is_finished);
-  int commit_tenant_shrink_resource_pool_(const uint64_t tenant_id);
+  int commit_tenant_alter_resource_pool_(const uint64_t tenant_id,
+      const ObIArray<share::ObUnit> &unit_array);
+  int get_tenant_alter_unit_(
+      const ObIArray<share::ObUnit> &unit_array,
+      ObIArray<common::ObAddr> &delete_unit_servers,
+      ObIArray<uint64_t> &delete_unit_ids,
+      ObIArray<uint64_t> &delete_unit_group_ids,
+      ObIArray<uint64_t> &adding_unit_ids);
 private:
   const volatile bool &is_stop_;
   common::ObMySQLProxy *sql_proxy_;

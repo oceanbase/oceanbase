@@ -11,7 +11,6 @@
  */
 
 #include "ob_admin_io_executor.h"
-#include "share/io/ob_io_manager.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_inner_table_operator.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "common/ob_smart_var.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -338,6 +334,13 @@ int ObInnerTableOperator::increase_column_by_one(
     const char *column_name, int64_t &affected_rows) const
 {
   return increase_column_by(proxy, key, column_name, 1LL, affected_rows);
+}
+
+int ObInnerTableOperator::decrease_column_by_one(
+    common::ObISQLClient &proxy, const ObIInnerTableKey &key,
+    const char *column_name, int64_t &affected_rows) const
+{
+  return increase_column_by(proxy, key, column_name, -1LL, affected_rows);
 }
 
 int ObInnerTableOperator::update_column(

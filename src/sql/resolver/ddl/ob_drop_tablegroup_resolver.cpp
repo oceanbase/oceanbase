@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 #include "sql/resolver/ddl/ob_drop_tablegroup_resolver.h"
 #include "sql/resolver/ddl/ob_drop_tablegroup_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;

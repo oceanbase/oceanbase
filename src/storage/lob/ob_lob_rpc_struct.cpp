@@ -8,11 +8,6 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE
-#include "share/ob_errno.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/ob_task_define.h"
-#include "share/ob_force_print_log.h"
 #include "ob_lob_rpc_struct.h"
 
 namespace oceanbase
@@ -54,7 +49,8 @@ OB_DEF_SERIALIZE_SIZE(ObLobQueryArg)
               cs_type_,
               scan_backward_,
               qtype_,
-              lob_locator_);
+              lob_locator_,
+              enable_remote_retry_);
   return len;
 }
 
@@ -68,7 +64,8 @@ OB_DEF_SERIALIZE(ObLobQueryArg)
               cs_type_,
               scan_backward_,
               qtype_,
-              lob_locator_);
+              lob_locator_,
+              enable_remote_retry_);
   return ret;
 }
 
@@ -82,7 +79,8 @@ OB_DEF_DESERIALIZE(ObLobQueryArg)
               cs_type_,
               scan_backward_,
               qtype_,
-              lob_locator_);
+              lob_locator_,
+              enable_remote_retry_);
   return ret;
 }
 
@@ -93,7 +91,8 @@ ObLobQueryArg::ObLobQueryArg()
     cs_type_(common::ObCollationType::CS_TYPE_INVALID),
     scan_backward_(false),
     qtype_(QueryType::READ),
-    lob_locator_()
+    lob_locator_(),
+    enable_remote_retry_(false)
 {}
 
 ObLobQueryArg::~ObLobQueryArg()

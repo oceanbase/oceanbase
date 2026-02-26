@@ -14,51 +14,24 @@
 
 #include "rootserver/ob_bootstrap.h"
 
-#include "share/ob_define.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/utility/ob_print_utils.h"
-#include "common/data_buffer.h"
-#include "common/ob_role.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "common/ob_member_list.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_ddl_sql_service.h"
 #include "share/ob_zone_table_operation.h"
-#include "share/ob_tenant_id_schema_version.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/ob_server_status.h"
-#include "lib/worker.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_primary_zone_util.h"
-#include "share/ob_schema_status_proxy.h"
-#include "share/ob_ls_id.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "storage/ob_file_system_router.h"
 #include "share/ls/ob_ls_creator.h"//ObLSCreator
 #include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
-#include "share/ob_all_server_tracer.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"
-#include "rootserver/ob_ddl_operator.h"
-#include "rootserver/ob_locality_util.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"
-#include "rootserver/ob_server_zone_op_service.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_freeze_info_manager.h"
 #include "rootserver/ob_table_creator.h"
-#include "share/scn.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "rootserver/ob_root_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "close_modules/tde_security/share/ob_master_key_getter.h"
 #endif
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/object_storage/ob_device_connectivity.h"
+#include "storage/shared_storage/ob_ss_format_util.h"
+#include "storage/shared_storage/ob_ss_cluster_info.h"
+#endif
+#include "share/inner_table/ob_load_inner_table_schema.h"
+#include "rootserver/ob_load_inner_table_schema_executor.h"
+#include "rootserver/ob_disaster_recovery_replace_tenant.h"
 
 namespace oceanbase
 {
@@ -79,7 +52,7 @@ ObBaseBootstrap::ObBaseBootstrap(ObSrvRpcProxy &rpc_proxy,
       rs_list_(rs_list),
       config_(config)
 {
-  std::sort(rs_list_.begin(), rs_list_.end());
+  lib::ob_sort(rs_list_.begin(), rs_list_.end());
 }
 
 int ObBaseBootstrap::gen_sys_unit_ids(const ObIArray<ObZone> &zones,
@@ -94,7 +67,7 @@ int ObBaseBootstrap::gen_sys_unit_ids(const ObIArray<ObZone> &zones,
   } else if (OB_FAIL(sorted_zones.assign(zones))) {
     LOG_WARN("assign failed", K(ret));
   } else {
-    std::sort(sorted_zones.begin(), sorted_zones.end());
+    lib::ob_sort(sorted_zones.begin(), sorted_zones.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < zones.count(); ++i) {
       for (int64_t j = 0; OB_SUCC(ret) && j < sorted_zones.count(); ++j) {
         if (sorted_zones.at(j) == zones.at(i)) {
@@ -132,9 +105,10 @@ int ObBaseBootstrap::check_multiple_zone_deployment_rslist(
       if (i != j) {
         if (zone == rs_list[j].zone_) {
           ret = OB_PARTITION_ZONE_DUPLICATED;
+          ObCStringHelper helper;
           LOG_WARN("should not choose two rs in same zone",
-              "server1", to_cstring(rs_list[i].server_),
-              "server2", to_cstring(rs_list[j].server_), K(zone), K(ret));
+              "server1", helper.convert(rs_list[i].server_),
+              "server2", helper.convert(rs_list[j].server_), K(zone), K(ret));
         }
       }
     }
@@ -149,10 +123,27 @@ int ObBaseBootstrap::check_bootstrap_rs_list(
   if (rs_list.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rs_list size must larger than 0", K(ret));
-  } else {
-    if (OB_FAIL(check_multiple_zone_deployment_rslist(rs_list))) {
-      LOG_WARN("fail to check multiple zone deployment rslist", K(ret));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else if (rs_list.count() != 1) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("in standalone mode, bootstrap with more than server is not allowed", KR(ret), K(rs_list));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "bootstrap more than one server in standalone mode");
+#endif
+  } else if (OB_FAIL(check_multiple_zone_deployment_rslist(rs_list))) {
+    LOG_WARN("fail to check multiple zone deployment rslist", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    // In shared_storage_mode, for now, we need the cluster to have only one single REGION.
+    // This constraint will be canceled in later version.
+    const ObRegion &the_only_region = rs_list[0].region_;
+    for (int64_t i = 1; i < rs_list_.count(); ++i) {
+      if (the_only_region != rs_list_[i].region_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("In shared storage mode, more than one REGION is not supported yet.", KR(ret), K(rs_list));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one region in shared-storage mode");
+      }
     }
+#endif
   }
   //BOOTSTRAP_CHECK_SUCCESS();
   return ret;
@@ -241,6 +232,7 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   bool is_empty = false;
   bool match = false;
   LOG_DBA_INFO_V2(OB_BOOTSTRAP_PREPARE_BEGIN, "bootstrap prepare begin.");
+  common::ObArray<share::ObUnit> unit_array;
   begin_ts_ = ObTimeUtility::current_time();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
@@ -249,8 +241,10 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   } else if (OB_FAIL(check_all_server_bootstrap_mode_match(match))) {
     LOG_WARN("fail to check all server bootstrap mode match", KR(ret));
   } else if (!match) {
-    ret = OB_NOT_SUPPORTED;
+    ret = OB_OP_NOT_ALLOW;
     LOG_WARN("cannot do bootstrap with different bootstrap mode on servers", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "startup mode not match, bootstrap");
+    // TODO(cangming.zl): add case
   } else if (OB_FAIL(check_is_all_server_empty(is_empty))) {
     LOG_WARN("failed to check bootstrap stat", KR(ret));
   } else if (!is_empty) {
@@ -258,14 +252,26 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
     LOG_WARN("cannot do bootstrap on not empty server", KR(ret));
   } else if (OB_FAIL(notify_sys_tenant_root_key())) {
     LOG_WARN("fail to notify sys tenant root key", KR(ret));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (OB_FAIL(check_and_notify_logservice_access_point())) {
+    LOG_WARN("fail to notify logservice access point", KR(ret));
+#endif
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (OB_FAIL(check_and_notify_shared_storage_info())) {
+    LOG_WARN("fail to notify shared-storage info", KR(ret));
+#endif
   } else if (OB_FAIL(notify_sys_tenant_server_unit_resource())) {
     LOG_WARN("fail to notify sys tenant server unit resource", KR(ret));
   } else if (OB_FAIL(notify_sys_tenant_config_())) {
     LOG_WARN("fail to notify sys tenant config", KR(ret));
-  } else if (OB_FAIL(create_ls())) {
-    LOG_WARN("failed to create core table partition", KR(ret));
-  } else if (OB_FAIL(wait_elect_ls(master_rs))) {
-    LOG_WARN("failed to wait elect master partition", KR(ret));
+  } else if (OB_FAIL(gen_sys_units(unit_array))) {
+    LOG_WARN("fail to gen sys unit array", KR(ret));
+  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(create_sslog_ls_(unit_array))) {
+    LOG_WARN("failed to sslog ls", KR(ret));
+  } else if (OB_FAIL(create_sys_ls(SYS_LS, unit_array))) {
+    LOG_WARN("failed to sys ls", KR(ret));
+  } else if (OB_FAIL(wait_elect_ls(SYS_LS, master_rs))) {
+    LOG_WARN("failed to wait elect leader", KR(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();
   if (OB_FAIL(ret)) {
@@ -276,6 +282,154 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   }
   return ret;
 }
+
+int ObPreBootstrap::create_sslog_ls_(
+    const common::ObArray<share::ObUnit> &unit_array)
+{
+  int ret = OB_SUCCESS;
+  ObAddr sslog_leader; // not used
+  if (OB_FAIL(create_sys_ls(SSLOG_LS, unit_array))) {
+    LOG_WARN("failed to sslog ls", KR(ret));
+  } else if (OB_FAIL(wait_elect_ls(SSLOG_LS, sslog_leader))) {
+    LOG_WARN("failed to wait elect leader", KR(ret));
+  } else if (OB_FAIL(ObRootUtils::create_sslog_tablet(OB_SYS_TENANT_ID))) {
+    LOG_WARN("failed to create sslog tablet", KR(ret));
+  }
+  return ret;
+}
+
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+int ObPreBootstrap::check_and_notify_logservice_access_point()
+{
+  int ret = OB_SUCCESS;
+  const ObString &logservice_access_point = arg_.logservice_access_point_;
+  if (!GCONF.enable_logservice) { // do nothing
+  } else if (logservice_access_point.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("logservice_access_point is empty with enable_logservice", KR(ret), K(arg_));
+  } else {
+    // Notify rs_list nodes with logservice access point
+    ObNotifyLogServiceAccessPointArg rpc_arg;
+    ObNotifyLogServiceAccessPointResult rpc_result;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
+      if (OB_FAIL(rpc_arg.init(logservice_access_point))) {
+        LOG_WARN("fail to init rpc_arg", KR(ret));
+      } else if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
+                                    .notify_logservice_access_point(rpc_arg, rpc_result))) {
+        LOG_WARN("fail to send rpc notify_logservice_access_point", KR(ret), K(rs_list_[i].server_));
+      } else if (OB_FAIL(rpc_result.get_ret())) {
+        LOG_WARN("notify_logservice_access_point via rpc failed", KR(ret), K(rs_list_[i].server_));
+      }
+    }
+  }
+  BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+#endif
+
+#ifdef OB_BUILD_SHARED_STORAGE
+/*
+ * Parse and check the validity of shared_storage info.
+ * Check connectivity and whether ss-format file exist.
+ * Then write the ss-format file and notify rs-list nodes with shared_storage info.
+ */
+int ObPreBootstrap::check_and_notify_shared_storage_info()
+{
+  int ret = OB_SUCCESS;
+  if (!GCTX.is_shared_storage_mode()) {
+    // do nothing in shared_nothing mode
+  } else {
+    const ObString &shared_storage_info_str = arg_.shared_storage_info_;
+    ObAdminStorageArg shared_storage_infos;
+    ObBackupDest storage_dest;
+    ObDeviceConnectivityCheckManager device_conn_check_mgr;
+    if (OB_UNLIKELY(shared_storage_info_str.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("shared_storage_infos is empty in SS mode", KR(ret), K(arg_));
+    } else if (OB_FAIL(ObStorageDestCheck::parse_shared_storage_info(shared_storage_info_str,
+                  shared_storage_infos, storage_dest))) {
+      LOG_WARN("failed to parse shared_storage_infos", KR(ret), K(shared_storage_infos));
+    } else if (OB_UNLIKELY(!shared_storage_infos.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("shared_storage_infos is invalid", KR(ret), K(shared_storage_infos));
+    }
+    // Check storage-dest connectivity
+    if (FAILEDx(device_conn_check_mgr.check_device_connectivity(storage_dest))) {
+      LOG_WARN("fail to check device connectivity", KR(ret), K(storage_dest));
+    } else if (OB_FAIL(wirte_ss_format_and_cluster_info_(storage_dest))) {
+      LOG_WARN("fail to write ss_format and cluster_info", KR(ret), K(storage_dest));
+    }
+
+    // Notify rs_list nodes with shared-storage info
+    if (OB_SUCC(ret)) {
+      ObNotifySharedStorageInfoArg rpc_arg;
+      ObNotifySharedStorageInfoResult rpc_result;
+      // NOTICE: For now, shared-storage info in bootstrap only include one storage-dest and used for all zones.
+      //         Its zone and region are not specified and need to be assigned from rs_list.
+      for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
+        shared_storage_infos.zone_ = rs_list_[i].zone_;
+        shared_storage_infos.region_ = rs_list_[i].region_;
+        if (OB_FAIL(rpc_arg.init(shared_storage_infos))) {
+          LOG_WARN("fail to init rpc_arg", KR(ret), K(shared_storage_infos));
+        } else if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
+                                      .notify_shared_storage_info(rpc_arg, rpc_result))) {
+          LOG_WARN("fail to send rpc notify_shared_stoarge_info", KR(ret), K(rpc_arg), K(rs_list_[i].server_));
+        } else if (OB_FAIL(rpc_result.get_ret())) {
+          LOG_WARN("notfiy_shared_storage_info via rpc failed", KR(ret), K(rpc_arg), K(rs_list_[i].server_));
+        }
+      }
+    }
+  }
+  BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObPreBootstrap::wirte_ss_format_and_cluster_info_(const ObBackupDest &storage_dest)
+{
+  int ret = OB_SUCCESS;
+  // Check and write the ss-format file to prevent from write conflict with another cluster
+  // in same shared-storage directory
+  bool is_ss_format_exist = false;
+  bool is_ss_cluster_info_exist = false;
+  ObSSFormat ss_format;
+  ObSSClusterInfo ss_cluster_info;
+  uint64_t logservice_cluster_id = OB_INVALID_ID;
+  if (FAILEDx(ObSSFormatUtil::is_exist_ss_format(storage_dest, is_ss_format_exist))) {
+    LOG_WARN("fail to judge ss_format exist", KR(ret), K(storage_dest), K(is_ss_format_exist));
+  } else if (OB_UNLIKELY(is_ss_format_exist)) {
+    ret = OB_FILE_ALREADY_EXIST;
+    LOG_ERROR("ss_format file already exist, shared storage must use new path"
+              "as the object storage path", KR(ret), K(is_ss_format_exist), K(storage_dest));
+    LOG_USER_ERROR(OB_ENTRY_EXIST, "ss_format file already exist,"
+                  "shared storage must use new path as the object storage path");
+  } else if (OB_FAIL(ss_format.init(CLUSTER_CURRENT_VERSION, ObTimeUtility::fast_current_time()))) {
+    LOG_WARN("fail to init ss_format", KR(ret), K(CLUSTER_CURRENT_VERSION));
+  } else if (OB_FAIL(ObSSFormatUtil::write_ss_format(storage_dest, ss_format))) {
+    LOG_ERROR("fail to write ss_format file", KR(ret), K(storage_dest), K(ss_format));
+  } else if (OB_FAIL(ObSSClusterInfoUtil::is_exist_ss_cluster_info(storage_dest, is_ss_cluster_info_exist))) {
+    LOG_WARN("fail to judge ss_cluster_info exist", KR(ret), K(storage_dest));
+  } else if (OB_UNLIKELY(is_ss_cluster_info_exist)) {
+    ret = OB_FILE_ALREADY_EXIST;
+    LOG_ERROR("ss_cluster_info file already exist, shared storage must use new path"
+              "as the object storage path", KR(ret), K(is_ss_cluster_info_exist), K(storage_dest));
+    LOG_USER_ERROR(OB_ENTRY_EXIST, "ss_cluster_info file already exist,"
+                  "shared storage must use new path as the object storage path");
+  } else if (rs_list_.count() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rs_list size must larger than 0", K(ret));
+  } else if (OB_FAIL(ObDRReplaceTenant::get_logservice_cluster_id(logservice_cluster_id))) {
+    LOG_WARN("fail to get logservice cluster id", KR(ret));
+  } else if (OB_FAIL(ss_cluster_info.init(logservice_cluster_id, rs_list_.at(0).region_))) {
+    LOG_WARN("fail to init ss_cluster_info", KR(ret), K(logservice_cluster_id), K(CLUSTER_CURRENT_VERSION));
+  } else if (OB_FAIL(ObSSClusterInfoUtil::write_ss_cluster_info(storage_dest, ss_cluster_info))) {
+    LOG_ERROR("fail to write ss_cluster_info file", KR(ret), K(storage_dest), K(ss_cluster_info));
+  }
+  FLOG_INFO("write ss_cluster_info", KR(ret), K(ss_cluster_info), K(ss_format));
+  return ret;
+}
+
+#endif
 
 int ObPreBootstrap::notify_sys_tenant_root_key()
 {
@@ -300,11 +454,11 @@ int ObPreBootstrap::notify_sys_tenant_root_key()
                                                                 result.root_key_))) {
   } else if (obrpc::RootKeyType::INVALID != result.key_type_ || !result.root_key_.empty()) {
     LOG_INFO("root key existed in local");
-  } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, addrs, result, false))) {
+  } else if (OB_FAIL(ObTenantDDLService::notify_root_key(rpc_proxy_, arg, addrs, result, false))) {
     LOG_WARN("fail to notify root key", K(ret));
   } else if (obrpc::RootKeyType::INVALID != result.key_type_ || !result.root_key_.empty()) {
     LOG_INFO("root key existed in remote");
-  } else if (OB_FAIL(ObDDLService::create_root_key(rpc_proxy_, OB_SYS_TENANT_ID, addrs))) {
+  } else if (OB_FAIL(ObTenantDDLService::create_root_key(rpc_proxy_, OB_SYS_TENANT_ID, addrs))) {
     LOG_WARN("fail to create sys tenant root key", KR(ret), K(addrs));
   }
   BOOTSTRAP_CHECK_SUCCESS();
@@ -319,6 +473,10 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
   common::ObArray<uint64_t> sys_unit_id_array;
   const bool is_hidden_sys = false;
 
+#ifdef OB_BUILD_TDE_SECURITY
+  obrpc::ObRootKeyResult root_key_result;
+#endif
+
   if (OB_FAIL(unit_config.gen_sys_tenant_unit_config(is_hidden_sys))) {
     LOG_WARN("gen sys tenant unit config fail", KR(ret), K(is_hidden_sys));
   } else if (OB_FAIL(gen_sys_unit_ids(sys_unit_id_array))) {
@@ -327,6 +485,12 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sys unit id array and rs list count not match", KR(ret),
              "unit_id_array_cnt", sys_unit_id_array.count(), "rs_list_cnt", rs_list_.count());
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(OB_SYS_TENANT_ID,
+                                                                root_key_result.key_type_,
+                                                                root_key_result.root_key_))) {
+    LOG_WARN("failed to get sys tenant root key", K(ret));
+#endif
   } else {
     ObNotifyTenantServerResourceProxy notify_proxy(
                                       rpc_proxy_,
@@ -346,7 +510,7 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
               false/*if not grant*/,
               false/*is_delete*/
 #ifdef OB_BUILD_TDE_SECURITY
-              , obrpc::ObRootKeyResult()/*invalid root_key*/
+              , root_key_result
 #endif
               ))) {
         LOG_WARN("fail to init tenant unit server config", KR(ret));
@@ -375,7 +539,7 @@ int ObPreBootstrap::notify_sys_tenant_config_()
   common::ObConfigPairs config;
   common::ObSEArray<common::ObConfigPairs, 1> init_configs;
   ObArray<ObAddr> addrs;
-  if (OB_FAIL(ObDDLService::gen_tenant_init_config(
+  if (OB_FAIL(ObTenantDDLService::gen_tenant_init_config(
       OB_SYS_TENANT_ID, DATA_CURRENT_VERSION, config))) {
   } else if (OB_FAIL(init_configs.push_back(config))) {
     LOG_WARN("fail to push back config", KR(ret), K(config));
@@ -387,7 +551,7 @@ int ObPreBootstrap::notify_sys_tenant_config_()
       LOG_WARN("fail to push back server", KR(ret));
     }
   } // end for
-  if (FAILEDx(ObDDLService::notify_init_tenant_config(
+  if (FAILEDx(ObTenantDDLService::notify_init_tenant_config(
               rpc_proxy_, init_configs, addrs))) {
     LOG_WARN("fail to notify init tenant config", KR(ret), K(init_configs), K(addrs));
   }
@@ -396,34 +560,39 @@ int ObPreBootstrap::notify_sys_tenant_config_()
   return ret;
 }
 
-int ObPreBootstrap::create_ls()
+int ObPreBootstrap::create_sys_ls(
+    const ObLSID &ls_id,
+    const common::ObArray<share::ObUnit> &unit_array)
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("start create sys tenant LS", K(ls_id));
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(OB_SYS_TENANT_ID))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id));
   } else {
-    common::ObArray<share::ObUnit> unit_array;
-    ObLSCreator ls_creator(rpc_proxy_, OB_SYS_TENANT_ID, SYS_LS);
-    if (OB_FAIL(gen_sys_units(unit_array))) {
-      LOG_WARN("fail to gen sys unit array", KR(ret));
-    } else if (OB_FAIL(ls_creator.create_sys_tenant_ls(
+    ObLSCreator ls_creator(rpc_proxy_, OB_SYS_TENANT_ID, ls_id);
+    if (OB_FAIL(ls_creator.create_sys_tenant_ls(
             rs_list_, unit_array))) {
       LOG_WARN("fail to create sys log stream", KR(ret));
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_INFO("succeed to create ls");
+    LOG_INFO("succeed to create ls", K(ls_id));
   } else {
-    LOG_WARN("create ls failed.", K(ret));
+    LOG_WARN("create ls failed", KR(ret), K(ls_id));
   }
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
 }
 
 int ObPreBootstrap::wait_elect_ls(
+    const ObLSID &ls_id,
     common::ObAddr &master_rs)
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("start LS election", K(ls_id));
   const uint64_t tenant_id = OB_SYS_TENANT_ID;
 
   int64_t timeout = WAIT_ELECT_SYS_LEADER_TIMEOUT_US;
@@ -433,13 +602,23 @@ int ObPreBootstrap::wait_elect_ls(
 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else if (!ls_id.is_sys_ls()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("standalone deployment enabled while sys tenant wait non sys ls", KR(ret), K(ls_id));
+  } else if (FALSE_IT(master_rs = GCTX.self_addr())) {
+#else
   } else if (OB_FAIL(ls_leader_waiter_.wait(
-      tenant_id, SYS_LS, timeout, master_rs))) {
-    LOG_WARN("leader_waiter_ wait failed", K(tenant_id), K(SYS_LS), K(timeout), K(ret));
+      tenant_id, ls_id, timeout, master_rs))) {
+    LOG_WARN("leader_waiter_ wait failed", KR(ret), K(tenant_id), K(ls_id), K(timeout));
+#endif
   }
   if (OB_SUCC(ret)) {
     ObTaskController::get().allow_next_syslog();
-    LOG_INFO("succeed to wait elect log stream");
+    LOG_INFO("succeed to wait elect log stream", K(ls_id));
   }
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
@@ -452,11 +631,12 @@ int ObPreBootstrap::check_all_server_bootstrap_mode_match(
   match = true;
   Bool is_match(false);
 
+  ObCheckDeploymentModeArg arg;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", K(ret));
+  } else if (OB_FAIL(arg.init(GCTX.startup_mode_, GCONF.enable_logservice))) {
+    LOG_WARN("fail to init arg", KR(ret));
   } else {
-    ObCheckDeploymentModeArg arg;
-    arg.single_zone_deployment_on_ = OB_FILE_SYSTEM_ROUTER.is_single_zone_deployment_on();
     for (int64_t i = 0; OB_SUCC(ret) && match && i < rs_list_.count(); ++i) {
       if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_).check_deployment_mode_match(
               arg, is_match))) {
@@ -481,18 +661,24 @@ int ObPreBootstrap::check_is_all_server_empty(bool &is_empty)
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
   } else {
-    ObCheckServerEmptyArg arg(ObCheckServerEmptyArg::BOOTSTRAP,
-                              DATA_CURRENT_VERSION);
+    ObCheckServerEmptyArg arg;
+    const ObCheckServerEmptyArg::Mode mode = ObCheckServerEmptyArg::BOOTSTRAP;
+    const uint64_t data_version = DATA_CURRENT_VERSION;
     for (int64_t i = 0; OB_SUCC(ret) && is_empty && i < rs_list_.count(); ++i) {
       int64_t rpc_timeout = obrpc::ObRpcProxy::MAX_RPC_TIMEOUT;
+      uint64_t server_id = OB_INIT_SERVER_ID + i;
       if (INT64_MAX != THIS_WORKER.get_timeout_ts()) {
         rpc_timeout = max(rpc_timeout, THIS_WORKER.get_timeout_remain());
       }
-      if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
+      // arg.server_id_ will be set if server is empty and mode is BOOTSTRAP.
+      if (OB_FAIL(arg.init(mode, data_version, server_id))) {
+        LOG_WARN("failed to init ObCheckServerEmptyArg", KR(ret), K(mode), K(data_version),
+            K(server_id));
+      } else if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
                             .timeout(rpc_timeout)
-                            .is_empty_server(arg, is_server_empty))) {
+                            .check_server_empty(arg, is_server_empty))) {
         LOG_WARN("failed to check if server is empty",
-            "server", rs_list_[i].server_, K(rpc_timeout), K(ret));
+            "server", rs_list_[i].server_, K(rpc_timeout), K(arg), K(ret));
       } else if (!is_server_empty) {
         // don't need to set ret
         LOG_WARN("server is not empty", "server", rs_list_[i].server_);
@@ -545,6 +731,7 @@ ObBootstrap::ObBootstrap(
     ObSrvRpcProxy &rpc_proxy,
     share::ObLSTableOperator &lst_operator,
     ObDDLService &ddl_service,
+    ObTenantDDLService &tenant_ddl_service,
     ObUnitManager &unit_mgr,
     ObServerConfig &config,
     const obrpc::ObBootstrapArg &arg,
@@ -552,6 +739,7 @@ ObBootstrap::ObBootstrap(
   : ObBaseBootstrap(rpc_proxy, arg.server_list_, config),
     lst_operator_(lst_operator),
     ddl_service_(ddl_service),
+    tenant_ddl_service_(tenant_ddl_service),
     unit_mgr_(unit_mgr),
     arg_(arg),
     common_proxy_(rs_rpc_proxy),
@@ -564,6 +752,7 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
   int ret = OB_SUCCESS;
   bool already_bootstrap = true;
   ObSArray<ObTableSchema> table_schemas;
+  ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
   begin_ts_ = ObTimeUtility::current_time();
 
   BOOTSTRAP_LOG(INFO, "start do execute_bootstrap");
@@ -583,68 +772,90 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
     LOG_WARN("failed to set in bootstrap", K(ret));
   } else if (OB_FAIL(init_global_stat())) {
     LOG_WARN("failed to init_global_stat", K(ret));
-  } else if (OB_FAIL(construct_all_schema(table_schemas))) {
-    LOG_WARN("construct all schema fail", K(ret));
-  } else if (OB_FAIL(broadcast_sys_schema(table_schemas))) {
+  } else if (OB_FAIL(broadcast_sys_schema())) {
     LOG_WARN("broadcast_sys_schemas failed", K(table_schemas), K(ret));
+  } else if (OB_FAIL(construct_all_schema(table_schemas, arena_allocator))) {
+    LOG_WARN("construct all schema fail", K(ret));
   } else if (OB_FAIL(create_all_partitions())) {
     LOG_WARN("create all partitions fail", K(ret));
-  } else if (OB_FAIL(create_all_schema(ddl_service_, table_schemas))) {
+  } else if (GCONF._enable_parallel_tenant_creation &&
+      OB_FAIL(load_all_schema(ddl_service_, table_schemas))) {
+    LOG_WARN("load_all_schema failed",  K(table_schemas), K(ret));
+  } else if (!GCONF._enable_parallel_tenant_creation &&
+      OB_FAIL(create_all_schema(ddl_service_, table_schemas))) {
     LOG_WARN("create_all_schema failed",  K(table_schemas), K(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS_V2("create_all_schema");
   ObMultiVersionSchemaService &schema_service = ddl_service_.get_schema_service();
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(init_system_data())) {
-      LOG_WARN("failed to init system data", KR(ret));
-    }
-    if (OB_SUCC(ret)) {
-      LOG_DBA_INFO_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_BEGIN,
-                      DBA_STEP_INC_INFO(bootstrap),
-                      "bootstrap refresh all schema begin.");
-    }
-    if (FAILEDx(ddl_service_.refresh_schema(OB_SYS_TENANT_ID))) {
-      LOG_WARN("failed to refresh_schema", K(ret));
-      LOG_DBA_ERROR_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_FAIL, ret,
-                       DBA_STEP_INC_INFO(bootstrap),
-                       "bootstrap refresh all schema fail. [suggestion] you can: "
-                       "1. Search previous error logs that may indicate the cause of this failure. "
-                       "2. Check if other nodes are accessible via ssh. "
-                       "2. Check whether other nodes can establish connections through sql client. "
-                       "3. Check the alert.log on others node to see if there are other error logs.");
-    } else {
-      LOG_DBA_INFO_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_SUCCESS,
-                      DBA_STEP_INC_INFO(bootstrap),
-                      "bootstrap refresh all schema success.");
-    }
+  if (FAILEDx(init_system_data())) {
+    LOG_WARN("failed to init system data", KR(ret));
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_BEGIN,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "bootstrap refresh all schema begin.");
+  }
+  if (FAILEDx(ddl_service_.refresh_schema(OB_SYS_TENANT_ID))) {
+    LOG_WARN("failed to refresh_schema", K(ret));
+    LOG_DBA_ERROR_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_FAIL, ret,
+                     DBA_STEP_INC_INFO(bootstrap),
+                     "bootstrap refresh all schema fail. [suggestion] you can: "
+                     "1. Search previous error logs that may indicate the cause of this failure. "
+                     "2. Check if other nodes are accessible via ssh. "
+                     "2. Check whether other nodes can establish connections through sql client. "
+                     "3. Check the alert.log on others node to see if there are other error logs.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_SUCCESS,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "bootstrap refresh all schema success.");
   }
   BOOTSTRAP_CHECK_SUCCESS_V2("refresh_schema");
 
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (FAILEDx(write_shared_storage_args())) {
+    LOG_WARN("failed to init write shared storage args", KR(ret));
+  } else {}
+#endif
+
   if (FAILEDx(add_servers_in_rs_list(server_zone_op_service))) {
     LOG_WARN("fail to add servers in rs_list_", KR(ret));
-  } else {
-    LOG_DBA_INFO_V2(OB_BOOTSTRAP_WAIT_ALL_ROOTSERVICE_BEGIN,
-                    DBA_STEP_INC_INFO(bootstrap),
-                    "bootstrap wait all rootservice in service begin.");
-    if (OB_FAIL(wait_all_rs_in_service())) {
-      LOG_WARN("failed to wait all rs in service", KR(ret));
-      LOG_DBA_ERROR_V2(OB_BOOTSTRAP_WAIT_ALL_ROOTSERVICE_FAIL, ret,
-                      DBA_STEP_INC_INFO(bootstrap),
-                      "bootstrap wait all rootservice in service fail. "
-                      "[suggestion] maybe this node is not leader anymore or just timeout.(depends on error code) you can:"
-                      "1. Check whether the current node is the leader through oceanbase.CDB_OB_LS; "
-                      "2. Check whether the network between nodes is connected; "
-                      "3. Check the alert.log on other nodes;");
-    } else {
-      ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
-      LOG_DBA_INFO_V2(OB_BOOTSTRAP_WAIT_ALL_ROOTSERVICE_SUCCESS,
-                      DBA_STEP_INC_INFO(bootstrap),
-                      "bootstrap wait all rootservice in service success.");
-    }
   }
-
+  ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
   BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObBootstrap::load_all_schema(
+    ObDDLService &ddl_service,
+    common::ObIArray<share::schema::ObTableSchema> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  const int64_t begin_time = ObTimeUtility::current_time();
+  LOG_INFO("start load all schemas", "table count", table_schemas.count());
+  LOG_DBA_INFO_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_BEGIN,
+                  DBA_STEP_INC_INFO(bootstrap),
+                  "bootstrap create all schema begin.");
+  ObLoadInnerTableSchemaExecutor executor;
+  if (OB_FAIL(executor.init(table_schemas, OB_SYS_TENANT_ID,
+          GCONF.get_sys_tenant_default_max_cpu(), &rpc_proxy_))) {
+    LOG_WARN("failed to init executor", KR(ret));
+  } else if (OB_FAIL(executor.execute())) {
+    LOG_WARN("failed to execute load all schema", KR(ret));
+  } else if (OB_FAIL(ObLoadInnerTableSchemaExecutor::load_core_schema_version(
+          OB_SYS_TENANT_ID, ddl_service.get_sql_proxy()))) {
+      LOG_WARN("failed to load core schema version", KR(ret));
+  }
+  LOG_INFO("finish load all schemas", KR(ret), "cost", ObTimeUtility::current_time() - begin_time);
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_FAIL, ret,
+                     DBA_STEP_INC_INFO(bootstrap),
+                     "bootstrap create all schema fail. "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_SUCCESS,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "bootstrap create all schema success.");
+  }
   return ret;
 }
 
@@ -664,7 +875,7 @@ int ObBootstrap::sort_schema(const ObIArray<ObTableSchema> &table_schemas,
     }
     if (OB_SUCC(ret)) {
       TableIdCompare compare;
-      std::sort(ptr_table_schemas.begin(), ptr_table_schemas.end(), compare);
+      lib::ob_sort(ptr_table_schemas.begin(), ptr_table_schemas.end(), compare);
       if (OB_FAIL(compare.get_ret())) {
         LOG_WARN("fail to sort schema", KR(ret));
       } else {
@@ -870,7 +1081,7 @@ int ObBootstrap::add_sys_table_lob_aux_table(
   int ret = OB_SUCCESS;
   if (is_system_table(data_table_id)) {
     HEAP_VARS_2((ObTableSchema, lob_meta_schema), (ObTableSchema, lob_piece_schema)) {
-      if (OB_ALL_CORE_TABLE_TID == data_table_id) {
+      if (is_hardcode_schema_table(data_table_id)) {
         // do nothing
       } else if (OB_FAIL(get_sys_table_lob_aux_schema(data_table_id, lob_meta_schema, lob_piece_schema))) {
         LOG_WARN("fail to get sys table lob aux schema", KR(ret), K(data_table_id));
@@ -884,78 +1095,32 @@ int ObBootstrap::add_sys_table_lob_aux_table(
   return ret;
 }
 
-int ObBootstrap::construct_all_schema(ObIArray<ObTableSchema> &table_schemas)
+int ObBootstrap::construct_all_schema(ObSArray<ObTableSchema> &table_schemas, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  const schema_create_func *creator_ptr_arrays[] = {
-    core_table_schema_creators,
-    sys_table_schema_creators,
-    virtual_table_schema_creators,
-    sys_view_schema_creators
-  };
-
-  ObTableSchema table_schema;
+  ObArray<uint64_t> table_ids_to_construct; // empty means construct all
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
-  } else if (OB_FAIL(table_schemas.reserve(OB_SYS_TABLE_COUNT))) {
-    LOG_WARN("reserve failed", "capacity", OB_SYS_TABLE_COUNT, KR(ret));
-  } else {
-    HEAP_VAR(ObTableSchema, data_schema) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
-        for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
-             OB_SUCCESS == ret && NULL != *creator_ptr; ++creator_ptr) {
-          table_schema.reset();
-          bool exist = false;
-          if (OB_FAIL(construct_schema(*creator_ptr, table_schema))) {
-            LOG_WARN("construct_schema failed", K(table_schema), KR(ret));
-          } else if (OB_FAIL(ObSysTableChecker::is_inner_table_exist(
-                     OB_SYS_TENANT_ID, table_schema, exist))) {
-            LOG_WARN("fail to check inner table exist",
-                     KR(ret), K(table_schema));
-          } else if (!exist) {
-            // skip
-          } else if (ObSysTableChecker::is_sys_table_has_index(table_schema.get_table_id())) {
-            const int64_t data_table_id = table_schema.get_table_id();
-            if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(table_schema))) {
-              LOG_WARN("fail to fill sys index infos", KR(ret), K(data_table_id));
-            } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
-                       OB_SYS_TENANT_ID, data_table_id, table_schemas))) {
-              LOG_WARN("fail to append sys table index schemas", KR(ret), K(data_table_id));
-            }
-          }
-
-          const int64_t data_table_id = table_schema.get_table_id();
-          if (OB_SUCC(ret) && exist) {
-            // process lob aux table
-            if (OB_FAIL(add_sys_table_lob_aux_table(data_table_id, table_schemas))) {
-              LOG_WARN("fail to add lob table to sys table", KR(ret), K(data_table_id));
-            }
-            // push sys table
-            if (OB_SUCC(ret) && OB_FAIL(table_schemas.push_back(table_schema))) {
-              LOG_WARN("push_back failed", KR(ret), K(table_schema));
-            }
-          }
-        }
-      }
-    }
+  } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(OB_SYS_TENANT_ID,
+          table_ids_to_construct, true/*include_index_and_lob_aux_schemas*/, allocator, table_schemas))) {
+    LOG_WARN("failed to construct inner table schemas", KR(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
 }
 
-int ObBootstrap::broadcast_sys_schema(const ObSArray<ObTableSchema> &table_schemas)
+int ObBootstrap::broadcast_sys_schema()
 {
   int ret = OB_SUCCESS;
   obrpc::ObBatchBroadcastSchemaArg arg;
   obrpc::ObBatchBroadcastSchemaResult result;
+  ObArray<ObTableSchema> table_schemas;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
-  } else if (table_schemas.count() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table_schemas is empty", KR(ret), K(table_schemas));
   } else if (OB_FAIL(arg.init(OB_SYS_TENANT_ID,
                               OB_CORE_SCHEMA_VERSION,
-                              table_schemas))) {
+                              table_schemas,
+                              true/*generate_schema*/))) {
     LOG_WARN("fail to init arg", KR(ret));
   } else {
     ObBatchBroadcastSchemaProxy proxy(rpc_proxy_,
@@ -1156,6 +1321,8 @@ int ObBootstrap::add_servers_in_rs_list(rootserver::ObServerZoneOpService &serve
         FLOG_INFO("add servers in rs_list_ in version < 4.2", KR(ret), K(server), K(zone));
       }
     } else {
+      // Attention: DO keep the order of this rs_list_ the same with that of ObPrepareBootstrap,
+      //   otherwise server_ids allocated here will mismatch those notified during prepare-bootstrap stage.
       for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
         servers.reuse();
         const ObAddr &server = rs_list_.at(i).server_;
@@ -1172,59 +1339,6 @@ int ObBootstrap::add_servers_in_rs_list(rootserver::ObServerZoneOpService &serve
       }
     }
   }
-  return ret;
-}
-
-int ObBootstrap::wait_all_rs_in_service()
-{
-  int ret = OB_SUCCESS;
-  const int64_t check_interval = 500 * 1000;
-  int64_t left_time_can_sleep = WAIT_RS_IN_SERVICE_TIMEOUT_US;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check_inner_stat failed", K(ret));
-  }
-  while (OB_SUCC(ret)) {
-    if (!ObRootServiceRoleChecker::is_rootserver()) {
-      ret = OB_RS_SHUTDOWN;
-      LOG_WARN("wait all rs in service fail, self is not master rootservice any more, check SYS LS leader revoke infos",
-          KR(ret), K(left_time_can_sleep));
-      break;
-    }
-
-    bool all_in_service = true;
-    FOREACH_CNT_X(rs, rs_list_, all_in_service && OB_SUCCESS == ret) {
-      bool in_service = false;
-      if (INT64_MAX != THIS_WORKER.get_timeout_ts()) {
-        left_time_can_sleep = max(left_time_can_sleep, THIS_WORKER.get_timeout_remain());
-      }
-      // mark
-      if (OB_FAIL(SVR_TRACER.check_in_service(rs->server_, in_service))) {
-        LOG_WARN("check_in_service failed", "server", rs->server_, K(ret));
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-          all_in_service = false;
-        }
-      } else if (!in_service) {
-        LOG_WARN("server is not in_service ", "server", rs->server_);
-        all_in_service = false;
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (all_in_service) {
-      break;
-    } else if (left_time_can_sleep > 0) {
-      const int64_t time_to_sleep = min(check_interval, left_time_can_sleep);
-      LOG_WARN("fail to wait all rs in service. wait a while", K(time_to_sleep), K(left_time_can_sleep));
-      ob_usleep(static_cast<uint32_t>(time_to_sleep));
-      left_time_can_sleep -= time_to_sleep;
-    } else {
-      ret = OB_WAIT_ALL_RS_ONLINE_TIMEOUT;
-      LOG_WARN("wait all rs in service timeout", "timeout",
-          static_cast<int64_t>(WAIT_RS_IN_SERVICE_TIMEOUT_US), K(ret));
-    }
-  }
-  BOOTSTRAP_CHECK_SUCCESS();
   return ret;
 }
 
@@ -1262,7 +1376,7 @@ int ObBootstrap::init_global_stat()
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
   } else {
-    const int64_t baseline_schema_version = -1;
+    const int64_t baseline_schema_version = OB_INVALID_VERSION; // OB_INVALID_VERSION == -1
     const int64_t rootservice_epoch = 0;
     const SCN snapshot_gc_scn = SCN::min_scn();
     const int64_t snapshot_gc_timestamp = 0;
@@ -1277,7 +1391,7 @@ int ObBootstrap::init_global_stat()
     } else if (OB_FAIL(global_stat_proxy.set_init_value(
                OB_CORE_SCHEMA_VERSION, baseline_schema_version,
                rootservice_epoch, snapshot_gc_scn, snapshot_gc_timestamp, ddl_epoch,
-               DATA_CURRENT_VERSION, DATA_CURRENT_VERSION))) {
+               DATA_CURRENT_VERSION, DATA_CURRENT_VERSION, DATA_CURRENT_VERSION))) {
       LOG_WARN("set_init_value failed", KR(ret), "schema_version", OB_CORE_SCHEMA_VERSION,
                K(baseline_schema_version), K(rootservice_epoch), K(ddl_epoch), "data_version", DATA_CURRENT_VERSION);
     }
@@ -1294,29 +1408,10 @@ int ObBootstrap::init_global_stat()
           OB_INVALID_VERSION);
       if (OB_FAIL(schema_status_proxy->set_tenant_schema_status(tenant_status))) {
         LOG_WARN("fail to init create partition status", KR(ret), K(tenant_status));
-      } else if (OB_FAIL(init_sequence_id())) {
-        LOG_WARN("failed to init_sequence_id", KR(ret));
       } else {}
     }
   }
   BOOTSTRAP_CHECK_SUCCESS();
-  return ret;
-}
-
-int ObBootstrap::init_sequence_id()
-{
-  int ret = OB_SUCCESS;
-  const int64_t rootservice_epoch = 0;
-  ObMultiVersionSchemaService &multi_schema_service = ddl_service_.get_schema_service();
-  ObSchemaService *schema_service = multi_schema_service.get_schema_service();
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check_inner_stat failed", K(ret));
-  } else if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is null", K(ret));
-  } else if (OB_FAIL(schema_service->init_sequence_id(rootservice_epoch))) {
-    LOG_WARN("init sequence id failed", K(ret), K(rootservice_epoch));
-  }
   return ret;
 }
 
@@ -1328,7 +1423,7 @@ int ObBootstrap::gen_multiple_zone_deployment_sys_tenant_locality_str(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("zone list count unexpected", K(ret));
   } else {
-    const int64_t BUFF_SIZE = 256; // 256 is enough for sys tenant
+    const int64_t BUFF_SIZE = 32 * MAX_ZONE_LENGTH; // 4096
     char locality_str[BUFF_SIZE] = "";
     bool first = true;
     int64_t pos = 0;
@@ -1413,10 +1508,10 @@ int ObBootstrap::create_sys_tenant()
       LOG_WARN("set_comment failed", "comment", "system tenant", K(ret));
     } else if (OB_FAIL(set_replica_options(tenant))) {
       LOG_WARN("failed to set replica options", KR(ret));
-    } else if (OB_FAIL(ddl_service_.check_primary_zone_locality_condition(
+    } else if (OB_FAIL(tenant_ddl_service_.check_primary_zone_locality_condition(
             tenant, zone_list, zone_region_list, dummy_schema_guard))) {
       LOG_WARN("fail to check primary zone region condition", K(ret));
-    } else if (OB_FAIL(ddl_service_.create_sys_tenant(arg, tenant))) {
+    } else if (OB_FAIL(tenant_ddl_service_.create_sys_tenant(arg, tenant))) {
       LOG_WARN("create tenant failed", K(ret), K(tenant));
     } else if (OB_FAIL(insert_sys_ls_(tenant, zone_list))) {
       LOG_WARN("failed to insert sys ls", KR(ret), K(zone_list));
@@ -1468,16 +1563,26 @@ int ObBootstrap::insert_sys_ls_(const share::schema::ObTenantSchema &tenant_sche
 
   if (OB_SUCC(ret)) {
     ObLSLifeAgentManager life_agent(ddl_service_.get_sql_proxy());
-    share::ObLSStatusInfo status_info;
     const uint64_t unit_group_id = 0;
     const uint64_t ls_group_id = 0;
-    share::ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
-    if (OB_FAIL(status_info.init(OB_SYS_TENANT_ID, SYS_LS, ls_group_id,
-            share::OB_LS_NORMAL, unit_group_id, primary_zone, flag))) {
-      LOG_WARN("failed to init ls info", KR(ret), K(primary_zone), K(flag));
-    } else if (OB_FAIL(life_agent.create_new_ls(status_info, SCN::base_scn(), primary_zone_str.string(),
-                                                share::NORMAL_SWITCHOVER_STATUS))) {
-      LOG_WARN("failed to get init member list", KR(ret), K(status_info), K(primary_zone_str));
+    share::ObLSStatusInfo sslog_status_info;
+    share::ObLSStatusInfo sys_status_info;
+    share::ObLSFlag sslog_flag(share::ObLSFlag::DUPLICATE_FLAG);
+    share::ObLSFlag sys_flag(share::ObLSFlag::NORMAL_FLAG);
+    ObUnitIDList unit_list;
+    if (OB_FAIL(sslog_status_info.init(OB_SYS_TENANT_ID, SSLOG_LS, ls_group_id,
+            share::OB_LS_NORMAL, unit_group_id, primary_zone, sslog_flag, unit_list))) {
+      LOG_WARN("failed to init ls info", KR(ret), K(primary_zone), K(sslog_flag));
+    } else if (OB_FAIL(sys_status_info.init(OB_SYS_TENANT_ID, SYS_LS, ls_group_id,
+            share::OB_LS_NORMAL, unit_group_id, primary_zone, sys_flag, unit_list))) {
+      LOG_WARN("failed to init ls info", KR(ret), K(primary_zone), K(sys_flag));
+    } else if (GCTX.is_shared_storage_mode()
+            && OB_FAIL(life_agent.create_new_ls(sslog_status_info, SCN::base_scn(), primary_zone_str.string(),
+                                                ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
+      LOG_WARN("failed to create new sslog ls", KR(ret), K(sslog_status_info), K(primary_zone_str));
+    } else if (OB_FAIL(life_agent.create_new_ls(sys_status_info, SCN::base_scn(), primary_zone_str.string(),
+                                                ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
+      LOG_WARN("failed to create new sys ls", KR(ret), K(sys_status_info), K(primary_zone_str));
     }
   }
   return ret;
@@ -1502,6 +1607,8 @@ int ObBootstrap::init_system_data()
     LOG_WARN("create system tenant failed", KR(ret));
   } else if (OB_FAIL(init_all_zone_table())) {
     LOG_WARN("failed to init all zone table", KR(ret));
+  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(init_palf_kv_system_data_())) {
+    LOG_WARN("failed to init palf kv system data", KR(ret));
   }
   if (OB_FAIL(ret)) {
     LOG_DBA_ERROR_V2(OB_BOOTSTRAP_CREATE_SYS_TENANT_FAIL, ret,
@@ -1514,6 +1621,39 @@ int ObBootstrap::init_system_data()
                     "bootstrap create sys tenant success.");
   }
   BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObBootstrap::init_palf_kv_system_data_()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+   if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported", KR(ret));
+   } else {
+    common::ObSEArray<uint64_t, 128> init_server_ids;
+    if (OB_FAIL(ObServerZoneOpService::store_data_version_in_palf_kv(OB_SYS_TENANT_ID, DATA_CURRENT_VERSION))) {
+      LOG_WARN("fail to store data version in palf kv", KR(ret), K(DATA_CURRENT_VERSION));
+    } else if (OB_FAIL(ObServerZoneOpService::store_server_ids_in_palf_kv(init_server_ids/*empty*/, OB_INIT_SERVER_ID - 1))) { // OB_INIT_SERVER_ID = 1
+      LOG_WARN("fail to store server_ids in palf kv", KR(ret));
+    } else if (OB_FAIL(ObServerZoneOpService::store_max_unit_id_in_palf_kv(OB_USER_UNIT_ID))) { // OB_USER_UNIT_ID = 1000
+      LOG_WARN("fail to store unit_id in palf kv", KR(ret));
+    } else if (OB_FAIL(ObMasterKeyUtil::store_sys_root_key_in_palf_kv())) {
+      LOG_WARN("fail to store sys root key in palf kv", KR(ret));
+    } else {
+      common::ObSEArray<ObZone, DEFAULT_ZONE_COUNT> zone_names;
+      for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); ++i) {
+        if (OB_FAIL(zone_names.push_back(rs_list_[i].zone_))) {
+          LOG_WARN("fail to push back", KR(ret));
+        }
+      }
+      if (FAILEDx(ObServerZoneOpService::store_all_zone_in_palf_kv(zone_names))) {
+        LOG_WARN("fail to store all zone in palf kv", KR(ret), K(zone_names));
+      }
+    }
+  }
+#endif
   return ret;
 }
 
@@ -1554,10 +1694,10 @@ int ObBootstrap::gen_sys_resource_pool(
 {
   int ret = OB_SUCCESS;
   pool.resource_pool_id_ = OB_SYS_RESOURCE_POOL_ID;
-  pool.name_ = "sys_pool";
+  pool.name_ = share::ObResourcePool::SYS_RESOURCE_POOL_NAME;
   pool.unit_count_ = 1;
   pool.unit_config_id_ = ObUnitConfig::SYS_UNIT_CONFIG_ID;
-  pool.tenant_id_ = OB_INVALID_ID;
+  pool.tenant_id_ = OB_SYS_TENANT_ID;
   if (OB_FAIL(gen_sys_zone_list(pool.zone_list_))) {
     LOG_WARN("fail to gen sys zone list", K(ret));
   }
@@ -1568,13 +1708,8 @@ int ObBootstrap::create_sys_resource_pool()
 {
   int ret = OB_SUCCESS;
   ObArray<ObUnit> sys_units;
-  ObArray<ObResourcePoolName> pool_names;
   share::ObResourcePool pool;
-  const bool is_bootstrap = true;
   const bool if_not_exist = false;
-  const bool check_data_version = false;
-  common::ObMySQLTransaction trans;
-  common::ObArray<uint64_t> new_ug_id_array;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
   } else if (OB_FAIL(gen_sys_resource_pool(pool))) {
@@ -1587,29 +1722,8 @@ int ObBootstrap::create_sys_resource_pool()
     LOG_WARN("gen_sys_units failed", K(ret));
   } else if (OB_FAIL(unit_mgr_.create_sys_units(sys_units))) {
     LOG_WARN("create_sys_units failed", K(sys_units), K(ret));
-  } else if (OB_FAIL(pool_names.push_back(pool.name_))) {
-    LOG_WARN("push_back failed", K(ret));
-  } else if (OB_FAIL(trans.start(&unit_mgr_.get_sql_proxy(), OB_SYS_TENANT_ID))) {
-    LOG_WARN("start transaction failed", KR(ret));
-  } else if (OB_FAIL(unit_mgr_.grant_pools(
-          trans, new_ug_id_array,
-          lib::Worker::CompatMode::MYSQL, pool_names,
-          OB_SYS_TENANT_ID, is_bootstrap, OB_INVALID_TENANT_ID/*source_tenant_id*/,
-          check_data_version))) {
-    LOG_WARN("grant_pools_to_tenant failed", K(pool_names),
-        "tenant_id", static_cast<uint64_t>(OB_SYS_TENANT_ID), K(ret));
-  } else {
-    if (OB_FAIL(unit_mgr_.load())) {
-      LOG_WARN("unit_manager reload failed", K(ret));
-    }
-  }
-  if (trans.is_started()) {
-    const bool commit = (OB_SUCC(ret));
-    int temp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
-      LOG_WARN("trans end failed", K(commit), K(temp_ret));
-      ret = (OB_SUCCESS == ret) ? temp_ret : ret;
-    }
+  } else if (OB_FAIL(unit_mgr_.load())) {
+    LOG_WARN("unit_mgr reload failed", K(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
@@ -1645,7 +1759,15 @@ int ObBootstrap::init_multiple_zone_deployment_table(
       }
 
       if (OB_SUCC(ret)) {
-        zone_info.storage_type_.value_ = ObZoneInfo::STORAGE_TYPE_LOCAL;
+        ObZoneInfo::StorageType storage_type = GCTX.is_shared_storage_mode() ?
+                                               ObZoneInfo::STORAGE_TYPE_SHARED_STORAGE :
+                                               ObZoneInfo::STORAGE_TYPE_LOCAL;
+        if (OB_FAIL(zone_info.storage_type_.info_.assign(
+                ObString(ObZoneInfo::get_storage_type_str(storage_type))))) {
+          LOG_WARN("fail to assign zone storage_type str", KR(ret));
+        } else {
+          zone_info.storage_type_.value_ = storage_type;
+        }
       }
 
       if (OB_SUCC(ret)) {
@@ -1689,6 +1811,66 @@ int ObBootstrap::init_all_zone_table()
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObBootstrap::write_shared_storage_args()
+{
+  int ret = OB_SUCCESS;
+  ObAdminStorageArg shared_storage_args;
+  if (GCTX.is_shared_storage_mode()) {
+    const ObString &shared_storage_info = arg_.shared_storage_info_;
+    if (shared_storage_info.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("shared_storage_info is empty", KR(ret), K(arg_));
+    } else if (OB_FAIL(ObStorageDestCheck::parse_shared_storage_info(shared_storage_info,
+            shared_storage_args))) {
+      LOG_WARN("failed to parse shared_storage_info", KR(ret), K(shared_storage_args));
+    } else if (OB_UNLIKELY(!shared_storage_args.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("shared_storage_args is invalid", KR(ret), K(shared_storage_args));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
+        const ObZone &zone = rs_list_.at(i).zone_;
+        const ObRegion &region = rs_list_.at(i).region_;
+        if (OB_FAIL(write_shared_storage_args_for_zone(zone, region, shared_storage_args))) {
+          LOG_WARN("failed to write shared storage args for zone", KR(ret), K(zone), K(shared_storage_args));
+        } else {}
+      }
+    }
+  }
+  BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObBootstrap::write_shared_storage_args_for_zone(const ObZone &zone, const ObRegion &region,
+    const obrpc::ObAdminStorageArg &storage_args)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObAdminStorageArg full_args;
+  ObMySQLProxy &sql_proxy = ddl_service_.get_sql_proxy();
+  if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root_service_ is NULL", KR(ret), KP(GCTX.root_service_));
+  } else if (OB_UNLIKELY(zone.is_empty() || region.is_empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty zone or region", KR(ret), K(zone), K(region));
+  } else if (OB_UNLIKELY(!storage_args.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage_args is invalid", KR(ret), K(storage_args));
+  } else if (OB_FAIL(full_args.assign(storage_args))) {
+    LOG_WARN("failed to assign full_args", KR(ret), K(zone), K(region), K(storage_args));
+  } else {
+    full_args.zone_ = zone;
+    full_args.region_ = region;
+    if (OB_FAIL(GCTX.root_service_->add_storage(full_args))) {
+      LOG_WARN("failed to add storage", KR(ret), K(full_args));
+    } else {
+      FLOG_INFO("add storage succeed", KR(ret), K(zone), K(storage_args));
+    }
+  }
+  return ret;
+}
+#endif
 
 template<typename SCHEMA>
 int ObBootstrap::set_replica_options(SCHEMA &schema)

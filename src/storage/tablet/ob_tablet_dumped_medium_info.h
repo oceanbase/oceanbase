@@ -54,13 +54,15 @@ public:
       const ObTabletDumpedMediumInfo &other1,
       const ObTabletDumpedMediumInfo &other2);
   void reset();
-
+  bool empty() const { return medium_info_list_.empty(); }
+  common::ObIArray<compaction::ObMediumCompactionInfo*> &get_array() { return medium_info_list_; }
+  void sort_array() { lib::ob_sort(medium_info_list_.begin(), medium_info_list_.end(), compare); }
   // key order in array: big -> small
   int append(
       const mds::MdsDumpKey &key,
       const mds::MdsDumpNode &node);
   int append(const compaction::ObMediumCompactionInfo &medium_info);
-  int assign(const ObTabletDumpedMediumInfo &other, common::ObIAllocator &allocator);
+  int assign(common::ObIAllocator &allocator, const ObTabletDumpedMediumInfo &other);
   bool is_valid() const;
 
   int get_min_medium_info_key(compaction::ObMediumCompactionInfoKey &key) const;

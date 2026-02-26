@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 
-#include "sql/optimizer/ob_opt_est_cost_model_vector.h"
+#include "ob_opt_est_cost_model_vector.h"
 #include "ob_opt_cost_model_parameter.h"
 
 using namespace oceanbase;

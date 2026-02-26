@@ -77,7 +77,8 @@ TEST_F(TestLocationPartitionId, calc_part_id_by_rowkeys)
       memset(buf, 0, BUF_LEN);
       of_result << "----------------Case" << case_num <<" start----------------" << std::endl;
       of_result << "rowkey json"<< ": " << total_line << std::endl;
-      of_result << "part_ids: " << to_cstring(part_ids) << std::endl;
+      ObCStringHelper helper;
+      of_result << "part_ids: " << helper.convert(part_ids) << std::endl;
       rowkey_lists.to_string(buf, BUF_LEN);
       of_result << "rowkey_lists: " << buf << std::endl;
       of_result << "----------------Case" << case_num <<" end----------------" << std::endl;

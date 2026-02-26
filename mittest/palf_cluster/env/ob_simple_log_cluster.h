@@ -58,11 +58,11 @@ namespace unittest
   const std::string log_file_name = TEST_NAME+"/"+TEST_NAME + ".log"; \
   const std::string ele_log_file_name = TEST_NAME+"/"+TEST_NAME + ".election.log"; \
   const std::string rs_log_file_name = TEST_NAME+"/"+TEST_NAME + ".rs.log"; \
-  OB_LOGGER.set_file_name(log_file_name.c_str(), true, false, rs_log_file_name.c_str(), \
-      ele_log_file_name.c_str(), NULL); \
   OB_LOGGER.set_log_level("INFO"); \
   OB_LOGGER.set_enable_log_limit(false); \
   OB_LOGGER.set_enable_async_log(false); \
+  OB_LOGGER.set_file_name(log_file_name.c_str(), false, false, rs_log_file_name.c_str(), \
+      ele_log_file_name.c_str(), NULL); \
   SERVER_LOG(INFO, "begin unittest"); \
   ::testing::InitGoogleTest(&argc, argv); \
   return RUN_ALL_TESTS();

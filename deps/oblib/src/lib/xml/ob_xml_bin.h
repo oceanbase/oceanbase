@@ -258,12 +258,12 @@ public:
   int serialize(int64_t depth);
   int deserialize(ObIMulModeBase*& node);
   int reserve_meta();
-  void set_key_entry(int64_t entry_idx,  int64_t key_offset, int64_t key_len);
-  void set_index_entry(int64_t origin_index, int64_t sort_index);
+  int set_key_entry(int64_t entry_idx,  int64_t key_offset, int64_t key_len);
+  int set_index_entry(int64_t origin_index, int64_t sort_index);
 
   int64_t size() { return attr_count_ + child_count_; }
   int serialize_child_key(const ObString& key, int64_t idx);
-  void set_value_entry(int64_t entry_idx,  uint8_t type, int64_t value_offset);
+  int set_value_entry(int64_t entry_idx,  uint8_t type, int64_t value_offset);
 
   struct MemberArray {
     int64_t g_start_;

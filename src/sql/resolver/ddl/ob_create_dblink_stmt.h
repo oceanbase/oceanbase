@@ -40,7 +40,11 @@ public:
   inline int set_reverse_tenant_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_tenant_name(name); }
   inline int set_reverse_user_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_user_name(name); }
   int set_reverse_password(const common::ObString &pwd);
-  inline void set_host_addr(const common::ObAddr &addr) { create_dblink_arg_.dblink_info_.set_host_addr(addr);; }
+  inline void set_host_addr(const common::ObAddr &addr) { create_dblink_arg_.dblink_info_.set_host_addr(addr); }
+  inline void set_host_name(const common::ObString &host_name) { create_dblink_arg_.dblink_info_.set_host_name(host_name); }
+  inline void set_host_port(const int32_t port) { create_dblink_arg_.dblink_info_.set_host_port(port); }
+  inline void set_reverse_host_name(const common::ObString &host_name) { create_dblink_arg_.dblink_info_.set_reverse_host_name(host_name); }
+  inline void set_reverse_host_port(const int32_t port) { create_dblink_arg_.dblink_info_.set_reverse_host_port(port); }
   inline int set_conn_string(const common::ObString &str) { return create_dblink_arg_.dblink_info_.set_conn_string(str); }
   inline int set_service_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_service_name(name); }
   inline void set_driver_proto(int64_t proto) {create_dblink_arg_.dblink_info_.set_driver_proto(proto);}

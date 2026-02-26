@@ -11,7 +11,6 @@
  */
 
 #include "ob_zstd_wrapper.h"
-#include <stdio.h>
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd_src/zstd.h"
@@ -240,7 +239,4 @@ int ObZstdWrapper::insert_block(void *ctx, const void *block, const size_t block
   }
   return ret;
 }
-
-
-
 

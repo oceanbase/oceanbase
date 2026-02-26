@@ -34,6 +34,25 @@ namespace sql
 class ObExprGetPackageVar : public ObFuncExprOperator
 {
 public:
+  struct ExtraInfo : public ObIExprExtraInfo
+  {
+    OB_UNIS_VERSION(1);
+  public:
+    ExtraInfo(common::ObIAllocator &alloc, ObExprOperatorType type);
+    int from_raw_expr(const ObRawExpr &raw_expr);
+    void reset();
+    virtual int deep_copy(common::ObIAllocator &allocator,
+                          const ObExprOperatorType type,
+                          ObIExprExtraInfo *&copied_info) const override;
+    int assign(const ExtraInfo &other);
+
+
+    TO_STRING_KV(K_(package_id),
+                K_(var_idx));
+
+    uint64_t package_id_;
+    int64_t var_idx_;
+  };
   explicit ObExprGetPackageVar(common::ObIAllocator &alloc)
   : ObFuncExprOperator(alloc, T_OP_GET_PACKAGE_VAR, N_GET_PACKAGE_VAR, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE) {}
 
@@ -48,8 +67,6 @@ public:
 private:
   static int calc(common::ObObj &result,
                   uint64_t package_id,
-                  int64_t spec_version,
-                  int64_t body_version,
                   int64_t var_idx,
                   ObExecContext *exec_ctx,
                   ObSQLSessionInfo *session_info);

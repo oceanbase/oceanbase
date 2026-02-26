@@ -40,15 +40,14 @@ public:
 public:
   //NOT thread safe.
   //Init the redo log and do recovery if there is redo logs in log_dir.
-  int init(ObStorageLoggerManager &slogger_manager, const uint64_t tenant_id);
+  int init(
+      ObStorageLoggerManager &slogger_manager,
+      const uint64_t tenant_id,
+      const int64_t tenant_epoch);
   int start();
+  void stop();
+  void wait();
   void destroy();
-
-  static int mtl_init(ObStorageLogger* &slogger);
-  static int mtl_start(ObStorageLogger* &slogger);
-  static void mtl_stop(ObStorageLogger* &slogger);
-  static void mtl_wait(ObStorageLogger* &slogger);
-
   int write_log(ObStorageLogParam &param);
   int write_log(ObIArray<ObStorageLogParam> &param_arr);
   const char *get_dir() { return tnt_slog_dir_; }

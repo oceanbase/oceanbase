@@ -33,7 +33,6 @@ class ObTableHandleV2;
 class ObICGIterator;
 class ObCOSSTableV2;
 
-
 /*
  * ObSSTableWrapper is used for guaranteeing the lifetime of cg sstable
  * ONLY CG SSTables need to be guarded by meta_handle
@@ -54,6 +53,7 @@ public:
   TO_STRING_KV(KPC_(sstable), K_(meta_handle));
 private:
   friend class ObCOSSTableV2;
+  friend class ObIncMajorDDLAggregateCOSSTable;
   ObStorageMetaHandle meta_handle_; // keep the lifetime of cg sstable
   blocksstable::ObSSTable *sstable_;
 };
@@ -103,13 +103,34 @@ enum ObCOSSTableBaseType : int32_t
 
 enum ObCOMajorSSTableStatus: uint8_t {
   INVALID_CO_MAJOR_SSTABLE_STATUS = 0,
-  COL_WITH_ALL, // all cg + normal cg
-  COL_ONLY_ALL, // all cg only
-  PURE_COL, // rowkey cg + normal cg
-  PURE_COL_ONLY_ALL, // all cg only
+  COL_WITH_ALL = 1, // all cg + normal cg
+  COL_ONLY_ALL = 2, // all cg only (schema have all cg)
+  PURE_COL = 3, // rowkey cg + normal cg
+  PURE_COL_ONLY_ALL = 4, // all cg only (schema do not have all cg)
+  COL_REPLICA_MAJOR = 5, // temp status, row store major from F/R replica for column store replica
+  DELAYED_TRANSFORM_MAJOR = 6, // row store sstable under column store schema
+  PURE_COL_WITH_ALL = 7, // rowkey cg + normal cg (schema have all cg)
   MAX_CO_MAJOR_SSTABLE_STATUS
 };
-
+/*
+  +-----------------------+---------------+---------------+-------+
+  |         status        |    schema     |  last_major   |IS_SAME|
+  +-----------------------+---------------+---------------+-------+
+  |      COL_WITH_ALL     |   ALL+EACH    |   ALL+EACH    |  YES  |
+  +-----------------------+---------------+---------------+-------+
+  |      COL_ONLY_ALL     |   ALL+EACH    |      ALL      |   NO  |
+  +-----------------------+---------------+---------------+-------+
+  |        PURE_COL       |     EACH      |      EACH     |  YES  |
+  +-----------------------+---------------+---------------+-------+
+  |   PURE_COL_ONLY_ALL   |     EACH      |      ALL      |   NO  |
+  +-----------------------+---------------+---------------+-------+
+  |   COL_REPLICA_MAJOR   |    ROW STORE  |   ROW STORE   |  YES  |
+  +-----------------------+---------------+---------------+-------+
+  |DELAYED_TRANSFORM_MAJOR| ALL+EACH/EACH |   ROW STORE   |   NO  |
+  +-----------------------+---------------+---------------+-------+
+  |   PURE_COL_WITH_ALL   |    ALL+EACH   |      EACH     |   NO  |
+  +-----------------------+---------------+---------------+-------+
+*/
 inline bool is_valid_co_major_sstable_status(const ObCOMajorSSTableStatus& major_sstable_status)
 {
   return major_sstable_status > INVALID_CO_MAJOR_SSTABLE_STATUS && major_sstable_status < MAX_CO_MAJOR_SSTABLE_STATUS;
@@ -126,7 +147,12 @@ inline bool is_major_sstable_match_schema(const ObCOMajorSSTableStatus& major_ss
 {
   return major_sstable_status == COL_WITH_ALL || major_sstable_status == PURE_COL;
 }
+inline bool is_build_redundent_row_store(const ObCOMajorSSTableStatus& major_sstable_status)
+{
+  return PURE_COL_WITH_ALL == major_sstable_status;
+}
 
+const char* co_major_sstable_status_to_str(const ObCOMajorSSTableStatus& major_sstable_status);
 /*
  * The base part of ObCOSSTable maybe
  */
@@ -142,9 +168,12 @@ public:
 
   bool is_row_store_only_co_table() const { return is_cgs_empty_co_ && is_all_cg_base(); }
   bool is_cgs_empty_co_table() const { return is_cgs_empty_co_; }
-  int fill_cg_sstables(const common::ObIArray<ObITable *> &cg_tables);
+  int fill_cg_sstables(
+      const common::ObIArray<ObITable *> &cg_tables,
+      const int64_t new_progressive_merge_step = OB_INVALID_INDEX_INT64 /*only used for co merge*/);
+  int set_progressive_merge_step(const int64_t progressive_merge_step);
   OB_INLINE const ObCOSSTableMeta &get_cs_meta() const { return cs_meta_; }
-  OB_INLINE bool is_all_cg_base() const { return ObCOSSTableBaseType::ALL_CG_TYPE == base_type_; }
+  OB_INLINE bool is_all_cg_base() const override final { return ObCOSSTableBaseType::ALL_CG_TYPE == base_type_; }
   OB_INLINE bool is_rowkey_cg_base() const { return ObCOSSTableBaseType::ROWKEY_CG_TYPE == base_type_; }
   OB_INLINE bool is_inited() const { return is_cgs_empty_co_table() || is_cs_valid(); }
   OB_INLINE bool is_cs_valid() const {
@@ -152,14 +181,15 @@ public:
         && base_type_ > ObCOSSTableBaseType::INVALID_TYPE && base_type_ < ObCOSSTableBaseType::MAX_TYPE
         && key_.column_group_idx_ < cs_meta_.column_group_cnt_;
   }
-  int fetch_cg_sstable(
+  int64_t get_data_checksum() const override;
+  virtual int fetch_cg_sstable(
       const uint32_t cg_idx,
       ObSSTableWrapper &cg_wrapper) const;
-  int get_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &cg_wrapper) const;
-  int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const;
+  virtual int get_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &cg_wrapper) const;
+  virtual int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const;
 
-  virtual int64_t get_serialize_size() const override;
-  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int64_t get_serialize_size(const uint64_t data_version) const override;
+  virtual int serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const override;
   virtual int deserialize(
       common::ObArenaAllocator &allocator,
       const char *buf,
@@ -170,8 +200,8 @@ public:
       common::ObArenaAllocator &allocator,
       const common::ObIArray<ObMetaDiskAddr> &cg_addrs,
       ObCOSSTableV2 *&co_sstable);
-  virtual int serialize_full_table(char *buf, const int64_t buf_len, int64_t &pos) const override;
-  virtual int64_t get_full_serialize_size() const override;
+  virtual int serialize_full_table(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int64_t get_full_serialize_size(const uint64_t data_version) const override;
 
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const override;
   virtual int64_t get_deep_copy_size() const override
@@ -197,7 +227,8 @@ public:
       ObTableAccessContext &context,
       ObICGIterator *&cg_iter,
       const bool is_projector /* remove later, needed to be used in projector */,
-      const bool project_single_row);
+      const bool project_single_row,
+      ObIAllocator* iter_alloc = nullptr /* use this to alloc cg_iter if is not null */);
   virtual int get(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
@@ -208,6 +239,9 @@ public:
       ObTableAccessContext &context,
       const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
       ObStoreRowIterator *&row_iter) override;
+  int fill_column_ckm_array(
+      const ObStorageSchema &storage_schema,
+      ObIArray<int64_t> &column_checksums) const;
   INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, KP(this), K_(cs_meta),
       K_(base_type), K_(is_cgs_empty_co), K_(valid_for_cs_reading));
 private:

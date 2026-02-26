@@ -51,10 +51,14 @@ public:
       const share::SCN &snapshot_scn,
       const palf::LSN &start_lsn,
       const palf::LSN &end_lsn);
+  int recycle_hisotry_dict_info(
+      const uint64_t tenant_id,
+      const share::SCN &recycle_until_scn,
+      int64_t &recycle_count);
 private:
-  static const char *query_ls_info_sql_format;
   static const char *query_tenant_schema_version_sql_format;
   static const char *report_data_dict_persist_info_sql_format;
+  static const char *recycle_dict_history_sql_format;
 private:
   int parse_record_from_row_(
       common::sqlclient::ObMySQLResult &result,

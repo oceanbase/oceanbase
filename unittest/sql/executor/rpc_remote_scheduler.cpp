@@ -294,7 +294,6 @@ TEST_F(ObRemoteSchedulerTest, basic_test)
   rpc.set_rpc_proxy(&proxy);
 
   ObPhyTableLocationFixedArray table_locs;
-  ObPhyTableLocation table_loc;
   ObPartitionReplicaLocation partition_loc;
   ObReplicaLocation replica_loc;
   replica_loc.server_ = dst_server;
@@ -302,9 +301,6 @@ TEST_F(ObRemoteSchedulerTest, basic_test)
   partition_loc.set_table_id(TEST_TABLE_ID);
   partition_loc.set_partition_id(0);
   partition_loc.set_replica_location(replica_loc);
-  table_loc.set_table_location_key(TEST_TABLE_ID, TEST_TABLE_ID);
-  ASSERT_EQ(OB_SUCCESS, table_loc.add_partition_location(partition_loc));
-  ASSERT_EQ(OB_SUCCESS, table_locs.push_back(table_loc));
 
   ObAddr server;
   server.set_ip_addr("10.125.224.8", 38455);
@@ -339,7 +335,6 @@ TEST_F(ObRemoteSchedulerTest, basic_test)
   //executor_ctx->set_partition_location_cache(&rpc.partition_loc_cache_);
   //executor_ctx->set_partition_service(&rpc.partition_service_);
   executor_ctx->set_execute_result(&exe_result);
-  executor_ctx->set_table_locations(table_locs);
   executor_ctx->set_self_addr(server);
 
   create_plan_tree(exec_ctx);

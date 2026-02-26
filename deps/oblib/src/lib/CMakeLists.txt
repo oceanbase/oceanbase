@@ -1,7 +1,7 @@
 add_subdirectory(compress)
 add_subdirectory(restore)
 
-ob_set_subtarget(oblib_lib ALONE
+ob_set_subtarget(oblib_lib_extra ALONE
   timezone/ob_timezone_util.cpp
   geo/ob_geo_func_difference.cpp
   geo/ob_geo_func_covered_by.cpp
@@ -10,30 +10,67 @@ ob_set_subtarget(oblib_lib ALONE
   geo/ob_geo_func_touches.cpp
   geo/ob_geo_func_equals.cpp
   geo/ob_geo_func_intersects.cpp
-  geo/ob_geo_func_symdifference.cpp
+  geo/ob_geo_func_symdifference1.cpp
+  geo/ob_geo_func_symdifference2.cpp
   geo/ob_geo_func_distance.cpp
   geo/ob_geo_func_crosses.cpp
   geo/ob_geo_func_overlaps.cpp
+  stat/ob_diagnostic_info_util.cpp
 )
 
 ob_set_subtarget(oblib_lib charset
   charset/ob_ctype_bin.cc
   charset/ob_ctype.cc
+  charset/ob_ctype_gb18030_tab.cpp
   charset/ob_ctype_gb18030.cc
+  charset/ob_ctype_gbk_tab.cpp
   charset/ob_ctype_gbk.cc
+  charset/ob_ctype_latin1_tab.cpp
   charset/ob_ctype_latin1.cc
+  charset/ob_ctype_ascii_tab.cpp
+  charset/ob_ctype_gb2312_tab.cpp
+  charset/ob_ctype_gb2312.cc
+  charset/ob_ctype_ascii.cc
+  charset/ob_ctype_tis620_tab.cpp
+  charset/ob_ctype_tis620.cc
   charset/ob_ctype_mb.cc
   charset/ob_ctype_simple.cc
   charset/ob_ctype_uca.cc
   charset/ob_ctype_utf8.cc
   charset/ob_ctype_utf16.cc
+  charset/ob_ctype_ujis_tab.cpp
+  charset/ob_ctype_ujis.cc
+  charset/ob_ctype_euckr_tab.cpp
+  charset/ob_ctype_euckr.cc
+  charset/ob_ctype_eucjpms_tab.cpp
+  charset/ob_ctype_eucjpms.cc
+  charset/ob_ctype_cp932_tab.cpp
+  charset/ob_ctype_cp932.cc
   charset/ob_dtoa.cc
   charset/uca900_ja_tbls.cc
   charset/uca900_zh_tbls.cc
   charset/uca900_zh2_tbls.cc
   charset/uca900_zh3_tbls.cc
   charset/ob_charset.cpp
+  charset/ob_ctype_sjis_tab.cpp
+  charset/ob_ctype_sjis.cc
+  charset/ob_ctype_big5_tab.cpp
+  charset/ob_ctype_big5.cc
+  charset/ob_ctype_hkscs_tab.cpp
+  charset/ob_ctype_hkscs31_tab.cpp
+  charset/ob_ctype_hkscs.cc
+  charset/ob_ctype_dec8_tab.cpp
+  charset/ob_ctype_cp850_tab.cpp
+  charset/ob_ctype_hp8_tab.cpp
+  charset/ob_ctype_macroman_tab.cpp
+  charset/ob_ctype_swe7_tab.cpp
+  charset/ob_ctype_extra.cc
 )
+
+ob_set_subtarget(oblib_lib sched
+  tc/ob_tc_wrapper.cpp
+)
+
 
 ob_set_subtarget(oblib_lib common
   ob_abort.cpp
@@ -87,6 +124,7 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_sdo_geo_func_to_wkb.cpp
   geo/ob_wkb_to_sdo_geo_visitor.cpp
   geo/ob_wkb_to_json_visitor.cpp
+  geo/ob_wkb_to_json_bin_visitor.cpp
   geo/ob_wkb_byte_order_visitor.cpp
   geo/ob_geo_3d.cpp
   geo/ob_sdo_geo_object.cpp
@@ -103,6 +141,7 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_simplify_visitor.cpp
   geo/ob_geo_box_clip_visitor.cpp
   geo/ob_geo_func_dissolve_polygon.cpp
+  geo/ob_geo_close_ring_visitor.cpp
   geo/ob_geo_cache.cpp
   geo/ob_geo_vertex_collect_visitor.cpp
   geo/ob_geo_segment_collect_visitor.cpp
@@ -113,6 +152,13 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_topology_calculate.cpp
   geo/ob_point_location_analyzer.cpp
   geo/ob_geo_point_location_visitor.cpp
+)
+
+ob_set_subtarget(oblib_lib roaringbitmap
+  roaringbitmap/ob_roaringbitmap.cpp
+  roaringbitmap/ob_rb_utils.cpp
+  roaringbitmap/ob_rb_bin.cpp
+  roaringbitmap/ob_rb_memory_mgr.cpp
 )
 
 ob_set_subtarget(oblib_lib encode
@@ -149,6 +195,10 @@ ob_set_subtarget(oblib_lib common_mixed
   encode/ob_quoted_printable_encode.cpp
   encode/ob_uuencode.cpp
   encrypt/ob_encrypted_helper.cpp
+  encrypt/ob_sha256_crypt.cpp
+  encrypt/ob_caching_sha2_cache.cpp
+  encrypt/ob_caching_sha2_cache_mgr.cpp
+  encrypt/ob_rsa_getter.cpp
   file/file_directory_utils.cpp
   file/ob_file.cpp
   file/ob_string_util.cpp
@@ -193,6 +243,10 @@ ob_set_subtarget(oblib_lib common_mixed
   stat/ob_session_stat.cpp
   stat/ob_stat_template.cpp
   statistic_event/ob_stat_event.cpp
+  stat/ob_diagnostic_info.cpp
+  stat/ob_diagnostic_info_summary.cpp
+  stat/ob_diagnostic_info_container.cpp
+  stat/ob_diagnostic_info_guard.cpp
   string/ob_hex_utils_base.cpp
   string/ob_sql_string.cpp
   string/ob_string.cpp
@@ -200,6 +254,7 @@ ob_set_subtarget(oblib_lib common_mixed
   string/ob_string_buffer.cpp
   task/ob_timer.cpp
   task/ob_timer_monitor.cpp
+  task/ob_timer_service.cpp
   thread_local/ob_tsi_utils.cpp
   thread_local/thread_buffer.cpp
   time/Time.cpp
@@ -217,6 +272,13 @@ ob_set_subtarget(oblib_lib common_mixed
   wide_integer/ob_wide_integer_cmp_funcs.cpp
   wide_integer/ob_wide_integer_str_funcs.cpp
   udt/ob_udt_type.cpp
+  udt/ob_collection_type.cpp
+  udt/ob_array_type.cpp
+  udt/ob_array_binary.cpp
+  udt/ob_array_nested.cpp
+  udt/ob_array_utils.cpp
+  udt/ob_vector_type.cpp
+  udt/ob_map_type.cpp
   xml/ob_mul_mode_reader.cpp
   xml/ob_xml.cpp
   xml/ob_xml_parser.cpp
@@ -232,6 +294,12 @@ ob_set_subtarget(oblib_lib common_mixed
   xml/ob_binary_aggregate.cpp
   locale/ob_locale_type.cc
   locale/ob_locale.cpp
+  enumset/ob_enum_set_meta.cpp
+  jni_env/ob_java_helper.cpp
+  jni_env/ob_java_env.cpp
+  jni_env/ob_java_native_method.cpp
+  jni_env/ob_jni_connector.cpp
+  other/recursion.cpp
 )
 
 ob_set_subtarget(oblib_lib lock
@@ -293,7 +361,7 @@ ob_set_subtarget(oblib_lib thread
   thread/ob_async_task_queue.cpp
   thread/ob_dynamic_thread_pool.cpp
   thread/ob_reentrant_thread.cpp
-  thread/ob_simple_thread_pool.cpp
+  thread/ob_simple_thread_pool.ipp
   thread/ob_map_queue_thread_pool.cpp
   thread/ob_work_queue.cpp
   thread/thread_mgr.cpp
@@ -317,10 +385,12 @@ ob_set_subtarget(oblib_lib utility
   utility/ob_proto_trans_util.cpp
   utility/ob_unify_serialize.cpp
   utility/ob_rpc_authentication_utility.cpp
+  utility/ob_hyperloglog.cpp
 )
 
 ob_set_subtarget(oblib_lib ash
   ash/ob_active_session_guard.cpp
+  ash/ob_ash_bkgd_sess_inactive_guard.cpp
 )
 
 ob_set_subtarget(oblib_lib ssl
@@ -331,7 +401,13 @@ ob_set_subtarget(oblib_lib vtoa
   vtoa/ob_vtoa_util.cpp
 )
 
+ob_set_subtarget(oblib_lib ob_vector_util
+  vector/ob_vector_util.cpp
+  vector/ob_vsag_adaptor.cpp
+)
+
 ob_lib_add_target(oblib_lib)
+ob_lib_add_target(oblib_lib_extra without_pass)
 
 ob_set_subtarget(oblib_lib_bitmap common
   container/ob_bitmap.cpp
@@ -359,6 +435,8 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/ob_latch_v2.cpp
   resource/achunk_mgr.cpp
   resource/ob_resource_mgr.cpp
+  resource/ob_resource_limiter.cpp
+  resource/ob_affinity_ctrl.cpp
   allocator/ob_allocator_v2.cpp
   allocator/ob_block_alloc_mgr.cpp
   allocator/ob_concurrent_fifo_allocator.cpp
@@ -377,14 +455,24 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
 )
 
 ob_add_new_object_target(ob_malloc_object ob_malloc_object_list)
-target_link_libraries(ob_malloc_object oblib_base_base_base)
+target_link_libraries(ob_malloc_object oblib_base_without_pass)
+if (ENABLE_SANITY)
+  if (${ARCHITECTURE} STREQUAL "x86_64" OR ${ARCHITECTURE} STREQUAL "aarch64")
+    target_link_libraries(ob_malloc_object ${DEVTOOLS_DIR}/lib64/libsanity.a)
+  endif()
+endif()
 add_library(ob_malloc STATIC)
 target_link_libraries(ob_malloc ob_malloc_object)
 
 add_library(malloc_hook STATIC
-  alloc/malloc_hook.cpp
-  alloc/malloc_hook.h)
-target_link_libraries(malloc_hook oblib_base)
+    alloc/malloc_hook.cpp
+    alloc/malloc_hook.h
+    alloc/malloc_hook_extended.cpp)
+if (BUILD_CDC_ONLY)
+  set_target_properties(malloc_hook PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+
+target_link_libraries(malloc_hook oblib_base_without_pass)
 
 if(OB_BUILD_CLOSE_MODULES)
   target_link_libraries(oblib_lib PUBLIC
@@ -394,8 +482,58 @@ if(OB_BUILD_CLOSE_MODULES)
   )
 endif()
 
+target_compile_options(oblib_lib PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
+
 target_link_libraries(oblib_lib
   PUBLIC ob_malloc compress restore
   ${DEP_DIR}/lib/libxml2.a
   ${DEP_DIR}/lib/liblzma.a
 )
+
+if (NOT BUILD_CDC_ONLY)
+# vsag vector library
+target_link_directories(
+  oblib_lib PUBLIC ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib
+)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+  target_link_libraries(oblib_lib
+    PUBLIC
+    libcpuinfo.a
+    libsimd.a
+    libvsag_static.a
+    libdiskann.a
+    libopenblas.a
+    libgfortran_static.a
+    libquadmath_static.a
+    libgomp_static.a
+    libroaring.a
+    libantlr4-runtime.a
+    libantlr4-autogen.a
+    libfmt.a
+  )
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+  target_link_libraries(oblib_lib
+    PUBLIC
+    libcpuinfo.a
+    libsimd.a
+    libvsag_static.a
+    libdiskann.a
+    libopenblas.a
+    libgfortran_static.a
+    libgomp_static.a
+    libroaring.a
+    libantlr4-runtime.a
+    libantlr4-autogen.a
+    libfmt.a
+  )
+else()
+    message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
+endif()
+
+# ATTENTION: add this cpp file as library only if compiled target doesn't need diagnose. like unittest or cdc.
+add_library(mock_di stat/mock_diagnostic_info.cpp)
+target_include_directories(mock_di PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/deps/oblib/src)

@@ -14,7 +14,6 @@
 #include "ob_drop_routine_resolver.h"
 #include "ob_drop_routine_stmt.h"
 #include "ob_drop_func_stmt.h"
-#include "sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {

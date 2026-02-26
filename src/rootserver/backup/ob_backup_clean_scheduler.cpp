@@ -12,16 +12,20 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_backup_clean_scheduler.h"
+#include "ob_backup_clean_selector.h"
 #include "ob_backup_clean_ls_task_mgr.h"
 #include "ob_backup_clean_task_mgr.h"
-#include "ob_backup_schedule_task.h"
 #include "ob_backup_task_scheduler.h"
 #include "share/backup/ob_backup_clean_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
-#include "rootserver/ob_root_utils.h"
 #include "share/backup/ob_backup_helper.h"
-#include "share/backup/ob_archive_persist_helper.h"
-#include "share/backup/ob_backup_store.h"
+#include "share/backup/ob_backup_clean_util.h"
+#include "share/backup/ob_archive_path.h"
+#include "share/backup/ob_backup_struct.h"
+#include "share/backup/ob_backup_connectivity.h"
+#include "storage/tx/ob_ts_mgr.h"
+#include "rootserver/ob_root_utils.h"
+#include "storage/tablelock/ob_lock_utils.h"
 
 namespace oceanbase
 {
@@ -46,7 +50,7 @@ int ObBackupCleanScheduler::init(
     const uint64_t tenant_id,
     common::ObMySQLProxy &sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
-    share::schema::ObMultiVersionSchemaService &schema_service,
+    schema::ObMultiVersionSchemaService &schema_service,
     ObBackupTaskScheduler &task_scheduler,
     ObBackupCleanService &backup_service)
 {
@@ -77,7 +81,8 @@ int ObBackupCleanScheduler::fill_template_delete_policy_(const obrpc::ObDeletePo
   int ret= OB_SUCCESS;
   if (OB_FAIL(databuff_printf(policy_attr.policy_name_, sizeof(policy_attr.policy_name_), "%s", in_arg.policy_name_))) {
     LOG_WARN("fail to assign policy_name_", K(ret));
-  } else if (OB_FAIL(databuff_printf(policy_attr.recovery_window_, sizeof(policy_attr.recovery_window_), "%s", in_arg.recovery_window_))) {
+  } else if (OB_FAIL(databuff_printf(policy_attr.recovery_window_,
+                      sizeof(policy_attr.recovery_window_), "%s", in_arg.recovery_window_))) {
     LOG_WARN("fail to assign recovery_window_", K(ret));
   } else {
     policy_attr.tenant_id_ = in_arg.initiator_tenant_id_;
@@ -87,9 +92,105 @@ int ObBackupCleanScheduler::fill_template_delete_policy_(const obrpc::ObDeletePo
   return ret;
 }
 
+int ObBackupCleanScheduler::add_delete_policy_(const ObDeletePolicyAttr &policy_attr)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  bool policy_exists = false;
+  bool backup_set_dest_exists = false;
+  if (!policy_attr.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(policy_attr));
+  } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(policy_attr.tenant_id_)))) {
+    LOG_WARN("failed to start transaction", K(ret), "tenant_id", policy_attr.tenant_id_);
+  } else if (OB_FAIL(ObBackupCleanUtil::lock_policy_table_then_check(
+                        trans, policy_attr.tenant_id_, false/*log_only*/, policy_exists))) {
+    LOG_WARN("failed to lock and check policy exists", K(ret));
+  } else if (policy_exists) {
+    ret = OB_ENTRY_EXIST;
+    LOG_WARN("policy already exists, cannot insert duplicate", K(ret), K(policy_attr));
+    LOG_USER_ERROR(OB_ERR_POLICY_EXIST, "only one backup clean policy can be set for each tenant");
+  } else {
+    // validate recovery_window before inserting policy
+    int64_t recovery_window = 0;
+    if (OB_FAIL(get_delete_policy_parameter_(policy_attr, recovery_window))) {
+      LOG_WARN("failed to get delete policy parameter", K(ret), K(policy_attr));
+    } else if (recovery_window <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("recovery window is not valid", K(ret), K(policy_attr), K(recovery_window));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "the recovery window");
+    } else if (0 == strcmp(policy_attr.policy_name_, OB_STR_BACKUP_CLEAN_POLICY_NAME_DEFAULT)) {
+      if (OB_FAIL(ObDeletePolicyOperator::insert_delete_policy(trans, policy_attr))) {
+        LOG_WARN("failed to insert delete policy", K(ret), K(policy_attr));
+      }
+    } else if (0 == strcmp(policy_attr.policy_name_, OB_STR_BACKUP_CLEAN_POLICY_NAME_LOG_ONLY)) {
+      // if policy name is "log_only", we expect backup dest table is empty
+      if (OB_FAIL(backup::ObBackupUtils::check_tenant_backup_dest_exists(
+                      policy_attr.tenant_id_, backup_set_dest_exists, *sql_proxy_))) {
+        LOG_WARN("failed to check backup set dest exists", K(ret));
+      } else if (backup_set_dest_exists) {
+        ret = OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET;
+        LOG_WARN("backup dest already exists, cannot set log_only policy", K(ret), K(policy_attr));
+      } else {
+        if (OB_FAIL(ObDeletePolicyOperator::insert_delete_policy(trans, policy_attr))) {
+          LOG_WARN("failed to insert delete policy", K(ret), K(policy_attr));
+        }
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid policy name", K(ret), K(policy_attr));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(trans.end(true))) {
+      LOG_WARN("failed to commit transaction", K(ret));
+    }
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+      LOG_WARN("failed to rollback transaction", K(tmp_ret));
+    }
+  }
+  return ret;
+}
+
+int ObBackupCleanScheduler::drop_delete_policy_(const ObDeletePolicyAttr &policy_attr)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+
+  if (!policy_attr.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(policy_attr));
+  } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(policy_attr.tenant_id_)))) {
+    LOG_WARN("failed to start transaction", K(ret), "tenant_id", policy_attr.tenant_id_);
+  } else {
+    bool exists = false;
+    // lock policy table and check if policy exists
+    if (OB_FAIL(ObBackupCleanUtil::lock_policy_table_then_check(trans, policy_attr.tenant_id_, false/*log_only*/, exists))) {
+      LOG_WARN("failed to lock and check policy exists", K(ret));
+    } else if (OB_FAIL(ObDeletePolicyOperator::drop_delete_policy(trans, policy_attr))) {
+      LOG_WARN("failed to drop delete policy", K(ret), K(policy_attr));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("failed to commit transaction", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        LOG_WARN("failed to rollback transaction", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupCleanScheduler::add_delete_policy(const obrpc::ObDeletePolicyArg &in_arg)
 {
-  int ret= OB_SUCCESS;
+  int ret = OB_SUCCESS;
   ObDeletePolicyAttr policy_attr;
 
   if (IS_NOT_INIT) {
@@ -105,15 +206,15 @@ int ObBackupCleanScheduler::add_delete_policy(const obrpc::ObDeletePolicyArg &in
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("must special one tenant", K(ret), K(in_arg));
     } else if (FALSE_IT(policy_attr.tenant_id_ = in_arg.clean_tenant_ids_.at(0))) {
-    } else if (OB_FAIL(ObDeletePolicyOperator::insert_delete_policy(*sql_proxy_, policy_attr))) {
-      LOG_WARN("failed to start cluster backup clean", K(ret), K(in_arg));
+    } else if (OB_FAIL(add_delete_policy_(policy_attr))) {
+      LOG_WARN("failed to add delete policy with transaction", K(ret), K(policy_attr));
     }
   } else {
     if (!in_arg.clean_tenant_ids_.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("tenant backup clean should not initiate another tenant", K(ret), K(in_arg));
-    } else if (OB_FAIL(ObDeletePolicyOperator::insert_delete_policy(*sql_proxy_, policy_attr))) {
-      LOG_WARN("failed to start tenant backup clean", K(ret), K(in_arg));
+    } else if (OB_FAIL(add_delete_policy_(policy_attr))) {
+      LOG_WARN("failed to add delete policy with transaction", K(ret), K(policy_attr));
     }
   }
   FLOG_INFO("[BACKUP_CLEAN] add delete policy", K(ret), K(in_arg)); 
@@ -138,15 +239,15 @@ int ObBackupCleanScheduler::drop_delete_policy(const obrpc::ObDeletePolicyArg &i
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("it must special one user tenant", K(ret), K(in_arg));
     } else if (FALSE_IT(policy_attr.tenant_id_ = in_arg.clean_tenant_ids_.at(0))) {
-    } else if (OB_FAIL(ObDeletePolicyOperator::drop_delete_policy(*sql_proxy_, policy_attr))) {
-      LOG_WARN("failed to start cluster backup clean", K(ret), K(in_arg));
+    } else if (OB_FAIL(drop_delete_policy_(policy_attr))) {
+      LOG_WARN("failed to drop delete policy with transaction", K(ret), K(policy_attr));
     }
   } else {
     if (!in_arg.clean_tenant_ids_.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("tenant backup clean should not initiate another tenant", K(ret), K(in_arg));
-    } else if (OB_FAIL(ObDeletePolicyOperator::drop_delete_policy(*sql_proxy_, policy_attr))) {
-      LOG_WARN("failed to start tenant backup clean", K(ret), K(in_arg));
+    } else if (OB_FAIL(drop_delete_policy_(policy_attr))) {
+      LOG_WARN("failed to drop delete policy with transaction", K(ret), K(policy_attr));
     }
   }
   FLOG_INFO("[BACKUP_CLEAN]drop_delete_policy", K(ret), K(in_arg)); 
@@ -155,8 +256,8 @@ int ObBackupCleanScheduler::drop_delete_policy(const obrpc::ObDeletePolicyArg &i
 
 int ObBackupCleanScheduler::get_job_need_reload_task(
     const ObBackupCleanJobAttr &job, 
-    common::ObIAllocator &allocator, 
-    common::ObIArray<ObBackupScheduleTask *> &tasks)
+    common::ObIAllocator &allocator,
+    ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
   const bool for_update = false;
@@ -168,39 +269,41 @@ int ObBackupCleanScheduler::get_job_need_reload_task(
   } else {
     for (int j = 0; OB_SUCC(ret) && j < task_attrs.count(); ++j) {
       const ObBackupCleanTaskAttr &task_attr = task_attrs.at(j);
-      ObArray<ObBackupCleanLSTaskAttr> ls_tasks;
-      if (OB_FAIL(ObBackupCleanLSTaskOperator::get_ls_tasks_from_task_id(*sql_proxy_, task_attr.task_id_, task_attr.tenant_id_, for_update, ls_tasks))) {
-        LOG_WARN("failed to get ls tasks", K(ret), K(task_attr));
-      } else if (ls_tasks.empty()) {
-        LOG_INFO("[BACKUP_CLEAN]no ls tasks, no need to reload", K(task_attr));
-      } else if (OB_FAIL(do_get_need_reload_task_(task_attr, ls_tasks, allocator, tasks))) {
-        LOG_WARN("failed to get need reload task", K(ret));
+      if (OB_FAIL(do_reload_for_task_(task_attr, allocator, queue))) {
+        LOG_WARN("failed to reload ls tasks", K(ret), K(task_attr));
       }
     }
   }
   return ret;
 }
 
-int ObBackupCleanScheduler::do_get_need_reload_task_(
-    const ObBackupCleanTaskAttr &task_attr, 
-    const ObArray<ObBackupCleanLSTaskAttr> &ls_tasks,
+
+int ObBackupCleanScheduler::do_reload_for_task_(
+    const ObBackupCleanTaskAttr &task_attr,
     common::ObIAllocator &allocator,
-    ObIArray<ObBackupScheduleTask *> &tasks)
+    ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
-  if (!task_attr.is_valid() || ls_tasks.empty()) {
+  if (!task_attr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(task_attr), K(ls_tasks));
+    LOG_WARN("[BACKUP_CLEAN]invalid argument", K(ret), K(task_attr));
   } else {
-    for (int i = 0; OB_SUCC(ret) && i < ls_tasks.count(); ++i) {
-      const ObBackupCleanLSTaskAttr &ls_task = ls_tasks.at(i);
-      ObBackupScheduleTask *task = nullptr;
-      if (OB_FAIL(build_task_(task_attr, ls_task, allocator, task))) {
-        LOG_WARN("failed to build task", K(ret), K(task_attr), K(ls_task));
-      } else if (ObBackupTaskStatus::Status::PENDING == ls_task.status_.status_
-          || ObBackupTaskStatus::Status::DOING == ls_task.status_.status_) {
-        if (OB_FAIL(tasks.push_back(task))) {
-          LOG_WARN("failed to push back task", K(ret), K(*task));
+    ObBackupCleanLSTaskOperator::LSTaskIterator iter;
+    if (OB_FAIL(iter.init(*sql_proxy_, task_attr.tenant_id_, task_attr.task_id_))) {
+      LOG_WARN("[BACKUP_CLEAN]failed to init iterator", K(ret));
+    } else {
+      ObBackupCleanLSTaskAttr ls_task;
+      while (OB_SUCC(ret)) {
+        ls_task.reset();
+        if (OB_FAIL(iter.next(ls_task))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("[BACKUP_CLEAN]failed to get next ls task", K(ret));
+          }
+        } else if (OB_FAIL(do_reload_single_clean_ls_task_(task_attr, ls_task, allocator, queue))) {
+          LOG_WARN("[BACKUP_CLEAN]failed to process single ls task", K(ret), K(ls_task));
         }
       }
     }
@@ -208,9 +311,49 @@ int ObBackupCleanScheduler::do_get_need_reload_task_(
   return ret;
 }
 
-int ObBackupCleanScheduler::get_need_reload_task(
-    common::ObIAllocator &allocator, 
-    common::ObIArray<ObBackupScheduleTask *> &tasks)
+int ObBackupCleanScheduler::do_reload_single_clean_ls_task_(
+    const ObBackupCleanTaskAttr &task_attr,
+    const ObBackupCleanLSTaskAttr &ls_task,
+    common::ObIAllocator &allocator,
+    ObBackupTaskSchedulerQueue &queue)
+{
+  int ret = OB_SUCCESS;
+  ObBackupScheduleTask *task = nullptr;
+  if (!task_attr.is_valid() || !ls_task.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_attr), K(ls_task));
+  } else {
+    bool queue_is_full = false;
+    if (OB_FAIL(build_task_(task_attr, ls_task, allocator, task))) {
+      LOG_WARN("failed to build task", K(ret), K(task_attr), K(ls_task));
+    } else if (OB_ISNULL(task)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("nullptr task", K(ret));
+    } else if (OB_FAIL(queue.check_queue_is_full(queue_is_full))) {
+      LOG_WARN("[BACKUP_CLEAN]failed to check can add task", K(ret));
+    } else if (queue_is_full) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("[BACKUP_CLEAN]queue is full, stop reload ls tasks", KPC(task));
+    } else if (OB_FAIL(queue.push_task(*task))) {
+      if (OB_ENTRY_EXIST == ret) {
+        LOG_DEBUG("task already exist in queue, skip", KPC(task));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to push task to queue", K(ret), KPC(task));
+      }
+    }
+    if (nullptr != task) {
+      task->~ObBackupScheduleTask();
+      allocator.free(task);
+      task = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObBackupCleanScheduler::reload_task(
+    common::ObIAllocator &allocator,
+    ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
   bool for_update = false;
@@ -232,7 +375,7 @@ int ObBackupCleanScheduler::get_need_reload_task(
         LOG_WARN("failed to check tenant status", K(ret));
       } else if (!is_valid) {
         LOG_INFO("[BACKUP_CLEAN]tenant status is not valid, no need to reload task");
-      } else if (OB_FAIL(get_job_need_reload_task(job, allocator, tasks))){
+      } else if (OB_FAIL(get_job_need_reload_task(job, allocator, queue))) {
         LOG_WARN("failed to get job need reload task", K(ret));
       }
     }
@@ -249,15 +392,10 @@ int ObBackupCleanScheduler::build_task_(
 {
   int ret = OB_SUCCESS;
   int64_t task_deep_copy_size = 0;
-  void *raw_ptr = nullptr;
   ObBackupCleanLSTask tmp_task;
   if (OB_FAIL(tmp_task.build(task_attr, ls_task))) {
     LOG_WARN("failed to build task", K(ret), K(task_attr), K(ls_task));
-  } else if (FALSE_IT(task_deep_copy_size = tmp_task.get_deep_copy_size())) {
-  } else if (nullptr == (raw_ptr = allocator.alloc(task_deep_copy_size))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate task", K(ret));
-  } else if (OB_FAIL(tmp_task.clone(raw_ptr, task))) {
+  } else if (OB_FAIL(tmp_task.clone(allocator, task))) {
     LOG_WARN("fail to clone input task", K(ret));
   } else if (nullptr == task) {
     ret = OB_ERR_UNEXPECTED;
@@ -315,10 +453,12 @@ int ObBackupCleanScheduler::cancel_backup_clean_job(const obrpc::ObBackupCleanAr
         LOG_INFO("tenant status not normal, no need to schedule backup", K(need_cancel_backup_tenant));
       } else if (OB_FAIL(cancel_tenant_jobs_(need_cancel_backup_tenant))) {
         LOG_WARN("failed to cancel tenant jobs", K(ret), K(need_cancel_backup_tenant));
+      } else {
+        // wakeup backup user tenant service to check job status, the return value is ignored
+        backup_service_->wakeup_tenant_service(need_cancel_backup_tenant);
       }
     }
   }
-
   return ret;
 }
 
@@ -387,7 +527,7 @@ int ObBackupCleanScheduler::start_schedule_backup_clean(const obrpc::ObBackupCle
     LOG_WARN("invalid argument", K(ret), K(in_arg));
   } else if (OB_FAIL(fill_template_job_(in_arg, template_job_attr))) {
     LOG_WARN("failed to fill backup clean arg", K(ret), K(in_arg));
-  } else if (is_sys_tenant(in_arg.initiator_tenant_id_)) {
+  } else if (is_sys_tenant(in_arg.tenant_id_)) {
     // backup clean initiate by sys tenant
     // if clean_tenant_ids is empty, clean all tenants, else backup clean tenant which is only in clean_tenant_ids.
     if (OB_FAIL(start_sys_backup_clean_(template_job_attr))) {
@@ -400,6 +540,9 @@ int ObBackupCleanScheduler::start_schedule_backup_clean(const obrpc::ObBackupCle
       LOG_WARN("tenant backup clean should not initiate another tenant", K(ret), K(in_arg));
     } else if (OB_FAIL(start_tenant_backup_clean_(template_job_attr))) {
       LOG_WARN("failed to start tenant backup clean", K(ret), K(in_arg));
+    } else {
+      // wakeup backup user tenant service to check job status, the return value is ignored
+      backup_service_->wakeup_tenant_service(in_arg.tenant_id_);
     }
   }
   if (OB_SUCC(ret)) {
@@ -409,6 +552,7 @@ int ObBackupCleanScheduler::start_schedule_backup_clean(const obrpc::ObBackupCle
   return ret;
 }
 
+// turn the rpc::ObBackupCleanArg to ObBackupCleanJobAttr
 int ObBackupCleanScheduler::fill_template_job_(const obrpc::ObBackupCleanArg &in_arg, ObBackupCleanJobAttr &job_attr)
 {
   int ret = OB_SUCCESS;
@@ -417,24 +561,35 @@ int ObBackupCleanScheduler::fill_template_job_(const obrpc::ObBackupCleanArg &in
     LOG_WARN("invalid argument", K(ret), K(in_arg));
   } else if (OB_FAIL(job_attr.description_.assign(in_arg.description_))) {
     LOG_WARN("failed to assign description", K(in_arg.description_));
+  } else if (OB_FAIL(job_attr.executor_tenant_id_.assign(in_arg.clean_tenant_ids_))) {
+    LOG_WARN("failed to assgin backup tenant id", K(ret));
   } else {
     const int64_t current_time = ObTimeUtility::current_time();
-    job_attr.tenant_id_ = in_arg.initiator_tenant_id_;
+    job_attr.tenant_id_ = in_arg.tenant_id_;
     job_attr.incarnation_id_ = 1;
     job_attr.initiator_tenant_id_ = in_arg.initiator_tenant_id_;
+    job_attr.initiator_job_id_ = in_arg.initiator_job_id_;
     job_attr.clean_type_ = in_arg.type_; 
     job_attr.dest_id_ = in_arg.dest_id_;
     job_attr.status_.status_ = ObBackupCleanStatus::Status::INIT;
     job_attr.start_ts_ = current_time;
     job_attr.end_ts_ = 0;
     job_attr.result_ = OB_SUCCESS;
+    job_attr.backup_path_type_ = in_arg.dest_type_;
     if (is_sys_tenant(in_arg.initiator_tenant_id_)) {
       job_attr.job_level_.level_ = in_arg.clean_tenant_ids_.empty() ? ObBackupLevel::Level::CLUSTER : ObBackupLevel::Level::SYS_TENANT;
     } else {
       job_attr.job_level_.level_ = ObBackupLevel::Level::USER_TENANT;
     }
-    if (OB_FAIL(job_attr.set_clean_parameter(in_arg.value_))) {
-      LOG_WARN("failed to set clean parameter", K(in_arg));
+    if (OB_FAIL(job_attr.backup_path_.assign(in_arg.dest_path_))) {
+      LOG_WARN("failed to assign backup path", K(ret), "dest_path", in_arg.dest_path_);
+    } else {
+      ObArray<int64_t> value_array;
+      if (OB_FAIL(in_arg.get_value_array(value_array))) {
+        LOG_WARN("failed to get value array", K(ret), K(in_arg));
+      } else if (OB_FAIL(job_attr.set_clean_parameter(value_array))) {
+        LOG_WARN("failed to set clean parameter", K(ret), K(value_array));
+      }
     }
   }
   return ret;
@@ -463,16 +618,16 @@ int ObBackupCleanScheduler::get_need_clean_tenant_ids_(ObBackupCleanJobAttr &job
       if (OB_FAIL(ObBackupCleanCommon::check_tenant_status(*schema_service_, tenant_id, is_valid))) {
         LOG_WARN("failed to check tenant status", K(tenant_id));
       } else if (!is_valid) {
-        ret = OB_BACKUP_CAN_NOT_START;
+        ret = OB_BACKUP_CLEAN_CAN_NOT_START;
         LOG_WARN("tenant status are not valid, can't start backup clean", K(ret), K(tenant_id));
       }
     }
   } else if (OB_FAIL(ObBackupCleanCommon::get_all_tenants(*schema_service_, job_attr.executor_tenant_id_))) {
     LOG_WARN("failed to get all tenants", K(ret));
   } else if (job_attr.executor_tenant_id_.empty()) {
-    ret = OB_BACKUP_CAN_NOT_START;
+    ret = OB_BACKUP_CLEAN_CAN_NOT_START;
     LOG_WARN("can't start cluster backup clean with no tenant", K(ret));
-    LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, "no tenant need backup clean");
+    LOG_USER_ERROR(OB_BACKUP_CLEAN_CAN_NOT_START, "no tenant need backup clean");
   }
   return ret;
 }
@@ -492,7 +647,6 @@ int ObBackupCleanScheduler::persist_job_task_(ObBackupCleanJobAttr &job_attr)
     } else if (OB_FAIL(ObBackupCleanJobOperator::insert_job(trans, job_attr))) {
       LOG_WARN("failed to insert user tenant backup clean job", K(ret), K(job_attr));
     }
-
     if (OB_SUCC(ret)) {
       if (OB_FAIL(trans.end(true))) {
         LOG_WARN("failed to commit trans", KR(ret));
@@ -503,6 +657,57 @@ int ObBackupCleanScheduler::persist_job_task_(ObBackupCleanJobAttr &job_attr)
         LOG_WARN("failed to rollback", KR(ret), K(tmp_ret));
       }
     }
+  }
+  return ret;
+}
+
+// do some basic check before generate backup clean job
+int ObBackupCleanScheduler::backup_clean_pre_checker_(ObBackupCleanJobAttr &job_attr, const bool is_sys_tenant)
+{
+  int ret = OB_SUCCESS;
+  if (ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP == job_attr.clean_type_) {
+    if (is_sys_tenant) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < job_attr.executor_tenant_id_.count(); ++i) {
+        const uint64_t tenant_id = job_attr.executor_tenant_id_.at(i);
+        ObDeletePolicyAttr delete_policy;
+        if (OB_FAIL(ObDeletePolicyOperator::get_delete_policy(*sql_proxy_, tenant_id, delete_policy))) {
+          LOG_WARN("failed to get delete policy for user tenant", K(ret), K(tenant_id));
+          LOG_USER_ERROR(OB_BACKUP_CLEAN_CAN_NOT_START, "no delete policy for some user tenant");
+        }
+      }
+      SCN gts;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(OB_TS_MGR.get_gts(OB_SYS_TENANT_ID, nullptr, gts))) {
+        LOG_WARN("failed to get gts for sys tenant", K(ret));
+      } else if (!gts.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("gts is invalid", K(ret), K(gts));
+      } else {
+        job_attr.expired_time_ = gts.convert_to_ts();
+        LOG_INFO("[BACKUP_CLEAN] sys tenant set gts time for all tenants", "expired_time", job_attr.expired_time_);
+      }
+    }
+  } else if (ObNewBackupCleanType::DELETE_BACKUP_ALL == job_attr.clean_type_) {
+    // check if target user tenant has ever use this dest
+    bool is_exist = false;
+    ObBackupDestType::TYPE dest_type = ObBackupDestType::TYPE::DEST_TYPE_MAX;
+    LOG_INFO("system tenant check if target user tenant has ever use this dest", K(job_attr));
+    ObBackupDest backup_dest;
+    if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_,
+        is_sys_tenant ? job_attr.executor_tenant_id_.at(0) : job_attr.tenant_id_, job_attr.backup_path_, backup_dest))) {
+      LOG_WARN("failed to get backup dest", K(ret), "path", job_attr.backup_path_);
+    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_type(*sql_proxy_,
+          is_sys_tenant ? job_attr.executor_tenant_id_.at(0) : job_attr.tenant_id_, backup_dest, dest_type))) {
+      LOG_WARN("failed to get dest type", K(ret), K(job_attr), K(backup_dest));
+      if (OB_ITER_END == ret) {
+        LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "failed to get the specified dest, please check the dest is exist");
+      }
+    } else if (job_attr.backup_path_type_ != dest_type) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("delete all backup can not use data backup dest", K(ret), K(job_attr));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "mismatched dest type");
+    }
+    LOG_INFO("[BACKUP_CLEAN] backup clean pre checker end", K(ret), K(job_attr));
   }
   return ret;
 }
@@ -518,10 +723,61 @@ int ObBackupCleanScheduler::start_sys_backup_clean_(const ObBackupCleanJobAttr &
     LOG_WARN("failed to assign clean job attr", K(ret), K(job_attr));
   } else if (OB_FAIL(get_need_clean_tenant_ids_(new_job_attr))) {
     LOG_WARN("failed to get can clean tenant ids", K(ret), K(new_job_attr));
+  } else if (OB_FAIL(backup_clean_pre_checker_(new_job_attr, true/*is_sys_tenant*/))) {
+    LOG_WARN("failed to check backup clean pre checker", K(ret), K(new_job_attr));
   } else if (OB_FAIL(persist_job_task_(new_job_attr))) {
     LOG_WARN("failed to insert job", K(ret), K(new_job_attr));
   }
   FLOG_INFO("[BACKUP_CLEAN] finish start sys tenant backup clean", K(ret), K(job_attr));
+  return ret;
+}
+
+int ObBackupCleanScheduler::set_tenant_obsolete_parameter_(ObBackupCleanJobAttr &job_attr)
+{
+  int ret = OB_SUCCESS;
+  ObDeletePolicyAttr delete_policy;
+  int64_t recovery_window = 0;
+  int64_t current_gts_time = 0;
+  SCN gts;
+
+  if (job_attr.expired_time_ > 0) {  // the job is initiated by sys tenant, current gts time is already seted
+    current_gts_time = job_attr.expired_time_;
+    LOG_INFO("[BACKUP_CLEAN] use system tenant gts time", K(current_gts_time), "tenant_id", job_attr.tenant_id_);
+  } else {
+    if (OB_FAIL(OB_TS_MGR.get_gts(job_attr.tenant_id_, nullptr, gts))) {
+      LOG_WARN("failed to get gts", K(ret));
+    } else if (!gts.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("gts is invalid", K(ret), K(gts));
+    } else {
+      current_gts_time = gts.convert_to_ts();
+      LOG_INFO("[BACKUP_CLEAN] use tenant gts time", K(current_gts_time), "tenant_id", job_attr.tenant_id_);
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObDeletePolicyOperator::get_delete_policy(*sql_proxy_, job_attr.tenant_id_, delete_policy))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get delete policy", K(ret), K(job_attr));
+    } else {
+      LOG_WARN("no delete policy", K(ret), K(job_attr));
+    }
+  } else if (OB_FAIL(get_delete_policy_parameter_(delete_policy, recovery_window))) {
+    LOG_WARN("failed to get delete policy parameter", K(ret), K(delete_policy));
+  } else if (recovery_window <= 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("recovery window is unexpected", K(ret), K(job_attr), K(recovery_window));
+  } else if (OB_FALSE_IT(job_attr.expired_time_ = current_gts_time - recovery_window)) {
+  } else if (0 == strcmp(delete_policy.policy_name_, OB_STR_BACKUP_CLEAN_POLICY_NAME_LOG_ONLY)) {
+    job_attr.backup_path_type_ = ObBackupDestType::DEST_TYPE_ARCHIVE_LOG;
+  } else if (0 == strcmp(delete_policy.policy_name_, OB_STR_BACKUP_CLEAN_POLICY_NAME_DEFAULT)) {
+    // for default policy, we delete data backup dest and log archive dest, but just use type DATA_BACKUP_DEST
+    job_attr.backup_path_type_ = ObBackupDestType::DEST_TYPE_BACKUP_DATA;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unsupported delete policy type", K(ret), K(delete_policy));
+  }
+  LOG_INFO("[BACKUP_CLEAN] finish set tenant obsolete parameter", K(ret), K(job_attr));
   return ret;
 }
 
@@ -541,6 +797,15 @@ int ObBackupCleanScheduler::start_tenant_backup_clean_(const ObBackupCleanJobAtt
   } else if (!is_valid) {
     ret = OB_NOT_SUPPORTED; 
     LOG_WARN("tenant status is not valid, can't start backup clean", K(ret), K(new_job_attr));
+  } else if (OB_FAIL(backup_clean_pre_checker_(new_job_attr, false/*is_sys_tenant*/))) {
+    LOG_WARN("failed to check backup clean pre checker", K(ret), K(new_job_attr));
+  } else if (ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP == job_attr.clean_type_) {
+    // read policy, then set the delete obsolete backup type (default or log_only), and set expired time
+    if (OB_FAIL(set_tenant_obsolete_parameter_(new_job_attr))) {
+      LOG_WARN("failed to set tenant obsolete parameter", K(ret), K(job_attr));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(new_job_attr.tenant_id_)))) {
     LOG_WARN("failed to start trans", K(ret), K(new_job_attr));
   } else {
@@ -548,7 +813,8 @@ int ObBackupCleanScheduler::start_tenant_backup_clean_(const ObBackupCleanJobAtt
       LOG_WARN("failed to get next job id", K(ret));
     } else if (OB_FAIL(new_job_attr.executor_tenant_id_.push_back(new_job_attr.tenant_id_))) {
       LOG_WARN("failed to push back tenant id", K(ret));
-    } else if (OB_FALSE_IT(new_job_attr.initiator_job_id_ = new_job_attr.job_id_)) { 
+    } else if (OB_FALSE_IT(new_job_attr.initiator_job_id_ = new_job_attr.tenant_id_ == new_job_attr.initiator_tenant_id_ ?
+          0/*no parent job*/ : new_job_attr.initiator_job_id_)) {
     } else if (OB_FAIL(backup_service_->check_leader())) {
       LOG_WARN("failed to check leader", K(ret));
     } else if (OB_FAIL(ObBackupCleanJobOperator::insert_job(trans, new_job_attr))) {
@@ -565,6 +831,7 @@ int ObBackupCleanScheduler::start_tenant_backup_clean_(const ObBackupCleanJobAtt
       }
     }
   }
+  LOG_INFO("[BACKUP_CLEAN] finish start tenant backup clean", K(ret), K(new_job_attr));
   return ret;
 }
 
@@ -583,7 +850,7 @@ int ObBackupCleanScheduler::get_next_job_id_(common::ObISQLClient &trans, const 
 
 int ObBackupCleanScheduler::handle_execute_over(
     const ObBackupScheduleTask *task, 
-    const share::ObHAResultInfo &result_info,
+    const ObHAResultInfo &result_info,
     bool &can_remove)
 {
   //cases of call handle_execute_over
@@ -595,7 +862,6 @@ int ObBackupCleanScheduler::handle_execute_over(
   bool is_valid = false;
   ObBackupCleanLSTaskAttr ls_attr;
   ObMySQLTransaction trans;
-  ObLSID ls_id(task->get_ls_id());
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -609,6 +875,7 @@ int ObBackupCleanScheduler::handle_execute_over(
   } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(task->get_tenant_id())))) {
     LOG_WARN("failed to start trans", K(ret));
   } else {
+    ObLSID ls_id(task->get_ls_id());
     if (OB_FAIL(ObBackupCleanLSTaskOperator::get_ls_task(trans, true/*for update*/, task->get_task_id(), task->get_tenant_id(), ls_id, ls_attr))) {
       LOG_WARN("failed to get log stream task", K(ret), K(*task));
     } else if (ObBackupTaskStatus::Status::DOING == ls_attr.status_.status_) {
@@ -659,6 +926,15 @@ int ObBackupCleanScheduler::handle_failed_job_(const uint64_t tenant_id, const i
     }
   }
   return ret;
+}
+
+int ObBackupCleanScheduler::get_delete_policy_parameter_(const ObDeletePolicyAttr &delete_policy, int64_t &recovery_window)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBackupCleanUtil::parse_time_interval(delete_policy.recovery_window_, recovery_window))) {
+    LOG_WARN("failed to parse recover window", K(ret), K(delete_policy));
+  }
+  return ret;
 } 
 
 int ObBackupCleanScheduler::process_tenant_delete_jobs_(const uint64_t tenant_id, ObArray<ObBackupCleanJobAttr> &clean_jobs)
@@ -683,7 +959,7 @@ int ObBackupCleanScheduler::process_tenant_delete_jobs_(const uint64_t tenant_id
       LOG_WARN("failed to init tenant backup clean job mgr", K(ret), K(job_attr));
     } else if (OB_SUCCESS != (tmp_ret = job_mgr->process())) { // tenant level backups are isolated
       LOG_WARN("failed to schedule tenant backup clean job", K(tmp_ret), K(job_attr));
-      if (!is_sys_tenant(tenant_id) && OB_SUCCESS != (tmp_ret = handle_failed_job_(tenant_id, tmp_ret, *job_mgr, job_attr))) {
+      if (OB_SUCCESS != (tmp_ret = handle_failed_job_(tenant_id, tmp_ret, *job_mgr, job_attr))) {
         LOG_WARN("failed to handle user tenant failed job", K(tmp_ret), K(job_attr)); 
       } else {
         backup_service_->wakeup();
@@ -697,10 +973,22 @@ int ObBackupCleanScheduler::process_tenant_delete_jobs_(const uint64_t tenant_id
   return ret;
 }
 
+bool ObBackupCleanScheduler::check_need_cancel_job_(const ObIArray<ObBackupCleanJobAttr> &clean_jobs)
+{
+  bool need_cancel_job = false;
+  if (clean_jobs.empty()) {
+  } else if (ObBackupCleanStatus::Status::CANCELING == clean_jobs.at(0).status_.status_) {
+    need_cancel_job = true;
+  }
+  return need_cancel_job;
+}
+
 int ObBackupCleanScheduler::process()
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupCleanJobAttr> clean_jobs;
+  bool can_add_task = false;
+  bool need_cancel_job = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup clean scheduler not init", K(ret));
@@ -708,6 +996,11 @@ int ObBackupCleanScheduler::process()
     LOG_WARN("failed to get backup clean jobs", K(ret));
   } else if (clean_jobs.empty()) {
     // do nothing
+  } else if (OB_FALSE_IT(need_cancel_job = check_need_cancel_job_(clean_jobs))) {
+  } else if (OB_FAIL(task_scheduler_->check_can_add_task(can_add_task))) {
+    LOG_WARN("failed to check can add task", K(ret));
+  } else if (!can_add_task && !need_cancel_job) { // if queue is full and no canceling job, skip
+    LOG_INFO("queue is full and no canceling job, skip process this round", K(need_cancel_job), K(can_add_task));
   } else if (OB_FAIL(process_tenant_delete_jobs_(tenant_id_, clean_jobs))) {
     LOG_WARN("failed to process tenant delete jobs", K(ret), K(tenant_id_), K(clean_jobs));
   } else {
@@ -739,7 +1032,7 @@ int ObIBackupDeleteMgr::init(
     common::ObMySQLProxy &sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     ObBackupTaskScheduler &task_scheduler,
-    share::schema::ObMultiVersionSchemaService &schema_service,
+    schema::ObMultiVersionSchemaService &schema_service,
     ObBackupCleanService &backup_service)
 {
   int ret = OB_SUCCESS;
@@ -827,6 +1120,8 @@ int ObUserTenantBackupDeleteMgr::deal_non_reentrant_job(const int error)
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObBackupCleanJobOperator::update_comment(*sql_proxy_, *job_attr_))) {
+      LOG_WARN("failed to update comment", K(ret));
     } else if (OB_FAIL(advance_job_status_(*sql_proxy_, next_status, job_attr_->result_, job_attr_->end_ts_))) {
       LOG_WARN("failed to move job status to FAILED", K(ret), K(*job_attr_), K(next_status));
     } else if (FALSE_IT(job_attr_->success_task_count_ = success_task_count)) {
@@ -846,7 +1141,7 @@ int ObUserTenantBackupDeleteMgr::check_data_backup_dest_validity_()
   int ret = OB_SUCCESS;
   ObBackupPathString backup_dest_str;
   ObBackupDestMgr dest_mgr;
-  share::ObBackupHelper backup_helper;
+  ObBackupHelper backup_helper;
   if (OB_FAIL(backup_helper.init(job_attr_->tenant_id_, *sql_proxy_))) {
     LOG_WARN("failed to init backup helper", K(ret));
   } else if (OB_FAIL(backup_helper.get_backup_dest(backup_dest_str))) {
@@ -858,7 +1153,7 @@ int ObUserTenantBackupDeleteMgr::check_data_backup_dest_validity_()
     }
   } else if (backup_dest_str.is_empty()) {
     // do nothing
-  } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA, backup_dest_str,  *sql_proxy_))) {
+  } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA, backup_dest_str, *sql_proxy_))) {
     LOG_WARN("failed to init dest manager", K(ret), K(job_attr_), K(backup_dest_str));
   } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
     LOG_WARN("failed to check backup dest validity", K(ret), K(job_attr_), K(backup_dest_str));
@@ -871,7 +1166,7 @@ int ObUserTenantBackupDeleteMgr::check_log_archive_dest_validity_()
   int ret = OB_SUCCESS;
   ObBackupPathString archive_dest_str;
   bool need_lock = false;
-  share::ObArchivePersistHelper helper;
+  ObArchivePersistHelper helper;
   common::ObSArray<std::pair<int64_t, int64_t>> dest_array;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(helper.init(job_attr_->tenant_id_))) {
@@ -923,9 +1218,7 @@ int ObUserTenantBackupDeleteMgr::process()
     ObBackupCleanStatus::Status status = job_attr_->status_.status_;
     switch (status) {
       case ObBackupCleanStatus::Status::INIT: {
-        if (OB_FAIL(check_dest_validity_())) {
-          LOG_WARN("failed to check clean dest validity", K(ret), K(*job_attr_));
-        } else if (OB_FAIL(persist_backup_clean_task_())) {
+        if (OB_FAIL(persist_backup_clean_task_())) {
           LOG_WARN("failed to persist log stream task", K(ret), K(*job_attr_));
         }
         break;
@@ -990,7 +1283,30 @@ int ObUserTenantBackupDeleteMgr::move_to_history_()
           }
         }
       }
-      if (OB_SUCC(ret) && OB_FAIL(ObBackupCleanJobOperator::move_job_to_his(trans, tenant_id_, job_attr_->job_id_))) {
+
+      // if is delete backup all, we need to delete the line in storage info table before move job to history
+      if (OB_FAIL(ret)) {
+      } else if (job_attr_->is_delete_backup_all()) {
+        ObBackupDest backup_dest;
+        if (job_attr_->result_ != OB_SUCCESS) {
+          LOG_WARN("job is not success, do not delete backup dest in storage info table", K(*job_attr_));
+        } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_,
+                                job_attr_->tenant_id_, job_attr_->backup_path_, backup_dest))) {
+          LOG_WARN("failed to get backup dest", K(ret), "path", job_attr_->backup_path_);
+        } else if (OB_FAIL(backup_service_->check_leader())) {
+          LOG_WARN("failed to check leader", K(ret));
+        } else if (OB_FAIL(ObBackupStorageInfoOperator::remove_backup_storage_info(
+                            trans, job_attr_->tenant_id_, backup_dest))) {
+          LOG_WARN("failed to delete backup dest in storage info table", K(ret), "dest", backup_dest);
+        } else {
+          LOG_INFO("[BACKUP_CLEAN] delete backup dest in storage info table", K(ret), "dest", backup_dest);
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(backup_service_->check_leader())) {
+        LOG_WARN("failed to check leader", K(ret));
+      } else if (OB_FAIL(ObBackupCleanJobOperator::move_job_to_his(trans, tenant_id_, job_attr_->job_id_))) {
         LOG_WARN("failed to move job to history", K(ret));
       }
     }
@@ -1001,6 +1317,10 @@ int ObUserTenantBackupDeleteMgr::move_to_history_()
       } else {
         LOG_INFO("succeed to move job to history. backup delete job finish", "tenant_id", job_attr_->tenant_id_, "job_id", job_attr_->job_id_);
         backup_service_->wakeup();
+        // if the job is initiated by sys tenant, wakeup sys tenant backup service to advance sys job status
+        if (is_sys_tenant(job_attr_->initiator_tenant_id_)) {
+          backup_service_->wakeup_tenant_service(job_attr_->initiator_tenant_id_);
+        }
       }
     } else {
       int tmp_ret = OB_SUCCESS;
@@ -1134,8 +1454,14 @@ int ObUserTenantBackupDeleteMgr::do_backup_clean_tasks_(const ObArray<ObBackupCl
     SMART_VAR(ObBackupCleanTaskMgr, task_mgr) {
       const ObBackupCleanTaskAttr &task_attr = task_attrs.at(i);
       if (ObBackupCleanStatus::Status::FAILED == task_attr.status_.status_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("set task status can not be failed", K(ret), K(task_attr));  
+        if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == task_attr.result_) {
+          // do nothing
+          // The clean task failed due to the worm.
+          // The failure of a single task does not affect the execution of other tasks.
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("set task status can not be failed", K(ret), K(task_attr));
+        }
       } else if (ObBackupCleanStatus::Status::COMPLETED == task_attr.status_.status_
           || ObBackupCleanStatus::Status::CANCELED == task_attr.status_.status_) {
         // do nothing
@@ -1159,6 +1485,7 @@ int ObUserTenantBackupDeleteMgr::handle_backup_clean_task(
   result = OB_SUCCESS;
   next_status.status_ = ObBackupCleanStatus::Status::MAX_STATUS;
   bool has_failed = false;
+  bool has_failed_by_worm = false;
   bool has_task = false;
   int64_t success_task_count = 0;
   for (int i = 0; OB_SUCC(ret) && i < task_attrs.count(); i++) {
@@ -1171,28 +1498,159 @@ int ObUserTenantBackupDeleteMgr::handle_backup_clean_task(
         || ObBackupCleanStatus::Status::CANCELING == task_attr.status_.status_) {
       has_task = true;
     } else if (ObBackupCleanStatus::Status::FAILED == task_attr.status_.status_ && !has_failed) { // return first failed
-      has_failed = true;
-      result = task_attr.result_;
+      if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == task_attr.result_) {
+        // Unlike other failures, a failure due to the worm does not affect the execution of other tasks.
+        // However, when all tasks are completed or failed due to worm,
+        // the job should be marked as failed, with the error code recorded as OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM.
+        has_failed_by_worm = true;
+      } else {
+        result = task_attr.result_;
+        has_failed = true;
+      }
     } else if (ObBackupCleanStatus::Status::COMPLETED == task_attr.status_.status_) {
       success_task_count++; 
     }
   }
   job_attr_->success_task_count_ = success_task_count;
   if (OB_FAIL(ret)) {
-  } else if (!has_failed && has_task) {
-    if (OB_FAIL(do_backup_clean_tasks_(task_attrs))) {
-      LOG_WARN("failed to do set tasks", K(ret)); 
-    } 
-  } else if (has_failed && has_task) {
-    if (OB_FAIL(do_cancel_())) {
-      LOG_WARN("failed to cancel task", K(ret)); 
+  } else if (has_task) {
+    if (!has_failed) {
+      if (OB_FAIL(do_backup_clean_tasks_(task_attrs))) {
+        LOG_WARN("failed to do set tasks", K(ret));
+      }
+    } else {
+      if (OB_FAIL(do_cancel_())) {
+        LOG_WARN("failed to cancel task", K(ret));
+      }
     }
-  } else if (has_failed && !has_task) {
-    next_status.status_ = ObBackupCleanStatus::Status::FAILED; 
   } else {
-    next_status.status_ = ObBackupCleanStatus::Status::COMPLETED;
+    if (has_failed) {
+      next_status.status_ = ObBackupCleanStatus::Status::FAILED;
+    } else if (has_failed_by_worm) {
+      result = OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM;
+      next_status.status_ = ObBackupCleanStatus::Status::FAILED;
+    } else {
+      next_status.status_ = ObBackupCleanStatus::Status::COMPLETED;
+    }
   }
-  FLOG_INFO("[BACKUP_CLEAN]handle backup clean task", K(ret), K(*job_attr_), K(next_status.status_), K(has_failed), K(has_task)); 
+
+  FLOG_INFO("[BACKUP_CLEAN]handle backup clean task", K(ret),
+      K(*job_attr_), K(next_status.status_), K(has_failed), K(has_task));
+  return ret;
+}
+
+//
+
+// traverse the task_attrs to collect round IDs and check if all pieces in each round are deleted
+int ObUserTenantBackupDeleteMgr::get_round_range_to_delete_(const ObArray<ObBackupCleanTaskAttr> &task_attrs,
+                                      ObIArray<int64_t> &round_ids,
+                                      common::hash::ObHashMap<int64_t, ObBackupPathString> &piece_round_to_backup_path) {
+  int ret = OB_SUCCESS;
+  int64_t max_round_id = INT64_MIN;
+  round_ids.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < task_attrs.count(); ++i) {
+    const ObBackupCleanTaskAttr &task_attr = task_attrs.at(i);
+    if (ObBackupCleanTaskType::BACKUP_PIECE == task_attr.task_type_) {
+      max_round_id = std::max(max_round_id, task_attr.round_id_);
+      if (OB_FAIL(piece_round_to_backup_path.set_refactored(task_attr.round_id_, task_attr.backup_path_))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to set refactored piece_round_to_backup_path", K(ret), K(task_attr));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !piece_round_to_backup_path.empty()) {
+    ObArchivePersistHelper archive_helper;
+    if (OB_FAIL(archive_helper.init(gen_user_tenant_id(tenant_id_)))) {
+      LOG_WARN("failed to init archive helper", K(ret), K(tenant_id_));
+    } else {
+      // check each round in the map to see if all pieces are deleted
+      for (common::hash::ObHashMap<int64_t, ObBackupPathString>::const_iterator iter = piece_round_to_backup_path.begin();
+           OB_SUCC(ret) && iter != piece_round_to_backup_path.end(); ++iter) {
+        const int64_t round_id = iter->first;
+        bool is_piece_all_deleted = false;
+        if (OB_FAIL(archive_helper.is_all_piece_in_round_deleted(*sql_proxy_, round_id, is_piece_all_deleted))) {
+          LOG_WARN("failed to check if round is cleared", K(ret), K(round_id));
+        } else if (is_piece_all_deleted) { // all pieces in the round are deleted
+          if (OB_FAIL(round_ids.push_back(round_id))) {
+            LOG_WARN("failed to push back round id", K(ret), K(round_id));
+          } else {
+            LOG_INFO("round is cleared, add to delete list", K(round_id));
+          }
+        } else { // some pieces in the round are not deleted
+          if (round_id != max_round_id) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("round is not totally deleted, but the piece after this round has been deleted",
+                       K(ret), K(round_id), K(max_round_id), K(task_attrs));
+          } else {
+            LOG_INFO("the piece in max round is not totally deleted, skip deleting placeholders of this round", K(round_id));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// delete the rounds placeholders if all pieces in the round are deleted
+int ObUserTenantBackupDeleteMgr::delete_rounds_placeholders_(const ObArray<ObBackupCleanTaskAttr> &task_attrs)
+{
+  int ret = OB_SUCCESS;
+  common::hash::ObHashMap<int64_t, ObBackupPathString> round_id_to_backup_path;
+  ObArray<int64_t> round_ids;  // round ids to delete
+  if (task_attrs.empty()) {
+    // do nothing
+  } else if (OB_FAIL(round_id_to_backup_path.create(task_attrs.count(), "round_map"))) {
+    LOG_WARN("failed to create round_id_to_backup_path map", K(ret));
+  } else if (OB_FAIL(get_round_range_to_delete_(task_attrs, round_ids, round_id_to_backup_path))) {
+    LOG_WARN("failed to get round range to delete", K(ret));
+  } else if (!round_ids.empty()) {
+    ObBackupPath rounds_start_path;
+    ObBackupPath rounds_end_path;
+    ObBackupPathString backup_path;
+    ObBackupDest backup_dest;
+    for (int64_t i = 0; OB_SUCC(ret) && i < round_ids.count(); ++i) { // delete the rounds placeholders in each round
+      int64_t round_id = round_ids.at(i);
+      int64_t dest_id = OB_INVALID_DEST_ID;
+      backup_path.reset();
+      backup_dest.reset();
+      rounds_start_path.reset();
+      rounds_end_path.reset();
+      if (OB_FAIL(round_id_to_backup_path.get_refactored(round_id, backup_path))) {
+        LOG_WARN("failed to get backup path", K(ret), K(round_id));
+      } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, gen_user_tenant_id(tenant_id_), backup_path, backup_dest))) {
+        LOG_WARN("failed to get backup dest from storage info table", K(ret), K(backup_path), K(round_id));
+      } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, gen_user_tenant_id(tenant_id_), backup_dest, dest_id))) {
+        LOG_WARN("failed to get dest id", K(ret), K(backup_dest));
+      } else {
+        const ObBackupStorageInfo *storage_info = backup_dest.get_storage_info();
+        if (OB_ISNULL(storage_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("storage info is null", K(ret), K(dest_id), K(round_id));
+        } else {
+          LOG_INFO("start deleting log archive rounds placeholders", K(ret), K(round_id), K(dest_id));
+          if (OB_FAIL(ObArchivePathUtil::get_round_start_file_path(backup_dest, dest_id, round_id, rounds_start_path))) {
+            LOG_WARN("failed to get round start file path", K(ret), K(dest_id), K(round_id));
+          } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_file(rounds_start_path, storage_info))) {
+            LOG_WARN("failed to delete round start file", K(ret), K(rounds_start_path));
+          } else if (OB_FAIL(ObArchivePathUtil::get_round_end_file_path(backup_dest, dest_id, round_id, rounds_end_path))) {
+            LOG_WARN("failed to get round end file path", K(ret), K(dest_id), K(round_id));
+          } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_file(rounds_end_path, storage_info))) {
+            LOG_WARN("failed to delete round end file", K(ret), K(rounds_end_path));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      LOG_INFO("successfully deleted log archive rounds placeholders", K(ret), K(round_ids));
+    } else {
+      LOG_WARN("failed to delete log archive rounds placeholders", K(ret), K(round_ids));
+    }
+  } else {
+    LOG_INFO("no log archive rounds placeholders to delete in this job", K(ret), K(round_ids));
+  }
   return ret;
 }
 
@@ -1209,9 +1667,22 @@ int ObUserTenantBackupDeleteMgr::do_backup_clean_task_()
   } else if (OB_FAIL(handle_backup_clean_task(task_attrs, next_status, result))) {
     LOG_WARN("failed to handle set tasks", K(ret));
   } else if (ObBackupCleanStatus::Status::COMPLETED == next_status.status_
-      || ObBackupCleanStatus::Status::FAILED == next_status.status_) {
+             || ObBackupCleanStatus::Status::FAILED == next_status.status_) {
+    // If the backup all's all tasks are completed, delete the files of the upper level.
+    if (ObBackupCleanStatus::Status::COMPLETED == next_status.status_) {
+      if (job_attr_->is_delete_backup_all()) {
+        if (OB_FAIL(delete_backup_all_meta_info_files_())) {
+          LOG_WARN("failed to delete backup all meta info files", K(ret));
+        }
+      } else {
+        if (OB_FAIL(delete_rounds_placeholders_(task_attrs))) {
+          LOG_WARN("failed to delete rounds placeholders", K(ret));
+        }
+      }
+    }
     int64_t end_ts = ObTimeUtility::current_time(); 
-    if (OB_FAIL(advance_job_status_(*sql_proxy_, next_status, result, end_ts))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(advance_job_status_(*sql_proxy_, next_status, result, end_ts))) {
       LOG_WARN("failed to advance status", K(ret));
     } else if (OB_FAIL(ObBackupCleanJobOperator::update_task_count(*sql_proxy_, *job_attr_, false/*is_total*/))) {
       LOG_WARN("failed to update job task count", K(ret)); 
@@ -1223,177 +1694,39 @@ int ObUserTenantBackupDeleteMgr::do_backup_clean_task_()
   return ret;
 }
 
-int ObUserTenantBackupDeleteMgr::get_delete_backup_set_infos_(ObArray<ObBackupSetFileDesc> &set_list)
+int ObUserTenantBackupDeleteMgr::get_delete_backup_set_infos_(ObIArray<ObBackupSetFileDesc> &set_list)
 {
   int ret = OB_SUCCESS;
-  ObBackupSetFileDesc backup_set_info;
-  int64_t copies_num = 0;
-  if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(*sql_proxy_, false/*need_lock*/, job_attr_->backup_set_id_,
-      job_attr_->incarnation_id_, job_attr_->tenant_id_, job_attr_->dest_id_, backup_set_info))) {
-    LOG_WARN("failed to get backup set file", K(ret)); 
-  } else if (!backup_set_info.is_valid()) {
-    ret = OB_ERR_UNEXPECTED; 
-    LOG_WARN("backup set info is invalid", K(ret), K(backup_set_info));
-  } else if (ObBackupSetFileDesc::BackupSetStatus::DOING == backup_set_info.status_) {
-    ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-    LOG_WARN("backup set do not allow clean, because status of backup set is not finish", K(ret), K(backup_set_info));
-  } else if (ObBackupSetFileDesc::BackupSetStatus::FAILED == backup_set_info.status_) {
-    // do nothing
-  } else if (ObBackupFileStatus::BACKUP_FILE_DELETED == backup_set_info.file_status_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("backup set has been deleted", K(ret), K(backup_set_info));
-  } else if (ObBackupFileStatus::BACKUP_FILE_DELETING == backup_set_info.file_status_) {
-    // do nothing
-  }
-  
-  if (OB_SUCC(ret) && OB_FAIL(set_list.push_back(backup_set_info))) {
-    LOG_WARN("failed to push backup set list", K(ret));
+  ObBackupDeleteSelector selector;
+  if (OB_FAIL(selector.init(*sql_proxy_, *schema_service_, *job_attr_, *rpc_proxy_, *this))) {
+    LOG_WARN("failed to init selector", K(ret));
+  } else if (OB_FAIL(selector.get_delete_backup_set_infos(set_list))) {
+    LOG_WARN("failed to get delete backup set infos", K(ret));
   }
   return ret;
 }
 
-int ObUserTenantBackupDeleteMgr::get_delete_backup_piece_infos_(ObArray<ObTenantArchivePieceAttr> &piece_list)
+int ObUserTenantBackupDeleteMgr::get_delete_backup_piece_infos_(ObIArray<ObTenantArchivePieceAttr> &piece_list)
 {
   int ret = OB_SUCCESS;
-  // TODO(wenjinyu.wjy) 4.3 support
-  return ret;
-}
-
-int ObUserTenantBackupDeleteMgr::get_delete_obsolete_backup_set_infos_(
-    ObBackupSetFileDesc &clog_data_clean_point,
-    ObArray<ObBackupSetFileDesc> &set_list)
-{
-  int ret = OB_SUCCESS; 
-  ObArray<ObBackupSetFileDesc> backup_set_infos;
-  CompareBackupSetInfo backup_set_info_cmp;
-  ObBackupPathString backup_dest_str;
-  ObBackupPathString backup_path_str;
-  share::ObBackupHelper backup_helper;
-  ObBackupDest backup_dest;
-  if (OB_FAIL(backup_helper.init(job_attr_->tenant_id_, *sql_proxy_))) {
-    LOG_WARN("fail to init backup help", K(ret));
-  } else if (OB_FAIL(backup_helper.get_backup_dest(backup_dest_str))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to get backup dest", K(ret));
-    }
-  } else if (backup_dest_str.is_empty()) {
-    // do nothing
-  } else if (OB_FAIL(backup_dest.set(backup_dest_str))) {
-    LOG_WARN("fail to set backup dest", K(ret), K(backup_dest_str)); 
-  } else if (OB_FAIL(backup_dest.get_backup_path_str(backup_path_str.ptr(), backup_path_str.capacity()))) {
-    LOG_WARN("fail to get backup path str", K(ret), K(backup_dest));
-  } else if (OB_FAIL(ObBackupSetFileOperator::get_candidate_obsolete_backup_sets(*sql_proxy_, job_attr_->tenant_id_,
-      job_attr_->expired_time_, backup_path_str.ptr(), backup_set_infos))) {
-    LOG_WARN("failed to get candidate obsolete backup sets", K(ret)); 
-  } else if (FALSE_IT(std::sort(backup_set_infos.begin(), backup_set_infos.end(), backup_set_info_cmp))) {
-  } else {
-    for (int64_t i = backup_set_infos.count() - 1 ; OB_SUCC(ret) && i >= 0; i--) {
-      bool need_deleted = false;
-      const ObBackupSetFileDesc &backup_set_info = backup_set_infos.at(i);
-      if (!backup_set_info.is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("backup set info is invalid", K(ret)); 
-      } else if (ObBackupSetFileDesc::BackupSetStatus::DOING == backup_set_info.status_) {
-        need_deleted = false;
-      } else if (ObBackupSetFileDesc::BackupSetStatus::FAILED == backup_set_info.status_
-          || ObBackupFileStatus::BACKUP_FILE_DELETING == backup_set_info.file_status_) {
-        need_deleted = true;
-        LOG_INFO("[BACKUP_CLEAN] allow delete", K(backup_set_info));  
-      } else if (backup_set_info.backup_type_.is_full_backup() && !clog_data_clean_point.is_valid()) {
-        if (OB_FAIL(clog_data_clean_point.assign(backup_set_info))) {
-          LOG_WARN("backup set info is invalid", K(ret)); 
-        } else {
-          need_deleted = false;
-        }
-      } else if (!backup_set_info.backup_type_.is_full_backup()
-          && backup_set_info.backup_set_id_ > clog_data_clean_point.backup_set_id_) {
-        need_deleted = false;
-      } else {
-        need_deleted = true;      
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (need_deleted && OB_FAIL(set_list.push_back(backup_set_info))) {
-        LOG_WARN("failed to push back set list", K(ret));
-      }
-    }
-    LOG_INFO("[BACKUP_CLEAN]finish get delete obsolete backup set infos ", K(ret), K(clog_data_clean_point), K(set_list)); 
+  ObBackupDeleteSelector selector;
+  if (OB_FAIL(selector.init(*sql_proxy_, *schema_service_, *job_attr_, *rpc_proxy_, *this))) {
+    LOG_WARN("failed to init selector", K(ret));
+  } else if (OB_FAIL(selector.get_delete_backup_piece_infos(piece_list))) {
+    LOG_WARN("failed to get delete archivelog piece infos", K(ret));
   }
   return ret;
 }
 
-bool ObUserTenantBackupDeleteMgr::can_backup_pieces_be_deleted(const ObArchivePieceStatus &status)
-{
-  return ObArchivePieceStatus::Status::INACTIVE == status.status_
-      || ObArchivePieceStatus::Status::FROZEN == status.status_;
-}
-
-int ObUserTenantBackupDeleteMgr::get_backup_dest_str(const bool is_backup_backup, char *backup_dest_str, int64_t str_len)
-{
-  int ret = OB_SUCCESS; 
-  return ret;
-}
-
-int ObUserTenantBackupDeleteMgr::get_all_dest_backup_piece_infos_(
-    const ObBackupSetFileDesc &clog_data_clean_point,
-    ObArray<ObTenantArchivePieceAttr> &backup_piece_infos)
+int ObUserTenantBackupDeleteMgr::get_delete_backup_all_infos_(ObIArray<ObBackupSetFileDesc> &set_list,
+                                                  ObIArray<ObTenantArchivePieceAttr> &piece_list)
 {
   int ret = OB_SUCCESS;
-  ObArchivePersistHelper archive_table_op;
-  common::ObArray<std::pair<int64_t, int64_t>> dest_array;
-  if (!clog_data_clean_point.is_valid()) {
-    LOG_INFO("[BACKUP_CLEAN]point is invalid", K(clog_data_clean_point));
-  } else if (OB_FAIL(archive_table_op.init(job_attr_->tenant_id_))) {
-    LOG_WARN("failed to init archive helper", K(ret)); 
-  } else if (OB_FAIL(archive_table_op.get_valid_dest_pairs(*sql_proxy_, dest_array))) {
-    LOG_WARN("failed to init archive helper", K(ret)); 
-  } else if (0 == dest_array.count()) {
-    // do nothing
-  } else {
-    ObBackupDest backup_dest;
-    ObBackupPathString backup_dest_str;
-    ObBackupPathString backup_path_str;
-    bool need_lock = false;
-    for (int i = 0; OB_SUCC(ret) && i < dest_array.count(); i++) {
-      std::pair<int64_t, int64_t> archive_dest = dest_array.at(i);
-      if (OB_FAIL(archive_table_op.get_archive_dest(*sql_proxy_, need_lock, archive_dest.first, backup_dest_str))) {
-        LOG_WARN("failed to get archive path", K(ret));
-      } else if (OB_FAIL(backup_dest.set(backup_dest_str))) {
-        LOG_WARN("fail to set backup dest", K(ret), K(backup_dest_str)); 
-      } else if (OB_FAIL(backup_dest.get_backup_path_str(backup_path_str.ptr(), backup_path_str.capacity()))) {
-        LOG_WARN("fail to get backup path str", K(ret), K(backup_dest));
-      } else if (OB_FAIL(archive_table_op.get_candidate_obsolete_backup_pieces(*sql_proxy_, clog_data_clean_point.start_replay_scn_, backup_path_str.ptr(), backup_piece_infos))) {
-        LOG_WARN("failed to get candidate obsolete backup sets", K(ret)); 
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObUserTenantBackupDeleteMgr::get_delete_obsolete_backup_piece_infos_(const ObBackupSetFileDesc &clog_data_clean_point, ObArray<ObTenantArchivePieceAttr> &piece_list)
-{ 
-  int ret = OB_SUCCESS;
-  CompareBackupPieceInfo backup_piece_info_cmp;
-  ObArray<ObTenantArchivePieceAttr> backup_piece_infos;
-  if (OB_FAIL(get_all_dest_backup_piece_infos_(clog_data_clean_point, backup_piece_infos))) {
-    LOG_WARN("failed to get all dest backup piece infos", K(ret), K(clog_data_clean_point)); 
-  } else if (FALSE_IT(std::sort(backup_piece_infos.begin(), backup_piece_infos.end(), backup_piece_info_cmp))) {
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < backup_piece_infos.count(); i++) {
-      const ObTenantArchivePieceAttr &backup_piece_info = backup_piece_infos.at(i);
-      if (!backup_piece_info.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("backup piece info is invalid", K(ret));
-      } else if (!can_backup_pieces_be_deleted(backup_piece_info.status_)) {
-        ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
-        LOG_WARN("piece can not be deleted", K(ret), K(backup_piece_info));
-      } else if (OB_FAIL(piece_list.push_back(backup_piece_info))) {
-        LOG_WARN("failed to push back piece list", K(ret));
-      }
-    }
+  ObBackupDeleteSelector selector;
+  if (OB_FAIL(selector.init(*sql_proxy_, *schema_service_, *job_attr_, *rpc_proxy_, *this))) {
+    LOG_WARN("failed to init selector", K(ret));
+  } else if (OB_FAIL(selector.get_delete_backup_all_infos(set_list, piece_list))) {
+    LOG_WARN("failed to get delete backup all infos", K(ret));
   }
   return ret;
 }
@@ -1401,11 +1734,11 @@ int ObUserTenantBackupDeleteMgr::get_delete_obsolete_backup_piece_infos_(const O
 int ObUserTenantBackupDeleteMgr::get_delete_obsolete_backup_infos_(ObArray<ObBackupSetFileDesc> &set_list, ObArray<ObTenantArchivePieceAttr> &piece_list)
 {
   int ret = OB_SUCCESS;
-  ObBackupSetFileDesc clog_data_clean_point;
-  if (OB_FAIL(get_delete_obsolete_backup_set_infos_(clog_data_clean_point, set_list))) {
-    LOG_WARN("failed to get delete obsolete backup set infos", K(ret));
-  } else if (OB_FAIL(get_delete_obsolete_backup_piece_infos_(clog_data_clean_point, piece_list))) {
-    LOG_WARN("failed to get delete obsolete backup piece infos", K(ret));
+  ObBackupDeleteSelector selector;
+  if (OB_FAIL(selector.init(*sql_proxy_, *schema_service_, *job_attr_, *rpc_proxy_, *this))) {
+    LOG_WARN("failed to init selector", K(ret));
+  } else if (OB_FAIL(selector.get_delete_obsolete_infos(set_list, piece_list))) {
+    LOG_WARN("failed to get delete obsolete backup infos", K(ret));
   }
   return ret;
 }
@@ -1425,6 +1758,10 @@ int ObUserTenantBackupDeleteMgr::get_need_cleaned_backup_infos_(ObArray<ObBackup
     if (OB_FAIL(get_delete_obsolete_backup_infos_(set_list, piece_list))) {
       LOG_WARN("failed to get delete obsolete backup infos", K(ret));
     }
+  } else if (job_attr_->is_delete_backup_all()) {
+    if (OB_FAIL(get_delete_backup_all_infos_(set_list, piece_list))) {
+      LOG_WARN("failed to get delete backup all infos", K(ret));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backup clean type is invalid", K(ret), K_(*job_attr));
@@ -1442,20 +1779,30 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_tasks_(
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < set_list.count(); i++) {
-    const ObBackupSetFileDesc &backup_set_info = set_list.at(i);
-    ObBackupCleanTaskAttr task_attr;
-    if (OB_FAIL(get_backup_clean_task_(backup_set_info, task_attr))) {
-      LOG_WARN("failed to get backup set task", K(ret));
-    } else if (!task_attr.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("backup clean set task is valid", K(ret), K(task_attr), K(backup_set_info));
-    } else if (OB_FAIL(backup_service_->check_leader())) {
-      LOG_WARN("failed to check leader", K(ret));
-    } else if (OB_FAIL(ObBackupCleanTaskOperator::insert_backup_clean_task(trans, task_attr))) {
-      LOG_WARN("failed to insert backup task", K(ret), K(task_attr));
+  if (!set_list.empty()) {
+    int64_t task_size = set_list.count();
+    int64_t start_task_id = -1;
+    if (OB_FAIL(get_next_task_id_(task_size, start_task_id))) {
+      LOG_WARN("failed to get next task id batch", K(ret), K(task_size));
     } else {
-      LOG_INFO("[BACKUP_CLEAN]success insert backup clean task", K(ret), K(task_attr), K(backup_set_info)); 
+      ObBackupCleanTaskAttr task_attr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < task_size; ++i) {
+        task_attr.reset();
+        const ObBackupSetFileDesc &backup_set_info = set_list.at(i);
+        const int64_t task_id = start_task_id + i;
+        if (OB_FAIL(generate_backup_clean_set_task_(backup_set_info, task_id, task_attr))) {
+          LOG_WARN("failed to generate backup clean task", K(ret), K(backup_set_info), K(task_id));
+        } else if (!task_attr.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("backup clean set task is invalid", K(ret), K(task_attr), K(backup_set_info));
+        } else if (OB_FAIL(backup_service_->check_leader())) {
+          LOG_WARN("failed to check leader", K(ret));
+        } else if (OB_FAIL(ObBackupCleanTaskOperator::insert_backup_clean_task(trans, task_attr))) {
+          LOG_WARN("failed to insert backup task", K(ret), K(task_attr));
+        } else {
+          LOG_INFO("[BACKUP_CLEAN]success insert backup clean task", K(ret), K(task_attr), K(backup_set_info));
+        }
+      }
     }
   }
   return ret;
@@ -1467,18 +1814,30 @@ int ObUserTenantBackupDeleteMgr::persist_backup_piece_task_(
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < piece_list.count(); i++) {
-    const ObTenantArchivePieceAttr &backup_piece_info = piece_list.at(i);
-    ObBackupCleanTaskAttr task_attr;
-    if (OB_FAIL(get_backup_piece_task_(backup_piece_info, task_attr))) {
-      LOG_WARN("failed to insert backup piece task", K(ret));
-    } else if (!task_attr.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("backup clean set task is valid", K(ret));
-    } else if (OB_FAIL(backup_service_->check_leader())) {
-      LOG_WARN("failed to check leader", K(ret));
-    } else if (OB_FAIL(ObBackupCleanTaskOperator::insert_backup_clean_task(trans, task_attr))) {
-      LOG_WARN("failed to insert backup task", K(ret), K(task_attr));
+  if (!piece_list.empty()) {
+    int64_t start_task_id = -1;
+    int64_t task_size = piece_list.count();
+    if (OB_FAIL(get_next_task_id_(task_size, start_task_id))) {
+      LOG_WARN("failed to get next task id batch", K(ret), K(task_size));
+    } else {
+      ObBackupCleanTaskAttr task_attr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < task_size; ++i) {
+        task_attr.reset();
+        const ObTenantArchivePieceAttr &backup_piece_info = piece_list.at(i);
+        const int64_t task_id = start_task_id + i;
+        if (OB_FAIL(generate_backup_clean_piece_task_(backup_piece_info, task_id, task_attr))) {
+          LOG_WARN("failed to generate backup piece task", K(ret), K(backup_piece_info), K(task_id));
+        } else if (!task_attr.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("backup clean piece task is invalid", K(ret), K(task_attr), K(backup_piece_info));
+        } else if (OB_FAIL(backup_service_->check_leader())) {
+          LOG_WARN("failed to check leader", K(ret));
+        } else if (OB_FAIL(ObBackupCleanTaskOperator::insert_backup_clean_task(trans, task_attr))) {
+          LOG_WARN("failed to insert backup task", K(ret), K(task_attr));
+        } else {
+          LOG_INFO("[BACKUP_CLEAN]success insert backup clean task", K(ret), K(task_attr), K(backup_piece_info));
+        }
+      }
     }
   }
   return ret;
@@ -1493,6 +1852,61 @@ int ObUserTenantBackupDeleteMgr::check_current_task_exist_(bool &is_exist)
   return ret;
 }
 
+int ObUserTenantBackupDeleteMgr::check_delete_all_dest_path_in_use_(common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDest backup_dest;
+  const uint64_t tenant_id = job_attr_->tenant_id_;
+  int64_t dest_id = ObBackupDeleteSelector::INVALID_CLEAN_ID;
+  if (ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA == job_attr_->backup_path_type_) {
+    ObBackupHelper backup_helper;
+    ObBackupPathString backup_path;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ObBackupDataProvider not inited", K(ret));
+    } else if (OB_FAIL(backup_helper.init(tenant_id, trans))) {
+      LOG_WARN("failed to init backup helper", K(ret), K(tenant_id));
+    } else if (OB_FAIL(backup_helper.get_backup_dest(backup_path))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get backup dest", K(ret), K(tenant_id));
+      }
+    } else if (OB_FAIL(backup_dest.set(backup_path.ptr()))) {
+      LOG_WARN("failed to set backup dest", K(ret), K(backup_path));
+    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(trans, tenant_id, backup_dest, dest_id))) {
+      LOG_WARN("failed to get dest id", K(ret), K(tenant_id), K(backup_dest));
+    } else if (dest_id == job_attr_->dest_id_) {
+      ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
+      LOG_WARN("current writing dest does not support deletion",
+                K(ret), "current_dest_id", dest_id, "dest_id", job_attr_->dest_id_);
+    }
+  } else if (ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG == job_attr_->backup_path_type_) {
+    ObArchivePersistHelper archive_helper;
+    common::ObArray<std::pair<int64_t, int64_t>> dest_array;
+    if (OB_FAIL(archive_helper.init(tenant_id))) {
+      LOG_WARN("failed to init archive helper", K(ret), K(tenant_id));
+    } else if (OB_FAIL(archive_helper.get_valid_dest_pairs(trans, dest_array))) {
+      LOG_WARN("failed to get valid dest pairs", K(ret));
+    } else if (0 == dest_array.count()) {
+      ret = OB_SUCCESS;
+    } else if (1 != dest_array.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, dest_array count is not exactly 1", K(ret), K(dest_array));
+    } else {
+      std::pair<int64_t, int64_t> archive_dest = dest_array.at(0);
+      if (archive_dest.second == job_attr_->dest_id_) {
+        ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+        LOG_WARN("current writing dest does not support deletion",
+                  K(ret), "archive_dest_id", archive_dest.second, "dest_id", job_attr_->dest_id_);
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unsupported dest_type for check backup dest status", K(ret), "dest_type", job_attr_->backup_path_type_);
+  }
+  return ret;
+}
 int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
 {
   int ret = OB_SUCCESS;
@@ -1502,10 +1916,10 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
   ObArray<ObTenantArchivePieceAttr> piece_list;
   bool is_exist = true;
   if (OB_FAIL(check_current_task_exist_(is_exist))) {
-    LOG_WARN("failed to get tenant backup infos", K(ret));
+    LOG_WARN("failed to get tenant backup infos", K(ret));   // Check here to prevent concurrent execution
   } else if (is_exist) {
-    // do nithing
-    FLOG_INFO("[BACKUP_CLEAN]task alrealdy exist", K_(job_attr));
+    // do nothing
+    FLOG_INFO("[BACKUP_CLEAN]task already exist", K_(job_attr));
   } else if (OB_FAIL(get_need_cleaned_backup_infos_(set_list, piece_list))) {
     LOG_WARN("failed to get tenant backup infos", K(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
@@ -1514,13 +1928,38 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
     if (OB_FAIL(persist_backup_clean_tasks_(trans, set_list))) {
       LOG_WARN("failed to persist backup set tasks", K(ret));
     } else if (OB_FAIL(persist_backup_piece_task_(trans, piece_list))) {
-      LOG_WARN("failed to persist backup piece tasks", K(ret));
+      LOG_WARN("failed to persist archivelog piece tasks", K(ret));
     } else if (FALSE_IT(next_status.status_ = ObBackupCleanStatus::Status::DOING)) {
     } else if (OB_FAIL(advance_job_status_(trans, next_status, job_attr_->result_, job_attr_->end_ts_))) {
       LOG_WARN("failed to advance status", K(ret));
     } else if (FALSE_IT(job_attr_->task_count_ = set_list.count() + piece_list.count())) {
     } else if (OB_FAIL(ObBackupCleanJobOperator::update_task_count(trans, *job_attr_, true/*is_total*/))) {
       LOG_WARN("failed to update job task count", K(ret)); 
+    }
+
+    if (OB_SUCC(ret) && job_attr_->is_delete_backup_all()) {
+      // set is_cleaning to true for DELETE_BACKUP_ALL type job's target path
+      ObBackupDest backup_dest;
+      if (OB_FAIL(oceanbase::transaction::tablelock::ObInnerTableLockUtil::lock_inner_table_in_trans(
+              trans,
+              gen_meta_tenant_id(tenant_id_),
+              share::OB_ALL_BACKUP_DELETE_POLICY_TID,
+              transaction::tablelock::SHARE_ROW_EXCLUSIVE,
+              false))) {
+        LOG_WARN("failed to lock policy table", K(ret));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_,
+                                job_attr_->tenant_id_, job_attr_->backup_path_, backup_dest))) {
+    LOG_WARN("failed to get backup dest", K(ret), "path", job_attr_->backup_path_);
+      } else if (OB_FAIL(backup_service_->check_leader())) {
+        LOG_WARN("failed to check leader", K(ret));
+      } else if (OB_FAIL(ObBackupStorageInfoOperator::set_backup_dest_status(
+              trans, tenant_id_, backup_dest, true/*deleting*/))) {
+        LOG_WARN("failed to set extension clean status", K(ret), K(tenant_id_), K(backup_dest));
+      } else if (OB_FAIL(check_delete_all_dest_path_in_use_(trans))) {
+        LOG_WARN("failed to check current backup dest status", K(ret));
+      } else {
+        LOG_INFO("success set backup dest status to deleting", K(ret), K(tenant_id_), K(backup_dest));
+      }
     }
     DEBUG_SYNC(BACKUP_DELETE_STATUS_INIT); 
     if (OB_SUCC(ret)) {
@@ -1540,14 +1979,15 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
   return ret;
 }
 
-int ObUserTenantBackupDeleteMgr::get_backup_clean_task_(const ObBackupSetFileDesc &backup_set_info, ObBackupCleanTaskAttr &task_attr)
+int ObUserTenantBackupDeleteMgr::generate_backup_clean_set_task_(const ObBackupSetFileDesc &backup_set_info,
+  const int64_t task_id,
+  ObBackupCleanTaskAttr &task_attr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(task_attr.backup_path_.assign(backup_set_info.backup_path_))) {
     LOG_WARN("failed to assign backup dest", K(ret), K(*job_attr_));
-  } else if (OB_FAIL(get_next_task_id_(task_attr.task_id_))) {
-    LOG_WARN("failed to get next task id");
   } else {
+    task_attr.task_id_ = task_id;
     task_attr.tenant_id_ = backup_set_info.tenant_id_;
     task_attr.job_id_ = job_attr_-> job_id_;
     task_attr.incarnation_id_ = backup_set_info.incarnation_;
@@ -1563,14 +2003,15 @@ int ObUserTenantBackupDeleteMgr::get_backup_clean_task_(const ObBackupSetFileDes
   return ret;
 }
 
-int ObUserTenantBackupDeleteMgr::get_backup_piece_task_(const ObTenantArchivePieceAttr &backup_piece_info, ObBackupCleanTaskAttr &task_attr)
+int ObUserTenantBackupDeleteMgr::generate_backup_clean_piece_task_(const ObTenantArchivePieceAttr &backup_piece_info,
+    const int64_t task_id,
+    ObBackupCleanTaskAttr &task_attr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(task_attr.backup_path_.assign(backup_piece_info.path_))) {
     LOG_WARN("failed to assign backup dest", K(ret), K(*job_attr_));
-  } else if (OB_FAIL(get_next_task_id_(task_attr.task_id_))) {
-    LOG_WARN("failed to get next task id", K(backup_piece_info), K(task_attr));
   } else {
+    task_attr.task_id_ = task_id;
     task_attr.tenant_id_ = backup_piece_info.key_.tenant_id_;
     task_attr.job_id_ = job_attr_->job_id_;
     task_attr.incarnation_id_ = backup_piece_info.incarnation_;
@@ -1587,15 +2028,15 @@ int ObUserTenantBackupDeleteMgr::get_backup_piece_task_(const ObTenantArchivePie
   return ret;
 }
 
-int ObUserTenantBackupDeleteMgr::get_next_task_id_(int64_t &task_id)
+int ObUserTenantBackupDeleteMgr::get_next_task_id_(const int64_t batch_size, int64_t &start_task_id)
 {
   int ret = OB_SUCCESS;
-  task_id = -1;
-  if (OB_FAIL(ObLSBackupInfoOperator::get_next_task_id(*sql_proxy_, tenant_id_, task_id))) {
-    LOG_WARN("failed to get next task id", K(ret));
-  } else if (-1 == task_id) {
+  start_task_id = -1;
+  if (OB_FAIL(ObLSBackupInfoOperator::get_next_task_id(*sql_proxy_, tenant_id_, batch_size, start_task_id))) {
+    LOG_WARN("failed to get next task id batch", K(ret), K(batch_size));
+  } else if (-1 == start_task_id) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid task id", K(ret), K(task_id));
+    LOG_WARN("invalid start task id", K(ret), K(start_task_id));
   }
   return ret;
 }
@@ -1611,6 +2052,115 @@ int ObUserTenantBackupDeleteMgr::advance_job_status_(
     LOG_WARN("failed to check leader", K(ret));
   } else if (OB_FAIL(ObBackupCleanJobOperator::advance_job_status(trans, *job_attr_, next_status, result, end_ts))) {
     LOG_WARN("failed to advance job status", K(ret), K(*job_attr_), K(next_status), K(result), K(end_ts));
+  }
+  return ret;
+}
+
+int ObUserTenantBackupDeleteMgr::delete_backup_all_meta_info_files_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupDest backup_dest;
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_,
+                                job_attr_->tenant_id_, job_attr_->backup_path_, backup_dest))) {
+    LOG_WARN("failed to get backup dest", K(ret), "path", job_attr_->backup_path_);
+  } else {
+    if (ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA == job_attr_->backup_path_type_) {
+      if (OB_FAIL(delete_backup_dest_meta_info_files_(backup_dest))) {
+        LOG_WARN("failed to delete backup dest meta info files", K(ret), "dest", backup_dest);
+      }
+    } else if (ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG == job_attr_->backup_path_type_) {
+      if (OB_FAIL(delete_archive_dest_meta_info_files_(backup_dest))) {
+        LOG_WARN("failed to delete archive dest meta info files", K(ret), "dest", backup_dest);
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unsupported dest_type for meta info cleanup", K(ret), "dest_type", job_attr_->backup_path_type_);
+    }
+  }
+  return ret;
+}
+
+int ObUserTenantBackupDeleteMgr::delete_backup_dest_meta_info_files_(ObBackupDest &backup_dest)
+{
+  int ret = OB_SUCCESS;
+  const ObBackupStorageInfo *storage_info = backup_dest.get_storage_info();
+  ObBackupPath format_path;
+  ObBackupStore backup_store;
+  ObBackupPathString format_path_str;
+  ObBackupPath backup_sets_path;
+  ObBackupPath check_file_path;
+  ObBackupPath backup_set_path;
+  ObBackupCheckFile check_file;
+
+  if (OB_FAIL(backup_store.init(backup_dest))) {
+    LOG_WARN("failed to init backup store", K(ret), K(backup_dest));
+  } else if (OB_FAIL(ObBackupPathUtil::get_backup_sets_dir_path(backup_dest, backup_sets_path))) {
+    LOG_WARN("failed to get backup sets dir path", K(ret), K(backup_dest));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(backup_sets_path, storage_info))) {
+    LOG_WARN("failed to delete backup sets dir files", K(ret), K(backup_sets_path));
+  } else if (OB_FAIL(check_file.init(job_attr_->tenant_id_, *sql_proxy_))) {
+    LOG_WARN("failed to init check file", K(ret), K(job_attr_->tenant_id_));
+  } else if (OB_FAIL(check_file.get_check_file_path(backup_dest, check_file_path))) {
+    LOG_WARN("failed to get check file dir path", K(ret), K(backup_dest));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(check_file_path, storage_info))) {
+    LOG_WARN("failed to delete check file dir files", K(ret), K(check_file_path));
+  } else if (OB_FAIL(backup_store.get_format_file_path(format_path_str))) {
+    LOG_WARN("failed to get format file path", K(ret), K(backup_dest));
+  } else if (OB_FAIL(format_path.init(format_path_str.ptr()))) {
+    LOG_WARN("failed to init format path", K(ret), K(format_path_str));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_file(format_path, storage_info))) {
+    LOG_WARN("failed to delete format file", K(ret), K(format_path));
+  } else if (OB_FAIL(ObBackupPathUtil::get_backup_set_dir_path(backup_dest, backup_set_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_dest));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(backup_set_path, storage_info))) {
+    LOG_WARN("failed to delete backup set dir files", K(ret), K(backup_set_path));
+  } else {
+    LOG_INFO("delete all backup dest files finished", K(ret), K(backup_set_path), "tenant_id", job_attr_->tenant_id_);
+  }
+  return ret;
+}
+
+int ObUserTenantBackupDeleteMgr::delete_archive_dest_meta_info_files_(ObBackupDest &log_archive_dest)
+{
+  int ret = OB_SUCCESS;
+  const ObBackupStorageInfo *storage_info = log_archive_dest.get_storage_info();
+  ObBackupPath format_path;
+  ObBackupStore backup_store;
+  ObBackupPathString format_path_str;
+  ObBackupPath rounds_path;
+  ObBackupPath pieces_path;
+  ObBackupPath check_file_path;
+  ObBackupPath log_archive_dest_path;
+  ObBackupCheckFile check_file;
+
+  if (OB_FAIL(backup_store.init(log_archive_dest))) {
+    LOG_WARN("failed to init backup store", K(ret), K(log_archive_dest));
+  } else if (OB_FAIL(ObArchivePathUtil::get_rounds_dir_path(log_archive_dest, rounds_path))) {
+    LOG_WARN("failed to get rounds dir path", K(ret), K(log_archive_dest));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(rounds_path, storage_info))) {
+    LOG_WARN("failed to delete rounds dir files", K(ret), K(rounds_path));
+  } else if (OB_FAIL(ObArchivePathUtil::get_pieces_dir_path(log_archive_dest, pieces_path))) {
+    LOG_WARN("failed to get pieces dir path", K(ret), K(log_archive_dest));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(pieces_path, storage_info))) {
+    LOG_WARN("failed to delete pieces dir files", K(ret), K(pieces_path));
+  } else if (OB_FAIL(check_file.init(job_attr_->tenant_id_, *sql_proxy_))) {
+    LOG_WARN("failed to init check file", K(ret), K(job_attr_->tenant_id_));
+  } else if (OB_FAIL(check_file.get_check_file_path(log_archive_dest, check_file_path))) {
+    LOG_WARN("failed to get check file dir path", K(ret), K(log_archive_dest));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(check_file_path, storage_info))) {
+    LOG_WARN("failed to delete check file dir files", K(ret), K(check_file_path));
+  } else if (OB_FAIL(backup_store.get_format_file_path(format_path_str))) {
+    LOG_WARN("failed to get format file path", K(ret), K(log_archive_dest));
+  } else if (OB_FAIL(format_path.init(format_path_str.ptr()))) {
+    LOG_INFO("failed to init format path", K(ret), K(format_path_str));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_file(format_path, storage_info))) {
+    LOG_WARN("failed to delete format file", K(ret), K(format_path));
+  } else if (OB_FAIL(log_archive_dest_path.init(log_archive_dest.get_root_path()))) {
+    LOG_WARN("failed to init log archive dest path", K(ret), K(log_archive_dest));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(log_archive_dest_path, storage_info))) {
+    LOG_WARN("failed to delete log archive dest dir files", K(ret), K(log_archive_dest_path));
+  } else {
+    LOG_INFO("delete all archive dest files finished", K(ret), K(log_archive_dest_path), "tenant_id", job_attr_->tenant_id_);
   }
   return ret;
 }
@@ -1674,13 +2224,14 @@ int ObSysTenantBackupDeleteMgr::handle_user_tenant_backup_delete_()
       LOG_WARN("fail to check tenant status", K(ret), K(user_tenant_id));
     } else if (!is_valid) {
       LOG_WARN("tenant status not valid, this tenant shouldn't be backup", K(user_tenant_id), K(is_valid));
-    } else if (OB_FAIL(ObBackupCleanJobOperator::cnt_jobs(*sql_proxy_, user_tenant_id, job_attr_->tenant_id_, job_attr_->job_id_, cnt))) {
+    } else if (OB_FAIL(ObBackupCleanJobOperator::cnt_jobs(
+                       *sql_proxy_, user_tenant_id, job_attr_->tenant_id_, job_attr_->job_id_, cnt))) {
       LOG_WARN("fail to cnt user backup delete job initiated by cur sys tenant job", K(ret), K(user_tenant_id));
     } else if (cnt != 0) {
       LOG_INFO("user tenant job has been inserted, just pass", K(user_tenant_id));
     } else if (OB_FAIL(do_handle_user_tenant_backup_delete_(user_tenant_id))) {
-      if (OB_BACKUP_CAN_NOT_START == ret) { 
-        LOG_WARN("tenant can't start backup now just pass", K(ret)); 
+      if (OB_BACKUP_CAN_NOT_START == ret) {
+        LOG_WARN("tenant can't start backup now just pass", K(ret));
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("fail to do insert user tenant job", K(ret), K(user_tenant_id));
@@ -1714,8 +2265,39 @@ int ObSysTenantBackupDeleteMgr::do_handle_user_tenant_backup_delete_(const uint6
     backup_delete_arg.tenant_id_ = tenant_id;
     backup_delete_arg.initiator_tenant_id_ = job_attr_->tenant_id_;
     backup_delete_arg.initiator_job_id_ = job_attr_->job_id_;
-    if (OB_FAIL(backup_delete_arg.description_.assign(job_attr_->description_))) {
+    backup_delete_arg.type_ = job_attr_->clean_type_;
+    backup_delete_arg.dest_type_ = job_attr_->backup_path_type_;
+    ObSArray<int64_t> value_array;
+    if (ObNewBackupCleanType::DELETE_BACKUP_SET == job_attr_->clean_type_) {
+      if (OB_FAIL(value_array.assign(job_attr_->backup_set_ids_))) {
+        LOG_WARN("fail to assign backup set ids", K(ret));
+      }
+    } else if (ObNewBackupCleanType::DELETE_BACKUP_PIECE == job_attr_->clean_type_)  {
+      if (OB_FAIL(value_array.assign(job_attr_->backup_piece_ids_))) {
+        LOG_WARN("fail to assign backup piece ids", K(ret));
+      }
+    } else if (ObNewBackupCleanType::DELETE_BACKUP_ALL == job_attr_->clean_type_) {
+      if (OB_FAIL(value_array.push_back(job_attr_->dest_id_))) {
+        LOG_WARN("fail to push dest id", K(ret));
+      }
+    } else if (ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP == job_attr_->clean_type_) {
+      // set the expired time into value_array
+      if (OB_FAIL(value_array.push_back(job_attr_->expired_time_))) {
+        LOG_WARN("fail to push expired time", K(ret));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid clean type", K(ret), "clean_type", job_attr_->clean_type_);
+    }
+
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to set value array", K(ret));
+    } else if (OB_FAIL(backup_delete_arg.set_value_array(value_array))) {
+      LOG_WARN("fail to assign value array", K(ret));
+    } else if (OB_FAIL(backup_delete_arg.description_.assign(job_attr_->description_))) {
       LOG_WARN("fail to assign backup description", K(ret));
+    } else if (OB_FAIL(backup_delete_arg.dest_path_.assign(job_attr_->backup_path_))) {
+      LOG_WARN("fail to assign dest path", K(ret));
     } else if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) { 
       ret = OB_ERR_SYS;
       LOG_WARN("rootserver rpc proxy or rs mgr must not be NULL", K(ret), K(GCTX));
@@ -1747,7 +2329,8 @@ int ObSysTenantBackupDeleteMgr::statistic_user_tenant_job_()
     } else if (!is_valid) {
       finish_user_backup_job++;
       LOG_WARN("tenant status not valid, just pass the tenant", K(user_tenant_id), K(is_valid));
-    } else if (OB_FAIL(ObBackupCleanJobOperator::cnt_jobs(*sql_proxy_, user_tenant_id, job_attr_->tenant_id_, job_attr_->job_id_, cnt))) {
+    } else if (OB_FAIL(ObBackupCleanJobOperator::cnt_jobs(
+                       *sql_proxy_, user_tenant_id, job_attr_->tenant_id_, job_attr_->job_id_, cnt))) {
       LOG_WARN("fail to cnt user backup delete job initiated by cur sys tenant job", K(ret), K(user_tenant_id));
     } else if (0 == cnt) {
       finish_user_backup_job++;
@@ -1807,14 +2390,15 @@ int ObSysTenantBackupDeleteMgr::cancel_user_tenant_job_()
     } else if (!is_valid) {
       finish_canceled_job++;
       LOG_WARN("tenant status not valid, just pass the tenant", K(user_tenant_id), K(is_valid));
-    } else if (OB_FAIL(ObBackupJobOperator::cnt_jobs(*sql_proxy_, user_tenant_id, job_attr_->tenant_id_, cnt))) {
-      LOG_WARN("fail to cnt user backup delete job initiated by cur sys tenant job", K(ret), K(user_tenant_id));
-    } else if (0 == cnt) {
-      finish_canceled_job ++;
-      LOG_INFO("user tenant backup delete job not finish, wait later", K(user_tenant_id));
     } else if (OB_FAIL(ObBackupCleanJobOperator::get_job(*sql_proxy_, false/*no update*/, 
         user_tenant_id, job_attr_->job_id_, true/**/, tmp_job_attr))) {
-      LOG_WARN("fail to get backup delete job", K(ret), K(user_tenant_id), "initiator job id", job_attr_->job_id_);
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        finish_canceled_job++;
+        ret = OB_SUCCESS;
+        LOG_INFO("tenant backup job has finished", K(user_tenant_id), KPC(job_attr_));
+      } else {
+        LOG_WARN("fail to get backup delete job", K(ret), K(user_tenant_id), "initiator job id", job_attr_->job_id_);
+      }
     } else if (ObBackupCleanStatus::Status::INIT == tmp_job_attr.status_.status_
         || ObBackupCleanStatus::Status::DOING == tmp_job_attr.status_.status_) {
       ObBackupCleanStatus next_status;
@@ -1875,7 +2459,7 @@ int ObBackupAutoObsoleteDeleteTrigger::init(
     const uint64_t tenant_id,
     common::ObMySQLProxy &sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
-    share::schema::ObMultiVersionSchemaService &schema_service,
+    schema::ObMultiVersionSchemaService &schema_service,
     ObBackupTaskScheduler &task_scheduler,
     ObBackupCleanService &backup_service)
 {
@@ -1904,76 +2488,33 @@ int ObBackupAutoObsoleteDeleteTrigger::process()
   } else if (OB_FAIL(start_auto_delete_obsolete_data_())) {
     LOG_WARN("failed to start auto obsolete delete", K(ret));
   }
-
   return ret; 
 }
-
-int ObBackupAutoObsoleteDeleteTrigger::parse_time_interval_(const char *str, int64_t &val)
-{
-  int ret = OB_SUCCESS;
-  bool is_valid = true;
-  val = 0;
-
-  if (OB_ISNULL(str)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), KP(str));
-  } else {
-    val = ObConfigTimeParser::get(str, is_valid);
-    if (!is_valid) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid time interval str", K(ret), K(str));
-    }
-  }
-  return ret;
-}
-
-int ObBackupAutoObsoleteDeleteTrigger::get_delete_policy_parameter_(const ObDeletePolicyAttr &delete_policy, int64_t &recovery_window)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(parse_time_interval_(delete_policy.recovery_window_, recovery_window))) {
-    LOG_WARN("failed to parse recover window", K(ret), K(delete_policy));
-  }
-  return ret;
-} 
 
 int ObBackupAutoObsoleteDeleteTrigger::start_auto_delete_obsolete_data_()
 {
   int ret = OB_SUCCESS;
   ObBackupCleanScheduler backup_clean_scheduler;
-  common::ObSArray<uint64_t> tenant_ids;
-  const int64_t now_ts = ObTimeUtil::current_time();
-  ObDeletePolicyAttr default_delete_policy;
-  int64_t recovery_window = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup auto delete obsolete bakcup do not init", K(ret));
   } else if (is_user_tenant(tenant_id_)) {
-    recovery_window = 0;
-    default_delete_policy.reset();
     obrpc::ObBackupCleanArg arg;
     arg.initiator_tenant_id_ = tenant_id_; // cluster-level automatic backup clean
     arg.tenant_id_ = tenant_id_;
     arg.type_ = ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP;
-    if (OB_FAIL(ObDeletePolicyOperator::get_default_delete_policy(*sql_proxy_, arg.tenant_id_, default_delete_policy))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("failed to get all tenants", K(ret), K(arg));
-      }
-    } else if (OB_FAIL(get_delete_policy_parameter_(default_delete_policy, recovery_window))) {
-    } else if (recovery_window <= 0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("recovery window is unepxected", K(ret), K(arg), K(recovery_window));
-    } else if (FALSE_IT(arg.value_ = now_ts - recovery_window)) {
-    } else if (OB_FAIL(backup_service_->handle_backup_delete(arg))) {
+    if (OB_FAIL(backup_service_->handle_backup_delete(arg))) {
       LOG_WARN("failed to schedule backup clean", K(ret), K(arg));
     }
-    FLOG_INFO("[BACKUP_CLEAN] finish schedule auto delete", K(tenant_ids));
+    FLOG_INFO("[BACKUP_CLEAN] finish schedule auto delete", K(tenant_id_));
   }
   return ret;
 }
 
+
 //******************** ObBackupCleanCommon ********************
 int ObBackupCleanCommon::check_tenant_status(
-    share::schema::ObMultiVersionSchemaService &schema_service,
+    schema::ObMultiVersionSchemaService &schema_service,
     const uint64_t tenant_id,
     bool &is_valid)
 {
@@ -1991,6 +2532,9 @@ int ObBackupCleanCommon::check_tenant_status(
     LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    is_valid = false;
+    LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), K(tenant_id));
   } else if (tenant_schema->is_normal()) {
     is_valid = true;
   } else if (tenant_schema->is_creating()) {
@@ -2013,7 +2557,7 @@ int ObBackupCleanCommon::check_tenant_status(
 }
 
 int ObBackupCleanCommon::get_all_tenants(
-    share::schema::ObMultiVersionSchemaService &schema_service,
+    schema::ObMultiVersionSchemaService &schema_service,
     ObIArray<uint64_t> &tenants) 
 {
   int ret = OB_SUCCESS;

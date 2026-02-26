@@ -11,7 +11,6 @@
  */
 
 #include "sql/engine/expr/ob_expr_merging_frozen_time.h"
-#include "lib/ob_name_def.h"
 
 namespace oceanbase
 {

@@ -11,7 +11,6 @@
  */
 
 #include "ob_sql_define.h"
-#include "lib/worker.h"
 
 namespace oceanbase
 {

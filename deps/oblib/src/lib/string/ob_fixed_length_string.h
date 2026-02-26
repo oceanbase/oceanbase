@@ -226,6 +226,8 @@ int64_t ObFixedLengthString<N>::to_string(char *buf, const int64_t buf_len) cons
   pos = snprintf(buf, buf_len, "%s", buf_);
   if (pos < 0) {
     pos = 0;
+  } else if (pos >= buf_len) {
+    pos = buf_len - 1;
   }
   return pos;
 }

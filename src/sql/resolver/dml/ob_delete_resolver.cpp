@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_delete_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 
 /**
@@ -78,7 +76,13 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("failed to check feature enable", K(ret));
   } else {
     stmt_ = delete_stmt;
-    if (OB_FAIL(resolve_outline_data_hints())) {
+    // Only support the syntax of delete ignore, and there is no semantic support.
+//   delete_stmt->set_ignore(false);
+//    if (NULL != parse_tree.children_[IGNORE]) {
+//      delete_stmt->set_ignore(true);
+//      session_info_->set_ignore_stmt(true);
+//    }
+    if (OB_FAIL(pre_process_hints(parse_tree))) {
       LOG_WARN("resolve outline data hints failed", K(ret));
     } else if (is_mysql_mode() && OB_FAIL(resolve_with_clause(parse_tree.children_[WITH_MYSQL]))) {
       LOG_WARN("resolve with clause failed", K(ret));
@@ -261,6 +265,11 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
          */
         LOG_DEBUG("succ to add from item", KPC(table_item));
       }
+      if (OB_ISNULL(table_item) || session_info_->is_inner()) {
+      } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));
+      }
     }
   }
 
@@ -390,8 +399,8 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
   const ObTableSchema *table_schema = NULL;
   ObDeleteStmt *delete_stmt = get_delete_stmt();
   ObDeleteTableInfo *table_info = NULL;
-  uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
-  int64_t gindex_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tid[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t gindex_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.session_info_) ||
       OB_ISNULL(allocator_) || OB_ISNULL(delete_stmt)) {
@@ -421,9 +430,12 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
       LOG_WARN("failed to assign part ids", K(ret));
     } else if (!delete_stmt->has_instead_of_trigger()) {
       // todo @zimiao error logging also need all columns ?
+      bool need_all_cols = true;
       if (OB_FAIL(add_all_rowkey_columns_to_stmt(table_item, table_info->column_exprs_))) {
         LOG_WARN("add all rowkey columns to stmt failed", K(ret));
-      } else if (need_all_columns(*table_schema, binlog_row_image)) {
+      } else if (OB_FAIL(need_all_columns(*table_schema, binlog_row_image, need_all_cols))) {
+        LOG_WARN("failed to check need all columns", K(ret));
+      } else if (need_all_cols) {
         if (OB_FAIL(add_all_columns_to_stmt(table_item, table_info->column_exprs_))) {
           LOG_WARN("fail to add all column to stmt", K(ret), K(table_item));
         }
@@ -432,6 +444,26 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
         LOG_WARN("fail to add relate column to stmt", K(ret), K(table_item));
       } else if (OB_FAIL(add_all_lob_columns_to_stmt(table_item, table_info->column_exprs_))) {
         LOG_WARN("fail to add lob column to stmt", K(ret), K(table_item));
+      } else if (table_schema->mv_container_table()) {
+        // always add following columns
+        //  1. unique key columns
+        //  2. partition key columns (only for tables without pk nor not-null uk)
+        bool has_not_null_uk = false;
+        bool need_check_part_key = false;
+        ObSchemaGetterGuard *schema_guard = NULL;
+        if (OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(table_schema->has_not_null_unique_key(*schema_guard, has_not_null_uk))) {
+          LOG_WARN("failed to check has not null unique key", K(ret));
+        } else if (FALSE_IT(need_check_part_key = table_schema->is_table_without_pk() && !has_not_null_uk)) {
+        } else if (OB_FAIL(add_all_unique_key_columns_to_stmt(table_item, table_info->column_exprs_))) {
+          LOG_WARN("failed to add all unique key columns to stmt", K(ret));
+        } else if (OB_FAIL(add_all_mlog_columns_to_stmt(table_item, table_info->column_exprs_))) {
+          LOG_WARN("failed to add all mlog columns to stmt", K(ret));
+        } else if (need_check_part_key && OB_FAIL(add_all_partition_key_columns_to_stmt(table_item, table_info->column_exprs_))) {
+          LOG_WARN("fail to add partition key column to stmt", K(ret), K(table_item));
+        }
       }
       if (OB_SUCC(ret)) {
         table_info->table_id_ = table_item.table_id_;
@@ -455,14 +487,7 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
     }
     if (OB_SUCC(ret)) {
       TableItem *rowkey_doc = NULL;
-      if (OB_FAIL(try_add_join_table_for_fts(&table_item, rowkey_doc))) {
-        LOG_WARN("fail to try add join table for fts", K(ret), K(table_item));
-      } else if (OB_NOT_NULL(rowkey_doc) && OB_FAIL(try_update_column_expr_for_fts(
-                                                                      table_item,
-                                                                      rowkey_doc,
-                                                                      table_info->column_exprs_))) {
-        LOG_WARN("fail to try update column expr for fts", K(ret), K(table_item));
-      } else if (OB_FAIL(delete_stmt->get_delete_table_info().push_back(table_info))) {
+      if (OB_FAIL(delete_stmt->get_delete_table_info().push_back(table_info))) {
         LOG_WARN("failed to push back table info", K(ret));
       } else if (gindex_cnt > 0) {
         delete_stmt->set_has_global_index(true);

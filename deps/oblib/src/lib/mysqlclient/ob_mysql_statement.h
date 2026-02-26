@@ -31,7 +31,7 @@ public:
   ObMySQLConnection *get_connection();
   MYSQL *get_stmt_handler();
   MYSQL *get_conn_handler();
-  int init(ObMySQLConnection &conn, const char *sql);
+  int init(ObMySQLConnection &conn, const ObString &sql, int64_t param_count = 0);
 
   /*
    * close statement
@@ -58,12 +58,12 @@ public:
    * reference ObMySQLPrepareStatement
    */
   ObMySQLResult *execute_query(bool enable_use_result = false);
-
+  int wait_for_mysql(int &status);
 private:
   ObMySQLConnection *conn_;
   ObMySQLResultImpl result_;
   MYSQL *stmt_;
-  const char *sql_str_;
+  ObString sql_str_;
 };
 } //namespace sqlclient
 }

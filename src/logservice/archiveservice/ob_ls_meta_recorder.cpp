@@ -11,18 +11,10 @@
  */
 
 #include "ob_ls_meta_recorder.h"
-#include "lib/checksum/ob_crc64.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"             // ObTimeUtility
-#include "lib/utility/ob_macro_utils.h"
 #include "ob_archive_service.h"                   // ObArchiveService
-#include "share/backup/ob_archive_piece.h"        // ObArchivePiece
-#include "ob_archive_define.h"
-#include "ob_archive_round_mgr.h"                 // ObArchiveRoundMgr
 #include "ob_archive_file_utils.h"
 #include "ob_ls_meta_record_task.h"               // *Task
 #include "share/backup/ob_archive_path.h"         // get.*path
-#include "share/rc/ob_tenant_base.h"              // mtl_
 
 #define ADD_LS_RECORD_TASK(CLASS, type) \
 { \
@@ -78,6 +70,14 @@
         ARCHIVE_LOG(WARN, "do record failed", K(ret), K(id), K(task_type));\
       } else if (OB_FAIL(insert_or_update_record_context_(t.get_type(), record_context))) {  \
          ARCHIVE_LOG(WARN, "insert or update record context failed", K(ret), K(id), K(task_type));    \
+      }  \
+      if (OB_OBJECT_STORAGE_PERMISSION_DENIED == ret) {  \
+        if (OB_ISNULL(round_mgr_)) {  \
+          ret = OB_ERR_UNEXPECTED;  \
+          ARCHIVE_LOG(WARN, "round_mgr is null", K(ret));  \
+        } else if (OB_FAIL(round_mgr_->reset_backup_dest(key))) {  \
+          ARCHIVE_LOG(WARN, "reset backup dest failed", K(ret), K(key));  \
+        }  \
       }  \
     }   \
   } \
@@ -323,7 +323,8 @@ int ObLSMetaRecorder::build_path_(const share::ObLSID &id,
   int64_t piece_switch_interval = -1;
   SCN genesis_scn;
   int64_t base_piece_id = -1;
-  if (OB_FAIL(round_mgr_->get_backup_dest(key, dest))) {
+  int64_t dest_id = -1;
+  if (OB_FAIL(round_mgr_->get_backup_dest_and_id(key, dest, dest_id))) {
     ARCHIVE_LOG(WARN, "get backup dest failed", K(ret), K(key));
   } else if (OB_FAIL(round_mgr_->get_piece_info(key,
           piece_switch_interval, genesis_scn, base_piece_id))) {
@@ -372,10 +373,13 @@ int ObLSMetaRecorder::do_record_(const ArchiveKey &key,
 {
   int ret = OB_SUCCESS;
   share::ObBackupDest dest;
-  if (OB_FAIL(round_mgr_->get_backup_dest(key, dest))) {
+  int64_t dest_id = -1;
+  if (OB_FAIL(round_mgr_->get_backup_dest_and_id(key, dest, dest_id))) {
     ARCHIVE_LOG(WARN, "get backup dest failed", K(ret));
   } else if (OB_FAIL(ObArchiveFileUtils::write_file(path.get_obstr(),
-          dest.get_storage_info(), buf, size))) {
+          dest.get_storage_info(),
+          common::ObStorageIdMod(dest_id, common::ObStorageUsedMod::STORAGE_USED_ARCHIVE),
+          buf, size))) {
     ARCHIVE_LOG(WARN, "write file failed", K(ret));
   }
   return ret;
@@ -392,7 +396,8 @@ int ObLSMetaRecorder::make_dir_(const share::ObLSID &id,
   int64_t piece_switch_interval = -1;
   SCN genesis_scn;
   int64_t base_piece_id = -1;
-  if (OB_FAIL(round_mgr_->get_backup_dest(key, dest))) {
+  int64_t dest_id = -1;
+  if (OB_FAIL(round_mgr_->get_backup_dest_and_id(key, dest, dest_id))) {
     ARCHIVE_LOG(WARN, "get backup dest failed", K(ret), K(key));
   } else if (OB_FAIL(round_mgr_->get_piece_info(key,
           piece_switch_interval, genesis_scn, base_piece_id))) {

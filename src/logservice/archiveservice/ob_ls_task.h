@@ -136,7 +136,8 @@ public:
   int print_self();
 
   void stat(LSArchiveStat &ls_stat) const;
-
+  int release_ref_file_id(const int64_t file_id);
+  int check_ref_file_id_exist(const int64_t file_id, bool &exist);
   void mock_init(const ObLSID &id, ObArchiveAllocator *allocotr);
   TO_STRING_KV(K_(id),
                K_(station),
@@ -147,6 +148,8 @@ private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard  RLockGuard;
   typedef common::SpinWLockGuard  WLockGuard;
+  typedef common::hash::ObHashSet<int64_t> FileIdRefSet;
+  static constexpr int64_t BUCKET_NUM = 1024;
 
   class ArchiveDest
   {
@@ -179,6 +182,9 @@ private:
     void get_archive_send_arg(ObArchiveSendDestArg &arg);
     void get_max_no_limit_lsn(LSN &lsn);
     void update_no_limit_lsn(const palf::LSN &lsn);
+    int set_ref_file_id(const int64_t file_id);
+    int release_ref_file_id(const int64_t file_id);
+    int check_ref_file_id_exist(const int64_t file_id, bool &exist);
     void mark_error();
     void print_tasks_();
     int64_t to_string(char *buf, const int64_t buf_len) const;
@@ -206,6 +212,7 @@ private:
     int64_t             wait_send_task_count_;
     ObArchiveTaskStatus *send_task_queue_;
 
+    FileIdRefSet file_id_ref_set_;
     ObArchiveAllocator *allocator_;
 
   private:

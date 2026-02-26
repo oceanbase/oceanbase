@@ -30,6 +30,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_fromdays(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_fromdays_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprFromDays);

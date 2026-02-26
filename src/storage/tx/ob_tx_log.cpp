@@ -11,11 +11,7 @@
  */
 
 #include "storage/tx/ob_tx_log.h"
-#include "logservice/ob_log_base_header.h"
-#include "logservice/ob_log_base_type.h"
 #include "storage/memtable/ob_memtable_mutator.h"
-#include "storage/blocksstable/ob_row_reader.h"
-#include "common/cell/ob_cell_reader.h"
 
 namespace oceanbase
 {
@@ -34,19 +30,23 @@ ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
 
   // multi data source trans's redo log
   if (ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type) {
-    if (data_source_type == ObTxDataSourceType::CREATE_TABLET_NEW_MDS
-        || data_source_type == ObTxDataSourceType::DELETE_TABLET_NEW_MDS
+    if (data_source_type == ObTxDataSourceType::DELETE_TABLET_NEW_MDS
         || data_source_type == ObTxDataSourceType::UNBIND_TABLET_NEW_MDS
         || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT
         || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT_PREPARE
         || data_source_type == ObTxDataSourceType::FINISH_TRANSFER_OUT
-        || data_source_type == ObTxDataSourceType::START_TRANSFER_IN) {
-
+        || data_source_type == ObTxDataSourceType::TABLET_SPLIT
+        || data_source_type == ObTxDataSourceType::TABLET_BINDING
+        || data_source_type == ObTxDataSourceType::MV_NOTICE_SAFE
+        || data_source_type == ObTxDataSourceType::UNBIND_LOB_TABLET
+        || data_source_type == ObTxDataSourceType::DDL_COMPLETE_MDS
+        || data_source_type == ObTxDataSourceType::TABLET_SPLIT_INFO) {
       barrier_flag = logservice::ObReplayBarrierType::PRE_BARRIER;
 
     } else if (data_source_type == ObTxDataSourceType::FINISH_TRANSFER_IN
                || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT_V2
-               || data_source_type == ObTxDataSourceType::TRANSFER_MOVE_TX_CTX) {
+               || data_source_type == ObTxDataSourceType::TRANSFER_MOVE_TX_CTX
+               || data_source_type == ObTxDataSourceType::START_TRANSFER_IN) {
 
       barrier_flag = logservice::ObReplayBarrierType::STRICT_BARRIER;
     }
@@ -297,7 +297,9 @@ OB_TX_SERIALIZE_MEMBER(ObTxActiveInfoLog,
                        /* 16 */ cluster_version_,
                        /* 17 */ max_submitted_seq_no_,
                        /* 18 */ xid_,
-                       /* 19 */ serial_final_seq_no_);
+                       /* 19 */ serial_final_seq_no_,
+                       /* 20 */ associated_session_id_,
+                       /* 21 */ prio_op_array_);
 
 OB_TX_SERIALIZE_MEMBER(ObTxCommitInfoLog,
                        compat_bytes_,
@@ -351,7 +353,7 @@ OB_TX_SERIALIZE_MEMBER(ObTxRollbackToLog, compat_bytes_, /* 1 */ from_, /* 2 */ 
 
 OB_TX_SERIALIZE_MEMBER(ObTxMultiDataSourceLog, compat_bytes_, /* 1 */ data_);
 
-OB_TX_SERIALIZE_MEMBER(ObTxDirectLoadIncLog, compat_bytes_, /* 1 */ ddl_log_type_, /* 2 */ log_buf_);
+OB_TX_SERIALIZE_MEMBER(ObTxDirectLoadIncLog, compat_bytes_, /* 1 */ ddl_log_type_, /* 2 */ log_buf_, /* 3 */ batch_key_);
 
 int ObTxActiveInfoLog::before_serialize()
 {
@@ -362,7 +364,7 @@ int ObTxActiveInfoLog::before_serialize()
       TRANS_LOG(WARN, "reset all compat_bytes_ valid failed", K(ret));
     }
   } else {
-    if (OB_FAIL(compat_bytes_.init(19))) {
+    if (OB_FAIL(compat_bytes_.init(21))) {
       TRANS_LOG(WARN, "init compat_bytes_ failed", K(ret));
     }
   }
@@ -387,6 +389,8 @@ int ObTxActiveInfoLog::before_serialize()
     TX_NO_NEED_SER(!max_submitted_seq_no_.is_valid(), 17, compat_bytes_);
     TX_NO_NEED_SER(xid_.empty(), 18, compat_bytes_);
     TX_NO_NEED_SER(!serial_final_seq_no_.is_valid(), 19, compat_bytes_);
+    TX_NO_NEED_SER(associated_session_id_ == 0, 20, compat_bytes_);
+    TX_NO_NEED_SER(prio_op_array_.empty(), 21, compat_bytes_);
   }
 
   return ret;
@@ -614,7 +618,7 @@ int ObTxDirectLoadIncLog::before_serialize()
       TRANS_LOG(WARN, "reset all compat_bytes_ valid failed", K(ret));
     }
   } else {
-    if (OB_FAIL(compat_bytes_.init(2))) {
+    if (OB_FAIL(compat_bytes_.init(3))) {
       TRANS_LOG(WARN, "init compat_bytes_ failed", K(ret));
     }
   }
@@ -622,6 +626,7 @@ int ObTxDirectLoadIncLog::before_serialize()
   if (OB_SUCC(ret)) {
     TX_NO_NEED_SER(false, 1, compat_bytes_);
     TX_NO_NEED_SER(false, 2, compat_bytes_);
+    TX_NO_NEED_SER(false, 3, compat_bytes_);
   }
 
   return ret;
@@ -643,13 +648,14 @@ const ObTxLogType ObTxStartWorkingLog::LOG_TYPE = ObTxLogType::TX_START_WORKING_
 const ObTxLogType ObTxRollbackToLog::LOG_TYPE = ObTxLogType::TX_ROLLBACK_TO_LOG;
 const ObTxLogType ObTxMultiDataSourceLog::LOG_TYPE = ObTxLogType::TX_MULTI_DATA_SOURCE_LOG;
 const ObTxLogType ObTxDirectLoadIncLog::LOG_TYPE = ObTxLogType::TX_DIRECT_LOAD_INC_LOG;
+const ObTxLogType ObTxDirectLoadIncMajorLog::LOG_TYPE = ObTxLogType::TX_DIRECT_LOAD_INC_MAJOR_LOG;
 
 int ObTxRedoLog::set_mutator_buf(char *buf)
 {
   int ret = OB_SUCCESS;
   if (nullptr == buf || mutator_size_ >= 0) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(ERROR, "invalid mutator buf", K(buf), K(mutator_size_));
+    TRANS_LOG(ERROR, "invalid mutator buf", KP(buf), K(mutator_size_));
   } else {
     mutator_buf_ = buf;
   }
@@ -663,7 +669,7 @@ int ObTxRedoLog::set_mutator_size(const int64_t size, const bool after_fill)
       || (after_fill && mutator_size_ < size)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument when set mutator size", K(after_fill), K(size),
-               K(mutator_size_), K(mutator_buf_));
+               K(mutator_size_), KP(mutator_buf_));
   } else if (!after_fill) {
     int len = 0;
     SERIALIZE_SIZE_HEADER(UNIS_VERSION);
@@ -719,21 +725,25 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
       arg.writer_ptr_->dump_key("###<TxRedoLog>");
       arg.writer_ptr_->start_object();
       arg.writer_ptr_->dump_key("txctxinfo");
-      arg.writer_ptr_->dump_string(to_cstring(*this));
+      ObCStringHelper helper;
+      arg.writer_ptr_->dump_string(helper.convert(*this));
       arg.writer_ptr_->dump_key("MutatorMeta");
-      arg.writer_ptr_->dump_string(to_cstring(iter_ptr->get_meta()));
+      arg.writer_ptr_->dump_string(helper.convert(iter_ptr->get_meta()));
 
       arg.writer_ptr_->dump_key("MutatorRows");
       arg.writer_ptr_->start_object();
       has_output = true;
     } else {
       if (!has_dumped_tx_id) {
-        databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "{BlockID: %s; LSN:%ld, TxID:%ld; SCN:%s",
-                        block_name, lsn.val_, tx_id, to_cstring(scn));
+        databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "{BlockID: %s; LSN:%ld, TxID:%ld; SCN:",
+                        block_name, lsn.val_, tx_id);
+        databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, scn);
       }
-      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_,
-                      "<TxRedoLog>: {TxCtxInfo: {%s}; MutatorMeta: {%s}; MutatorRows: {",
-                      to_cstring(*this), to_cstring(iter_ptr->get_meta()));
+      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "<TxRedoLog>: {TxCtxInfo: {");
+      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, *this);
+      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "}; MutatorMeta: {");
+      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, iter_ptr->get_meta());
+      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "}; MutatorRows: {");
       //fill info in buf
     }
     bool has_dumped_meta_info = false;
@@ -753,7 +763,8 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
       }
       has_output = true;
       arg.writer_ptr_->dump_key("RowHeader");
-      arg.writer_ptr_->dump_string(to_cstring(iter_ptr->get_row_head()));
+      ObCStringHelper helper;
+      arg.writer_ptr_->dump_string(helper.convert(iter_ptr->get_row_head()));
 
       switch (iter_ptr->get_row_head().mutator_type_) {
         case memtable::MutatorType::MUTATOR_ROW: {
@@ -769,7 +780,8 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
         case memtable::MutatorType::MUTATOR_TABLE_LOCK: {
           arg.log_stat_->table_lock_count_++;
           arg.writer_ptr_->dump_key("TableLock");
-          arg.writer_ptr_->dump_string(to_cstring(iter_ptr->get_table_lock_row()));
+          helper.reset();
+          arg.writer_ptr_->dump_string(helper.convert(iter_ptr->get_table_lock_row()));
           break;
         }
         case memtable::MutatorType::MUTATOR_ROW_EXT_INFO: {
@@ -824,6 +836,7 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
   ObStoreRowkey rowkey;
   memtable::ObRowData new_row;
   memtable::ObRowData old_row;
+  ObCStringHelper helper;
   blocksstable::ObDmlFlag dml_flag = blocksstable::ObDmlFlag::DF_NOT_EXIST;
 
   if (OB_FAIL(row.copy(table_id, rowkey, table_version, new_row, old_row, dml_flag,
@@ -865,7 +878,7 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
     arg.writer_ptr_->dump_key("Flag");
     arg.writer_ptr_->dump_int64(flag);
     arg.writer_ptr_->dump_key("SeqNo");
-    arg.writer_ptr_->dump_string(to_cstring(seq_no));
+    arg.writer_ptr_->dump_string(helper.convert(seq_no));
     arg.writer_ptr_->dump_key("NewRowSize");
     arg.writer_ptr_->dump_int64(new_row.size_);
     arg.writer_ptr_->dump_key("OldRowSize");
@@ -891,7 +904,7 @@ int ObTxRedoLog::format_row_data_(const memtable::ObRowData &row_data, ObAdminMu
   int ret = OB_SUCCESS;
 
   blocksstable::ObDatumRow datum_row;
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   const blocksstable::ObRowHeader *row_header = nullptr;
   if (row_data.size_ > 0) {
     if (OB_FAIL(row_reader.read_row(row_data.data_, row_data.size_, nullptr, datum_row))) {
@@ -921,18 +934,27 @@ void ObTxMultiDataSourceLog::reset()
 int ObTxMultiDataSourceLog::fill_MDS_data(const ObTxBufferNode &node)
 {
   int ret = OB_SUCCESS;
-#ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
-  if (node.get_serialize_size() + data_.get_serialize_size() >= MAX_MDS_LOG_SIZE) {
+  // #ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
+  if (data_.empty() && node.allow_to_use_mds_big_segment()
+      && node.get_serialize_size() > ObTxMultiDataSourceLog::MAX_MDS_LOG_SIZE) {
+    TRANS_LOG(INFO, "meet a big segment node with the empty log, try to fill it", K(ret), K(node),
+              K(data_.count()), K(node.get_serialize_size()), K(this->get_serialize_size()),
+              KPC(this));
+
+  } else if (node.get_serialize_size() + data_.get_serialize_size() >= MAX_MDS_LOG_SIZE) {
     ret = OB_SIZE_OVERFLOW;
     TRANS_LOG(WARN, "MDS log is overflow", K(*this), K(node));
-  } else {
-#endif
-
-    data_.push_back(node);
-
-#ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
   }
-#endif
+  //   } else {
+  // #endif
+
+  if (OB_SUCC(ret)) {
+    data_.push_back(node);
+  }
+
+  // #ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
+  //   }
+  // #endif
   return ret;
 }
 
@@ -1009,7 +1031,8 @@ int ObTxActiveInfoLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxActiveInfoLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1027,7 +1050,8 @@ int ObTxCommitInfoLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("Size");
     arg.writer_ptr_->dump_int64(get_serialize_size());
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1043,7 +1067,8 @@ int ObTxPrepareLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxPrepareLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1061,7 +1086,8 @@ int ObTxCommitLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("Size");
     arg.writer_ptr_->dump_int64(get_serialize_size());
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1077,7 +1103,8 @@ int ObTxClearLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxClearLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1093,7 +1120,8 @@ int ObTxAbortLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxAbortLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1109,7 +1137,8 @@ int ObTxRecordLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxRecordLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1125,7 +1154,8 @@ int ObTxStartWorkingLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxStartWorkingLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1141,8 +1171,59 @@ int ObTxRollbackToLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("<TxRollbackToLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
+  }
+  return ret;
+}
+
+int ObTxDirectLoadIncLog::ob_admin_dump_macro_block(share::ObAdminMutatorStringArg &arg,
+                                                    int64_t scn_val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(arg.writer_ptr_) || OB_ISNULL(arg.dir_path_) || strlen(arg.dir_path_) == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid arg writer is NULL or dir_path is NULL", K(ret), KP(arg.writer_ptr_), KP(arg.dir_path_));
+  } else if (ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_REDO == ddl_log_type_) {
+    storage::ObDDLRedoLog ddl_redo_log;
+    if (OB_FAIL(log_buf_.deserialize_log_object(&ddl_redo_log))) {
+      TRANS_LOG(WARN, "deserialize ddl redo log failed", K(ret), KPC(this));
+    } else if (arg.filter_.is_tablet_id_valid() &&
+               arg.filter_.get_tablet_id() != ddl_redo_log.get_redo_info().table_key_.tablet_id_) {
+      // filter by tablet_id
+    } else {
+      ObCStringHelper helper;
+      arg.writer_ptr_->dump_key("<TxDirectLoadIncLog>");
+      arg.writer_ptr_->start_object();
+      arg.writer_ptr_->dump_key("dli_log_type");
+      arg.writer_ptr_->dump_int64(static_cast<int64_t>(ddl_log_type_));
+      arg.writer_ptr_->dump_key("dli_buf_size");
+      arg.writer_ptr_->dump_int64(log_buf_.get_buf_size());
+      arg.writer_ptr_->dump_key("dli_batch_key");
+      arg.writer_ptr_->dump_string(helper.convert(batch_key_));
+      arg.writer_ptr_->dump_key("dli_redo_log");
+      arg.writer_ptr_->dump_string(helper.convert(ddl_redo_log));
+      arg.writer_ptr_->end_object();
+
+      storage::ObDDLMacroBlockRedoInfo redo_info = ddl_redo_log.get_redo_info();
+      char dump_dir_path[common::MAX_PATH_SIZE] = {0};
+      // 目录结构dir_path_ / tablet_id / trans_id / seq_no
+      if (OB_FAIL(ObAdminLogDumpBlockHelper::generate_dump_dir(
+            arg.dir_path_, redo_info.table_key_.tablet_id_.id(), redo_info.trans_id_.get_id(),
+            redo_info.seq_no_.get_seq(), dump_dir_path))) {
+        TRANS_LOG(WARN, "failed to generate dump directory", K(ret), K(redo_info));
+      } else if (OB_FAIL(ObAdminLogDumpBlockHelper::create_dir_if_not_exist(dump_dir_path))) {
+        TRANS_LOG(WARN, "failed to create dump directory", K(ret), K(redo_info));
+        // 文件名 {slice_idx}_{column_group_idx}_{data_seq}.{scn}.macro
+      } else if (OB_FAIL(ObAdminLogDumpBlockHelper::write_macro_block_file(
+                   dump_dir_path, redo_info.table_key_.slice_range_.start_slice_idx_,
+                   redo_info.table_key_.column_group_idx_,
+                   redo_info.logic_id_.data_seq_.get_data_seq(), scn_val,
+                   redo_info.data_buffer_.ptr(), redo_info.data_buffer_.length()))) {
+        TRANS_LOG(WARN, "failed to write macro block file", K(ret), K(redo_info));
+      }
+    }
   }
   return ret;
 }
@@ -1154,10 +1235,44 @@ int  ObTxDirectLoadIncLog::ob_admin_dump(share::ObAdminMutatorStringArg &arg)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid arg writer is NULL", K(arg), K(ret));
   } else {
+    ObCStringHelper helper;
     arg.writer_ptr_->dump_key("<TxDirectLoadIncLog>");
     arg.writer_ptr_->start_object();
+    arg.writer_ptr_->dump_key("dli_log_type");
+    arg.writer_ptr_->dump_int64(static_cast<int64_t>(ddl_log_type_));
+    arg.writer_ptr_->dump_key("dli_buf_size");
+    arg.writer_ptr_->dump_int64(log_buf_.get_buf_size());
+    arg.writer_ptr_->dump_key("dli_batch_key");
+    arg.writer_ptr_->dump_string(helper.convert(batch_key_));
     //TODO direct_load_inc
     //dump direct_load_inc log_buf as a string in ob_admin log_tool
+    if (ddl_log_type_ == ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_START) {
+      storage::ObDDLIncStartLog ddl_start_log;
+      if (OB_FAIL(log_buf_.deserialize_log_object(&ddl_start_log))) {
+        TRANS_LOG(WARN, "deserialize ddl start log failed", K(ret), KPC(this));
+      } else {
+        arg.writer_ptr_->dump_key("dli_start_log");
+        arg.writer_ptr_->dump_string(helper.convert(ddl_start_log));
+      }
+    } else if (ddl_log_type_ == ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_REDO) {
+      storage::ObDDLRedoLog ddl_redo_log;
+      if (OB_FAIL(log_buf_.deserialize_log_object(&ddl_redo_log))) {
+        TRANS_LOG(WARN, "deserialize ddl redo log failed", K(ret), KPC(this));
+      } else {
+        arg.writer_ptr_->dump_key("dli_redo_log");
+        arg.writer_ptr_->dump_string(helper.convert(ddl_redo_log));
+      }
+    } else if (ddl_log_type_ == ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_END) {
+      storage::ObDDLIncCommitLog ddl_commit_log;
+      if (OB_FAIL(log_buf_.deserialize_log_object(&ddl_commit_log))) {
+        TRANS_LOG(WARN, "deserialize ddl commit log failed", K(ret), KPC(this));
+      } else {
+        arg.writer_ptr_->dump_key("dli_commit_log");
+        arg.writer_ptr_->dump_string(helper.convert(ddl_commit_log));
+      }
+    } else {
+      TRANS_LOG(WARN, "invalid ddl log type", K(ddl_log_type_));
+    }
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1173,17 +1288,24 @@ int ObTxMultiDataSourceLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("<TxMultiDataSourceLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("mds_count");
-    arg.writer_ptr_->dump_string(to_cstring(data_.count()));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(data_.count()));
 
     arg.writer_ptr_->dump_key("mds_array");
     arg.writer_ptr_->start_object();
     for (int64_t i = 0; i < data_.count(); i++) {
       arg.writer_ptr_->dump_key("type");
-        arg.writer_ptr_->dump_string(to_str_mds_type(data_[i].get_data_source_type()));
+        helper.reset();
+        arg.writer_ptr_->dump_string(ObMultiDataSourcePrinter::to_str_mds_type(data_[i].get_data_source_type()));
         arg.writer_ptr_->dump_key("buf_len");
-        arg.writer_ptr_->dump_string(to_cstring(data_[i].get_data_size()));
+        arg.writer_ptr_->dump_string(helper.convert(data_[i].get_data_size()));
         arg.writer_ptr_->dump_key("content");
-        arg.writer_ptr_->dump_string(ObMulSourceTxDataDump::dump_buf(data_[i].get_data_source_type(),static_cast<char *>(data_[i].get_ptr()),data_[i].get_data_size()));
+        helper.reset();
+        arg.writer_ptr_->dump_string(
+            ObMulSourceTxDataDump::dump_buf(data_[i].get_data_source_type(),
+                                            static_cast<char *>(data_[i].get_ptr()),
+                                            data_[i].get_data_size(),
+                                            helper));
     }
     arg.writer_ptr_->end_object();
 
@@ -1386,7 +1508,7 @@ int ObTxLogBlock::init_for_replay(const char *buf, const int64_t &size)
       || OB_ISNULL(buf)
       || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(ERROR, "invalid argument", K(buf), K(size), K(*this));
+    TRANS_LOG(ERROR, "invalid argument", KP(buf), K(size), K(*this));
   } else {
     replay_buf_ = buf;
     len_ = size;
@@ -1408,7 +1530,7 @@ int ObTxLogBlock::init_for_replay(const char *buf, const int64_t &size, int skip
     ret = OB_INIT_TWICE;
   } else if (OB_ISNULL(buf) || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(ERROR, "invalid argument", K(buf), K(size), K(*this));
+    TRANS_LOG(ERROR, "invalid argument", KP(buf), K(size), K(*this));
   } else {
     replay_buf_ = buf;
     len_ = size;

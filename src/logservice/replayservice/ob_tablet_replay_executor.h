@@ -18,6 +18,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_binding_mds_user_data.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
+#include "storage/tablet/ob_tablet_ddl_complete_mds_data.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,10 @@ namespace mds
 {
 class MdsCtx;
 }
+}
+namespace rootserver
+{
+struct ObTruncateTabletArg;
 }
 
 namespace logservice
@@ -93,6 +98,9 @@ protected:
 
   virtual bool replay_allow_tablet_not_exist_() { return true; }
 
+  // only set true when replay ddl start or commit log
+  virtual bool is_replay_ddl_control_log_() const { return false; }
+
   // not allowed to pass ObTabletCreateDeleteMdsUserData or ObTabletBindingMdsUserData
   template <typename T,
             typename U = typename std::enable_if<
@@ -114,10 +122,21 @@ protected:
       const bool for_old_mds = false);
   int replay_to_mds_table_(
       storage::ObTabletHandle &tablet_handle,
+      const ObTabletDDLCompleteMdsUserData &mds,
+      storage::mds::MdsCtx &ctx,
+      const share::SCN &scn,
+      const bool for_old_mds);
+  int replay_to_mds_table_(
+      storage::ObTabletHandle &tablet_handle,
       const ObTabletBindingMdsUserData &mds,
       storage::mds::MdsCtx &ctx,
       const share::SCN &scn,
       const bool for_old_mds = false);
+  int replay_to_mds_table_(
+      storage::ObTabletHandle &tablet_handle,
+      const rootserver::ObTruncateTabletArg &mds,
+      storage::mds::MdsCtx &ctx,
+      const share::SCN &scn);
   template <typename K, typename V>
   int replay_to_mds_table_(
       storage::ObTabletHandle &tablet_handle,

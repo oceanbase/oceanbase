@@ -74,7 +74,7 @@ public:
   DEFINE_IN_TRANS_FUC(create_new_ls, const ObLSStatusInfo &ls_info,\
                     const SCN &create_ls_scn,\
                     const common::ObString &zone_priority,\
-                    const share::ObTenantSwitchoverStatus &working_sw_status)
+                    const int64_t switchover_epoch)
   /*
    * description: for primary cluster and GC of standby, delete ls from each inner_table
    * @param[in] tenant_id: tenant_id

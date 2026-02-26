@@ -31,7 +31,7 @@ class ObIRowIndex;
 typedef void (*raw_fix_batch_decode_func)(
             const int64_t col_len,
             const char *base_data,
-            const int64_t *row_ids,
+            const int32_t *row_ids,
             const int64_t row_cap,
             common::ObDatum *datums);
 
@@ -41,7 +41,7 @@ typedef void (*raw_var_batch_decode_func)(
             const int64_t header_off,
             const int64_t header_len,
             const int64_t header_var_col_cnt,
-            const int64_t *row_ids,
+            const int32_t *row_ids,
             const int64_t row_cap,
             common::ObDatum *datums);
 
@@ -178,7 +178,7 @@ public:
   virtual int batch_decode(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex* row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       common::ObDatum *datums) const override;
@@ -200,7 +200,7 @@ public:
   virtual int get_null_count(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex *row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const override;
   virtual bool fast_decode_valid(const ObColumnDecoderCtx &ctx) const override;
@@ -216,14 +216,14 @@ private:
   int batch_decode_general(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex* row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       common::ObDatum *datums) const;
   int batch_decode_fast(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex* row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums) const;
 

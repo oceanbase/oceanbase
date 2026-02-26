@@ -28,7 +28,7 @@ namespace schema
 class ObProfileNameHashKey
 {
 public:
-  ObProfileNameHashKey() : tenant_id_(common::OB_INVALID_TENANT_ID) {}
+  ObProfileNameHashKey() : tenant_id_(common::OB_INVALID_TENANT_ID), name_() {}
   ObProfileNameHashKey(uint64_t tenant_id, common::ObString name)
     : tenant_id_(tenant_id),
       name_(name)

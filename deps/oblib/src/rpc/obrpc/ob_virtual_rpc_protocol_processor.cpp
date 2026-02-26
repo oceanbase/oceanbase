@@ -11,18 +11,12 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBRPC
-#include "rpc/obrpc/ob_virtual_rpc_protocol_processor.h"
 
+#include "ob_virtual_rpc_protocol_processor.h"
 #include <byteswap.h>
-#include "io/easy_io.h"
-#include "lib/compress/ob_compressor_pool.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
-#include "rpc/frame/ob_req_handler.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::serialization;

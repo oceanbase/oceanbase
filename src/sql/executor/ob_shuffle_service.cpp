@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_shuffle_service.h"
-#include "common/row/ob_row.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_func_part_hash.h"
 

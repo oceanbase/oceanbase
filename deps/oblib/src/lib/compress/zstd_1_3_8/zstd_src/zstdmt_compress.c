@@ -20,11 +20,8 @@
 
 
 /* ======   Dependencies   ====== */
-#include <string.h>      /* memcpy, memset */
-#include <limits.h>      /* INT_MAX, UINT_MAX */
 #include "pool.h"        /* threadpool */
 #include "threading.h"   /* mutex */
-#include "zstd_compress_internal.h"  /* MIN, ERROR, ZSTD_*, ZSTD_highbit32 */
 #include "zstd_ldm.h"
 #include "zstdmt_compress.h"
 

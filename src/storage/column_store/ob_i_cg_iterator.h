@@ -24,7 +24,7 @@ struct PushdownFilterInfo;
 namespace storage
 {
 class ObSSTableWrapper;
-class ObGroupByCell;
+class ObGroupByCellBase;
 
 class ObICGIterator
 {
@@ -49,7 +49,7 @@ public:
       const int cg_iter_type,
       const bool project_single_row)
   {
-    return project_single_row ? (OB_CG_SINGLE_ROW_SCANNER || OB_CG_DEFAULT_SCANNER) : (OB_CG_ROW_SCANNER <= cg_iter_type && cg_iter_type < OB_CG_TILE_SCANNER);
+    return project_single_row ? (OB_CG_SINGLE_ROW_SCANNER == cg_iter_type || OB_CG_DEFAULT_SCANNER == cg_iter_type) : (OB_CG_ROW_SCANNER <= cg_iter_type && cg_iter_type < OB_CG_TILE_SCANNER);
   }
   static bool is_valid_cg_row_scanner(const int cg_iter_type)
   {
@@ -104,6 +104,7 @@ public:
   virtual ObCGIterType get_type() = 0;
   virtual int get_next_row(const blocksstable::ObDatumRow *&datum_row)
   { return OB_NOT_IMPLEMENT; }
+  virtual int get_current_row_id(ObCSRowId& current_row_id) const { return OB_ERR_UNSUPPORTED_TYPE; }
   OB_INLINE uint32_t get_cg_idx() const { return cg_idx_; }
   OB_INLINE void set_cg_idx(uint32_t cg_idx) { cg_idx_ = cg_idx; }
   OB_INLINE bool is_valid() const { return cg_idx_ != OB_CS_INVALID_CG_IDX; }
@@ -150,7 +151,10 @@ public:
    * calculate aggregate on this column group
    * is_group_by_col: current column is group by column?
    */
+  virtual int fill_group_by_col_lob_locator() = 0;
   virtual int calc_aggregate(const bool is_group_by_col) = 0;
+
+  virtual int locate_micro_index(const ObCSRange &range) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 

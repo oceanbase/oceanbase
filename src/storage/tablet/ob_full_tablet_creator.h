@@ -31,16 +31,13 @@ namespace storage
 
 class ObFullTabletCreator final
 {
-  static const int64_t ONE_ROUND_PERSIST_COUNT_THRESHOLD = 200L;
-  static const int64_t FIFO_START_OFFSET =
-      sizeof(ObFIFOAllocator::NormalPageHeader) + sizeof(ObFIFOAllocator::AllocHeader) + 16 - 1;
 public:
   ObFullTabletCreator();
   ~ObFullTabletCreator() = default;
 public:
   int init(const uint64_t tenant_id);
   void reset();
-  int create_tablet(ObTabletHandle &tablet_handle);
+  int create_tablet(ObTablet *&tablet);
   /* ATTENTION: below functions should be called without any ls_tablet or t3m locks */
   int throttle_tablet_creation();
   void free_tablet(ObTablet *tablet);

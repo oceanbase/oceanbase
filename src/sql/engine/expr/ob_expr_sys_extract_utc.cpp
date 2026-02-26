@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_sys_extract_utc.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/ob_name_def.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

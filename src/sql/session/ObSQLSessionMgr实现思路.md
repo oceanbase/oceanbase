@@ -21,7 +21,7 @@ ObSQLSessionMgr负责为每一个连接分配session id，并保证sessid的全�
 # 实现思路
 ### ObSQLSessionInfo内存管理
 
-ObSQLSessionMgr采用ObConcurrentHashMapWithHazardValue<Key, Value *> 并发数据结构来管理ObSQLSessionInfo的创建、查询和销毁。ObSQLSessionMgr主要提供create_session/get_session/rever_session/free_session接口。
+ObSQLSessionMgr采用ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *> 并发数据结构来管理ObSQLSessionInfo的创建、查询和销毁。ObSQLSessionMgr主要提供create_session/get_session/rever_session/free_session接口。
 - 通过create_session接口创建新的ObSQLSessionInfo，同时会给该ObSQLSessionInfo增加引用计数；
 - 通过get_session接口获取已经创建的ObSQLSessionInfo，同时会给该ObSQLSessionInfo增加引用计数；
 - 通过free_session接口释放ObSQLSessionInfo的内存；调用free_session后会检查该ObSQLSessionInfo的引用计数，如果为0则物理上删除该ObSQLSessionInfo所占有的内存，否则仅在逻辑上删除该ObSQLSessionInfo；

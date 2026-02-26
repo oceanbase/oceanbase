@@ -13,15 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_restore.h"
 #include "observer/ob_server.h"
-#include "ob_physical_copy_task.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/backup/ob_backup_data_store.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/high_availability/ob_storage_ha_reader.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_create_mds_helper.h"
-#include "storage/tablet/ob_tablet.h"
+#include "share/backup/ob_backup_connectivity.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -83,10 +77,18 @@ int ObLSRestoreCtx::fill_comment(char *buf, const int64_t buf_len) const
   } else if (NULL == buf || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ls restore : task_id = %s, ls_id = %s, src = %s, dest = %s",
-      to_cstring(task_id_), to_cstring(arg_.ls_id_), to_cstring(arg_.src_.get_server()),
-      to_cstring(arg_.dst_.get_server())))) {
-    LOG_WARN("failed to set comment", K(ret), K(buf), K(pos), K(buf_len));
+  } else {
+    ret = databuff_printf(buf, buf_len, pos, "ls restore : task_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, task_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", src = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.src_.get_server());
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", dest = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.dst_.get_server());
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to set comment", K(ret), K(buf), K(pos), K(buf_len));
+    }
   }
   return ret;
 }
@@ -189,6 +191,7 @@ int ObLSRestoreDagNet::init_by_param(const ObIDagInitParam *param)
     backup::ObBackupIndexStoreParam index_store_param;
     storage::ObBackupDataStore store;
     int64_t retry_id = 0;
+    int64_t dest_id = 0;
     if (OB_FAIL(store.init(init_param->arg_.restore_base_info_.backup_dest_))) {
       LOG_WARN("fail to init mgr", K(ret));
     } else if (OB_FAIL(store.read_backup_set_info(backup_set_file_desc))) {
@@ -204,9 +207,13 @@ int ObLSRestoreDagNet::init_by_param(const ObIDagInitParam *param)
       index_store_param.backup_data_type_ = data_type;
       index_store_param.turn_id_ = init_param->arg_.ls_id_.is_sys_ls() ?
                                    1/*sys ls only has one turn*/ : backup_set_file_desc.backup_set_file_.meta_turn_id_;
+      const ObBackupDestType::TYPE backup_dest_type = ObBackupDestType::DEST_TYPE_RESTORE_DATA;
 
       ObBackupPath backup_path;
-      if (OB_FAIL(ObBackupPathUtil::get_ls_backup_dir_path(
+      if (OB_FAIL(share::ObBackupStorageInfoOperator::get_restore_dest_id(
+          *GCTX.sql_proxy_, MTL_ID(), backup_dest_type, index_store_param.dest_id_))) {
+        LOG_WARN("failed to get restore dest id", K(ret));
+      } else if (OB_FAIL(ObBackupPathUtil::get_ls_backup_dir_path(
           init_param->arg_.restore_base_info_.backup_dest_, init_param->arg_.ls_id_, backup_path))) {
         LOG_WARN("failed to get ls backup dir path", K(ret), KPC(init_param));
       } else if (OB_FAIL(store.get_max_sys_ls_retry_id(backup_path, init_param->arg_.ls_id_, index_store_param.turn_id_, retry_id))) {
@@ -223,10 +230,16 @@ int ObLSRestoreDagNet::init_by_param(const ObIDagInitParam *param)
         init_param->arg_.restore_base_info_.backup_dest_,
         backup_set_file_desc.backup_set_file_, false/*is_sec_meta*/, true/*init sys tablet index store*/, OB_BACKUP_INDEX_CACHE))) {
       LOG_WARN("failed to init meta index store", K(ret), KPC(init_param));
-    } else if (OB_FAIL(second_meta_index_store_.init(mode, index_store_param,
-        init_param->arg_.restore_base_info_.backup_dest_,
-        backup_set_file_desc.backup_set_file_, true/*is_sec_meta*/, true/*init sys tablet index store*/, OB_BACKUP_INDEX_CACHE))) {
-      LOG_WARN("failed to init macro index store", K(ret), KPC(init_param));
+    } else if (backup_set_file_desc.backup_set_file_.is_backup_set_not_support_quick_restore()
+            && OB_FAIL(second_meta_index_store_.init(
+                       mode,
+                       index_store_param,
+                       init_param->arg_.restore_base_info_.backup_dest_,
+                       backup_set_file_desc.backup_set_file_,
+                       true/*is_sec_meta*/,
+                       true/*init sys tablet index store*/,
+                       OB_BACKUP_INDEX_CACHE))) {
+      LOG_WARN("failed to init macro index store", K(ret), K(backup_set_file_desc), KPC(init_param));
     }
   }
 
@@ -287,7 +300,7 @@ int ObLSRestoreDagNet::start_running_for_ls_restore_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc initial ls restore dag ", K(ret));
   } else if (OB_FAIL(initial_ls_restore_dag->init(this))) {
     LOG_WARN("failed to initial ls restore dag", K(ret));
@@ -335,9 +348,9 @@ bool ObLSRestoreDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObLSRestoreDagNet::hash() const
+uint64_t ObLSRestoreDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx is NULL", KPC(ctx_));
   } else {
@@ -356,11 +369,15 @@ int ObLSRestoreDagNet::fill_comment(char *buf, const int64_t buf_len) const
     LOG_WARN("ls restore dag net do not init ", K(ret));
   } else if (OB_UNLIKELY(0 > ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
     ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("failed to get trace id string", K(ret), K(*ctx_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-          "ObLSRestoreDagNet: ls_id=%s, trace_id=%s",
-          to_cstring(ctx_->arg_.ls_id_), task_id_str))) {
-    LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+    LOG_WARN("failed to get trace id string", K(ret), "arg", ctx_->arg_);
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObLSRestoreDagNet: ls_id=");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", trace_id=%s", task_id_str);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), "arg", ctx_->arg_);
+    }
   }
   return ret;
 }
@@ -371,9 +388,13 @@ int ObLSRestoreDagNet::fill_dag_net_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls restore dag net do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObLSRestoreDagNet: ls_id = %s", to_cstring(ctx_->arg_.ls_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObLSRestoreDagNet: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_->arg_.ls_id_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+    }
   }
   return ret;
 }
@@ -476,9 +497,9 @@ bool ObLSRestoreDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObLSRestoreDag::hash() const
+uint64_t ObLSRestoreDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObLSRestoreCtx *ctx = get_ctx();
 
   if (OB_ISNULL(ctx)) {
@@ -501,12 +522,15 @@ int ObLSRestoreDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, O
   if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls restore ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                   ctx->arg_.ls_id_.id(),
                                   static_cast<int64_t>(ctx->arg_.is_leader_),
-                                  "dag_net_task_id", to_cstring(ctx->task_id_),
-                                  "src", to_cstring(ctx->arg_.src_.get_server())))) {
-    LOG_WARN("failed to fill info param", K(ret), KP(ctx));
+                                  "dag_net_task_id", helper.convert(ctx->task_id_),
+                                  "src", helper.convert(ctx->arg_.src_.get_server())))) {
+      LOG_WARN("failed to fill info param", K(ret), KP(ctx));
+    }
   }
   return ret;
 }
@@ -533,9 +557,13 @@ int ObInitialLSRestoreDag::fill_dag_key(char *buf, const int64_t buf_len) const
   } else if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls restore ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObInitialLSRestoreDag: ls_id = %s", to_cstring(ctx->arg_.ls_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObInitialLSRestoreDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -665,9 +693,9 @@ int ObInitialLSRestoreTask::generate_ls_restore_dags_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial ls restore dag should not be NULL", K(ret), KP(initial_ls_restore_dag));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(start_ls_restore_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(start_ls_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc start ls restore dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag(finish_ls_restore_dag))) {
+    } else if (OB_FAIL(scheduler->alloc_dag(finish_ls_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc finish ls restore dag", K(ret));
     } else if (OB_FAIL(start_ls_restore_dag->init(dag_net_))) {
       LOG_WARN("failed to init start ls restore dag", K(ret));
@@ -746,9 +774,13 @@ int ObStartLSRestoreDag::fill_dag_key(char *buf, const int64_t buf_len) const
   } else if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls restore ctx should not be NULL", K(ret), K(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObStartLSRestoreDag: ls_id = %s", to_cstring(ctx->arg_.ls_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObStartLSRestoreDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -907,7 +939,6 @@ int ObStartLSRestoreTask::alloc_copy_ls_view_reader_(ObICopyLSViewInfoReader *&r
     ObCopyLSViewInfoRestoreReader *restore_reader = nullptr;
     ObIDagNet *dag_net = nullptr;
     ObLSRestoreDagNet *ls_restore_dag_net = nullptr;
-
     if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
     } else if (OB_ISNULL(dag_net)) {
       ret = OB_ERR_UNEXPECTED;
@@ -980,14 +1011,13 @@ int ObStartLSRestoreTask::create_tablet_(
 {
   int ret = OB_SUCCESS;
   ObTablesHandleArray remote_table;
-  ObBatchUpdateTableStoreParam param;
 
   if (!tablet_meta.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create tablet get invalid argument", K(ret), K(tablet_meta), KP(ls));
   } else if (OB_FAIL(ObTabletCreateMdsHelper::check_create_new_tablets(1LL, ObTabletCreateThrottlingLevel::SOFT))) {
     LOG_WARN("failed to check create new tablet", K(ret), K(tablet_meta));
-  } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_meta, false /*keep old*/))) {
+  } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_meta))) {
     LOG_WARN("failed to create tablet", K(ret), K(tablet_meta));
   } else {
     LOG_INFO("succeed to create tablet and table store", KPC(ls), K(tablet_meta), K(remote_table));
@@ -1008,6 +1038,7 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
   ObLSService *ls_service = nullptr;
   ObLS *ls = nullptr;
   ObLSHandle ls_handle;
+  const ObBackupSetFileDesc::Compatible backup_compat = ctx_->arg_.restore_base_info_.backup_compatible_;
   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
@@ -1049,9 +1080,11 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
         ctx_->ls_rebuild_seq_ = ctx_->arg_.is_leader_ ? -1 : ls_meta_package.ls_meta_.get_rebuild_seq();
         ctx_->sys_tablet_id_array_.reset();
         int64_t tablet_cnt = 0;
+        ObLogicTabletID logic_tablet_id;
         // create all tablets on the log stream
         while (OB_SUCC(ret)) {
           tablet_info.reset();
+          logic_tablet_id.reset();
           if (OB_FAIL(reader->get_next_tablet_info(tablet_info))) {
             if (OB_ITER_END == ret) {
               LOG_INFO("update ls meta and create all tablets succeed", KPC_(ctx), K(tablet_cnt));
@@ -1060,10 +1093,14 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
             } else {
               LOG_WARN("failed to get next tablet meta", K(ret));
             }
+          } else if (OB_FAIL(logic_tablet_id.init(tablet_info.tablet_id_, tablet_info.param_.transfer_info_.transfer_seq_))) {
+            LOG_WARN("failed to init logicl tablet id", K(ret), K(tablet_info));
           } else if (tablet_info.param_.tablet_id_.is_ls_inner_tablet()
-                     && OB_FAIL(ctx_->sys_tablet_id_array_.push_back(tablet_info.param_.tablet_id_))) {
+                     && OB_FAIL(ctx_->sys_tablet_id_array_.push_back(logic_tablet_id))) {
             LOG_WARN("failed to push sys tablet id into array", K(ret), "array count", ctx_->sys_tablet_id_array_.count());
-          } else if (!tablet_info.param_.is_empty_shell() && OB_FALSE_IT(set_tablet_to_restore(tablet_info.param_))) {
+          } else if (!tablet_info.param_.is_empty_shell()
+                      && !share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(backup_compat)
+                      && OB_FALSE_IT(set_tablet_to_restore(tablet_info.param_))) {
           } else if (OB_FAIL(reset_multi_version_start_(tablet_info.param_))) {
             LOG_WARN("failed to reset multi version start", K(ret), K(tablet_info));
           } else if (OB_FAIL(create_tablet_(tablet_info.param_, ls))) {
@@ -1076,33 +1113,6 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
     }
 
     free_copy_ls_view_reader_(reader);
-  }
-  return ret;
-}
-
-int ObStartLSRestoreTask::generate_tablet_id_array_(
-    const ObIArray<common::ObTabletID> &tablet_id_array)
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start ls restore task do not init", K(ret));
-  } else if (tablet_id_array.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("generate tablet id array get invalid argument", K(ret), K(tablet_id_array));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
-      const ObTabletID &tablet_id = tablet_id_array.at(i);
-      if (tablet_id.is_ls_inner_tablet()) {
-        if (OB_FAIL(ctx_->sys_tablet_id_array_.push_back(tablet_id))) {
-          LOG_WARN("failed to push tablet id into array", K(ret));
-        }
-      } else {
-        if (OB_FAIL(ctx_->data_tablet_id_array_.push_back(tablet_id))) {
-          LOG_WARN("failed to push tablet id into array", K(ret));
-        }
-      }
-    }
   }
   return ret;
 }
@@ -1155,7 +1165,7 @@ int ObStartLSRestoreTask::generate_tablets_restore_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(sys_tablets_restore_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(sys_tablets_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc sys tablets restore dag ", K(ret));
     } else if (OB_FAIL(sys_tablets_restore_dag->init(dag_net))) {
       LOG_WARN("failed to init sys tablets restore dag", K(ret), K(*ctx_));
@@ -1221,9 +1231,13 @@ int ObSysTabletsRestoreDag::fill_dag_key(char *buf, const int64_t buf_len) const
   } else if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls restore ctx should not be null", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObSysTabletsRestoreDag: ls_id = %s", to_cstring(ctx->arg_.ls_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObSysTabletsRestoreDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -1298,6 +1312,7 @@ int ObSysTabletsRestoreTask::init()
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
   ObLSRestoreDagNet *ls_restore_dag_net = nullptr;
+  ObArray<ObTabletID> tablet_id_array;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -1320,8 +1335,10 @@ int ObSysTabletsRestoreTask::init()
     const ObTabletRestoreAction::ACTION &restore_action = ObTabletRestoreAction::ACTION::RESTORE_ALL;
     if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle_))) {
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+    } else if (OB_FAIL(ObStorageHAUtils::append_tablet_list(ctx_->sys_tablet_id_array_, tablet_id_array))) {
+      LOG_WARN("failed to append tablet list", K(ret));
     } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
-        ctx_->arg_.tenant_id_, ctx_->sys_tablet_id_array_, ctx_->arg_.is_leader_,
+        ctx_->arg_.tenant_id_, tablet_id_array, ctx_->arg_.is_leader_,
         ctx_->need_check_seq_, ctx_->ls_rebuild_seq_, ctx_->src_,
         ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, restore_action,
         meta_index_store_, &ctx_->ha_table_info_mgr_,
@@ -1346,6 +1363,8 @@ int ObSysTabletsRestoreTask::process()
     //do nothing
   } else if (OB_FAIL(create_or_update_tablets_())) {
     LOG_WARN("failed to create or update tablets", K(ret), K(*ctx_));
+  } else if (OB_FAIL(ObStorageHAUtils::deal_compat_with_ls_inner_tablet(ctx_->arg_.ls_id_))) {
+    LOG_WARN("failed to deal compcat with ls inner tablet", K(ret), KPC(ctx_));
   } else if (OB_FAIL(build_tablets_sstable_info_())) {
     LOG_WARN("failed to build tablets sstable info", K(ret), K(*ctx_));
   } else if (OB_FAIL(generate_sys_tablet_restore_dag_())) {
@@ -1361,14 +1380,20 @@ int ObSysTabletsRestoreTask::process()
   return ret;
 }
 
-//TODO(zeyong) check need to create or update anyway
 int ObSysTabletsRestoreTask::create_or_update_tablets_()
 {
   int ret = OB_SUCCESS;
+  ObIDagNet *dag_net = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sys tablets restore task do not init", K(ret));
-  } else if (OB_FAIL(ha_tablets_builder_.create_or_update_tablets())) {
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+  } else if (OB_FAIL(ha_tablets_builder_.create_or_update_tablets(dag_net))) {
     LOG_WARN("failed to create or update tablets", K(ret), KPC(ctx_));
   }
   return ret;
@@ -1377,11 +1402,17 @@ int ObSysTabletsRestoreTask::create_or_update_tablets_()
 int ObSysTabletsRestoreTask::build_tablets_sstable_info_()
 {
   int ret = OB_SUCCESS;
-
+  ObIDagNet *dag_net = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sys tablets restore task do not init", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ha_tablets_builder_.build_tablets_sstable_info())) {
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+  } else if (OB_FAIL(ha_tablets_builder_.build_tablets_sstable_info(dag_net))) {
     LOG_WARN("failed to build tablets sstable info", K(ret), KPC(ctx_));
   }
   return ret;
@@ -1415,7 +1446,7 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
     LOG_WARN("failed to push sys_tablets_restore_dag into array", K(ret), K(*ctx_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->sys_tablet_id_array_.count(); ++i) {
-      const ObTabletID &tablet_id = ctx_->sys_tablet_id_array_.at(i);
+      const ObTabletID &tablet_id = ctx_->sys_tablet_id_array_.at(i).tablet_id_;
       ObTabletRestoreDag *tablet_restore_dag = nullptr;
       ObInitTabletRestoreParam param;
       param.tenant_id_ = ctx_->arg_.tenant_id_;
@@ -1432,7 +1463,7 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
       if (!param.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("init tablet restore param is invalid", K(ret), K(param), KPC(ctx_));
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag, true/*is_ha_dag*/))) {
         LOG_WARN("failed to alloc tablet restore dag", K(ret));
       } else if (OB_FAIL(tablet_restore_dag_array.push_back(tablet_restore_dag))) {
         LOG_WARN("failed to push tablet restore dag into array", K(ret), K(*ctx_));
@@ -1502,9 +1533,13 @@ int ObDataTabletsMetaRestoreDag::fill_dag_key(char *buf, const int64_t buf_len) 
   } else if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls restore ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObDataTabletsMetaRestoreDag: ls_id = %s", to_cstring(ctx->arg_.ls_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObDataTabletsMetaRestoreDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -1575,6 +1610,7 @@ int ObDataTabletsMetaRestoreTask::init()
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
   ObLSRestoreDagNet *ls_restore_dag_net = nullptr;
+  ObSEArray<ObINodeWithChild*, 1> child_node_array;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -1587,8 +1623,9 @@ int ObDataTabletsMetaRestoreTask::init()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(ls_restore_dag_net = static_cast<ObLSRestoreDagNet*>(dag_net))) {
+  } else if (OB_FAIL(this->get_dag()->copy_child_nodes(child_node_array))) {
+    LOG_WARN("failed to copy child nodes", K(ret));
   } else {
-    const common::ObIArray<ObINodeWithChild*> &child_node_array = this->get_dag()->get_child_nodes();
     if (child_node_array.count() != 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("data tablets meta restore dag get unexpected child node", K(ret), K(child_node_array));
@@ -1642,7 +1679,7 @@ int ObDataTabletsMetaRestoreTask::process()
 int ObDataTabletsMetaRestoreTask::build_tablet_group_info_()
 {
   int ret = OB_SUCCESS;
-  ObArray<ObTabletID> tablet_group_id_array;
+  ObArray<ObLogicTabletID> tablet_group_id_array;
   const int64_t MAX_TABLET_GROUP_NUM = 128;
   int64_t index = 0;
 
@@ -1654,7 +1691,7 @@ int ObDataTabletsMetaRestoreTask::build_tablet_group_info_()
     while (OB_SUCC(ret) && index < ctx_->data_tablet_id_array_.count()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < MAX_TABLET_GROUP_NUM
           && index < ctx_->data_tablet_id_array_.count(); ++i, index++) {
-        const ObTabletID &tablet_id = ctx_->data_tablet_id_array_.at(index);
+        const ObLogicTabletID &tablet_id = ctx_->data_tablet_id_array_.at(index);
         if (OB_FAIL(tablet_group_id_array.push_back(tablet_id))) {
           LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_id));
         }
@@ -1682,7 +1719,7 @@ int ObDataTabletsMetaRestoreTask::generate_tablet_group_dag_()
   ObIDagNet *dag_net = nullptr;
   ObDataTabletsMetaRestoreDag *data_tablets_meta_restore_dag = nullptr;
   ObHATabletGroupCtx *tablet_group_ctx = nullptr;
-  ObArray<ObTabletID> tablet_id_array;
+  ObArray<ObLogicTabletID> tablet_id_array;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1708,7 +1745,7 @@ int ObDataTabletsMetaRestoreTask::generate_tablet_group_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(tablet_group_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(tablet_group_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc tablet group meta restore dag ", K(ret));
     } else if (OB_FAIL(tablet_group_dag->init(tablet_id_array, dag_net, finish_dag_))) {
       LOG_WARN("failed to init tablet group dag", K(ret), K(tablet_id_array));
@@ -1763,9 +1800,9 @@ bool ObTabletGroupMetaRestoreDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletGroupMetaRestoreDag::hash() const
+uint64_t ObTabletGroupMetaRestoreDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObLSRestoreCtx *ctx = get_ctx();
 
   if (NULL != ctx) {
@@ -1796,16 +1833,21 @@ int ObTabletGroupMetaRestoreDag::fill_dag_key(char *buf, const int64_t buf_len) 
   } else if (tablet_id_array_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet id array should not be empty", K(ret), KPC(ctx), K(tablet_id_array_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObTabletGroupMetaRestoreDag: ls_id = %s, first_tablet_id = %s", to_cstring(ctx->arg_.ls_id_),
-       to_cstring(tablet_id_array_.at(0))))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObTabletGroupMetaRestoreDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", first_tablet_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, tablet_id_array_.at(0));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
 
 int ObTabletGroupMetaRestoreDag::init(
-    const common::ObIArray<common::ObTabletID> &tablet_id_array,
+    const common::ObIArray<ObLogicTabletID> &tablet_id_array,
     share::ObIDagNet *dag_net,
     share::ObIDag *finish_dag)
 {
@@ -1865,7 +1907,7 @@ int ObTabletGroupMetaRestoreDag::generate_next_dag(share::ObIDag *&dag)
   bool need_set_failed_result = true;
   ObLSRestoreCtx *ctx = nullptr;
   ObHATabletGroupCtx *tablet_group_ctx = nullptr;
-  ObArray<ObTabletID> tablet_id_array;
+  ObArray<ObLogicTabletID> tablet_id_array;
   ObDagId dag_id;
 
   if (!is_inited_) {
@@ -1895,7 +1937,7 @@ int ObTabletGroupMetaRestoreDag::generate_next_dag(share::ObIDag *&dag)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(tablet_group_meta_restore_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(tablet_group_meta_restore_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc tablet group meta restore dag ", K(ret));
   } else if (OB_FAIL(tablet_group_meta_restore_dag->init(tablet_id_array, dag_net, finish_dag_))) {
     LOG_WARN("failed to init tablet migration dag", K(ret), KPC(ctx));
@@ -1932,13 +1974,16 @@ int ObTabletGroupMetaRestoreDag::fill_info_param(compaction::ObIBasicInfoParam *
   } else if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls restore ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                   ctx->arg_.ls_id_.id(),
-                                  static_cast<int64_t>(tablet_id_array_.at(0).id()),
+                                  static_cast<int64_t>(tablet_id_array_.at(0).tablet_id_.id()),
                                   static_cast<int64_t>(ctx->arg_.is_leader_),
-                                  "dag_net_task_id", to_cstring(ctx->task_id_),
-                                  "src", to_cstring(ctx->arg_.src_.get_server())))) {
-    LOG_WARN("failed to fill info param", K(ret));
+                                  "dag_net_task_id", helper.convert(ctx->task_id_),
+                                  "src", helper.convert(ctx->arg_.src_.get_server())))) {
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -1957,7 +2002,7 @@ ObTabletGroupMetaRestoreTask::~ObTabletGroupMetaRestoreTask()
 }
 
 int ObTabletGroupMetaRestoreTask::init(
-    const ObIArray<ObTabletID> &tablet_id_array,
+    const ObIArray<ObLogicTabletID> &tablet_id_array,
     share::ObIDag *finish_dag)
 {
   int ret = OB_SUCCESS;
@@ -2033,7 +2078,7 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablets_()
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array_.count(); ++i) {
-      const ObTabletID &tablet_id = tablet_id_array_.at(i);
+      const ObTabletID &tablet_id = tablet_id_array_.at(i).tablet_id_;
       if (OB_FAIL(create_or_update_tablet_(tablet_id, ls))) {
         LOG_WARN("failed to create or update tablet", K(ret), K(tablet_id), KPC(ctx_));
       }
@@ -2142,9 +2187,13 @@ int ObFinishLSRestoreDag::fill_dag_key(char *buf, const int64_t buf_len) const
   } else if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls restore ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObFinishLSRestoreDag: ls_id = %s", to_cstring(ctx->arg_.ls_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObFinishLSRestoreDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -2274,7 +2323,7 @@ int ObFinishLSRestoreTask::generate_initial_ls_restore_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc ls restore dag", K(ret));
     } else if (OB_FAIL(initial_ls_restore_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial ls restore dag", K(ret));

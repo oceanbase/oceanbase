@@ -20,6 +20,10 @@
 #include "logservice/ob_log_handler.h"
 #include "share/scn.h"
 
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_ss_inc_checkpoint.h"
+#endif
+
 namespace oceanbase
 {
 
@@ -67,6 +71,7 @@ public:
 public:
   int on_success();
   int on_failure();
+  const char *get_cb_name() const override { return "PresistIDLogCb"; }
 
 public:
   TO_STRING_KV(K_(log_ts), K_(log_buf), K_(pos), K_(id_srv_type), K_(limited_id));
@@ -79,10 +84,10 @@ private:
   int64_t pos_;
 };
 
-class ObIDService : public logservice::ObIReplaySubHandler,
-                    public logservice::ObICheckpointSubHandler,
-                    public logservice::ObIRoleChangeSubHandler
-{
+class ObIDService :
+    public logservice::ObIReplaySubHandler,
+    public logservice::ObICheckpointSubHandler,
+    public logservice::ObIRoleChangeSubHandler {
 public:
   ObIDService() : rwlock_(ObLatchIds::ID_SOURCE_LOCK), log_interval_(100 * 1000) { reset(); }
   virtual ~ObIDService() {}
@@ -94,12 +99,28 @@ public:
     TimestampService,
     TransIDService,
     DASIDService,
+    SSLogGTS,  // FARM COMPAT WHITELIST
+    SSLogUID,  // FARM COMPAT WHITELIST
+    TableSessIDService,  // FARM COMPAT WHITELIST
     MAX_SERVICE_TYPE,
   };
 
   static void get_all_id_service_type(int64_t *service_type);
   static int get_id_service(const int64_t id_service_type, ObIDService *&id_service);
+  // this is for TimestampService, TransIDService, DASIDService
   static int update_id_service(const ObAllIDMeta &id_meta);
+  // this is for SSLogGTS, SSLogUID
+  static int update_id_service_for_sslog(const ObAllIDMeta &id_meta);
+  static bool is_id_service_for_sslog(
+      const int64_t service_type);
+  static bool is_working_service(
+      const int64_t service_type,
+      const uint64_t tenant_id);
+  // write slog without lock
+  static int update_ls_id_meta_for_flush(
+      const int64_t id_service_type,
+      const int64_t limited_id,
+      const SCN latest_log_ts);
 
   //获取数值或数值组
   int get_number(const int64_t range, const int64_t base_id, int64_t &start_id, int64_t &end_id);
@@ -137,6 +158,10 @@ public:
                         int64_t &submit_log_ts, bool &is_master);
   static const int64_t SUBMIT_LOG_ALARM_INTERVAL = 100 * 1000;
   static const int64_t MIN_LAST_ID = 1;
+
+protected:
+  share::ObLSID get_target_ls_id_() const;
+
 protected:
   typedef common::SpinWLockGuard  WLockGuard;
   typedef common::SpinRLockGuard  RLockGuard;
@@ -144,6 +169,9 @@ protected:
   int submit_log_(const int64_t last_id, const int64_t limited_id);
   int submit_log_with_lock_(const int64_t last_id, const int64_t limited_id);
   int64_t max_pre_allocated_id_(const int64_t base_id);
+  int flush_ls_id_meta_for_ss_(
+      const int64_t limited_id,
+      share::SCN latest_log_ts);
 protected:
   ServiceType service_type_;
   //预分配大小
@@ -165,6 +193,7 @@ protected:
   ObPresistIDLogCb cb_;
   common::ObAddr self_;
   common::ObTimeInterval log_interval_;
+  bool is_flushing_;
 };
 
 class ObIDMeta
@@ -183,10 +212,12 @@ class ObAllIDMeta
 public:
   ObAllIDMeta() : count_(ObIDService::MAX_SERVICE_TYPE) {}
   ~ObAllIDMeta() {}
-  void update_all_id_meta(const ObAllIDMeta &all_id_meta);
+  void update_all_id_meta(const ObAllIDMeta &all_id_meta,
+                          bool &updated);
   int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,
-                     const share::SCN &latest_log_ts);
+                     const share::SCN &latest_log_ts,
+                     bool &updated);
   int get_id_meta(const int64_t service_type,
                   int64_t &limited_id,
                   share::SCN &latest_log_ts) const;

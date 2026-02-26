@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX  SQL_ENG
 #include "sql/engine/expr/ob_expr_output_pack.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "io/easy_io.h"
-#include "lib/oblog/ob_log.h"
-#include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 namespace oceanbase{
 
@@ -60,7 +56,7 @@ int ObExprOutputPack::cg_expr(ObExprCGCtx &cg_ctx, const ObRawExpr &raw_expr, Ob
 {
   UNUSED(raw_expr);
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOutputPackInfo::init_output_pack_info(raw_expr.get_extra(), cg_ctx.allocator_, rt_expr, type_))) {
+  if (OB_FAIL(ObOutputPackInfo::init_output_pack_info(raw_expr.get_field_array(), cg_ctx.allocator_, rt_expr, type_))) {
     LOG_WARN("failed to init output pack info", K(ret));
   } else {
     rt_expr.eval_func_ = &eval_output_pack;
@@ -211,9 +207,10 @@ int ObExprOutputPack::encode_cell(const ObObj &cell, const common::ObIArray<ObFi
 {
   int ret = OB_SUCCESS;
   const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
-  ret = ObSMUtils::cell_str(buf, len, cell, encode_type, pos, column_num, bitmap,
-                            dtc_params, &param_fields.at(column_num), schema_guard,
-                            session->get_effective_tenant_id());
+  CK (OB_NOT_NULL(session));
+  OZ (ObSMUtils::cell_str(buf, len, cell, encode_type, pos, column_num, bitmap,
+                            dtc_params, &param_fields.at(column_num), *session, schema_guard,
+                            session->get_effective_tenant_id()));
   return ret;
 }
 
@@ -525,7 +522,7 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
   bool is_use_lob_locator = my_session.is_client_use_lob_locator();
   bool is_support_outrow_locator_v2 = my_session.is_client_support_lob_locatorv2();
-  if (!(value.is_lob() || value.is_json() || value.is_geometry() ||value.is_lob_locator())) {
+  if (!(value.is_lob() || value.is_json() || value.is_geometry() || value.is_roaringbitmap() || value.is_lob_locator())) {
     // not lob types, do nothing
   } else if (is_use_lob_locator && value.is_lob() && lib::is_oracle_mode()) {
     // if does not have extern header, mock one
@@ -593,6 +590,8 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
           dst_type = ObJsonType;
         } else if (value.is_geometry()) {
           dst_type = ObGeometryType;
+        } else if (value.is_roaringbitmap()) {
+          dst_type = ObRoaringBitmapType;
         }
         // remove has lob header flag
         value.set_lob_value(dst_type, data.ptr(), static_cast<int32_t>(data.length()));
@@ -683,7 +682,7 @@ int ObExprOutputPack::try_encode_row(const ObExpr &expr, ObEvalCtx &ctx,
           LOG_WARN("convert text obj charset failed", K(ret));
         }
         if (OB_FAIL(ret)) {
-        } else if ((obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry())
+        } else if ((obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry() || obj.is_roaringbitmap())
                    && OB_FAIL(process_lob_locator_results(obj, alloc, *session, ctx.exec_ctx_))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
         } else if ((obj.is_user_defined_sql_type() || obj.is_collection_sql_type() || obj.is_geometry())
@@ -727,7 +726,7 @@ int ObExprOutputPack::process_oneline(const ObExpr &expr, ObEvalCtx &ctx, ObSQLS
     LOG_WARN("failed to get str res mem", K(ret), K(len));
   }
   //if try encode failed, refresh buffer and retry
-  while(OB_SUCC(ret) && OB_SUCCESS != tmp_ret) {
+  while (OB_SUCC(ret) && OB_SUCCESS != tmp_ret) {
     tmp_ret = OB_SUCCESS;
     if (obmysql::MYSQL_PROTOCOL_TYPE::BINARY == encode_type) {
       tmp_ret = reset_bitmap(buffer, len, expr.arg_cnt_ - 1, pos, bitmap);
@@ -737,16 +736,20 @@ int ObExprOutputPack::process_oneline(const ObExpr &expr, ObEvalCtx &ctx, ObSQLS
                               buffer, bitmap, schema_guard, encode_type, len, pos);
     }
     if (OB_SUCCESS != tmp_ret) {
-      len *= 2;
-      if (len >= MAX_PACK_LEN) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("encode row size overflow ", K(ret), K(len));
-      } else if (OB_ISNULL(buffer = expr.get_str_res_mem(ctx, len))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to get str res mem", K(ret), K(len));
+      if (OB_SIZE_OVERFLOW != tmp_ret && OB_BUF_NOT_ENOUGH != tmp_ret) {
+        ret = tmp_ret;
       } else {
-        //re encode from begin
-        pos = 0;
+        len *= 2;
+        if (len >= MAX_PACK_LEN) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("encode row size overflow ", K(ret), K(len));
+        } else if (OB_ISNULL(buffer = expr.get_str_res_mem(ctx, len))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to get str res mem", K(ret), K(len));
+        } else {
+          //re encode from begin
+          pos = 0;
+        }
       }
     }
   }

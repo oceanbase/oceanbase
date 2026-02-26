@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_information_user_privileges_table.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -72,6 +71,36 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "SHUTDOWN";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_RELOAD_SHIFT] =
                                                    "RELOAD";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_LOCK_TABLE_SHIFT] =
+                                                   "LOCK TABLES";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_REFERENCES_SHIFT] =
+                                                   "REFERENCES";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_ROLE_SHIFT] =
+                                                   "CREATE ROLE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DROP_ROLE_SHIFT] =
+                                                   "DROP ROLE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_ENCRYPT_SHIFT] =
+                                                   "ENCRYPT";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DECRYPT_SHIFT] =
+                                                   "DECRYPT";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_EVENT_SHIFT] =
+                                                   "EVENT";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_CATALOG_SHIFT] =
+                                                   "CREATE CATALOG";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_USE_CATALOG_SHIFT] =
+                                                   "USE CATALOG";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_AI_MODEL_SHIFT] =
+                                                   "CREATE AI MODEL";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_ALTER_AI_MODEL_SHIFT] =
+                                                   "ALTER AI MODEL";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DROP_AI_MODEL_SHIFT] =
+                                                   "DROP AI MODEL";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_ACCESS_AI_MODEL_SHIFT] =
+                                                   "ACCESS AI MODEL";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_SENSITIVE_RULE_SHIFT] =
+                                                   "CREATE SENSITIVE RULE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_PLAINACCESS_SHIFT] =
+                                                   "PLAINACCESS";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

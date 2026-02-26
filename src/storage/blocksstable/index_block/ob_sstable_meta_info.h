@@ -26,6 +26,7 @@ namespace storage
 {
 class ObLinkedMacroBlockItemReader;
 class ObLinkedMacroBlockItemWriter;
+struct ObSSTableLinkBlockWriteInfo;
 }
 namespace blocksstable
 {
@@ -69,6 +70,7 @@ public:
   }
   OB_INLINE const storage::ObMetaDiskAddr &get_addr() const { return addr_; }
   OB_INLINE const ObMicroBlockData &get_block_data() const { return block_data_; }
+  OB_INLINE const char *get_orig_block_buf() const { return orig_block_buf_; }
 
   TO_STRING_KV(K_(addr), KP_(orig_block_buf), K_(block_data));
 private:
@@ -210,6 +212,10 @@ public:
       int64_t &data_block_count,
       MacroBlockId *&other_block_ids,
       int64_t &other_block_count);
+  OB_INLINE const ObRootBlockInfo &get_macro_meta_info() const
+  {
+    return macro_meta_info_;
+  }
   DECLARE_TO_STRING;
 private:
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
@@ -228,16 +234,18 @@ private:
       MacroBlockId *&other_block_ids,
       int64_t &other_block_count);
   int persist_block_ids(
-      const common::ObIArray<MacroBlockId> &data_ids,
-      const common::ObIArray<MacroBlockId> &other_ids,
-      common::ObArenaAllocator &allocator);
+      common::ObArenaAllocator &allocator,
+      const ObLinkedMacroInfoWriteParam &param,
+      int64_t &macro_start_seq,
+      ObSharedObjectsWriteCtx &linked_block_write_ctx);
   int write_block_ids(
-      const common::ObIArray<MacroBlockId> &data_ids,
-      const common::ObIArray<MacroBlockId> &other_ids,
+      const ObLinkedMacroInfoWriteParam &param,
       storage::ObLinkedMacroBlockItemWriter &writer,
-      MacroBlockId &entry_id) const;
+      MacroBlockId &entry_id,
+      int64_t &macro_start_seq) const;
   static int flush_ids(
-      const common::ObIArray<MacroBlockId> &blk_ids,
+      const MacroBlockId *blk_ids,
+      const int64_t blk_cnt,
       storage::ObLinkedMacroBlockItemWriter &writer);
   int save_linked_block_list(
       const common::ObIArray<MacroBlockId> &list,

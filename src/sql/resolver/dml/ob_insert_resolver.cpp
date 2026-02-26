@@ -12,25 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_insert_resolver.h"
-#include "share/ob_define.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/ob_autoincrement_param.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/parser/parse_malloc.h"
 #include "ob_default_value_utils.h"
-#include "observer/ob_server.h"
-#include "pl/ob_pl_resolver.h"
-#include "common/ob_smart_call.h"
-#include "lib/json/ob_json_print_utils.h"
 
 namespace oceanbase
 {
@@ -86,15 +70,26 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret) && 5 <= parse_tree.num_child_) {
     bool overwrite = false;
     if (OB_NOT_NULL(parse_tree.children_[OVERWRITE_NODE]) && 1 == parse_tree.children_[OVERWRITE_NODE]->value_) {
-      overwrite = true;
-      insert_stmt->set_overwrite(overwrite);
+      const uint64_t tenant_id = MTL_ID();
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+        LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
+      } else if (DATA_VERSION_4_3_2_0 > data_version) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant data version is less than 4.3.2, and the insert overwrite statement is");
+      } else {
+        overwrite = true;
+        insert_stmt->set_overwrite(overwrite);
+      }
     }
   }
 
   // resolve outline data hints first
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(resolve_outline_data_hints())) {
+    if (OB_FAIL(pre_process_hints(parse_tree))) {
       LOG_WARN("resolve outline data hints failed", K(ret));
+    } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE]))) {
+      LOG_WARN("failed to resolve hints", K(ret));
     }
   }
 
@@ -126,39 +121,6 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     } else if (!insert_stmt->value_from_select()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite with values");
-    } else if (!tmp_table_item->access_all_part()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with partitions");
-    }
-  }
-
-  // resolve hints and inner cast
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE]))) {
-      LOG_WARN("failed to resolve hints", K(ret));
-    } else if ((stmt::T_INSERT == insert_stmt->stmt_type_)
-        && insert_stmt->value_from_select()
-        && GCONF._ob_enable_direct_load) {
-      ObQueryCtx *query_ctx = insert_stmt->get_query_ctx();
-      if (OB_ISNULL(query_ctx)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("query ctx should not be NULL", KR(ret), KP(query_ctx));
-      } else {
-        if (insert_stmt->is_overwrite()) {
-          // For insert overwrite select
-          // 1. not allow add direct load hint
-          // 2. disable plan cache as direct load
-          if (query_ctx->get_query_hint_for_update().global_hint_.has_direct_load()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with direct load hint");
-          } else {
-            query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
-          }
-        } else if (query_ctx->get_query_hint().get_global_hint().has_direct_load()) {
-          // For insert into select clause with direct-insert mode, plan cache is disabled
-          query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
-        }
-      }
     }
   }
 
@@ -174,6 +136,9 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     if (OB_FAIL(check_view_insertable())) {
       LOG_WARN("view not insertable", K(ret));
     }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(check_insert_into_external_table())) {
+    LOG_WARN("check insert into external table failed", K(ret));
   }
 
   return ret;
@@ -293,6 +258,61 @@ int ObInsertResolver::resolve_insert_clause(const ParseNode &node)
     } else { /*do nothing*/ }
   }
 
+  return ret;
+}
+
+int ObInsertResolver::add_column_conv_for_diagnosis(ObInsertStmt *insert_stmt,
+                                                    ObSelectStmt *select_stmt,
+                                                    TableItem* table_item)
+{
+  int ret = OB_SUCCESS;
+  bool is_diagnosis = false;
+
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid session_info_", K(ret));
+  } else {
+    is_diagnosis = session_info_->is_diagnosis_enabled();
+  }
+
+  if (OB_SUCC(ret) && is_diagnosis) {
+    if (OB_ISNULL(select_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid select stmt", K(ret), K(select_stmt));
+    } else {
+      ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
+      uint64_t table_id = insert_stmt->get_insert_table_info().table_id_;
+
+      if (insert_stmt->get_values_desc().count() != select_items.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected insert target column and select items",
+                K(ret), K(insert_stmt->get_values_desc()), K(select_items));
+      }
+      for (int64_t i = 0; i < insert_stmt->get_values_desc().count() && OB_SUCC(ret); ++i) {
+        ColumnItem *column_item = NULL;
+        uint64_t column_id = OB_INVALID_ID;
+        const ObColumnRefRawExpr *tbl_col = NULL;
+        if (OB_ISNULL(tbl_col = insert_stmt->get_values_desc().at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid table column", K(ret), K(i), K(insert_stmt->get_values_desc()));
+        } else if (FALSE_IT(column_id = tbl_col->get_column_id())) {
+        } else if (OB_ISNULL(column_item = get_del_upd_stmt()->get_column_item_by_id(table_id,
+                                                                                    column_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null column item", K(ret));
+        }
+
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(add_additional_function_according_to_type(
+                                            column_item, select_items.at(i).expr_, T_INSERT_SCOPE,
+                                            ObObjMeta::is_binary(tbl_col->get_data_type(),
+                                                                tbl_col->get_collation_type())))) {
+            LOG_WARN("failed to build column conv expr", K(ret));
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -444,13 +464,22 @@ int ObInsertResolver::replace_column_ref(ObArray<ObRawExpr*> *value_row,
         } else if (OB_FAIL(add_additional_function_according_to_type(column_item,
                                                                      value_expr,
                                                                      T_INSERT_SCOPE,
-                                                                     true))) {
+                                                                     true,
+                                                                     true/*in_insert_value_list*/))) {
           LOG_WARN("fail to build column conv expr", K(ret));
         }
         if (OB_SUCC(ret)) {
           expr = insert_stmt->get_values_desc().at(value_index);
-          insert_stmt->set_is_all_const_values(false);
-          SQL_RESV_LOG(DEBUG, "replace column ref to value", K(*expr), K(value_index));
+          if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+                                                             *params_.allocator_,
+                                                             *column_item->get_expr(),
+                                                             expr,
+                                                             session_info_))) {
+            LOG_WARN("fail to add column_convert expr", K(ret), K(column_item));
+          } else {
+            insert_stmt->set_is_all_const_values(false);
+            SQL_RESV_LOG(DEBUG, "replace column ref to value", K(*expr), K(value_index));
+          }
         }
       }
     }
@@ -500,16 +529,6 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
     } else { /*do nothing*/ }
   }
 
-  if (OB_SUCC(ret) && 2 == insert_into.num_child_) {
-    ParseNode *tmp_node = insert_into.children_[1];
-    if (OB_NOT_NULL(tmp_node) && T_COLUMN_LIST == tmp_node->type_) {
-      if (insert_stmt->is_overwrite()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with column list");
-      }
-    }
-  }
-
   if (OB_SUCC(ret) && 2 == insert_into.num_child_ &&
       OB_FAIL(resolve_insert_columns(insert_into.children_[1], insert_stmt->get_insert_table_info()))) {
     LOG_WARN("failed to resolve insert columns", K(ret));
@@ -533,6 +552,12 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
 
   OZ(remove_dup_dep_cols_for_heap_table(insert_stmt->get_insert_table_info().part_generated_col_dep_cols_,
                                         insert_stmt->get_values_desc()));
+
+  if (OB_ISNULL(table_item) || session_info_->is_inner() ) {
+  } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));
+  }
   return ret;
 }
 
@@ -545,7 +570,7 @@ int ObInsertResolver::resolve_insert_assign(const ParseNode &assign_list)
   if (OB_ISNULL(insert_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid insert stmt", K(ret), K(insert_stmt));
-  } else if (OB_FAIL(resolve_assignments(assign_list, tables_assign, current_scope_))) {
+  } else if (OB_FAIL(resolve_assignments(assign_list, tables_assign, current_scope_, true))) {
     LOG_WARN("resolve insert set assignment list failed", K(ret));
   } else {
     ObArray<ObRawExpr*> value_row;
@@ -561,7 +586,9 @@ int ObInsertResolver::resolve_insert_assign(const ParseNode &assign_list)
           LOG_WARN("invalid assignment variable", K(i), K(j), K(assign));
         } else if (assign.is_duplicated_) {
           ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(assign.column_expr_->get_column_name()));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
+              helper.convert(assign.column_expr_->get_column_name()));
         } else if (OB_FAIL(replace_column_to_default(assign.expr_))) {
           LOG_WARN("replace values column to default failed", K(ret));
         } else if (OB_FAIL(assign.expr_->formalize(session_info_))) {
@@ -677,16 +704,23 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
       LOG_WARN("failed to resolve select stmt in INSERT stmt", K(ret));
     } else if (OB_ISNULL(select_stmt = sub_select_resolver_->get_select_stmt())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid select stmt", K(select_stmt));
+      LOG_WARN("invalid select stmt", K(ret), K(select_stmt));
+    } else if (OB_FAIL(adjust_select_column_accuracy_for_csv_url_table(*insert_stmt, *select_stmt))) {
+      LOG_WARN("failed to adjust select column accuracy for csv url table", K(ret));
     } else if (!session_info_->get_ddl_info().is_ddl() &&
+               !session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility() &&
                 OB_FAIL(check_insert_select_field(*insert_stmt, *select_stmt, is_mock_))) {
       LOG_WARN("check insert select field failed", K(ret), KPC(insert_stmt), KPC(select_stmt));
-    } else if (!session_info_->get_ddl_info().is_ddl() && OB_FAIL(add_new_sel_item_for_oracle_temp_table(*select_stmt))) {
+    } else if (!session_info_->get_ddl_info().is_ddl() &&
+               !session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility() &&
+                OB_FAIL(add_new_sel_item_for_oracle_temp_table(*select_stmt))) {
       LOG_WARN("add session id value to select item failed", K(ret));
     } else if (OB_FAIL(add_new_sel_item_for_oracle_label_security_table(insert_stmt->get_insert_table_info(),
                                                                         label_se_columns,
                                                                         *select_stmt))) {
       LOG_WARN("add label security columns to select item failed", K(ret));
+    } else if (OB_FAIL(add_column_conv_for_diagnosis(insert_stmt, select_stmt, table_item))) {
+      LOG_WARN("failed to add column conv for diagnosis", K(ret));
     } else if (OB_FAIL(resolve_generate_table_item(select_stmt, view_name, sub_select_table))) {
       LOG_WARN("failed to resolve generate table item", K(ret));
     }
@@ -984,7 +1018,11 @@ int ObInsertResolver::check_insert_select_field(ObInsertStmt &insert_stmt,
   bool is_generated_column = false;
   const ObIArray<ObColumnRefRawExpr*> &values_desc = insert_stmt.get_values_desc();
   ObSelectStmt *ref_stmt = NULL;
-  if (OB_ISNULL(session_info_)) {
+  TableItem *insert_table = NULL;
+  if (OB_ISNULL(insert_table = insert_stmt.get_table_item_by_id(insert_stmt.get_insert_table_info().table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("insert target table is unexpected null", K(ret));
+  } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid session_info_", K(ret));
   } else if (values_desc.count() != select_stmt.get_select_item_size()) {
@@ -1010,7 +1048,7 @@ int ObInsertResolver::check_insert_select_field(ObInsertStmt &insert_stmt,
                                                                    &insert_stmt,
                                                                    is_generated_column))) {
           LOG_WARN("check basic column generated failed", K(ret));
-    } else if (is_generated_column) {
+    } else if (is_generated_column && schema::EXTERNAL_TABLE != insert_table->table_type_) {
       if (select_stmt.get_table_size() == 1 &&
           select_stmt.get_table_item(0) != NULL &&
           select_stmt.get_table_item(0)->is_values_table()) {
@@ -1101,10 +1139,6 @@ int ObInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr *column_re
       value_desc->set_ref_id(stmt->get_insert_table_info().table_id_, column_ref->get_column_id());
       value_desc->set_column_attr(ObString::make_string(OB_VALUES), column_ref->get_column_name());
       value_desc->set_udt_set_id(column_ref->get_udt_set_id());
-      if (ob_is_enumset_tc(column_ref->get_result_type().get_type ())
-          && OB_FAIL(value_desc->set_enum_set_values(column_ref->get_enum_set_values()))) {
-        LOG_WARN("failed to set_enum_set_values", K(*column_ref), K(ret));
-      }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(value_desc->add_flag(IS_COLUMN))) {
           LOG_WARN("failed to add flag IS_COLUMN", K(ret));
@@ -1167,6 +1201,31 @@ int ObInsertResolver::check_returning_validity()
     LOG_WARN("insert into returning into does not allow group function", K(ret));
   } else if (OB_FAIL(ObDelUpdResolver::check_returning_validity())) {
     LOG_WARN("check returning validity failed", K(ret));
+  }
+  return ret;
+}
+
+int ObInsertResolver::check_insert_into_external_table()
+{
+  int ret = OB_SUCCESS;
+  ObInsertStmt *insert_stmt = get_insert_stmt();
+  TableItem *table = NULL;
+  if (OB_ISNULL(insert_stmt) || insert_stmt->get_table_items().empty()
+      || OB_ISNULL(table = insert_stmt->get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid stmt", K(ret), K(insert_stmt));
+  } else if (schema::EXTERNAL_TABLE != table->table_type_) {
+    // do nothing
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to insert into external table during updating", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table during updating");
+  } else if (!insert_stmt->value_from_select() || insert_stmt->is_replace()
+             || insert_stmt->is_ignore() || insert_stmt->is_returning()
+             || insert_stmt->is_insert_up()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support insert into external table with values, replace, ignore, returning, update", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table with values, replace, ignore, returning, update");
   }
   return ret;
 }
@@ -1273,7 +1332,9 @@ int ObInsertResolver::resolve_insert_constraint()
   if (OB_ISNULL(insert_stmt = get_insert_stmt()) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(insert_stmt), K(session_info_), K(ret));
-  } else if (session_info_->get_ddl_info().is_ddl() || insert_stmt->has_instead_of_trigger()) {
+  } else if (session_info_->get_ddl_info().is_ddl() ||
+             session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility() ||
+             insert_stmt->has_instead_of_trigger()) {
     /*do nothing*/
   } else if (OB_ISNULL(table_item = insert_stmt->get_table_item_by_id(
                        insert_stmt->get_insert_table_info().table_id_))) {
@@ -1454,7 +1515,6 @@ int ObInsertResolver::inner_cast(common::ObIArray<ObColumnRefRawExpr*> &target_c
     ObSelectStmt &select_stmt)
 {
   int ret = OB_SUCCESS;
-  ObExprResType res_type;
   if (target_columns.count() != select_stmt.get_select_items().count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected insert target column and select items", K(ret), K(target_columns),
@@ -1462,7 +1522,7 @@ int ObInsertResolver::inner_cast(common::ObIArray<ObColumnRefRawExpr*> &target_c
   }
   for (int64_t i = 0; i < target_columns.count() && OB_SUCC(ret); ++i) {
     SelectItem &select_item = select_stmt.get_select_item(i);
-    res_type = target_columns.at(i)->get_result_type();
+    const ObRawExprResType &res_type = target_columns.at(i)->get_result_type();
     ObSysFunRawExpr *new_expr = NULL;
     if (res_type == select_item.expr_->get_result_type()) {
       // no need to generate cast expr.
@@ -1476,6 +1536,118 @@ int ObInsertResolver::inner_cast(common::ObIArray<ObColumnRefRawExpr*> &target_c
     LOG_DEBUG("pdml build a cast expr", KPC(target_columns.at(i)), KPC(new_expr));
   }
 
+  return ret;
+}
+
+/**
+ * 针对 INSERT SELECT FROM csv_url_table 场景
+ * csv_url_table 推断的类型都是VARCHAR(65535)
+ * 因此如果 INSERT 的目标列中有 BLOB，且该列的数据来自 csv_url_table，需要修改相应的accuracy
+ */
+int ObInsertResolver::adjust_select_column_accuracy_for_csv_url_table(
+                                      ObInsertStmt &insert_stmt,
+                                      ObSelectStmt &select_stmt)
+{
+  int ret = OB_SUCCESS;
+  // 场景限制：只处理以下情况
+  // 1. select * from 单个外表
+  // 2. select col_expr, col_expr ... from 单个外表
+  // 3. 不能有 WHERE、GROUP BY、ORDER BY、LIMIT、DISTINCT、HAVING、子查询等子句
+  bool is_valid_scenario = false;
+  int64_t csv_url_table_id = OB_INVALID_INDEX;
+  if (OB_FAIL(ret)) {
+  } else if (select_stmt.get_condition_size() > 0   // WHERE
+      || select_stmt.has_group_by()                 // GROUP BY
+      || select_stmt.has_having()                   // HAVING
+      || select_stmt.has_order_by()                 // ORDER BY
+      || select_stmt.has_limit()                    // LIMIT
+      || select_stmt.has_distinct()                 // DISTINCT
+      || select_stmt.has_window_function()          // 窗口函数
+      || select_stmt.has_hierarchical_query()       // 层次查询
+      || select_stmt.has_for_update()               // FOR UPDATE
+      || select_stmt.get_table_size() != 1) {       // 多个表
+    is_valid_scenario = false;
+  } else {
+    const TableItem *table_item = select_stmt.get_table_item(0);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret), K(table_item));
+    } else if (!table_item->is_basic_table()  // 限制子查询
+               || schema::EXTERNAL_TABLE != table_item->table_type_) {
+      is_valid_scenario = false;
+    } else {
+      const ObTableSchema *table_schema = NULL;
+      ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::INVALID_FORMAT;
+      is_valid_scenario = true;
+      if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                    table_item->ref_id_,
+                                                    table_schema))) {
+        LOG_WARN("get table schema failed", K(ret), K(table_item->ref_id_));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::get_external_table_type(table_schema, format_type))) {
+        LOG_WARN("get external table type failed", K(ret));
+      } else if (ObExternalFileFormat::CSV_FORMAT != format_type
+                || !is_external_object_id(table_schema->get_table_id())) {  // csv临时外表
+        is_valid_scenario = false;
+      } else {
+        for (int64_t i = 0; i < select_stmt.get_select_item_size() && is_valid_scenario; ++i) {
+          const SelectItem &select_item = select_stmt.get_select_item(i);
+          if (OB_ISNULL(select_item.expr_) || !select_item.expr_->is_column_ref_expr()) {
+            is_valid_scenario = false;
+          }
+        }
+        if (is_valid_scenario) {
+          csv_url_table_id = table_item->table_id_;
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && is_valid_scenario && csv_url_table_id != OB_INVALID_INDEX) {
+    if (select_stmt.get_select_item_size() != insert_stmt.get_values_desc().count()) {
+      ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
+      LOG_WARN("select item size is not equal to values desc size", K(ret),
+               K(select_stmt.get_select_item_size()),
+               K(insert_stmt.get_values_desc().count()));
+      LOG_USER_ERROR(OB_ERR_COULUMN_VALUE_NOT_MATCH, 1l);
+    } else {
+      const ObIArray<ObColumnRefRawExpr*> &values_desc = insert_stmt.get_values_desc();
+      for (int64_t i = 0; OB_SUCC(ret) && i < values_desc.count(); ++i) {
+        const ObColumnRefRawExpr *target_col = values_desc.at(i);
+        SelectItem &select_item = select_stmt.get_select_item(i);
+        if (OB_ISNULL(target_col) || OB_ISNULL(select_item.expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), K(target_col), K(select_item.expr_));
+        } else {
+          const ObObjType target_type = target_col->get_data_type();
+          if (ob_is_text_tc(target_type) || ob_is_lob_tc(target_type)) {  // 目标列是LOB/TEXT
+            if (select_item.expr_->is_column_ref_expr()) {
+              ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(select_item.expr_);
+              if (col_expr->get_table_id() == csv_url_table_id) {
+                ObLength target_length = target_col->get_accuracy().get_length();
+                ObAccuracy col_accuracy = col_expr->get_accuracy();
+                col_accuracy.set_length(target_length);
+                col_expr->set_accuracy(col_accuracy);
+
+                ObRawExpr *dep_expr = col_expr->get_dependant_expr();
+                if (OB_NOT_NULL(dep_expr)
+                    && T_FUN_COLUMN_CONV == dep_expr->get_expr_type()
+                    && ObVarcharType == dep_expr->get_data_type()) {
+                  ObSysFunRawExpr *conv_expr = static_cast<ObSysFunRawExpr*>(dep_expr);
+                  ObAccuracy conv_accuracy = conv_expr->get_accuracy();
+                  conv_accuracy.set_length(target_length);
+                  conv_expr->set_accuracy(conv_accuracy);
+                }
+                LOG_TRACE("CSV URL, adjust accuracy length", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 

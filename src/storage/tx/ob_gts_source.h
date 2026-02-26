@@ -104,6 +104,15 @@ private:
                                             MonotonicTs &receive_gts_ts);
   int get_gts_from_local_timestamp_service_(common::ObAddr &leader,
                                             int64_t &gts);
+  OB_INLINE uint64_t get_real_tenant_id_() const
+  {
+    return GTS_REAL_TENANT_ID_MASK & tenant_id_;
+  }
+  OB_INLINE bool is_sslog_gts_() const
+  {
+    return ~GTS_REAL_TENANT_ID_MASK & tenant_id_;
+  }
+  share::ObLSID get_target_ls_id_() const;
 public:
   static const int64_t GET_GTS_QUEUE_COUNT = 1;
   static const int64_t WAIT_GTS_QUEUE_COUNT = 1;

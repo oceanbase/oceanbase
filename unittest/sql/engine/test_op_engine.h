@@ -79,7 +79,8 @@ protected:
   int test_phy_plan(ObPhysicalPlan &plan);
   ObOperator *subtitude_table_scan_to_fake(ObOperator *root);
 
-  int get_tested_op_from_string(const std::string &sql, bool vector_2, ObOperator *&op, ObExecutor &executor);
+  int get_tested_op_from_string(const std::string &sql, bool vector_2, ObOperator *&op,
+                                ObExecutor &executor, bool use_old_ctx = false);
   int generate_physical_plan(ObLogPlan *log_plan, ObPhysicalPlan &phy_plan, ObExecContext &exec_ctx,
                              bool enable_rich_format);
   int open_and_get_op(ObExecContext &exec_ctx, ObExecutor &ob_exe, ObPhysicalPlan &phy_plan, ObOperator *&root);

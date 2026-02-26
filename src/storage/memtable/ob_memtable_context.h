@@ -19,6 +19,7 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/lock/ob_small_spin_lock.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/alloc/alloc_struct.h"
 #include "ob_clock_generator.h"
 #include "share/ob_define.h"
 #include "storage/ob_memtable_ctx_obj_pool.h"
@@ -45,6 +46,7 @@ struct ObTableLockInfo;
 
 namespace memtable
 {
+using SmallTCCounter = common::ObCounter<8, common::ObCounterSlotPickerByThread>;
 class ObTxCallbackListStat;
 struct RetryInfo
 {
@@ -186,9 +188,7 @@ public:
   {
     if (OB_UNLIKELY(ATOMIC_LOAD(&free_count_) != ATOMIC_LOAD(&alloc_count_))) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "query allocator leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
-#ifdef ENABLE_DEBUG_LOG
-      ob_abort();
-#endif
+      OB_SAFE_ABORT();
     }
     if (!only_check) {
       allocator_.reset();
@@ -238,29 +238,22 @@ class ObMemtableCtxCbAllocator final : public common::ObIAllocator
 {
 public:
   explicit ObMemtableCtxCbAllocator()
-    : alloc_count_(0),
-      free_count_(0),
-      alloc_size_(0),
-      is_inited_(false) {}
+    : ctx_cb_mem_limiter_(),
+      is_inited_(false),
+      expand_nway_called_(false) {}
   ~ObMemtableCtxCbAllocator()
   {
-    if (OB_UNLIKELY(ATOMIC_LOAD(&free_count_) != ATOMIC_LOAD(&alloc_count_))) {
-      TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
-    }
     ATOMIC_STORE(&is_inited_, false);
   }
-  // FIFOAllocator doesn't support double init, even after reset, so is_inited_ is handled specially here.
+  // Allocator doesn't support double init, even after reset, so is_inited_ is handled specially here.
   int init(const uint64_t tenant_id)
   {
     int ret = OB_SUCCESS;
     ObMemAttr attr(tenant_id, ObModIds::OB_MEMTABLE_CALLBACK, ObCtxIds::TX_CALLBACK_CTX_ID);
-    if (OB_UNLIKELY(free_count_ != alloc_count_)) {
-      TRANS_LOG(ERROR, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
-    }
     if (IS_NOT_INIT) {
-      if (OB_FAIL(allocator_.init(NULL,
-                                  common::OB_MALLOC_NORMAL_BLOCK_SIZE,
-                                  attr))) {
+      if (OB_FAIL(allocator_.init(common::OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                  ctx_cb_mem_limiter_,
+                                  SET_IGNORE_MEM_VERSION(attr)))) {
         TRANS_LOG(ERROR, "callback allocator init failed", K(ret), K(lbt()), K(tenant_id));
       } else {
         ATOMIC_STORE(&is_inited_, true);
@@ -268,37 +261,44 @@ public:
     }
     if (OB_SUCC(ret)) {
       allocator_.set_attr(attr);
+      allocator_.set_nway(1);
+      ATOMIC_STORE(&expand_nway_called_, false);
     }
-    ATOMIC_STORE(&alloc_count_, 0);
-    ATOMIC_STORE(&free_count_, 0);
-    ATOMIC_STORE(&alloc_size_, 0);
     return ret;
   }
   void reset(bool only_check = false)
   {
-    if (OB_UNLIKELY(free_count_ != alloc_count_)) {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
-#ifdef ENABLE_DEBUG_LOG
-      ob_abort();
-#endif
+    // ObVSliceAlloc default constructed using default_blk_alloc,
+    // if ObVSliceAlloc has not been initialized, ObVSliceAlloc::used() may not equal 0.
+    if (IS_INIT) {
+      if (OB_UNLIKELY(allocator_.used() != 0)) {
+        // If VSliceAlloc::set_nway is called during VSliceAlloc::alloc, Arena may cache unused block,
+        // call ObVSliceAlloc::purge() to purge the unused block. However, this case is extremely rare,
+        // and purge is an expensive operation, so it is only called when used() != 0
+        allocator_.purge();
+        if (OB_UNLIKELY(allocator_.used() != 0)) {
+          TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "callback memory leak found", K(used()));
+          OB_SAFE_ABORT();
+        }
+      }
+      if (!only_check) {
+        ATOMIC_STORE(&is_inited_, false);
+      }
     }
-    if (!only_check) {
-      allocator_.reset();
-      ATOMIC_STORE(&alloc_count_, 0);
-      ATOMIC_STORE(&free_count_, 0);
-      ATOMIC_STORE(&alloc_size_, 0);
-      ATOMIC_STORE(&is_inited_, false);
+  }
+  inline void expand_nway()
+  {
+    if (!expand_nway_called_) {
+      if (ATOMIC_BCAS(&expand_nway_called_, false, true)) {
+        allocator_.set_nway(get_cpu_num() / 2);
+      }
     }
   }
   void *alloc(const int64_t size) override
   {
     void *ret = nullptr;
     if (OB_ISNULL(ret = allocator_.alloc(size))) {
-      TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback memory failed",
-        K(alloc_count_), K(free_count_), K(alloc_size_), K(size));
-    } else {
-      ATOMIC_INC(&alloc_count_);
-      ATOMIC_FAA(&alloc_size_, size);
+      TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback memory failed", K(used()), K(size));
     }
     return ret;
   }
@@ -312,17 +312,15 @@ public:
     if (OB_ISNULL(ptr)) {
       // do nothing
     } else {
-      ATOMIC_INC(&free_count_);
       allocator_.free(ptr);
     }
   }
 private:
-  ObFIFOAllocator allocator_;
-  int64_t alloc_count_;
-  int64_t free_count_;
-  int64_t alloc_size_;
-  // used to record the init condition of FIFO allocator
+  ObBlockAllocMgr ctx_cb_mem_limiter_;
+  ObDynamicVSliceAlloc allocator_;
+  // used to record the init condition of allocator
   bool is_inited_;
+  bool expand_nway_called_;
 };
 
 class ObMemtable;
@@ -379,6 +377,7 @@ public:
                         const share::SCN final_scn);
   virtual int trans_clear();
   virtual int elr_trans_preparing();
+  virtual void elr_trans_revoke();
   virtual int trans_kill();
   virtual int trans_publish();
   virtual int trans_replay_begin();
@@ -438,7 +437,9 @@ public:
   int clean_unlog_callbacks();
   int check_tx_mem_size_overflow(bool &is_overflow);
 public:
-  void on_key_duplication_retry(const ObMemtableKey& key);
+  void on_key_duplication_retry(const ObMemtableKey& key,
+                                const ObMvccRow *value,
+                                const ObMvccWriteResult &res);
   void on_tsc_retry(const ObMemtableKey& key,
                     const share::SCN snapshot_version,
                     const share::SCN max_trans_version,
@@ -471,6 +472,12 @@ public: // callback
 
   bool is_for_replay() const { return trans_mgr_.is_for_replay(); }
   int append_callback(ObITransCallback *cb) { return trans_mgr_.append(cb); }
+  int append_callback(ObITransCallback *head,
+                      ObITransCallback *tail,
+                      const int64_t length)
+  {
+    return trans_mgr_.append(head, tail, length);
+  }
   int64_t get_pending_log_size() { return trans_mgr_.get_pending_log_size(); }
   int64_t get_flushed_log_size() { return trans_mgr_.get_flushed_log_size(); }
   int acquire_callback_list(const bool new_epoch)
@@ -479,7 +486,11 @@ public: // callback
   void set_for_replay(const bool for_replay) { trans_mgr_.set_for_replay(for_replay); }
   void inc_pending_log_size(const int64_t size) { trans_mgr_.inc_pending_log_size(size); }
   void inc_flushed_log_size(const int64_t size) { trans_mgr_.inc_flushed_log_size(size); }
-
+  void *alloc_prio_link_node()
+  { return mem_ctx_obj_pool_.alloc<transaction::tablelock::ObMemCtxLockPrioOpLinkNode>(); }
+  void free_prio_link_node(void *ptr)
+  { mem_ctx_obj_pool_.free<transaction::tablelock::ObMemCtxLockPrioOpLinkNode>(ptr); }
+  int64_t get_write_epoch() const { return trans_mgr_.get_write_epoch(); }
 public:
   // tx_status
   enum ObTxStatus {
@@ -510,6 +521,7 @@ public:
   int check_modify_time_elapsed(const common::ObTabletID &tablet_id,
                                 const int64_t timestamp);
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
+  int iterate_tx_lock_priority_list(ObPrioOpIterator &iter) const;
   int check_lock_need_replay(const share::SCN &scn,
                              const transaction::tablelock::ObTableLockOp &lock_op,
                              bool &need_replay);
@@ -541,7 +553,11 @@ public:
   {
     return lock_mem_ctx_.get_lock_memtable(memtable);
   }
-
+  int add_priority_record(const transaction::tablelock::ObTableLockPrioArg &arg,
+                          const transaction::tablelock::ObTableLockOp &lock_op);
+  int remove_priority_record(const transaction::tablelock::ObTableLockOp &lock_op);
+  int get_prio_op_array(transaction::tablelock::ObTableLockPrioOpArray &prio_op_array);
+  int prepare_prio_op_list(const transaction::tablelock::ObTableLockPrioOpArray &prio_op_array);
 private:
   int do_trans_end(
       const bool commit,
@@ -563,10 +579,16 @@ public:
   inline ObRedoLogGenerator &get_redo_generator() { return log_gen_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableCtx);
+
+  static const int8_t ELR_STATE_INIT = 0;
+  static const int8_t ELR_STATE_DONE = 1;
+  static const int8_t ELR_STATE_REVOKED = 2;
+
   RWLock rwlock_;
   common::ObByteLock lock_;
   int end_code_;
   int64_t tx_status_;
+  int8_t elr_state_;
   int64_t ref_;
   // allocate memory for callback when query executing
   ObQueryAllocator query_allocator_;
@@ -582,9 +604,8 @@ private:
   int64_t trans_mem_total_size_;
   // statistics for txn logging
   int64_t unsubmitted_cnt_;
-  int64_t callback_mem_used_;
-  int64_t callback_alloc_count_;
-  int64_t callback_free_count_;
+  SmallTCCounter callback_alloc_count_;
+  SmallTCCounter callback_free_count_;
   bool is_read_only_;
   bool is_master_;
   // Used to indicate whether mvcc row is updated or not.

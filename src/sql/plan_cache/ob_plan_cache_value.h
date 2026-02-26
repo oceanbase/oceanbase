@@ -91,7 +91,7 @@ struct PCVSchemaObj
     is_mv_container_table_(false) {}
 
   int init(const share::schema::ObTableSchema *schema);
-  int init_with_synonym(const ObSimpleSynonymSchema *schema);
+  int init_with_synonym(const ObSimpleSynonymSchema *schema, const ObSchemaObjVersion &table_version);
   int init_with_version_obj(const share::schema::ObSchemaObjVersion &schema_obj_version);
   int init_without_copy_name(const share::schema::ObSimpleTableSchemaV2 *schema);
   void set_allocator(common::ObIAllocator *alloc)
@@ -170,6 +170,7 @@ public:
                              const ObBitSet<> &neg_param_index,
                              const ObBitSet<> &not_param_index,
                              const ObBitSet<> &must_be_positive_idx,
+                             const ObBitSet<> &fmt_int_or_ch_decint_idx,
                              ObIArray<ObPCParam *> &raw_params,
                              ParamStore *obj_params);
 
@@ -183,6 +184,7 @@ public:
                                          const ObBitSet<> &neg_param_index_,
                                          const ObBitSet<> &not_param_index,
                                          const ObBitSet<> &must_be_positive_idx,
+                                         const ObBitSet<> &fmt_int_or_ch_decint_idx,
                                          ParamStore &param_store);
 
   static int resolve_insert_multi_values_param(ObPlanCacheCtx &pc_ctx,
@@ -191,6 +193,7 @@ public:
                                                const ObBitSet<> &neg_param_index_,
                                                const ObBitSet<> &not_param_index,
                                                const ObBitSet<> &must_be_positive_idx,
+                                               const ObBitSet<> &fmt_int_or_ch_decint_idx,
                                                int64_t params_num,
                                                ParamStore &param_store);
 
@@ -219,6 +222,11 @@ public:
   int add_plan(ObPlanCacheObject &cache_obj,
                const common::ObIArray<PCVSchemaObj> &schema_array,
                ObPlanCacheCtx &pc_ctx);
+  int add_to_plan_set(ObPlanCacheCtx &pc_ctx,
+                      ObPlanCacheObject &plan,
+                      int64_t outline_param_idx,
+                      bool is_multi_stmt_batch,
+                      bool add_last = true);
 
   int match_and_generate_ext_params(ObPlanSet *batch_plan_set,
                                     ObPlanCacheCtx &pc_ctx,
@@ -364,6 +372,7 @@ private:
   int cmp_not_param_info(const NotParamInfoList &l_param_info_list,
                          const NotParamInfoList &r_param_info_list,
                          bool &is_equal);
+  int check_need_force_miss_match(const ObPlanCacheObject &plan);
 
   friend class ::test::TestPlanSet_basic_Test;
   friend class ::test::TestPlanCacheValue_basic_Test;
@@ -385,6 +394,7 @@ private:
   //*************************
   //not param回填后的sql序列化结果, 主要是用于outline 的signature
   common::ObString outline_signature_;
+  common::ObString outline_format_signature_;
   common::ObString constructed_sql_;
   ObPCVSet *pcv_set_;
   common::ObIAllocator *pc_alloc_;
@@ -400,6 +410,7 @@ private:
   ObOutlineState outline_state_;
   share::schema::ObOutlineParamsWrapper outline_params_wrapper_;
   char sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
+  char format_sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
 
   // session id for temporary table
   uint64_t sessid_;
@@ -407,9 +418,6 @@ private:
   uint64_t sess_create_time_;
   // wether this pcv's plans contains sys table (oracle mode)
   bool contain_sys_name_table_;
-#ifdef OB_BUILD_SPM
-  bool is_spm_closed_;
-#endif
 
   bool need_param_;
   //at present, if a SQL is in nested sql, it is forced to use DAS plan
@@ -453,6 +461,10 @@ private:
   TplSqlConstCons tpl_sql_const_cons_;
   //***********  end user-defined rules **************
   bool enable_rich_vector_format_;
+  common::ObBitSet<> fmt_int_or_ch_decint_idx_;
+  int64_t switchover_epoch_;
+  // Force miss match plan cache. e.g. contain lake table or mview
+  bool force_miss_match_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheValue);
 };

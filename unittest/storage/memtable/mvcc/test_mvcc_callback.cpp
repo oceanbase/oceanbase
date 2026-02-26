@@ -14,11 +14,8 @@
 
 #define private public
 #define protected public
-#include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
-#include "storage/memtable/ob_memtable_context.h"
-#include "lib/random/ob_random.h"
+#include "src/storage/tx/ob_tx_log_cb_define.h"
+#include "src/storage/tx/ob_trans_ctx.h"
 
 namespace oceanbase
 {
@@ -163,6 +160,36 @@ public:
     EXPECT_EQ(OB_SUCCESS, callback_list_.append_callback(cb, false/*for_replay*/));
     cb->need_submit_log_ = need_submit_log;
     return cb;
+  }
+  ObMockTxCallback * replay_callback(ObMemtable *mt,
+                                     transaction::ObTxSEQ seq_no,
+                                     int64_t scn_v,
+                                     bool parallel_replay,
+                                     bool serial_final)
+  {
+    share::SCN scn;
+    EXPECT_EQ(OB_SUCCESS, scn.convert_for_tx(scn_v));
+    ObMockTxCallback *cb = new ObMockTxCallback(mt,
+                                                false,
+                                                scn,
+                                                seq_no);
+    EXPECT_EQ(OB_SUCCESS, callback_list_.append_callback(cb, true, parallel_replay, serial_final));
+    return cb;
+  }
+  ObMockTxCallback * parallel_replay_callback(ObMemtable *mt,
+                                              transaction::ObTxSEQ seq_no,
+                                              int64_t scn_v,
+                                              bool serial_final)
+  {
+    return replay_callback(mt, seq_no, scn_v, true, serial_final);
+  }
+
+  ObMockTxCallback * serial_replay_callback(ObMemtable *mt,
+                                            transaction::ObTxSEQ seq_no,
+                                            int64_t scn_v,
+                                            bool serial_final)
+  {
+    return replay_callback(mt, seq_no, scn_v, false, serial_final);
   }
 
   ObMemtable *create_memtable()
@@ -1272,10 +1299,47 @@ TEST_F(TestTxCallbackList, log_cursor) {
   EXPECT_EQ(callback_list_.log_cursor_, cb_4->next_);
 #undef APPEND_CB
 }
+
+TEST_F(TestTxCallbackList, parallel_replay_and_replay_fail_parallel_start_pos) {
+  using ObTxSEQ = transaction::ObTxSEQ;
+  using SCN = share::SCN;
+  TRANS_LOG(INFO, "CASE: parallel replay and replay fail");
+  int ret = 0;
+  ObMemtable *mt = create_memtable();
+  ObMockTxCallback *cb1 = parallel_replay_callback(mt, ObTxSEQ(10, 1), 100, false/*serial_final*/);
+  ObMockTxCallback *cb2 = parallel_replay_callback(mt, ObTxSEQ(20, 1), 100, false/*serial_final*/);
+  ObMockTxCallback *cb3 = parallel_replay_callback(mt, ObTxSEQ(30, 1), 100, false/*serial_final*/);
+  ASSERT_EQ(callback_list_.parallel_start_pos_, cb1);
+  ObMockTxCallback *cb4 = serial_replay_callback(mt, ObTxSEQ(1, 1), 10, false/*serial_final*/);
+  ObMockTxCallback *cb5 = serial_replay_callback(mt, ObTxSEQ(2, 1), 10, false/*serial_final*/);
+  ObMockTxCallback *cb6 = serial_replay_callback(mt, ObTxSEQ(3, 1), 10, false/*serial_final*/);
+  // check chain: serial -> parallel_start_pos ->  parallel
+  ASSERT_EQ(cb6->next_, callback_list_.parallel_start_pos_);
+  ASSERT_EQ(callback_list_.parallel_start_pos_, cb1);
+  // replay fail, parallel start_pos
+  SCN scn;
+  scn.convert_for_tx(100);
+  ASSERT_EQ(OB_SUCCESS, callback_list_.replay_fail(scn, false /*serial replay*/));
+  ASSERT_EQ(NULL, callback_list_.parallel_start_pos_);
+  ObMockTxCallback *cb7 = serial_replay_callback(mt, ObTxSEQ(4, 1), 11, false/*serial_final*/);
+  ObMockTxCallback *cb8 = serial_replay_callback(mt, ObTxSEQ(5, 1), 11, false/*serial_final*/);
+  ObMockTxCallback *cb9 = serial_replay_callback(mt, ObTxSEQ(6, 1), 11, false/*serial_final*/);
+  // check chain order on serial part: head -> cb4 -> cb5 -> cb6 -> cb7 -> cb8 -> cb9 -> head
+  ASSERT_EQ(cb6->next_, cb7);
+  ASSERT_EQ(cb9->next_, &callback_list_.head_);
+  ASSERT_EQ(cb4->prev_, &callback_list_.head_);
+  ASSERT_EQ(callback_list_.head_.next_, cb4);
+  ASSERT_EQ(callback_list_.head_.prev_, cb9);
+}
+
 } // namespace unittest
 
 namespace memtable
 {
+// override free_mvcc_row_callback is only intended to avoid errors during free,
+// don't really want to free the callback object.
+// if the callback object is really freed, the UT execution will report
+// an error "callback has not submitted log yet when commit callback".
 void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
 {
   if (OB_ISNULL(cb)) {
@@ -1283,9 +1347,9 @@ void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
   } else if (cb->is_table_lock_callback()) {
     free_table_lock_callback(cb);
   } else {
-    ATOMIC_INC(&callback_free_count_);
+    callback_free_count_.inc();
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
-    ctx_cb_allocator_.free(cb);
+    // delete cb;
     cb = NULL;
   }
 }

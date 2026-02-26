@@ -10,15 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_defer.h"
-#include "logservice/palf/election/utils/election_common_define.h"
 #include "ob_multi_replica_test_base.h"
 #include "ob_multi_replica_util.h"
-#include <fstream>
 
 namespace oceanbase
 {

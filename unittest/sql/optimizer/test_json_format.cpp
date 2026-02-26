@@ -12,7 +12,6 @@
 
 #include <gtest/gtest.h>
 #include "lib/json/ob_json.h"
-#include "lib/allocator/ob_mod_define.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::json;

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dcl/ob_drop_role_resolver.h"
 #include "sql/resolver/dcl/ob_drop_role_stmt.h"
-#include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_service.h"
 
 namespace oceanbase
 {
@@ -90,7 +87,7 @@ int ObDropRoleResolver::resolve(const ParseNode &parse_tree)
     OZ (ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(params_.session_info_->get_effective_tenant_id()));
 
     if (OB_SUCC(ret) && NULL != parse_tree.children_[1]) {
-      if (T_IF_NOT_EXISTS != parse_tree.children_[1]->type_) {
+      if (T_IF_EXISTS != parse_tree.children_[1]->type_) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(parse_tree.children_[1]->type_), K(ret));
       } else {

@@ -11,14 +11,8 @@
  */
 
 #include "ob_archive_timer.h"
-#include "lib/ob_define.h"
-#include "lib/thread/ob_thread_name.h"        // lib::set_thread_name
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
 #include "share/config/ob_server_config.h"    // GCONF
-#include "ob_archive_define.h"
 #include "ob_archive_round_mgr.h"             // ObArchiveRoundMgr
-#include "share/rc/ob_tenant_base.h"          // MTL
 #include "ob_ls_meta_recorder.h"              // ObLSMetaRecorder
 
 namespace oceanbase
@@ -100,6 +94,7 @@ void ObArchiveTimer::wait()
 void ObArchiveTimer::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveTimer thread start", K(tenant_id_));
+  ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveTimer");
   lib::set_thread_name("ArcTimer");
   common::ObCurTraceId::init(GCONF.self_addr_);
 
@@ -112,7 +107,7 @@ void ObArchiveTimer::run1()
       int64_t end_tstamp = ObTimeUtility::current_time();
       int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
-        ob_usleep(wait_interval);
+        ob_usleep(wait_interval, true/*is_idle_sleep*/);
       }
     }
   }

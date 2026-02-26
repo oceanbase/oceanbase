@@ -23,6 +23,7 @@ int64_t size_array [] = {                    \
   sizeof(ObString##Item),                    \
   sizeof(ObIntDict##Item),                   \
   sizeof(ObStrDict##Item),                   \
+  sizeof(ObSemiStruct##Item),                \
 }                                            \
 
 CS_DEF_SIZE_ARRAY(ColumnEncoder, cs_encoder_sizes);

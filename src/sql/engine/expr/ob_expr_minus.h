@@ -179,6 +179,28 @@ public:
   static int minus_decimalint128_oracle(EVAL_FUNC_ARG_DECL);
   static int minus_decimalint128_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
   static int minus_decimalint128_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int8_t(EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int8_t_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int8_t_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int16_t(EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int16_t_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int16_t_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int32_t(EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int32_t_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int32_t_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int64_t(EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int64_t_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_int64_t_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_float(EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_float_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_float_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_double(EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_double_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_double_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_uint64_t(EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_uint64_t_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_collection_collection_uint64_t_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
 
 public:
   OB_INLINE static bool is_int_int_out_of_range(int64_t val1, int64_t val2, int64_t res)

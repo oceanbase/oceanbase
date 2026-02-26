@@ -13,17 +13,11 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/report/ob_tenant_meta_checker.h"
-#include "observer/ob_server_struct.h" // GCTX
-#include "share/ob_thread_define.h" // TenantLSMetaChecker, TenantTabletMetaChecker
-#include "share/ls/ob_ls_operator.h" // ObLSOperator
 #include "share/ls/ob_ls_table_iterator.h" // ObLSTableIterator
 #include "storage/tablet/ob_tablet_iterator.h" // ObLSTabletIterator
-#include "share/tablet/ob_tablet_table_operator.h" // ObTabletTableOperator
 #include "share/tablet/ob_tablet_table_iterator.h" // ObTenantTabletTableIterator
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService, ObLSIterator
-#include "storage/tx_storage/ob_ls_handle.h" // ObLSHandle
 #include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
-#include "storage/tablet/ob_tablet.h" // ObTablet
 
 namespace oceanbase
 {
@@ -523,7 +517,11 @@ int ObTenantMetaChecker::check_tablet_not_exist_in_local_(
   } else if (OB_ISNULL(ls_handle.get_ls()->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet_svr of sys ls is null", KR(ret));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, tablet_handle))) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
+          tablet_id,
+          tablet_handle,
+          ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S,
+          ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     if (OB_TABLET_NOT_EXIST == ret || OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       not_exist = true;
@@ -630,7 +628,7 @@ int ObTenantMetaChecker::check_report_replicas_(
     LOG_WARN("failed to get ls iter", KR(ret));
   } else {
     ObLS *ls = NULL;
-    ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_READABLE_COMMITED);
+    ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_ALL_COMMITED);
     while(OB_SUCC(ret)) {
       if (OB_UNLIKELY(stopped_)) {
         ret = OB_CANCELED;
@@ -690,7 +688,11 @@ int ObTenantMetaChecker::check_report_replicas_(
               local_replica,
               tablet_checksum,
               need_checksum))) {
-            LOG_WARN("fail to fill tablet replica", KR(ret), K_(tenant_id), K(ls_id), K(tablet_id));
+            if (OB_EAGAIN == ret) {
+              ret = OB_SUCCESS; // do not affect report of other tablets
+            } else {
+              LOG_WARN("fail to fill tablet replica", KR(ret), K_(tenant_id), K(ls_id), K(tablet_id));
+            }
           } else if (table_replica.is_equal_for_report(local_replica)) {
             continue;
           } else { // not equal
@@ -714,6 +716,7 @@ int ObTenantMetaChecker::check_report_replicas_(
   }
   return ret;
 }
+
 
 } // end namespace observer
 } // end namespace oceanbase

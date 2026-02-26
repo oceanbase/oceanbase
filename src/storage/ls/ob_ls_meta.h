@@ -29,11 +29,15 @@
 #include "storage/ls/ob_ls_saved_info.h"
 #include "share/scn.h"
 #include "storage/high_availability/ob_ls_transfer_info.h"
+#include "storage/mview/ob_major_mv_merge_info.h"
+#include "common/ob_store_format.h"       // ObLSStoreFormat
 
 namespace oceanbase
 {
 namespace storage
 {
+class ObLSMeta;
+
 class ObLSCreateType
 {
 public:
@@ -46,30 +50,33 @@ public:
 class ObLSMeta
 {
   friend class ObLSMetaPackage;
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  friend class ObSSLSMeta;
+#endif
   OB_UNIS_VERSION_V(1);
 public:
   ObLSMeta();
   ObLSMeta(const ObLSMeta &ls_meta);
-  ~ObLSMeta() {}
+  virtual ~ObLSMeta() {}
   int init(const uint64_t tenant_id,
            const share::ObLSID &ls_id,
            const ObMigrationStatus &migration_status,
            const share::ObLSRestoreStatus &restore_status,
-           const int64_t create_scn);
+           const int64_t create_scn,
+           const ObLSStoreFormat &store_format);
   void reset();
   bool is_valid() const;
   int set_start_work_state();
   int set_start_ha_state();
   int set_finish_ha_state();
-  int set_remove_state();
+  int set_remove_state(const bool write_slog);
   const ObLSPersistentState &get_persistent_state() const;
   ObLSMeta &operator=(const ObLSMeta &other);
   share::SCN get_clog_checkpoint_scn() const;
-  palf::LSN &get_clog_base_lsn();
+  palf::LSN get_clog_base_lsn() const;
   int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
                           const share::SCN &clog_checkpoint_scn,
-                          const bool write_slog = true);
+                          const bool write_slog);
   int64_t get_rebuild_seq() const;
   int set_migration_status(const ObMigrationStatus &migration_status,
                            const bool write_slog = true);
@@ -110,16 +117,38 @@ public:
   int get_rebuild_info(ObLSRebuildInfo &rebuild_info) const;
   int get_create_type(int64_t &create_type) const;
   int check_ls_need_online(bool &need_online) const;
-
+  int get_transfer_meta(
+      share::SCN &transfer_scn,
+      ObLSTransferMetaInfo &transfer_meta_info) const;
+  int set_transfer_meta_info(
+      const share::SCN &replay_scn,
+      const share::ObLSID &src_ls,
+      const share::SCN &src_scn,
+      const ObTransferInTransStatus::STATUS &trans_status,
+      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      const uint64_t data_version);
+  int get_transfer_meta_info(ObLSTransferMetaInfo &trasfer_meta_info) const;
+  int cleanup_transfer_meta_info(const share::SCN &replay_scn);
+  ObMajorMVMergeInfo get_major_mv_merge_info() const;
+  int set_major_mv_merge_scn(const SCN &major_mv_merge_scn);
+  int set_major_mv_merge_scn_safe_calc(const SCN &major_mv_merge_scn_safe_calc);
+  int set_major_mv_merge_scn_publish(const SCN &major_mv_merge_scn_publish);
+  ObLSStoreFormat get_store_format() const;
   int init(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &restore_status,
-      const share::SCN &create_scn);
+      const share::SCN &create_scn,
+      const ObMajorMVMergeInfo &major_mv_merge_info,
+      const ObLSStoreFormat &store_format,
+      const ObReplicaType &replica_type = REPLICA_TYPE_FULL);
+  int64_t get_ls_epoch() const { return ls_epoch_; }
+  void set_ls_epoch(const int64_t ls_epoch) { ls_epoch_ = ls_epoch; }
 
   ObReplicaType get_replica_type() const
-  { return unused_replica_type_; }
+  { return replica_type_; }
+
   // IF I have locked with W:
   //    lock with R/W will be succeed do nothing.
   // ELSE:
@@ -159,8 +188,9 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_persistent_state),
                K_(clog_checkpoint_scn), K_(clog_base_lsn),
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_scn_),
-               K_(restore_status), K_(replayable_point), K_(tablet_change_checkpoint_scn),
-               K_(all_id_meta), K_(transfer_scn), K_(rebuild_info), K_(transfer_meta_info));
+               K_(restore_status), K_(replica_type), K_(replayable_point), K_(tablet_change_checkpoint_scn),
+               K_(all_id_meta), K_(transfer_scn), K_(rebuild_info), K_(transfer_meta_info),
+               K_(store_format));
 private:
   int check_can_update_();
 public:
@@ -172,23 +202,28 @@ public:
 private:
   void update_clog_checkpoint_in_ls_meta_package_(const share::SCN& clog_checkpoint_scn,
                                                   const palf::LSN& clog_base_lsn);
-private:
-  ObReplicaType unused_replica_type_;
+protected:
+  ObReplicaType replica_type_;
   ObLSPersistentState ls_persistent_state_;
-  typedef common::ObFunction<int(ObLSMeta &)> WriteSlog;
+  typedef common::ObFunction<int(const ObLSMeta &)> WriteSlog;
   // for test
-  void set_write_slog_func_(WriteSlog write_slog);
   static WriteSlog write_slog_;
 
   // clog_checkpoint_scn_, meaning:
   // 1. dump points of all modules have exceeded clog_checkpoint_scn_
   // 2. all clog entries which log_scn are smaller than clog_checkpoint_scn_ can be recycled
-  share::SCN clog_checkpoint_scn_;
+  union {
+    share::SCN clog_checkpoint_scn_;
+    share::SCN ss_checkpoint_scn_; // for share storage
+  };
   // clog_base_lsn_, meaning:
   // 1. all clog entries which lsn are smaller than clog_base_lsn_ have been recycled
   // 2. log_scn of log entry that clog_base_lsn_ points to is smaller than/equal to clog_checkpoint_scn_
   // 3. clog starts to replay log entries from clog_base_lsn_ on crash recovery
-  palf::LSN clog_base_lsn_;
+  union {
+    palf::LSN clog_base_lsn_;
+    palf::LSN ss_checkpoint_lsn_;
+  };
   int64_t rebuild_seq_;
   ObMigrationStatus migration_status_;
   logservice::LSGCState gc_state_;
@@ -202,6 +237,9 @@ private:
   share::SCN transfer_scn_;
   ObLSRebuildInfo rebuild_info_;
   ObLSTransferMetaInfo transfer_meta_info_; //transfer_dml_ctrl_42x # placeholder
+  ObMajorMVMergeInfo major_mv_merge_info_;
+  common::ObLSStoreFormat store_format_;    // set on initialization and then remain unchanged
+  int64_t ls_epoch_;
 };
 
 }  // namespace storage

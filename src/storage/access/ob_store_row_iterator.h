@@ -14,7 +14,6 @@
 #define OB_STORAGE_OB_STORE_ROW_ITERATOR_H_
 
 #include "storage/ob_i_store.h"
-#include "storage/ob_table_store_stat_mgr.h"
 #include "storage/column_store/ob_i_cg_iterator.h"
 #include "ob_block_row_store.h"
 
@@ -38,9 +37,6 @@ public:
   ObIStoreRowIterator() {}
   virtual ~ObIStoreRowIterator() {}
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) = 0;
-  //TODO removed by hanhui
-  virtual int get_next_row(const ObStoreRow *&row)
-  { return OB_NOT_SUPPORTED; }
 };
 
 class ObStoreRowIterator : public ObIStoreRowIterator
@@ -84,6 +80,11 @@ public:
     UNUSED(rowkey);
     return OB_NOT_SUPPORTED;
   }
+  virtual int get_blockscan_border_rowkey(blocksstable::ObDatumRowkey &border_rowkey)
+  {
+    UNUSED(border_rowkey);
+    return OB_NOT_SUPPORTED;
+  }
   virtual int set_ignore_shadow_row() { return OB_NOT_SUPPORTED; }
   virtual bool can_blockscan() const
   {
@@ -120,7 +121,18 @@ public:
         IteratorCOMultiScan == iter_type;
   }
   OB_INLINE bool is_reclaimed() const { return is_reclaimed_; }
-
+  virtual int get_next_rowkey(int64_t &curr_scan_index,
+                              blocksstable::ObDatumRowkey& rowkey,
+                              common::ObIAllocator &allocator)
+  {
+    UNUSEDx(curr_scan_index, rowkey, allocator);
+    return OB_NOT_IMPLEMENT;
+  }
+  virtual int get_next_border_rowkey(const blocksstable::ObDatumRowkey *&border_rowkey) const
+  {
+    UNUSED(border_rowkey);
+    return OB_NOT_IMPLEMENT;
+  }
   VIRTUAL_TO_STRING_KV(K_(type), K_(is_sstable_iter), K_(is_reclaimed), KP_(block_row_store), KP_(long_life_allocator));
 
 protected:
@@ -431,8 +443,8 @@ do {                                                                            
 
 #define FREE_TABLE_STORE_ROW_IETRATOR(ctx, ptr)                                                \
 do {                                                                                           \
-  if (NULL != ptr) {                                                                           \
-    ctx.get_long_life_allocator()->free(ptr);                                                  \
+  if (NULL != (ptr)) {                                                                           \
+    (ctx).get_long_life_allocator()->free(ptr);                                                  \
   }                                                                                            \
  } while(0)
 

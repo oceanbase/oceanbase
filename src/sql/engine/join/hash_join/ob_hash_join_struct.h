@@ -28,7 +28,7 @@ namespace oceanbase
 namespace sql
 {
 
-static const uint64_t END_ITEM = UINT64_MAX >> 1;
+static const uint64_t END_ROW_PTR = 0x0000FFFFFFFFFFFF;
 
 struct ObHJStoredRow : public ObCompactRow
 {
@@ -109,11 +109,24 @@ struct ObHJStoredRow : public ObCompactRow
                                       const RowMeta &row_meta,
                                       const ObHJStoredRow *row,
                                       const int64_t batch_idx);
+
+  static int convert_rows_to_exprs(const ExprFixedArray &exprs,
+                                   ObEvalCtx &eval_ctx,
+                                   const RowMeta &row_meta,
+                                   const ObHJStoredRow **rows,
+                                   const uint16_t *sel,
+                                   const uint16_t sel_cnt);
+
   static int attach_rows(const ObExprPtrIArray &exprs,
                          ObEvalCtx &ctx,
                          const RowMeta &row_meta,
                          const ObHJStoredRow **srows,
                          const uint16_t selector[],
+                         const int64_t size);
+  static int attach_rows(const ObExprPtrIArray &exprs,
+                         ObEvalCtx &ctx,
+                         const RowMeta &row_meta,
+                         const ObHJStoredRow **srows,
                          const int64_t size);
 };
 
@@ -209,21 +222,33 @@ public:
 struct JoinTableCtx {
 public:
   JoinTableCtx() : eval_ctx_(NULL), join_type_(UNKNOWN_JOIN), is_shared_(false),
-                   contain_ns_equal_(false), join_conds_(NULL), build_output_(NULL), probe_output_(NULL),
+                   contain_ns_equal_(false), is_ns_equal_cond_(NULL), join_conds_(NULL), build_output_(NULL), probe_output_(NULL),
                    calc_exprs_(NULL), probe_opt_(false), build_keys_(NULL), probe_keys_(NULL),
-                   build_key_proj_(NULL), probe_key_proj_(NULL), cur_bkid_(-1),
-                   cur_tuple_(reinterpret_cast<void *>(END_ITEM)), max_output_cnt_(NULL),
-                   cur_items_(NULL), stored_rows_(NULL), max_batch_size_(0),
-                   output_info_(NULL), probe_batch_rows_(NULL)
+                   build_key_proj_(NULL), probe_key_proj_(NULL), max_output_cnt_(NULL),
+                   scan_chain_rows_(NULL), unmatched_sel_(NULL), unmatched_rows_(NULL), unmatched_bkts_(NULL),
+                   cmp_ret_map_(NULL), cmp_ret_for_one_col_(NULL), unmatched_pos_(NULL), eval_skip_(NULL), join_cond_matched_(NULL),
+                   del_bkts_(NULL), del_pre_rows_(NULL), del_matched_pre_rows_(NULL), del_matched_bkts_(NULL),
+                   del_rows_(NULL), del_sel_(NULL), build_cols_have_null_(NULL), probe_cols_have_null_(NULL),
+                   stored_rows_(NULL), max_batch_size_(0), output_info_(NULL), probe_batch_rows_(NULL),
+                   build_cmp_funcs_(NULL), probe_cmp_funcs_(NULL),
+                   read_row_idx_(0), page_alloc_(NULL), left_part_rows_(NULL)
   {}
   void reuse() {
-    cur_bkid_ = -1;
-    cur_tuple_ = reinterpret_cast<void *>(END_ITEM);
+    read_row_idx_ = 0;
   }
-  void reset()
+  void reset(ObIAllocator *alloc)
   {
     build_row_meta_.reset();
     probe_row_meta_.reset();
+    if (OB_NOT_NULL(left_part_rows_)) {
+      left_part_rows_->reset();
+      alloc->free(left_part_rows_);
+      left_part_rows_ = nullptr;
+    }
+    if (OB_NOT_NULL(page_alloc_)) {
+      alloc->free(page_alloc_);
+      page_alloc_ = nullptr;
+    }
   }
   bool need_mark_match() {
     return FULL_OUTER_JOIN == join_type_
@@ -243,13 +268,18 @@ public:
       }
     }
   }
+  int prepare_part_rows_array(uint64_t row_num, ObIAllocator *allocator);
+  int insert_left_part_rows(uint64_t row_num);
+  int get_unmatched_rows(OutputInfo &output_info);
 public:
   ObEvalCtx *eval_ctx_;
   ObJoinType join_type_;
   bool is_shared_;
   bool contain_ns_equal_;
+  const ObFixedArray<bool, common::ObIAllocator> *is_ns_equal_cond_;
 
   const ExprFixedArray *join_conds_;
+  const ExprFixedArray *other_conds_;
   const ExprFixedArray *build_output_;
   const ExprFixedArray *probe_output_;
   const ExprFixedArray *calc_exprs_;
@@ -264,17 +294,47 @@ public:
   RowMeta probe_row_meta_;
 
   // used for output remain unmatch rows
-  int64_t cur_bkid_;
-  void *cur_tuple_;
   int64_t *max_output_cnt_;
 
-  void **cur_items_;
+  ObHJStoredRow **scan_chain_rows_; // equal key chain table
+  // used for internal calc join conditions
+  uint16_t *unmatched_sel_;
+  ObHJStoredRow **unmatched_rows_;
+  void **unmatched_bkts_;
+  int *cmp_ret_map_;
+  int *cmp_ret_for_one_col_;
+  uint64_t *unmatched_pos_;
+  ObBitVector *eval_skip_;
+  bool *join_cond_matched_;
+
+  // for probe del
+  void **del_bkts_;
+  ObHJStoredRow **del_pre_rows_;
+  ObHJStoredRow **del_matched_pre_rows_;
+  void **del_matched_bkts_;
+  ObHJStoredRow **del_rows_;
+  uint16_t *del_sel_;
+
+  // notice: if conds is null safe, cols_have_null is false
+  ObBitVector *build_cols_have_null_;
+  ObBitVector *probe_cols_have_null_;
+
   //template buffer for build table
   const ObHJStoredRow **stored_rows_;
   int64_t max_batch_size_;
 
   OutputInfo *output_info_;
   ProbeBatchRows *probe_batch_rows_;
+  ObFixedArray<NullSafeRowCmpFunc, common::ObIAllocator> build_cmp_funcs_;
+  ObFixedArray<NullSafeRowCmpFunc, common::ObIAllocator> probe_cmp_funcs_;
+
+  // used for need left output join
+  using PartRowsArray = common::ObSegmentArray<const ObHJStoredRow *,
+                                               OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                               common::ModulePageAllocator>;
+  uint64_t read_row_idx_;
+  ModulePageAllocator *page_alloc_;
+  PartRowsArray *left_part_rows_;
 };
 
 struct ObHJSharedTableInfo

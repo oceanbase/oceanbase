@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_err_log.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/optimizer/ob_del_upd_log_plan.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"

@@ -14,12 +14,8 @@
 
 #include "rpc/obrpc/ob_rpc_handler.h"
 
-#include "io/easy_io.h"
 
-#include "lib/utility/utility.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_request.h"
-#include "rpc/ob_packet.h"
 using namespace oceanbase::rpc;
 using namespace oceanbase::rpc::frame;
 using namespace oceanbase::obrpc;

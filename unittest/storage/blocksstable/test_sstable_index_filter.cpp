@@ -14,11 +14,7 @@
 #define private public
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 
-#include "share/schema/ob_table_param.h"
 #include "sql/engine/ob_exec_context.h"
-#include "storage/access/ob_sstable_index_filter.h"
-#include "storage/access/ob_table_access_param.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {
@@ -276,6 +272,8 @@ ObPushdownFilterExecutor* TestSSTableIndexFilter::create_lt_white_filter(uint64_
   datum.from_obj(ref_obj);
   filter->datum_params_.push_back(datum);
   filter->cmp_func_ = get_datum_cmp_func(obj_meta, obj_meta);
+  filter->col_obj_meta_ = obj_meta;
+  filter->param_obj_meta_ = obj_meta;
   return filter;
 }
 
@@ -334,8 +332,9 @@ void TestSSTableIndexFilter::init_micro_index_info(
     ObMicroIndexInfo &index_info)
 {
   ObArray<ObSkipIndexColMeta> agg_cols;
-  ObDatumRow agg_row;
-  agg_row.init(3);
+  ObSkipIndexAggResult agg_result;
+  ASSERT_EQ(OB_SUCCESS, agg_result.init(3, allocator_));
+  ObDatumRow &agg_row = agg_result.agg_row_;
 
   ObSkipIndexColMeta skip_col_meta;
   skip_col_meta.col_idx_ = TEST_COLUMN_ID;
@@ -354,8 +353,8 @@ void TestSSTableIndexFilter::init_micro_index_info(
   agg_row.storage_datums_[2].from_obj_enhance(null_count_obj);
 
   ObAggRowWriter row_writer;
-  row_writer.init(agg_cols, agg_row, allocator_);
-  int64_t buf_size = row_writer.get_data_size();
+  ASSERT_EQ(OB_SUCCESS, row_writer.init(agg_cols, agg_result, DATA_CURRENT_VERSION, allocator_));
+  int64_t buf_size = row_writer.get_serialize_data_size();
   char *buf = reinterpret_cast<char *>(allocator_.alloc(buf_size));
   EXPECT_TRUE(buf != nullptr);
   MEMSET(buf, 0, buf_size);

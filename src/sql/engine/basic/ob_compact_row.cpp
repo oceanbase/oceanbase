@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/basic/ob_compact_row.h"
-#include "share/vector/ob_continuous_vector.h"
-#include "share/vector/ob_uniform_vector.h"
-#include "share/vector/ob_discrete_vector.h"
-#include "share/vector/ob_fixed_length_vector.h"
+#include "ob_compact_row.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -24,7 +21,8 @@ namespace sql
 {
 int RowMeta::init(const ObExprPtrIArray &exprs,
                   const int32_t extra_size,
-                  const bool enable_reorder_expr /*ture*/)
+                  const bool enable_reorder_expr /*ture*/,
+                  common::ObIAllocator *allocator /*NULL*/)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -34,6 +32,7 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
   fixed_offsets_ = NULL;
   projector_ = NULL;
   nulls_off_ = 0;
+  allocator_ = allocator;
   var_offsets_off_ = nulls_off_ + ObTinyBitVector::memory_size(col_cnt_);
   if (enable_reorder_expr) {
     for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
@@ -45,6 +44,9 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
         fixed_cnt_++;
       }
     }
+  }
+  if (!use_local_allocator() && nullptr == allocator_) {
+    fixed_cnt_ = 0;
   }
   const int64_t var_col_cnt = get_var_col_cnt();
   extra_off_ = var_offsets_off_;
@@ -97,6 +99,46 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
   return ret;
 }
 
+int RowMeta::assign(const RowMeta &row_meta, common::ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  allocator_ = row_meta.allocator_;
+  col_cnt_ = row_meta.col_cnt_;
+  extra_size_ = row_meta.extra_size_;
+
+  fixed_cnt_ = row_meta.fixed_cnt_;
+  nulls_off_ = row_meta.nulls_off_;
+  var_offsets_off_ = row_meta.var_offsets_off_;
+  extra_off_ = row_meta.extra_off_;
+  fix_data_off_ = row_meta.fix_data_off_;
+  var_data_off_ = row_meta.var_data_off_;
+
+  if (fixed_cnt_ > 0) {
+    ObDataBuffer local_alloc(buf_, MAX_LOCAL_BUF_LEN);
+    ObIAllocator *alloc = use_local_allocator() ? &local_alloc : allocator_;
+    if (OB_ISNULL(alloc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is null", K(ret), K(lbt()));
+    } else if (OB_ISNULL(projector_ =
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * col_cnt_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc projector failed", K(ret), K(col_cnt_));
+    } else if (OB_ISNULL(fixed_offsets_ =
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * (fixed_cnt_ + 1))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc fixed_offsets_ failed", K(ret), K(col_cnt_));
+    } else {
+      memcpy(projector_, row_meta.projector_, sizeof(int32_t) * col_cnt_);
+      memcpy(fixed_offsets_, row_meta.fixed_offsets_, sizeof(int32_t) * (fixed_cnt_ + 1));
+    }
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("row meta assgin failed", K(ret));
+      reset();
+    }
+  }
+  return ret;
+}
+
 void RowMeta::reset()
 {
   if (!use_local_allocator() && NULL != allocator_) {
@@ -107,6 +149,7 @@ void RowMeta::reset()
       allocator_->free(projector_);
     }
   }
+  col_cnt_ = 0;
   fixed_offsets_ = NULL;
   projector_ = NULL;
 }
@@ -137,7 +180,7 @@ int64_t ObCompactRow::calc_max_row_size(const ObExprPtrIArray &exprs, int32_t ex
   } else {
     res += tmp_meta.fix_data_off_;
     for (int64_t i = 0; i < exprs.count(); ++i) {
-      if (T_REF_COLUMN == exprs.at(i)->type_) {
+      if (T_REF_COLUMN == exprs.at(i)->type_ && exprs.at(i)->max_length_ > 0) {
         res += exprs.at(i)->max_length_;
       } else {
         res += INT32_MAX;
@@ -166,6 +209,13 @@ int ObCompactRow::calc_row_size(const RowMeta &row_meta, const common::ObIArray<
       SQL_ENG_LOG(WARN, "fail to evel vector", K(ret), K(expr));
     } else if (reordered && row_meta.project_idx(col_idx) < row_meta.fixed_cnt_) {
       // continue, the size is computed in `fixed_size`
+    } else if (expr->is_nested_expr()) {
+      int64_t len = 0;
+      if (OB_FAIL(ObArrayExprUtils::calc_nested_expr_data_size(*expr, ctx, row_idx, len))) {
+        SQL_ENG_LOG(WARN, "fail to calc nested expr data size", K(ret));
+      } else {
+        size += len;
+      }
     } else {
       ObIVector *vec = expr->get_vector(ctx);
       const VectorFormat format = vec->get_format();

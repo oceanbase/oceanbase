@@ -843,8 +843,7 @@ BEGIN
   RETURN arg;
 END|
 delimiter ;|
-# mysql8.0 会报错
---error 1264
+# mysql8.0 不会报错
 SELECT f1(-2500);
 
 # Call in TRADITIONAL mode the function created in ANSI mode.
@@ -918,8 +917,7 @@ BEGIN
 END|
 delimiter ;|
 
-#mysql 8.0报错
---error 1264
+#mysql 8.0 不会报错
 SELECT f1(8388699);
 
 # Call in TRADITIONAL mode the function created in ANSI mode.

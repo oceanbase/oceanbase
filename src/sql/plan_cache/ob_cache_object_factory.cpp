@@ -12,17 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_PC
 
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "sql/engine/ob_physical_plan.h"
+#include "ob_cache_object_factory.h"
 #include "sql/ob_sql.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_package.h"
-#include "lib/alloc/malloc_hook.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/allocator/ob_malloc.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_req_time_service.h"
 
 namespace oceanbase
 {

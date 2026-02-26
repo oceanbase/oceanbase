@@ -3,7 +3,6 @@
 // Authors:
 // Normalizer:
 #include "lib/hash_func/murmur_hash.h"
-#include <stdint.h>
 
 namespace oceanbase
 {

@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_context_executor.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ddl/ob_context_stmt.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

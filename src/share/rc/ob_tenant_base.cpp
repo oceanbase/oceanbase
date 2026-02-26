@@ -11,13 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "lib/thread/thread_mgr.h"
-#include "lib/thread/threads.h"
-#include "share/rc/ob_tenant_base.h"
+#include "ob_tenant_base.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
-#include "storage/ob_file_system_router.h"
-#include "share/rc/ob_tenant_module_init_ctx.h"
+#include "src/share/schema/ob_schema_struct.h"
 #include "observer/omt/ob_tenant_mtl_helper.h"
+#include "share/ob_tenant_info_proxy.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 
 namespace oceanbase
 {
@@ -29,6 +28,57 @@ bool mtl_is_mini_mode()
 }
 }
 
+namespace common
+{
+uint64_t mtl_get_id()
+{
+  return MTL_ID();
+}
+}
+
+namespace common
+{
+
+void __attribute__((used)) lib_release_tenant(void *ptr)
+{
+  share::ObTenantSwitchGuard *g = reinterpret_cast<share::ObTenantSwitchGuard *>(ptr);
+  g->share::ObTenantSwitchGuard::~ObTenantSwitchGuard();
+  ob_free(ptr);
+}
+
+int64_t __attribute__((used)) get_mtl_id()
+{
+  return MTL_ID();
+}
+
+ObDiagnosticInfoContainer *__attribute__((used)) get_di_container()
+{
+  return MTL(ObDiagnosticInfoContainer *);
+}
+
+void __attribute__((used)) lib_mtl_switch(int64_t tenant_id, std::function<void(int)> fn)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  if (tenant_id != MTL_ID()) {
+    if (OB_FAIL(guard.switch_to(tenant_id))) {
+      LOG_WARN("failed to switch to tenant", K(ret), K(tenant_id));
+    }
+  }
+  fn(ret);
+}
+
+int64_t __attribute__((used)) lib_mtl_cpu_count()
+{
+  return share::ObTenantEnv::get_tenant()->unit_max_cpu();
+}
+
+bool __attribute__((used)) lib_enable_diagnostic_info_cache()
+{
+  return GCONF._enable_diagnostic_info_cache;
+}
+
+}
 namespace share
 {
 using namespace oceanbase::common;
@@ -44,9 +94,10 @@ using namespace oceanbase::common;
 LST_DO2(INIT_BIND_FUNC, (), MTL_MEMBERS);
 
 #define CONSTRUCT_MEMBER(T, IDX) m##IDX##_()
-ObTenantBase::ObTenantBase(const uint64_t id, bool enable_tenant_ctx_check)
+ObTenantBase::ObTenantBase(const uint64_t id, const int64_t epoch, bool enable_tenant_ctx_check)
     : LST_DO2(CONSTRUCT_MEMBER, (,), MTL_MEMBERS),
     id_(id),
+    epoch_(epoch),
     inited_(false),
     created_(false),
     mtl_init_ctx_(nullptr),
@@ -54,11 +105,14 @@ ObTenantBase::ObTenantBase(const uint64_t id, bool enable_tenant_ctx_check)
     unit_max_cpu_(0),
     unit_min_cpu_(0),
     unit_memory_size_(0),
+    switchover_epoch_(ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH),
     cgroups_(nullptr),
     enable_tenant_ctx_check_(enable_tenant_ctx_check),
     thread_count_(0),
-    mini_mode_(false)
+    mini_mode_(false),
+    marked_prepare_gc_ts_(0)
 {
+  MEMSET(group_cpu_time_us_, 0, sizeof(group_cpu_time_us_));
 }
 #undef CONSTRUCT_MEMBER
 
@@ -68,8 +122,10 @@ ObTenantBase &ObTenantBase::operator=(const ObTenantBase &ctx)
     return *this;
   }
   id_ = ctx.id_;
+  epoch_ = ctx.epoch_;
   mtl_init_ctx_ = ctx.mtl_init_ctx_;
   tenant_role_value_ = ctx.tenant_role_value_;
+  switchover_epoch_ = ctx.switchover_epoch_;
 #define CONSTRUCT_MEMBER_TMP2(IDX) \
   m##IDX##_ = ctx.m##IDX##_;
 #define CONSTRUCT_MEMBER2(UNUSED, IDX) CONSTRUCT_MEMBER_TMP2(IDX)
@@ -120,7 +176,7 @@ int ObTenantBase::init(ObCgroupCtrl *cgroup)
 int ObTenantBase::create_mtl_module()
 {
   int ret = OB_SUCCESS;
-
+  lib::ObDisableDiagnoseGuard disable_guard;
   if (created_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("create twice error", K(ret));
@@ -296,22 +352,45 @@ ObCgroupCtrl *ObTenantBase::get_cgroup()
 
 int ObTenantBase::pre_run()
 {
+  ObTimeGuard timeguard("tenant_pre_run", 10 * 1000);
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(this);
-  ObCgroupCtrl *cgroup_ctrl = get_cgroup();
-  if (cgroup_ctrl != nullptr && cgroup_ctrl->is_valid()) {
-    ret = cgroup_ctrl->add_self_to_cgroup(id_);
-  }
+  ob_get_origin_tenant_id() = this->id();
   {
     ThreadListNode *node = lib::Thread::current().get_thread_list_node();
+    ThreadListNode *group_node  = lib::Thread::current().get_group_thread_list_node();
+    uint64_t thread_group_id = lib::Thread::current().get_thread_group_id();
+    ThreadList *group_thread_list = NULL;
+    if (OB_INVALID_GROUP_ID != thread_group_id && thread_group_id < OB_TENANT_THREAD_GROUP_MAXNUM) {
+      group_thread_list = &group_thread_list_array_[thread_group_id];
+    }
     lib::ObMutexGuard guard(thread_list_lock_);
     if (!thread_list_.add_last(node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("add to thread list fail", K(ret));
+    } else {
+      if (NULL != group_thread_list) {
+        if (!group_thread_list->add_last(group_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("add to group thread list fail", K(thread_group_id), K(ret));
+        }
+      }
     }
   }
+  timeguard.click("add_to_thread_list");
   ATOMIC_INC(&thread_count_);
-  LOG_INFO("tenant thread pre_run", K(MTL_ID()), K(ret), K(thread_count_));
+  if (GCONF._enable_numa_aware && OB_NUMA_SHARED_INDEX == AFFINITY_CTRL.get_tls_node()) {
+    AFFINITY_CTRL.thread_bind_to_node(thread_count_);
+  }
+  timeguard.click("bind_numa_node");
+  // register in tenant cgroup without modifying group_id
+  ObCgroupCtrl *cgroup_ctrl = get_cgroup();
+  if (OB_NOT_NULL(cgroup_ctrl) && cgroup_ctrl->is_valid()) {
+    // add thread to tenant OBCG_DEFAULT cgroup
+    ret = cgroup_ctrl->add_self_to_cgroup_(id_);
+  }
+
+  LOG_INFO("tenant thread pre_run", K(ret), K(thread_count_), K(id_), K(GET_GROUP_ID()));
   return ret;
 }
 
@@ -319,17 +398,29 @@ int ObTenantBase::end_run()
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(nullptr);
-  ObCgroupCtrl *cgroup_ctrl = get_cgroup();
-  if (cgroup_ctrl != nullptr && cgroup_ctrl->is_valid()) {
-    ret = cgroup_ctrl->remove_self_from_cgroup(id_);
-  }
+  ob_get_origin_tenant_id() = 0;
   {
     ThreadListNode *node = lib::Thread::current().get_thread_list_node();
+    ThreadListNode *group_node  = lib::Thread::current().get_group_thread_list_node();
+    uint64_t thread_group_id = lib::Thread::current().get_thread_group_id();
+    ThreadList *group_thread_list = NULL;
+    if (OB_INVALID_GROUP_ID != thread_group_id && thread_group_id < OB_TENANT_THREAD_GROUP_MAXNUM) {
+      group_thread_list = &group_thread_list_array_[thread_group_id];
+    }
     lib::ObMutexGuard guard(thread_list_lock_);
+
+    if (NULL != group_thread_list) {
+      int64_t inc = 0;
+      lib::Thread *thread = node->get_data();
+      if (OB_SUCC(thread->get_group_cpu_time_inc(inc))) {
+        IGNORE_RETURN ATOMIC_FAA(&group_cpu_time_us_[thread_group_id], inc);
+      }
+      group_thread_list->remove(group_node);
+    }
     thread_list_.remove(node);
   }
   ATOMIC_DEC(&thread_count_);
-  LOG_INFO("tenant thread end_run", K(id_), K(ret), K(thread_count_));
+  LOG_INFO("tenant thread end_run", K(ret), K(thread_count_), K(id_), K(GET_GROUP_ID()));
   return ret;
 }
 
@@ -449,7 +540,7 @@ void ObTenantEnv::set_tenant(ObTenantBase *ctx)
   }
   get_tenant() = ctx;
   if (ctx == nullptr) {
-    ObTenantBase ctx_tmp(OB_INVALID_TENANT_ID);
+    ObTenantBase ctx_tmp(OB_INVALID_TENANT_ID, 0/*epoch*/);
     *get_tenant_local() = ctx_tmp;
     ob_get_tenant_id() = 0;
   } else {
@@ -566,6 +657,37 @@ void ObTenantSwitchGuard::release()
 
     reset();
   }
+}
+
+int ObTenantSimpleGuard::get_tenant_base(uint64_t tenant_id, ObTenantBase *&tenant_base)
+{
+  int ret = OB_SUCCESS;
+
+  if (!common::is_valid_tenant_id(tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid tenant id to get", K(ret), K(tenant_id));
+  } else if (tenant_id == MTL_ID()) {
+    tenant_base = ObTenantEnv::get_tenant();
+  } else if (is_virtual_tenant_id(tenant_id)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_ERROR("can't get virtual tenant", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_base_with_lock(tenant_id, lock_handle_, tenant_base, release_cb_))) {
+    if (ret == OB_IN_STOP_STATE) {
+      ret = OB_TENANT_NOT_IN_SERVER;
+    }
+    LOG_WARN("get tenant base fail", K(tenant_id), K(ret), K(lbt()));
+  }
+
+  return ret;
+}
+
+void ObTenantSimpleGuard::release()
+{
+  if (release_cb_ != nullptr) {
+    release_cb_(lock_handle_);
+    release_cb_ = nullptr;
+  }
+  reset();
 }
 
 } // end of namespace share

@@ -34,8 +34,8 @@ namespace libobcdc
 class ObLogMetaDataSQLQueryer : public ObCDCTenantQuery<logfetcher::DataDictionaryInLogInfo>
 {
 public:
-  ObLogMetaDataSQLQueryer(const int64_t start_timstamp_ns, common::ObMySQLProxy &sql_proxy)
-    : ObCDCTenantQuery(sql_proxy), start_timstamp_ns_(start_timstamp_ns) {}
+  ObLogMetaDataSQLQueryer(const int64_t start_timstamp_ns, const bool is_cluster_sql_proxy, common::ObMySQLProxy &sql_proxy)
+    : ObCDCTenantQuery(is_cluster_sql_proxy, sql_proxy), start_timstamp_ns_(start_timstamp_ns) {}
   ~ObLogMetaDataSQLQueryer() { start_timstamp_ns_ = OB_INVALID_TIMESTAMP; }
 public:
   int get_data_dict_in_log_info(

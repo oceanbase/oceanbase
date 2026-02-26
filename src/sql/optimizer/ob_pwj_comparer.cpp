@@ -11,14 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_pwj_comparer.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "sql/optimizer/ob_optimizer_context.h"
+#include "ob_pwj_comparer.h"
 #include "sql/optimizer/ob_logical_operator.h"
-#include "sql/optimizer/ob_opt_est_utils.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -110,6 +104,8 @@ int PwjTable::assign(const PwjTable &other)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(GroupPWJTabletIdInfo, group_id_, tablet_id_array_);
+
 void ObPwjComparer::reset()
 {
   pwj_tables_.reset();
@@ -144,36 +140,32 @@ int ObPwjComparer::extract_all_partition_indexes(const ObCandiTableLoc &phy_tabl
       // 对于一级分区表part_id(一级逻辑分区id) = partition_id(物理分区id)
       ObTabletID tablet_id = phy_partitions.at(i).get_partition_location().get_tablet_id();
       int64_t part_index = -1;
-      int64_t subpart_index = -1;
       if (table_schema.is_external_table()) {
         if (OB_FAIL(all_tablet_ids.push_back(tablet_id.id()))) { //mock
         LOG_WARN("failed to push back partition id", K(ret));
         } else if (OB_FAIL(all_partition_indexes.push_back(part_index))) {
           LOG_WARN("failed to push back partition index", K(ret));
         }
-      } else if (OB_FAIL(table_schema.get_part_idx_by_tablet(tablet_id, part_index, subpart_index))) {
-        LOG_WARN("failed to get part idx by tablet", K(ret));
       } else if (OB_FAIL(all_tablet_ids.push_back(tablet_id.id()))) {
         LOG_WARN("failed to push back partition id", K(ret));
-      } else if (OB_FAIL(all_partition_indexes.push_back(part_index))) {
-        LOG_WARN("failed to push back partition index", K(ret));
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (table_schema.is_external_table()) {
+      // do nothing
+    } else if (OB_FAIL(table_schema.get_part_idx_by_tablets(all_tablet_ids, all_partition_indexes, all_subpartition_indexes))) {
+      LOG_WARN("failed to get part idx by tablets", K(ret));
     }
   } else if (share::schema::PARTITION_LEVEL_TWO == part_level) {
     for (int64_t i = 0; OB_SUCC(ret) && i < phy_partitions.count(); ++i) {
-      int64_t partition_id = phy_partitions.at(i).get_partition_location().get_partition_id();
       ObTabletID tablet_id = phy_partitions.at(i).get_partition_location().get_tablet_id();
-      int64_t part_index = -1;
-      int64_t subpart_index = -1;
-      if (OB_FAIL(table_schema.get_part_idx_by_tablet(tablet_id, part_index, subpart_index))) {
-        LOG_WARN("failed to get part idx by tablet", K(ret));
-      } else if (OB_FAIL(all_tablet_ids.push_back(tablet_id.id()))) {
+      if (OB_FAIL(all_tablet_ids.push_back(tablet_id.id()))) {
         LOG_WARN("failed to push back partition id", K(ret));
-      } else if (OB_FAIL(all_partition_indexes.push_back(part_index))) {
-        LOG_WARN("failed to push back part index", K(ret));
-      } else if (OB_FAIL(all_subpartition_indexes.push_back(subpart_index))) {
-        LOG_WARN("failed to push back subpart index");
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(table_schema.get_part_idx_by_tablets(all_tablet_ids, all_partition_indexes, all_subpartition_indexes))) {
+      LOG_WARN("failed to get part idx by tablets", K(ret));
     }
   }
   if (OB_SUCC(ret) && share::schema::PARTITION_LEVEL_TWO == part_level) {
@@ -222,7 +214,7 @@ int ObPwjComparer::is_partition_equal(const ObPartition *l_partition,
     if (OB_FAIL(is_row_equal(l_partition->get_high_bound_val(),
                              r_partition->get_high_bound_val(),
                              is_equal))) {
-      LOG_WARN("failed to check is row equal", K(ret));
+      LOG_WARN("failed to check is row equal", K(ret), K(*l_partition), K(*r_partition));
     }
   } else if (OB_FAIL(is_list_partition_equal(l_partition, r_partition, is_equal))) {
     LOG_WARN("failed to check is list partition equal", K(ret));
@@ -341,10 +333,8 @@ int ObPwjComparer::is_obj_equal(const common::ObObj &first_value,
     is_equal = (first_value.is_min_value() && second_value.is_min_value());
   } else if (first_value.is_max_value() || second_value.is_max_value()) {
     is_equal = (first_value.is_max_value() && second_value.is_max_value());
-  } else if (OB_UNLIKELY(first_value.get_meta() != second_value.get_meta())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("first value and second value meta not same", K(ret),
-        K(first_value.get_meta()), K(second_value.get_meta()));
+  } else if (first_value.get_meta() != second_value.get_meta()) {
+    is_equal = false;
   } else {
     is_equal = (first_value == second_value);
   }
@@ -759,7 +749,7 @@ int ObStrictPwjComparer::get_subpartition_indexes_by_part_index(const PwjTable &
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(&used_subpart_indexes.at(0), &used_subpart_indexes.at(0) + used_subpart_indexes.count());
+    lib::ob_sort(&used_subpart_indexes.at(0), &used_subpart_indexes.at(0) + used_subpart_indexes.count());
   }
   return ret;
 }

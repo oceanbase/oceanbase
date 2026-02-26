@@ -39,7 +39,7 @@ public:
   int fetch_payload(const uint16_t selector[], const int64_t selector_size);
 
 private:
-  int init_sk_col_result_list(const int64_t sk_cnt, const int64_t batch_size);
+  int init_sk_col_result_list(const int64_t sk_cnt, const int64_t batch_size, int64_t &init_cnt);
   int fetch_fixed_payload(const ObFixedLengthBase &vec, const uint16_t selector[],
                           const int64_t selector_size, SortKeyColResult &col_result);
   int fetch_fixed_payload(const ObFixedLengthBase &vec, const ObBatchRows &input_brs,

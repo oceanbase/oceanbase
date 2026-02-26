@@ -11,11 +11,8 @@
  */
 
 #include "log_request_handler.h"
-#include "log_req.h"
 #include "palf_handle_impl_guard.h"
-#include "palf_handle_impl.h"
 #include "palf_env_impl.h"
-#include "share/ob_occam_time_guard.h"
 
 namespace oceanbase
 {
@@ -87,7 +84,7 @@ int LogRequestHandler::handle_request<LogPushResp>(
       PALF_LOG(TRACE, "PalfHandleImpl ack_log success", K(ret), K(server), K(req), KPC(palf_env_impl_));
     }
   }
-  return ret;
+ return ret;
 }
 
 template <>

@@ -10,10 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_clog_encrypt_info.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/utility/serialization.h"
-#include "lib/utility/ob_tracepoint.h"
 #ifndef OB_BUILD_TDE_SECURITY
 
 namespace oceanbase

@@ -18,7 +18,9 @@
 #include <map>
 #include "share/ob_define.h"
 #include "share/parameter/ob_parameter_macro.h"
+#define CONFIG_LOCK_EXEMPTION
 #include "share/config/ob_common_config.h"    // ObInitConfigContainer
+#undef CONFIG_LOCK_EXEMPTION
 
 ////////////// Define member variables of type INT, no limit on maximum value //////////////
 // DEF: default value
@@ -199,6 +201,8 @@ public:
   // Maximum number of RPC results per RPC
   T_DEF_INT_INFT(rpc_result_count_per_rpc_upper_limit, OB_CLUSTER_PARAMETER, 16, 1,
       "max rpc result count per rpc");
+
+  T_DEF_BOOL(logfetcher_parallel_log_transport, OB_CLUSTER_PARAMETER, 1, "0: disabled, 1 enabled");
 
   // Whether to print RPC processing information
   // Print every RPC processing

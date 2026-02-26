@@ -1,3 +1,6 @@
+// owner: gaishun.gs
+// owner group: storage
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,13 +13,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <errno.h>
 #include <gtest/gtest.h>
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 #define protected public
 #define private public
 #include "ob_index_block_data_prepare.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {
@@ -90,7 +91,7 @@ TEST_F(TestSharedMacroBlk, test_rebuild_sstable)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
   ObSharedMacroBlockMgr *shared_blk_mgr = MTL(ObSharedMacroBlockMgr*);
   ObArenaAllocator allocator;
-  ObSSTableIndexBuilder *sstable_index_builder = OB_NEW(ObSSTableIndexBuilder, "SSTableIdx");
+  ObSSTableIndexBuilder *sstable_index_builder = OB_NEW(ObSSTableIndexBuilder, "SSTableIdx",false /*not need writer buffer*/);
   ObIndexBlockRebuilder *index_block_rebuilder = OB_NEW(ObIndexBlockRebuilder, "IdxRebuilder");
   ObSSTable sstable;
 

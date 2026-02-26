@@ -11,27 +11,15 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/ob_schema_checker.h"
-#include "lib/string/ob_string.h"
-#include "lib/thread_local/ob_tsi_factory.h"
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/schema/ob_udf.h"
-#include "share/schema/ob_synonym_mgr.h"
-#include "sql/privilege_check/ob_ora_priv_check.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/ob_resolver_define.h"
+#include "ob_schema_checker.h"
+
 #include "observer/virtual_table/ob_table_columns.h"
-#include "common/ob_smart_call.h"
-#include "share/schema/ob_sys_variable_mgr.h" // ObSimpleSysVariableSchema
-#include "sql/resolver/ob_stmt_resolver.h"
 #include "pl/ob_pl_stmt.h"
+#include "share/catalog/ob_external_catalog.h"
+#include "share/schema/ob_sensitive_rule_schema_struct.h"
+#include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/privilege_check/ob_privilege_check.h"
-#include "sql/session/ob_sql_session_info.h"
+#include "sql/resolver/ob_stmt_resolver.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -114,6 +102,7 @@ int ObSchemaChecker::check_ora_priv(
 }
 
 int ObSchemaChecker::check_priv(const share::schema::ObSessionPrivInfo &session_priv,
+                                const common::ObIArray<uint64_t> &enable_role_id_array,
                                 const share::schema::ObStmtNeedPrivs &stmt_need_privs) const
 {
   int ret = OB_SUCCESS;
@@ -123,7 +112,7 @@ int ObSchemaChecker::check_priv(const share::schema::ObSessionPrivInfo &session_
   } else if (OB_UNLIKELY(!session_priv.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session_priv is invalid", K(session_priv), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_priv(session_priv, stmt_need_privs))) {
+  } else if (OB_FAIL(schema_mgr_->check_priv(session_priv, enable_role_id_array, stmt_need_privs))) {
     LOG_WARN("failed to check_priv", K(session_priv), K(stmt_need_privs), K(ret));
   } else {}
   return ret;
@@ -131,6 +120,7 @@ int ObSchemaChecker::check_priv(const share::schema::ObSessionPrivInfo &session_
 
 
 int ObSchemaChecker::check_priv_or(const share::schema::ObSessionPrivInfo &session_priv,
+                                   const common::ObIArray<uint64_t> &enable_role_id_array,
                                    const share::schema::ObStmtNeedPrivs &stmt_need_privs)
 {
   int ret = OB_SUCCESS;
@@ -140,13 +130,14 @@ int ObSchemaChecker::check_priv_or(const share::schema::ObSessionPrivInfo &sessi
   } else if (OB_UNLIKELY(!session_priv.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session_priv is invalid", K(session_priv), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_priv_or(session_priv, stmt_need_privs))) {
+  } else if (OB_FAIL(schema_mgr_->check_priv_or(session_priv, enable_role_id_array, stmt_need_privs))) {
     LOG_WARN("failed to check_priv_or", K(session_priv), K(stmt_need_privs), K(ret));
   } else {}
   return ret;
 }
 
 int ObSchemaChecker::check_db_access(share::schema::ObSessionPrivInfo &s_priv,
+                                     const common::ObIArray<uint64_t> &enable_role_id_array,
                                      const ObString& database_name) const
 {
   int ret = OB_SUCCESS;
@@ -156,13 +147,35 @@ int ObSchemaChecker::check_db_access(share::schema::ObSessionPrivInfo &s_priv,
   } else if (OB_UNLIKELY(!s_priv.is_valid() || database_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(s_priv), K(database_name), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_db_access(s_priv, database_name))) {
-    LOG_WARN("failed to check_db_access", K(s_priv), K(database_name), K(ret));
+  } else if (OB_FAIL(schema_mgr_->check_db_access(s_priv, enable_role_id_array, database_name))) {
+    LOG_WARN("failed to check_db_access", K(s_priv), K(enable_role_id_array), K(database_name), K(ret));
   } else {}
   return ret;
 }
 
+int ObSchemaChecker::check_db_access(share::schema::ObSessionPrivInfo &s_priv,
+                                     const common::ObIArray<uint64_t> &enable_role_id_array,
+                                     const uint64_t catalog_id,
+                                     const ObString &database_name) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+  } else if (is_internal_catalog_id(catalog_id)) {
+    ret = check_db_access(s_priv, enable_role_id_array, database_name);
+  } else if (is_external_catalog_id(catalog_id)) {
+    ret = schema_mgr_->check_catalog_db_access(s_priv, enable_role_id_array, catalog_id, database_name);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected", K(ret));
+  }
+  return ret;
+}
+
 int ObSchemaChecker::check_table_show(const share::schema::ObSessionPrivInfo &s_priv,
+                                      const common::ObIArray<uint64_t> &enable_role_id_array,
+                                      const uint64_t catalog_id,
                                       const ObString &db,
                                       const ObString &table,
                                       bool &allow_show) const
@@ -174,8 +187,8 @@ int ObSchemaChecker::check_table_show(const share::schema::ObSessionPrivInfo &s_
   } else if (OB_UNLIKELY(!s_priv.is_valid() || db.empty() || table.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(s_priv), K(db), K(table), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_table_show(s_priv, db, table, allow_show))) {
-    LOG_WARN("failed to check_table_show", K(s_priv), K(db), K(table), K(ret));
+  } else if (OB_FAIL(schema_mgr_->check_table_show(s_priv, enable_role_id_array, catalog_id, db, table, allow_show))) {
+    LOG_WARN("failed to check_table_show", K(s_priv), K(enable_role_id_array), K(catalog_id), K(db), K(table), K(ret));
   } else {}
   return ret;
 }
@@ -274,9 +287,11 @@ int ObSchemaChecker::check_routine_show(const share::schema::ObSessionPrivInfo &
 }
 
 int ObSchemaChecker::check_trigger_show(const share::schema::ObSessionPrivInfo &s_priv,
+                                        const common::ObIArray<uint64_t> &enable_role_id_array,
                                         const ObString &db,
                                         const ObString &trigger,
-                                        bool &allow_show) const
+                                        bool &allow_show,
+                                        const ObString &table) const
 {
   int ret = OB_SUCCESS;
   allow_show = true;
@@ -286,41 +301,64 @@ int ObSchemaChecker::check_trigger_show(const share::schema::ObSessionPrivInfo &
   } else if (OB_UNLIKELY(!s_priv.is_valid() || db.empty() || trigger.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(s_priv), K(db), K(trigger), K(ret));
-  } else {}
+  } else {
+    bool need_check = false;
+    if(OB_FAIL(ObCompatControl::check_feature_enable(s_priv.security_version_,
+                                      ObCompatFeatureType::MYSQL_TRIGGER_PRIV_CHECK, need_check))) {
+      LOG_WARN("failed to check feature enable", K(ret));
+    } else if(need_check && lib::is_mysql_mode()) {
+      ObNeedPriv need_priv;
+      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      need_priv.db_ = db;
+      need_priv.priv_set_ = OB_PRIV_TRIGGER;
+      need_priv.table_ = table;
+      OZ (schema_mgr_->check_single_table_priv(s_priv, enable_role_id_array, need_priv));
+      if(OB_FAIL(ret)) {
+        allow_show = false;
+        ret = OB_SUCCESS;
+        LOG_WARN("show create trigger not has trigger priv", K(s_priv), K(enable_role_id_array), K(db), K(trigger), K(table), K(ret));
+      }
+    }
+  }
   return ret;
 }
 
-int ObSchemaChecker::check_table_or_index_exists(
-    const uint64_t tenant_id,
-    const uint64_t database_id,
-    const ObString &table_name,
-    const bool with_hidden_flag,
-    const bool is_built_in_index,
-    bool &is_exist)
+int ObSchemaChecker::check_table_or_index_exists(const uint64_t tenant_id,
+                                                 const uint64_t catalog_id,
+                                                 const uint64_t database_id,
+                                                 const ObString &table_name,
+                                                 const bool with_hidden_flag,
+                                                 const bool is_built_in_index,
+                                                 bool &is_exist)
 {
   int ret = OB_SUCCESS;
   bool is_index_table = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == database_id
-                        || table_name.empty())) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == catalog_id || OB_INVALID_ID == database_id || table_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(tenant_id), K(database_id), K(table_name), K(ret));
-  } else if (OB_FAIL(check_table_exists(tenant_id, database_id, table_name,
-                                        is_index_table, with_hidden_flag, is_exist))) {
-    LOG_WARN("check table exist failed", K(tenant_id), K(database_id), K(table_name), K(ret));
-  } else if(!is_exist) {
+    LOG_WARN("invalid arguments", K(tenant_id), K(catalog_id), K(database_id), K(table_name), K(ret));
+  } else if (OB_FAIL(check_table_exists(tenant_id, catalog_id, database_id, table_name, is_index_table, with_hidden_flag, is_exist))) {
+    LOG_WARN("check table exist failed", K(tenant_id), K(catalog_id), K(database_id), K(table_name), K(ret));
+  } else if (!is_exist) {
     is_index_table = true;
-    if (OB_FAIL(check_table_exists(tenant_id, database_id, table_name,
-                                   is_index_table, with_hidden_flag, is_exist, is_built_in_index))) {
-      LOG_WARN("check index exist failed", K(tenant_id), K(database_id), K(table_name), K(ret), K(is_built_in_index));
+    if (OB_FAIL(check_table_exists(tenant_id,
+                                   catalog_id,
+                                   database_id,
+                                   table_name,
+                                   is_index_table,
+                                   with_hidden_flag,
+                                   is_exist,
+                                   is_built_in_index))) {
+      LOG_WARN("check index exist failed", K(tenant_id), K(catalog_id), K(database_id), K(table_name), K(ret), K(is_built_in_index));
     }
   }
   return ret;
 }
 
 int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
+                                        const uint64_t catalog_id,
                                         const uint64_t database_id,
                                         const ObString &table_name,
                                         const bool is_index_table,
@@ -331,41 +369,55 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
 
   is_exist = false;
-  uint64_t table_id= OB_INVALID_ID;
+  uint64_t table_id = OB_INVALID_ID;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == database_id
-                        || table_name.empty())) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == catalog_id || OB_INVALID_ID == database_id || table_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(tenant_id), K(database_id), K(table_name), K(ret));
+    LOG_WARN("invalid arguments", K(tenant_id), K(catalog_id), K(database_id), K(table_name), K(ret));
   } else {
-    if (OB_FAIL(schema_mgr_->get_table_id(tenant_id, database_id, table_name, is_index_table,
-            with_hidden_flag ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES,
-            table_id, is_built_in_index))) {
-      LOG_WARN("get table id failed", K(ret), K(tenant_id), K(database_id),
-               K(table_name), K(is_index_table));
+    if (is_internal_catalog_id(catalog_id)) {
+      if (OB_FAIL(schema_mgr_->get_table_id(tenant_id,
+                                             database_id,
+                                             table_name,
+                                             is_index_table,
+                                             with_hidden_flag ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE
+                                                              : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES,
+                                             table_id,
+                                             is_built_in_index))) {
+        LOG_WARN("get table id failed", K(ret), K(tenant_id), K(database_id), K(table_name), K(is_index_table));
+      }
+    } else if (is_external_catalog_id(catalog_id)) {
+      if (OB_FAIL(sql_schema_mgr_->get_catalog_table_id(tenant_id, catalog_id, database_id, table_name, table_id))) {
+        LOG_WARN("get catalog table id failed", K(ret), K(tenant_id), K(catalog_id), K(database_id), K(table_name));
+      }
     } else {
-      is_exist = (OB_INVALID_ID != table_id);
-      if (is_exist == false) {
-        bool exist = false;
-        ObNameCaseMode mode = OB_NAME_CASE_INVALID;
-        if (is_sys_tenant(tenant_id) || is_oceanbase_sys_database_id(database_id)) {
-          // The system tenant cannot obtain the name_case_mode of the other tenants, and the system tenant shall prevail.
-          mode = OB_ORIGIN_AND_INSENSITIVE;
-        } else if (OB_FAIL(schema_mgr_->get_tenant_name_case_mode(tenant_id, mode))) {
-          LOG_WARN("fail to get name case mode");
-        } else if (OB_NAME_CASE_INVALID == mode) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid case mode", K(ret), K(mode));
-        }
-        if (OB_FAIL(ret)) {
-          //do nothing
-        } else if (OB_FAIL(find_fake_cte_schema(table_name, mode, exist))) {
-          LOG_WARN("can not find the table", K(ret), K(tenant_id), K(database_id), K(table_name), K(is_index_table));
-        } else {
-          is_exist = exist;
-        }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    is_exist = (OB_INVALID_ID != table_id);
+    if (is_exist == false) {
+      bool exist = false;
+      ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+      if (is_sys_tenant(tenant_id) || is_oceanbase_sys_database_id(database_id)) {
+        // The system tenant cannot obtain the name_case_mode of the other tenants, and the system tenant shall prevail.
+        mode = OB_ORIGIN_AND_INSENSITIVE;
+      } else if (OB_FAIL(schema_mgr_->get_tenant_name_case_mode(tenant_id, mode))) {
+        LOG_WARN("fail to get name case mode");
+      } else if (OB_NAME_CASE_INVALID == mode) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid case mode", K(ret), K(mode));
+      }
+      if (OB_FAIL(ret)) {
+        //do nothing
+      } else if (OB_FAIL(find_fake_cte_schema(table_name, mode, exist))) {
+        LOG_WARN("can not find the table", K(ret), K(tenant_id), K(database_id), K(table_name), K(is_index_table));
+      } else {
+        is_exist = exist;
       }
     }
   }
@@ -378,7 +430,8 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
                                         const bool is_index_table,
                                         const bool with_hidden_flag,
                                         bool &is_exist,
-                                        const bool is_built_in_index)
+                                        const bool is_built_in_index,
+                                        const uint64_t catalog_id)
 {
   int ret = OB_SUCCESS;
 
@@ -387,18 +440,36 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || database_name.empty() || table_name.empty())) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == catalog_id || database_name.empty() || table_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(tenant_id), K(database_name), K(table_name), K(ret));
+    LOG_WARN("invalid arguments", K(tenant_id), K(catalog_id), K(database_name), K(table_name), K(ret));
   } else {
-    if (OB_FAIL(schema_mgr_->get_table_id(tenant_id, database_name, table_name, is_index_table,
-            with_hidden_flag ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES,
-            table_id, is_built_in_index))) {
-      LOG_WARN("fail to check table exist", K(tenant_id), K(database_name), K(table_name),
-               K(is_index_table), K(ret));
+    if (is_internal_catalog_id(catalog_id)) {
+      if (OB_FAIL(schema_mgr_->get_table_id(tenant_id,
+                                            database_name,
+                                            table_name,
+                                            is_index_table,
+                                            with_hidden_flag ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE
+                                                             : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES,
+                                            table_id,
+                                            is_built_in_index))) {
+        LOG_WARN("fail to check table exist", K(tenant_id), K(database_name), K(table_name), K(is_index_table), K(ret));
+      }
+    } else if (is_external_catalog_id(catalog_id)) {
+      uint64_t database_id = OB_INVALID_ID;
+      if (OB_FAIL(sql_schema_mgr_->get_catalog_database_id(tenant_id, catalog_id, database_name, database_id))) {
+        LOG_WARN("fail to get catalog database id", K(ret), K(tenant_id), K(catalog_id), K(database_name));
+      } else if (OB_FAIL(sql_schema_mgr_->get_catalog_table_id(tenant_id, catalog_id, database_id, table_name, table_id))) {
+        LOG_WARN("fail to check catalog table exist", K(ret), K(tenant_id), K(catalog_id), K(database_name), K(database_id));
+      }
     } else {
-      is_exist = (OB_INVALID_ID != table_id);
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected", K(ret));
     }
+  }
+
+  if (OB_SUCC(ret)) {
+    is_exist = (OB_INVALID_ID != table_id);
   }
   return ret;
 }
@@ -410,7 +481,7 @@ int ObSchemaChecker::get_mock_fk_parent_table_with_name(
     const common::ObString &name,
     const ObMockFKParentTableSchema *&schema)
 {
-  int ret= OB_SUCCESS;
+  int ret = OB_SUCCESS;
   if (OB_FAIL(schema_mgr_->get_mock_fk_parent_table_schema_with_name(tenant_id, database_id, name, schema))) {
     LOG_WARN("failed to get mock fk parent table schema", K(ret));
   }
@@ -418,7 +489,13 @@ int ObSchemaChecker::get_mock_fk_parent_table_with_name(
 }
 // mock_fk_parent_table end
 
+int ObSchemaChecker::get_database_id(const uint64_t tenant_id, const ObString &database_name, uint64_t &database_id) const
+{
+  return get_database_id(tenant_id, OB_INTERNAL_CATALOG_ID, database_name, database_id);
+}
+
 int ObSchemaChecker::get_database_id(const uint64_t tenant_id,
+                                     const uint64_t catalog_id,
                                      const ObString &database_name,
                                      uint64_t &database_id) const
 {
@@ -432,11 +509,149 @@ int ObSchemaChecker::get_database_id(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_name), K(ret));
   } else {
-    if (OB_FAIL(schema_mgr_->get_database_id(tenant_id, database_name, database_id))) {
-      LOG_WARN("fail to get database id", K(tenant_id), K(database_name), K(database_id), K(ret));
-    } else if (OB_INVALID_ID == database_id) {
-      ret = OB_ERR_BAD_DATABASE;
-      LOG_WARN("database is not exist", K(tenant_id), K(database_name), K(ret));
+    if (is_internal_catalog_id(catalog_id)) {
+      if (OB_FAIL(OB_FAIL(schema_mgr_->get_database_id(tenant_id, database_name, database_id)))) {
+        LOG_WARN("fail to get database id", K(tenant_id), K(database_name), K(database_id), K(ret));
+      }
+    } else if (is_external_catalog_id(catalog_id)) {
+      if (OB_ISNULL(sql_schema_mgr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(sql_schema_mgr_->get_catalog_database_id(tenant_id, catalog_id, database_name, database_id))) {
+        LOG_WARN("failed to get catalog database id", K(tenant_id), K(catalog_id), K(database_name), K(database_id), K(ret));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_INVALID_ID == database_id) {
+    ret = OB_ERR_BAD_DATABASE;
+    LOG_WARN("database is not exist", K(tenant_id), K(catalog_id), K(database_name), K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_catalog_id_name(const uint64_t tenant_id,
+                                         common::ObString &catalog_name,
+                                         uint64_t &catalog_id,
+                                         ObIAllocator *allocator,
+                                         bool allow_not_exist) const
+{
+  int ret = OB_SUCCESS;
+  catalog_id = OB_INVALID_ID;
+  const ObCatalogSchema *catalog_schema = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+  } else if (OB_ISNULL(schema_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || catalog_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(catalog_name), K(ret));
+  } else if (OB_FAIL(schema_mgr_->get_catalog_schema_by_name(tenant_id, catalog_name, catalog_schema))) {
+    LOG_WARN("failed to get catalog schema", K(ret));
+  } else if (OB_ISNULL(catalog_schema)) {
+    if (allow_not_exist) {
+      // do nothing
+    } else {
+      ret = OB_CATALOG_NOT_EXIST;
+      LOG_WARN("catalog not exist", K(ret), K(catalog_name));
+      LOG_USER_ERROR(OB_CATALOG_NOT_EXIST, catalog_name.length(), catalog_name.ptr());
+    }
+  } else {
+    catalog_id = catalog_schema->get_catalog_id();
+    catalog_name = catalog_schema->get_catalog_name_str();
+    if (allocator != NULL && OB_FAIL(ob_write_string(*allocator, catalog_name, catalog_name))) {
+      LOG_WARN("failed to deep copy str", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_sensitive_rule_schema_count(const uint64_t tenant_id, int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+  } else if (OB_ISNULL(schema_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(ret));
+  } else if (OB_FAIL(schema_mgr_->get_sensitive_rule_schema_count(tenant_id, count))) {
+    LOG_WARN("failed to get sensitive rule schema count", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_sensitive_rule_id_name(const uint64_t tenant_id,
+                                                common::ObString &sensitive_rule_name,
+                                                uint64_t &sensitive_rule_id,
+                                                ObIAllocator *allocator,
+                                                bool allow_not_exist) const
+{
+  int ret = OB_SUCCESS;
+  sensitive_rule_id = OB_INVALID_ID;
+  const ObSensitiveRuleSchema *sensitive_rule_schema = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+  } else if (OB_ISNULL(schema_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || sensitive_rule_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(sensitive_rule_name), K(ret));
+  } else if (OB_FAIL(schema_mgr_->get_sensitive_rule_schema_by_name(tenant_id, sensitive_rule_name, sensitive_rule_schema))) {
+    LOG_WARN("failed to get sensitive rule schema", K(ret));
+  } else if (OB_ISNULL(sensitive_rule_schema)) {
+    if (allow_not_exist) {
+      // do nothing
+    } else {
+      ret = OB_SENSITIVE_RULE_NOT_EXIST;
+      LOG_WARN("sensitive rule not exist", K(ret), K(sensitive_rule_name));
+      LOG_USER_ERROR(OB_SENSITIVE_RULE_NOT_EXIST, sensitive_rule_name.length(), sensitive_rule_name.ptr());
+    }
+  } else {
+    sensitive_rule_id = sensitive_rule_schema->get_sensitive_rule_id();
+    sensitive_rule_name = sensitive_rule_schema->get_sensitive_rule_name_str();
+    if (allocator != NULL && OB_FAIL(ob_write_string(*allocator, sensitive_rule_name, sensitive_rule_name))) {
+      LOG_WARN("failed to deep copy str", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_sensitive_rule_schema_by_column(const uint64_t tenant_id,
+                                                         const uint64_t table_id,
+                                                         const uint64_t column_id,
+                                                         bool allow_not_exist,
+                                                         const ObSensitiveRuleSchema *&schema) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+  } else if (OB_ISNULL(schema_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_valid_id(table_id) || !is_valid_id(column_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(table_id), K(column_id), K(ret));
+  } else if (OB_FAIL(schema_mgr_->get_sensitive_rule_schema_by_column(tenant_id, table_id, column_id, schema))) {
+    LOG_WARN("failed to get sensitive rule schema", K(ret));
+  } else if (OB_ISNULL(schema)) {
+    if (allow_not_exist) {
+      // do nothing
+    } else {
+      ret = OB_SENSITIVE_RULE_NOT_EXIST;
+      LOG_WARN("sensitive rule not exist", K(ret), K(table_id), K(column_id));
+      LOG_USER_ERROR(OB_SENSITIVE_RULE_NOT_EXIST, 0, "");
     }
   }
   return ret;
@@ -451,6 +666,7 @@ int ObSchemaChecker::get_column_schema(
     bool is_link /* = false */)
 {
   int ret = OB_SUCCESS;
+  bool is_ddl_tmp = false;
   column_schema = NULL;
 
   const ObColumnSchemaV2 *column = NULL;
@@ -461,7 +677,9 @@ int ObSchemaChecker::get_column_schema(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(table_id), K(column_name), K(ret));
   } else {
-    if (OB_FAIL(get_column_schema_inner(tenant_id, table_id, column_name, column, is_link))) {
+    if (OB_FAIL(get_ddl_tmp_column_schema(tenant_id, table_id, column_name, is_ddl_tmp, column))) {
+      LOG_WARN("fail to get ddl tmp column schema", K(ret));
+    } else if (!is_ddl_tmp && OB_FAIL(get_column_schema_inner(tenant_id, table_id, column_name, column, is_link))) {
       LOG_WARN("get column schema failed", K(tenant_id), K(table_id), K(column_name), K(ret));
     } else if (NULL == column) {
       for (int64_t i = 0; i < tmp_cte_schemas_.count(); i++) {
@@ -603,6 +821,7 @@ int ObSchemaChecker::check_table_exists_with_synonym(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   uint64_t tbl_db_id = OB_INVALID_ID;
   uint64_t obj_db_id = OB_INVALID_ID;
+  uint64_t catalog_id = OB_INTERNAL_CATALOG_ID; // not support in catalog, use INTERNAL_CATALOG instead
   ObSEArray<uint64_t, 8> syn_id_arr;
   ObString obj_name;
   table_exist = false;
@@ -626,7 +845,7 @@ int ObSchemaChecker::check_table_exists_with_synonym(const uint64_t tenant_id,
       }
     } else {
       has_synonym = true;
-      if (OB_FAIL(check_table_exists(tenant_id, obj_db_id, obj_name, is_index_table, false/*is_hidden*/, table_exist))) {
+      if (OB_FAIL(check_table_exists(tenant_id, catalog_id, obj_db_id, obj_name, is_index_table, false /*is_hidden*/, table_exist))) {
         LOG_WARN("get_table_schema failed", K(ret), K(tenant_id), K(tbl_db_name), K(tbl_db_id), K(tbl_name));
       } else if (false == table_exist) {
         // TODO: 错误码与Oracle不兼容
@@ -634,7 +853,8 @@ int ObSchemaChecker::check_table_exists_with_synonym(const uint64_t tenant_id,
         // 但是目前没法区分是table不存在，还是该对象不是table。所以错误码与Oracle不一致
         ret = OB_ERR_SYNONYM_TRANSLATION_INVALID;
         LOG_WARN("object is synonym, but real object not exist", K(ret), K(tenant_id), K(tbl_db_name), K(tbl_name), K(obj_name));
-        LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, to_cstring(tbl_name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, helper.convert(tbl_name));
       }
     }
   } else {
@@ -685,7 +905,8 @@ int ObSchemaChecker::get_table_schema_with_synonym(const uint64_t tenant_id,
         } else if (OB_ISNULL(tbl_schema)) {
           ret = OB_ERR_SYNONYM_TRANSLATION_INVALID;
           LOG_WARN("object is synonym, but real object not exist", K(ret), K(tenant_id), K(tbl_db_name), K(tbl_name), K(obj_name));
-          LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, to_cstring(tbl_name));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, helper.convert(tbl_name));
         } else if (OB_FAIL(get_database_schema(tenant_id, obj_db_id, db_schema))) {
           LOG_WARN("get database schema failed", K(ret), K(tenant_id), K(obj_db_id));
         } else if (OB_ISNULL(db_schema)) {
@@ -739,12 +960,14 @@ int ObSchemaChecker::get_simple_table_schema(
 
 int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const ObString &database_name,
                                       const ObString &table_name, const bool is_index_table,
-                                      const ObTableSchema *&table_schema)
+                                      const ObTableSchema *&table_schema, const bool with_hidden_flag,
+                                      const bool is_built_in_index)
 {
   int ret = OB_SUCCESS;
   table_schema = NULL;
 
   const ObTableSchema *table = NULL;
+  ObCStringHelper helper;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
@@ -752,7 +975,7 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const ObString &
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_name), K(table_name), K(ret));
   } else if (OB_FAIL(schema_mgr_->get_table_schema(tenant_id, database_name, table_name,
-                                            is_index_table, table))) {
+                                            is_index_table, table, with_hidden_flag, is_built_in_index))) {
     LOG_WARN("get table schema failed", K(tenant_id), K(database_name), K(table_name), K(ret));
   } else if (NULL == table) {
     ret = OB_TABLE_NOT_EXIST;
@@ -762,10 +985,10 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const ObString &
              && 0 != table->get_session_id()
              && OB_INVALID_ID != schema_mgr_->get_session_id()) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(table_name));
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name), helper.convert(table_name));
   } else if (table->is_materialized_view() && !(table->mv_available())) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(table_name));
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name), helper.convert(table_name));
   } else {
     table_schema = table;
   }
@@ -774,13 +997,15 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const ObString &
 
 // 注意：这个函数只能在 sql 层使用
 int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
+                                      const uint64_t catalog_id,
                                       const uint64_t database_id,
                                       const ObString &table_name,
                                       const bool is_index_table,
                                       const bool cte_table_fisrt,
                                       const bool with_hidden_flag,
                                       const ObTableSchema *&table_schema,
-                                      const bool is_built_in_index/*= false*/)
+                                      const bool is_built_in_index /*= false*/,
+                                      const share::ObTimeTravelInfo *time_travel_info /*= NULL*/)
 {
   int ret = OB_SUCCESS;
   table_schema = NULL;
@@ -794,11 +1019,38 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_id), K(table_name), K(ret));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(schema_mgr_->get_table_schema(tenant_id, database_id, table_name,
-        is_index_table, table, with_hidden_flag, is_built_in_index))) {
-    LOG_WARN("get table schema failed", K(tenant_id), K(database_id), K(table_name),
-             K(with_hidden_flag), K(is_built_in_index), K(is_index_table), K(ret));
   } else {
+    if (is_internal_catalog_id(catalog_id)) {
+      if (OB_FAIL(schema_mgr_->get_table_schema(tenant_id, database_id, table_name, is_index_table, table, with_hidden_flag, is_built_in_index))) {
+        LOG_WARN("get table schema failed",
+             K(tenant_id),
+             K(database_id),
+             K(table_name),
+             K(with_hidden_flag),
+             K(is_built_in_index),
+             K(is_index_table),
+             K(ret));
+      }
+    } else if (is_external_catalog_id(catalog_id)) {
+      if (OB_FAIL(sql_schema_mgr_->get_catalog_table_schema(tenant_id,
+                                                            catalog_id,
+                                                            database_id,
+                                                            table_name,
+                                                            table,
+                                                            time_travel_info))) {
+        LOG_WARN("get catalog table schema failed",
+                 K(tenant_id),
+                 K(catalog_id),
+                 K(database_id),
+                 K(table_name),
+                 K(ret));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     // 也有可能是临时cte递归表schema与已有表重名，
     // 这个时候必须由cte递归表schema优先(same with oracle)
     // 在fake schema中找到了，则覆盖之前找到的基本表
@@ -837,13 +1089,51 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
         LOG_WARN("fail to get database schema", K(tenant_id), K(database_id), K(ret));
       } else {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(), to_cstring(table_name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(),
+            helper.convert(table_name));
+      }
+    } else if (table->is_materialized_view() && !(table->mv_available())) {
+      const ObDatabaseSchema *db_schema = NULL;
+      if (OB_FAIL(schema_mgr_->get_database_schema(tenant_id, database_id, db_schema))) {
+        LOG_WARN("get database schema failed", K(tenant_id), K(database_id), K(ret));
+      } else if (NULL == db_schema) {
+        ret = OB_ERR_BAD_DATABASE;
+        LOG_WARN("fail to get database schema", K(tenant_id), K(database_id), K(ret));
+      } else {
+        ret = OB_TABLE_NOT_EXIST;
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(),
+                       helper.convert(table_name));
       }
     } else {
       table_schema = table;
     }
   }
   return ret;
+}
+
+// 注意：这个函数只能在 sql 层使用
+int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
+                                      const uint64_t database_id,
+                                      const ObString &table_name,
+                                      const bool is_index_table,
+                                      const bool cte_table_fisrt,
+                                      const bool with_hidden_flag,
+                                      const ObTableSchema *&table_schema,
+                                      const bool is_built_in_index /*= false*/,
+                                      const share::ObTimeTravelInfo *time_travel_info /*= NULL*/)
+{
+  return get_table_schema(tenant_id,
+                          OB_INTERNAL_CATALOG_ID,
+                          database_id,
+                          table_name,
+                          is_index_table,
+                          cte_table_fisrt,
+                          with_hidden_flag,
+                          table_schema,
+                          is_built_in_index,
+                          time_travel_info);
 }
 
 // 注意：这个函数只能在 sql 层使用
@@ -1049,8 +1339,8 @@ int ObSchemaChecker::get_sys_variable_schema(const uint64_t &tenant_id,
 }
 
 int ObSchemaChecker::get_database_schema(const uint64_t tenant_id,
-                                          const uint64_t database_id,
-                                          const ObDatabaseSchema *&database_schema)
+                                         const uint64_t database_id,
+                                         const ObDatabaseSchema *&database_schema)
 {
   int ret = OB_SUCCESS;
   database_schema = NULL;
@@ -1061,13 +1351,28 @@ int ObSchemaChecker::get_database_schema(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == database_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_id), K(ret));
-  } else if (OB_FAIL(schema_mgr_->get_database_schema(tenant_id, database_id, database))) {
-    LOG_WARN("get database schema failed", K(tenant_id), K(database_id), K(ret));
-  } else if (NULL == database) {
-    ret = OB_ERR_BAD_DATABASE;
-    LOG_WARN("fail to get database schema", K(tenant_id), K(database_id), K(ret));
+  } else if (is_external_object_id(database_id)) {
+    // fetch database schema from ObSqlSchemaGuard
+    if (OB_ISNULL(sql_schema_mgr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(sql_schema_mgr_->get_database_schema(database_id, database))) {
+      LOG_WARN("get catalog's database schema failed", K(ret));
+    }
   } else {
-    database_schema = database;
+    // follow original logic
+    if (OB_FAIL(schema_mgr_->get_database_schema(tenant_id, database_id, database))) {
+      LOG_WARN("get database schema failed", K(tenant_id), K(database_id), K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (NULL == database) {
+      ret = OB_ERR_BAD_DATABASE;
+      LOG_WARN("fail to get database schema", K(tenant_id), K(database_id), K(ret));
+    } else {
+      database_schema = database;
+    }
   }
   return ret;
 }
@@ -1118,8 +1423,8 @@ int ObSchemaChecker::check_column_has_index(const uint64_t tenant_id, uint64_t t
 {
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *col_schema = NULL;
-  uint64_t index_tid_array[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tid_array[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t index_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
 
   has_index = false;
   if (IS_NOT_INIT) {
@@ -1536,7 +1841,7 @@ int ObSchemaChecker::get_package_id(const uint64_t tenant_id,
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K_(is_inited));
   } else if (OB_FAIL(schema_mgr_->get_package_id(
-                      tenant_id, database_id, package_name, PACKAGE_TYPE, compatible_mode, package_id))) {
+                      tenant_id, database_id, package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_id))) {
     LOG_WARN("get package id failed", K(ret));
   } else if (OB_INVALID_ID == package_id) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -1558,7 +1863,7 @@ int ObSchemaChecker::get_package_id(const uint64_t tenant_id,
     LOG_WARN("schema checker is not inited", K_(is_inited));
   } else if (OB_FAIL(get_database_id(tenant_id, database_name, db_id))) {
     LOG_WARN("get database id failed", K(ret));
-  } else if (OB_FAIL(schema_mgr_->get_package_id(tenant_id, db_id, package_name, PACKAGE_TYPE, compatible_mode, package_id))) {
+  } else if (OB_FAIL(schema_mgr_->get_package_id(tenant_id, db_id, package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_id))) {
     LOG_WARN("get package id failed", K(ret));
   } else if (OB_INVALID_ID == package_id) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -1616,7 +1921,7 @@ int ObSchemaChecker::get_package_body_id(const uint64_t tenant_id,
       LOG_WARN("schema checker is not inited", K_(is_inited));
     } else if (OB_FAIL(get_database_id(tenant_id, database_name, db_id))) {
       LOG_WARN("get database id failed", K(ret));
-    } else if (OB_FAIL(schema_mgr_->get_package_id(tenant_id, db_id, package_name, PACKAGE_BODY_TYPE,
+    } else if (OB_FAIL(schema_mgr_->get_package_id(tenant_id, db_id, package_name, share::schema::PACKAGE_BODY_TYPE,
                                                    compatible_mode, package_body_id))) {
       LOG_WARN("get package body id failed", K(ret));
     } else if (OB_INVALID_ID == package_body_id) {
@@ -2032,7 +2337,9 @@ int ObSchemaChecker::get_idx_schema_by_origin_idx_name(const uint64_t tenant_id,
         LOG_WARN("fail to get database schema", K(tenant_id), K(database_id), K(ret));
       } else {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(), to_cstring(index_name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(),
+            helper.convert(index_name));
       }
     } else {
       table_schema = table;
@@ -2128,6 +2435,26 @@ int ObSchemaChecker::get_directory_id(const uint64_t tenant_id,
   return ret;
 }
 
+int ObSchemaChecker::get_location_id(const uint64_t tenant_id,
+                                     const common::ObString &location_name,
+                                     uint64_t &location_id)
+{
+  int ret = OB_SUCCESS;
+  const ObLocationSchema *schema = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K_(is_inited));
+  } else if (OB_FAIL(schema_mgr_->get_location_schema_by_name(tenant_id, location_name, schema))) {
+    LOG_WARN("get location schema failed", K(ret));
+  } else if (OB_ISNULL(schema)) {
+    ret = OB_LOCATION_OBJ_NOT_EXIST;
+    LOG_WARN("location is not exists", K(location_name));
+  } else {
+    location_id = schema->get_location_id();
+  }
+  return ret;
+}
+
 int ObSchemaChecker::get_table_schema_inner(const uint64_t tenant_id, uint64_t table_id,
                                             const ObTableSchema *&table_schema) const
 {
@@ -2200,7 +2527,10 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     common::ObString &object_db_name,
     bool explicit_db,
     const common::ObString &prev_table_name,
-    ObSynonymChecker &synonym_checker) /* ObSelectStmt* */
+    ObSynonymChecker &synonym_checker,
+    bool is_catalog,
+    bool is_location,
+    bool is_sensitive_rule)
 {
   int ret = OB_SUCCESS;
   object_type = ObObjectType::INVALID;
@@ -2217,7 +2547,7 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     if (lib::is_oracle_mode() && ret == OB_ERR_BAD_DATABASE) {
       ret = OB_TABLE_NOT_EXIST;
     }
-  } else if (false == is_directory) {
+  } else if (!is_directory && !is_catalog && !is_location && !is_sensitive_rule) {
     ret = get_table_schema(tenant_id, database_name, table_name, false, table_schema);
     if (OB_TABLE_NOT_EXIST == ret) {
       if (lib::is_oracle_mode()) {
@@ -2390,14 +2720,30 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
         }
       }
     }
-  } else {
+  } else if (is_directory) {
     // if directory, support it's a directory, to do after create directory
     uint64_t dir_id = 0;
     OZ (get_directory_id(tenant_id, table_name, dir_id));
     OX (object_type = ObObjectType::DIRECTORY);
     OX (object_id = dir_id);
+  } else if (is_catalog) {
+    ObString catalog_name = table_name;
+    OZ (get_catalog_id_name(tenant_id, catalog_name, object_id));
+    OX (object_type = ObObjectType::CATALOG);
+  } else if (is_location) {
+    uint64_t loc_id = 0;
+    OZ (get_location_id(tenant_id, table_name, loc_id));
+    OX (object_type = ObObjectType::LOCATION);
+    OX (object_id = loc_id);
+  } else if (is_sensitive_rule) {
+    uint64_t sensitive_rule_id = 0;
+    ObString sensitive_rule_name = table_name;
+    OZ (get_sensitive_rule_id_name(tenant_id, sensitive_rule_name, sensitive_rule_id));
+    OX (object_type = ObObjectType::SENSITIVE_RULE);
+    OX (object_id = sensitive_rule_id);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
   }
-
   if (OB_FAIL(ret)) {
     LOG_WARN("get_object_type_with_view_info failed",
              K(tenant_id), K(database_name), K(table_name), K(ret));
@@ -2405,15 +2751,13 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
   return ret;
 }
 
-int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t tenant_id,
-                                     uint64_t database_id,
-                                     const common::ObString &object_name,
-                                     bool &exist,
-                                     bool &is_private_syn)
+int ObSchemaChecker::get_object_id_by_name(const uint64_t tenant_id,
+                                            uint64_t database_id,
+                                            const common::ObString &object_name,
+                                            uint64_t &object_id)
 {
   int ret = OB_SUCCESS;
-  exist = false;
-  is_private_syn = false;
+
   common::ObString database_name;
   const ObDatabaseSchema  *db_schema = NULL;
   const share::schema::ObTableSchema *table_schema = NULL;
@@ -2421,6 +2765,116 @@ int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t te
     LOG_WARN("fail to get db schema", K(ret));
   } else if (OB_NOT_NULL(db_schema)) {
     database_name = db_schema->get_database_name();
+    ret = get_table_schema(tenant_id, database_name, object_name, false, table_schema);
+    if (OB_TABLE_NOT_EXIST == ret) {
+      if (lib::is_oracle_mode()) {
+        ret = get_idx_schema_by_origin_idx_name(tenant_id, database_id, object_name, table_schema);
+        if (OB_SUCC(ret)) {
+          if (table_schema == NULL) {
+            ret = OB_TABLE_NOT_EXIST;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(table_schema)) {
+      object_id = table_schema->get_table_id();
+    }
+
+    //check sequence
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t sequence_id = 0;
+      if (OB_FAIL(get_sequence_id(tenant_id, database_name, object_name, sequence_id))) {
+        if (OB_ERR_SEQ_NOT_EXIST == ret) {
+          ret = OB_TABLE_NOT_EXIST;
+        }
+      } else {
+        object_id = sequence_id;
+      }
+    }
+    //check procedure/function
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t routine_id = 0;
+      bool is_proc = false;
+      if (OB_FAIL(get_routine_id(tenant_id, database_name, object_name, routine_id, is_proc))) {
+        if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
+          ret = OB_TABLE_NOT_EXIST;
+        }
+      } else {
+        object_id = routine_id;
+      }
+    }
+    //check package
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t package_id = 0;
+      int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
+                                                      : COMPATIBLE_MYSQL_MODE;
+      if (OB_FAIL(get_package_id(tenant_id, database_name, object_name,
+                                  compatible_mode, package_id))) {
+        if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
+          if (OB_FAIL(get_package_id(OB_SYS_TENANT_ID,
+                                      OB_SYS_DATABASE_ID,
+                                      object_name,
+                                      compatible_mode,
+                                      package_id))) {
+            if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
+              ret = OB_TABLE_NOT_EXIST;
+            }
+          } else {
+            object_id = package_id;
+          }
+        }
+      } else {
+        object_id = package_id;
+      }
+    }
+
+    //check type
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t udt_id = 0;
+      if (OB_FAIL(get_udt_id(tenant_id, database_name, object_name, udt_id))) {
+        if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
+        ret = OB_TABLE_NOT_EXIST;
+        }
+      } else {
+        object_id = udt_id;
+      }
+    }
+    //check synonym
+    if (OB_TABLE_NOT_EXIST == ret) {
+      ObString obj_db_name;
+      ObString obj_name;
+      uint64_t synonym_id = OB_INVALID_ID;
+      uint64_t database_id = OB_INVALID_ID;
+      bool exist = false;
+      ret = OB_SUCCESS;
+      if (OB_FAIL(get_syn_info(tenant_id, database_name, object_name, obj_db_name,
+                               obj_name, synonym_id, database_id, exist))) {
+        ret = OB_TABLE_NOT_EXIST;
+      } else {
+        object_id = synonym_id;
+      }
+    }
+  }
+  if (OB_TABLE_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+  }
+
+  return ret;
+}
+
+int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t tenant_id,
+                                                               uint64_t database_id,
+                                                               const common::ObString &object_name,
+                                                               bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  const ObDatabaseSchema  *db_schema = NULL;
+  if (OB_FAIL(get_database_schema(tenant_id, database_id, db_schema))) {
+    LOG_WARN("fail to get db schema", K(ret));
+  } else if (OB_NOT_NULL(db_schema)) {
+    common::ObString database_name = db_schema->get_database_name();
     ret = get_table_schema(tenant_id, database_name, object_name, false, table_schema);
     if (OB_TABLE_NOT_EXIST == ret) {
       if (lib::is_oracle_mode()) {
@@ -2467,17 +2921,7 @@ int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t te
       if (OB_FAIL(get_package_id(tenant_id, database_name, object_name,
                                   compatible_mode, package_id))) {
         if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
-          if (OB_FAIL(get_package_id(OB_SYS_TENANT_ID,
-                                      OB_SYS_DATABASE_ID,
-                                      object_name,
-                                      compatible_mode,
-                                      package_id))) {
-            if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
-              ret = OB_TABLE_NOT_EXIST;
-            }
-          } else {
-            exist = true;
-          }
+          ret = OB_TABLE_NOT_EXIST;
         }
       } else {
         exist = true;
@@ -2495,25 +2939,46 @@ int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t te
         exist = true;
       }
     }
-    //check synonym
-    if (OB_TABLE_NOT_EXIST == ret) {
+  }
+  if (OB_TABLE_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObSchemaChecker::check_object_exists_by_name(const uint64_t tenant_id,
+                                     uint64_t database_id,
+                                     const common::ObString &object_name,
+                                     bool &exist,
+                                     bool &is_private_syn)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  is_private_syn = false;
+  //check commmon object
+  OZ(check_exist_same_name_object_with_synonym(tenant_id, database_id, object_name, exist));
+  //check synonym
+  if (OB_FAIL(ret)) {
+  } else if (!exist) {
+    const ObDatabaseSchema  *db_schema = NULL;
+    if (OB_FAIL(get_database_schema(tenant_id, database_id, db_schema))) {
+      LOG_WARN("fail to get db schema", K(ret));
+    } else if (OB_ISNULL(db_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("db_schema is NULL", K(ret));
+    } else {
       ObString obj_db_name;
       ObString obj_name;
       uint64_t synonym_id = OB_INVALID_ID;
       uint64_t database_id = OB_INVALID_ID;
-      ret = OB_SUCCESS;
-      if (OB_FAIL(get_syn_info(tenant_id, database_name, object_name, obj_db_name,
-                               obj_name, synonym_id, database_id, exist))) {
-        ret = OB_TABLE_NOT_EXIST;
+      if (OB_FAIL(get_syn_info(tenant_id, db_schema->get_database_name(), object_name, obj_db_name,
+                              obj_name, synonym_id, database_id, exist))) {
+        ret = OB_SUCCESS;
       } else {
         is_private_syn = true;
       }
     }
   }
-  if (OB_TABLE_NOT_EXIST == ret) {
-    ret = OB_SUCCESS;
-  }
-
   return ret;
 }
 
@@ -2526,7 +2991,10 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
                                      bool is_directory,
                                      bool explicit_db,
                                      const common::ObString &prev_table_name,
-                                     ObSynonymChecker &synonym_checker)
+                                     ObSynonymChecker &synonym_checker,
+                                     bool is_catalog,
+                                     bool is_location,
+                                     bool is_sensitive_rule)
 {
   int ret = OB_SUCCESS;
   object_type = ObObjectType::INVALID;
@@ -2540,7 +3008,7 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
     if (lib::is_oracle_mode() && ret == OB_ERR_BAD_DATABASE) {
       ret = OB_TABLE_NOT_EXIST;
     }
-  } else if (false == is_directory) {
+  } else if (!is_directory && !is_catalog && !is_location && !is_sensitive_rule) {
     ret = get_table_schema(tenant_id, database_name, table_name, false, table_schema);
     if (OB_TABLE_NOT_EXIST == ret) {
       if (lib::is_oracle_mode()) {
@@ -2687,12 +3155,29 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
       }
     }
 
-  } else {
+  } else if (is_directory) {
     // if directory, support it's a directory, to do after create directory
     uint64_t dir_id = 0;
     OZ (get_directory_id(tenant_id, table_name, dir_id));
     OX (object_type = ObObjectType::DIRECTORY);
     OX (object_id = dir_id);
+  } else if (is_catalog) {
+    ObString catalog_name = table_name;
+    OZ (get_catalog_id_name(tenant_id, catalog_name, object_id));
+    OX (object_type = ObObjectType::CATALOG);
+  } else if (is_location) {
+    uint64_t loc_id = 0;
+    OZ (get_location_id(tenant_id, table_name, loc_id));
+    OX (object_type = ObObjectType::LOCATION);
+    OX (object_id = loc_id);
+  } else if (is_sensitive_rule) {
+    uint64_t sensitive_rule_id = 0;
+    ObString sensitive_rule_name = table_name;
+    OZ (get_sensitive_rule_id_name(tenant_id, sensitive_rule_name, sensitive_rule_id));
+    OX (object_type = ObObjectType::SENSITIVE_RULE);
+    OX (object_id = sensitive_rule_id);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("get_object_type failed", K(tenant_id), K(database_name), K(table_name), K(ret));
@@ -3111,7 +3596,8 @@ int ObSchemaChecker::construct_udt_qualified_name(const ObUDTTypeInfo &udt_info,
   return ret;
 }
 
-int ObSchemaChecker::get_udt_attribute_id(const uint64_t udt_id, const ObString &attr_name, uint64_t &attr_id, uint64_t &attr_pos)
+int ObSchemaChecker::get_udt_attribute_id(const uint64_t udt_id, const ObString &attr_name, uint64_t &attr_id,
+                                          uint64_t &attr_pos, int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
@@ -3131,14 +3617,25 @@ int ObSchemaChecker::get_udt_attribute_id(const uint64_t udt_id, const ObString 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("udt info is null.", K(ret), K(udt_id));
   } else if (!udt_info->is_collection()) {
-    for (int i = 0; i < udt_info->get_attributes() && OB_SUCC(ret) && attr_id == OB_INVALID_ID; i++) {
+    for (int i = 0; OB_SUCC(ret) && i < udt_info->get_attributes() && attr_id == OB_INVALID_ID; i++) {
       const ObUDTTypeAttr *attr = udt_info->get_attrs().at(i);
       if (attr->get_name().case_compare(attr_name) == 0) {
         attr_id = attr->get_type_attr_id();
         attr_pos++;
+        if (!attr->is_base_type()) {
+          // not basic type
+          if (OB_FAIL(schema_mgr_->get_udt_info(tenant_id, attr_id, udt_info))) {
+            LOG_WARN("get udt info failed", K(ret), K(tenant_id), K(attr_id));
+          } else if (OB_ISNULL(udt_info)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("udt info is null.", K(ret), K(tenant_id), K(attr_id));
+          } else {
+            schema_version = udt_info->get_schema_version();
+          }
+        }
       } else if (attr->get_type_attr_id() >= ObMaxType) {
         attr_pos++;
-        if (OB_FAIL(get_udt_attribute_id(attr->get_type_attr_id(), attr_name, attr_id, attr_pos))) {
+        if (OB_FAIL(get_udt_attribute_id(attr->get_type_attr_id(), attr_name, attr_id, attr_pos, schema_version))) {
            LOG_WARN("failed to get udt attribute id", K(ret), K(udt_id));
         }
       }
@@ -3276,6 +3773,43 @@ int ObSchemaChecker::check_set_default_role_priv(
     }
   }
 
+  return ret;
+}
+
+int ObSchemaChecker::add_ddl_tmp_schema(const share::schema::ObTableSchema* tbl_schema)
+{
+  int ret = OB_SUCCESS;
+  bool dup_schame = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ddl_tmp_schemas_.count(); i++) {
+    if (tbl_schema->get_table_id() == ddl_tmp_schemas_.at(i)->get_table_id()) {
+      dup_schame = true;
+    }
+  }
+  if (!dup_schame) {
+    if (OB_FAIL(ddl_tmp_schemas_.push_back(tbl_schema))) {
+      LOG_WARN("fail to push back ddl tmp schema", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_ddl_tmp_column_schema(const uint64_t tenant_id, uint64_t table_id,
+                                                const common::ObString &column_name,
+                                                bool &is_ddl_tmp,
+                                                const share::schema::ObColumnSchemaV2 *&column_schema) const
+{
+  int ret = OB_SUCCESS;
+  is_ddl_tmp = false;
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == column_schema && i < ddl_tmp_schemas_.count(); i++) {
+    if (OB_ISNULL(ddl_tmp_schemas_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ddl tmp schema is null", K(ret));
+    } else if (ddl_tmp_schemas_.at(i)->get_tenant_id() == tenant_id &&
+               ddl_tmp_schemas_.at(i)->get_table_id() == table_id) {
+      is_ddl_tmp = true;
+      column_schema = ddl_tmp_schemas_.at(i)->get_column_schema(column_name);
+    }
+  }
   return ret;
 }
 

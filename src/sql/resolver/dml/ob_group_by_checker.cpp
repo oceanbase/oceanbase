@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_group_by_checker.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/plan_cache/ob_plan_cache_util.h"
-#include "sql/ob_sql_context.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "common/ob_smart_call.h"
 
 namespace oceanbase
 {
@@ -337,11 +333,6 @@ int ObGroupByChecker::add_pc_const_param_info(ObExprEqualCheckContext &check_ctx
     } else if (const_param_info.const_idx_.count() > 0
                && OB_FAIL(query_ctx_->all_plan_const_param_constraints_.push_back(const_param_info))) {
       LOG_WARN("failed to push back element", K(ret));
-    } else if (const_param_info.const_idx_.count() > 0
-               && OB_FAIL(query_ctx_->all_possible_const_param_constraints_.push_back(const_param_info))) {
-      LOG_WARN("failed to push back element", K(ret));
-    } else {
-      // do nothing
     }
   }
   return ret;
@@ -556,9 +547,9 @@ int ObGroupByChecker::add_abs_equal_constraint_in_grouping_sets(ObConstRawExpr &
           if (lib::is_oracle_mode() && c_expr != nullptr &&
               expr.get_expr_type() == T_QUESTIONMARK && c_expr->get_expr_type() == T_QUESTIONMARK) {
             const ObObj &left_value = expr.get_value().is_unknown() ?
-                                      expr.get_result_type().get_param() : expr.get_value();
+                                      expr.get_param() : expr.get_value();
             const ObObj &right_value = c_expr->get_value().is_unknown() ?
-                                       c_expr->get_result_type().get_param() : c_expr->get_value();
+                                       c_expr->get_param() : c_expr->get_value();
             if (check_obj_abs_equal(left_value, right_value)) {
               // add abs equal constraint
               ObPCParamEqualInfo abs_equal_info;
@@ -909,6 +900,16 @@ int ObGroupByChecker::visit(ObCaseOpRawExpr &expr)
 }
 
 int ObGroupByChecker::visit(ObMatchFunRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_cube(expr) || find_in_grouping_sets(expr)) {
+    set_skip_expr(&expr);
+  }
+  return ret;
+}
+
+int ObGroupByChecker::visit(ObUnpivotRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   if (find_in_group_by(expr) || find_in_rollup(expr) ||

@@ -14,8 +14,6 @@
 
 #define USING_LOG_PREFIX OBLOG_PARSER
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_macro_utils.h"
 
 #include "ob_cdc_multi_data_source_info.h"
@@ -52,7 +50,7 @@ int MultiDataSourceNode::init(
     common::ObString data;
     data.assign_ptr(reinterpret_cast<const char *>(buf), buf_size);
 
-    if (OB_FAIL(tx_buf_node_.init(type, data, share::SCN(), nullptr))) {
+    if (OB_FAIL(tx_buf_node_.init(type, data, share::SCN(), transaction::ObTxSEQ::mk_v0(1), nullptr))) {
       LOG_ERROR("init tx_buf_node failed", KR(ret), K(lsn), K(type), K(data), K(buf_size));
     }
   }
@@ -140,14 +138,17 @@ int64_t MultiDataSourceInfo::to_string(char *buf, const int64_t buf_len) const
 
   if (NULL != buf && buf_len > 0) {
     if (has_ls_table_op()) {
-      (void)common::databuff_printf(buf, buf_len, pos, "{ls_table_op: %s", to_cstring(ls_attr_arr_));
+      (void)common::databuff_printf(buf, buf_len, pos, "{ls_table_op: ");
+      (void)common::databuff_printf(buf, buf_len, pos, ls_attr_arr_);
     } else {
       (void)common::databuff_printf(buf, buf_len, pos, "has_ls_table_op: false");
     }
 
     (void)common::databuff_printf(buf, buf_len, pos, ", is_ddl_trans: %d", has_ddl_trans_op_);
     if (has_tablet_change_op()) {
-      (void)common::databuff_printf(buf, buf_len, pos, ", tablet_change_info: %s}", to_cstring(tablet_change_info_arr_));
+      (void)common::databuff_printf(buf, buf_len, pos, ", tablet_change_info: ");
+      (void)common::databuff_printf(buf, buf_len, pos, tablet_change_info_arr_);
+      (void)common::databuff_printf(buf, buf_len, pos, "}");
     } else {
       (void)common::databuff_printf(buf, buf_len, pos, ", tablet_change_info: None}");
     }
@@ -182,7 +183,7 @@ int MultiDataSourceInfo::get_new_tenant_scehma_info(
           tenant_id,
           tenant_meta->get_schema_version(),
           tenant_meta->get_tenant_name(),
-          tenant_meta->is_restore());
+          tenant_meta->get_status());
     }
   }
 

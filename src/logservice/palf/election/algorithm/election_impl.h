@@ -79,12 +79,18 @@ public:
    */
   virtual int get_role(common::ObRole &role, int64_t &epoch) const final
   {
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+    // for standalone deployment, only one replica exists, so self is leader forever
+    role = common::ObRole::LEADER;
+    epoch = 1;
+#else
     if (OB_LIKELY(proposer_.check_leader(&epoch))) {
       role = common::ObRole::LEADER;
     } else {
       role = common::ObRole::FOLLOWER;
       epoch = 0;
     }
+#endif
     return common::OB_SUCCESS;
   }
   /**
@@ -98,6 +104,11 @@ public:
                                         int64_t &cur_leader_epoch) const override final
   {
     int ret = common::OB_SUCCESS;
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+    // for standalone deployment, only one replica exists, so self is leader forever
+    addr = self_addr_;
+    cur_leader_epoch = 1;
+#else
     bool get_addr_from_proposer = false;
     // 先默认自己是leader，校验lease，校验成功直接给出本机地址
     if (OB_LIKELY(proposer_.check_leader(&cur_leader_epoch))) {
@@ -117,6 +128,7 @@ public:
         cur_leader_epoch = 0;
       }
     }
+#endif
     return ret;
   }
   virtual int set_priority(ElectionPriority *priority) override final;

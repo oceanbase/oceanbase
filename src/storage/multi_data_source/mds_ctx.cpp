@@ -10,10 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "mds_ctx.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "mds_table_handle.h"
-#include "share/ob_errno.h"
+#include "src/storage/multi_data_source/mds_table_impl.h"
+
+using namespace oceanbase::common;
+using namespace oceanbase::share;
 
 namespace oceanbase
 {
@@ -22,11 +22,14 @@ namespace storage
 namespace mds
 {
 
-MdsCtx::MdsCtx() : state_(TwoPhaseCommitState::STATE_INIT) {}
+MdsCtx::MdsCtx() : state_(TwoPhaseCommitState::STATE_INIT), writer_(), seq_no_(transaction::ObTxSEQ::MIN_VAL()) {}
 
-MdsCtx::MdsCtx(const MdsWriter &writer)
+MdsCtx::MdsCtx(const MdsWriter &writer, const transaction::ObTxSEQ start_seq)
   : state_(TwoPhaseCommitState::STATE_INIT),
-    writer_(writer){}
+    writer_(writer),
+    seq_no_(start_seq)
+{
+}
 
 MdsCtx::~MdsCtx()
 {
@@ -44,7 +47,8 @@ MdsCtx::~MdsCtx()
   }
 }
 
-int MdsCtx::assign(const MdsCtx &rhs) {
+int MdsCtx::assign(const MdsCtx &rhs)
+{
   MdsWLockGuard lg(lock_);
   writer_ = rhs.writer_;
   state_ = rhs.state_;
@@ -53,8 +57,9 @@ int MdsCtx::assign(const MdsCtx &rhs) {
 
 const MdsWriter MdsCtx::get_writer() const { return writer_; }
 
-void MdsCtx::set_writer(const MdsWriter &writer)
+int MdsCtx::set_writer(const MdsWriter &writer)
 {
+  int ret = OB_SUCCESS;
   MdsWLockGuard lg(lock_);
   if (state_ != TwoPhaseCommitState::STATE_INIT) {
     MDS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "not allow set writer in non-init state", K(*this), K(writer));
@@ -62,6 +67,29 @@ void MdsCtx::set_writer(const MdsWriter &writer)
     writer_.writer_type_ = writer.writer_type_;
     writer_.writer_id_ = writer.writer_id_;
   }
+  return ret;
+}
+
+void MdsCtx::set_seq_no(const transaction::ObTxSEQ seq_no)
+{
+  seq_no_ = seq_no;
+}
+
+int MdsCtx::inc_seq_no()
+{
+  int ret = OB_SUCCESS;
+  int64_t seq = 0;
+  if (OB_FAIL(ObSequence::get_and_inc_max_seq_no(0, seq))) {
+    MDS_LOG(WARN, "fail to get and inc max seq no", K(ret), KPC(this));
+  } else {
+    seq_no_ = transaction::ObTxSEQ::mk_v0(seq);
+  }
+  return ret;
+}
+
+transaction::ObTxSEQ MdsCtx::get_seq_no() const
+{
+  return seq_no_;
 }
 
 bool MdsCtx::can_write() const

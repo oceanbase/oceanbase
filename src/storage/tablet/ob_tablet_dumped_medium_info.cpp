@@ -11,7 +11,6 @@
  */
 
 #include "storage/tablet/ob_tablet_dumped_medium_info.h"
-#include <algorithm>
 #include "storage/multi_data_source/adapter_define/mds_dump_node.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 
@@ -130,8 +129,8 @@ int ObTabletDumpedMediumInfo::init_for_mds_table_dump(
       LOG_WARN("failed to assign", K(ret));
     } else {
       // sort first
-      std::sort(array1.begin(), array1.end(), ObTabletDumpedMediumInfo::compare);
-      std::sort(array2.begin(), array2.end(), ObTabletDumpedMediumInfo::compare);
+      lib::ob_sort(array1.begin(), array1.end(), ObTabletDumpedMediumInfo::compare);
+      lib::ob_sort(array2.begin(), array2.end(), ObTabletDumpedMediumInfo::compare);
 
       // merge
       bool contain = false;
@@ -203,7 +202,7 @@ int ObTabletDumpedMediumInfo::init_for_mds_table_dump(
   return ret;
 }
 
-int ObTabletDumpedMediumInfo::assign(const ObTabletDumpedMediumInfo &other, common::ObIAllocator &allocator)
+int ObTabletDumpedMediumInfo::assign(common::ObIAllocator &allocator, const ObTabletDumpedMediumInfo &other)
 {
   int ret = OB_SUCCESS;
 
@@ -264,7 +263,7 @@ int ObTabletDumpedMediumInfo::append(
     } else if (OB_FAIL(medium_info_list_.push_back(medium_info))) {
       LOG_WARN("failed to push back to array", K(ret));
     } else {
-      std::sort(medium_info_list_.begin(), medium_info_list_.end(), compare);
+      lib::ob_sort(medium_info_list_.begin(), medium_info_list_.end(), compare);
     }
   }
 
@@ -664,7 +663,7 @@ int ObTabletDumpedMediumInfoIterator::init(
     if (OB_FAIL(ret)) {
       reset();
     } else {
-      std::sort(medium_info_list_.begin(), medium_info_list_.end(), ObTabletDumpedMediumInfo::compare);
+      lib::ob_sort(medium_info_list_.begin(), medium_info_list_.end(), ObTabletDumpedMediumInfo::compare);
 
       idx_ = 0;
       allocator_ = &allocator;
@@ -768,5 +767,6 @@ int ObTabletDumpedMediumInfoIterator::get_next_medium_info(
 
   return ret;
 }
+
 } // namespace storage
 } // namespace oceanbase

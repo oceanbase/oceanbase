@@ -12,25 +12,10 @@
 
 #include "lib/file/file_directory_utils.h"
 
-#include "lib/ob_define.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/ob_errno.h"
+#include "common/ob_smart_call.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <string.h>
-#include <assert.h>
-#include <errno.h>
 #include <dirent.h>
-#include <sys/wait.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
 #include <sys/statvfs.h>
 
 
@@ -415,10 +400,15 @@ int FileDirectoryUtils::delete_directory_rec(const char *path)
 {
   int ret = OB_SUCCESS;
   DIR *dir = NULL;
-  struct dirent *entry;
+  struct dirent *entry = nullptr;
   if (NULL == (dir = opendir(path))) {
-    ret = OB_ERR_SYS;
-    LIB_LOG(WARN, "opendir failed", K(path));
+    if (ENOENT != errno) {
+      ret = OB_FILE_NOT_OPENED;
+      LIB_LOG(WARN, "fail to open dir", K(ret), K(path), K(errno), KERRMSG);
+    } else {
+      ret = OB_ENTRY_NOT_EXIST;
+      LIB_LOG(WARN, "dir does not exist", K(ret), K(path), K(errno), KERRMSG);
+    }
   } else {
     char current_file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
     while ((entry = readdir(dir)) != NULL && OB_SUCC(ret)) {
@@ -432,13 +422,11 @@ int FileDirectoryUtils::delete_directory_rec(const char *path)
       } else if (OB_FAIL(FileDirectoryUtils::is_directory(current_file_path, is_dir))) {
         LIB_LOG(WARN, "is_directory failed", K(ret), K(entry->d_name));
         // delecte directory recursive
-      } else if (true == is_dir && OB_FAIL(delete_directory_rec(current_file_path))) {
+      } else if (true == is_dir && OB_FAIL(SMART_CALL(delete_directory_rec(current_file_path)))) {
         LIB_LOG(WARN, "delete directory failed", K(ret), K(entry->d_name), K(path));
         // delete normal file
       } else if (false == is_dir && OB_FAIL(FileDirectoryUtils::delete_file(current_file_path))) {
         LIB_LOG(WARN, "delete_file failed", K(ret), K(current_file_path));
-      } else {
-        LIB_LOG(INFO, "delete_directory_rec success", K(path));
       }
     }
   }
@@ -449,6 +437,7 @@ int FileDirectoryUtils::delete_directory_rec(const char *path)
   }
   if (NULL != dir) {
     closedir(dir);
+    dir = nullptr;
   }
   return ret;
 }
@@ -457,10 +446,10 @@ int FileDirectoryUtils::delete_tmp_file_or_directory_at(const char *path)
 {
   int ret = OB_SUCCESS;
   DIR *dir = NULL;
-  struct dirent *entry;
+  struct dirent *entry = nullptr;
   if (NULL == (dir = opendir(path))) {
     ret = OB_ERR_SYS;
-    LIB_LOG(WARN, "opendir failed", K(path));
+    LIB_LOG(WARN, "opendir failed", K(path), K(errno), KERRMSG);
   } else {
     auto check_is_tmp_file = [](const char* file_name) -> bool {
       return NULL != strstr(file_name, ".tmp");

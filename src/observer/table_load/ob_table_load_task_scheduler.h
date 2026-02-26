@@ -53,7 +53,10 @@ class ObTableLoadTaskThreadPoolScheduler final : public ObITableLoadTaskSchedule
   static const int STATE_STOPPED = 4;
   static const int STATE_STOPPED_NO_WAIT = 5;
 public:
-  ObTableLoadTaskThreadPoolScheduler(int64_t thread_count, uint64_t table_id, const char *label,
+  ObTableLoadTaskThreadPoolScheduler(int64_t thread_count,
+                                     uint64_t table_id,
+                                     const char *label,
+                                     sql::ObSQLSessionInfo *session_info,
                                      int64_t session_queue_size = 64);
   virtual ~ObTableLoadTaskThreadPoolScheduler();
   int init() override;
@@ -84,11 +87,13 @@ private:
   public:
     MyThreadPool(ObTableLoadTaskThreadPoolScheduler *scheduler)
       : scheduler_(scheduler), running_thread_count_(0) {}
+    int init();
     virtual ~MyThreadPool() = default;
     void run1() override;
   private:
     ObTableLoadTaskThreadPoolScheduler * const scheduler_;
     int64_t running_thread_count_ CACHE_ALIGNED;
+    common::ObThreadCond pool_cond_;
   };
   struct WorkerContext
   {
@@ -103,6 +108,7 @@ private:
   common::ObArenaAllocator allocator_;
   const int64_t thread_count_;
   const int64_t session_queue_size_;
+  sql::ObSQLSessionInfo *session_info_;
   char name_[OB_THREAD_NAME_BUF_LEN];
   common::ObCurTraceId::TraceId trace_id_;
   int64_t timeout_ts_;

@@ -20,7 +20,6 @@
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
 #include "common/log/ob_log_cursor.h"
 
-#define SLOGGERMGR (oceanbase::storage::ObStorageLoggerManager::get_instance())
 
 namespace oceanbase
 {
@@ -30,12 +29,18 @@ class ObStorageLoggerManager final
 {
   friend class ObStorageLogger;
 public:
-  static ObStorageLoggerManager &get_instance();
+  ObStorageLoggerManager();
+  ~ObStorageLoggerManager();
+  ObStorageLoggerManager(const ObStorageLoggerManager &) = delete;
+  ObStorageLoggerManager &operator = (const ObStorageLoggerManager &) = delete;
   int init(
       const char *log_dir,
       const char *data_dir,
       const int64_t max_log_file_size,
       const blocksstable::ObLogFileSpec &log_file_spec);
+  int start();
+  void stop();
+  void wait();
   void destroy();
 
   // allocate item and its buffer
@@ -49,10 +54,6 @@ public:
   int get_reserved_size(int64_t &reserved_size) const;
 
 private:
-  ObStorageLoggerManager();
-  ~ObStorageLoggerManager();
-  ObStorageLoggerManager(const ObStorageLoggerManager &) = delete;
-  ObStorageLoggerManager &operator = (const ObStorageLoggerManager &) = delete;
 
   // prepare for log items and their buffers
   int prepare_log_buffers(const int64_t count, const int64_t log_buf_size);

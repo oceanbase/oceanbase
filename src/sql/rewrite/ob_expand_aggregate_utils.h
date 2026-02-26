@@ -43,10 +43,12 @@ public:
                               ObIArray<ObAggFunRawExpr*> &new_aggr_items);
 
   static int add_aggr_item(common::ObIArray<ObAggFunRawExpr*> &new_aggr_items,
-                           ObAggFunRawExpr *&aggr_expr);
+                           ObAggFunRawExpr *&aggr_expr,
+                           const bool need_strict_check = true);
 
   static int add_win_expr(common::ObIArray<ObWinFunRawExpr*> &new_win_exprs,
-                          ObWinFunRawExpr *&win_expr);
+                          ObWinFunRawExpr *&win_expr,
+                          const bool need_strict_check = true);
 
 private:
   int extract_candi_aggr(ObDMLStmt *select_stmt,
@@ -146,7 +148,9 @@ private:
     return aggr_type == T_FUN_AVG || aggr_type == T_FUN_STDDEV ||
            aggr_type == T_FUN_VARIANCE || aggr_type == T_FUN_STDDEV_POP ||
            aggr_type == T_FUN_STDDEV_SAMP ||
-           aggr_type == T_FUN_APPROX_COUNT_DISTINCT;
+           aggr_type == T_FUN_APPROX_COUNT_DISTINCT ||
+           aggr_type == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||
+           aggr_type == T_FUN_SYS_RB_OR_CARDINALITY_AGG;
   }
 
   int expand_avg_expr(ObAggFunRawExpr *aggr_expr,
@@ -177,8 +181,11 @@ private:
                                         ObRawExpr *&replace_expr,
                                         ObIArray<ObAggFunRawExpr *> &new_aggr_items);
 
+  int expand_rb_cardinality_expr(ObAggFunRawExpr *aggr_expr,
+                                 ObRawExpr *&replace_expr,
+                                 ObIArray<ObAggFunRawExpr*> &new_aggr_items);
   int add_cast_expr(ObRawExpr *expr,
-                    const ObExprResType &dst_type,
+                    const ObRawExprResType &dst_type,
                     ObRawExpr *&new_expr);
 
   int add_win_exprs(ObSelectStmt *select_stmt,

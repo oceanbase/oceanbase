@@ -17,10 +17,6 @@
 
 namespace oceanbase
 {
-namespace observer
-{
-struct ObGlobalContext;
-}
 namespace sql
 {
 template <typename T>

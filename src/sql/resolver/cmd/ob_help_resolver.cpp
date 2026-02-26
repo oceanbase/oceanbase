@@ -11,15 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "ob_help_resolver.h"
-#include "sql/resolver/ob_resolver.h"
-#include "sql/resolver/cmd/ob_help_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
 
 using namespace oceanbase;
 using namespace sql;

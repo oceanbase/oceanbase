@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_tx_data_define.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "share/rc/ob_tenant_base.h"
+#include "ob_tx_data_op.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 
 using namespace oceanbase::share;
@@ -131,7 +128,8 @@ int ObTxOpVector::try_extend_space(int64_t count, ObIAllocator &allocator)
     // do nothing
   } else {
     ObTxOp *tx_op_ptr = nullptr;
-    if (OB_ISNULL(tx_op_ptr = (ObTxOp*)allocator.alloc((count_ + count) * sizeof(ObTxOp)))) {
+    int64_t new_capacity = count_ + count;
+    if (OB_ISNULL(tx_op_ptr = (ObTxOp*)allocator.alloc(new_capacity * sizeof(ObTxOp)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       if (count_ > 0) {
@@ -141,7 +139,7 @@ int ObTxOpVector::try_extend_space(int64_t count, ObIAllocator &allocator)
         allocator.free(tx_op_);
       }
       tx_op_ = tx_op_ptr;
-      capacity_ = count_ + count;
+      capacity_ = new_capacity;
     }
   }
   return ret;

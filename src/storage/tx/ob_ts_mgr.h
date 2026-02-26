@@ -274,23 +274,26 @@ class ObTsMgr;
 class ObTsSourceInfoGuard
 {
 public:
-  ObTsSourceInfoGuard() : ts_source_info_(NULL), mgr_(NULL), need_revert_(true) {}
+  ObTsSourceInfoGuard() : ts_source_info_(NULL), mgr_(NULL), need_revert_(true), tenant_id_(0) {}
   ~ObTsSourceInfoGuard();
-  void set(ObTsSourceInfo *info, ObTsMgr *mgr, const bool need_revert)
+  void set(ObTsSourceInfo *info, ObTsMgr *mgr, const bool need_revert, const uint64_t tenant_id)
   {
     ts_source_info_ = info;
     mgr_ = mgr;
     need_revert_ = need_revert;
+    tenant_id_ = tenant_id;
   }
   void set_ts_source_info(ObTsSourceInfo *ts_source_info) { ts_source_info_ = ts_source_info; }
   void set_mgr(ObTsMgr *mgr) { mgr_ = mgr; }
   void set_need_revert(const bool need_revert) { need_revert_ = need_revert; }
   ObTsSourceInfo *get_ts_source_info() { return ts_source_info_; }
   bool need_revert() const { return need_revert_; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
 private:
   ObTsSourceInfo *ts_source_info_;
   ObTsMgr *mgr_;
   bool need_revert_;
+  uint64_t tenant_id_;
 };
 
 class ObTsSyncGetTsCbTask : public ObTsCbTask
@@ -406,7 +409,7 @@ public:
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn, ObTsCbTask *task,
       bool &need_wait);
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn);
-  bool is_external_consistent(const uint64_t tenant_id);
+  bool is_external_consistent(const uint64_t tenant_id) { UNUSED(tenant_id); return true; }
   int refresh_gts_location(const uint64_t tenant_id);
   int remove_dropped_tenant(const uint64_t tenant_id);
 public:

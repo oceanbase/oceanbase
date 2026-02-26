@@ -1,8 +1,5 @@
 #include "util/easy_inet.h"
 #include "util/easy_string.h"
-#include <easy_atomic.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <netdb.h>
 #include <arpa/inet.h>      // inet_addr
 #include <sys/ioctl.h>

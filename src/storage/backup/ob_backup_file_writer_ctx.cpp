@@ -13,9 +13,12 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_backup_file_writer_ctx.h"
 #include "ob_backup_data_struct.h"
+#include "share/backup/ob_backup_io_adapter.h"
 namespace oceanbase {
 
 namespace backup {
+
+ERRSIM_POINT_DEF(EN_BACKUP_TRIGGER_BANDWIDTH_THROTTLE);
 
 /* ObBackupFileWriteCtx */
 
@@ -25,13 +28,16 @@ ObBackupFileWriteCtx::ObBackupFileWriteCtx()
       max_file_size_(0),
       io_fd_(),
       dev_handle_(NULL),
-      data_buffer_("BackupFileWriteCtx")
+      data_buffer_("BackupFileWriteCtx"),
+      bandwidth_throttle_(NULL),
+      last_active_time_(0)
 {}
 
 ObBackupFileWriteCtx::~ObBackupFileWriteCtx()
 {}
 
-int ObBackupFileWriteCtx::open(const int64_t max_file_size, const common::ObIOFd &io_fd, common::ObIODevice &dev_handle)
+int ObBackupFileWriteCtx::open(const int64_t max_file_size, const common::ObIOFd &io_fd, common::ObIODevice &dev_handle,
+    common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -47,6 +53,7 @@ int ObBackupFileWriteCtx::open(const int64_t max_file_size, const common::ObIOFd
     max_file_size_ = max_file_size;
     io_fd_ = io_fd;
     dev_handle_ = &dev_handle;
+    bandwidth_throttle_ = &bandwidth_throttle;
     is_inited_ = true;
   }
   return ret;
@@ -99,7 +106,7 @@ int ObBackupFileWriteCtx::write_buffer_(const char *buf, const int64_t len, cons
 
 bool ObBackupFileWriteCtx::check_can_flush_(const bool is_last_part) const
 {
-  return is_last_part || data_buffer_.length() >= OB_MAX_BACKUP_MEM_BUF_LEN;
+  return (is_last_part && data_buffer_.length() > 0) || data_buffer_.length() >= OB_MAX_BACKUP_MEM_BUF_LEN;
 }
 
 int ObBackupFileWriteCtx::flush_buffer_(const bool is_last_part)
@@ -107,19 +114,38 @@ int ObBackupFileWriteCtx::flush_buffer_(const bool is_last_part)
   int ret = OB_SUCCESS;
   int64_t write_size = 0;
   const int64_t offset = file_size_;
+  common::ObBackupIoAdapter io_adapter;
   if (!check_can_flush_(is_last_part)) {
     LOG_DEBUG("can not flush now", K(is_last_part), K(data_buffer_));
-  } else if (OB_ISNULL(dev_handle_)) {
+  } else if (OB_ISNULL(dev_handle_) || OB_ISNULL(bandwidth_throttle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dev handle should not be null", K(ret));
-  } else if (OB_FAIL(dev_handle_->pwrite(io_fd_, offset, data_buffer_.length(), data_buffer_.data(), write_size))) {
+  } else if (OB_FAIL(io_adapter.pwrite(*dev_handle_, io_fd_, data_buffer_.data(), offset,
+                                       data_buffer_.length(), write_size, false/*is_can_seal*/))) {
     LOG_WARN("failed to write data buffer", K(ret), K(data_buffer_));
   } else if (data_buffer_.length() != write_size) {
     ret = OB_IO_ERROR;
     LOG_WARN("write length not equal buffer length", K(offset), K(data_buffer_.length()), K(write_size));
   } else {
-    file_size_ += write_size;
-    data_buffer_.reuse();
+    int64_t bytes = write_size;
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = EN_BACKUP_TRIGGER_BANDWIDTH_THROTTLE ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_BACKUP_TRIGGER_BANDWIDTH_THROTTLE", K(ret));
+        // in case of errsim, that the bytes be larger to trigger bandwidth throttle
+        bytes = write_size * 100;
+        ret = OB_SUCCESS;
+      }
+    }
+#endif
+    if (OB_FAIL(bandwidth_throttle_->limit_out_and_sleep(bytes, last_active_time_, INT64_MAX))) {
+      LOG_WARN("failed to limit out and sleep", K(ret));
+    } else {
+      file_size_ += write_size;
+      data_buffer_.reuse();
+      last_active_time_ = ObTimeUtility::current_time();
+    }
   }
   return ret;
 }

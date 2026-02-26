@@ -66,8 +66,12 @@ public:
   OB_INLINE uint64_t seq() const { return seq_; }
   OB_INLINE DiskType type() const { return static_cast<DiskType>(type_); }
   OB_INLINE void inc_seq() { seq_++; }
-  OB_INLINE blocksstable::MacroBlockId block_id() const {
-      return blocksstable::MacroBlockId(first_id_, second_id_, third_id_);}
+  OB_INLINE blocksstable::MacroBlockId block_id() const
+  {
+    blocksstable::MacroBlockId id(first_id_, second_id_, third_id_, fifth_id_);
+    id.set_version_v2();
+    return id;
+  }
 
   int get_block_addr(
       blocksstable::MacroBlockId &macro_id,
@@ -92,6 +96,9 @@ public:
   int set_mem_addr(
       const int64_t offset,
       const int64_t size);
+
+  // just for compatibility, the old version ObMetaDiskAddr is serialized directly by memcpy in some scenarios
+  int memcpy_deserialize(const char* buf, const int64_t data_len, int64_t& pos);
 
   OB_UNIS_VERSION(1);
 private:
@@ -120,8 +127,11 @@ private:
       uint64_t type_   : FOURTH_ID_BIT_TYPE;
     };
   };
+  union {
+    int64_t fifth_id_;  // for the fourth_id_ of MacroBlockId
+  };
   union { // doesn't serialize
-    int64_t fifth_id_;
+    int64_t sixth_id_;
     uint64_t seq_;
   };
 };
@@ -151,25 +161,22 @@ public:
   ObMetaObjGuard(const ObMetaObjGuard<T> &other);
   virtual ~ObMetaObjGuard();
 
-  virtual void reset();
+  void reset();
+  OB_INLINE T *get_obj() const;
+  OB_INLINE void get_obj(ObMetaObj<T> &obj) const;
 
-  virtual void set_obj(ObMetaObj<T> &obj);
-  virtual void set_obj(T *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m);
+  bool is_valid() const;
+  bool need_hold_time_check() const;
 
-  OB_INLINE virtual T *get_obj();
-  OB_INLINE virtual T *get_obj() const;
-  OB_INLINE virtual void get_obj(ObMetaObj<T> &obj) const;
-
-  virtual bool is_valid() const;
-  virtual bool need_hold_time_check() const;
-
+  void set_obj(ObMetaObj<T> &obj);
+  void set_obj(T *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m);
   ObMetaObjGuard<T> &operator = (const ObMetaObjGuard<T> &other);
 
-  VIRTUAL_TO_STRING_KV(KP_(obj), KP_(obj_pool), KP_(allocator), KP_(t3m));
+  TO_STRING_KV(KP_(obj), KP_(obj_pool), KP_(allocator), KP_(t3m));
 
 protected:
   static const int64_t HOLD_OBJ_MAX_TIME = 2 * 60 * 60 * 1000 * 1000L; // 2h
-  virtual void reset_obj();
+  void reset_obj();
 
 protected:
   T *obj_;
@@ -238,13 +245,13 @@ void ObMetaObjGuard<T>::set_obj(ObMetaObj<T> &obj)
 {
   reset();
   if (nullptr != obj.ptr_) {
-    if (OB_UNLIKELY((nullptr == obj.pool_ && nullptr == obj.allocator_) || nullptr == obj.t3m_)) {
+    if (OB_UNLIKELY(nullptr == obj.pool_ && nullptr == obj.allocator_)) {
       STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool is nullptr", K(obj));
       ob_abort();
     } else {
       obj_pool_ = obj.pool_;
       allocator_ = obj.allocator_;
-      t3m_ = obj.t3m_;
+      t3m_ = obj.t3m_; // t3m maybe nullptr
     }
     obj_ = obj.ptr_;
     obj_->inc_ref();
@@ -262,7 +269,7 @@ void ObMetaObjGuard<T>::set_obj(T *obj, common::ObIAllocator *allocator, ObTenan
     STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid args to set", KP(obj), KP(allocator), KP(t3m));
     ob_abort();
   } else if (nullptr != obj) {
-    if (nullptr == allocator || nullptr == t3m) {
+    if (nullptr == allocator) {
       STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "allocator is nullptr", KP(obj), KP(allocator), KP(t3m));
       ob_abort();
     } else {
@@ -323,12 +330,6 @@ ObMetaObjGuard<T> &ObMetaObjGuard<T>::operator = (const ObMetaObjGuard<T> &other
 }
 
 template <typename T>
-OB_INLINE T *ObMetaObjGuard<T>::get_obj()
-{
-  return obj_;
-}
-
-template <typename T>
 OB_INLINE T *ObMetaObjGuard<T>::get_obj() const
 {
   return obj_;
@@ -348,7 +349,7 @@ void ObMetaObjGuard<T>::reset_obj()
 {
   if (nullptr != obj_) {
     if (OB_UNLIKELY(!is_valid())) {
-      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool and allocator is nullptr", K_(obj), K_(obj_pool), K_(allocator));
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool and allocator is nullptr", K_(obj), K_(obj_pool), K_(allocator), K_(t3m));
       ob_abort();
     } else {
       const int64_t ref_cnt = obj_->dec_ref();

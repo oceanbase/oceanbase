@@ -14,8 +14,6 @@
 #include "ob_prepare_executor.h"
 #include "sql/resolver/prepare/ob_prepare_stmt.h"
 #include "sql/ob_sql.h"
-#include "sql/engine/ob_exec_context.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

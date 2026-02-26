@@ -1,4 +1,3 @@
-#include "io/easy_log.h"
 #include "io/easy_io.h"
 #include <string.h>
 #include <easy_test.h>

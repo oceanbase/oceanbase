@@ -87,6 +87,18 @@ public:
       const int64_t new_schema_version,
       const int64_t timeout) = 0;
 
+  virtual int add_hbase_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
+      const int64_t timeout) = 0;
+
+  virtual int add_hbase_table(ObLogSchemaGuard &schema_guard,
+      const ObSimpleTableSchemaV2 *table_schema,
+      const int64_t timeout) = 0;
+
+  virtual int add_hbase_table(const datadict::ObDictTableMeta *table_meta,
+      const int64_t timeout) = 0;
+
   /// Add a global unique index table, create index table scenario
   /// @note must be called by a single thread in order by Schema version, not concurrently and in random order
   ////
@@ -180,6 +192,11 @@ public:
       const int64_t timeout) = 0;
 
   virtual int rename_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
+      const int64_t timeout) = 0;
+
+  virtual int recover_table_end(const uint64_t table_id,
       DdlStmtTask &ddl_stmt,
       const int64_t new_schema_version,
       const int64_t timeout) = 0;
@@ -300,6 +317,15 @@ public:
       DdlStmtTask &ddl_stmt,
       const int64_t new_schema_version,
       const int64_t timeout);
+  virtual int add_hbase_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
+      const int64_t timeout);
+  virtual int add_hbase_table(ObLogSchemaGuard &schema_guard,
+      const ObSimpleTableSchemaV2 *table_schema,
+      const int64_t timeout);
+  virtual int add_hbase_table(const datadict::ObDictTableMeta *table_meta,
+      const int64_t timeout);
   virtual int alter_table(const uint64_t table_id,
       const int64_t schema_version_before_alter,
       const int64_t schema_version_after_alter,
@@ -327,6 +353,10 @@ public:
       const int64_t old_schema_version,
       const int64_t timeout);
   virtual int rename_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
+      const int64_t timeout);
+  virtual int recover_table_end(const uint64_t table_id,
       DdlStmtTask &ddl_stmt,
       const int64_t new_schema_version,
       const int64_t timeout);
@@ -460,6 +490,7 @@ private:
   // INDEX_TYPE_UNIQUE_LOCAL
   // INDEX_TYPE_UNIQUE_GLOBAL
   // INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE
+  // INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY
   // where INDEX_TYPE_UNIQUE_GLOBAL is a globally unique index
   bool is_unique_index_table_but_expect_global_unqiue_index_(const ObSimpleTableSchemaV2 &table_schema) const;
 
@@ -633,7 +664,6 @@ private:
       const int64_t timeout);
   template<class TABLE_SCHEMA>
   int try_add_hbase_table_(const TABLE_SCHEMA *table_schema,
-      const char *table_name,
       const int64_t timeout);
 
 private:

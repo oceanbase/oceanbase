@@ -23,6 +23,7 @@ namespace oceanbase
 namespace table
 {
 class ObTableLoadSqlStatistics;
+class ObTableLoadDmlStat;
 } // namespace table
 namespace observer
 {
@@ -39,24 +40,20 @@ public:
     ObTableLoadTableCtx *ctx,
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
-  static void abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped);
+  static void abort_ctx(ObTableLoadTableCtx *ctx, int error_code, bool &is_stopped);
   int init();
 private:
   static int abort_active_trans(ObTableLoadTableCtx *ctx);
-
 // table load ctrl interface
 public:
   int pre_begin();
   int confirm_begin();
-private:
-  int open_insert_table_ctx();
-  class OpenInsertTabletTaskProcessor;
-  class OpenInsertTabletTaskCallback;
 public:
   int pre_merge(const table::ObTableLoadArray<table::ObTableLoadTransId> &committed_trans_id_array);
   int start_merge();
   int commit(table::ObTableLoadResultInfo &result_info,
              table::ObTableLoadSqlStatistics &sql_statistics,
+             table::ObTableLoadDmlStat &dml_stats,
              transaction::ObTxExecResult &trans_result);
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
   int heart_beat();
@@ -99,6 +96,8 @@ public:
 private:
   int px_flush(ObTableLoadStoreTrans *trans);
   static int px_clean_up_trans(ObTableLoadStoreTrans *trans);
+private:
+  static const int32_t PX_SESSION_ID = 1;
 
 private:
   ObTableLoadTableCtx * const ctx_;

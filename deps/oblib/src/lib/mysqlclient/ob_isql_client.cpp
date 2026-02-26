@@ -11,9 +11,7 @@
  */
 
 #include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/allocator/ob_mod_define.h"
 #include "lib/mysqlclient/ob_isql_result_handler.h"
-#include "lib/mysqlclient/ob_isql_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 
 namespace oceanbase

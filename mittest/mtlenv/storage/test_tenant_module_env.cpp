@@ -1,3 +1,6 @@
+// owner: lana.lgx
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,7 +13,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include "../mock_tenant_module_env.h"
 
 namespace oceanbase

@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX COMMON_MYSQLP
 #include "ob_sql_client_decorator.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/ob_schema_status_proxy.h"
-#include "observer/ob_server_struct.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;

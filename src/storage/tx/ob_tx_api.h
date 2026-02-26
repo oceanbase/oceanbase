@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-int acquire_tx(ObTxDesc *&tx, const uint32_t session_id = 0, const uint64_t data_version = 0);
+int acquire_tx(ObTxDesc *&tx, const uint32_t session_id = 0, const uint32_t client_sid = 0, const uint64_t data_version = 0);
 
 /**
  * start_tx - explicit start transaction
@@ -161,7 +161,8 @@ int stop_tx(ObTxDesc &tx);
 int get_read_snapshot(ObTxDesc &tx,
                       const ObTxIsolationLevel isolation_level,
                       const int64_t expire_ts,
-                      ObTxReadSnapshot &snapshot);
+                      ObTxReadSnapshot &snapshot,
+                      const bool is_for_sslog = false);
 
 /**
  * get_ls_read_snapshot - get a read snapshot which can be used to read
@@ -402,7 +403,14 @@ int create_explicit_savepoint(ObTxDesc &tx,
  *                                  the savepoint but not sensed by this
  *                                  transaction for some reason
  *                                  (eg. network partition, OutOfMemory)
- * @exec_errcode:                   stmt execution error code
+ * @clean_policy:                   control how to process when transaction
+ *                                  is wholly rollbacked, default is FAST_ROLLBACK
+ *
+ * When transaction wholly rollbacked, there are three policy:
+ * - FAST_ROLLBACK: only rollback transaction, the participants maybe in dirty
+ *                  state if the rollback msg has not been received successfully
+ * - KEEP:          do not rollback transaction, but rollback write-set on participants
+ * - ROLLBACK:      clean write-set on participants and rollback transaction
  *
  * Return:
  * OB_SUCCESS             - OK
@@ -415,7 +423,7 @@ int rollback_to_implicit_savepoint(ObTxDesc &tx,
                                    const ObTxSEQ savepoint,
                                    const int64_t expire_ts,
                                    const share::ObLSArray *extra_touched_ls,
-                                   const int exec_errcode = OB_SUCCESS);
+                                   const ObTxCleanPolicy = ObTxCleanPolicy::FAST_ROLLBACK);
 
 /**
  * rollback_to_explicit_savepoint - rollback to a explicit savepoint

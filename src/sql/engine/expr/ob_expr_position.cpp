@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_position.h"
-#include "sql/engine/expr/ob_expr_instr.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

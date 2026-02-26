@@ -21,7 +21,11 @@ namespace share
 {
 class SCN;
 }
-
+namespace blocksstable
+{
+class ObSSTable;
+class ObSSTableMetaHandle;
+}
 namespace storage
 {
 class ObTabletTableStore;
@@ -35,7 +39,7 @@ class ObSSTableArray
 public:
   friend class ObTabletTableStore;
   ObSSTableArray() : cnt_(0), sstable_array_(nullptr), serialize_table_type_(false), is_inited_(false) {}
-  virtual ~ObSSTableArray() {}
+  virtual ~ObSSTableArray() { reset(); }
 
   void reset();
   int init(
@@ -56,12 +60,13 @@ public:
   // Attention ! should only be called by COSSTable
   int init_empty_array_for_cg(common::ObArenaAllocator &allocator, const int64_t count);
   int add_tables_for_cg(common::ObArenaAllocator &allocator, const ObIArray<ObITable *> &tables);
+  int add_tables_for_cg_without_deep_copy(const ObIArray<ObITable *> &tables);
 
   int64_t get_deep_copy_size() const;
   int deep_copy(char *dst_buf, const int64_t buf_size, int64_t &pos, ObSSTableArray &dst_array) const;
 
-  int64_t get_serialize_size() const;
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int64_t get_serialize_size(const uint64_t data_version) const;
+  int serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
       ObArenaAllocator &allocator,
       const char *buf,
@@ -85,6 +90,10 @@ public:
   TO_STRING_KV(K_(cnt), KP_(sstable_array), K_(serialize_table_type), K_(is_inited));
 private:
   int get_all_tables(ObIArray<ObITable *> &tables) const;
+  // construct major_tables with old sstable array and input tables_array, but filter twin sstable of new_co_major
+  int replace_twin_majors_and_build_new(
+      const ObIArray<ObITable *> &tables_array,
+      ObIArray<ObITable *> &major_tables) const;
   int inc_meta_ref_cnt(bool &inc_success) const;
   int inc_data_ref_cnt(bool &inc_success) const;
   void dec_meta_ref_cnt() const;
@@ -213,6 +222,14 @@ struct ObTableStoreUtil
     int &result_code_;
   };
 
+  struct ObITableDDLCompare {
+    explicit ObITableDDLCompare(int &sort_ret)
+      : result_code_(sort_ret) {}
+    bool operator()(const ObITable *ltable, const ObITable *rtable) const;
+
+    int &result_code_;
+  };
+
   struct ObTableHandleV2LogTsRangeCompare {
     explicit ObTableHandleV2LogTsRangeCompare(int &sort_ret)
       : result_code_(sort_ret) {}
@@ -240,6 +257,7 @@ struct ObTableStoreUtil
   static int compare_table_by_scn_range(const ObITable *ltable, const ObITable *rtable, const bool is_ascend, bool &bret);
   static int compare_table_by_snapshot_version(const ObITable *ltable, const ObITable *rtable, bool &bret);
   static int compare_table_by_end_scn(const ObITable *ltable, const ObITable *rtable, bool &bret);
+  static int compare_table_by_scn_range_and_slice_range(const ObITable *ltable, const ObITable *rtable, bool &bret);
 
   static int sort_minor_tables(ObArray<ObITable *> &tables);
   static int reverse_sort_minor_table_handles(ObArray<ObTableHandleV2> &table_handles);
@@ -248,6 +266,57 @@ struct ObTableStoreUtil
 
   static bool check_include_by_scn_range(const ObITable &ltable, const ObITable &rtable);
   static bool check_intersect_by_scn_range(const ObITable &ltable, const ObITable &rtable);
+
+  static int check_has_backup_macro_block(const ObITable *table, bool &has_backup_macro);
+};
+
+
+// load sstable on demand
+struct ObCacheSSTableHelper
+{
+public:
+  // Load sstable with @addr, loaded object lifetime guaranteed by @handle
+  static int load_sstable(
+    const ObMetaDiskAddr &addr,
+    const bool load_co_sstable,
+    ObStorageMetaHandle &handle);
+  // load sstable from cache with @addr, cache miss is allowed, loaded object lifetime guaranteed by @handle
+  static int load_sstable_from_cache(
+    const ObMetaDiskAddr &addr,
+    const bool load_co_sstable,
+    ObStorageMetaHandle &handle);
+  // load @orig_sstable on demand, return @loaded_sstable.
+  // Lifetime guaranteed by loaded_sstable_handle if is loaded.
+  static int load_sstable_on_demand(
+      const ObStorageMetaHandle &table_store_handle,
+      blocksstable::ObSSTable &orig_sstable,
+      ObStorageMetaHandle &loaded_sstable_handle,
+      blocksstable::ObSSTable *&loaded_sstable);
+  static int try_cache_local_sstable_meta(
+      ObArenaAllocator &allocator,
+      ObSSTableArray &sstable_array,
+      const int64_t local_sstable_size_limit,
+      int64_t &local_sstable_meta_size);
+  static int cache_local_sstable_meta(
+      ObArenaAllocator &allocator,
+      blocksstable::ObSSTable *array_sstable,
+      const blocksstable::ObSSTable *loaded_sstable,
+      const int64_t local_sstable_size_limit,
+      int64_t &local_sstable_meta_size);
+  // Asynchronously batch cache sstable meta according to the specified memory size.
+  //  - Here remain_size doesn't include the size of the table store itself.
+  //  - Taking the bypass don't pollute the meta cache.
+  //  - Asynchronously batch performance is better.
+  static int batch_cache_sstable_meta(
+      common::ObArenaAllocator &allocator,
+      const int64_t remain_size,
+      ObTabletTableStore *table_store);
+private:
+  static int batch_cache_sstable_meta_(
+      common::ObArenaAllocator &allocator,
+      const int64_t limit_size,
+      common::ObIArray<blocksstable::ObSSTable *> &sstables,
+      common::ObIArray<ObStorageMetaHandle> &handles);
 };
 
 } // storage

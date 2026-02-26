@@ -35,6 +35,7 @@ public:
   int check_allow_retry(bool &allow_retry);
   void reuse();
   void reset();
+  void reset_result();
   int get_retry_count(int32_t &retry_count);
   int get_first_failed_task_id(share::ObTaskId &task_id);
   TO_STRING_KV(K_(result), K_(retry_count), K_(allow_retry), K_(failed_task_id_list));
@@ -62,6 +63,12 @@ public:
     TABLET_GROUP_RESTORE = 4,
     BACKFILL_TX = 5,
     TRANSFER_BACKFILL_TX = 6,
+    REBUILD_TABLET = 7,
+    SS_LS_MIGRATION = 8,
+    SS_TRANSFER_BACKFILL_TX = 9,
+    SS_MACRO_COPY = 10,
+    SS_MACRO_DELETE = 11,
+    SS_LS_RESTORE = 12,
     MAX
   };
 
@@ -77,6 +84,7 @@ public:
   int get_result(int32_t &result);
   void reuse();
   void reset();
+  void reset_result();
   int check_is_in_retry(bool &is_in_retry);
   int get_retry_count(int32_t &retry_count);
   int get_first_failed_task_id(share::ObTaskId &task_id);
@@ -94,7 +102,7 @@ public:
   explicit ObStorageHADag(const share::ObDagType::ObDagTypeEnum &dag_type);
   virtual ~ObStorageHADag();
   virtual int inner_reset_status_for_retry();
-  virtual bool check_can_retry();
+  virtual bool inner_check_can_retry();
   int check_is_in_retry(bool &is_in_retry);
 
   int set_result(const int32_t result, const bool allow_retry = true,
@@ -128,24 +136,63 @@ public:
   static int check_self_is_valid_member(
       const share::ObLSID &ls_id,
       bool &is_valid_member);
+  static int check_self_is_valid_member_after_inc_config_version(
+      const share::ObLSID &ls_id,
+      const bool with_leader,
+      bool &is_valid_member);
+  static int inc_member_list_config_version(
+      const share::ObLSID &ls_id,
+      const bool with_leader);
+  static int get_migration_src_info(
+      const ObMigrationOpArg &arg,
+      const uint64_t tenant_id,
+      const share::SCN &local_clog_checkpoint_scn,
+      storage::ObStorageRpc *storage_rpc,
+      ObStorageHASrcInfo &src_info);
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int check_self_is_valid_member_with_log_service(
+      const share::ObLSID &ls_id,
+      bool &is_valid_member);
+  static int inc_config_version_with_log_service(
+      const share::ObLSID &ls_id);
+#endif
+
+private:
+  static int inner_check_self_is_valid_member_(
+      const share::ObLSID &ls_id,
+      const common::ObMemberList &member_list,
+      const common::GlobalLearnerList &learner_list,
+      bool &is_valid_member);
 };
 
 class ObHATabletGroupCtx
 {
 public:
-  ObHATabletGroupCtx();
+  enum class TabletGroupCtxType
+  {
+    NORMAL_TYPE     = 0,
+    CS_REPLICA_TYPE = 1,
+    MAX_TYPE
+  };
+public:
+  explicit ObHATabletGroupCtx(const TabletGroupCtxType type);
   virtual ~ObHATabletGroupCtx();
-  int init(const common::ObIArray<ObTabletID> &tablet_id_array);
-  int get_next_tablet_id(common::ObTabletID &tablet_id);
-  int get_all_tablet_ids(common::ObIArray<ObTabletID> &tablet_id);
-  void reuse();
-
+  int init(const common::ObIArray<ObLogicTabletID> &tablet_id_array);
+  int get_next_tablet_id(ObLogicTabletID &logic_tablet_id);
+  int get_all_tablet_ids(common::ObIArray<ObLogicTabletID> &tablet_id);
+  bool is_cs_replica_ctx() const;
+public:
+  virtual void reuse();
+  virtual void inner_reuse();
+  virtual int inner_init() { return OB_SUCCESS; }
   TO_STRING_KV(K_(tablet_id_array), K_(index));
-private:
+protected:
   bool is_inited_;
   common::SpinRWLock lock_;
-  ObArray<ObTabletID> tablet_id_array_;
+  ObArray<ObLogicTabletID> tablet_id_array_;
   int64_t index_;
+  TabletGroupCtxType type_;
   DISALLOW_COPY_AND_ASSIGN(ObHATabletGroupCtx);
 };
 
@@ -158,8 +205,14 @@ public:
   int get_next_tablet_group_ctx(
       ObHATabletGroupCtx *&tablet_group_ctx);
   int build_tablet_group_ctx(
-      const common::ObIArray<ObTabletID> &tablet_id_array);
+      const common::ObIArray<ObLogicTabletID> &tablet_id_array,
+      const ObHATabletGroupCtx::TabletGroupCtxType type = ObHATabletGroupCtx::TabletGroupCtxType::NORMAL_TYPE);
+  int alloc_and_new_tablet_group_ctx(
+      const ObHATabletGroupCtx::TabletGroupCtxType type,
+      ObHATabletGroupCtx *&tablet_group_ctx);
   void reuse();
+  int64_t get_tablet_group_ctx_count() const;
+  int get_tablet_group_ctx(const int64_t idx, ObHATabletGroupCtx *&tablet_group_ctx);
 
   TO_STRING_KV(K_(tablet_group_ctx_array), K_(index));
 private:
@@ -176,12 +229,17 @@ class ObStorageHATaskUtils
 public:
   static int check_need_copy_sstable(
       const ObMigrationSSTableParam &param,
+      const bool &is_restore,
       ObTabletHandle &tablet_handle,
       bool &need_copy);
-
+  static int check_need_copy_macro_blocks(
+      const ObMigrationSSTableParam &param,
+      const bool is_leader_restore,
+      bool &need_copy);
 private:
   static int check_major_sstable_need_copy_(
       const ObMigrationSSTableParam &param,
+      const bool &is_restore,
       ObTabletHandle &tablet_handle,
       bool &need_copy);
 
@@ -195,9 +253,19 @@ private:
       ObTabletHandle &tablet_handle,
       bool &need_copy);
 
+  static int check_inc_major_ddl_sstable_need_copy_(
+      const ObMigrationSSTableParam &param,
+      ObTabletHandle &tablet_handle,
+      bool &need_copy);
 };
 
-
+class ObStorageHACancelDagNetUtils
+{
+public:
+  static int cancel_task(const share::ObLSID &ls_id, const share::ObTaskId &task_id);
+private:
+  static int cancel_migration_task_(const share::ObTaskId &task_id, const ObLSHandle &ls_handle, bool &is_exist);
+};
 }
 }
 #endif

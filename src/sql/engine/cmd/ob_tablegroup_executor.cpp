@@ -11,17 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "share/object/ob_obj_cast.h"
 #include "sql/engine/cmd/ob_tablegroup_executor.h"
 
-#include "share/ob_common_rpc_proxy.h"
-#include "share/schema/ob_schema_struct.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
 #include "sql/resolver/ddl/ob_alter_tablegroup_stmt.h"
 #include "sql/resolver/ddl/ob_drop_tablegroup_stmt.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 
 namespace oceanbase

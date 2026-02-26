@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_datum.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

@@ -12,13 +12,11 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_backup_data_table_operator.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "lib/string/ob_sql_string.h"
-#include "common/ob_smart_var.h"
-#include "share/config/ob_server_config.h"
+#include "src/share/inner_table/ob_inner_table_schema_constants.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_share_util.h"
+#include "share/backup/ob_tenant_archive_mgr.h"
+#include "share/backup/ob_archive_store.h"
+#include "share/backup/ob_archive_persist_helper.h"
 
 namespace oceanbase
 { 
@@ -102,6 +100,8 @@ int ObBackupSetFileOperator::fill_dml_with_backup_set_(const ObBackupSetFileDesc
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_FILE_STATUS, ObBackupFileStatus::get_str(backup_set_desc.file_status_)))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
+  } else if (OB_FAIL(dml.add_column(OB_STR_BACKUP_PLUS_ARCHIVELOG, backup_set_desc.get_plus_archivelog_str()))) {
+    LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_RESULT, backup_set_desc.result_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_BACKUP_ENCRYPTION_MODE, ObBackupEncryptionMode::to_str(backup_set_desc.encryption_mode_)))) {
@@ -161,7 +161,7 @@ int ObBackupSetFileOperator::get_backup_set_files(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  if(!is_valid_tenant_id(tenant_id)) {
+  if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else {
@@ -192,7 +192,8 @@ int ObBackupSetFileOperator::get_backup_set_files_specified_dest(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  if(!is_valid_tenant_id(tenant_id)) {
+  backup_set_infos.reset();
+  if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else {
@@ -236,6 +237,123 @@ int ObBackupSetFileOperator::parse_backup_set_info_result_(
       LOG_WARN("[DATA_BACKUP]failed to push back job", K(ret), K(backup_set_desc));
     }
   }
+  return ret;
+}
+
+
+int ObBackupSetFileOperator::get_oldest_full_backup_set(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    ObBackupSetFileDesc &oldest_backup_desc)
+{
+  int ret = OB_SUCCESS;
+  oldest_backup_desc.reset();
+  if (OB_FAIL(get_boundary_full_backup_set_(proxy, tenant_id, backup_path_str, false /* oldest */, oldest_backup_desc))) {
+    LOG_WARN("failed to get oldest full backup set", K(ret), K(tenant_id), K(backup_path_str));
+  }
+  return ret;
+}
+
+int ObBackupSetFileOperator::get_boundary_full_backup_set_(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    const bool get_latest, // true: get latest, false: get oldest
+    ObBackupSetFileDesc &boundary_desc)
+{
+  int ret = OB_SUCCESS;
+  boundary_desc.reset();
+  ObSqlString sql;
+  if (OB_INVALID_TENANT_ID == tenant_id || NULL == backup_path_str) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), KP(backup_path_str));
+  } else if (OB_FAIL(sql.assign_fmt(
+               "SELECT * FROM %s WHERE %s = %lu AND path = '%s' "
+               "AND backup_type = 'FULL' AND status = 'SUCCESS' AND file_status = 'AVAILABLE' "
+               "ORDER BY start_ts %s LIMIT 1",
+               OB_ALL_BACKUP_SET_FILES_TNAME, OB_STR_TENANT_ID, tenant_id, backup_path_str,
+               get_latest ? "DESC" : "ASC"))) {
+    LOG_WARN("failed to assign fmt", K(ret));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy.read(res, get_exec_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("no valid full backup set found", K(ret), K(sql));
+        } else {
+          LOG_WARN("failed to get next result", K(ret), K(sql));
+        }
+      } else if (OB_FAIL(do_parse_backup_set_(*result, boundary_desc))) {
+        LOG_WARN("failed to parse backup set", K(ret), K(sql));
+      } else if (OB_SUCC(result->next())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("LIMIT 1 query returned more than one row, unexpected", K(ret), K(sql));
+      } else if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get next result", K(ret), K(sql));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  LOG_INFO("get boundary full backup set", K(ret), K(sql), K(boundary_desc));
+  return ret;
+}
+
+int ObBackupSetFileOperator::get_latest_full_backup_set_with_limit(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    const int64_t backup_set_id_limit,
+    ObBackupSetFileDesc &latest_backup_desc)
+{
+  int ret = OB_SUCCESS;
+  latest_backup_desc.reset();
+  ObSqlString sql;
+  if (OB_INVALID_TENANT_ID == tenant_id || NULL == backup_path_str) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), KP(backup_path_str));
+  } else if (OB_FAIL(sql.assign_fmt(
+               "SELECT * FROM %s WHERE %s = %lu AND path = '%s' "
+               "AND backup_type = 'FULL' AND status = 'SUCCESS' AND file_status = 'AVAILABLE' "
+               "AND backup_set_id < %ld ORDER BY %s DESC LIMIT 1",
+               OB_ALL_BACKUP_SET_FILES_TNAME, OB_STR_TENANT_ID, tenant_id,
+               backup_path_str, backup_set_id_limit, OB_STR_BACKUP_SET_ID))) {
+    LOG_WARN("failed to assign fmt", K(ret));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy.read(res, get_exec_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("no valid full backup set found with limit", K(ret), K(sql), K(backup_set_id_limit));
+        } else {
+          LOG_WARN("failed to get next result", K(ret), K(sql));
+        }
+      } else if (OB_FAIL(do_parse_backup_set_(*result, latest_backup_desc))) {
+        LOG_WARN("failed to parse backup set", K(ret), K(sql));
+      } else if (OB_SUCC(result->next())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("LIMIT 1 query returned more than one row, unexpected", K(ret), K(sql));
+      } else if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get next result", K(ret), K(sql));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  LOG_INFO("get latest full backup set with limit", K(ret), K(sql), K(latest_backup_desc), K(backup_set_id_limit));
   return ret;
 }
 
@@ -360,6 +478,7 @@ int ObBackupSetFileOperator::do_parse_backup_set_(ObMySQLResult &result, ObBacku
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_PREV_FULL_BACKUP_SET_ID, backup_set_desc.prev_full_backup_set_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_PREV_INC_BACKUP_SET_ID, backup_set_desc.prev_inc_backup_set_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_START_TS, backup_set_desc.start_time_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_END_TS, backup_set_desc.end_time_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESULT, backup_set_desc.result_, int);
   EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_REPLAY_SCN, start_replay_scn, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_DATA_TURN_ID, backup_set_desc.data_turn_id_, int64_t); 
@@ -818,9 +937,6 @@ int ObBackupJobOperator::cancel_jobs(common::ObISQLClient &proxy, const uint64_t
     LOG_WARN("[DATA_BACKUP]failed to append sql", K(ret), K(sql));
   } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
-  } else if (2 < affected_rows) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("[DATA_BACKUP]invalid affected_rows, disallow more than 2 jobs at the same", K(ret), K(affected_rows), K(sql));
   } else {
     LOG_INFO("success cancel the backup jobs of tenant", K(ret), K(tenant_id));
   }
@@ -1562,12 +1678,9 @@ int ObBackupTaskOperator::update_turn_id(common::ObISQLClient &proxy, share::ObB
   } else if (backup_status == ObBackupStatus::BACKUP_USER_META
       && OB_FAIL(dml.add_column(OB_STR_META_TURN_ID, turn_id))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (backup_status == ObBackupStatus::BACKUP_DATA_MINOR
-    && OB_FAIL(dml.add_column(OB_STR_MINOR_TURN_ID, turn_id))) {
-      LOG_WARN("failed to add column", K(ret));
-  } else if (backup_status == ObBackupStatus::BACKUP_DATA_MAJOR
-    && OB_FAIL(dml.add_column(OB_STR_MAJOR_TURN_ID, turn_id))) {
-      LOG_WARN("failed to add column", K(ret));
+  } else if (backup_status == ObBackupStatus::BACKUP_USER_DATA
+      && OB_FAIL(dml.add_column(OB_STR_MAJOR_TURN_ID, turn_id))) {
+    LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_TASK_TNAME, sql))) {
     LOG_WARN("failed to splice_update_sql", K(ret));
   } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
@@ -2023,6 +2136,70 @@ int ObBackupLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBackupL
   return ret;
 }
 
+int ObBackupLSTaskOperator::LSTaskIterator::init(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const int64_t job_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const ObBackupTaskStatus pending_status(ObBackupTaskStatus::Status::PENDING);
+  const ObBackupTaskStatus doing_status(ObBackupTaskStatus::Status::DOING);
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("[DATA_BACKUP]iterator already inited", K(ret));
+  } else if (OB_FAIL(ObBackupLSTaskOperator::fill_select_ls_task_sql_(sql))) {
+    LOG_WARN("[DATA_BACKUP]failed to fill select ls task sql", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(" where %s=%ld", OB_STR_JOB_ID, job_id))) {
+    LOG_WARN("[DATA_BACKUP]failed to append where clause", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(" and (%s='%s' or %s='%s')",
+                                            OB_STR_STATUS, pending_status.get_str(),
+                                            OB_STR_STATUS, doing_status.get_str()))) {
+    LOG_WARN("[DATA_BACKUP]failed to append status condition", K(ret));
+  } else if (OB_FAIL(sql_proxy.read(res_, ObBackupBaseTableOperator::get_exec_tenant_id(tenant_id), sql.ptr()))) {
+    LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql), K(tenant_id));
+  } else if (OB_ISNULL(result_ = res_.get_result())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[DATA_BACKUP]result is null", K(ret), K(sql));
+  } else {
+    sql_proxy_ = &sql_proxy;
+    tenant_id_ = tenant_id;
+    is_inited_ = true;
+  }
+
+  return ret;
+}
+
+int ObBackupLSTaskOperator::LSTaskIterator::next(ObBackupLSTaskAttr &ls_task)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[DATA_BACKUP]iterator not inited", K(ret));
+  } else if (OB_ISNULL(result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[DATA_BACKUP]result is null", K(ret));
+  } else if (OB_FAIL(result_->next())) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("[DATA_BACKUP]failed to get next row", K(ret));
+    }
+  } else if (OB_FAIL(ObBackupLSTaskOperator::do_parse_ls_result_(*result_, ls_task))) {
+    LOG_WARN("[DATA_BACKUP]failed to parse ls task", K(ret));
+  }
+
+  return ret;
+}
+
+void ObBackupLSTaskOperator::LSTaskIterator::reset()
+{
+  sql_proxy_ = nullptr;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  result_ = nullptr;
+  is_inited_ = false;
+  res_.reset();
+}
+
 int ObBackupLSTaskOperator::update_dst_and_status(
     common::ObISQLClient &proxy, 
     const int64_t task_id,
@@ -2166,6 +2343,8 @@ int ObBackupLSTaskOperator::delete_build_index_task(
   } else if (1 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]invalid affected_rows", K(ret), K(affected_rows), K(sql));
+  } else {
+    LOG_INFO("[DATA_BACKUP]delete build index task succ", K(build_index_attr), K(sql));
   }
   return ret;
 }
@@ -2438,6 +2617,71 @@ int ObBackupSkippedTabletOperator::move_skip_tablet_to_his(
   return ret;
 }
 
+int ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(
+    common::ObMySQLProxy &proxy,
+    const uint64_t tenant_id,
+    const share::SCN &snapshot,
+    common::ObIArray<common::ObTabletID> &tablet_list,
+    common::ObIArray<share::SCN> &tablet_mview_dep_scn_list)
+{
+  int ret = OB_SUCCESS;
+  tablet_list.reset();
+  tablet_mview_dep_scn_list.reset();
+  ObSqlString sql;
+  int64_t affected_rows = -1;
+  if (OB_INVALID_TENANT_ID == tenant_id || !snapshot.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(tenant_id), K(snapshot));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select t1.tablet_id tablet_id,t2.major_version major_version from %s as of snapshot %ld t1"
+            " join (select p_obj table_id,cast(min(case when b.last_refresh_type>0 then b.last_refresh_scn else 0 end) as unsigned) major_version from %s as of snapshot %ld a"
+            " join %s as of snapshot %ld b on a.mview_id=b.mview_id where b.refresh_mode=%ld group by p_obj"
+            " union all (select a.data_table_id table_id,b.last_refresh_scn major_version from %s as of snapshot %ld a"
+            " join %s as of snapshot %ld b on a.table_id=b.mview_id and b.refresh_mode=%ld)) t2 on t1.table_id=t2.table_id",
+          OB_ALL_TABLET_TO_LS_TNAME, snapshot.get_val_for_inner_table_field(),
+          OB_ALL_MVIEW_DEP_TNAME, snapshot.get_val_for_inner_table_field(),
+          OB_ALL_MVIEW_TNAME, snapshot.get_val_for_inner_table_field(), schema::ObMVRefreshMode::MAJOR_COMPACTION,
+          OB_ALL_TABLE_TNAME, snapshot.get_val_for_inner_table_field(),
+          OB_ALL_MVIEW_TNAME, snapshot.get_val_for_inner_table_field(), schema::ObMVRefreshMode::MAJOR_COMPACTION))) {
+        LOG_WARN("failed to assign fmt", K(ret), K(snapshot));
+      } else if (OB_FAIL(proxy.read(res, common::gen_user_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("failed to read sql", K(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("failed to get next row", K(ret));
+            }
+          } else {
+            int64_t tablet_id = -1;
+            uint64_t scn_val = -1;
+            share::SCN major_scn;
+            EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_TABLET_ID, tablet_id, int64_t);
+            EXTRACT_UINT_FIELD_MYSQL(*result, "major_version", scn_val, uint64_t);
+            if (FAILEDx(tablet_list.push_back(ObTabletID(tablet_id)))) {
+              LOG_WARN("failed to push back", K(ret), K(tablet_id));
+            } else if (OB_FAIL(major_scn.convert_for_inner_table_field(scn_val))) {
+              LOG_WARN("failed to convert for inner table field", K(ret));
+            } else if (OB_FAIL(tablet_mview_dep_scn_list.push_back(major_scn))) {
+              LOG_WARN("failed to push back", K(ret), K(major_scn));
+            }
+          }
+        }
+      }
+    }
+  }
+  LOG_INFO("get all mview dep tablet list", K(ret), K(sql), K(tablet_list));
+  return ret;
+}
+
 /*
  *---------------------------__all_backup_ls_task_info------------------------
  */
@@ -2502,6 +2746,58 @@ int ObBackupLSTaskInfoOperator::get_statistics_info(
         LOG_WARN("[DATA_BACKUP]failed to parse result", K(ret), K(task_id), K(tenant_id), K(ls_id), K(turn_id), K(retry_id));
       } else {
         LOG_INFO("[DATA_BACKUP]success get statis info", K(task_infos));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupLSTaskInfoOperator::get_distinct_ls_ids(
+    common::ObISQLClient &proxy,
+    const int64_t task_id,
+    const uint64_t tenant_id,
+    ObIArray<ObLSID> &ls_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (task_id <= 0 || OB_INVALID_TENANT_ID == tenant_id || !ls_ids.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[DATA_BACKUP]invalid argument for get distinct ls ids", K(ret), K(task_id), K(tenant_id), K(ls_ids.count()));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select distinct %s from %s where %s=%ld and %s=%lu order by %s",
+              OB_STR_LS_ID, OB_ALL_BACKUP_LS_TASK_INFO_TNAME, OB_STR_TASK_ID, task_id, OB_STR_TENANT_ID, tenant_id, OB_STR_LS_ID))) {
+        LOG_WARN("[DATA_BACKUP]failed to assign sql", K(ret));
+      } else if (OB_FAIL(proxy.read(res, get_exec_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("[DATA_BACKUP]result is null", K(ret), K(sql));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("[DATA_BACKUP]failed to get next row", K(ret));
+            }
+          } else {
+            int64_t int_ls_id = ObLSID::INVALID_LS_ID;
+            EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_LS_ID, int_ls_id, int64_t);
+            if (OB_FAIL(ret)) {
+              LOG_WARN("[DATA_BACKUP]failed to extract ls id field", K(ret));
+            } else {
+              ObLSID ls_id(int_ls_id);
+              if (!ls_id.is_valid()) {
+                LOG_WARN("[DATA_BACKUP]skip invalid ls id", K(ls_id), K(int_ls_id));
+              } else if (OB_FAIL(ls_ids.push_back(ls_id))) {
+                LOG_WARN("[DATA_BACKUP]failed to push ls id", K(ret), K(ls_id));
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -2621,27 +2917,33 @@ int ObLSBackupInfoOperator::get_next_job_id(common::ObISQLClient &trans, const u
   return ret;
 }
 
-int ObLSBackupInfoOperator::get_next_task_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &task_id)
+int ObLSBackupInfoOperator::get_next_task_id(common::ObISQLClient &trans,
+                                                   const uint64_t tenant_id,
+                                                   const int64_t batch_size,
+                                                   int64_t &start_task_id)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS ;
   InfoItem item;
   item.name_ = OB_STR_TASK_ID;
+  int64_t current_task_id = 0;
   if (OB_FAIL(get_item(trans, get_exec_tenant_id(tenant_id), item, true))) {
     if (ret == OB_BACKUP_INFO_NOT_EXIST) {
-      task_id = 1/*first job id*/;
+      current_task_id = 1/*first task id*/;
       ret = OB_SUCCESS;
     }
-  } else if (OB_FAIL(ob_atoll(item.value_.ptr(), task_id))) {
+  } else if (OB_FAIL(ob_atoll(item.value_.ptr(), current_task_id))) {
     LOG_WARN("failed to change char to int64_t", K(ret), K(item));
-  } else {
-    ++task_id;
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(set_item_value(item.value_, task_id))) {
-    LOG_WARN("failed to set item value");
-  } else if (OB_FAIL(insert_item_with_update(trans, get_exec_tenant_id(tenant_id), item))) {
-    LOG_WARN("fail to insert item with update", K(ret), K(tenant_id), K(item));
-  }  
+
+  if (OB_SUCC(ret)) {
+    start_task_id = current_task_id + 1;
+    int64_t end_task_id = current_task_id + batch_size;
+    if (OB_FAIL(set_item_value(item.value_, end_task_id))) {
+      LOG_WARN("failed to set item value", K(ret), K(end_task_id));
+    } else if (OB_FAIL(insert_item_with_update(trans, get_exec_tenant_id(tenant_id), item))) {
+      LOG_WARN("fail to insert item with update", K(ret), K(tenant_id), K(item));
+    }
+  }
   return ret;
 }
 

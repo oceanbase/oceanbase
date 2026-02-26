@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_MONITOR
 #include <gtest/gtest.h>
-#include "share/ob_thread_pool.h"
 #include "sql/monitor/ob_monitor_info_manager.h"
 #include "sql/monitor/ob_phy_plan_monitor_info.h"
-#include "sql/engine/ob_physical_plan.h"
 using namespace std;
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -169,6 +167,16 @@ public:
   virtual ~TestMonitorInfoManager() {}
   virtual void SetUp() {}
   virtual void TearDown() {}
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
   virtual void run1() {
     //do_add();
   }

@@ -1,2 +1,3 @@
 storage_unittest(test_direct_load_index_block_writer)
 storage_unittest(test_direct_load_data_block_writer)
+storage_unittest(test_direct_load_chunk_sort)

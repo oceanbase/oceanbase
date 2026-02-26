@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_conditional_aggr_coalesce.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/optimizer/ob_log_plan.h"
 using namespace oceanbase::sql;
@@ -48,9 +46,8 @@ int ObTransformConditionalAggrCoalesce::transform_one_stmt(
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param has null", K(ret), K(stmt), K(ctx_));
-  } else if (stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_3 ||
-             (stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_0 &&
-              stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_2)) {
+  } else if (!stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3, COMPAT_VERSION_4_3_0,
+                                                              COMPAT_VERSION_4_3_2)) {
     // do nothing
   } else if (OB_FAIL(check_hint_valid(*stmt,
                                       force_trans_wo_pullup,
@@ -471,6 +468,8 @@ int ObTransformConditionalAggrCoalesce::check_statistics_threshold(ObSelectStmt 
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (table_schema->get_lake_table_format() != ObLakeTableFormat::INVALID) {
+    LOG_TRACE("lake table format is not supported", K(table_schema->get_lake_table_format()));
   } else {
     // collect ndv product for cols_in_groupby
     for (int64_t i = 0; OB_SUCC(ret) && i < cols_in_groupby.count(); i++) {
@@ -773,10 +772,10 @@ int ObTransformConditionalAggrCoalesce::coalesce_cond_aggrs(ObIArray<ObAggFunRaw
                                            new_case_expr))) {
         LOG_WARN("failed to build case when exprs", K(ret));
       } else if (OB_FALSE_IT(cast_case_expr = new_case_expr)) {
-      } else if (ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
                                                                 cond_aggr,
                                                                 cast_case_expr,
-                                                                ctx_->session_info_)) {
+                                                                ctx_->session_info_))) {
         LOG_WARN("failed to add cast", K(ret));
       } else if (OB_FAIL(case_exprs.push_back(cast_case_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -840,21 +839,10 @@ int ObTransformConditionalAggrCoalesce::try_share_aggr(ObIArray<ObAggFunRawExpr*
       is_sharable = true;
       cur_aggr->set_explicited_reference();
       // constraints need to be added if the same_as judgement relies on specific const value
-      for(int64_t i = 0; OB_SUCC(ret) && i < equal_ctx.param_expr_.count(); i++) {
-        ObPCConstParamInfo param_info;
-        int64_t param_idx = equal_ctx.param_expr_.at(i).param_idx_;
-        if (OB_UNLIKELY(param_idx < 0 || param_idx >= plan_ctx->get_param_store().count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(ret), K(param_idx),
-                                            K(plan_ctx->get_param_store().count()));
-        } else if (OB_FAIL(param_info.const_idx_.push_back(param_idx))) {
-          LOG_WARN("failed to push back param idx", K(ret));
-        } else if (OB_FAIL(param_info.const_params_.push_back(
-                                                      plan_ctx->get_param_store().at(param_idx)))) {
-          LOG_WARN("failed to push back value", K(ret));
-        } else if (OB_FAIL(constraints.push_back(param_info))) {
-          LOG_WARN("failed to push back param info", K(ret));
-        } else {/*do nothing*/}
+      if (OB_FAIL(ObTransformUtils::add_const_param_constraints(equal_ctx,
+                                                                   plan_ctx->get_param_store(),
+                                                                   constraints))) {
+        LOG_WARN("failed to gather const param constraints", K(ret));
       }
     }
   }
@@ -911,6 +899,7 @@ int ObTransformConditionalAggrCoalesce::create_and_replace_aggrs_for_merge(ObSel
     for (int i = 0; OB_SUCC(ret) && i < view_stmt->get_select_item_size(); i++) {
       ObRawExpr *col_expr = NULL;
       ObAggFunRawExpr* aggr_for_merge = NULL;
+      ObRawExpr *aggr_with_cast = NULL;
       ObItemType aggr_type = T_INVALID;
       if (OB_ISNULL(select_expr = view_stmt->get_select_item(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -927,9 +916,15 @@ int ObTransformConditionalAggrCoalesce::create_and_replace_aggrs_for_merge(ObSel
         LOG_WARN("failed to create aggr for merge", K(ret));
       } else if (OB_FAIL(select_stmt->get_aggr_items().push_back(aggr_for_merge))) {
         LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FALSE_IT(aggr_with_cast = aggr_for_merge)) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                        col_expr,
+                                                                        aggr_with_cast,
+                                                                        ctx_->session_info_))) {
+        LOG_WARN("failed to add cast", K(ret));
       } else if (OB_FAIL(cols_for_replace.push_back(col_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
-      } else if (OB_FAIL(aggrs_for_merge.push_back(aggr_for_merge))) {
+      } else if (OB_FAIL(aggrs_for_merge.push_back(aggr_with_cast))) {
         LOG_WARN("failed to push back expr", K(ret));
       }
     }

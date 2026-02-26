@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_unit_placement_strategy.h"
-#include "lib/charset/ob_mysql_global.h"  // for DBL_MAX
-#include "ob_root_utils.h"                // resource_type_to_str
 
 using namespace oceanbase::common;
 using namespace oceanbase::rootserver;
@@ -37,6 +35,12 @@ DEF_TO_STRING(ObUnitPlacementStrategy::ObServerResource)
   (void)databuff_printf(buf, buf_len, pos,
       "log_disk_capacity:\"%.9gGB\", log_disk_assigned:\"%.9gGB\"",
       capacity_[RES_LOG_DISK]/1024/1024/1024, assigned_[RES_LOG_DISK]/1024/1024/1024);
+
+  // DATA_DISK
+  (void)databuff_printf(buf, buf_len, pos,
+      "data_disk_capacity:\"%.9gGB\", data_disk_assigned:\"%.9gGB\"",
+      capacity_[RES_DATA_DISK]/1024/1024/1024, assigned_[RES_DATA_DISK] >= 0
+        ? assigned_[RES_DATA_DISK]/1024/1024/1024 : assigned_[RES_DATA_DISK]);
   J_OBJ_END();
   return pos;
 }
@@ -98,6 +102,7 @@ int ObUnitPlacementDPStrategy::choose_server(ObArray<ObUnitPlacementDPStrategy::
         case RES_CPU: { demand = demand_resource.min_cpu(); break; }
         case RES_MEM: { demand = static_cast<double>(demand_resource.memory_size()); break; }
         case RES_LOG_DISK: { demand = static_cast<double>(demand_resource.log_disk_size()); break; }
+        case RES_DATA_DISK: { demand = static_cast<double>(demand_resource.data_disk_size()); break; }
         default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unknown resource type", KR(ret), K(j));
@@ -130,10 +135,11 @@ int ObUnitPlacementDPStrategy::choose_server(ObArray<ObUnitPlacementDPStrategy::
       for (int j = RES_CPU; j < RES_MAX; ++j) {
         double dp = weight[j] * demands[j] * remaining[j];
         dot_product += dp;
+        ObCStringHelper helper;
         _LOG_INFO("[%s] [CHOOSE_SERVER_FOR_UNIT] calc dot-product: server=%s, resource=%s, "
             "demands=%.6g, remain=%.6g, weight=%.6g, dp=%.6g sum=%.6g",
             module,
-            to_cstring(server_resource.get_server()),
+            helper.convert(server_resource.get_server()),
             resource_type_to_str((ObResourceType)j),
             demands[j], remaining[j], weight[j], dp, dot_product);
       }

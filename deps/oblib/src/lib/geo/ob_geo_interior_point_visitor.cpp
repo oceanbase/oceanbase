@@ -10,11 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX LIB
-#include "lib/ob_errno.h"
 #include "ob_geo_interior_point_visitor.h"
-#include "ob_srs_info.h"
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_utils.h"
 
 namespace oceanbase
 {
@@ -26,7 +23,7 @@ int ObGeoInteriorPointVisitor::init(ObGeometry *geo)
   if (OB_FAIL(ObGeoTypeUtil::check_empty(geo, is_geo_empty_))) {
     LOG_WARN("fail to check geometry is empty", K(ret));
   } else {
-    ObGeoEvalCtx centroid_context(allocator_);
+    ObGeoEvalCtx centroid_context(mem_ctx_);
     ObGeometry *res_geo = nullptr;
     if (OB_FAIL(centroid_context.append_geo_arg(geo))) {
       LOG_WARN("build geo gis context failed", K(ret));
@@ -61,7 +58,7 @@ int ObGeoInteriorPointVisitor::assign_interior_point(double x, double y)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(interior_point_)) {
-    if (OB_ISNULL(interior_point_ = OB_NEWx(ObCartesianPoint, allocator_, x, y, srid_, allocator_))) {
+    if (OB_ISNULL(interior_point_ = OB_NEWx(ObCartesianPoint, allocator_, x, y, srid_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory for collection", K(ret));
     }
@@ -77,7 +74,7 @@ int ObGeoInteriorPointVisitor::assign_interior_endpoint(double x, double y)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(interior_endpoint_)) {
-    if (OB_ISNULL(interior_endpoint_ = OB_NEWx(ObCartesianPoint, allocator_, x, y, srid_, allocator_))) {
+    if (OB_ISNULL(interior_endpoint_ = OB_NEWx(ObCartesianPoint, allocator_, x, y, srid_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory for collection", K(ret));
     }
@@ -237,7 +234,7 @@ int ObGeoInteriorPointVisitor::inner_calculate_interior_y(
 int ObGeoInteriorPointVisitor::calculate_interior_y(ObIWkbGeomPolygon *geo, double &interior_y)
 {
   int ret = OB_SUCCESS;
-  ObGeoEvalCtx box_ctx(allocator_);
+  ObGeoEvalCtx box_ctx(mem_ctx_);
   ObGeogBox *gbox = nullptr;
   const ObWkbGeomPolygon *polygon = reinterpret_cast<const ObWkbGeomPolygon *>(geo->val());
   ObWkbGeomLinearRing::iterator iter = polygon->exterior_ring().begin();
@@ -374,7 +371,7 @@ int ObGeoInteriorPointVisitor::visit(ObIWkbGeomPolygon *geo)
       LOG_WARN("crossing_points size should be even", K(ret), K(crossing_points.size()));
     } else {
       double interior_x = 0;
-      std::sort(crossing_points.begin(), crossing_points.end());
+      lib::ob_sort(crossing_points.begin(), crossing_points.end());
       for (int64_t i = 0; OB_SUCC(ret) && i < crossing_points.size(); i += 2) {
         double width = crossing_points[i + 1] - crossing_points[i];
         if (width != 0 && width > max_width_) {
@@ -423,7 +420,7 @@ int ObGeoInteriorPointVisitor::visit(ObIWkbGeomCollection *geo)
     if (OB_FAIL(ObGeoTypeUtil::get_coll_dimension(geo, dimension_))) {
       LOG_WARN("fail to calculate collection dimension_", K(ret));
     } else if (dimension_ == 0 || dimension_ == 1) {
-      ObGeoEvalCtx centroid_context(allocator_);
+      ObGeoEvalCtx centroid_context(mem_ctx_);
       ObGeometry *res_geo = nullptr;
       if (OB_FAIL(centroid_context.append_geo_arg(geo))) {
         LOG_WARN("build geo gis context failed", K(ret));

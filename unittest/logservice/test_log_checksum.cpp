@@ -11,6 +11,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "lib/allocator/ob_malloc.h"
 #include "lib/checksum/ob_crc64.h"
 #include "lib/checksum/ob_parity_check.h"
 #include <gtest/gtest.h>

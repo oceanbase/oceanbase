@@ -12,14 +12,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/ob_define.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/xml/ob_multi_mode_interface.h"
-#include "lib/xml/ob_tree_base.h"
+#include "ob_tree_base.h"
 #include "lib/xml/ob_xml_tree.h"
 
 namespace oceanbase {

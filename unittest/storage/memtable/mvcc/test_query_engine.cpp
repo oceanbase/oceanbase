@@ -12,14 +12,11 @@
 
 #include "storage/memtable/mvcc/ob_query_engine.h"
 
-#include "storage/memtable/ob_memtable_key.h"
-#include "lib/atomic/ob_atomic.h"
 
 #include "../utils_rowkey_builder.h"
 #include "../utils_mod_allocator.h"
 
 #include <gtest/gtest.h>
-#include <thread>
 
 namespace oceanbase
 {

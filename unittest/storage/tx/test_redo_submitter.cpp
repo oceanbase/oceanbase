@@ -11,13 +11,8 @@
  */
 
 #include <gmock/gmock.h>
-#include <gtest/gtest.h>
-#include <thread>
 #define private public
 #define protected public
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_tx_redo_submitter.h"
 #define USING_LOG_PREFIX TRANS
 
@@ -113,7 +108,7 @@ int succ_submit_redo_log_out(ObTxLogBlock & b,
 {
   submitted_scn.convert_for_tx(123123123);
   if (log_cb) {
-    ((ObPartTransCtx*)(log_cb->ctx_))->return_log_cb_(log_cb);
+    ((ObPartTransCtx*)(log_cb->get_group_ptr()->get_tx_ctx()))->return_log_cb_(log_cb);
     log_cb = NULL;
   }
   return OB_SUCCESS;

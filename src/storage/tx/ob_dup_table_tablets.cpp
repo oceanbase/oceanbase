@@ -8,15 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#include "lib/utility/ob_tracepoint.h"
-#include "storage/tx/ob_trans_service.h"
-#include "ob_dup_table_base.h"
 #include "ob_dup_table_tablets.h"
-#include "ob_dup_table_util.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_struct.h"
+#include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase
 {
@@ -359,7 +352,7 @@ int ObLSDupTabletsMgr::init(ObDupTableLSHandler *dup_ls_handle)
 {
   int ret = OB_SUCCESS;
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   if (!ATOMIC_LOAD(&is_stopped_)) {
     ret = OB_INIT_TWICE;
@@ -470,7 +463,7 @@ int ObLSDupTabletsMgr::offline()
   int ret = OB_SUCCESS;
 
   // DUP_TABLE_LOG(INFO, "before dup_tablets_mgr offline", K(ret),KPC(this));
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
   if (OB_FAIL(clean_unlog_tablets_())) {
     DUP_TABLE_LOG(WARN, "clean unlog tablets failed", K(ret), KPC(this));
   } else if (OB_FAIL(clean_durable_confirming_tablets_(share::SCN::max_scn()))) {
@@ -491,7 +484,7 @@ int ObLSDupTabletsMgr::check_readable(const common::ObTabletID &tablet_id,
   readable = false;
   DupTabletInfo tmp_status;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   DLIST_FOREACH(readable_node, readable_tablets_list_)
   {
@@ -553,7 +546,7 @@ int ObLSDupTabletsMgr::search_dup_tablet_in_redo_log(const common::ObTabletID &t
   is_dup_table = false;
   DupTabletInfo tmp_status;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   // for DEBUG
   // no need to check dup_table which has not submitted
@@ -648,7 +641,7 @@ int ObLSDupTabletsMgr::search_dup_tablet_for_read(const common::ObTabletID &tabl
   is_dup_table = false;
   DupTabletInfo tmp_status;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   if (OB_NOT_NULL(changing_new_set_)) {
     if (OB_SUCC(changing_new_set_->get_refactored(tablet_id, tmp_status))) {
@@ -872,7 +865,7 @@ int ObLSDupTabletsMgr::scan_readable_set_for_gc(const int64_t leader_takeover_ts
   const int64_t last_scan_task_succ_ts =
       MTL(ObTransService *)->get_dup_table_scan_task().get_last_scan_task_succ_ts();
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   if (OB_ISNULL(removing_old_set_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -998,7 +991,7 @@ int ObLSDupTabletsMgr::refresh_dup_tablet(const common::ObTabletID &tablet_id,
 {
   int ret = OB_SUCCESS;
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   if (!tablet_id.is_valid() || ATOMIC_LOAD(&is_stopped_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1148,7 +1141,7 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   unique_id_array.reuse();
 
@@ -1340,7 +1333,7 @@ int ObLSDupTabletsMgr::serialize_tablet_log(const DupTabletSetIDArray &unique_id
 
   int64_t tmp_pos = pos;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   if (OB_ISNULL(buf) || buf_len <= 0 || pos <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -1388,7 +1381,7 @@ int ObLSDupTabletsMgr::deserialize_tablet_log(DupTabletSetIDArray &unique_id_arr
   common::ObTimeGuard timeguard("deserialize_tablet_log", 500 * 1000);
   unique_id_array.reset();
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
   timeguard.click();
 
   if (OB_ISNULL(buf) || data_len <= 0 || pos <= 0) {
@@ -1518,7 +1511,7 @@ int ObLSDupTabletsMgr::tablet_log_submitted(const bool submit_result,
   int ret = OB_SUCCESS;
 
   common::ObTimeGuard timeguard("tablet_log_submitted", 500 * 1000);
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   timeguard.click();
   UNUSED(for_replay);
@@ -1559,7 +1552,7 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
 
   bool contain_readable_set = false;
   modify_readable_set = false;
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
 
   for (int i = 0; OB_SUCC(ret) && i < unique_id_array.count(); i++) {
@@ -1798,7 +1791,7 @@ int ObLSDupTabletsMgr::merge_into_readable_tablets_(DupTabletChangeMap *change_m
 
 int64_t ObLSDupTabletsMgr::get_dup_tablet_count()
 {
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
   int64_t total_size = 0;
 
   if (OB_NOT_NULL(changing_new_set_)) {
@@ -1827,7 +1820,7 @@ int64_t ObLSDupTabletsMgr::get_dup_tablet_count()
 
 int64_t ObLSDupTabletsMgr::get_readable_tablet_count()
 {
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
   int64_t total_size = 0;
 
   DLIST_FOREACH_X(readable_set_ptr, readable_tablets_list_, true)
@@ -1844,7 +1837,7 @@ int64_t ObLSDupTabletsMgr::get_readable_tablet_set_count()
 {
   int64_t cnt = 0;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
   cnt = readable_tablets_list_.get_size();
 
   return cnt;
@@ -1854,7 +1847,7 @@ int64_t ObLSDupTabletsMgr::get_need_confirm_tablet_set_count()
 {
   int64_t cnt = 0;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
   cnt = need_confirm_new_queue_.get_size();
 
   return cnt;
@@ -1863,7 +1856,7 @@ int64_t ObLSDupTabletsMgr::get_need_confirm_tablet_set_count()
 int64_t ObLSDupTabletsMgr::get_all_tablet_set_count()
 {
   int64_t cnt = 0;
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   if (OB_NOT_NULL(changing_new_set_)) {
     cnt += 1;
@@ -1883,7 +1876,7 @@ int64_t ObLSDupTabletsMgr::get_all_tablet_set_count()
 bool ObLSDupTabletsMgr::check_removing_tablet_exist()
 {
   bool bool_ret = false;
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   if (OB_ISNULL(removing_old_set_)) {
     bool_ret = false;
@@ -1902,7 +1895,7 @@ bool ObLSDupTabletsMgr::check_removing_tablet_exist()
 bool ObLSDupTabletsMgr::check_changing_new_tablet_exist()
 {
   bool bool_ret = false;
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
 
   if (OB_ISNULL(changing_new_set_)) {
     bool_ret = false;
@@ -1922,7 +1915,7 @@ int ObLSDupTabletsMgr::leader_takeover(const bool is_resume,
 {
   int ret = OB_SUCCESS;
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   if (!is_resume) {
     if (OB_FAIL(construct_clean_confirming_set_task_())) {
@@ -1949,7 +1942,7 @@ int ObLSDupTabletsMgr::leader_revoke(const bool is_logging)
 
   int ret = OB_SUCCESS;
 
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
 
   if (!is_logging) {
     // clean unreadable tablets to make replay from clean sets.
@@ -1969,7 +1962,7 @@ int ObLSDupTabletsMgr::try_to_confirm_tablets(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  SpinWLockGuard guard(dup_tablets_lock_);
+  TCRWLock::WLockGuard guard(dup_tablets_lock_);
   if (!lease_valid_follower_max_replayed_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid confirm ts", KR(ret), K(lease_valid_follower_max_replayed_scn));
@@ -2030,7 +2023,7 @@ int ObLSDupTabletsMgr::try_to_confirm_tablets(
 
 void ObLSDupTabletsMgr::print_tablet_diag_info_log(bool is_master)
 {
-  SpinRLockGuard guard(dup_tablets_lock_);
+  TCRWLock::RLockGuard guard(dup_tablets_lock_);
   int ret = OB_SUCCESS;
 
   const uint64_t TABLET_SET_PRINT_BUF_LEN =
@@ -2092,14 +2085,16 @@ void ObLSDupTabletsMgr::print_tablet_diag_info_log(bool is_master)
       if (OB_SUCC(ret) && !need_confirm_new_queue_.is_empty()) {
         DLIST_FOREACH_X(need_confirm_set, need_confirm_new_queue_, OB_SUCC(ret))
         {
-          if (OB_FAIL(::oceanbase::common::databuff_printf(
-                  tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
-                  "\n%s[%sNew Dup Tablet Set - NeedConfirm] unique_id = %lu, tablet_count = %lu, "
-                  "change_status = %s",
-                  DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
-                  need_confirm_set->get_common_header().get_unique_id(), need_confirm_set->size(),
-                  to_cstring(need_confirm_set->get_RO_change_status())))) {
-
+          ret = ::oceanbase::common::databuff_printf(
+              tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+              "\n%s[%sNew Dup Tablet Set - NeedConfirm] unique_id = %lu, tablet_count = %lu, "
+              "change_status = ",
+              DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
+              need_confirm_set->get_common_header().get_unique_id(), need_confirm_set->size());
+          OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+              tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+              need_confirm_set->get_RO_change_status());
+          if (OB_FAIL(ret)) {
             _DUP_TABLE_LOG(WARN,
                            "%sprint need confirm tablet list header failed, ret=%d, ls_id=%lu",
                            DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, ret, ls_id.id());
@@ -2121,15 +2116,16 @@ void ObLSDupTabletsMgr::print_tablet_diag_info_log(bool is_master)
 
     // old tablet print
     if (OB_SUCC(ret) && OB_NOT_NULL(removing_old_set_) && removing_old_set_->size() > 0) {
-
-      if (OB_FAIL(::oceanbase::common::databuff_printf(
-              tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
-              "\n%s[%sOld Dup Tablet Set] unique_id = %lu, tablet_count = %lu, "
-              "change_status = %s",
-              DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
-              removing_old_set_->get_common_header().get_unique_id(), removing_old_set_->size(),
-              to_cstring(removing_old_set_->get_RO_change_status())))) {
-
+      ret = ::oceanbase::common::databuff_printf(
+          tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+          "\n%s[%sOld Dup Tablet Set] unique_id = %lu, tablet_count = %lu, "
+          "change_status = ",
+          DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
+          removing_old_set_->get_common_header().get_unique_id(), removing_old_set_->size());
+      OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+          tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+          removing_old_set_->get_RO_change_status());
+      if (OB_FAIL(ret)) {
         _DUP_TABLE_LOG(WARN, "%sprint need confirm tablet list header failed, ret=%d, ls_id=%lu",
                        DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, ret, ls_id.id());
       } else {
@@ -2150,14 +2146,16 @@ void ObLSDupTabletsMgr::print_tablet_diag_info_log(bool is_master)
     if (OB_SUCC(ret) && !readable_tablets_list_.is_empty()) {
       DLIST_FOREACH(readable_set_ptr, readable_tablets_list_)
       {
-        if (OB_FAIL(::oceanbase::common::databuff_printf(
-                tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
-                "\n%s[%sReadable Dup Tablet Set] unique_id = %lu, tablet_count = %lu, "
-                "change_status = %s",
-                DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
-                readable_set_ptr->get_common_header().get_unique_id(), readable_set_ptr->size(),
-                to_cstring(readable_set_ptr->get_RO_change_status())))) {
-
+        ret = ::oceanbase::common::databuff_printf(
+            tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+            "\n%s[%sReadable Dup Tablet Set] unique_id = %lu, tablet_count = %lu, "
+            "change_status = ",
+            DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
+            readable_set_ptr->get_common_header().get_unique_id(), readable_set_ptr->size());
+        OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+            tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+            readable_set_ptr->get_RO_change_status());
+        if (OB_FAIL(ret)) {
           _DUP_TABLE_LOG(WARN, "%sprint readable tablet list header failed, ret=%d, ls_id=%lu",
                          DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, ret, ls_id.id());
         } else {
@@ -2178,17 +2176,18 @@ void ObLSDupTabletsMgr::print_tablet_diag_info_log(bool is_master)
     tablet_set_diag_info_log_buf_[MIN(tablet_set_diag_pos + 1, TABLET_SET_PRINT_BUF_LEN - 1)] =
         '\0';
     tablet_id_diag_info_log_buf_[MIN(tablet_id_diag_pos + 1, TABLET_ID_PRINT_BUF_LEN - 1)] = '\0';
+    ObCStringHelper helper;
     _DUP_TABLE_LOG(
         INFO,
         "[%sDup Tablet Info] tenant: %lu, ls: %lu, is_master: %s, total_tablet_count: %lu, "
         "need_confirm_new_set_count: %u, readable_set_count: %u, tablet_set_print_buf_used: "
         "%lu/%lu, tablet_id_print_buf_used:%lu/%lu, last_readable_log_entry_scn: %s, "
         "last_readable_sync_succ_time_: %s, %s %s",
-        DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, tenant_id, ls_id.id(), to_cstring(is_master),
+        DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, tenant_id, ls_id.id(), helper.convert(is_master),
         total_tablet_cnt, need_confirm_new_queue_.get_size(), readable_tablets_list_.get_size(),
         tablet_set_diag_pos, TABLET_SET_PRINT_BUF_LEN, tablet_id_diag_pos, TABLET_ID_PRINT_BUF_LEN,
-        to_cstring(last_readable_log_entry_scn_.atomic_load()),
-        to_cstring(last_readable_sync_succ_time_), tablet_set_diag_info_log_buf_,
+        helper.convert(last_readable_log_entry_scn_.atomic_load()),
+        helper.convert(last_readable_sync_succ_time_), tablet_set_diag_info_log_buf_,
         tablet_id_diag_info_log_buf_);
   }
 }
@@ -3023,7 +3022,7 @@ int ObLSDupTabletsMgr::get_tablets_stat(ObDupLSTabletsStatIterator &collect_iter
   const ObAddr addr = GCTX.self_addr();
   const int64_t tenant_id = MTL_ID();
   const int64_t collect_ts = ObTimeUtility::current_time();
-  SpinRLockGuard rlock(dup_tablets_lock_);
+  TCRWLock::RLockGuard rlock(dup_tablets_lock_);
 
   // iter changing new
   if (OB_NOT_NULL(changing_new_set_)) {
@@ -3111,7 +3110,7 @@ int ObLSDupTabletsMgr::get_tablet_set_stat(ObDupLSTabletSetStatIterator &collect
   int ret = OB_SUCCESS;
   // iter changing new
   const int64_t tenant_id = MTL_ID();
-  SpinRLockGuard rlock(dup_tablets_lock_);
+  TCRWLock::RLockGuard rlock(dup_tablets_lock_);
 
   if (OB_NOT_NULL(changing_new_set_)) {
     DupTabletSetChangeStatus *tmp_status = changing_new_set_->get_change_status();
@@ -3218,10 +3217,17 @@ int ObTenantDupTabletSchemaHelper::get_all_dup_tablet_set_(TabletIDSet &tablet_s
     DUP_TABLE_LOG(WARN, "get table schemas in tenant failed", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCCESS == ret && i < table_schemas.count(); i++) {
+      bool is_restore = false;
       bool is_duplicated = false;
       const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i);
-      if (OB_FAIL(table_schema->check_is_duplicated(schema_guard, is_duplicated))) {
-        DUP_TABLE_LOG(WARN, "check duplicate failed", K(ret));
+      if (OB_FAIL(schema_guard.check_tenant_is_restore(table_schema->get_tenant_id(), is_restore))) {
+        DUP_TABLE_LOG(WARN, "fail to check tenant is restore", K(ret));
+      } else if (is_restore) {
+        is_duplicated = false;
+      } else if (table_schema->is_duplicate_table()) {
+        is_duplicated = true;
+      }
+      if (OB_FAIL(ret)) {
       } else if (is_duplicated) {
         ObArray<ObTabletID> tablet_id_arr;
         if (OB_FAIL(table_schema->get_tablet_ids(tablet_id_arr))) {

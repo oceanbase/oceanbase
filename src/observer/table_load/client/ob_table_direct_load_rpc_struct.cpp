@@ -29,7 +29,9 @@ OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadBeginArg,
                            heartbeat_timeout_,
                            force_create_,
                            is_async_,
-                           load_method_);
+                           load_method_,
+                           column_names_,
+                           part_names_);
 
 OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadBeginRes,
                            table_id_,
@@ -71,6 +73,11 @@ OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadHeartBeatArg,
 OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadHeartBeatRes,
                            status_,
                            error_code_);
+
+// detach
+OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadDetachArg,
+                           table_id_,
+                           task_id_);
 
 } // namespace observer
 } // namespace oceanbase

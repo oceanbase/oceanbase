@@ -15,6 +15,7 @@
 
 #include "storage/meta_mem/ob_storage_meta_cache.h"
 #include "share/cache/ob_kv_storecache.h"
+#include "storage/ob_i_table.h"
 
 namespace oceanbase
 {
@@ -34,8 +35,8 @@ class ObMemtableArray;
 
 class ObTableStoreIterator final
 {
-// TODO: currently, we will load all related tables into memory on initializetion of iterator,
-// maybe we should init with sstable address and prefetch sstable on iteratring for more smooth memory usage
+// TODO: currently, we will load all related tables into memory on initialization of iterator,
+// maybe we should init with sstable address and prefetch sstable on iterating for more smooth memory usage
 public:
   class TablePtr final
   {
@@ -67,6 +68,7 @@ public:
   void resume();
 
   int set_handle(const ObStorageMetaHandle &table_store_handle);
+  int alloc_split_extra_table_store_handle(ObStorageMetaHandle *&meta_handle);
 
   ObITable *get_last_memtable();
   int get_next(ObITable *&table);
@@ -75,17 +77,20 @@ public:
   int set_retire_check();
 
   int add_table(ObITable *table);
+  int add_ddl_agg_table(ObTableHandleV2 &ddl_agg_sstable_handle);
+  int add_ddl_co_table(ObTableHandleV2 &ddl_co_sstable_handle, ObITable *co_table);
   int add_tables(
       const ObSSTableArray &sstable_array,
       const int64_t start_pos = 0,
       const int64_t count = 1,
       const bool unpack_co_table = false);
+  int get_ith_table(const int64_t pos, ObITable *&table);
   inline bool check_store_expire() const
   {
     return (NULL == memstore_retired_) ? false : ATOMIC_LOAD(memstore_retired_);
   }
   TO_STRING_KV(K_(table_ptr_array), K_(sstable_handle_array), K_(pos), K_(step), K_(memstore_retired),
-      K_(need_load_sstable), K_(table_store_handle), KPC_(transfer_src_table_store_handle));
+      K_(need_load_sstable), K_(table_store_handle), KPC_(transfer_src_table_store_handle), K_(split_extra_table_store_handles));
 private:
   int inner_move_idx_to_next();
   int get_table_ptr_with_meta_handle(
@@ -96,10 +101,12 @@ private:
       const ObSSTableArray &sstable_array,
       const bool is_loaded_co_table,
       const blocksstable::ObSSTableMetaHandle &co_meta_handle);
-  int get_ith_table(const int64_t pos, ObITable *&table);
+  int get_unloaded_sstable(common::ObIArray<TablePtr*> &table_ptr_aggregate);
+  int load_sstable_meta_with_aggregate_io();
 private:
   friend class ObTablet; // TODO: remove this friend class when possible
   friend class ObTabletTableStore;
+  friend class AggregatedIOGuard;
   bool need_load_sstable_;
   ObStorageMetaHandle table_store_handle_;
   SSTableHandleArray sstable_handle_array_;
@@ -108,9 +115,30 @@ private:
   int64_t step_;
   bool * memstore_retired_;
   ObStorageMetaHandle *transfer_src_table_store_handle_;
+  ObSEArray<ObStorageMetaHandle, 1> split_extra_table_store_handles_;
+  ObArray<ObTableHandleV2> *ddl_agg_sstable_handles_;
+  ObTableHandleV2 *ddl_co_sstable_handle_;
+  bool aggregated_guard_created_;
   DISALLOW_COPY_AND_ASSIGN(ObTableStoreIterator);
 };
 
+// Aggregated I/O Guard for batching sstable meta loading
+// If AggregatedIOGuard is created, the IO will be blocked until the AggregatedIOGuard is destroyed.
+// The IO will be triggered when the iterator is valid and the sstable needs to be loaded.
+class AggregatedIOGuard final
+{
+public:
+  explicit AggregatedIOGuard(ObTableStoreIterator &iterator) : iterator_(&iterator) {
+    iterator_->aggregated_guard_created_ = true;
+  }
+  // It will load the sstable meta into memory.
+  // This function must be called with aggregated I/O.
+  int finish();
+  ~AggregatedIOGuard() {}
+private:
+  ObTableStoreIterator *iterator_;
+  DISALLOW_COPY_AND_ASSIGN(AggregatedIOGuard);
+};
 
 } // namespace storage
 } // namespace oceanbase

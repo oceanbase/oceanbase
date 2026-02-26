@@ -21,6 +21,10 @@
 
 namespace oceanbase
 {
+namespace lib
+{
+class ObShareTenantLimiter;
+}
 namespace storage
 {
 class ObStorageLogger;
@@ -113,12 +117,20 @@ public:
                                   const int64_t old_log_disk_size,
                                   const int64_t new_log_disk_size,
                                   int64_t &allowed_log_disk_size);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int update_tenant_data_disk_size(const uint64_t tenant_id,
+                                    const int64_t new_data_disk_size);
+  int update_ss_garbage_collection_service_config();
+#endif
   int modify_tenant_io(const uint64_t tenant_id, const share::ObUnitConfig &unit_config);
   int update_tenant_config(uint64_t tenant_id);
   int update_palf_config();
   int update_tenant_dag_scheduler_config();
   int update_tenant_ddl_config();
   int update_checkpoint_diagnose_config();
+  int update_tenant_audit_log_config();
+  int update_tenant_query_response_time_flush_config();
+  int get_tenant_unsafe(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
   int get_active_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
@@ -127,6 +139,7 @@ public:
   int update_tenant_freezer_mem_limit(const uint64_t tenant_id,
                                       const int64_t tenant_min_mem,
                                       const int64_t tenant_max_mem);
+  int update_tenant_decode_resource(const uint64_t tenant_id);
 
   inline TenantList &get_tenant_list();
   int for_each(std::function<int(ObTenant &)> func);
@@ -142,6 +155,7 @@ public:
   int get_tenant_cpu_usage(const uint64_t tenant_id, double &usage) const;
   int get_tenant_worker_time(const uint64_t tenant_id, int64_t &worker_time) const;
   int get_tenant_cpu_time(const uint64_t tenant_id, int64_t &rusage_time) const;
+  int get_tenant_group_cpu_time(const uint64_t tenant_id, uint64_t group_id, int64_t &cpu_time);
   int get_tenant_cpu(
       const uint64_t tenant_id,
       double &min_cpu, double &max_cpu) const;
@@ -159,19 +173,12 @@ public:
   inline bool has_synced() const;
 
   void set_workers_per_cpu(int64_t v);
-  int write_create_tenant_abort_slog(uint64_t tenant_id);
-  int write_delete_tenant_commit_slog(uint64_t tenant_id);
-  int clear_persistent_data(const uint64_t tenant_id);
   int check_if_unit_id_exist(const uint64_t unit_id, bool &exist);
+  int inc_tenant_ddl_count(const uint64_t tenant_id, const int64_t cpu_quota_concurrency);
+  int dec_tenant_ddl_count(const uint64_t tenant_id);
 
 protected:
   void run1();
-  int get_tenant_unsafe(const uint64_t tenant_id, ObTenant *&tenant) const;
-
-  int write_create_tenant_prepare_slog(const ObTenantMeta &meta);
-  int write_create_tenant_commit_slog(uint64_t tenant_id);
-  int write_delete_tenant_prepare_slog(uint64_t tenant_id);
-  int write_update_tenant_unit_slog(const share::ObUnitInfoGetter::ObTenantConfig &unit);
   int construct_meta_for_hidden_sys(ObTenantMeta &meta);
   int construct_meta_for_virtual_tenant(const uint64_t tenant_id,
                                         const double min_cpu,
@@ -189,14 +196,23 @@ protected:
 private:
   int update_tenant_freezer_config_();
   int update_throttle_config_(const uint64_t tenant_id);
+  lib::ObShareTenantLimiter* get_share_tenant_limiter_unsafe(int64_t tenant_id);
+  lib::ObShareTenantLimiter* get_share_tenant_limiter(int64_t tenant_id);
+  int create_share_tenant_limiter_unsafe(int64_t tenant_id, lib::ObShareTenantLimiter*& limiter);
+  void del_share_tenant_limiter(lib::ObShareTenantLimiter* limiter);
+  void update_share_tenant_limiter(int64_t tenant_id);
+  void recycle_tenant_allocator(int64_t tenant_id);
 protected:
       static const int DEL_TRY_TIMES = 30;
       enum class ObTenantCreateStep {
         STEP_BEGIN = 0, // begin
         STEP_CTX_MEM_CONFIG_SETTED = 1, // set_tenant_ctx_idle succ
         STEP_LOG_DISK_SIZE_PINNED = 2,  // pin log disk size succ
-        STEP_TENANT_NEWED = 3, // new tenant succ
-        STEP_WRITE_PREPARE_SLOG = 4, // write_prepare_create_tenant_slog succ
+#ifdef OB_BUILD_SHARED_STORAGE
+        STEP_DATA_DISK_ALLOCATED = 3, // data disk allocate succ
+#endif
+        STEP_CREATION_PREPARED = 4, // finish prepare create tenant
+        STEP_TENANT_NEWED = 5, // new tenant succ
         STEP_FINISH,
       };
 
@@ -217,6 +233,8 @@ protected:
   static ObICtxMemConfigGetter *mcg_;
 
 private:
+  lib::ObShareTenantLimiter *tenant_limiter_head_;
+  lib::ObMutex limiter_mutex_;
   DISALLOW_COPY_AND_ASSIGN(ObMultiTenant);
 }; // end of class ObMultiTenant
 

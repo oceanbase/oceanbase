@@ -11,7 +11,6 @@
  */
 
 #include <stdio.h>
-#include "lib/alloc/alloc_assist.h"
 #include "sql/parser/ob_non_reserved_keywords.h"
 #include "pl/parser/pl_parser_mysql_mode_tab.h"
 
@@ -24,6 +23,7 @@ static t_node *mysql_pl_none_reserved_keywords_root = NULL;
 static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
 {
   {"after", AFTER},
+  {"at", AT},
   {"begin", BEGIN_KEY},
   {"before", BEFORE},
   {"binary_integer", BINARY_INTEGER},
@@ -36,6 +36,8 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"column_name", COLUMN_NAME},
   {"comment", COMMENT},
   {"commit", COMMIT},
+  {"compile", COMPILE},
+  {"completion", COMPLETION},
   {"condition", CONDITION},
   {"constraint_catalog", CONSTRAINT_CATALOG},
   {"constraint_name", CONSTRAINT_NAME},
@@ -50,10 +52,15 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"definer", DEFINER},
   {"delete", DELETE},
   {"deterministic", DETERMINISTIC},
+  {"disable", DISABLE},
   {"each", EACH},
   {"else", ELSE},
   {"elseif", ELSEIF},
+  {"enable", ENABLE},
   {"end", END_KEY},
+  {"ends", ENDS},
+  {"event", EVENT},
+  {"every", EVERY},
   {"exists", EXISTS},
   {"exit", EXIT},
   {"extend", EXTEND},
@@ -84,6 +91,7 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"out", OUT},
   {"package", PACKAGE},
   {"precedes", PRECEDES},
+  {"properties", PROPERTIES},
   {"table_name", TABLE_NAME},
   {"then", THEN},
   {"type", TYPE},
@@ -92,16 +100,20 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"resignal", RESIGNAL},
   {"return", RETURN},
   {"returns", RETURNS},
+  {"reuse", REUSE},
   {"rollback", ROLLBACK},
   {"row", ROW},
   {"rowtype", ROWTYPE},
   {"role", ROLE},
+  {"schedule", SCHEDULE},
   {"schema_name", SCHEMA_NAME},
   {"signal", SIGNAL},
   {"sqlexception", SQLEXCEPTION},
   {"sqlstate", SQLSTATE},
   {"sqlwarning", SQLWARNING},
+  {"starts", STARTS},
   {"subclass_origin", SUBCLASS_ORIGIN},
+  {"preserve", PRESERVE},
   {"until", UNTIL},
   {"update", UPDATE},
   {"user", USER},
@@ -147,6 +159,12 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"time", TIME},
   {"date", DATE},
   {"year", YEAR},
+  {"settings", SETTINGS},
+  {"month", MONTH},
+  {"day", DAY},
+  {"hour", HOUR},
+  {"minute", MINUTE},
+  {"second", SECOND},
   {"character", CHARACTER},
   {"char", CHARACTER},
   {"text", TEXT},
@@ -177,6 +195,24 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"pragma", PRAGMA},
   {"interface", INTERFACE},
   {"c", C},
+  {"submit", SUBMIT},
+  {"job", JOB},
+  {"cancel", CANCEL},
+  {"xa", XA},
+  {"recover", RECOVER},
+  {"polygon", POLYGON},
+  {"multipoint", MULTIPOINT},
+  {"point", POINT},
+  {"linestring", LINESTRING},
+  {"geometry", GEOMETRY},
+  {"multilinestring", MULTILINESTRING},
+  {"multipolygon", MULTIPOLYGON},
+  {"geometrycollection", GEOMETRYCOLLECTION},
+  {"geomcollection", GEOMCOLLECTION},
+  {"roaringbitmap", ROARINGBITMAP},
+  {"interval", INTERVAL},
+  {"to", TO},
+  {"serial", SERIAL}
 };
 
 const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char *word)

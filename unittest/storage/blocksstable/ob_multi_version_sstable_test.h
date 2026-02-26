@@ -40,6 +40,8 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_compaction_memory_context.h"
 #include "storage/ob_storage_schema_util.h"
+#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
+#include "storage/blocksstable/ob_micro_block_writer.h"
 
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 
@@ -163,9 +165,14 @@ public:
       const int64_t snapshot_version);
 public:
   ObITable::TableType get_merged_table_type() const;
-  void prepare_table_schema(const char **micro_data, const int64_t schema_rowkey_cnt, const ObScnRange &scn_range, const int64_t snapshot_version);
+  void prepare_table_schema(
+      const char **micro_data,
+      const int64_t schema_rowkey_cnt,
+      const ObScnRange &scn_range,
+      const int64_t snapshot_version,
+      const ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
   void init_tablet();
-  void reset_writer(const int64_t snapshot_version);
+  void reset_writer(const int64_t snapshot_version, const ObMergeType &merge_type = MINOR_MERGE);
   void prepare_one_macro(
       const char **micro_data,
       const int64_t micro_cnt,
@@ -177,12 +184,12 @@ public:
 public:
   static const int64_t MICRO_BLOCK_SIZE = 4 * 1024;
   static const int64_t MACRO_BLOCK_SIZE = 64 * 1024;
-  static const int64_t MAX_MICRO_BLOCK_CNT = 100;
+  static const int64_t MAX_MICRO_BLOCK_CNT = 300;
   static const int64_t MACRO_BLOCK_COUNT = 1000;
   static const int64_t SCHEMA_VERSION = 10;
   static const int64_t TEST_COLUMN_CNT = 6;
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 2;
-  static const int64_t MAX_FILE_SIZE = 256 * 1024 * 1024;
+  static const int64_t MAX_FILE_SIZE = 1024 * 1024 * 1024;
   enum LoadDataType
   {
     ALL_DELETE = 0,
@@ -190,7 +197,7 @@ public:
     MIX_DELETE_WITH_UPDATE = 2,
   };
 
-  static const uint64_t tenant_id_ = 1;
+  static const uint64_t tenant_id_ = 1001;
   static const uint64_t tablet_id_ = 300000;
   static const uint64_t table_id_ = 300000;
   static const uint64_t ls_id_ = 1001;
@@ -202,8 +209,9 @@ public:
   ObITable::TableKey table_key_;
   ObWholeDataStoreDesc data_desc_;
   ObWholeDataStoreDesc index_desc_;
+  ObSSTablePrivateObjectCleaner cleaner_;
   ObMacroBlockWriter macro_writer_;
-  ObMicroBlockWriter micro_writer_;
+  ObMicroBlockWriter<> micro_writer_;
   ObRowStoreType row_store_type_;
   ObSSTableIndexBuilder *root_index_builder_;
 
@@ -234,7 +242,7 @@ void ObMultiVersionSSTableTest::SetUpTestCase()
   int ret = OB_SUCCESS;
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
   //OK(init_io_device("multi_version_test"));
 
   // create ls
@@ -306,7 +314,8 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
     const char **micro_data,
     const int64_t schema_rowkey_cnt,
     const ObScnRange &scn_range,
-    const int64_t snapshot_version)
+    const int64_t snapshot_version,
+    const ObMergeEngineType merge_engine_type)
 {
   full_read_info_.reset();
   data_iter_cursor_ = 0;
@@ -325,8 +334,10 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
       col_desc.col_id_ = common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID;
     } else if (i == schema_rowkey_cnt + 1) {
       col_desc.col_id_ = common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID;
-    } else {
+    } else if (i < schema_rowkey_cnt) {
       col_desc.col_id_ = common::OB_APP_MIN_COLUMN_ID + i;
+    } else {
+      col_desc.col_id_ = common::OB_APP_MIN_COLUMN_ID + i - 2;
     }
     OK(tmp_col_descs.push_back(col_desc));
   }
@@ -349,6 +360,8 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
   table_schema_.set_compress_func_name("none");
   table_schema_.set_row_store_type(FLAT_ROW_STORE);
   table_schema_.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema_.set_merge_engine_type(merge_engine_type);
+  table_schema_.set_micro_block_format_version(ObMicroBlockFormatVersionHelper::LATEST_VERSION);
 
   ObColumnSchemaV2 column;
   //init column
@@ -400,10 +413,12 @@ void ObMultiVersionSSTableTest::init_tablet()
   tablet->storage_schema_addr_.get_ptr()->init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL);
   ASSERT_NE(nullptr, ptr = allocator_.alloc(sizeof(ObRowkeyReadInfo)));
   tablet->rowkey_read_info_ = new (ptr) ObRowkeyReadInfo();
-  tablet->build_read_info(allocator_);
+  tablet->build_read_info(allocator_, nullptr /*tablet*/, false /*is_cs_replica_compat*/);
 }
 
-void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
+void ObMultiVersionSSTableTest::reset_writer(
+  const int64_t snapshot_version,
+  const ObMergeType &merge_type)
 {
   ObMacroDataSeq start_seq(0);
   start_seq.set_data_block();
@@ -418,11 +433,13 @@ void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
 
   ObLSID ls_id(ls_id_);
   ObTabletID tablet_id(tablet_id_);
-  SCN scn;
-  scn.convert_for_tx(snapshot_version);
-  ASSERT_EQ(OB_SUCCESS, data_desc_.init(table_schema_, ls_id, tablet_id, merge_type_, snapshot_version, DATA_VERSION_4_1_0_0, scn));
+  const SCN reorganization_scn(SCN::min_scn());
+  SCN end_scn;
+  end_scn.convert_for_tx(snapshot_version);
+  ASSERT_EQ(OB_SUCCESS, data_desc_.init(false/*is_ddl*/, table_schema_, ls_id, tablet_id, merge_type, snapshot_version, DATA_VERSION_4_1_0_0,
+                                        table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, 0/*concurrent_cnt*/, reorganization_scn, end_scn));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
-  root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder();
+  root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
   ASSERT_NE(nullptr, root_index_builder_);
   data_desc_.get_desc().sstable_index_builder_ = root_index_builder_;
   data_desc_.get_desc().row_store_type_ = row_store_type_;
@@ -432,7 +449,11 @@ void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
   ASSERT_TRUE(index_desc_.is_valid());
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(index_desc_.get_desc()));
 
-  ASSERT_EQ(OB_SUCCESS, macro_writer_.open(data_desc_.get_desc(), start_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = start_seq.macro_data_seq_;
+  ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ASSERT_EQ(OB_SUCCESS, macro_writer_.open(data_desc_.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner_));
 }
 
 void ObMultiVersionSSTableTest::prepare_one_macro(
@@ -448,7 +469,6 @@ void ObMultiVersionSSTableTest::prepare_one_macro(
     macro_writer_.macro_blocks_[macro_writer_.current_index_].set_contain_uncommitted_row();
   }
   if (0 == data_iter_cursor_) {
-    macro_writer_.last_key_.set_min_rowkey();
     append_micro_block(data_iter_[0]);
     if (1 == micro_cnt) {
       OK(macro_writer_.build_micro_block());
@@ -496,7 +516,10 @@ void ObMultiVersionSSTableTest::prepare_data_end(
       table_schema_.get_column_count() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->close(res));
 
+  const int64_t upper_trans_version = res.contain_uncommitted_row_ ?
+      INT64_MAX : res.max_merged_trans_version_;
   ObTabletCreateSSTableParam param;
+  param.set_init_value_for_column_store_();
   table_key_.table_type_ = table_type;
   ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
   ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
@@ -532,25 +555,34 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   param.nested_size_ = res.nested_size_;
   param.nested_offset_ = res.nested_offset_;
   param.ddl_scn_.set_min();
+  param.table_backup_flag_.reset();
+  param.table_shared_flag_.reset();
+  param.filled_tx_scn_ = table_key_.get_end_scn();
+  param.tx_data_recycle_scn_.set_min();
+  param.sstable_logic_seq_ = 0;
+  param.row_count_ = 0;
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.rec_scn_ = table_key_.get_start_scn();
+  param.max_merged_trans_version_ = res.max_merged_trans_version_;
+  param.contain_uncommitted_row_ = res.contain_uncommitted_row_;
+  param.upper_trans_version_ = upper_trans_version;
   if (table_type == ObITable::MAJOR_SSTABLE) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   }
 
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ObLSID lsid(ls_id_);
-  OK(ls_svr->get_ls(lsid, ls_handle, ObLSGetMod::STORAGE_MOD));
+  if (ObITable::is_inc_major_type_sstable(table_type)) {
+    ObUncommitTxDesc tx_seq_key(10, 1);
+    param.uncommit_tx_info_.reuse();
+    OK(param.uncommit_tx_info_.tx_infos_.push_back(tx_seq_key));
+  }
+
   if (table_type == ObITable::COLUMN_ORIENTED_SSTABLE) {
     param.table_key_.column_group_idx_ = column_idx;
     OK(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param, allocator_, handle));
   } else {
     OK(ObTabletCreateDeleteHelper::create_sstable(param, allocator_, handle));
   }
-  ObTableReadInfo read_info;
-  ObSEArray<share::schema::ObColDesc, 16> cols_desc;
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_multi_version_column_descs(cols_desc));
-  ASSERT_EQ(OB_SUCCESS, read_info.init(allocator_, table_schema_.get_rowkey_column_num() + 1,
-   table_schema_.get_rowkey_column_num(), false, cols_desc, nullptr/*storage_cols_index*/));
 }
 
 void ObMultiVersionSSTableTest::prepare_data(

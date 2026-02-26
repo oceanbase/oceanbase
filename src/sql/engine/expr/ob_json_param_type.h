@@ -123,6 +123,7 @@ typedef enum JsnValueClause {
   JSN_VAL_MISMATCH  // 9
 } JsnValueClause;
 
+static const int32_t OB_JSON_VALUE_EXPR_PARAM_COUNT = 11;
 
 typedef enum JsnValueOpt {
   JSN_VAL_TRUNC_OPT,      // 0
@@ -130,6 +131,11 @@ typedef enum JsnValueOpt {
   JSN_VAL_EMPTY_OPT,     // 2
   JSN_VAL_ERROR_OPT,  // 3
 } JsnValueOpt;
+
+static bool is_support_pushdown_json_expr(const ObItemType type)
+{
+  return T_FUN_SYS_JSON_VALUE == type;
+}
 
 }  // namespace sql
 }  // namespace oceanbase

@@ -34,6 +34,8 @@ class ObAlterTablegroupArg;
 class ObSetPasswdArg;
 class ObAlterIndexParallelArg;
 class ObSequenceDDLArg;
+class ObAlterIndexTablespaceArg;
+class ObSchemaReviseArg;
 }
 
 namespace common
@@ -68,12 +70,10 @@ class ObColumnSchemaV2;
 class AlterColumnSchema;
 struct ObSchemaOperation;
 class ObSchemaService;
-class ObRoutineInfo;
-class ObUDTTypeInfo;
 class ObTriggerInfo;
-class ObErrorInfo;
 class ObConstraint;
 class ObUDF;
+class ObDependencyInfo;
 }
 }
 
@@ -89,49 +89,6 @@ class ObDropForeignKeyArg;
 
 namespace rootserver
 {
-struct ObSysStat
-{
-  struct Item;
-  typedef common::ObDList<Item> ItemList;
-
-  struct Item : public common::ObDLinkBase<Item>
-  {
-    Item() : name_(NULL), value_(), info_(NULL) {}
-    Item(ItemList &list, const char *name, const char *info);
-
-    TO_STRING_KV("name", common::ObString(name_), K_(value), "info", common::ObString(info_));
-    const char *name_;
-    common::ObObj value_;
-    const char *info_;
-  };
-
-  ObSysStat();
-
-  // set values after bootstrap
-  int set_initial_values(const uint64_t tenant_id);
-
-  TO_STRING_KV(K_(item_list));
-
-  ItemList item_list_;
-
-  // only root tenant own
-  Item ob_max_used_tenant_id_;
-  Item ob_max_used_unit_config_id_;
-  Item ob_max_used_resource_pool_id_;
-  Item ob_max_used_unit_id_;
-  Item ob_max_used_server_id_;
-  Item ob_max_used_ddl_task_id_;
-  Item ob_max_used_unit_group_id_;
-
-  // all tenant own
-  Item ob_max_used_normal_rowid_table_tablet_id_;
-  Item ob_max_used_extended_rowid_table_tablet_id_;
-  Item ob_max_used_ls_id_;
-  Item ob_max_used_ls_group_id_;
-  Item ob_max_used_sys_pl_object_id_;
-  Item ob_max_used_object_id_;
-  Item ob_max_used_rewrite_rule_version_;
-};
 
 class ObDDLOperator
 {
@@ -168,6 +125,7 @@ public:
   virtual int purge_tenant_in_recyclebin(const share::schema::ObTenantSchema &tenant_schema,
                                          common::ObMySQLTransaction &trans,
                                          const common::ObString *ddl_stmt_str);
+  virtual int try_init_tenant_data_version(const uint64_t tenant_id);
   virtual int replace_sys_variable(share::schema::ObSysVariableSchema &sys_variable_schema,
                                    const int64_t schema_version,
                                    common::ObMySQLTransaction &trans,
@@ -206,8 +164,8 @@ public:
        const common::ObRowkey &fir_values,
        const common::ObIArray<common::ObNewRow> &sed_values);
 
-  int update_default_partition_part_idx_for_external_table(const ObTableSchema &orig_table_schema,
-                                        const ObTableSchema &new_table_schema,
+  int update_default_partition_part_idx_for_external_table(const share::schema::ObTableSchema &orig_table_schema,
+                                        const share::schema::ObTableSchema &new_table_schema,
                                         ObMySQLTransaction &trans);
   int add_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
                            share::schema::ObTableSchema &inc_table_schema,
@@ -259,6 +217,9 @@ public:
   int update_boundary_schema_version(const uint64_t &tenant_id,
                                      const uint64_t &boundary_schema_version,
                                      common::ObMySQLTransaction &trans);
+  int inc_table_schema_version(ObMySQLTransaction &trans,
+                               const uint64_t tenant_id,
+                               const uint64_t table_id);
   int truncate_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
                                 share::schema::ObTableSchema &inc_table_schema,
                                 share::schema::ObTableSchema &del_table_schema,
@@ -275,6 +236,14 @@ public:
                               share::schema::ObTableSchema &inc_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
                               common::ObMySQLTransaction &trans);
+  int split_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
+                             share::schema::ObTableSchema &inc_table_schema,
+                             share::schema::ObTableSchema &new_table_schema,
+                             share::schema::ObTableSchema &upd_table_schema,
+                             common::ObMySQLTransaction &trans);
+  int drop_table_splitted_partitions(const share::schema::ObTableSchema &orig_table_schema,
+                                     share::schema::ObTableSchema &inc_table_schema,
+                                     common::ObMySQLTransaction &trans);
   int drop_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
                             share::schema::ObTableSchema &inc_table_schema,
                             share::schema::ObTableSchema &new_table_schema,
@@ -291,18 +260,27 @@ public:
                               share::schema::ObTableSchema &inc_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
                               common::ObMySQLTransaction &trans);
+  int alter_policy_table_partitions(const ObTableSchema &orig_table_schema,
+      ObTableSchema &inc_table_schema, ObTableSchema &new_table_schema, ObMySQLTransaction &trans);
+
+  int alter_policy_table_subpartitions(const ObTableSchema &orig_table_schema,
+      ObTableSchema &inc_table_schema, ObTableSchema &new_table_schema, ObMySQLTransaction &trans);
   int get_part_array_from_table(const share::schema::ObTableSchema &orig_table_schema,
                                 const share::schema::ObTableSchema &inc_table_schema,
                                 common::ObIArray<share::schema::ObPartition*> &part_array);
-  int insert_column_groups(ObMySQLTransaction &trans, const ObTableSchema &new_table_schema);
+  int insert_column_groups(ObMySQLTransaction &trans, const share::schema::ObTableSchema &new_table_schema);
   int insert_column_ids_into_column_group(ObMySQLTransaction &trans,
-                                          const ObTableSchema &new_table_schema,
+                                          const share::schema::ObTableSchema &new_table_schema,
                                           const ObIArray<uint64_t> &column_ids,
-                                          const ObColumnGroupSchema &column_group);
+                                          const share::schema::ObColumnGroupSchema &column_group);
+  int update_origin_column_group_with_new_schema(ObMySQLTransaction &trans,
+                                                const ObTableSchema &origin_table_schema,
+                                                const ObTableSchema &new_table_schema);
   int insert_single_column(common::ObMySQLTransaction &trans,
                            const share::schema::ObTableSchema &new_table_schema,
                            share::schema::ObColumnSchemaV2 &new_column);
   int delete_single_column(common::ObMySQLTransaction &trans,
+                           const int64_t new_schema_version,
                            share::schema::ObTableSchema &new_table_schema,
                            const common::ObString &column_name);
   int batch_update_system_table_columns(
@@ -312,10 +290,10 @@ public:
       const common::ObIArray<uint64_t> &add_column_ids,
       const common::ObIArray<uint64_t> &alter_column_ids,
       const common::ObString *ddl_stmt_str = NULL);
-  int reinit_autoinc_row(const ObTableSchema &table_schema,
+  int reinit_autoinc_row(const share::schema::ObTableSchema &table_schema,
                          common::ObMySQLTransaction &trans);
   // for alter table autoinc to check __all_auto_increment
-  int try_reinit_autoinc_row(const ObTableSchema &table_schema,
+  int try_reinit_autoinc_row(const share::schema::ObTableSchema &table_schema,
                              common::ObMySQLTransaction &trans);
   int create_sequence_in_create_table(share::schema::ObTableSchema &table_schema,
                                       common::ObMySQLTransaction &trans,
@@ -349,7 +327,7 @@ public:
   virtual int alter_table_drop_foreign_key(const share::schema::ObTableSchema &table_schema,
                                            const obrpc::ObDropForeignKeyArg &drop_foreign_key_arg,
                                            common::ObMySQLTransaction &trans,
-                                           const ObForeignKeyInfo *&parent_table_mock_foreign_key_info,
+                                           const share::schema::ObForeignKeyInfo *&parent_table_mock_foreign_key_info,
                                            const bool parent_table_in_offline_ddl_white_list);
   virtual int alter_index_drop_options(const share::schema::ObTableSchema &index_table_schema,
                                        const common::ObString &table_name,
@@ -359,14 +337,16 @@ public:
                                        const uint64_t data_table_id,
                                        const uint64_t database_id,
                                        const obrpc::ObRenameIndexArg &rename_index_arg,
-                                       const ObIndexStatus *new_index_status,
+                                       const share::schema::ObIndexStatus *new_index_status,
+                                       const bool is_in_deleting,
                                        common::ObMySQLTransaction &trans,
                                        share::schema::ObTableSchema &new_index_table_schema);
   int alter_table_rename_index_with_origin_index_name(
       const uint64_t tenant_id,
       const uint64_t index_table_id,
       const ObString &new_index_name, // Attention!!! origin index name, don't use table name. For example, __idx_500005_{index_name}, please using index_name!!!
-      const ObIndexStatus &new_index_status,
+      const share::schema::ObIndexStatus &new_index_status,
+      const bool is_in_deleting,
       common::ObMySQLTransaction &trans,
       share::schema::ObTableSchema &new_index_table_schema);
 
@@ -417,6 +397,10 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &index_schema,
       share::schema::ObTableSchema &new_data_table_schema);
+  virtual int drop_inner_generated_domain_extra_column(common::ObMySQLTransaction &trans,
+      const share::schema::ObTableSchema *ori_data_schema,
+      const share::schema::ObColumnSchemaV2 &ori_column_schema,
+      share::schema::ObTableSchema &new_data_table_schema);
 
 //  virtual int log_ddl_operation(share::schema::ObSchemaOperation &ddl_operation,
 //                                       common::ObMySQLTransaction &trans);
@@ -447,11 +431,11 @@ public:
   virtual int deal_with_mock_fk_parent_table(
         ObMySQLTransaction &trans,
         share::schema::ObSchemaGetterGuard &schema_guard,
-        ObMockFKParentTableSchema &mock_fk_parent_table_schema);
+        share::schema::ObMockFKParentTableSchema &mock_fk_parent_table_schema);
   virtual int deal_with_mock_fk_parent_tables(
         ObMySQLTransaction &trans,
         share::schema::ObSchemaGetterGuard &schema_guard,
-        ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array);
+        ObIArray<share::schema::ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array);
   // mock_fk_parent_table end
 
   virtual int drop_table(const share::schema::ObTableSchema &table_schema,
@@ -460,7 +444,8 @@ public:
                          const bool is_truncate_table = false,
                          share::schema::DropTableIdHashSet *drop_table_set = NULL,
                          const bool is_drop_db = false,
-                         const bool delete_priv = true);
+                         const bool delete_priv = true,
+                         const bool is_force_drop_lonely_lob_aux_table = false);
   virtual int drop_table_for_not_dropped_schema(
       const share::schema::ObTableSchema &table_schema,
       common::ObMySQLTransaction &trans,
@@ -468,7 +453,8 @@ public:
       const bool is_truncate_table = false,
       share::schema::DropTableIdHashSet *drop_table_set = NULL,
       const bool is_drop_db = false,
-      const bool delete_priv = true);
+      const bool delete_priv = true,
+      const bool is_force_drop_lonely_lob_aux_table = false);
   virtual int drop_table_to_recyclebin(const share::schema::ObTableSchema &table_schema,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        common::ObMySQLTransaction &trans,
@@ -520,12 +506,10 @@ public:
       const int64_t expire_time,
       common::ObIArray<share::schema::ObRecycleObject> &recycle_objs);
 
-  virtual int init_tenant_env(const share::schema::ObTenantSchema &tenant_schema,
-                              const share::schema::ObSysVariableSchema &sys_variable,
-                              const share::ObTenantRole &tenant_role,
-                              const share::SCN &recovery_until_scn,
-                              const common::ObIArray<common::ObConfigPairs> &init_configs,
-                              common::ObMySQLTransaction &trans);
+  virtual int init_tenant_schemas(
+      const share::schema::ObTenantSchema &tenant_schema,
+      const share::schema::ObSysVariableSchema &sys_variable,
+      common::ObMySQLTransaction &trans);
   virtual int rename_table(const share::schema::ObTableSchema &table_schema,
                            const common::ObString &new_table_name,
                            const uint64_t new_db_id,
@@ -534,11 +518,11 @@ public:
                            const common::ObString *ddl_stmt_str,
                            int64_t &new_data_table_schema_version /*OUTPUT*/,
                            ObIArray<std::pair<uint64_t, int64_t>> &idx_schema_versions /*OUTPUT*/);
-  virtual int rename_aux_table(const ObTableSchema &new_table_schema,
+  virtual int rename_aux_table(const share::schema::ObTableSchema &new_table_schema,
                                const uint64_t table_id,
-                               ObSchemaGetterGuard &schema_guard,
+                               share::schema::ObSchemaGetterGuard &schema_guard,
                                ObMySQLTransaction &trans,
-                               ObTableSchema &new_aux_table_schema,
+                               share::schema::ObTableSchema &new_aux_table_schema,
                                bool &has_aux_table_updated);
   virtual int update_index_status(
               const uint64_t tenant_id,
@@ -548,7 +532,21 @@ public:
               const bool in_offline_ddl_white_list,
               common::ObMySQLTransaction &trans,
               const common::ObString *ddl_stmt_str);
-
+  virtual int update_index_type(const share::schema::ObTableSchema &data_table_schema,
+                                const uint64_t index_table_id,
+                                const share::schema::ObIndexType index_type,
+                                const common::ObString *ddl_stmt_str,
+                                common::ObMySQLTransaction &trans);
+  virtual int update_indexes_type(const share::schema::ObTableSchema &data_table_schema,
+                                 const ObIArray<uint64_t> &index_table_ids,
+                                 const ObIArray<share::schema::ObIndexType> &index_types,
+                                 const common::ObString *ddl_stmt_str,
+                                 common::ObMySQLTransaction &trans);
+  virtual int switch_mlog_status(const share::schema::ObTableSchema &data_table_schema,
+                                 const uint64_t old_mlog_id,
+                                 const uint64_t new_mlog_id,
+                                 ObSchemaGetterGuard &schema_guard,
+                                 common::ObMySQLTransaction &trans);
   // tablespace
   virtual int create_tablespace(share::schema::ObTablespaceSchema &tablespace_schema,
                                 common::ObMySQLTransaction &trans,
@@ -588,7 +586,8 @@ public:
                          const uint64_t user_id,
                          const common::ObString &passwd,
                          const common::ObString *ddl_stmt_str,
-                         common::ObMySQLTransaction &trans);
+                         common::ObMySQLTransaction &trans,
+                         const common::ObString &plugin);
   virtual int set_max_connections(const uint64_t tenant_id,
                                   const uint64_t user_id,
                                   const uint64_t max_connections_per_hour,
@@ -630,26 +629,34 @@ public:
                           common::ObMySQLTransaction &trans,
                           const share::ObRawObjPrivArray &obj_priv_array,
                           const uint64_t option,
-                          const share::schema::ObObjPrivSortKey &obj_priv_key);
+                          const share::schema::ObObjPrivSortKey &obj_priv_key,
+                          const common::ObString &grantor = "",
+                          const common::ObString &grantor_host = "");
   virtual int revoke_table(const share::schema::ObTablePrivSortKey &table_priv_key,
                            const ObPrivSet priv_set,
                            common::ObMySQLTransaction &trans,
                            const share::schema::ObObjPrivSortKey &obj_priv_key,
                            const share::ObRawObjPrivArray &obj_priv_array,
-                           const bool revoke_all_ora);
+                           const bool revoke_all_ora,
+                           const common::ObString &grantor = "",
+                           const common::ObString &grantor_host = "");
 
-  virtual int grant_routine(const ObRoutinePrivSortKey &routine_priv_key,
+  virtual int grant_routine(const share::schema::ObRoutinePrivSortKey &routine_priv_key,
                             const ObPrivSet priv_set,
                             common::ObMySQLTransaction &trans,
                             const uint64_t option,
-                            const bool gen_ddl_stmt = true);
-  virtual int revoke_routine(const ObRoutinePrivSortKey &routine_priv_key,
+                            const bool gen_ddl_stmt = true,
+                            const common::ObString &grantor = "",
+                            const common::ObString &grantor_host = "");
+  virtual int revoke_routine(const share::schema::ObRoutinePrivSortKey &routine_priv_key,
                             const ObPrivSet priv_set,
                             common::ObMySQLTransaction &trans,
                             const bool report_error = true,
-                            const bool gen_ddl_stmt = true);
-  virtual int grant_column(ObSchemaGetterGuard &schema_guard,
-                           const ObColumnPrivSortKey &column_priv_key,
+                            const bool gen_ddl_stmt = true,
+                            const common::ObString &grantor = "",
+                            const common::ObString &grantor_host = "");
+  virtual int grant_column(share::schema::ObSchemaGetterGuard &schema_guard,
+                           const share::schema::ObColumnPrivSortKey &column_priv_key,
                            const ObPrivSet priv_set,
                            const ObString *ddl_stmt_str,
                            common::ObMySQLTransaction &trans,
@@ -754,52 +761,6 @@ public:
 
   // --------------end  keystore ---------------//
 
-  //----Functions for managing routine----
-  int create_routine(share::schema::ObRoutineInfo &routine_info,
-                       common::ObMySQLTransaction &trans,
-                       share::schema::ObErrorInfo &error_info,
-                       common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                       const common::ObString *ddl_stmt_str/*=NULL*/);
-  int replace_routine(share::schema::ObRoutineInfo &routine_info,
-                      const share::schema::ObRoutineInfo *old_routine_info,
-                      common::ObMySQLTransaction &trans,
-                      share::schema::ObErrorInfo &error_info,
-                      common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                      const common::ObString *ddl_stmt_str/*=NULL*/);
-  int alter_routine(const share::schema::ObRoutineInfo &routine_info,
-                    common::ObMySQLTransaction &trans,
-                    share::schema::ObErrorInfo &error_info,
-                    const common::ObString *ddl_stmt_str/*=NULL*/);
-  int drop_routine(const share::schema::ObRoutineInfo &routine_info,
-                     common::ObMySQLTransaction &trans,
-                     share::schema::ObErrorInfo &error_info,
-                     const common::ObString *ddl_stmt_str/*=NULL*/);
-  //----End of functions for managing routine----
-
-  //----Functions for managing udt----
-  int create_udt(share::schema::ObUDTTypeInfo &udt_info,
-                 common::ObMySQLTransaction &trans,
-                 share::schema::ObErrorInfo &error_info,
-                 common::ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
-                 share::schema::ObSchemaGetterGuard &schema_guard,
-                 common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                 const common::ObString *ddl_stmt_str/*=NULL*/);
-  int replace_udt(share::schema::ObUDTTypeInfo &udt_info,
-                  const share::schema::ObUDTTypeInfo *old_udt_info,
-                  common::ObMySQLTransaction &trans,
-                  share::schema::ObErrorInfo &error_info,
-                  common::ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
-                  share::schema::ObSchemaGetterGuard &schema_guard,
-                  common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                  const common::ObString *ddl_stmt_str/*=NULL*/);
-  int drop_udt(const share::schema::ObUDTTypeInfo &udt_info,
-               common::ObMySQLTransaction &trans,
-               share::schema::ObSchemaGetterGuard &schema_guard,
-               const common::ObString *ddl_stmt_str/*=NULL*/);
-  int del_routines_in_udt(const share::schema::ObUDTTypeInfo &udt_info,
-                              common::ObMySQLTransaction &trans,
-                              share::schema::ObSchemaGetterGuard &schema_guard);
-  //----End of functions for managing udt----
   int handle_audit_metainfo(const share::schema::ObSAuditSchema &audit_schema,
                             const share::schema::ObSAuditModifyType modify_type,
                             const bool need_update,
@@ -815,10 +776,10 @@ public:
                      share::schema::ObErrorInfo &error_info,
                      common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
                      const common::ObString *ddl_stmt_str/*=NULL*/);
-  int alter_package(const share::schema::ObPackageInfo &package_info,
-                    ObSchemaGetterGuard &schema_guard,
+  int alter_package(share::schema::ObPackageInfo &package_info,
+                    share::schema::ObSchemaGetterGuard &schema_guard,
                     common::ObMySQLTransaction &trans,
-                    ObIArray<ObRoutineInfo> &public_routine_infos,
+                    ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
                     share::schema::ObErrorInfo &error_info,
                     const common::ObString *ddl_stmt_str);
   int drop_package(const share::schema::ObPackageInfo &package_info,
@@ -835,17 +796,12 @@ public:
   int create_trigger(share::schema::ObTriggerInfo &new_trigger_info,
                      common::ObMySQLTransaction &trans,
                      share::schema::ObErrorInfo &error_info,
-                     ObIArray<ObDependencyInfo> &dep_infos,
+                     ObIArray<share::schema::ObDependencyInfo> &dep_infos,
                      int64_t &table_schema_version,
                      const common::ObString *ddl_stmt_str/*=NULL*/,
                      bool is_update_table_schema_version = true,
                      bool is_for_truncate_table = false);
   // set ddl_stmt_str to NULL if the statement is not 'drop trigger xxx'.
-  int drop_trigger(const share::schema::ObTriggerInfo &trigger_info,
-                   common::ObMySQLTransaction &trans,
-                   const common::ObString *ddl_stmt_str/*=NULL*/,
-                   bool is_update_table_schema_version = true,
-                   const bool in_offline_ddl_white_list = false);
   int drop_trigger_to_recyclebin(const share::schema::ObTriggerInfo &trigger_info,
                                  share::schema::ObSchemaGetterGuard &schema_guard,
                                  common::ObMySQLTransaction &trans);
@@ -992,12 +948,6 @@ public:
                                     share::schema::ObSchemaGetterGuard &schema_guard);
   //----End of functions for row level security----
 
-  int insert_dependency_infos(common::ObMySQLTransaction &trans,
-                              common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                              uint64_t tenant_id,
-                              uint64_t dep_obj_id,
-                              uint64_t schema_version, uint64_t owner_id);
-
   virtual int insert_temp_table_info(common::ObMySQLTransaction &trans,
                                      const share::schema::ObTableSchema &table_schema);
   virtual int delete_temp_table_info(common::ObMySQLTransaction &trans,
@@ -1010,12 +960,21 @@ public:
   int update_single_column(common::ObMySQLTransaction &trans,
                            const share::schema::ObTableSchema &origin_table_schema,
                            const share::schema::ObTableSchema &new_table_schema,
-                           share::schema::ObColumnSchemaV2 &column_schema);
+                           share::schema::ObColumnSchemaV2 &column_schema,
+                           const bool need_del_stats /*for online drop column, need delete column stat*/);
   int update_single_column_group(common::ObMySQLTransaction &trans,
-                                 const ObTableSchema &origin_table_schema,
-                                 const ObColumnSchemaV2 &new_column_schema);
+                                 const share::schema::ObTableSchema &origin_table_schema,
+                                 const share::schema::ObColumnSchemaV2 &new_column_schema);
+  int update_column_and_column_group(common::ObMySQLTransaction &trans,
+                                     const share::schema::ObTableSchema &origin_table_schema,
+                                     const share::schema::ObTableSchema &new_table_schema,
+                                     share::schema::ObColumnSchemaV2 &column_schema,
+                                    const bool need_del_stats /*for online drop column, need delete column stat*/);
   int update_partition_option(common::ObMySQLTransaction &trans,
                               share::schema::ObTableSchema &table_schema);
+  int update_partition_option(common::ObMySQLTransaction &trans,
+                              share::schema::ObTableSchema &table_schema,
+                              const common::ObString &ddl_stmt_str);
   int update_check_constraint_state(common::ObMySQLTransaction &trans,
                                     const share::schema::ObTableSchema &table,
                                     share::schema::ObConstraint &cst);
@@ -1024,33 +983,28 @@ public:
   template <typename T>
   int construct_new_name_for_recyclebin(const T &schema,
                                         common::ObSqlString &new_table_name);
-  static int replace_sys_stat(const uint64_t tenant_id,
-                              ObSysStat &sys_stat,
-                              common::ObISQLClient &trans);
 
-  int insert_tenant_merge_info(const share::schema::ObSchemaOperationType op,
-                               const share::schema::ObTenantSchema &tenant_schema,
-                               common::ObMySQLTransaction &trans);
   int update_table_status(const share::schema::ObTableSchema &orig_table_schema,
                           const int64_t schema_version,
-                          const ObObjectStatus new_status,
+                          const share::schema::ObObjectStatus new_status,
                           const bool update_object_status_ignore_version,
                           common::ObMySQLTransaction &trans);
-  int update_view_columns(const ObTableSchema &view_schema,
+  int update_view_columns(const share::schema::ObTableSchema &view_schema,
                           common::ObMySQLTransaction &trans);
   int reset_view_status(common::ObMySQLTransaction &trans,
                         const uint64_t tenant_id,
                         const share::schema::ObTableSchema *table);
-  int try_add_dep_info_for_synonym(const ObSimpleSynonymSchema *synonym_info,
+  int try_add_dep_info_for_synonym(const share::schema::ObSimpleSynonymSchema *synonym_info,
                                    common::ObMySQLTransaction &trans);
   int exchange_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
                                 share::schema::ObTableSchema &inc_table_schema,
                                 share::schema::ObTableSchema &del_table_schema,
                                 common::ObMySQLTransaction &trans);
   int exchange_table_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
-                                share::schema::ObTableSchema &inc_table_schema,
-                                share::schema::ObTableSchema &del_table_schema,
-                                common::ObMySQLTransaction &trans);
+                                   share::schema::ObTableSchema &inc_table_schema,
+                                   share::schema::ObTableSchema &del_table_schema,
+                                   common::ObMySQLTransaction &trans,
+                                   const bool is_subpart_idx_specified);
   int get_target_auto_inc_sequence_value(const uint64_t tenant_id,
                                          const uint64_t table_id,
                                          const uint64_t column_id,
@@ -1067,22 +1021,30 @@ public:
                                      common::ObMySQLTransaction &trans,
                                      ObIAllocator &allocator,
                                      common::number::ObNumber &next_value);
-  int alter_target_sequence_start_with(const ObSequenceSchema &sequence_schema,
+  int alter_target_sequence_start_with(const share::schema::ObSequenceSchema &sequence_schema,
                                        common::ObMySQLTransaction &trans);
-  int alter_user_proxy(const ObUserInfo* client_user_info,
-                        const ObUserInfo* proxy_user_info,
+  int alter_user_proxy(const share::schema::ObUserInfo* client_user_info,
+                        const share::schema::ObUserInfo* proxy_user_info,
                         const uint64_t flags,
                         const bool is_grant,
                         const ObIArray<uint64_t> &role_ids,
-                        ObIArray<ObUserInfo> &users_to_update,
+                        ObIArray<share::schema::ObUserInfo> &users_to_update,
                         ObMySQLTransaction &trans);
-private:
+  inline share::schema::ObMultiVersionSchemaService &get_multi_schema_service() { return schema_service_; }
+  inline common::ObMySQLProxy &get_sql_proxy() { return sql_proxy_; }
+  int cleanup_autoinc_cache(const share::schema::ObTableSchema &table_schema);
+  int sync_version_for_cascade_table(
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &table_ids,
+      common::ObMySQLTransaction &trans);
   virtual int set_need_flush_ora(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObObjPrivSortKey &obj_priv_key,          /* in: obj priv key*/
       const uint64_t option,                                        /* in: new option */
       const share::ObRawObjPrivArray &obj_priv_array,               /* in: new privs used want to add */
       share::ObRawObjPrivArray &new_obj_priv_array);
+
+private:
   virtual int init_tenant_tablegroup(const uint64_t tenant_id,
                                      common::ObMySQLTransaction &trans);
   virtual int init_tenant_database(const share::schema::ObTenantSchema &tenant_schema,
@@ -1106,11 +1068,6 @@ private:
   virtual int init_tenant_users(const share::schema::ObTenantSchema &tenant_schema,
                                 const share::schema::ObSysVariableSchema &sys_variable,
                                 common::ObMySQLTransaction &trans);
-  virtual int init_tenant_sys_stats(const uint64_t tenant_id,
-                                    common::ObMySQLTransaction &trans);
-  virtual int init_tenant_config(const uint64_t tenant_id,
-                                 const common::ObIArray<common::ObConfigPairs> &init_configs,
-                                 common::ObMySQLTransaction &trans);
   virtual int init_freeze_info(const uint64_t tenant_id,
                                common::ObMySQLTransaction &trans);
   virtual int init_tenant_srs(const uint64_t tenant_id,
@@ -1122,16 +1079,6 @@ private:
   int check_tenant_exist(share::schema::ObSchemaGetterGuard &schema_guard,
                          const common::ObString &tenant_name,
                          bool &is_exist);
-
-  int sync_version_for_cascade_table(
-      const uint64_t tenant_id,
-      const common::ObIArray<uint64_t> &table_ids,
-      common::ObMySQLTransaction &trans);
-
-  int cleanup_autoinc_cache(const share::schema::ObTableSchema &table_schema);
-
-  int fill_trigger_id(share::schema::ObSchemaService &schema_service,
-                      share::schema::ObTriggerInfo &new_trigger_info);
   bool is_aux_object(const share::schema::ObDatabaseSchema &schema);
   bool is_aux_object(const share::schema::ObTableSchema &schema);
   bool is_aux_object(const share::schema::ObTriggerInfo &schema);
@@ -1145,36 +1092,29 @@ private:
                                      share::schema::ObSchemaGetterGuard &schema_guard);
   int update_table_version_of_db(const share::schema::ObDatabaseSchema &database_schema,
                                  common::ObMySQLTransaction &trans);
-  int drop_trigger_cascade(const share::schema::ObTableSchema &table_schema,
-                           common::ObMySQLTransaction &trans);
-  template <typename SchemaType>
-  int build_flashback_object_name(
-      const SchemaType &object_schema,
-      const char *data_table_prifix,
-      const char *object_type_prefix,
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      common::ObIAllocator &allocator,
-      common::ObString &object_name);
+
   int get_user_id_for_inner_ur(
       share::schema::ObUserInfo &user,
       bool &is_inner_ur,
       uint64_t &new_user_id);
 
-  int update_routine_info(share::schema::ObRoutineInfo &routine_info,
-                           int64_t tenant_id,
-                           int64_t parent_id,
-                           int64_t owner_id,
-                           int64_t database_id,
-                           int64_t routine_id);
+protected:
+  int drop_obj_privs(
+      const uint64_t tenant_id,
+      const uint64_t obj_id,
+      const uint64_t obj_ypte,
+      common::ObMySQLTransaction &trans);
 
 private:
-  int alter_table_rename_built_in_fts_index_(
+  int alter_table_rename_built_in_index_(
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       const uint64_t database_id,
+      const share::schema::ObIndexType index_type,
       const ObString &index_name,
       const ObString &new_index_name,
-      const ObIndexStatus *new_index_status,
+      const share::schema::ObIndexStatus *new_index_status,
+      const bool is_in_deleting,
       share::schema::ObSchemaGetterGuard &schema_guard,
       common::ObMySQLTransaction &trans,
       ObArenaAllocator &allocator);
@@ -1183,7 +1123,8 @@ private:
       const uint64_t tenant_id,
       const share::schema::ObTableSchema *index_table_schema,
       const ObString &new_index_table_name,
-      const ObIndexStatus *new_index_status,
+      const share::schema::ObIndexStatus *new_index_status,
+      const bool is_in_deleting,
       common::ObMySQLTransaction &trans,
       share::schema::ObTableSchema &new_index_table_schema);
 
@@ -1218,12 +1159,6 @@ private:
       common::ObMySQLTransaction &trans,
       const share::schema::ObObjPrivSortKey &old_key,
       share::ObRawObjPrivArray &old_array);
-
-  int drop_obj_privs(
-      const uint64_t tenant_id,
-      const uint64_t obj_id,
-      const uint64_t obj_ypte,
-      common::ObMySQLTransaction &trans);
 
   int revoke_table_all(
       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1272,16 +1207,21 @@ private:
   int init_tenant_optimizer_stats_info(const share::schema::ObSysVariableSchema &sys_variable,
                                        uint64_t tenant_id,
                                        ObMySQLTransaction &trans);
+
+  int init_tenant_recompile_pl_obj(const share::schema::ObSysVariableSchema &sys_variable,
+                                       uint64_t tenant_id,
+                                       ObMySQLTransaction &trans);
   int init_tenant_spm_configure(uint64_t tenant_id, ObMySQLTransaction &trans);
-  int init_tenant_config_(
-      const uint64_t tenant_id,
-      const common::ObConfigPairs &tenant_config,
-      common::ObMySQLTransaction &trans);
-  int init_tenant_config_from_seed_(
+  int init_tenant_scheduled_job(
+      const share::schema::ObSysVariableSchema &sys_variable,
       const uint64_t tenant_id,
       common::ObMySQLTransaction &trans);
+  int try_create_tablegroup_for_database_(
+      common::ObMySQLTransaction &trans,
+      share::schema::ObDatabaseSchema &database_schema);
 private:
   static const int64_t ENCRYPT_KEY_LENGTH = 15;
+protected:
   share::schema::ObMultiVersionSchemaService &schema_service_;
   common::ObMySQLProxy &sql_proxy_;
 };

@@ -10,11 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <unistd.h>
-#include <stdarg.h>
-#include <errno.h>
-#include <assert.h>
-#include <time.h>
 #include "lib/container/ob_paringheap.h"
 #include "gtest/gtest.h"
 

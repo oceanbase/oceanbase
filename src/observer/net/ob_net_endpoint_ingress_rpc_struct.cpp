@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "observer/net/ob_net_endpoint_ingress_rpc_struct.h"
-#include "observer/ob_server_struct.h"
+#include "ob_net_endpoint_ingress_rpc_struct.h"
 #include "observer/ob_srv_network_frame.h"
 
 #define USING_LOG_PREFIX RPC

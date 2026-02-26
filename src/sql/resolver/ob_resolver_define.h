@@ -26,6 +26,7 @@
 #include "sql/plan_cache/ob_plan_cache_struct.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
+#include "sql/resolver/dml/ob_hint.h"
 
 namespace oceanbase
 {
@@ -149,12 +150,17 @@ inline common::ObString concat_qualified_name(const common::ObString &db_name, c
   int64_t pos = 0;
   if (OB_LIKELY(buffer != nullptr)) {
     if (tbl_name.length() > 0 && db_name.length() > 0) {
-      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, "%s.%s.%s",
-                              to_cstring(db_name), to_cstring(tbl_name), to_cstring(col_name));
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, db_name);
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, ".");
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, tbl_name);
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, ".");
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, col_name);
     } else if (tbl_name.length() > 0) {
-      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, "%s.%s", to_cstring(tbl_name), to_cstring(col_name));
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, tbl_name);
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, ".");
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, col_name);
     } else {
-      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, "%s", to_cstring(col_name));
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, col_name);
     }
   }
   return common::ObString(pos, buffer);
@@ -166,9 +172,11 @@ inline common::ObString concat_table_name(const common::ObString &db_name, const
   int64_t pos = 0;
   if (OB_LIKELY(buffer != nullptr)) {
     if (db_name.length() > 0) {
-      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, "%s.%s", to_cstring(db_name), to_cstring(tbl_name));
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, db_name);
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, ".");
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, tbl_name);
     } else {
-      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, "%s", to_cstring(tbl_name));
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, tbl_name);
     }
   }
   return common::ObString(pos, buffer);
@@ -268,7 +276,7 @@ typedef common::ObFastArray<ObRawExpr *, FAST_ARRAY_COUNT> RawExprFastArray;
 typedef common::ObTuple<ObRawExpr*, ObConstRawExpr*, int64_t> ExternalParamInfo;
 
 struct ExternalParams{
-  ExternalParams() : by_name_(false), params_( ){}
+  ExternalParams() : by_name_(false), need_clear_(false), params_() {}
   ~ExternalParams() {}
 
 public:
@@ -277,6 +285,7 @@ public:
   int assign(ExternalParams &other)
   {
     by_name_ = other.by_name_;
+    need_clear_ = need_clear_;
     return params_.assign(other.params_);
   }
   ExternalParamInfo &at(int64_t i)
@@ -290,6 +299,7 @@ public:
 
 public:
   bool by_name_;
+  bool need_clear_ = false;
   common::ObSEArray<ExternalParamInfo, 8> params_;
 };
 
@@ -318,6 +328,7 @@ struct ObResolverParams
        secondary_namespace_(NULL),
        session_info_(NULL),
        query_ctx_(NULL),
+       global_hint_(),
        param_list_(NULL),
        select_item_param_infos_(NULL),
        prepare_param_count_(0),
@@ -333,10 +344,11 @@ struct ObResolverParams
        is_from_show_resolver_(false),
        is_restore_(false),
        is_from_create_view_(false),
-       is_from_create_mview_(false),
+       is_mview_definition_sql_(false),
        is_from_create_table_(false),
        is_prepare_protocol_(false),
        is_pre_execute_(false),
+       is_prepare_with_params_(false),
        is_prepare_stage_(false),
        is_dynamic_sql_(false),
        is_dbms_sql_(false),
@@ -358,8 +370,8 @@ struct ObResolverParams
        is_resolve_table_function_expr_(false),
        tg_timing_event_(-1),
        is_column_ref_(true),
-       hidden_column_scope_(T_NONE_SCOPE),
        outline_parse_result_(NULL),
+       outline_state_(NULL),
        is_execute_call_stmt_(false),
        enable_res_map_(false),
        need_check_col_dup_(true),
@@ -370,7 +382,11 @@ struct ObResolverParams
        package_guard_(NULL),
        star_expansion_infos_(),
        is_for_rt_mv_(false),
-       is_resolve_fake_cte_table_(false)
+       is_resolve_fake_cte_table_(false),
+       is_returning_(false),
+       is_in_view_(false),
+       is_htable_(false),
+       disable_shared_expr_(false)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 
@@ -380,6 +396,7 @@ public:
   pl::ObPLBlockNS *secondary_namespace_;
   ObSQLSessionInfo *session_info_;
   ObQueryCtx *query_ctx_;
+  ObGlobalHint global_hint_;
   const ParamStore *param_list_;
   const SelectItemParamInfoArray *select_item_param_infos_;
   int64_t prepare_param_count_;
@@ -398,10 +415,11 @@ public:
   //查询建表、创建视图不能包含临时表;
   //前者是实现起来问题, 后者是兼容MySQL;
   bool is_from_create_view_;
-  bool is_from_create_mview_;
+  bool is_mview_definition_sql_;
   bool is_from_create_table_;
   bool is_prepare_protocol_;
   bool is_pre_execute_;
+  bool is_prepare_with_params_;  // prexec prepare with parameters
   bool is_prepare_stage_;
   bool is_dynamic_sql_;
   bool is_dbms_sql_;
@@ -428,8 +446,8 @@ public:
   bool is_resolve_table_function_expr_;  // used to mark resolve table function expr.
   int64_t tg_timing_event_;      // mysql mode, trigger的触发时机和类型
   bool is_column_ref_;                   // used to mark normal column ref
-  ObStmtScope hidden_column_scope_; // record scope for first hidden column which need check hidden_column_visable in opt_param hint
   ParseResult *outline_parse_result_;
+  ObOutlineState *outline_state_;
   bool is_execute_call_stmt_;
   bool enable_res_map_;
   bool need_check_col_dup_;
@@ -441,6 +459,10 @@ public:
   common::ObArray<ObStarExpansionInfo> star_expansion_infos_;
   bool is_for_rt_mv_; // call resolve in transformation for expanding inline real-time materialized view
   bool is_resolve_fake_cte_table_;
+  bool is_returning_;
+  bool is_in_view_;
+  bool is_htable_;
+  bool disable_shared_expr_;
 };
 } // end namespace sql
 } // end namespace oceanbase

@@ -24,7 +24,7 @@ class ObTableLoadObjectAllocator
 {
 public:
   static const int64_t DEFAULT_MIN_OBJ_COUNT_ON_BLOCK = 1;
-  ObTableLoadObjectAllocator() {}
+  ObTableLoadObjectAllocator() : size_(0) {}
   ~ObTableLoadObjectAllocator() {}
 
   template<typename... Args>
@@ -39,8 +39,11 @@ public:
     return small_allocator_.init(sizeof(T), label, tenant_id, block_size, min_obj_count_on_block, limit_num);
   }
 
+  int64_t size() const { return ATOMIC_LOAD(&size_); }
+
 private:
   common::ObSmallAllocator small_allocator_;
+  int64_t size_;
 };
 
 template<class T>
@@ -51,6 +54,7 @@ T *ObTableLoadObjectAllocator<T>::alloc(Args&&... args)
   void *buf = nullptr;
   if (OB_NOT_NULL(buf = small_allocator_.alloc())) {
     t = new (buf) T(args...);
+    ATOMIC_AAF(&size_, 1);
   }
   return t;
 }
@@ -61,6 +65,7 @@ void ObTableLoadObjectAllocator<T>::free(T *t)
   if (OB_NOT_NULL(t)) {
     t->~T();
     small_allocator_.free(t);
+    ATOMIC_AAF(&size_, -1);
   }
 }
 

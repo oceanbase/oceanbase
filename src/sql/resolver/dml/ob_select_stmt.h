@@ -46,7 +46,6 @@ struct SelectItem
       esc_str_flag_(false),
       need_check_dup_name_(false),
       implicit_filled_(false),
-      is_unpivot_mocked_column_(false),
       is_implicit_added_(false),
       is_hidden_rowid_(false)
   {
@@ -64,7 +63,6 @@ struct SelectItem
     esc_str_flag_ = false;
     need_check_dup_name_ = false;
     implicit_filled_ = false;
-    is_unpivot_mocked_column_ = false;
     is_implicit_added_ = false;
     is_hidden_rowid_ = false;
   }
@@ -89,7 +87,6 @@ struct SelectItem
                K_(esc_str_flag),
                K_(need_check_dup_name),
                K_(implicit_filled),
-               K_(is_unpivot_mocked_column),
                K_(is_hidden_rowid));
 
   ObRawExpr *expr_;
@@ -107,7 +104,6 @@ struct SelectItem
   bool need_check_dup_name_;
   // select item is implicit filled in updatable view, to pass base table's column to top view.
   bool implicit_filled_;
-  bool is_unpivot_mocked_column_; //used for unpivot
   bool is_implicit_added_; //used for temporary table and label security at insert resolver
 
   bool is_hidden_rowid_;
@@ -126,7 +122,10 @@ struct ObSelectIntoItem
         is_optional_(DEFAULT_OPTIONAL_ENCLOSED),
         is_single_(DEFAULT_SINGLE_OPT),
         max_file_size_(DEFAULT_MAX_FILE_SIZE),
-        escaped_cht_()
+        escaped_cht_(),
+        file_partition_expr_(NULL),
+        buffer_size_(DEFAULT_BUFFER_SIZE),
+        external_properties_()
   {
     field_str_.set_varchar(DEFAULT_FIELD_TERM_STR);
     field_str_.set_collation_type(ObCharset::get_system_collation());
@@ -151,8 +150,14 @@ struct ObSelectIntoItem
     max_file_size_ = other.max_file_size_;
     escaped_cht_ = other.escaped_cht_;
     cs_type_ = other.cs_type_;
+    file_partition_expr_ = other.file_partition_expr_;
+    buffer_size_ = other.buffer_size_;
+    external_properties_ = other.external_properties_;
     return user_vars_.assign(other.user_vars_);
   }
+  int deep_copy(ObIAllocator &allocator,
+                ObIRawExprCopier &copier,
+                const ObSelectIntoItem &other);
   TO_STRING_KV(K_(into_type),
                K_(outfile_name),
                K_(field_str),
@@ -162,7 +167,10 @@ struct ObSelectIntoItem
                K_(is_single),
                K_(max_file_size),
                K_(escaped_cht),
-               K_(cs_type));
+               K_(cs_type),
+               N_EXPR, file_partition_expr_,
+               K_(buffer_size),
+               K_(external_properties));
   ObItemType into_type_;
   common::ObObj outfile_name_;
   common::ObObj field_str_; // field terminated str
@@ -175,6 +183,9 @@ struct ObSelectIntoItem
   int64_t max_file_size_;
   common::ObObj escaped_cht_;
   common::ObCollationType cs_type_;
+  sql::ObRawExpr* file_partition_expr_;
+  int64_t buffer_size_;
+  common::ObString external_properties_;
 
   static const char* const DEFAULT_FIELD_TERM_STR;
   static const char* const DEFAULT_LINE_TERM_STR;
@@ -182,6 +193,7 @@ struct ObSelectIntoItem
   static const bool DEFAULT_OPTIONAL_ENCLOSED;
   static const bool DEFAULT_SINGLE_OPT;
   static const int64_t DEFAULT_MAX_FILE_SIZE;
+  static const int64_t DEFAULT_BUFFER_SIZE;
   static const char DEFAULT_FIELD_ESCAPED_CHAR;
 };
 
@@ -231,16 +243,22 @@ struct ObGroupingSetsItem
   ObGroupingSetsItem()
   : grouping_sets_exprs_(),
     rollup_items_(),
-    cube_items_()
+    cube_items_(),
+    pruned_grouping_set_ids_()
   {
   }
   int assign(const ObGroupingSetsItem& other);
   int deep_copy(ObIRawExprCopier &expr_copier,
                 const ObGroupingSetsItem &other);
-  TO_STRING_KV("grouping sets exprs", grouping_sets_exprs_, K_(rollup_items), K_(cube_items));
+  TO_STRING_KV("grouping sets exprs", grouping_sets_exprs_, K_(rollup_items), K_(cube_items),
+               K_(pruned_grouping_set_ids));
   common::ObSEArray<ObGroupbyExpr, 2, common::ModulePageAllocator, true> grouping_sets_exprs_;
   common::ObSEArray<ObRollupItem, 2, common::ModulePageAllocator, true> rollup_items_;
   common::ObSEArray<ObCubeItem, 2, common::ModulePageAllocator, true> cube_items_;
+  // select sum(a) from t group by grouping sets(b, c) having b > 1
+  // `grouping_sets_exprs_` will contain '[b], [c]'
+  // `pruned_grouping_sets_exprs_` will contain `[1]`
+  common::ObSEArray<int64_t, 2, common::ModulePageAllocator, true> pruned_grouping_set_ids_;
 };
 
 struct ForUpdateDMLInfo
@@ -438,6 +456,8 @@ public:
                                                into_item_->into_type_ == T_INTO_OUTFILE; }
   // check if the stmt is a Select-Project-Join(SPJ) query
   bool is_spj() const;
+  // is_spj + normal group by or scalar group by
+  bool is_spjg() const;
 
   ObRawExpr *get_expr(uint64_t expr_id);
   inline bool is_single_table_stmt() const { return (1 == get_table_size()
@@ -498,8 +518,8 @@ public:
   SelectItem &get_select_item(int64_t index) { return select_items_[index]; }
   common::ObIArray<SelectItem> &get_select_items() { return select_items_; }
   const common::ObIArray<SelectItem> &get_select_items() const { return select_items_; }
-  int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs, const bool is_for_outout = false);
-  int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs, const bool is_for_outout = false) const;
+  int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs);
+  int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs) const;
   int get_select_exprs_without_lob(ObIArray<ObRawExpr*> &select_exprs) const;
   const common::ObIArray<ObAggFunRawExpr*> &get_aggr_items() const { return agg_items_; }
   common::ObIArray<ObAggFunRawExpr*> &get_aggr_items() { return agg_items_; }
@@ -609,14 +629,15 @@ public:
    */
   bool equals(const ObSelectStmt &stmt);
   int check_and_get_same_aggr_item(ObRawExpr *expr, ObAggFunRawExpr *&same_aggr);
-  ObWinFunRawExpr *get_same_win_func_item(const ObRawExpr *expr);
+  int get_same_win_func_item(const ObRawExpr *expr, ObWinFunRawExpr *&win_expr);
   void set_match_topk(bool is_match) { is_match_topk_ = is_match; }
   bool is_match_topk() const { return is_match_topk_; }
   bool is_set_stmt() const { return NONE != set_op_; }
   int get_child_stmt_size(int64_t &child_size) const;
   int get_child_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
   int set_child_stmt(const int64_t child_num, ObSelectStmt* child_stmt);
-  int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
+  virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts,
+                                      bool contain_lateral_table = true) const override;
   const common::ObIArray<ObWinFunRawExpr *> &get_window_func_exprs() const { return win_func_exprs_; };
   common::ObIArray<ObWinFunRawExpr *> &get_window_func_exprs() { return win_func_exprs_; };
   bool has_window_function() const { return win_func_exprs_.count() != 0; }
@@ -638,19 +659,13 @@ public:
   int add_search_item(const OrderItem &order_item) { return search_by_items_.push_back(order_item); }
   int add_cycle_item(const ColumnItem &col_item) { return cycle_by_items_.push_back(col_item); }
 
-  int add_sample_info(const SampleInfo &sample_info) { return sample_infos_.push_back(sample_info); }
-  common::ObIArray<SampleInfo> &get_sample_infos() { return sample_infos_; }
-  const common::ObIArray<SampleInfo> &get_sample_infos() const { return sample_infos_; }
-  const SampleInfo *get_sample_info_by_table_id(uint64_t table_id) const;
-  SampleInfo *get_sample_info_by_table_id(uint64_t table_id);
-  // check if a table is using sample scan
-  bool is_sample_scan(uint64_t table_id) const { return get_sample_info_by_table_id(table_id) != nullptr; }
   virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const override;
 
   // check aggregation has distinct or group concat e.g.:
   //  count(distinct c1)
   //  group_concat(c1 order by c2))
   bool has_distinct_or_concat_agg() const;
+  bool has_concat_agg() const;
   virtual int get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
                                        const bool is_strict,
                                        const bool check_having = false) const override;
@@ -686,6 +701,24 @@ public:
   inline common::ObIArray<ForUpdateDMLInfo*>& get_for_update_dml_infos() { return for_update_dml_info_; }
   void set_select_straight_join(bool flag) { is_select_straight_join_ = flag; }
   bool is_select_straight_join() const { return is_select_straight_join_; }
+  virtual int check_is_simple_lock_stmt(bool &is_valid) const override;
+  inline bool is_implicit_distinct() const { return is_implicit_distinct_; }
+  virtual int formalize_implicit_distinct() override;
+  virtual int check_from_dup_insensitive(bool &is_from_dup_insens) const override;
+  int is_duplicate_insensitive_aggregation(bool &is_dup_insens_aggr) const;
+  bool is_implicit_distinct_allowed() const;
+  inline void set_implicit_distinct(bool v) { is_implicit_distinct_ = v; }
+  inline void reset_implicit_distinct() { is_implicit_distinct_ = false; }
+  int is_query_deterministic(bool &is_deterministic) const;
+  inline bool is_oracle_compat_groupby() const {return is_oracle_compat_groupby_; }
+  inline void set_is_oracle_compat_groupby(bool v) { is_oracle_compat_groupby_ = v; }
+  int is_contains_mv_proctime_table(bool &is_contains) const;
+  inline bool is_recursive_union_branch() const { return is_recursive_union_branch_; }
+  inline void set_is_recursive_union_branch(bool v) { is_recursive_union_branch_ = v; }
+  inline void set_for_update_cursor_table_id(uint64_t table_id) {
+    for_update_cursor_table_id_ = table_id;
+  }
+  uint64_t get_for_update_table_id() const { return for_update_cursor_table_id_; }
 
 private:
   SetOperator set_op_;
@@ -717,9 +750,6 @@ private:
   common::ObSEArray<ObGroupingSetsItem, 8, common::ModulePageAllocator, true> grouping_sets_items_;
   common::ObSEArray<ObRollupItem, 8, common::ModulePageAllocator, true> rollup_items_;
   common::ObSEArray<ObCubeItem, 8, common::ModulePageAllocator, true> cube_items_;
-
-  // sample scan infos
-  common::ObSEArray<SampleInfo, 4, common::ModulePageAllocator, true> sample_infos_;
 
   // for oracle mode only, for stmt print only
   common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> for_update_columns_;
@@ -753,6 +783,12 @@ private:
   bool is_expanded_mview_;
   //denote if the query option 'STRAIGHT_JOIN' has been specified
   bool is_select_straight_join_;
+  // denote if the duplicate value of this stmt will not change the query result
+  // optimizer can assign or remove DISTINCT for this stmt
+  bool is_implicit_distinct_;
+  bool is_oracle_compat_groupby_; // true if has rollup/cube/grouping sets in mysql mode
+  bool is_recursive_union_branch_; // true if the stmt is a branch of a recursive union
+  uint64_t for_update_cursor_table_id_;
 };
 }
 }

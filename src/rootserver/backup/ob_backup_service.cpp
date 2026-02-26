@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_backup_service.h"
-#include "ob_backup_schedule_task.h"
+#include "src/rootserver/backup/ob_backup_base_service.h"
 #include "ob_backup_task_scheduler.h"
 #include "rootserver/ob_root_utils.h"
 
@@ -76,7 +76,7 @@ void ObBackupService::run2()
   LOG_INFO("[backupService]backup service start");
   int64_t last_trigger_ts = ObTimeUtility::current_time();
   while (!has_set_stop()) {
-    set_idle_time(ObBackupBaseService::OB_MIDDLE_IDLE_TIME);
+    set_idle_time(ObBackupBaseService::OB_SERVICE_DEFAULT_IDLE_TIME);
     ObCurTraceId::init(GCONF.self_addr_);
     share::schema::ObSchemaGetterGuard schema_guard;
     const share::schema::ObTenantSchema *tenant_schema = NULL;
@@ -124,6 +124,14 @@ void ObBackupService::destroy()
   ObBackupBaseService::destroy();
   task_scheduler_ = nullptr;
   is_inited_ = false;
+}
+
+void ObBackupService::wakeup_tenant_service(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObRootUtils::notify_tenant_service(tenant_id, get_tenant_thread_type_()))) {
+    LOG_WARN("failed to wakeup tenant service", K(ret), K(tenant_id), "thread_type", get_tenant_thread_type_());
+  }
 }
 
 /*
@@ -174,14 +182,14 @@ ObIBackupJobScheduler *ObBackupDataService::get_scheduler(const BackupJobType &t
   return ptr;
 }
 
-int ObBackupDataService::get_need_reload_task(
-    common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks)
+int ObBackupDataService::do_reload_task(
+    common::ObIAllocator &allocator, ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(backup_data_scheduler_.get_need_reload_task(allocator, tasks))) {
+  } else if (OB_FAIL(backup_data_scheduler_.reload_task(allocator, queue))) {
     LOG_WARN("failed to get need reload task", K(ret));
   }
   return ret;
@@ -222,6 +230,10 @@ int ObBackupDataService::handle_backup_database_cancel(const uint64_t tenant_id,
   return ret;
 }
 
+obrpc::ObNotifyTenantThreadArg::TenantThreadType ObBackupDataService::get_tenant_thread_type_() const
+{
+  return obrpc::ObNotifyTenantThreadArg::BACKUP_SERVICE;
+}
 /*
 *----------------------------- ObBackupCleanService -----------------------------
 */
@@ -284,22 +296,17 @@ ObIBackupJobScheduler *ObBackupCleanService::get_scheduler(const BackupJobType &
   return ptr;
 }
 
-int ObBackupCleanService::get_need_reload_task(
-    common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks)
+int ObBackupCleanService::do_reload_task(
+    common::ObIAllocator &allocator, ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
-  ObSArray<ObBackupScheduleTask *> need_reload_tasks;
   for (int i = 0; OB_SUCC(ret) && i < jobs_.count(); ++i) {
     ObIBackupJobScheduler *job = jobs_.at(i);
-    need_reload_tasks.reset();
     if (nullptr == job) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("nullptr backup job", K(ret));
-    } else if (OB_FAIL(job->get_need_reload_task(allocator, need_reload_tasks))) {
+    } else if (OB_FAIL(job->reload_task(allocator, queue))) {
       LOG_WARN("failed to get need reload task", K(ret), K(*job));
-    } else if (need_reload_tasks.empty()) {
-    } else if (OB_FAIL(append(tasks, need_reload_tasks))) {
-      LOG_WARN("failed to append tasks", K(ret), K(need_reload_tasks));
     }
   }
   return ret;
@@ -324,21 +331,12 @@ int ObBackupCleanService::handle_backup_delete(const obrpc::ObBackupCleanArg &ar
       break;
     };
     case ObNewBackupCleanType::DELETE_BACKUP_SET: 
-    case ObNewBackupCleanType::DELETE_BACKUP_PIECE: {
-    // TODO(wenjinyu.wjy) 4.3 support delete backup set/piece
-      ret = OB_NOT_SUPPORTED;
-      break;
-    };
+    case ObNewBackupCleanType::DELETE_BACKUP_PIECE:
     case ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP:
-    case ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP_BACKUP: {
-      if (OB_FAIL(handle_backup_delete_obsolete(arg))) {
+    case ObNewBackupCleanType::DELETE_BACKUP_ALL: {
+      if (OB_FAIL(handle_backup_delete_(arg))) {
         LOG_WARN("failed to handle delete backup obsolete data", K(ret), K(arg));
       }
-      break;
-    };
-    case ObNewBackupCleanType::DELETE_BACKUP_ALL: {
-    // TODO(wenjinyu.wjy) 4.3 support delete backup all function
-      ret = OB_NOT_SUPPORTED;
       break;
     };
     default: {
@@ -393,15 +391,18 @@ int ObBackupCleanService::handle_delete_policy(const obrpc::ObDeletePolicyArg &a
   return ret;
 }
 
-int ObBackupCleanService::handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg &arg)
+int ObBackupCleanService::handle_backup_delete_(const obrpc::ObBackupCleanArg &arg)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP != arg.type_) {
+  } else if (ObNewBackupCleanType::DELETE_BACKUP_SET != arg.type_
+             && ObNewBackupCleanType::DELETE_BACKUP_PIECE != arg.type_
+             && ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP != arg.type_
+             && ObNewBackupCleanType::DELETE_BACKUP_ALL != arg.type_) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("backup delete arg type is not obsolete backup arg", K(ret), K(arg));
+    LOG_WARN("backup delete arg type is not supported", K(ret), K(arg));
   } else if (OB_FAIL(backup_clean_scheduler_.start_schedule_backup_clean(arg))) {
     LOG_WARN("failed to start schedule backup clean", K(ret), K(arg));
   }
@@ -445,6 +446,11 @@ void ObBackupCleanService::process_trigger_(int64_t &last_trigger_ts)
   const int64_t now_ts = ObTimeUtility::current_time();
 #ifdef ERRSIM
   const int64_t MAX_TRIGGET_TIME_INTERVAL = GCONF.trigger_auto_backup_delete_interval;
+  if (MAX_TRIGGET_TIME_INTERVAL < ObBackupBaseService::OB_SERVICE_DEFAULT_IDLE_TIME) {
+    // In ERRSIM mode, if auto backup delete trigger interval is shorter than default idle time,
+    // use auto backup delete trigger interval as idle time to ensure clean_service can be triggered timely
+    set_idle_time(MAX_TRIGGET_TIME_INTERVAL);
+  }
 #else
   const int64_t MAX_TRIGGET_TIME_INTERVAL = 60 * 60 * 1000 * 1000L;// 1h
 #endif
@@ -468,6 +474,11 @@ void ObBackupCleanService::process_scheduler_()
       LOG_WARN_RET(tmp_ret, "job status move forward failed", K(*job));
     }
   }
+}
+
+obrpc::ObNotifyTenantThreadArg::TenantThreadType ObBackupCleanService::get_tenant_thread_type_() const
+{
+  return obrpc::ObNotifyTenantThreadArg::BACKUP_CLEAN_SERVICE;
 }
 
 }  // namespace rootserver

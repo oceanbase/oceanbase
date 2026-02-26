@@ -12,15 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/rewrite/ob_transform_const_propagate.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "common/ob_smart_call.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -145,19 +141,18 @@ int ObTransformConstPropagate::ConstInfoContext::add_const_info(ExprConstInfo &c
 }
 
 int ObTransformConstPropagate::ConstInfoContext::merge_expired_const_infos(ConstInfoContext &other,
-                                                                           bool is_null_side)
+                                                                           bool can_pull_up)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < other.active_const_infos_.count(); ++i) {
-    if (other.active_const_infos_.at(i).can_pullup_) {
-      other.active_const_infos_.at(i).can_pullup_ = !is_null_side;
+    if (can_pull_up) {
       if (OB_FAIL(add_const_info(other.active_const_infos_.at(i)))) {
         LOG_WARN("failed to push back", K(ret));
       }
-    } else if (!other.active_const_infos_.at(i).is_used_) {
-      // do nothing
-    } else if (OB_FAIL(expired_const_infos_.push_back(other.active_const_infos_.at(i)))) {
-      LOG_WARN("failed to push back", K(ret));
+    } else if (other.active_const_infos_.at(i).is_used_) {
+      if (OB_FAIL(expired_const_infos_.push_back(other.active_const_infos_.at(i)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -252,6 +247,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     }
 
     if (OB_SUCC(ret)) {
+      is_happened = false;
       if (OB_FAIL(collect_equal_pair_from_tables(stmt,
                                                  const_ctx,
                                                  is_happened))) {
@@ -263,6 +259,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     }
 
     if (OB_SUCC(ret)) {
+      is_happened = false;
       if (OB_FAIL(collect_equal_pair_from_semi_infos(stmt,
                                                      const_ctx,
                                                      is_happened))) {
@@ -274,6 +271,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     }
 
     if (OB_SUCC(ret)) {
+      is_happened = false;
       if (OB_FAIL(replace_join_conditions(stmt,
                                           const_ctx,
                                           is_happened))) {
@@ -285,6 +283,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     }
 
     if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty()) {
+      is_happened = false;
       if (OB_FAIL(replace_common_exprs(stmt->get_condition_exprs(),
                                        const_ctx,
                                        is_happened))) {
@@ -313,6 +312,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() &&
         (stmt->is_insert_stmt() || stmt->is_merge_stmt())) {
       ObDelUpdStmt *insert = static_cast<ObDelUpdStmt *>(stmt);
+      is_happened = false;
       if (OB_FAIL(replace_common_exprs(insert->get_sharding_conditions(),
                                        const_ctx,
                                        is_happened))) {
@@ -364,9 +364,10 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
 
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
       if (!const_ctx.active_const_infos_.empty() && !ignore_all_select_exprs && static_cast<ObSelectStmt*>(stmt)->get_aggr_item_size() > 0) {
+        is_happened = false;
         if (OB_FAIL(replace_select_exprs(static_cast<ObSelectStmt*>(stmt),
-                                        const_ctx,
-                                        is_happened))) {
+                                         const_ctx,
+                                         is_happened))) {
           LOG_WARN("failed to replace select exprs", K(ret));
         } else {
           trans_happened |= is_happened;
@@ -389,9 +390,19 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     }
 
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
-      if (OB_FAIL(replace_common_exprs(static_cast<ObSelectStmt*>(stmt)->get_having_exprs(),
-                                       const_ctx,
-                                       is_happened))) {
+      is_happened = false;
+      if (has_rollup_or_groupingsets) {
+        if (OB_FAIL(replace_common_exprs_skip_agg(static_cast<ObSelectStmt*>(stmt)->get_having_exprs(),
+                                                  const_ctx,
+                                                  is_happened))) {
+          LOG_WARN("failed to replace having exprs skip agg", K(ret));
+        } else {
+          trans_happened |= is_happened;
+          LOG_TRACE("succeed to do const propagation for having expr", K(is_happened));
+        }
+      } else if (OB_FAIL(replace_common_exprs(static_cast<ObSelectStmt*>(stmt)->get_having_exprs(),
+                                              const_ctx,
+                                              is_happened))) {
         LOG_WARN("failed to replace having exprs", K(ret));
       } else {
         trans_happened |= is_happened;
@@ -412,7 +423,8 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     }
 
     // replace select exprs using common const info and post-gby const info
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() && stmt->is_select_stmt() && !ignore_all_select_exprs) {
+    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() && stmt->is_select_stmt()
+        && !has_rollup_or_groupingsets && !ignore_all_select_exprs) {
       is_happened = false;
       if (static_cast<ObSelectStmt*>(stmt)->get_aggr_item_size() > 0) {
         if (OB_FAIL(replace_select_exprs_skip_agg(static_cast<ObSelectStmt*>(stmt),
@@ -437,7 +449,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() && stmt->is_update_stmt()) {
       is_happened = false;
       ObUpdateStmt *upd_stmt = static_cast<ObUpdateStmt *>(stmt);
-       for (int64_t i = 0; OB_SUCC(ret) && i < upd_stmt->get_update_table_info().count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < upd_stmt->get_update_table_info().count(); ++i) {
         ObUpdateTableInfo* table_info = upd_stmt->get_update_table_info().at(i);
         if (OB_ISNULL(table_info)) {
           ret = OB_ERR_UNEXPECTED;
@@ -473,7 +485,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
         LOG_WARN("failed to append expired equal params constraints", K(ret));
       } else if (OB_FAIL(remove_const_exec_param(stmt))) {
         LOG_WARN("failed to remove const exec param", K(ret));
-      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
         LOG_WARN("failed to formalize stmt info", K(ret));
       } else {
         LOG_TRACE("succeed to do replacement internal", KPC(stmt));
@@ -505,32 +517,107 @@ int ObTransformConstPropagate::check_allow_trans(ObDMLStmt *stmt, bool &allow_tr
 
 int ObTransformConstPropagate::exclude_redundancy_join_cond(ObIArray<ObRawExpr*> &condition_exprs,
                                                             ObIArray<ExprConstInfo> &expr_const_infos,
-                                                            ObIArray<ObRawExpr*> &excluded_exprs)
+                                                            ObIArray<ObRawExpr*> &excluded_exprs,
+                                                            ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *l_const_expr = NULL;
-  ObRawExpr *r_const_expr = NULL;
   ObExprEqualCheckContext equal_ctx;
   equal_ctx.override_const_compare_ = true;
-  for (int64_t i = 0; OB_SUCC(ret) && i < condition_exprs.count(); ++i) {
-    ObRawExpr *expr = condition_exprs.at(i);
-    if (OB_ISNULL(expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (!expr->has_flag(IS_JOIN_COND) ||
-               2 != expr->get_param_count()) {
-      //do nothing
-    } else if (!find_const_expr(expr_const_infos, expr->get_param_expr(0), l_const_expr) || 
-               !find_const_expr(expr_const_infos, expr->get_param_expr(1), r_const_expr)) {
-      //do nothing
-    } else if (OB_ISNULL(l_const_expr) || OB_ISNULL(r_const_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (!l_const_expr->same_as(*r_const_expr, &equal_ctx)) {
-      //do nothing
-    } else if (OB_FAIL(excluded_exprs.push_back(expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
+  uint64_t version = GET_MIN_CLUSTER_VERSION();
+  uint64_t opt_feature_version = 0;
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (FALSE_IT(opt_feature_version = stmt->get_query_ctx()->optimizer_features_enable_version_)) {
+  } else if (!stmt->is_insert_stmt() && !stmt->is_merge_stmt() /* Avoid modifying behaviors related to sharding_cond */ &&
+             ((MOCK_CLUSTER_VERSION_4_2_5_6 <= version && version < CLUSTER_VERSION_4_3_0_0) ||
+              (CLUSTER_VERSION_4_3_5_0 <= version && version < CLUSTER_VERSION_4_4_0_0) ||
+              (CLUSTER_VERSION_4_4_1_0 <= version)) &&
+             ((COMPAT_VERSION_4_2_5_BP6 <= opt_feature_version && opt_feature_version < COMPAT_VERSION_4_3_0) ||
+              (COMPAT_VERSION_4_3_5_BP4 <= opt_feature_version && opt_feature_version < COMPAT_VERSION_4_4_0) ||
+              (COMPAT_VERSION_4_4_1 <= opt_feature_version))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < condition_exprs.count(); ++i) {
+      ObRawExpr *expr = condition_exprs.at(i);
+      bool is_const_null = false;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (!expr->has_flag(IS_JOIN_COND) ||
+                2 != expr->get_param_count()) {
+        // don't exclude
+      } else if (!expr->get_param_expr(0)->has_flag(IS_COLUMN) ||
+                !expr->get_param_expr(1)->has_flag(IS_COLUMN)) {
+        // don't exclude
+
+        // PredDeduce can't handle cannot handle 'is null' expr, e.g:
+        // 'select * from t1, t2 where t1.c1 = t2.c1 and t2.c1 is null'
+        // so it's nessasary to handle it during ConstPropagate
+      } else if (OB_FAIL(check_is_expr_const_null(expr_const_infos, expr->get_param_expr(0), is_const_null))) {
+        LOG_WARN("failed to check is expr const null", K(ret));
+      } else if (is_const_null) {
+        // don't exclude
+      } else if (OB_FAIL(check_is_expr_const_null(expr_const_infos, expr->get_param_expr(1), is_const_null))) {
+        LOG_WARN("failed to check is expr const null", K(ret));
+      } else if (is_const_null) {
+        // don't exclude
+      } else if (OB_FAIL(excluded_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
     }
+  } else {
+    ObRawExpr *l_const_expr = NULL;
+    ObRawExpr *r_const_expr = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < condition_exprs.count(); ++i) {
+      ObRawExpr *expr = condition_exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (!expr->has_flag(IS_JOIN_COND) ||
+                2 != expr->get_param_count()) {
+        //do nothing
+      } else if (!find_const_expr(expr_const_infos, expr->get_param_expr(0), l_const_expr) ||
+                !find_const_expr(expr_const_infos, expr->get_param_expr(1), r_const_expr)) {
+        //do nothing
+      } else if (OB_ISNULL(l_const_expr) || OB_ISNULL(r_const_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (!l_const_expr->same_as(*r_const_expr, &equal_ctx)) {
+        //do nothing
+      } else if (OB_FAIL(excluded_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::check_is_expr_const_null(ObIArray<ExprConstInfo> &expr_const_infos,
+                                                        ObRawExpr *expr,
+                                                        bool &is_const_null) {
+  int ret = OB_SUCCESS;
+  ObRawExpr *const_expr = NULL;
+  ObObj result;
+  bool is_null = false;
+  bool calc_happened = false;
+  is_const_null = false;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->exec_ctx_) ||
+      OB_ISNULL(ctx_->allocator_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null ctx", K(ret));
+  } else if (!find_const_expr(expr_const_infos, expr, const_expr)) {
+    is_const_null = false;
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
+                                                               const_expr,
+                                                               result,
+                                                               calc_happened,
+                                                               *ctx_->allocator_))) {
+    LOG_WARN("failed to calc const or calculable expr", K(ret));
+  } else if (!calc_happened) {
+    is_const_null = false;
+  } else if (is_oracle_mode()) {
+    is_const_null = result.is_null_oracle();
+  } else {
+    is_const_null = result.is_null();
   }
   return ret;
 }
@@ -573,7 +660,8 @@ int ObTransformConstPropagate::collect_equal_pair_from_condition(ObDMLStmt *stmt
   if (OB_SUCC(ret)) {
     if (OB_FAIL(exclude_redundancy_join_cond(condition_exprs,
                                              const_ctx.active_const_infos_,
-                                             const_ctx.extra_excluded_exprs_))) {
+                                             const_ctx.extra_excluded_exprs_,
+                                             stmt))) {
       LOG_WARN("failed to exclude redundancy join cond", K(ret));
     }
   }
@@ -641,6 +729,12 @@ int ObTransformConstPropagate::collect_equal_pair_from_semi_infos(ObDMLStmt *stm
   return ret;
 }
 
+/* collect const info from table
+ * 1. As left-join table(also right-join table
+ *    const infos from not_null_side and on_condition can be pulled up to high level const ctx.
+ *    const infos from null_side can only used on self level join table.
+ * 2. inner-join table, const infos can be pulled up to high level const ctx.
+*/
 int ObTransformConstPropagate::recursive_collect_const_info_from_table(ObDMLStmt *stmt,
                                                                        TableItem *table_item,
                                                                        ConstInfoContext &const_ctx,
@@ -648,6 +742,7 @@ int ObTransformConstPropagate::recursive_collect_const_info_from_table(ObDMLStmt
                                                                        bool &trans_happened)
 {
   int ret = OB_SUCCESS;
+  JoinedTable *joined_table = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(ret));
@@ -655,71 +750,75 @@ int ObTransformConstPropagate::recursive_collect_const_info_from_table(ObDMLStmt
     if (OB_FAIL(collect_equal_pair_from_pullup(stmt, table_item, const_ctx, is_null_side))) {
       LOG_WARN("failed to collect const info from pullup", K(ret));
     }
-  } else if (table_item->is_joined_table()) {
-    JoinedTable *joined_table = static_cast<JoinedTable *>(table_item);
-    if (LEFT_OUTER_JOIN == joined_table->joined_type_ ||
-        RIGHT_OUTER_JOIN == joined_table->joined_type_) {
-      // FULL_OUT_JOIN is not transformed because may eliminate all equal join conditions
-      ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.allow_trans_);
-      bool left_happened = false;
-      bool right_happened = false;
-      bool condition_happened = false;
-      if (OB_FAIL(SMART_CALL(recursive_collect_const_info_from_table(stmt,
-                                                             joined_table->left_table_,
-                                                             tmp_ctx,
-                                                             !joined_table->is_left_join(),
-                                                             left_happened)))) {
-        LOG_WARN("failed to recursive collect const info from table", K(ret));
-      } else if (OB_FAIL(SMART_CALL(recursive_collect_const_info_from_table(stmt,
-                                                                    joined_table->right_table_,
-                                                                    tmp_ctx,
-                                                                    !joined_table->is_right_join(),
-                                                                    right_happened)))) {
-        LOG_WARN("failed to recursive collect const info from table", K(ret));
-      } else if (OB_FAIL(collect_equal_pair_from_condition(stmt,
-                                                           joined_table->get_join_conditions(),
-                                                           tmp_ctx,
-                                                           condition_happened))) {
-        LOG_WARN("failed to collect const info from join condition", K(ret));
-      } else {
-        trans_happened |= left_happened || right_happened || condition_happened;
-      }
-      if (OB_SUCC(ret)) {
-        bool is_happened = false;
-        if (OB_FAIL(SMART_CALL(recursive_replace_join_conditions(joined_table,
-                                                                 tmp_ctx,
-                                                                 is_happened)))) {
-          LOG_WARN("failed to replace exprs in joined table", K(ret));
-        } else if (const_ctx.merge_expired_const_infos(tmp_ctx, is_null_side)) {
-          LOG_WARN("failed to merge expired const infos", K(ret));
-        } else {
-          trans_happened |= is_happened;
-        }
-      }
-    } else if (joined_table->is_inner_join()) {
-      bool left_happened = false;
-      bool right_happened = false;
-      bool condition_happened = false;
-      if (OB_FAIL(SMART_CALL(recursive_collect_const_info_from_table(stmt,
-                                                             joined_table->left_table_,
-                                                             const_ctx,
-                                                             false,
-                                                             left_happened)))) {
-        LOG_WARN("failed to recursive collect const info from table", K(ret));
-      } else if (OB_FAIL(SMART_CALL(recursive_collect_const_info_from_table(stmt,
-                                                                    joined_table->right_table_,
-                                                                    const_ctx,
-                                                                    false,
-                                                                    right_happened)))) {
-        LOG_WARN("failed to recursive collect const info from table", K(ret));
-      } else if (OB_FAIL(collect_equal_pair_from_condition(stmt,
-                                                           joined_table->get_join_conditions(),
-                                                           const_ctx,
-                                                           condition_happened))) {
-        LOG_WARN("failed to collect const info from join condition", K(ret));
-      } else {
-        trans_happened |= left_happened || right_happened || condition_happened;
-      }
+  } else if (!table_item->is_joined_table()) {
+  } else if (FALSE_IT(joined_table = static_cast<JoinedTable *>(table_item))) {
+  } else if (LEFT_OUTER_JOIN == joined_table->joined_type_ ||
+             RIGHT_OUTER_JOIN == joined_table->joined_type_) {
+    // FULL_OUT_JOIN is not transformed because may eliminate all equal join conditions
+    TableItem *left_table = LEFT_OUTER_JOIN == joined_table->joined_type_ ?
+                            joined_table->left_table_ : joined_table->right_table_;
+    TableItem *right_table = LEFT_OUTER_JOIN == joined_table->joined_type_ ?
+                              joined_table->right_table_ : joined_table->left_table_;
+    ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.allow_trans_);
+    bool left_happened = false;
+    bool right_happened = false;
+    bool condition_happened = false;
+    bool replace_join_left = false;
+    bool replace_join_right = false;
+    if (OB_FAIL(SMART_CALL(recursive_collect_const_info_from_table(stmt, left_table,
+                                                                   tmp_ctx, false,
+                                                                   left_happened)))) {
+      LOG_WARN("failed to recursive collect const info from table", K(ret));
+    } else if (OB_FAIL(SMART_CALL(recursive_replace_join_conditions(joined_table, tmp_ctx,
+                                                                    replace_join_left)))) {
+      LOG_WARN("failed to replace exprs in joined table", K(ret));
+    } else if (OB_FAIL(const_ctx.merge_expired_const_infos(tmp_ctx, true))) {
+      LOG_WARN("failed to merge expired const infos", K(ret));
+    } else if (FALSE_IT(tmp_ctx.reset())) {
+    } else if (OB_FAIL(SMART_CALL(recursive_collect_const_info_from_table(stmt, right_table,
+                                                                          tmp_ctx, true,
+                                                                          right_happened)))) {
+      LOG_WARN("failed to recursive collect const info from table", K(ret));
+    } else if (OB_FAIL(collect_equal_pair_from_condition(stmt, joined_table->get_join_conditions(),
+                                                         tmp_ctx, condition_happened))) {
+      LOG_WARN("failed to collect const info from join condition", K(ret));
+    } else if (OB_FAIL(SMART_CALL(recursive_replace_join_conditions(joined_table, tmp_ctx,
+                                                                    replace_join_right)))) {
+      LOG_WARN("failed to replace exprs in joined table", K(ret));
+    } else if (OB_FAIL(const_ctx.merge_expired_const_infos(tmp_ctx, false))) {
+      LOG_WARN("failed to merge expired const infos", K(ret));
+    } else {
+      trans_happened |= left_happened || right_happened || condition_happened ||
+                        replace_join_left || replace_join_right;
+      LOG_TRACE("collect const info from table", K(trans_happened), K(left_happened),
+                K(right_happened), K(condition_happened), K(replace_join_left),
+                K(replace_join_right));
+    }
+  } else if (joined_table->is_inner_join()) {
+    bool left_happened = false;
+    bool right_happened = false;
+    bool condition_happened = false;
+    if (OB_FAIL(SMART_CALL(recursive_collect_const_info_from_table(stmt,
+                                                                   joined_table->left_table_,
+                                                                   const_ctx,
+                                                                   false,
+                                                                   left_happened)))) {
+      LOG_WARN("failed to recursive collect const info from table", K(ret));
+    } else if (OB_FAIL(SMART_CALL(recursive_collect_const_info_from_table(stmt,
+                                                                         joined_table->right_table_,
+                                                                         const_ctx,
+                                                                         false,
+                                                                         right_happened)))) {
+      LOG_WARN("failed to recursive collect const info from table", K(ret));
+    } else if (OB_FAIL(collect_equal_pair_from_condition(stmt,
+                                                         joined_table->get_join_conditions(),
+                                                         const_ctx,
+                                                         condition_happened))) {
+      LOG_WARN("failed to collect const info from join condition", K(ret));
+    } else {
+      trans_happened |= left_happened || right_happened || condition_happened;
+      LOG_TRACE("collect const info from table", K(trans_happened), K(left_happened),
+                K(right_happened), K(condition_happened));
     }
   }
   return ret;
@@ -744,7 +843,6 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
     for (int64_t j = 0; OB_SUCC(ret) && j < child_stmt->get_select_item_size(); ++j) {
       ObRawExpr *select_expr = child_stmt->get_select_items().at(j).expr_;
       ExprConstInfo equal_info;
-      equal_info.can_pullup_ = !is_null_side;
       equal_info.mem_equal_ = true;
       const uint64_t column_id = j + OB_APP_MIN_COLUMN_ID;
       if (OB_ISNULL(select_expr)) {
@@ -797,7 +895,7 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
                                                                   got_result,
                                                                   *ctx_->allocator_))) {
               LOG_WARN("failed to calc const or caculable expr", K(ret));
-            } else if (got_result && (result.is_null()
+            } else if (got_result && !result.is_ext() && (result.is_null()
                       || (lib::is_oracle_mode() && result.is_null_oracle()))) {
               is_valid = true;
               if (!equal_info.const_expr_ -> is_const_raw_expr()) {
@@ -1008,13 +1106,14 @@ int ObTransformConstPropagate::replace_semi_conditions(ObDMLStmt *stmt,
       LOG_WARN("invalid semi info", K(ret));
     } else if (OB_FAIL(exclude_redundancy_join_cond(semi_info->semi_conditions_,
                                                     const_ctx.active_const_infos_,
-                                                    const_ctx.extra_excluded_exprs_))) {
+                                                    const_ctx.extra_excluded_exprs_,
+                                                    stmt))) {
       LOG_WARN("failed to exclude redundancy join cond", K(ret));
     } else if (OB_FAIL(replace_common_exprs(semi_info->semi_conditions_,
                                             const_ctx,
                                             is_happened))) {
       LOG_WARN("failed to replace semi condition exprs", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("formalize child stmt failed", K(ret));
     } else {
       trans_happened |= is_happened;
@@ -1074,14 +1173,25 @@ int ObTransformConstPropagate::replace_expr_internal(ObRawExpr *&cur_expr,
                                                      bool used_in_compare)
 {
   int ret = OB_SUCCESS;
-  if (const_ctx.allow_trans_) {
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parameter", K(ret));
+  } else if (const_ctx.allow_trans_) {
     ObSEArray<ObRawExpr *, 8> parent_exprs;
+    bool is_happened = false;
     if (OB_FAIL(recursive_replace_expr(cur_expr,
                                       parent_exprs,
                                       const_ctx,
                                       used_in_compare,
-                                      trans_happened))) {
+                                      is_happened))) {
       LOG_WARN("failed to recursive");
+    } else if (OB_ISNULL(cur_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parameter", K(ret));
+    } else if (is_happened && OB_FAIL(cur_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    } else {
+      trans_happened |= is_happened;
     }
   }
   return ret;
@@ -1369,9 +1479,11 @@ int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
     // for static engine, all params in rigth side of in or not in should have same type
     need_cast = true;
   } else if (const_expr->get_expr_type() == T_NULL &&
-             ObDatumFuncs::is_null_aware_hash_type(expr->get_result_type().get_type())) {
+             (ObDatumFuncs::is_null_aware_hash_type(expr->get_result_type().get_type()) ||
+              ObDecimalIntType == expr->get_result_type().get_type())) {
     // To adapt to the behavior of casting NULL values for hash compare
     // cast need to be added above NULL for null aware hash type.
+    // cast need to be added above NULL for decimalInt type in in-expr (e.g. c1 in (1.1,1.2))
     need_cast = true;
   } else if (parent_expr->is_win_func_expr()) {
     ObWinFunRawExpr *win_expr = static_cast<ObWinFunRawExpr*>(parent_expr);
@@ -1389,7 +1501,6 @@ int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
     }
   } else {
     need_cast = !(IS_COMPARISON_OP(parent_expr->get_expr_type()) ||
-                  T_OP_ROW == parent_expr->get_expr_type() ||
                   parent_expr->is_query_ref_expr());
   }
   return ret;
@@ -1511,7 +1622,7 @@ int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
     // do nothing
   } else {
     const ObObj *dest_val = NULL;
-    const ObExprResType &dst_type = const_info.column_expr_->get_result_type();
+    const ObRawExprResType &dst_type = const_info.column_expr_->get_result_type();
     ObDataTypeCastParams dtc_params = ctx_->session_info_->get_dtc_params();
     ObCastCtx cast_ctx(ctx_->allocator_,
                        &dtc_params,
@@ -1816,7 +1927,7 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
                                                                            bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(expr));
   } else if (T_OP_EQ == expr->get_expr_type()) {
@@ -1855,7 +1966,8 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
         }
       }
     }
-  } else if (T_OP_AND == expr->get_expr_type()) {
+  } else if (T_OP_AND == expr->get_expr_type() &&
+             !(expr->get_param_count() >= 10 && stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1))) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       bool is_happened = false;
       if (OB_FAIL(SMART_CALL(recursive_collect_equal_pair_from_condition(stmt,
@@ -1900,12 +2012,14 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
         }
       }
       if (OB_SUCC(ret) && is_valid) {
+        new_info.exclude_expr_ = expr;
         if (OB_FAIL(const_ctx.add_const_info(new_info))) {
           LOG_WARN("failed to push back", K(ret));
         }
       }
     }
-  } else if (T_OP_OR == expr->get_expr_type()) {
+  } else if (T_OP_OR == expr->get_expr_type() &&
+             !(expr->get_param_count() >= 10 && stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1))) {
     ObArray<ExprConstInfo> complex_infos;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.allow_trans_);
@@ -2025,7 +2139,7 @@ int ObTransformConstPropagate::replace_check_constraint_exprs(ObDMLStmt *stmt,
   } else {
     LOG_TRACE("begin replace check constraint exprs", K(const_ctx), K(stmt->get_check_constraint_items()));
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_check_constraint_items().count(); ++i) {
-      ObDMLStmt::CheckConstraintItem &item = stmt->get_check_constraint_items().at(i);
+      CheckConstraintItem &item = stmt->get_check_constraint_items().at(i);
       for (int64_t j = 0; OB_SUCC(ret) && j < item.check_constraint_exprs_.count(); ++j) {
         ObRawExpr *check_constraint_expr = item.check_constraint_exprs_.at(j);
         bool is_valid = false;
@@ -2037,8 +2151,8 @@ int ObTransformConstPropagate::replace_check_constraint_exprs(ObDMLStmt *stmt,
             OB_UNLIKELY(item.check_constraint_exprs_.count() != item.check_flags_.count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(item));
-        } else if (!(item.check_flags_.at(j) & ObDMLStmt::CheckConstraintFlag::IS_VALIDATE_CHECK) &&
-                   !(item.check_flags_.at(j) & ObDMLStmt::CheckConstraintFlag::IS_RELY_CHECK)) {
+        } else if (!(item.check_flags_.at(j) & CheckConstraintFlag::IS_VALIDATE_CHECK) &&
+                   !(item.check_flags_.at(j) & CheckConstraintFlag::IS_RELY_CHECK)) {
           //do nothing
         } else if (OB_FAIL(check_constraint_expr_validity(check_constraint_expr,
                                                           stmt->get_part_exprs(),
@@ -2068,7 +2182,7 @@ int ObTransformConstPropagate::replace_check_constraint_exprs(ObDMLStmt *stmt,
 }
 
 int ObTransformConstPropagate::check_constraint_expr_validity(ObRawExpr *check_constraint_expr,
-                                                              const ObIArray<ObDMLStmt::PartExprItem> &part_items,
+                                                              const ObIArray<PartExprItem> &part_items,
                                                               ObIArray<ExprConstInfo> &expr_const_infos,
                                                               ObRawExpr *&part_column_expr,
                                                               ObIArray<ObRawExpr*> &old_column_exprs,
@@ -2125,7 +2239,7 @@ int ObTransformConstPropagate::check_constraint_expr_validity(ObRawExpr *check_c
 int ObTransformConstPropagate::do_check_constraint_param_expr_vaildity(
                                                               ObRawExpr *column_param_expr,
                                                               ObRawExpr *non_column_param_expr,
-                                                              const ObIArray<ObDMLStmt::PartExprItem> &part_items,
+                                                              const ObIArray<PartExprItem> &part_items,
                                                               ObIArray<ExprConstInfo> &expr_const_infos,
                                                               ObIArray<ObRawExpr*> &old_column_exprs,
                                                               ObIArray<ObRawExpr*> &new_const_exprs,
@@ -2353,6 +2467,11 @@ int ObTransformConstPropagate::do_replace_check_constraint_expr(ObDMLStmt *stmt,
         LOG_WARN("push back failed", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_, or_expr_children, or_expr))) {
         LOG_WARN("build or exprs failed", K(ret));
+      } else if (OB_ISNULL(or_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("or expr is null", K(ret));
+      } else if (OB_FAIL(or_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("formalize failed", K(ret));
       } else {
         new_check_cst_expr = or_expr;
       }
@@ -2413,10 +2532,10 @@ int ObTransformConstPropagate::build_new_in_condition_expr(ObRawExpr *check_cons
     } else if (OB_ISNULL(in_expr) || OB_ISNULL(row_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("add expr is null", K(ret), K(in_expr), K(row_expr));
-    } else if (OB_FAIL(in_expr->add_param_expr(part_column_expr))) {
-      LOG_WARN("failed to add param expr", K(ret));
-    } else if (OB_FAIL(in_expr->add_param_expr(row_expr))) {
-      LOG_WARN("failed to add param expr", K(ret));
+    } else if (OB_FAIL(in_expr->set_param_exprs(part_column_expr, row_expr))) {
+      LOG_WARN("failed to set param exprs", K(ret));
+    } else if (OB_FAIL(row_expr->init_param_exprs(expr_const_info.multi_const_exprs_.count()))) {
+      LOG_WARN("failed to init param exprs", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && !reject && i < expr_const_info.multi_const_exprs_.count(); ++i) {
         ObRawExpr *new_param_expr = NULL;
@@ -2602,8 +2721,8 @@ int ObTransformConstPropagate::collect_from_pullup_const_infos(ObDMLStmt *stmt,
 }
 
 int ObTransformConstPropagate::replace_select_exprs_skip_agg(ObSelectStmt *stmt,
-                                                    ConstInfoContext &const_ctx,
-                                                    bool &trans_happened)
+                                                             ConstInfoContext &const_ctx,
+                                                             bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> parent_exprs;
@@ -2621,11 +2740,11 @@ int ObTransformConstPropagate::replace_select_exprs_skip_agg(ObSelectStmt *stmt,
       LOG_WARN("invalid parameter", K(ret));
     } else if (cur_expr->is_column_ref_expr()) {
       //do nothing, const infos have been pulluped befored collect having const infos
-    } else if (OB_FAIL(replace_select_exprs_skip_agg_internal(cur_expr,
-                                                          const_ctx,
-                                                          parent_exprs,
-                                                          internal_trans_happened,
-                                                          false))) {
+    } else if (OB_FAIL(replace_expr_skip_agg_internal(cur_expr,
+                                                      const_ctx,
+                                                      parent_exprs,
+                                                      internal_trans_happened,
+                                                      false))) {
       LOG_WARN("failed to replace select exprs based on equal_pair", K(ret));
     } else {
       trans_happened |= internal_trans_happened;
@@ -2634,11 +2753,34 @@ int ObTransformConstPropagate::replace_select_exprs_skip_agg(ObSelectStmt *stmt,
   return ret;
 }
 
-int ObTransformConstPropagate::replace_select_exprs_skip_agg_internal(ObRawExpr *&cur_expr,
-                                                                      ConstInfoContext &const_ctx,
-                                                                      ObIArray<ObRawExpr *> &parent_exprs,
-                                                                      bool &trans_happened,
-                                                                      bool used_in_compare)
+int ObTransformConstPropagate::replace_common_exprs_skip_agg(ObIArray<ObRawExpr*> &exprs,
+                                                             ConstInfoContext &const_ctx,
+                                                             bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 8> parent_exprs;
+  trans_happened = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    parent_exprs.reuse();
+    bool internal_trans_happened = false;
+    if (OB_FAIL(replace_expr_skip_agg_internal(exprs.at(i),
+                                               const_ctx,
+                                               parent_exprs,
+                                               internal_trans_happened,
+                                               false))) {
+      LOG_WARN("failed to replace common exprs skip agg", K(ret), K(i), KPC(exprs.at(i)));
+    } else {
+      trans_happened |= internal_trans_happened;
+    }
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::replace_expr_skip_agg_internal(ObRawExpr *&cur_expr,
+                                                              ConstInfoContext &const_ctx,
+                                                              ObIArray<ObRawExpr *> &parent_exprs,
+                                                              bool &trans_happened,
+                                                              bool used_in_compare)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
@@ -2665,11 +2807,11 @@ int ObTransformConstPropagate::replace_select_exprs_skip_agg_internal(ObRawExpr 
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       bool param_trans_happened = false;
-      if (OB_FAIL(SMART_CALL(replace_select_exprs_skip_agg_internal(cur_expr->get_param_expr(i),
-                                                                    const_ctx,
-                                                                    parent_exprs,
-                                                                    param_trans_happened,
-                                                                    used_in_compare)))) {
+      if (OB_FAIL(SMART_CALL(replace_expr_skip_agg_internal(cur_expr->get_param_expr(i),
+                                                            const_ctx,
+                                                            parent_exprs,
+                                                            param_trans_happened,
+                                                            used_in_compare)))) {
         LOG_WARN("fail to replace scalar select exprs internal", K(ret));
       } else {
         trans_happened |= param_trans_happened;
@@ -2691,6 +2833,8 @@ int ObTransformConstPropagate::check_can_replace_child_of_row(ConstInfoContext &
   if (OB_ISNULL(cur_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
+  } else if (T_OP_ROW != cur_expr->get_expr_type()) {
+    // do nothing
   } else if (cur_expr->is_const_expr() || !const_ctx.allow_trans_) {
     can_replace_child = false;
   } else {
@@ -2707,6 +2851,15 @@ int ObTransformConstPropagate::check_can_replace_child_of_row(ConstInfoContext &
       LOG_WARN("failed to check const expr recursively", K(ret));
     } else {
       can_replace_child &= is_const_recursively;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && can_replace_child && i < cur_expr->get_param_count(); ++i) {
+      ObRawExpr *&child_expr = cur_expr->get_param_expr(i);
+      if (OB_ISNULL(child_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (T_FUN_SYS_INNER_ROW_CMP_VALUE == child_expr->get_expr_type()) {
+        can_replace_child = false;
+      }
     }
   }
   return ret;

@@ -14,6 +14,7 @@
 *.pyc
 *.pyc
 *.reject
+*.reject.iep
 *.run.*
 *.swn
 *.swp
@@ -24,6 +25,7 @@
 .auth_file
 .auth_file
 .autotools
+.clangd
 .clang_complete
 .configured
 .configured
@@ -39,6 +41,7 @@
 .pydevproject
 .review/
 .vscode/
+.cursor/
 /.obdev
 /.settings/
 BROWSE
@@ -139,6 +142,10 @@ src/observer/observer
 src/sql/parser/*.output
 src/sql/parser/expr_parser.output
 src/sql/parser/sql_parser.output
+src/sql/parser/ftsblex_lex.c
+src/sql/parser/ftsblex_lex.h
+src/sql/parser/ftsparser_tab.c
+src/sql/parser/ftsparser_tab.h
 src/sql/parser/sql_parser_mysql_mode_lex.c
 src/sql/parser/sql_parser_mysql_mode_lex.h
 src/sql/parser/sql_parser_mysql_mode_tab.c
@@ -148,17 +155,23 @@ src/sql/parser/sql_parser_oracle_gbk_mode_lex.c
 src/sql/parser/sql_parser_oracle_gbk_mode_lex.h
 src/sql/parser/sql_parser_oracle_gbk_mode_tab.c
 src/sql/parser/sql_parser_oracle_gbk_mode_tab.h
+src/sql/parser/sql_parser_oracle_hkscs_mode_lex.c
+src/sql/parser/sql_parser_oracle_hkscs_mode_lex.h
+src/sql/parser/sql_parser_oracle_hkscs_mode_tab.c
+src/sql/parser/sql_parser_oracle_hkscs_mode_tab.h
+src/sql/parser/non_reserved_keywords_oracle_hkscs_mode.c
 src/sql/parser/sql_parser_oracle_utf8_mode_lex.c
 src/sql/parser/sql_parser_oracle_utf8_mode_lex.h
 src/sql/parser/sql_parser_oracle_utf8_mode_tab.c
 src/sql/parser/sql_parser_oracle_utf8_mode_tab.h
-src/sql/parser/sql_parser_oracle_latin1_mode_lex.c
-src/sql/parser/sql_parser_oracle_latin1_mode_lex.h
-src/sql/parser/sql_parser_oracle_latin1_mode_tab.c
-src/sql/parser/sql_parser_oracle_latin1_mode_tab.h
-src/sql/parser/non_reserved_keywords_oracle_latin1_mode.c
+src/sql/parser/sql_parser_oracle_single_byte_mode_lex.c
+src/sql/parser/sql_parser_oracle_single_byte_mode_lex.h
+src/sql/parser/sql_parser_oracle_single_byte_mode_tab.c
+src/sql/parser/sql_parser_oracle_single_byte_mode_tab.h
+src/sql/parser/non_reserved_keywords_oracle_single_byte_mode.c
 src/sql/parser/_gen_parser.output
 src/sql/parser/_gen_parser.error
+src/sql/parser/_MD5
 src/pl/parser/pl_parser_mysql_mode_lex.c
 src/pl/parser/pl_parser_mysql_mode_lex.h
 src/pl/parser/pl_parser_mysql_mode_tab.c
@@ -169,14 +182,34 @@ src/pl/parser/pl_parser_oracle_mode_tab.c
 src/pl/parser/pl_parser_oracle_mode_tab.h
 src/pl/parser/_gen_parser.error
 src/pl/parser/_gen_pl_parser.output
+src/pl/parser/_MD5
 src/pl/parser/pl_parser_mysql_mode.output
 src/pl/parser/pl_parser_oracle_mode.output
+src/share/inner_table/sys_package/syspack_source.cpp
+src/share/inner_table/sys_package/*.plw
+src/share/parameter/standalone_default_parameter.json
+src/share/parameter/shared_storage_default_parameter.json
+src/share/system_variable/standalone_default_system_variable.json
+src/share/system_variable/shared_storage_default_system_variable.json
+src/observer/dbms_scheduler/parser/_gen_parser.output
+src/observer/dbms_scheduler/parser/_gen_parser.error
+src/observer/dbms_scheduler/parser/_MD5
+src/observer/dbms_scheduler/parser/dbms_sched_parser_calendar_lex.c
+src/observer/dbms_scheduler/parser/dbms_sched_parser_calendar_lex.h
+src/observer/dbms_scheduler/parser/dbms_sched_parser_calendar_tab.c
+src/observer/dbms_scheduler/parser/dbms_sched_parser_calendar_tab.h
+src/observer/dbms_scheduler/parser/dbms_sched_parser_calendar.output
 
 ############# close_modules #############
 close_modules/oracle_pl/pl/parser/*.output
 close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_lex.c
 close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.c
 close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.h
+close_modules/oracle_pl/pl/wrap/pl_wrap_scanner.h
+close_modules/oracle_pl/pl/wrap/pl_wrap_scanner.c
+close_modules/oracle_pl/pl/wrap/pl_wrap_parser.h
+close_modules/oracle_pl/pl/wrap/pl_wrap_parser.c
+close_modules/oracle_pl/pl/wrap/pl_wrap_parser.output
 
 ############# tools #############
 tools/ObRestore/mvn_repository
@@ -197,10 +230,12 @@ tools/deploy/debug/
 tools/deploy/dooba.py
 tools/deploy/etc/
 tools/deploy/focus_*
+tools/deploy/home/admin/
 tools/deploy/lib
 tools/deploy/lib/
 tools/deploy/list
 tools/deploy/log/
+tools/deploy/openlogic-openjdk-*
 tools/deploy/usr/
 tools/deploy/mysql_test/java/mytest.jar
 tools/deploy/mysql_test/r/*.reject
@@ -242,6 +277,7 @@ tools/obtest/1.1.1_beta/
 tools/obtest/1_*
 tools/obtest/2_*
 tools/obtest/3_*
+tools/obtest/4_*
 tools/obtest/agent/*
 tools/obtest/agent/agentrestore.conf.template
 tools/obtest/agent/agentserver.conf.template
@@ -256,6 +292,7 @@ tools/obtest/lib/libobserver.so.0
 tools/obtest/lib/libobserver.so.0.0.0
 tools/obtest/log/
 tools/obtest/mytest.log*
+tools/obtest/obcdc/
 tools/obtest/oblog/
 tools/obtest/observer.debug
 tools/obtest/rollback_sql_post.txt
@@ -295,10 +332,12 @@ tools/systemd/profile/post_install.sh
 tools/systemd/profile/pre_uninstall.sh
 tools/systemd/profile/post_uninstall.sh
 tools/systemd/profile/telemetry.sh
+tools/systemd/profile/oceanbase.service
 tools/systemd/profile/preinst
 tools/systemd/profile/postinst
 tools/systemd/profile/prerm
 tools/systemd/profile/postrm
+tools/ocp/software_package
 
 ############# unittest #############
 unittest/**/test_*

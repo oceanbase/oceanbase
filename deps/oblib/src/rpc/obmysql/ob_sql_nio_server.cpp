@@ -19,11 +19,12 @@ using namespace common;
 namespace obmysql
 {
 
-int ObSqlNioServer::start(int port, rpc::frame::ObReqDeliver* deliver, int n_thread)
+int ObSqlNioServer::start(int port, rpc::frame::ObReqDeliver* deliver, int n_thread, bool enable_numa_aware)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(io_handler_.init(deliver))) {
     LOG_WARN("handler init fail", K(ret));
+  } else if(FALSE_IT(nio_.set_numa_info(OB_INVALID_TENANT_ID, enable_numa_aware, INT32_MAX))) {
   } else if (OB_FAIL(nio_.start(port, &io_handler_, n_thread, tenant_id_))) {
     LOG_WARN("sql nio start fail", K(ret));
   }

@@ -51,7 +51,7 @@ public:
                                 const share::SCN &new_all_merged_scn);
   int suspend_merge(const int64_t expected_epoch);
   int resume_merge(const int64_t expected_epoch);
-  int set_merge_error(const int64_t merge_error, const int64_t expected_epoch);
+  int set_merge_status(const int64_t merge_error, const int64_t expected_epoch);
 
   int set_zone_merging(const common::ObZone &zone, const int64_t expected_epoch);
   int check_need_broadcast(const share::SCN &frozen_scn, bool &need_broadcast);
@@ -90,7 +90,6 @@ private:
                                        common::ObIArray<share::ObZoneMergeInfo> &to_insert_infos);
   int inner_adjust_global_merge_info(const share::SCN &frozen_scn,
                                      const int64_t expected_epoch);
-
 protected:
   common::SpinRWLock lock_;
   static int copy_infos(ObZoneMergeManagerBase &dest, const ObZoneMergeManagerBase &src);
@@ -139,7 +138,7 @@ public:
   ZONE_MERGE_MANAGER_FUNC(finish_all_zone_merge);
   ZONE_MERGE_MANAGER_FUNC(suspend_merge);
   ZONE_MERGE_MANAGER_FUNC(resume_merge);
-  ZONE_MERGE_MANAGER_FUNC(set_merge_error);
+  ZONE_MERGE_MANAGER_FUNC(set_merge_status);
   ZONE_MERGE_MANAGER_FUNC(set_zone_merging);
   ZONE_MERGE_MANAGER_FUNC(check_need_broadcast);
   ZONE_MERGE_MANAGER_FUNC(set_global_freeze_info);

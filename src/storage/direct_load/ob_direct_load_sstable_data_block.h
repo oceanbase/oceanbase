@@ -21,7 +21,7 @@ namespace storage
 class ObDirectLoadSSTableDataBlock
 {
 public:
-  static const int64_t DEFAULT_DATA_BLOCK_SIZE = 16 * 1024; // 16K
+  static const int64_t DEFAULT_DATA_BLOCK_SIZE = 64 * 1024; // 64K
   struct Header : public ObDirectLoadDataBlock::Header
   {
     OB_UNIS_VERSION(1);

@@ -17,8 +17,10 @@ namespace oceanbase
 namespace common
 {
 
-const char *OB_STORAGE_ACCESS_TYPES_STR[] = {"reader", "adaptive_reader", "overwriter",
-                                             "appender", "random_write", "multipart_writer"};
+const char *OB_STORAGE_ACCESS_TYPES_STR[] = {
+    "reader", "nohead_reader", "adaptive_reader",
+    "overwriter", "appender", "multipart_writer",
+    "direct_multipart_writer", "buffered_multipart_writer"};
 
 const char *get_storage_access_type_str(const ObStorageAccessType &type)
 {
@@ -30,8 +32,9 @@ const char *get_storage_access_type_str(const ObStorageAccessType &type)
   return str;
 }
 
-ObObjectDevice::ObObjectDevice()
-  : storage_info_(), is_started_(false), lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK)
+ObObjectDevice::ObObjectDevice(const bool is_local_disk)
+  : storage_info_(), is_started_(false), lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK),
+    storage_id_mod_(), is_local_disk_(is_local_disk)
 {
   ObMemAttr attr = SET_USE_500("ObjectDevice");
   reader_ctx_pool_.set_attr(attr);
@@ -39,6 +42,8 @@ ObObjectDevice::ObObjectDevice()
   appender_ctx_pool_.set_attr(attr);
   overwriter_ctx_pool_.set_attr(attr);
   multipart_writer_ctx_pool_.set_attr(attr);
+  direct_multiwriter_ctx_pool_.set_attr(attr);
+  buffered_multiwriter_ctx_pool_.set_attr(attr);
 }
 
 int ObObjectDevice::init(const ObIODOpts &opts)
@@ -57,10 +62,13 @@ void ObObjectDevice::destroy()
     adaptive_reader_ctx_pool_.reset();
     overwriter_ctx_pool_.reset();
     multipart_writer_ctx_pool_.reset();
+    direct_multiwriter_ctx_pool_.reset();
+    buffered_multiwriter_ctx_pool_.reset();
     //close the util
     util_.close();
     //baseinfo will be free with allocator
     is_started_ = false;
+    storage_id_mod_.reset();
   }
 }
 
@@ -68,6 +76,15 @@ ObObjectDevice::~ObObjectDevice()
 {
   destroy();
   OB_LOG(INFO, "destory the device!", KP(storage_info_str_));
+}
+
+int ObObjectDevice::setup_storage_info(const ObIODOpts &opts)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(storage_info_.set(device_type_, opts.opts_[0].value_.value_str))) {
+    OB_LOG(WARN, "failed to build storage info", K(ret));
+  }
+  return ret;
 }
 
 /*the app logical use call ObBackupIoAdapter::get_and_init_device*/
@@ -79,20 +96,21 @@ int ObObjectDevice::start(const ObIODOpts &opts)
   common::ObSpinLockGuard guard(lock_);
   if (is_started_) {
     //has inited, no need init again, do nothing
-  } else if (1 != opts.opt_cnt_ || NULL == opts.opts_) {
+  } else if ((1 != opts.opt_cnt_ && 5 != opts.opt_cnt_ && 6 != opts.opt_cnt_) || NULL == opts.opts_) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "fail to start device, args cnt is wrong!", K(opts.opt_cnt_), K(ret));
   } else if (0 != STRCMP(opts.opts_[0].key_, "storage_info")) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "fail to start device, args wrong !", KCSTRING(opts.opts_[0].key_), K(ret));
   } else {
-    if (OB_FAIL(storage_info_.set(device_type_, opts.opts_[0].value_.value_str))) {
-      OB_LOG(WARN, "failed to build storage_info");
+    if (OB_FAIL(setup_storage_info(opts))) {
+      OB_LOG(WARN, "failed to setup storage_info", K(ret));
     }
 
+    common::ObObjectStorageInfo &info = get_storage_info();
     if (OB_SUCCESS != ret) {
       //mem resource will be free with device destroy
-    } else if (OB_FAIL(util_.open(&storage_info_))) {
+    } else if (OB_FAIL(util_.open(&info))) {
       OB_LOG(WARN, "fail to open the util!", K(ret), KP(opts.opts_[0].value_.value_str));
     } else if (OB_FAIL(fd_mng_.init())) {
       OB_LOG(WARN, "fail to init fd manager!", K(ret));
@@ -146,16 +164,20 @@ int ObObjectDevice::get_access_type(ObIODOpts *opts, ObStorageAccessType& access
     OB_LOG(WARN, "can not find access type!");
   } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_READER])) {
     access_type_flag = OB_STORAGE_ACCESS_READER;
+  } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_NOHEAD_READER])) {
+    access_type_flag = OB_STORAGE_ACCESS_NOHEAD_READER;
   } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_ADAPTIVE_READER])) {
     access_type_flag = OB_STORAGE_ACCESS_ADAPTIVE_READER;
   } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_OVERWRITER])) {
     access_type_flag = OB_STORAGE_ACCESS_OVERWRITER;
   } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_APPENDER])) {
     access_type_flag = OB_STORAGE_ACCESS_APPENDER;
-  } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_RANDOMWRITER])) {
-    access_type_flag = OB_STORAGE_ACCESS_RANDOMWRITER;
   } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_MULTIPART_WRITER])) {
     access_type_flag = OB_STORAGE_ACCESS_MULTIPART_WRITER;
+  } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER])) {
+    access_type_flag = OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER;
+  } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER])) {
+    access_type_flag = OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER;
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invaild access type!", KCSTRING(access_type));
@@ -163,7 +185,7 @@ int ObObjectDevice::get_access_type(ObIODOpts *opts, ObStorageAccessType& access
   return ret;
 }
 
-int ObObjectDevice::open_for_reader(const char *pathname, void*& ctx)
+int ObObjectDevice::open_for_reader(const char *pathname, void *&ctx, const bool head_meta)
 {
   int ret = OB_SUCCESS;
   ObStorageReader *reader = reader_ctx_pool_.alloc();
@@ -171,7 +193,8 @@ int ObObjectDevice::open_for_reader(const char *pathname, void*& ctx)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc mem for object device reader! ", K(ret));
   } else {
-    if (OB_FAIL(reader->open(pathname, &storage_info_))) {
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(reader->open(pathname, &info, head_meta))) {
       OB_LOG(WARN, "fail to open for read!", K(ret));
     } else {
       ctx = (void*)reader;
@@ -192,8 +215,9 @@ int ObObjectDevice::open_for_adaptive_reader_(const char *pathname, void *&ctx)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc mem for object device adaptive_reader! ", K(ret), K(pathname));
   } else {
-    if (OB_FAIL(adaptive_reader->open(pathname, &storage_info_))) {
-      OB_LOG(WARN, "fail to open for read!", K(ret), K(pathname), K_(storage_info));
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(adaptive_reader->open(pathname, &info))) {
+      OB_LOG(WARN, "fail to open for read!", K(ret), K(pathname), K(info));
     } else {
       ctx = (void*)adaptive_reader;
     }
@@ -215,7 +239,8 @@ int ObObjectDevice::open_for_overwriter(const char *pathname, void*& ctx)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc mem for object device reader! ", K(ret));
   } else {
-    if (OB_FAIL(overwriter->open(pathname, &storage_info_))) {
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(overwriter->open(pathname, &info))) {
       OB_LOG(WARN, "fail to open for overwrite!", K(ret));
     } else {
       ctx = (void*)overwriter;
@@ -259,7 +284,8 @@ int ObObjectDevice::open_for_appender(const char *pathname, ObIODOpts *opts, voi
 
   if (OB_SUCCESS == ret) {
     appender->set_open_mode(mode);
-    if (OB_FAIL(appender->open(pathname, &storage_info_))){
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(appender->open(pathname, &info))){
       OB_LOG(WARN, "fail to open the appender!", K(ret));
     } else {
       ctx = appender;
@@ -280,8 +306,9 @@ int ObObjectDevice::open_for_multipart_writer_(const char *pathname, void *&ctx)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc multipart_writer!", K(ret), K(pathname));
   } else {
-    if (OB_FAIL(multipart_writer->open(pathname, &storage_info_))) {
-      OB_LOG(WARN, "fail to open for multipart_writer!", K(ret), K(pathname), K_(storage_info));
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(multipart_writer->open(pathname, &info))) {
+      OB_LOG(WARN, "fail to open for multipart_writer!", K(ret), K(pathname), K(info));
     } else {
       ctx = (void*)multipart_writer;
     }
@@ -293,7 +320,51 @@ int ObObjectDevice::open_for_multipart_writer_(const char *pathname, void *&ctx)
   return ret;
 }
 
-int ObObjectDevice::release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType access_type)
+int ObObjectDevice::open_for_parallel_multipart_writer_(const char *pathname, void *&ctx)
+{
+  int ret = OB_SUCCESS;
+  ObStorageDirectMultiPartWriter *multipart_writer = direct_multiwriter_ctx_pool_.alloc();
+  if (OB_ISNULL(multipart_writer)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "fail to alloc multipart_writer!", K(ret), K(pathname));
+  } else {
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(multipart_writer->open(pathname, &info))) {
+      OB_LOG(WARN, "fail to open for multipart_writer!", K(ret), K(pathname), K(info));
+    } else {
+      ctx = (void*)multipart_writer;
+    }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(multipart_writer)) {
+    direct_multiwriter_ctx_pool_.free(multipart_writer);
+    multipart_writer = nullptr;
+  }
+  return ret;
+}
+
+int ObObjectDevice::open_for_buffered_multipart_writer_(const char *pathname, void *&ctx)
+{
+  int ret = OB_SUCCESS;
+  ObStorageBufferedMultiPartWriter *multipart_writer = buffered_multiwriter_ctx_pool_.alloc();
+  if (OB_ISNULL(multipart_writer)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "fail to alloc multipart_writer!", K(ret), K(pathname));
+  } else {
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(multipart_writer->open(pathname, &info))) {
+      OB_LOG(WARN, "fail to open for multipart_writer!", K(ret), K(pathname), K(info));
+    } else {
+      ctx = (void*)multipart_writer;
+    }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(multipart_writer)) {
+    buffered_multiwriter_ctx_pool_.free(multipart_writer);
+    multipart_writer = nullptr;
+  }
+  return ret;
+}
+
+int ObObjectDevice::release_res(void *ctx, const ObIOFd &fd, ObStorageAccessType access_type)
 {
   int ret = OB_SUCCESS;
   int ret_tmp = OB_SUCCESS;
@@ -302,14 +373,14 @@ int ObObjectDevice::release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "ctx is null, invald para!");
   } else {
-    if (OB_STORAGE_ACCESS_APPENDER == access_type ||
-        OB_STORAGE_ACCESS_RANDOMWRITER == access_type) {
+    if (OB_STORAGE_ACCESS_APPENDER == access_type) {
       ObStorageAppender *appender = static_cast<ObStorageAppender*>(ctx);
       if (OB_FAIL(appender->close())) {
         OB_LOG(WARN, "fail to close the appender!", K(ret), K(access_type));
       }
       appender_ctx_pool_.free(appender);
-    } else if (OB_STORAGE_ACCESS_READER == access_type) {
+    } else if (OB_STORAGE_ACCESS_READER == access_type
+        || OB_STORAGE_ACCESS_NOHEAD_READER == access_type) {
       ObStorageReader *reader = static_cast<ObStorageReader*>(ctx);
       if (OB_FAIL(reader->close())) {
         OB_LOG(WARN, "fail to close the reader!", K(ret), K(access_type));
@@ -333,6 +404,18 @@ int ObObjectDevice::release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType
         OB_LOG(WARN, "fail to close the multipart writer!", K(ret), K(access_type));
       }
       multipart_writer_ctx_pool_.free(multipart_writer);
+    } else if (OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER == access_type) {
+      ObStorageDirectMultiPartWriter *multipart_writer = static_cast<ObStorageDirectMultiPartWriter*>(ctx);
+      if (OB_FAIL(multipart_writer->close())) {
+        OB_LOG(WARN, "fail to close the multipart writer!", K(ret), K(access_type));
+      }
+      direct_multiwriter_ctx_pool_.free(multipart_writer);
+    } else if (OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == access_type) {
+      ObStorageBufferedMultiPartWriter *multipart_writer = static_cast<ObStorageBufferedMultiPartWriter*>(ctx);
+      if (OB_FAIL(multipart_writer->close())) {
+        OB_LOG(WARN, "fail to close the multipart writer!", K(ret), K(access_type));
+      }
+      buffered_multiwriter_ctx_pool_.free(multipart_writer);
     } else {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "invalid access_type!", K(access_type), K(ret));
@@ -355,13 +438,13 @@ int ObObjectDevice::open(const char *pathname, const int flags, const mode_t mod
   UNUSED(flags);
   UNUSED(mode);
   int ret = OB_SUCCESS;
-  void* ctx = NULL;
+  void *ctx = NULL;
   ObStorageAccessType access_type = OB_STORAGE_ACCESS_MAX_TYPE;
   //validate fd
   if (fd_mng_.validate_fd(fd, false)) {
     ret = OB_INIT_TWICE;
-    OB_LOG(WARN, "fd should not be a valid one!", K(fd.first_id_), K(fd.second_id_), K(ret));
-  }  else if (OB_ISNULL(pathname)) {
+    OB_LOG(WARN, "fd should not be a valid one!", K(fd), K(ret));
+  } else if (OB_ISNULL(pathname)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "pathname is null!", K(ret));
   }
@@ -375,16 +458,21 @@ int ObObjectDevice::open(const char *pathname, const int flags, const mode_t mod
       OB_LOG(WARN, "fail to get access type!", KCSTRING(pathname), K(ret));
     } else {
       if (OB_STORAGE_ACCESS_READER == access_type) {
-        ret = open_for_reader(pathname, ctx);
+        ret = open_for_reader(pathname, ctx, true/*head_meta*/);
+      } else if (OB_STORAGE_ACCESS_NOHEAD_READER == access_type) {
+        ret = open_for_reader(pathname, ctx, false/*head_meta*/);
       } else if (OB_STORAGE_ACCESS_ADAPTIVE_READER == access_type) {
         ret = open_for_adaptive_reader_(pathname, ctx);
-      } else if (OB_STORAGE_ACCESS_APPENDER == access_type ||
-                OB_STORAGE_ACCESS_RANDOMWRITER == access_type) {
+      } else if (OB_STORAGE_ACCESS_APPENDER == access_type) {
         ret = open_for_appender(pathname, opts, ctx);
       } else if (OB_STORAGE_ACCESS_OVERWRITER == access_type) {
         ret = open_for_overwriter(pathname, ctx);
       } else if (OB_STORAGE_ACCESS_MULTIPART_WRITER == access_type) {
         ret = open_for_multipart_writer_(pathname, ctx);
+      } else if (OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER == access_type) {
+        ret = open_for_parallel_multipart_writer_(pathname, ctx);
+      } else if (OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == access_type) {
+        ret = open_for_buffered_multipart_writer_(pathname, ctx);
       }
 
       if (OB_FAIL(ret)) {
@@ -401,6 +489,15 @@ int ObObjectDevice::open(const char *pathname, const int flags, const mode_t mod
     }
   }
 
+  if (OB_SUCC(ret) && OB_NOT_NULL(ctx)) {
+    ObStorageAccesser *storage_accesser = static_cast<ObStorageAccesser *>(ctx);
+    if (OB_FAIL(storage_accesser->init(fd, this))) {
+      OB_LOG(WARN, "fail to set fd", K(ret), K(fd));
+    } else {
+      storage_accesser->inc_ref();
+    }
+  }
+
   //handle resource free when exception happen
   if (OB_FAIL(ret) && !OB_ISNULL(ctx)) {
     int tmp_ret = OB_SUCCESS;
@@ -409,6 +506,7 @@ int ObObjectDevice::open(const char *pathname, const int flags, const mode_t mod
       OB_LOG(WARN, "fail to release the resource!", K(tmp_ret));
     }
   } else {
+    fd.device_handle_ = static_cast<ObIODevice *>(this);
     OB_LOG(DEBUG, "success to open file !", KCSTRING(pathname), K(access_type));
   }
 
@@ -432,6 +530,16 @@ int ObObjectDevice::complete(const ObIOFd &fd)
     OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret), K(fd));
   } else if (flag == OB_STORAGE_ACCESS_MULTIPART_WRITER) {
     ObStorageMultiPartWriter *multipart_writer = static_cast<ObStorageMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->complete())) {
+      OB_LOG(WARN, "fail to complete!", K(ret), K(flag));
+    }
+  } else if (flag == OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER) {
+    ObStorageDirectMultiPartWriter *multipart_writer = static_cast<ObStorageDirectMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->complete())) {
+      OB_LOG(WARN, "fail to complete!", K(ret), K(flag));
+    }
+  } else if (flag == OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER) {
+    ObStorageBufferedMultiPartWriter *multipart_writer = static_cast<ObStorageBufferedMultiPartWriter*>(ctx);
     if (OB_FAIL(multipart_writer->complete())) {
       OB_LOG(WARN, "fail to complete!", K(ret), K(flag));
     }
@@ -462,6 +570,16 @@ int ObObjectDevice::abort(const ObIOFd &fd)
     if (OB_FAIL(multipart_writer->abort())) {
       OB_LOG(WARN, "fail to abort!", K(ret), K(flag));
     }
+  } else if (flag == OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER) {
+    ObStorageDirectMultiPartWriter *multipart_writer = static_cast<ObStorageDirectMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->abort())) {
+      OB_LOG(WARN, "fail to abort!", K(ret), K(flag));
+    }
+  } else if (flag == OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER) {
+    ObStorageBufferedMultiPartWriter *multipart_writer = static_cast<ObStorageBufferedMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->abort())) {
+      OB_LOG(WARN, "fail to abort!", K(ret), K(flag));
+    }
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "unknow access type, not a multipart writer fd!", K(flag), K(ret));
@@ -472,18 +590,41 @@ int ObObjectDevice::abort(const ObIOFd &fd)
 int ObObjectDevice::close(const ObIOFd &fd)
 {
   int ret = OB_SUCCESS;
+  void *ctx = nullptr;
+  ObStorageAccesser *storage_accesser = nullptr;
+  if (!fd_mng_.validate_fd(fd, true)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "fail to close fd. since fd is invalid!", K(ret), K(fd.first_id_), K(fd.second_id_));
+  } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
+    OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret), K(fd));
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "ctx is null", K(ret));
+  } else {
+    storage_accesser = static_cast<ObStorageAccesser *>(ctx);
+    storage_accesser->dec_ref();
+  }
+  return ret;
+}
+
+int ObObjectDevice::release_fd(const ObIOFd &fd)
+{
+  int ret = OB_SUCCESS;
+  // make sure device's lifecycle is longger than fd and ctx.
+  inc_ref();
   int flag = -1;
   void *ctx = NULL;
 
   fd_mng_.get_fd_flag(fd, flag);
   if (!fd_mng_.validate_fd(fd, true)) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "fail to close fd. since fd is invalid!", K(ret) ,K(fd.first_id_), K(fd.second_id_));
+    OB_LOG(WARN, "fail to close fd. since fd is invalid!", K(ret) ,K(fd));
   } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
     OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret), K(fd));
   } else if (OB_FAIL(release_res(ctx, fd, (ObStorageAccessType)flag))) {
     OB_LOG(WARN, "fail to release the resource!", K(ret), K(flag));
   }
+  dec_ref();
   return ret;
 }
 
@@ -502,7 +643,7 @@ int ObObjectDevice::seal_for_adaptive(const ObIOFd &fd)
   } else if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret));
-  } else if (flag == OB_STORAGE_ACCESS_RANDOMWRITER || flag == OB_STORAGE_ACCESS_APPENDER) {
+  } else if (OB_STORAGE_ACCESS_APPENDER == flag) {
     ObStorageAppender *appender = static_cast<ObStorageAppender*>(ctx);
     if (OB_FAIL(appender->seal_for_adaptive())) {
       OB_LOG(WARN, "fail to seal!", K(ret), K(flag));
@@ -558,6 +699,16 @@ int ObObjectDevice::inner_unlink_(const char *pathname, const bool is_adaptive)
   return ret;
 }
 
+int ObObjectDevice::batch_del_files(
+    const ObIArray<ObString> &files_to_delete, ObIArray<int64_t> &failed_files_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(util_.batch_del_files(files_to_delete, failed_files_idx))) {
+    OB_LOG(WARN, "fail to del file", K(ret));
+  }
+  return ret;
+}
+
 int ObObjectDevice::exist(const char *pathname, bool &is_exist)
 {
   return inner_exist_(pathname, is_exist, false/*is_adaptive*/);
@@ -595,12 +746,21 @@ int ObObjectDevice::inner_stat_(const char *pathname,
     ObIODFileStat &statbuf, const bool is_adaptive)
 {
   int ret = OB_SUCCESS;
-  int64_t length = 0;
   common::ObString uri(pathname);
-  if (OB_FAIL(util_.get_file_length(uri, is_adaptive, length))) {
-    OB_LOG(WARN, "fail to get file length!", K(ret), K(uri), K(is_adaptive));
-  } else {
-    statbuf.size_ = length;
+  if (OB_FAIL(util_.get_file_stat(uri, is_adaptive, statbuf))) {
+    OB_LOG(WARN, "fail to get file stat!", K(ret), K(uri), K(is_adaptive));
+  }
+  return ret;
+}
+
+int ObObjectDevice::get_file_content_digest(
+    const char *pathname, char *digest_buf, const int64_t digest_buf_len)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString uri(pathname);
+  if (OB_FAIL(util_.get_file_content_digest(uri, digest_buf, digest_buf_len))) {
+    OB_LOG(WARN, "fail to get file content digest!",
+        K(ret), K(uri), KP(digest_buf), K(digest_buf_len));
   }
   return ret;
 }
@@ -621,16 +781,15 @@ int ObObjectDevice::inner_scan_dir_(const char *dir_name,
 {
   common::ObString uri(dir_name);
   int ret = OB_SUCCESS;
-  bool is_dir_scan = false;
   if (op.is_dir_scan()) {
     ret = util_.list_directories(uri, is_adaptive, op);
-    is_dir_scan = true;
   } else {
     ret = util_.list_files(uri, is_adaptive, op);
   }
 
   if (OB_FAIL(ret)) {
-    OB_LOG(WARN, "fail to do list/dir scan!", K(ret), K(is_dir_scan), KCSTRING(dir_name));
+    OB_LOG(WARN, "fail to do list/dir scan!", K(ret), KCSTRING(dir_name),
+        "is_dir_scan", op.is_dir_scan());
   }
   return ret;
 }
@@ -652,13 +811,13 @@ int ObObjectDevice::pread(const ObIOFd &fd, const int64_t offset, const int64_t 
   fd_mng_.get_fd_flag(fd, flag);
   if (!fd_mng_.validate_fd(fd, true)) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "fd is not init!", K(fd.first_id_), K(fd.second_id_));
+    OB_LOG(WARN, "fd is not init!", K(fd));
   } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
     OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret));
   } else if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret));
-  } else if (flag == OB_STORAGE_ACCESS_READER) {
+  } else if (flag == OB_STORAGE_ACCESS_READER || flag == OB_STORAGE_ACCESS_NOHEAD_READER) {
     ObStorageReader *reader = static_cast<ObStorageReader*>(ctx);
     if (OB_FAIL(reader->pread((char*)buf, size, offset, read_size))) {
       OB_LOG(WARN, "fail to do normal pread!", K(ret), K(flag));
@@ -682,12 +841,12 @@ int ObObjectDevice::write(const ObIOFd &fd, const void *buf, const int64_t size,
 {
   int ret = OB_SUCCESS;
   int flag = -1;
-  void* ctx = NULL;
+  void *ctx = NULL;
 
   fd_mng_.get_fd_flag(fd, flag);
   if (!fd_mng_.validate_fd(fd, true)) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "fd is not init!", K(fd.first_id_), K(fd.second_id_), K(ret));
+    OB_LOG(WARN, "fd is not init!", K(fd), K(ret));
   } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
     OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret));
   } else if (OB_ISNULL(ctx)) {
@@ -697,11 +856,6 @@ int ObObjectDevice::write(const ObIOFd &fd, const void *buf, const int64_t size,
     ObStorageWriter *overwriter = static_cast<ObStorageWriter*>(ctx);
     if (OB_FAIL(overwriter->write((char*)buf, size))) {
       OB_LOG(WARN, "fail to do overwrite write!", K(ret));
-    }
-  } else if (flag == OB_STORAGE_ACCESS_APPENDER) {
-    ObStorageAppender *appender = static_cast<ObStorageAppender*>(ctx);
-    if (OB_FAIL(appender->write((char*)buf, size))) {
-      OB_LOG(WARN, "fail to do append write!", K(ret));
     }
   } else if (flag == OB_STORAGE_ACCESS_MULTIPART_WRITER) {
     ObStorageMultiPartWriter *multipart_writer = static_cast<ObStorageMultiPartWriter*>(ctx);
@@ -713,7 +867,7 @@ int ObObjectDevice::write(const ObIOFd &fd, const void *buf, const int64_t size,
     OB_LOG(WARN, "unknow access type, not a writable type!", K(flag), K(ret));
   }
 
-  if (OB_SUCCESS == ret) {
+  if (OB_SUCC(ret)) {
     write_size = size;
   } else {
     write_size = 0;
@@ -730,9 +884,52 @@ int ObObjectDevice::pwrite(const ObIOFd &fd, const int64_t offset, const int64_t
 {
   int ret = OB_SUCCESS;
   int flag = -1;
-  void* ctx = NULL;
+  void *ctx = NULL;
 
   UNUSED(offset);
+
+  fd_mng_.get_fd_flag(fd, flag);
+  if (!fd_mng_.validate_fd(fd, true)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "fd is not init!", K(fd));
+  } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
+    OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret), K(fd));
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret));
+  } else if (OB_STORAGE_ACCESS_APPENDER == flag) {
+    ObStorageAppender *appender = static_cast<ObStorageAppender*>(ctx);
+    if (OB_FAIL(appender->pwrite((char*)buf, size, offset))) {
+      OB_LOG(WARN, "fail to do appender pwrite!", K(ret));
+    }
+  } else if (OB_STORAGE_ACCESS_MULTIPART_WRITER == flag) {
+    ObStorageMultiPartWriter *multipart_writer = static_cast<ObStorageMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->pwrite((char*)buf, size, offset))) {
+      OB_LOG(WARN, "fail to do multipart writer pwrite!", K(ret));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "unknow access type, not a writable type!", K(flag), K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    write_size = size;
+  } else {
+    write_size = 0;
+  }
+  return ret;
+}
+
+int ObObjectDevice::upload_part(
+    const ObIOFd &fd,
+    const char *buf,
+    const int64_t size,
+    const int64_t part_id,
+    int64_t &write_size)
+{
+  int ret = OB_SUCCESS;
+  int flag = -1;
+  void *ctx = nullptr;
 
   fd_mng_.get_fd_flag(fd, flag);
   if (!fd_mng_.validate_fd(fd, true)) {
@@ -743,26 +940,126 @@ int ObObjectDevice::pwrite(const ObIOFd &fd, const int64_t offset, const int64_t
   } else if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret));
-  } else if (flag == OB_STORAGE_ACCESS_RANDOMWRITER) {
-    ObStorageAppender *appender = static_cast<ObStorageAppender*>(ctx);
-    if (OB_FAIL(appender->pwrite((char*)buf, size, offset))) {
-      OB_LOG(WARN, "fail to do appender pwrite!", K(ret));
+  } else if (flag == OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER) {
+    ObStorageDirectMultiPartWriter *multipart_writer = static_cast<ObStorageDirectMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->upload_part(buf, size, part_id))) {
+      OB_LOG(WARN, "fail to do multipart writer upload!", K(ret), K(part_id));
     }
-  } else if (flag == OB_STORAGE_ACCESS_MULTIPART_WRITER) {
-    ObStorageMultiPartWriter *multipart_writer = static_cast<ObStorageMultiPartWriter*>(ctx);
-    if (OB_FAIL(multipart_writer->pwrite((char*)buf, size, offset))) {
-      OB_LOG(WARN, "fail to do multipart writer pwrite!", K(ret));
+  } else if (flag == OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER) {
+    ObStorageBufferedMultiPartWriter *multipart_writer = static_cast<ObStorageBufferedMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->upload_part(buf, size, part_id))) {
+      OB_LOG(WARN, "fail to do multipart writer upload!", K(ret), K(part_id));
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "unknow access type, not a writable type!", K(flag), K(ret));
   }
 
-  if (OB_SUCCESS == ret) {
+  if (OB_SUCC(ret)) {
     write_size = size;
   } else {
     write_size = 0;
   }
+  return ret;
+}
+
+int ObObjectDevice::buf_append_part(
+    const ObIOFd &fd,
+    const char *buf,
+    const int64_t size,
+    const uint64_t tenant_id,
+    bool &is_full)
+{
+  int ret = OB_SUCCESS;
+  int flag = -1;
+  void *ctx = nullptr;
+
+  fd_mng_.get_fd_flag(fd, flag);
+  if (!fd_mng_.validate_fd(fd, true)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "fd is not init!", K(fd.first_id_), K(fd.second_id_));
+  } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
+    OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret));
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret));
+  } else if (flag == OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER) {
+    ObStorageDirectMultiPartWriter *multipart_writer = static_cast<ObStorageDirectMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->buf_append_part(buf, size, tenant_id, is_full))) {
+      OB_LOG(WARN, "fail to do multipart writer buf_append_part!", K(ret));
+    }
+  } else if (flag == OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER) {
+    ObStorageBufferedMultiPartWriter *multipart_writer = static_cast<ObStorageBufferedMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->buf_append_part(buf, size, tenant_id, is_full))) {
+      OB_LOG(WARN, "fail to do multipart writer buf_append_part!", K(ret));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "unknow access type, not a writable type!", K(flag), K(ret));
+  }
+
+  return ret;
+}
+
+int ObObjectDevice::get_part_id(
+    const ObIOFd &fd, bool &is_exist, int64_t &part_id)
+{
+  int ret = OB_SUCCESS;
+  int flag = -1;
+  void *ctx = nullptr;
+
+  fd_mng_.get_fd_flag(fd, flag);
+  if (!fd_mng_.validate_fd(fd, true)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "fd is not init!", K(fd.first_id_), K(fd.second_id_));
+  } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
+    OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret));
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret));
+  } else if (flag == OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER) {
+    ObStorageDirectMultiPartWriter *multipart_writer = static_cast<ObStorageDirectMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->get_part_id(is_exist, part_id))) {
+      OB_LOG(WARN, "fail to do multipart writer get_part_id!", K(ret));
+    }
+  } else if (flag == OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER) {
+    ObStorageBufferedMultiPartWriter *multipart_writer = static_cast<ObStorageBufferedMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->get_part_id(is_exist, part_id))) {
+      OB_LOG(WARN, "fail to do multipart writer get_part_id!", K(ret));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "unknow access type, not a writable type!", K(flag), K(ret));
+  }
+
+  return ret;
+}
+
+int ObObjectDevice::get_part_size(const ObIOFd &fd, const int64_t part_id, int64_t &part_size)
+{
+  int ret = OB_SUCCESS;
+  int flag = -1;
+  void *ctx = nullptr;
+
+  fd_mng_.get_fd_flag(fd, flag);
+  if (!fd_mng_.validate_fd(fd, true)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "fd is not init!", K(fd.first_id_), K(fd.second_id_));
+  } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
+    OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret));
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret));
+  } else if (flag == OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER) {
+    ObStorageBufferedMultiPartWriter *multipart_writer = static_cast<ObStorageBufferedMultiPartWriter*>(ctx);
+    if (OB_FAIL(multipart_writer->get_part_size(part_id, part_size))) {
+      OB_LOG(WARN, "fail to do multipart writer get_part_size!", K(ret), K(part_id));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "unknow access type, not a writable type!", K(flag), K(ret));
+  }
+
   return ret;
 }
 
@@ -948,8 +1245,9 @@ int ObObjectDevice::io_getevents(ObIOContext *io_context, int64_t min_nr,
   return OB_NOT_SUPPORTED;
 }
 
-ObIOCB *ObObjectDevice::alloc_iocb()
+ObIOCB *ObObjectDevice::alloc_iocb(const uint64_t tenant_id)
 {
+  UNUSED(tenant_id);
   OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "alloc_iocb is not support in object device !", K(device_type_));
   return NULL;
 }
@@ -1004,9 +1302,12 @@ int64_t ObObjectDevice::get_max_block_count(int64_t reserved_size) const
   return -1;
 }
 
-int ObObjectDevice::check_space_full(const int64_t required_size) const
+int ObObjectDevice::check_space_full(
+    const int64_t required_size,
+    const bool alarm_if_space_full) const
 {
   UNUSED(required_size);
+  UNUSED(alarm_if_space_full);
   OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "check_space_full is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
@@ -1046,6 +1347,16 @@ int ObObjectDevice::read(const ObIOFd &fd, void *buf, const int64_t size, int64_
   UNUSED(size);
   UNUSED(read_size);
   return OB_NOT_SUPPORTED;
+}
+
+void ObObjectDevice::set_storage_id_mod(const ObStorageIdMod &storage_id_mod)
+{
+  storage_id_mod_ = storage_id_mod;
+}
+
+const ObStorageIdMod &ObObjectDevice::get_storage_id_mod() const
+{
+  return storage_id_mod_;
 }
 
 }

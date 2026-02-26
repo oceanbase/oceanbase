@@ -27,13 +27,17 @@ class ObIncrementalStatEstimator
 public:
 
   static int derive_global_stat_from_part_stats(ObExecContext &ctx,
-                                               const ObTableStatParam &param,
-                                               const ObIArray<ObOptStat> &approx_part_opt_stats,
-                                               ObOptStat &global_opt_stat);
+                                                const ObTableStatParam &param,
+                                                const ObIArray<ObOptStat> &approx_part_opt_stats,
+                                                const PartitionIdBlockMap *partition_id_block_map,
+                                                ObOptStatGatherAudit *audit,
+                                                ObOptStat &global_opt_stat);
 
   static int derive_part_stats_from_subpart_stats(ObExecContext &ctx,
                                                   const ObTableStatParam &param,
                                                   const ObIArray<ObOptStat> &gather_subpart_opt_stats,
+                                                  const PartitionIdBlockMap *partition_id_block_map,
+                                                  ObOptStatGatherAudit *audit,
                                                   ObIArray<ObOptStat> &approx_part_opt_stats);
 
   static int derive_global_stat_by_direct_load(ObExecContext &ctx, const uint64_t table_id);
@@ -41,6 +45,8 @@ public:
   static int derive_split_gather_stats(ObExecContext &ctx,
                                        ObMySQLTransaction &trans,
                                        const ObTableStatParam &param,
+                                       const PartitionIdBlockMap *partition_id_block_map,
+                                       ObOptStatGatherAudit *audit,
                                        bool derive_part_stat,
                                        bool is_all_columns_gather,
                                        ObIArray<ObOptTableStat *> &all_tstats);
@@ -52,6 +58,18 @@ public:
   static int derive_global_index_stat_by_part_index_stats(const ObTableStatParam &param,
                                                           const ObIArray<ObOptTableStat *> &part_index_stats,
                                                           ObIArray<ObOptTableStat *> &all_index_stats);
+
+  static int derive_part_index_column_stat_by_subpart_index(ObExecContext &ctx,
+                                                            ObIAllocator &alloc,
+                                                            const ObTableStatParam &param,
+                                                            const ObIArray<ObOptStat> &part_index_stats,
+                                                            ObIArray<ObOptStat> &approx_part_opt_stats);
+
+  static int derive_global_index_column_stat_by_part_index(ObExecContext &ctx,
+                                                           ObIAllocator &alloc,
+                                                           const ObTableStatParam &param,
+                                                           const ObIArray<ObOptStat> &part_index_stats,
+                                                           ObOptStat &global_opt_stat);
 private:
   static int do_derive_part_stats_from_subpart_stats(
     ObExecContext &ctx,
@@ -59,6 +77,8 @@ private:
     const ObTableStatParam &param,
     const ObIArray<ObOptStat> &no_regather_subpart_opt_stats,
     const ObIArray<ObOptStat> &gather_subpart_opt_stats,
+    const PartitionIdBlockMap *partition_id_block_map,
+    ObOptStatGatherAudit *audit,
     ObIArray<ObOptStat> &approx_part_opt_stats);
 
   static int get_table_and_column_stats(ObOptStat &src_opt_stat,
@@ -85,6 +105,8 @@ private:
                                    ObIAllocator &alloc,
                                    const ObTableStatParam &param,
                                    ObIArray<ObOptStat> &part_opt_stats,
+                                   const PartitionIdBlockMap *partition_id_block_map,
+                                   ObOptStatGatherAudit *audit,
                                    bool need_derive_hist,
                                    const StatLevel &approx_level,
                                    const int64_t partition_id,
@@ -101,6 +123,8 @@ private:
                                     ObIAllocator &alloc,
                                     const ObTableStatParam &param,
                                     ObIArray<ObOptStat> &part_opt_stats,
+                                    const PartitionIdBlockMap *partition_id_block_map,
+                                    ObOptStatGatherAudit *audit,
                                     bool need_derive_hist,
                                     const StatLevel &approx_level,
                                     const int64_t partition_id,
@@ -153,6 +177,16 @@ private:
                                          bool derive_part_stat,
                                          ObTableStatParam &new_param);
 
+  static int adjust_derive_gather_histogram_param(const ObOptStat &opt_stat,
+                                                  const PartitionIdBlockMap *partition_id_block_map,
+                                                  ObOptStatGatherParam &param,
+                                                  int64_t &total_row_count,
+                                                  int64_t &micro_block_num,
+                                                  bool &sstable_rows_more);
+
+  static int mark_internal_stat(const int64_t global_part_id,
+                                ObIArray<ObOptTableStat *> &all_tstats,
+                                ObIArray<ObOptColumnStat *> &all_cstats);
 };
 
 } // namespace common

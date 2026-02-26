@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/blocksstable/ob_logic_macro_id.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/utility.h"
 
 namespace oceanbase
 {
@@ -68,7 +66,7 @@ int64_t ObLogicMacroBlockId::hash() const
   hash_val = common::murmurhash(&macro_data_seq, sizeof(macro_data_seq), hash_val);
   hash_val = common::murmurhash(&logic_version_, sizeof(logic_version_), hash_val);
   hash_val = common::murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
-  hash_val = common::murmurhash(&info_, sizeof(uint16_t), hash_val);
+  hash_val = common::murmurhash(&info_, sizeof(info_), hash_val);
   return hash_val;
 }
 
@@ -77,7 +75,7 @@ bool ObLogicMacroBlockId::operator==(const ObLogicMacroBlockId &other) const
   return data_seq_         == other.data_seq_
       && logic_version_    == other.logic_version_
       && tablet_id_        == other.tablet_id_
-      && column_group_idx_ == other.column_group_idx_;
+      && info_             == other.info_;
 }
 
 bool ObLogicMacroBlockId::operator!=(const ObLogicMacroBlockId &other) const
@@ -104,6 +102,10 @@ bool ObLogicMacroBlockId::operator<(const ObLogicMacroBlockId &other) const
     bool_ret = true;
   } else if (column_group_idx_ > other.column_group_idx_) {
     bool_ret = false;
+  } else if (!is_mds_ && other.is_mds_) {
+    bool_ret = true;
+  } else if (is_mds_ && !other.is_mds_) {
+    bool_ret = false;
   }
   return bool_ret;
 }
@@ -127,6 +129,10 @@ bool ObLogicMacroBlockId::operator>(const ObLogicMacroBlockId &other) const
     bool_ret = false;
   } else if (column_group_idx_ > other.column_group_idx_) {
     bool_ret = true;
+  } else if (!is_mds_ && other.is_mds_) {
+    bool_ret = false;
+  } else if (is_mds_ && !other.is_mds_) {
+    bool_ret = true;
   }
   return bool_ret;
 }
@@ -135,7 +141,7 @@ void ObLogicMacroBlockId::reset() {
   logic_version_ = 0;
   data_seq_.reset();
   tablet_id_ = 0;
-  column_group_idx_ = 0;
+  info_ = 0;
 }
 
 OB_SERIALIZE_MEMBER(ObLogicMacroBlockId,
@@ -143,5 +149,15 @@ OB_SERIALIZE_MEMBER(ObLogicMacroBlockId,
                     logic_version_,
                     tablet_id_,
                     info_);
+
+uint64_t ObLogicMicroBlockId::hash() const
+{
+  uint64_t hash_val = logic_macro_id_.hash();
+  hash_val = common::murmurhash(&info_, sizeof(info_), hash_val);
+  return hash_val;
+}
+
+OB_SERIALIZE_MEMBER(ObLogicMicroBlockId, info_, logic_macro_id_);
+
 } // blocksstable
 } // oceanbase

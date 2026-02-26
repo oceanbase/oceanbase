@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "lib/container/ob_array_iterator.h"
-#include "share/ob_i_tablet_scan.h"
-#include "share/schema/ob_schema_struct.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_inner_sql_result.h"
 #include "observer/virtual_table/ob_iterate_private_virtual_table.h"
 
@@ -121,9 +117,9 @@ int ObIteratePrivateVirtualTable::do_open()
     }
     if (OB_SUCC(ret)) {
       if (scan_flag_.is_reverse_scan()) {
-        std::sort(tenants_.begin(), tenants_.end(), std::greater<uint64_t>());
+        lib::ob_sort(tenants_.begin(), tenants_.end(), std::greater<uint64_t>());
       } else {
-        std::sort(tenants_.begin(), tenants_.end());
+        lib::ob_sort(tenants_.begin(), tenants_.end());
       }
       LOG_TRACE("tenant id array", K(tenants_));
     }
@@ -174,6 +170,13 @@ bool ObIteratePrivateVirtualTable::check_tenant_in_range_(const uint64_t tenant_
            || (end.is_number() && end.get_number().compare(tenant_id) > 0))) {
     in_range = false;
   }
+  //ash report often use sample_time instead of tenant_id to filter data,
+  //so the first column of rowkey is sample_time instead of tenant_id
+  //here use the first column of rowkey to filter tenant_id, but the first colum of
+  // OB_WR_ACTIVE_SESSION_HISTORY_V2's rowkey is sample_time, so we set in_range to true
+  if (base_table_id_ == OB_WR_ACTIVE_SESSION_HISTORY_V2_TID) {
+    in_range = true;
+  }
   return in_range;
 }
 
@@ -213,8 +216,20 @@ int ObIteratePrivateVirtualTable::setup_inital_rowkey_condition(
       }
     }
   }
+  //ash report often use sample_time instead of tenant_id to filter data,
+  //so the first column of rowkey is sample_time instead of tenant_id
+  //usually the base_rowkey_offset_ is 1, because the first column of rowkey is tenant_id and can be skipped
+  //but for OB_WR_ACTIVE_SESSION_HISTORY_V2, the first column of rowkey is sample_time and can't be skipped
+  if (base_table_id_ == OB_WR_ACTIVE_SESSION_HISTORY_V2_TID) {
+    base_rowkey_offset_ = 0;
+  }
 
   return ret;
+}
+
+bool ObIteratePrivateVirtualTable::is_dr_table_()
+{
+  return (OB_ALL_LS_REPLICA_TASK_HISTORY_TID == base_table_id_) || (OB_ALL_LS_REPLICA_TASK_TID == base_table_id_);
 }
 
 int ObIteratePrivateVirtualTable::add_extra_condition(common::ObSqlString &sql)
@@ -240,12 +255,51 @@ int ObIteratePrivateVirtualTable::add_extra_condition(common::ObSqlString &sql)
   return ret;
 }
 
+bool ObIteratePrivateVirtualTable::is_tenant_has_leader_(
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  // ignore ret code
+  bool has_leader = false;
+  ObAddr leader_addr;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location_service_ nullptr", KR(ret), KP(GCTX.location_service_));
+  } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
+                                                        gen_meta_tenant_id(tenant_id), // check corresponding meta tenant
+                                                        SYS_LS,
+                                                        false/*force_renew*/,
+                                                        leader_addr))) {
+    // ret may be OB_LS_LOCATION_LEADER_NOT_EXIST.
+    LOG_WARN("failed to get ls leader", KR(ret), K(tenant_id));
+  } else if (leader_addr.is_valid()) {
+    ObServerInfoInTable server_info;
+    if (OB_FAIL(SVR_TRACER.get_server_info(leader_addr, server_info))) {
+      LOG_WARN("failed to get server info", KR(ret), K(leader_addr));
+    } else if (server_info.is_alive()) {
+      has_leader = true;
+    }
+  }
+  return has_leader;
+}
+
 int ObIteratePrivateVirtualTable::next_tenant_()
 {
   int ret = OB_SUCCESS;
   if (tenant_idx_ + 1 >= tenants_.count()) {
     ret = OB_ITER_END;
   } else {
+    ObSessionParam session_param;
+    ObTimeZoneInfoWrap tz_wrap;
+    if (OB_NOT_NULL(session_)) {
+      tz_wrap.deep_copy(session_->get_tz_info_wrap());
+      session_param.tz_info_wrap_ = &tz_wrap;
+    } else {
+      session_param.tz_info_wrap_ = nullptr;
+    }
     tenant_idx_ += 1;
     cur_tenant_id_ = tenants_.at(tenant_idx_);
     const uint64_t exec_tenant_id = get_exec_tenant_id_(cur_tenant_id_);
@@ -265,7 +319,7 @@ int ObIteratePrivateVirtualTable::next_tenant_()
       sql_res_->~ReadResult();
       inner_sql_res_ = NULL;
       new (sql_res_) ObMySQLProxy::MySQLResult();
-      if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, exec_tenant_id, sql_.ptr()))) {
+      if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, exec_tenant_id, sql_.ptr(), &session_param))) {
         LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K_(cur_tenant_id), K(sql_));
       } else if (OB_ISNULL(sql_res_->get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -345,7 +399,7 @@ int ObIteratePrivateVirtualTable::try_convert_row(const ObNewRow *input_row, ObN
 uint64_t ObIteratePrivateVirtualTable::get_exec_tenant_id_(const uint64_t tenant_id)
 {
   uint64_t exec_tenant_id = OB_INVALID_TENANT_ID;
-  if (is_sys_tenant(tenant_id)) {
+  if (is_sys_tenant(tenant_id) || (is_dr_table_() && !is_tenant_has_leader_(tenant_id))) {
     exec_tenant_id = OB_SYS_TENANT_ID;
   } else if (is_meta_tenant(tenant_id)) {
     exec_tenant_id = meta_record_in_sys_ ? OB_SYS_TENANT_ID : tenant_id;

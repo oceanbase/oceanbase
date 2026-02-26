@@ -13,17 +13,10 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_minus.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "sql/engine/expr/ob_rt_datum_arith.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -68,6 +61,45 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
   } else if (type.is_decimal_int() && (type1.is_null() || type2.is_null())) {
     type.set_precision(MAX(type1.get_precision(), type2.get_precision()));
     type.set_scale(MAX(type1.get_scale(), type2.get_scale()));
+  } else if (type.is_collection_sql_type()) {
+    if (type1.is_collection_sql_type() && type2.is_collection_sql_type()) {
+      ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+      ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+      ObCollectionTypeBase *coll_type1 = NULL;
+      ObCollectionTypeBase *coll_type2 = NULL;
+      ObExprResType coll_calc_type = type;
+      if (OB_ISNULL(exec_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec ctx is null", K(ret));
+      } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type1.get_subschema_id(), coll_type1))) {
+        LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
+      } else if (coll_type1->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type1->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid collection type", K(ret), K(coll_type1->type_id_));
+      } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type2.get_subschema_id(), coll_type2))) {
+        LOG_WARN("failed to get array type by subschema id", K(ret), K(type2.get_subschema_id()));
+      } else if (coll_type2->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type2->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid collection type", K(ret), K(coll_type2->type_id_));
+      } else if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
+        LOG_WARN("failed to check array compatibilty", K(ret));
+      } else {
+        type1.set_calc_meta(coll_calc_type);
+        type2.set_calc_meta(coll_calc_type);
+        type.set_collection(coll_calc_type.get_subschema_id());
+      }
+    } else {
+      // only support vector/array/varchar - vector/array/varchar now // array and varchar need cast to array(float)
+      uint16_t res_subschema_id = UINT16_MAX;
+      if (OB_FAIL(ObArrayExprUtils::calc_cast_type2(type_, type1, type2, type_ctx, res_subschema_id))) {
+        LOG_WARN("failed to calc cast type", K(ret), K(type1));
+      } else if (UINT16_MAX == res_subschema_id) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected result subschema_id", K(ret));
+      } else {
+        type.set_collection(res_subschema_id);
+      }
+    }
   } else if (OB_UNLIKELY(SCALE_UNKNOWN_YET == type1.get_scale() ||
                          SCALE_UNKNOWN_YET == type2.get_scale())) {
     type.set_scale(NUMBER_SCALE_UNKNOWN_YET);
@@ -98,6 +130,14 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
         int64_t inter_part_length2 = type2.get_precision() - type2.get_scale();
         precision = static_cast<ObPrecision>(MAX(inter_part_length1, inter_part_length2)
                                             + CARRY_OFFSET + scale);
+        precision = MIN(OB_MAX_DECIMAL_POSSIBLE_PRECISION, precision);
+      }
+      const ObObjTypeClass result_tc = type.get_type_class();
+      if (lib::is_mysql_mode() && ObNumberTC == result_tc) {
+        scale1 = static_cast<ObScale>(MAX(type1.get_calc_scale(), scale1));
+        scale2 = static_cast<ObScale>(MAX(type2.get_calc_scale(), scale2));
+        ObScale calc_scale = MAX(scale1, scale2);
+        type.set_calc_scale(calc_scale);
       }
     }
     type.set_scale(scale);
@@ -137,6 +177,15 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
     if (OB_SUCC(ret) && is_oracle && type.is_oracle_decimal() && !type.is_decimal_int()) {
       type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
       type.set_precision(PRECISION_UNKNOWN_YET);
+    }
+    if ((ob_is_double_tc(type.get_type()) || ob_is_float_tc(type.get_type())) && type.get_scale() > 0) {
+      // if result is fixed double/float, calc type's of params should also be fixed double/float
+      if (ob_is_double_tc(type1.get_calc_type()) || ob_is_float_tc(type1.get_calc_type())) {
+        type1.set_calc_scale(type.get_scale());
+      }
+      if (ob_is_double_tc(type2.get_calc_type()) || ob_is_float_tc(type2.get_calc_type())) {
+        type2.set_calc_scale(type.get_scale());
+      }
     }
     LOG_DEBUG("calc_result_type2", K(scale), K(type1), K(type2), K(type), K(precision));
   }
@@ -777,6 +826,41 @@ int ObExprMinus::cg_expr(ObExprCGCtx &op_cg_ctx,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected precision", K(ret), K(rt_expr.datum_meta_));
             break;
+        }
+        break;
+        case ObCollectionSQLType: {
+          ObExecContext *exec_ctx = op_cg_ctx.session_->get_cur_exec_ctx();
+          const uint16_t sub_id = rt_expr.obj_meta_.get_subschema_id();
+          ObObjType elem_type;
+          uint32_t unused;
+          bool is_vec = false;
+          if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, sub_id, elem_type, unused, is_vec))) {
+            LOG_WARN("failed to get collection elem type", K(ret), K(sub_id));
+          } else if (elem_type == ObTinyIntType) {
+            SET_MINUS_FUNC_PTR(minus_collection_collection_int8_t);
+            rt_expr.eval_vector_func_ = minus_collection_collection_int8_t_vector;
+          } else if (elem_type == ObSmallIntType) {
+            SET_MINUS_FUNC_PTR(minus_collection_collection_int16_t);
+            rt_expr.eval_vector_func_ = minus_collection_collection_int16_t_vector;
+          } else if (elem_type == ObInt32Type) {
+            SET_MINUS_FUNC_PTR(minus_collection_collection_int32_t);
+            rt_expr.eval_vector_func_ = minus_collection_collection_int32_t_vector;
+          } else if (elem_type == ObIntType) {
+            SET_MINUS_FUNC_PTR(minus_collection_collection_int64_t);
+            rt_expr.eval_vector_func_ = minus_collection_collection_int64_t_vector;
+          } else if (elem_type == ObFloatType) {
+            SET_MINUS_FUNC_PTR(minus_collection_collection_float);
+            rt_expr.eval_vector_func_ = minus_collection_collection_float_vector;
+          } else if (elem_type == ObDoubleType) {
+            SET_MINUS_FUNC_PTR(minus_collection_collection_double);
+            rt_expr.eval_vector_func_ = minus_collection_collection_double_vector;
+          } else if (elem_type == ObUInt64Type) {
+            SET_MINUS_FUNC_PTR(minus_collection_collection_uint64_t);
+            rt_expr.eval_vector_func_ = minus_collection_collection_uint64_t_vector;
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("invalid element type for array operation", K(ret), K(elem_type));
+          }
         }
         break;
       default:
@@ -1793,7 +1877,8 @@ int ObExprMinus::minus_decimal##TYPE##_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL) 
 {                                            \
   ObNumStackOnceAlloc tmp_alloc;                                \
   const int64_t scale = expr.args_[0]->datum_meta_.scale_;      \
-  return def_fixed_len_vector_arith_op_func<ObDecimalOracleVectorMinusFunc<TYPE##_t>>(VECTOR_EVAL_FUNC_ARG_LIST, scale, tmp_alloc); \
+  return def_fixed_len_vector_arith_op_func<ObDecimalOracleVectorMinusFunc<TYPE##_t>,\
+                                            ObArithTypedBase<TYPE##_t, TYPE##_t, TYPE##_t>>(VECTOR_EVAL_FUNC_ARG_LIST, scale, tmp_alloc); \
 }
 
 DECINC_MINUS_EVAL_FUNC_ORA_DECL(int32)
@@ -1802,6 +1887,86 @@ DECINC_MINUS_EVAL_FUNC_ORA_DECL(int128)
 
 
 #undef DECINC_MINUS_EVAL_FUNC_ORA_DECL
+
+template<typename T>
+struct ObArrayMinusFunc : public ObNestedArithOpBaseFunc
+{
+  int operator()(ObIArrayType &res, const ObIArrayType &l, const ObIArrayType &r) const
+  {
+    int ret = OB_SUCCESS;
+
+    if (l.get_format() != r.get_format() || res.get_format() != r.get_format()) {
+      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+      LOG_WARN("nested type is mismatch", K(ret), K(l.get_format()), K(r.get_format()), K(res.get_format()));
+    } else if (l.size() != r.size()) {
+      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+      LOG_WARN("nested size is mismatch", K(ret), K(l.size()), K(r.size()));
+    } else if (l.get_format() != ArrayFormat::Vector && MEMCMP(l.get_nullbitmap(), r.get_nullbitmap(), sizeof(uint8_t) * l.size())) {
+      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+      LOG_WARN("nested nullbitmap is mismatch", K(ret));
+    } else if (l.get_format() == ArrayFormat::Nested_Array) {
+      // compare array dimension
+      const ObArrayNested &left = static_cast<const ObArrayNested&>(l);
+      const ObArrayNested &right = static_cast<const ObArrayNested&>(r);
+      ObArrayNested &nest_res = static_cast<ObArrayNested&>(res);
+      if (MEMCMP(left.get_nullbitmap(), right.get_nullbitmap(), sizeof(uint8_t) * left.size()) != 0) {
+        ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+        LOG_WARN("nested nullbitmap is mismatch", K(ret));
+      } else if (MEMCMP(left.get_offsets(), right.get_offsets(), sizeof(uint32_t) * left.size()) != 0) {
+        ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+        LOG_WARN("nested offsets is mismatch", K(ret));
+      } else if (OB_FAIL(res.set_null_bitmaps(left.get_nullbitmap(), left.size()))) {
+        LOG_WARN("nested nullbitmap copy failed", K(ret));
+      } else if (OB_FAIL(res.set_offsets(left.get_offsets(), left.size()))) {
+        LOG_WARN("nested offset copy failed", K(ret));
+      } else if (OB_FAIL(operator()(*nest_res.get_child_array(), *left.get_child_array(), *right.get_child_array()))) {
+        LOG_WARN("nested child array add failed", K(ret));
+      }
+    } else if (l.get_format() != ArrayFormat::Fixed_Size && l.get_format() != ArrayFormat::Vector) {
+      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+      LOG_WARN("invaid array type", K(ret), K(l.get_format()));
+    } else {
+      T *res_data = NULL;
+      if (OB_FAIL(l.get_format() != ArrayFormat::Vector && res.set_null_bitmaps(l.get_nullbitmap(), l.size()))) {
+        LOG_WARN("array nullbitmap copy failed", K(ret));
+      } else if (OB_FAIL(static_cast<ObArrayBase<T> &>(res).get_reserved_data(l.size(), res_data))) {
+        LOG_WARN("array get resered data failed", K(ret));
+      } else {
+        T *left_data = reinterpret_cast<T *>(l.get_data());
+        T *right_data = reinterpret_cast<T *>(r.get_data());
+        for (int64_t i = 0; i < l.size() && OB_SUCC(ret); ++i) {
+          res_data[i] = left_data[i] - right_data[i];
+          if (OB_FAIL(ObArrayExprUtils::raw_check_minus(res_data[i], left_data[i], right_data[i]))) {
+            LOG_WARN("array minus check failed", K(ret));
+          }
+        }
+      }
+    }
+    return ret;
+  }
+};
+
+#define COLLECTION_MINUS_EVAL_FUNC_DECL(TYPE) \
+int ObExprMinus::minus_collection_collection_##TYPE(EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_arith_eval_func<ObNestedArithOpWrap<ObArrayMinusFunc<TYPE>>>(EVAL_FUNC_ARG_LIST, expr, ctx); \
+}                                            \
+int ObExprMinus::minus_collection_collection_##TYPE##_batch(BATCH_EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_batch_arith_op_by_datum_func<ObNestedArithOpWrap<ObArrayMinusFunc<TYPE>>>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx); \
+}                                             \
+int ObExprMinus::minus_collection_collection_##TYPE##_vector(VECTOR_EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_nested_vector_arith_op_func<ObNestedVectorArithOpFunc<ObArrayMinusFunc<TYPE>>>(VECTOR_EVAL_FUNC_ARG_LIST, expr, ctx);  \
+}
+
+COLLECTION_MINUS_EVAL_FUNC_DECL(int8_t)
+COLLECTION_MINUS_EVAL_FUNC_DECL(int16_t)
+COLLECTION_MINUS_EVAL_FUNC_DECL(int32_t)
+COLLECTION_MINUS_EVAL_FUNC_DECL(int64_t)
+COLLECTION_MINUS_EVAL_FUNC_DECL(float)
+COLLECTION_MINUS_EVAL_FUNC_DECL(double)
+COLLECTION_MINUS_EVAL_FUNC_DECL(uint64_t)
 
 }
 }

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_sys_connect_by_path.h"
 #include "sql/engine/expr/ob_expr_concat.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/engine/ob_exec_context.h"
-#include "share/ob_i_sql_expression.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -45,9 +42,9 @@ int ObExprSysConnectByPath::calc_result_type2(ObExprResType &type,
     type2.set_calc_type(ObVarcharType);
     types[0] = type1;
     types[1] = type2;
-    if (OB_FAIL(aggregate_charsets_for_string_result(type, types, 2, type_ctx.get_coll_type()))) {
+    if (OB_FAIL(aggregate_charsets_for_string_result(type, types, 2, type_ctx))) {
       LOG_WARN("fail to aggregate charset", K(type1), K(type2), K(ret));
-    } else if (OB_FAIL(aggregate_charsets_for_comparison(type, types, 2, type_ctx.get_coll_type()))) {
+    } else if (OB_FAIL(aggregate_charsets_for_comparison(type, types, 2, type_ctx))) {
       LOG_WARN("fail to aggregate charset", K(type1), K(type2), K(ret));
     }
   }

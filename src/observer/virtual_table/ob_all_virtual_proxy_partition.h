@@ -44,7 +44,7 @@ class ObAllVirtualProxyPartition : public ObAllVirtualProxyBaseIterator
     SUB_INTERVAL_START,
     SUB_INTERVAL_START_BIN,
 
-    SPARE1,
+    SPARE1, // replace this with a table-level schema_version
     SPARE2,
     SPARE3,
     SPARE4,

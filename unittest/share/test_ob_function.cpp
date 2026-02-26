@@ -15,8 +15,6 @@
 #include "lib/function/ob_function.h"
 #include "lib/container/ob_array.h"
 #include <gtest/gtest.h>
-#include <iostream>
-#include <vector>
 
 namespace oceanbase {
 namespace unittest {
@@ -218,7 +216,7 @@ TEST_F(TestObFunction, construct_path) {
 }
 
 struct BigObj {
-  unsigned char val[41];
+  unsigned char val[241];
 } ;
 
 struct SmallObj {

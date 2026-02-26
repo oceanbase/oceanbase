@@ -14,10 +14,6 @@
 
 #include "share/ob_zone_merge_table_operator.h"
 
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/string/ob_sql_string.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_dml_sql_splicer.h"
@@ -411,7 +407,7 @@ int ObZoneMergeTableOperator::construct_zone_merge_info_(
   bool exist = false;
   int64_t tmp_real_str_len = 0; // only used for output parameter
   int64_t tenant_id = 0;
-  char zone_buf[OB_MAX_TZ_NAME_LEN] = "";
+  char zone_buf[MAX_ZONE_LENGTH] = "";
   ObZoneMergeInfo tmp_merge_info;
   uint64_t all_merged_scn = 0;
   uint64_t broadcast_scn = 0;

@@ -23,6 +23,7 @@
 #include "lib/trace/ob_trace_event.h"
 #include "logservice/palf/lsn.h"
 #include "logservice/ob_log_base_header.h"
+#include "share/scn.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_ls_id.h"
 #include "share/allocator/ob_reserve_arena.h"
@@ -32,10 +33,10 @@
 #include "storage/tx/ob_trans_result.h"
 #include "storage/tx/ob_xa_define.h"
 #include "storage/tx/ob_direct_load_tx_ctx_define.h"
-#include  "storage/tx/ob_tx_on_demand_print.h"
-#include "ob_multi_data_source.h"
-#include "share/scn.h"
+#include "storage/tx/ob_multi_data_source_tx_buffer_node.h"
+#include "storage/tx/ob_tx_on_demand_print.h"
 #include "storage/tx/ob_tx_seq.h"
+#include "storage/tx/ob_trans_id.h"
 
 namespace oceanbase
 {
@@ -91,6 +92,7 @@ class AggreLogTask;
 class ObXACtx;
 class ObITxCallback;
 class ObTxMultiDataSourceLog;
+enum class NotifyType : int64_t;
 typedef palf::LSN LogOffSet;
 enum { MAX_CALLBACK_LIST_COUNT = 64 };
 class ObTransErrsim
@@ -225,65 +227,6 @@ protected:
   }
 private:
   ObReserveAllocator reserve_allocator_;
-};
-
-class ObTransID
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObTransID() : tx_id_(0) {}
-  ObTransID(const int64_t tx_id) : tx_id_(tx_id) {}
-  ~ObTransID() { tx_id_ = 0; }
-  ObTransID &operator=(const ObTransID &r) {
-    if (this != &r) {
-      tx_id_ = r.tx_id_;
-    }
-    return *this;
-  }
-  ObTransID &operator=(const int64_t &id) {
-    tx_id_ = id;
-    return *this;
-  }
-  bool operator<(const ObTransID &id) {
-    bool bool_ret = false;
-    if (this->compare(id) < 0) {
-      bool_ret = true;
-    }
-    return bool_ret;
-  }
-  bool operator>(const ObTransID &id) {
-    bool bool_ret = false;
-    if (this->compare(id) > 0) {
-      bool_ret = true;
-    }
-    return bool_ret;
-  }
-  int64_t get_id() const { return tx_id_; }
-  uint64_t hash() const
-  {
-    return murmurhash(&tx_id_, sizeof(tx_id_), 0);
-  }
-  int hash(uint64_t &hash_val) const
-  {
-    hash_val = hash();
-    return OB_SUCCESS;
-  }
-  bool is_valid() const { return tx_id_ > 0; }
-  void reset() { tx_id_ = 0; }
-  int compare(const ObTransID& other) const;
-  operator int64_t() const { return tx_id_; }
-  bool operator==(const ObTransID &other) const
-  { return tx_id_ == other.tx_id_; }
-  bool operator!=(const ObTransID &other) const
-  { return tx_id_ != other.tx_id_; }
-  /*  XA  */
-  int parse(char *b) {
-    UNUSED(b);
-    return OB_SUCCESS;
-  }
-  TO_STRING_AND_YSON(OB_ID(txid), tx_id_);
-private:
-  int64_t tx_id_;
 };
 
 struct ObLockForReadArg
@@ -922,7 +865,8 @@ public:
 public:
   static bool is_valid(const int32_t level)
   {
-    return level == READ_COMMITED
+    return level == READ_UNCOMMITTED
+        || level == READ_COMMITED
         || level == REPEATABLE_READ
         || level == SERIALIZABLE;
   }
@@ -1001,6 +945,10 @@ public:
   void set_transfer_blocking() { flag_.transfer_blocking_ = 1; }
   void clear_transfer_blocking() { flag_.transfer_blocking_ = 0; }
 
+  bool is_commit_submitting_redo() const { return flag_.commit_submitting_redo_; }
+  void set_commit_submitting_redo() { flag_.commit_submitting_redo_ = 1; }
+  void clear_commit_submitting_redo() { flag_.commit_submitting_redo_ = 0; }
+
   DECLARE_ON_DEMAND_TO_STRING
   TO_STRING_KV("info_log_submitted",
                flag_.info_log_submitted_,
@@ -1015,7 +963,9 @@ public:
                "force_abort",
                flag_.force_abort_,
                "transfer_blocking",
-               flag_.transfer_blocking_);
+               flag_.transfer_blocking_,
+               "commit_submitting_redo",
+               flag_.commit_submitting_redo_);
 
   bool is_valid() const { return flag_.is_valid(); }
 private:
@@ -1028,6 +978,7 @@ private:
     unsigned int prepare_notify_ : 1;
     unsigned int force_abort_ : 1;
     unsigned int transfer_blocking_ : 1;
+    unsigned int commit_submitting_redo_ : 1;
 
     void reset()
     {
@@ -1038,13 +989,14 @@ private:
       prepare_notify_ = 0;
       force_abort_ = 0;
       transfer_blocking_ = 0;
+      commit_submitting_redo_ = 0;
     }
 
     bool is_valid() const
     {
       return info_log_submitted_ > 0 || gts_waiting_ > 0 || state_log_submitted_ > 0
           || state_log_submitting_ > 0 || prepare_notify_ > 0 || force_abort_ > 0
-          || transfer_blocking_ > 0;
+          || transfer_blocking_ > 0 || commit_submitting_redo_ > 0;
     }
 
     BitFlag() { reset(); }
@@ -1093,7 +1045,8 @@ public:
   static const int64_t ADVANCE_LS_CKPT_TASK = 1;
   static const int64_t STANDBY_CLEANUP_TASK = 2;
   static const int64_t DUP_TABLE_TX_REDO_SYNC_RETRY_TASK = 3;
-  static const int64_t MAX = 4;
+  static const int64_t PALF_KV_GC_TASK = 4;
+  static const int64_t MAX = 5;
 public:
   static bool is_valid(const int64_t task_type)
   { return task_type > UNKNOWN && task_type < MAX; }
@@ -1568,7 +1521,7 @@ typedef common::ObSEArray<ObElrTransInfo, 1, TransModulePageAllocator> ObElrTran
 typedef common::ObSEArray<int64_t, 10, TransModulePageAllocator> ObRedoLogIdArray;
 typedef common::ObSEArray<palf::LSN, 10, ModulePageAllocator> ObRedoLSNArray;
 typedef common::ObSEArray<ObLSLogInfo, 10, ModulePageAllocator> ObLSLogInfoArray;
-typedef common::ObSEArray<ObStateInfo, 1, ModulePageAllocator> ObStateInfoArray;
+typedef common::ObSEArray<ObStateInfo, 1, TransModulePageAllocator> ObStateInfoArray;
 
 struct CtxInfo final
 {
@@ -1824,31 +1777,17 @@ struct ObMulSourceDataNotifyArg
   share::SCN scn_; // the log ts of current notify type
   // in case of abort transaction, trans_version_ is invalid
   share::SCN trans_version_;
-  bool for_replay_;
   NotifyType notify_type_;
-
+  bool for_replay_;
   bool redo_submitted_;
   bool redo_synced_;
-
+  bool willing_to_commit_;
   // force kill trans without abort scn
   bool is_force_kill_;
-
   bool is_incomplete_replay_;
 
   ObMulSourceDataNotifyArg() { reset(); }
-
-  void reset()
-  {
-    tx_id_.reset();
-    scn_.reset();
-    trans_version_.reset();
-    for_replay_ = false;
-    notify_type_ = NotifyType::ON_ABORT;
-    redo_submitted_ = false;
-    redo_synced_ = false;
-    is_force_kill_ = false;
-    is_incomplete_replay_ = false;
-  }
+  void reset();
 
   TO_STRING_KV(K_(tx_id),
                K_(scn),
@@ -1857,8 +1796,9 @@ struct ObMulSourceDataNotifyArg
                K_(notify_type),
                K_(redo_submitted),
                K_(redo_synced),
-               K_(is_force_kill),
-               K_(is_incomplete_replay));
+               K_(is_incomplete_replay),
+               K_(willing_to_commit),
+               K_(is_force_kill));
 
   // The redo log of current buf_node has been submitted;
   bool is_redo_submitted() const;
@@ -1962,6 +1902,22 @@ struct ObIArraySerDeTrait {
     }
     return ret;
   }
+};
+
+static const uint64_t GTS_TENANT_ID_BITS = 48;
+static const uint64_t GTS_SSLOG_TENANT_ID_FLAG_MASK = (1ULL << GTS_TENANT_ID_BITS);
+static const uint64_t GTS_REAL_TENANT_ID_MASK = (1ULL << GTS_TENANT_ID_BITS) - 1;
+
+OB_INLINE uint64_t get_sslog_gts_tenant_id(uint64_t tenant_id)
+{ return tenant_id | GTS_SSLOG_TENANT_ID_FLAG_MASK; }
+
+OB_INLINE bool is_sslog_gts_tenant_id(uint64_t tenant_id)
+{ return ~GTS_REAL_TENANT_ID_MASK & tenant_id; }
+
+struct SSLogModID
+{
+  static constexpr const char OB_SSLOG_UID_RPC_PROXY[] = "SSLogUIdProxy";
+  static constexpr const char OB_SSLOG_UID_REQUEST_RPC[] = "SSLogUIdReqRPC";
 };
 
 } // transaction

@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_CG
 
 #include "sql/code_generator/ob_code_generator.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -55,6 +52,9 @@ int ObCodeGenerator::generate_exprs(const ObLogPlan &log_plan,
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = log_plan.get_optimizer_context().get_exec_ctx();
   CK(NULL != exec_ctx && NULL != exec_ctx->get_physical_plan_ctx());
+  CK(exec_ctx->get_my_session() != NULL);
+  CK(exec_ctx->get_my_session()->use_rich_format() == exec_ctx->get_physical_plan_ctx()->is_rich_format()
+     && exec_ctx->get_my_session()->use_rich_format() == phy_plan.get_use_rich_format());
   if (OB_SUCC(ret)) {
     ObStaticEngineExprCG expr_cg(
         phy_plan.get_allocator(),
@@ -65,6 +65,7 @@ int ObCodeGenerator::generate_exprs(const ObLogPlan &log_plan,
         min_cluster_version_);
     // init ctx for operator cg
     expr_cg.set_batch_size(phy_plan.get_batch_size());
+    expr_cg.set_log_plan(&log_plan);
     if (OB_FAIL(expr_cg.generate(log_plan.get_optimizer_context().get_all_exprs(),
                                  phy_plan.get_expr_frame_info()))) {
       LOG_WARN("fail to generate expr", K(ret));
@@ -99,6 +100,14 @@ int ObCodeGenerator::detect_batch_size(
       log_plan.get_optimizer_context().get_session_info();
   ObExecContext *exec_ctx = log_plan.get_optimizer_context().get_exec_ctx();
   CK(NULL != exec_ctx && NULL != exec_ctx->get_physical_plan_ctx());
+  bool has_registered_vec_op = false;
+  if (OB_ISNULL(log_plan.get_plan_root())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null plan root", K(ret));
+  } else if (OB_FAIL(ObStaticEngineCG::exist_registered_vec_op(*log_plan.get_plan_root(), true,
+                                                               has_registered_vec_op))) {
+    LOG_WARN("check exist registetered vectorized operator failed", K(ret));
+  }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(session)) {
     // empty session disable batch processing
@@ -108,8 +117,12 @@ int ObCodeGenerator::detect_batch_size(
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     // TODO bin.lb: move to optimizer and more sophisticated rules
     bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
+    // if tenant config is invalid, use 8 as lob_rowsets_max_rows, compatible to origin behavior
+    int64_t lob_rowsets_max_rows = tenant_config.is_valid() ? tenant_config->_lob_rowsets_max_rows : 8;
     const ObOptParamHint *opt_params = &log_plan.get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
-    if (OB_FAIL(opt_params->get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
+    if (OB_FAIL(opt_params->get_integer_opt_param(ObOptParamHint::LOB_ROWSETS_MAX_ROWS, lob_rowsets_max_rows))) {
+      LOG_WARN("get integer opt param failed", K(ret));
+    } else if (OB_FAIL(opt_params->get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
       LOG_WARN("fail to check rowsets enabled", K(ret));
     } else if (rowsets_enabled) {
       // TODO bin.lb; check all sub plans
@@ -118,7 +131,16 @@ int ObCodeGenerator::detect_batch_size(
                                                      scan_cardinality,
                                                      log_plan.get_plan_root()));
     }
-    if (OB_SUCC(ret) && vectorize) {
+    if (OB_FAIL(ret)) {
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0 && !vectorize) {
+      // set max_batch_size = 1
+      // if all physical operator is not registered as vec op, disable vectorization
+      if (rowsets_enabled && has_registered_vec_op) {
+        batch_size = 1;
+      } else {
+        batch_size = 0;
+      }
+    } else if (vectorize) {
       ObArenaAllocator alloc;
       ObRawExprUniqueSet flattened_exprs(true);
       OZ(flattened_exprs.flatten_and_add_raw_exprs(log_plan.get_optimizer_context()
@@ -134,7 +156,8 @@ int ObCodeGenerator::detect_batch_size(
       OZ(expr_cg.detect_batch_size(flattened_exprs, batch_size,
                                    rowsets_max_rows,
                                    tenant_config->_rowsets_target_maxsize,
-                                   scan_cardinality));
+                                   scan_cardinality,
+                                   lob_rowsets_max_rows));
       // overwrite batch size if hint is specified
       OZ(opt_params->get_integer_opt_param(ObOptParamHint::ROWSETS_MAX_ROWS, batch_size));
 
@@ -150,7 +173,8 @@ int ObCodeGenerator::detect_batch_size(
     }
     // TODO qubin.qb: remove the tracelog when rowsets/batch_size is displayed
     // in plan
-    LOG_TRACE("detect_batch_size", K(vectorize), K(scan_cardinality), K(batch_size));
+    LOG_TRACE("detect_batch_size", K(vectorize), K(scan_cardinality), K(batch_size),
+              K(rowsets_enabled), K(batch_size), K(has_registered_vec_op));
   }
   return ret;
 }

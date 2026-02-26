@@ -113,13 +113,6 @@ public:
                                              const ObObjMeta& meta2,
                                              ObCmpOp cmp_op,
                                              obj_cmp_func &cmp_func);
-  /*
-   * obj1 and obj2 can be compared without any casts, nullsafe
-   */
-  OB_INLINE static bool can_cmp_without_cast(ObObjType type1,
-                                             ObObjType type2,
-                                             ObCmpOp cmp_op,
-                                             obj_cmp_func_nullsafe &cmp_func_nullsafe);
   static int compare_oper(const ObObj &obj1,
                           const ObObj &obj2,
                           ObCollationType cs_type,
@@ -301,8 +294,7 @@ public:
 private:
   OB_INLINE static int INT_TO_CR(int val) { return val < 0 ? CR_LT : val > 0 ? CR_GT : CR_EQ; }
 private:
-  static const obj_cmp_func cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX];
-  static const obj_cmp_func_nullsafe cmp_funcs_nullsafe[ObMaxTC][ObMaxTC];
+  static const obj_cmp_func cmp_funcs[ObMaxTC+1][ObMaxTC+1][CO_MAX+1];
   static const ObObj cmp_res_objs_bool[CR_BOOL_CNT];
   static const ObObj cmp_res_objs_int[CR_INT_CNT];
 };
@@ -312,35 +304,8 @@ OB_INLINE int ObObjCmpFuncs::get_cmp_func(const ObObjTypeClass tc1,
                                           ObCmpOp cmp_op,
                                           obj_cmp_func &func)
 {
-  int ret = OB_SUCCESS;
-  func = NULL;
-  if (OB_UNLIKELY(ob_is_invalid_cmp_op(cmp_op))) {
-    func = NULL;
-  } else if (OB_UNLIKELY(ob_is_invalid_obj_tc(tc1)
-             || OB_UNLIKELY(ob_is_invalid_obj_tc(tc2)))) {
-    func = NULL;
-  } else {
-    func = cmp_funcs[tc1][tc2][cmp_op];
-  }
-  return ret;
-}
-
-OB_INLINE int ObObjCmpFuncs::get_cmp_func(const ObObjTypeClass tc1,
-                                          const ObObjTypeClass tc2,
-                                          ObCmpOp cmp_op,
-                                          obj_cmp_func_nullsafe &func)
-{
-  int ret = OB_SUCCESS;
-  func = nullptr;
-  if (OB_UNLIKELY(ob_is_invalid_cmp_op(cmp_op))) {
-    func = nullptr;
-  } else if (OB_UNLIKELY(ob_is_invalid_obj_tc(tc1) ||
-                         ob_is_invalid_obj_tc(tc2))) {
-    func = nullptr;
-  } else {
-    func = cmp_funcs_nullsafe[tc1][tc2];
-  }
-  return ret;
+  func = cmp_funcs[tc1][tc2][cmp_op];
+  return OB_SUCCESS;
 }
 
 OB_INLINE bool ObObjCmpFuncs::can_cmp_without_cast(const ObObjMeta& meta1,
@@ -351,8 +316,6 @@ OB_INLINE bool ObObjCmpFuncs::can_cmp_without_cast(const ObObjMeta& meta1,
   int ret = OB_SUCCESS;
   const ObObjType type1 = meta1.get_type();
   const ObObjType type2 = meta2.get_type();
-  const ObObjTypeClass tc1 = meta1.get_type_class();
-  const ObObjTypeClass tc2 = meta2.get_type_class();
   cmp_func = NULL;
   bool need_no_cast = false;
   if (OB_UNLIKELY(is_datetime_timestamp_cmp(type1, type2))
@@ -365,34 +328,11 @@ OB_INLINE bool ObObjCmpFuncs::can_cmp_without_cast(const ObObjMeta& meta1,
                          && ob_is_string_type(type2)
                          && ((meta1.get_collation_type() != meta2.get_collation_type())))) {
     need_no_cast = false;
-  } else if (OB_FAIL(get_cmp_func(tc1, tc2, cmp_op, cmp_func))) {
-    COMMON_LOG(ERROR, "get cmp func failed", K(type1), K(type2), K(tc1), K(tc2), K(cmp_op));
   } else {
+    const ObObjTypeClass tc1 = meta1.get_type_class();
+    const ObObjTypeClass tc2 = meta2.get_type_class();
+    cmp_func = cmp_funcs[tc1][tc2][cmp_op];
     need_no_cast = (cmp_func != NULL);
-  }
-  return need_no_cast;
-}
-
-OB_INLINE bool ObObjCmpFuncs::can_cmp_without_cast(ObObjType type1,
-                                                   ObObjType type2,
-                                                   ObCmpOp cmp_op,
-                                                   obj_cmp_func_nullsafe &cmp_func)
-{
-  int ret = OB_SUCCESS;
-  ObObjTypeClass tc1 = ob_obj_type_class(type1);
-  ObObjTypeClass tc2 = ob_obj_type_class(type2);
-  cmp_func = nullptr;
-
-  bool need_no_cast = true;
-  if (is_datetime_timestamp_cmp(type1, type2)) {
-    need_no_cast = false;
-  } else if ((ObIntervalYMType == type1 && ObIntervalDSType == type2)
-              || (ObIntervalYMType == type2 && ObIntervalDSType == type1)) {
-    need_no_cast = false;
-  } else if (OB_FAIL(get_cmp_func(tc1, tc2, cmp_op, cmp_func))) {
-    COMMON_LOG(ERROR, "get cmp func failed", K(type1), K(type2), K(tc1), K(tc2), K(cmp_op));
-  } else {
-    need_no_cast = (cmp_func != nullptr);
   }
   return need_no_cast;
 }

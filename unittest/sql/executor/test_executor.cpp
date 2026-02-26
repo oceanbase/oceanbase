@@ -334,13 +334,9 @@ TEST_F(ObExecutorTest, local_executor_test)
   int ret = OB_SUCCESS;
 
   ObPhyTableLocationSEArray table_locs;
-  ObPhyTableLocation table_loc;
   ObPartitionLocation partition_loc;
   partition_loc.set_table_id(TEST_TABLE_ID);
   partition_loc.set_partition_id(9);
-  table_loc.set_table_id(TEST_TABLE_ID);
-  ASSERT_EQ(OB_SUCCESS, table_loc.add_partition_location(partition_loc));
-  ASSERT_EQ(OB_SUCCESS, table_locs.push_back(table_loc));
 
   ObAddr server;
   server.set_ip_addr("127.0.0.1", 8888);
@@ -361,7 +357,6 @@ TEST_F(ObExecutorTest, local_executor_test)
   task_exe_ctx->set_partition_location_cache(&rpc_.partition_loc_cache_);
   task_exe_ctx->set_partition_service(&rpc_.partition_service_);
   task_exe_ctx->set_execute_result(&exe_result);
-  task_exe_ctx->set_table_locations(table_locs);
 
   ASSERT_EQ(OB_SUCCESS, create_local_plan_tree(exec_ctx));
 
@@ -383,14 +378,9 @@ TEST_F(ObExecutorTest, distributed_executor_test)
   //启动模拟收包队列
   ObMockPacketQueueThread::get_instance()->start();
 
-  ObPhyTableLocationSEArray table_locs;
-  ObPhyTableLocation table_loc;
   ObPartitionLocation partition_loc;
   partition_loc.set_table_id(TEST_TABLE_ID);
   partition_loc.set_partition_id(9);
-  table_loc.set_table_id(TEST_TABLE_ID);
-  ASSERT_EQ(OB_SUCCESS, table_loc.add_partition_location(partition_loc));
-  ASSERT_EQ(OB_SUCCESS, table_locs.push_back(table_loc));
 
   ObAddr server;
   server.set_ip_addr("127.0.0.1", 8888);
@@ -409,7 +399,6 @@ TEST_F(ObExecutorTest, distributed_executor_test)
   task_exe_ctx->set_partition_service(&rpc_.partition_service_);
   task_exe_ctx->set_execute_result(&exe_result);
   task_exe_ctx->set_task_executor_rpc(&rpc_);
-  task_exe_ctx->set_table_locations(table_locs);
 
   ASSERT_EQ(OB_SUCCESS, create_distributed_plan_tree(exec_ctx));
 

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX PL
 #include "ob_pl_dbms_resource_manager.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
-#include "sql/privilege_check/ob_ora_priv_check.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -91,8 +90,20 @@ int ObPlDBMSResourceManager::delete_plan(
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(proxy.delete_plan(tenant_id, plan))) {
-      LOG_WARN("fail create plan", K(tenant_id), K(plan), K(ret));
+    ObString resource_manager_plan;
+    if (OB_FAIL(ObSchemaUtils::get_tenant_varchar_variable(
+                  tenant_id,
+                  SYS_VAR_RESOURCE_MANAGER_PLAN,
+                  ctx.get_allocator(),
+                  resource_manager_plan))) {
+        LOG_WARN("fail get tenant variable", K(tenant_id), K(resource_manager_plan), K(ret));
+    } else if (0 == plan.case_compare(resource_manager_plan)) {
+      // this plan is active and cannot be deleted.
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "deleting active plan");
+      LOG_WARN("active plan cannot be removed", K(plan));
+    } else if (OB_FAIL(proxy.delete_plan(tenant_id, plan))) {
+      LOG_WARN("fail delete plan", K(tenant_id), K(plan), K(ret));
     }
   }
   return ret;
@@ -186,20 +197,6 @@ int ObPlDBMSResourceManager::create_plan_directive(
     sql::ParamStore &params,
     common::ObObj &result)
 {
-  enum {
-    PLAN = 0,
-    GROUP = 1,
-    COMMENT = 2,
-    MGMT_P1 = 3,
-    UTILIZATION_LIMIT = 4,
-    MIN_IOPS = 5,
-    MAX_IOPS = 6,
-    WEIGHT_IOPS = 7,
-    // MAX_NET_BADNWIDTH = 8,    placeholder
-    // NET_BANDWIDTH_WEIGHT = 9, placeholder
-    MAX_PARAM
-  };
-
   int ret = OB_SUCCESS;
   uint64_t tenant_id;
   UNUSED(result);
@@ -207,31 +204,49 @@ int ObPlDBMSResourceManager::create_plan_directive(
   ObString plan;
   ObString group;
   sql::ObSQLSessionInfo *sess = GET_MY_SESSION(ctx);
-  if (OB_ISNULL(sess) || params.count() < MAX_PARAM) {
+  common::ObObj max_net_bandwidht_obj(int64_t(100));
+  common::ObObj net_bandwidth_weight_obj(int64_t(0));
+
+  if (OB_ISNULL(sess)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("err unexpected", K(params.count()), K(MAX_PARAM), K(ret));
-  } else {
-    tenant_id = sess->get_effective_tenant_id();
+    LOG_WARN("err unexpected", K(params.count()), K(ret));
+  } else if (params.count() < ObPlanDirectiveParamType::MAX_PARAM) {
+    if (params.count() < ObPlanDirectiveParamType::MAX_NET_BANDWIDTH) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("err unexpected", K(params.count()), K(ObPlanDirectiveParamType::MAX_PARAM), K(ret));
+    } else {
+      LOG_INFO("use lower version of admin pkg", K(params.count()), K(ObPlanDirectiveParamType::MAX_PARAM), K(ret));
+    }
+  } else if (params.count() == ObPlanDirectiveParamType::MAX_PARAM) {
+      max_net_bandwidht_obj.reset();
+      net_bandwidth_weight_obj.reset();
+      bool is_copy_all = true;
+      params.at(MAX_NET_BANDWIDTH).copy_value_or_obj(max_net_bandwidht_obj, is_copy_all);
+      params.at(NET_BANDWIDTH_WEIGHT).copy_value_or_obj(net_bandwidth_weight_obj, is_copy_all);
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < params.count() && i < COMMENT; ++i) {
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < params.count() && i < ObPlanDirectiveParamType::COMMENT; ++i) {
     LOG_INFO("pl params", K(params.at(i)));
     ObObj &obj = params.at(i);
-    if (PLAN == i) {
+    if (ObPlanDirectiveParamType::PLAN == i) {
       ret = obj.get_string(plan);
-    } else if (GROUP == i) {
+    } else if (ObPlanDirectiveParamType::GROUP == i) {
       ret = obj.get_string(group);
     }
   }
   if (OB_SUCC(ret)) {
+    tenant_id = sess->get_effective_tenant_id();
     if (OB_FAIL(proxy.create_plan_directive(tenant_id,
                                             plan,
                                             group,
-                                            params.at(COMMENT),
-                                            params.at(MGMT_P1),
-                                            params.at(UTILIZATION_LIMIT),
-                                            params.at(MIN_IOPS),
-                                            params.at(MAX_IOPS),
-                                            params.at(WEIGHT_IOPS)))) {
+                                            params.at(ObPlanDirectiveParamType::COMMENT),
+                                            params.at(ObPlanDirectiveParamType::MGMT_P1),
+                                            params.at(ObPlanDirectiveParamType::UTILIZATION_LIMIT),
+                                            params.at(ObPlanDirectiveParamType::MIN_IOPS),
+                                            params.at(ObPlanDirectiveParamType::MAX_IOPS),
+                                            params.at(ObPlanDirectiveParamType::WEIGHT_IOPS),
+                                            max_net_bandwidht_obj,
+                                            net_bandwidth_weight_obj))) {
       LOG_WARN("fail create plan directive", K(tenant_id), K(plan), K(group), K(ret));
     }
   }
@@ -284,19 +299,6 @@ int ObPlDBMSResourceManager::update_plan_directive(
     sql::ParamStore &params,
     common::ObObj &result)
 {
-  enum {
-    PLAN = 0,
-    GROUP = 1,
-    COMMENT = 2,
-    MGMT_P1 = 3,
-    UTILIZATION_LIMIT = 4,
-    MIN_IOPS = 5,
-    MAX_IOPS = 6,
-    WEIGHT_IOPS = 7,
-    // MAX_NET_BADNWIDTH = 8,    placeholder
-    // NET_BANDWIDTH_WEIGHT = 9, placeholder
-    MAX_PARAM
-  };
   int ret = OB_SUCCESS;
   uint64_t tenant_id;
   UNUSED(result);
@@ -304,30 +306,48 @@ int ObPlDBMSResourceManager::update_plan_directive(
   ObString plan;
   ObString group;
   sql::ObSQLSessionInfo *sess = GET_MY_SESSION(ctx);
-  if (OB_ISNULL(sess) || params.count() < MAX_PARAM) {
+  common::ObObj max_net_bandwidht_obj(int64_t(100));
+  common::ObObj net_bandwidth_weight_obj(int64_t(0));
+
+  if (OB_ISNULL(sess)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("err unexpected", K(params.count()), K(MAX_PARAM), K(ret));
-  } else {
-    tenant_id = sess->get_effective_tenant_id();
+    LOG_WARN("err unexpected", K(params.count()), K(ret));
+  } else if (params.count() < ObPlanDirectiveParamType::MAX_PARAM) {
+    if (params.count() < MAX_NET_BANDWIDTH) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("err unexpected", K(params.count()), K(ObPlanDirectiveParamType::MAX_PARAM), K(ret));
+    } else {
+      LOG_INFO("use lower version of admin pkg", K(params.count()), K(ObPlanDirectiveParamType::MAX_PARAM), K(ret));
+    }
+  } else if (params.count() == ObPlanDirectiveParamType::MAX_PARAM) {
+    max_net_bandwidht_obj.reset();
+    net_bandwidth_weight_obj.reset();
+    bool is_copy_all = true;
+    params.at(ObPlanDirectiveParamType::MAX_NET_BANDWIDTH).copy_value_or_obj(max_net_bandwidht_obj, is_copy_all);
+    params.at(ObPlanDirectiveParamType::NET_BANDWIDTH_WEIGHT).copy_value_or_obj(net_bandwidth_weight_obj, is_copy_all);
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < params.count() && i < 2; ++i) {
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < params.count() && i < ObPlanDirectiveParamType::COMMENT; ++i) {
     ObObj &obj = params.at(i);
-    if (PLAN == i) {
+    if (ObPlanDirectiveParamType::PLAN == i) {
       ret = obj.get_string(plan);
-    } else if (GROUP == i) {
+    } else if (ObPlanDirectiveParamType::GROUP == i) {
       ret = obj.get_string(group);
     }
   }
   if (OB_SUCC(ret)) {
+    tenant_id = sess->get_effective_tenant_id();
     if (OB_FAIL(proxy.update_plan_directive(tenant_id,
                                             plan,
                                             group,
-                                            params.at(COMMENT),
-                                            params.at(MGMT_P1),
-                                            params.at(UTILIZATION_LIMIT),
-                                            params.at(MIN_IOPS),
-                                            params.at(MAX_IOPS),
-                                            params.at(WEIGHT_IOPS)))) {
+                                            params.at(ObPlanDirectiveParamType::COMMENT),
+                                            params.at(ObPlanDirectiveParamType::MGMT_P1),
+                                            params.at(ObPlanDirectiveParamType::UTILIZATION_LIMIT),
+                                            params.at(ObPlanDirectiveParamType::MIN_IOPS),
+                                            params.at(ObPlanDirectiveParamType::MAX_IOPS),
+                                            params.at(ObPlanDirectiveParamType::WEIGHT_IOPS),
+                                            max_net_bandwidht_obj,
+                                            net_bandwidth_weight_obj))) {
       LOG_WARN("fail update plan directive", K(tenant_id), K(plan), K(group), K(ret));
     }
   }

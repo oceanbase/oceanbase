@@ -12,25 +12,12 @@
 
 // #define USING_LOG_PREFIX SQL_ENGINE
 #define USING_LOG_PREFIX COMMON
-#include <stdlib.h>
-#include <sys/wait.h>
-#include <iterator>
-#include <gtest/gtest.h>
 #include "test_op_engine.h"
-#include "src/observer/omt/ob_tenant_config_mgr.h"
-#include "sql/test_sql_utils.h"
-#include "lib/container/ob_array.h"
-#include "sql/ob_sql_init.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "observer/ob_req_time_service.h"
 #include "ob_fake_table_scan_vec_op.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "src/share/ob_local_device.h"
 #include "src/share/ob_device_manager.h"
-#include "src/storage/blocksstable/ob_storage_cache_suite.h"
+#include "src/storage/meta_store/ob_server_storage_meta_service.h"
+#include "src/storage/ob_file_system_router.h"
 #include "ob_test_config.h"
-#include <vector>
-#include <string>
 
 using namespace oceanbase::sql;
 namespace test
@@ -60,6 +47,12 @@ void TestOpEngine::SetUp()
   tbase_.inner_set(&instance);
   ASSERT_EQ(tbase_.init(), 0);
   ObTenantEnv::set_tenant(&tbase_);
+  common::ObTenantIOManager *io_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, common::ObTenantIOManager::mtl_new(io_service));
+  EXPECT_EQ(OB_SUCCESS, common::ObTenantIOManager::mtl_init(io_service));
+  EXPECT_EQ(OB_SUCCESS, io_service->start());
+  tbase_.set(io_service);
+  ObTenantEnv::set_tenant(&tbase_);
 
   out_origin_result_stream_.open(ObTestOpConfig::get_instance().test_filename_origin_output_file_, std::ios::out | std::ios::trunc);
   out_vec_result_stream_.open(ObTestOpConfig::get_instance().test_filename_vec_output_file_, std::ios::out | std::ios::trunc);
@@ -72,26 +65,26 @@ void TestOpEngine::TearDown()
 
 void TestOpEngine::destory()
 {
-  OB_SERVER_BLOCK_MGR.stop();
-  OB_SERVER_BLOCK_MGR.wait();
-  OB_SERVER_BLOCK_MGR.destroy();
+  SERVER_STORAGE_META_SERVICE.destroy();
+  OB_STORAGE_OBJECT_MGR.stop();
+  OB_STORAGE_OBJECT_MGR.wait();
+  OB_STORAGE_OBJECT_MGR.destroy();
   OB_STORE_CACHE.destroy();
   ObIOManager::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
   ObClusterVersion::get_instance().destroy();
-  oceanbase::blocksstable::ObTmpFileManager::get_instance().destroy();
 
-  // THE_IO_DEVICE->destroy();
+  // LOCAL_DEVICE_INSTANCE.destroy();
 }
 
 common::ObIODevice *TestOpEngine::get_device_inner()
 {
   int ret = OB_SUCCESS;
   common::ObIODevice *device = NULL;
-  common::ObString storage_info(OB_LOCAL_PREFIX);
-  // for the local and nfs, storage_prefix and storage info are same
-  if (OB_FAIL(common::ObDeviceManager::get_instance().get_device(storage_info, storage_info, device))) {
-    LOG_WARN("get_device_inner", K(ret));
+  common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
+  const ObStorageIdMod storage_id_mode(0, ObStorageUsedMod::STORAGE_USED_DATA);
+  if (OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, storage_id_mode, device))) {
+    LOG_WARN("fail to get local device", K(ret));
   }
   return device;
 }
@@ -99,7 +92,7 @@ common::ObIODevice *TestOpEngine::get_device_inner()
 // copy from mittest/mtlenv/mock_tenant_module_env.h and unittest/storage/blocksstable/ob_data_file_prepare.h
 // refine some code
 // call prepare_io() for testing operators that needs to dump intermediate data
-int TestOpEngine::prepare_io(const string & test_data_name_suffix)
+int TestOpEngine::prepare_io(const std::string & test_data_name_suffix)
 {
   int ret = OB_SUCCESS;
 
@@ -127,6 +120,10 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
     STORAGE_LOG(WARN, "failed to gen slog dir", K(ret));
   } else if (OB_FAIL(databuff_printf(clog_dir, OB_MAX_FILE_NAME_LENGTH, "%s/clog/", data_dir))) {
     STORAGE_LOG(WARN, "failed to gen clog dir", K(ret));
+  } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_instance().init(data_dir))) {
+    STORAGE_LOG(WARN, "failed to init file system router", K(ret));
+  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    LOG_WARN("fail to init device manager", K(ret));
   }
   storage_env_.data_dir_ = data_dir;
   storage_env_.sstable_dir_ = file_dir;
@@ -136,7 +133,7 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
   storage_env_.data_disk_percentage_ = 0;
   storage_env_.log_disk_size_ = 20 * 1024 * 1024 * 1024ll;
   share::ObLocalDevice *local_device = static_cast<share::ObLocalDevice *>(get_device_inner());
-  THE_IO_DEVICE = local_device;
+  ObIODeviceWrapper::get_instance().set_local_device(local_device);
   iod_opt_array[0].set("data_dir", storage_env_.data_dir_);
   iod_opt_array[1].set("sstable_dir", storage_env_.sstable_dir_);
   iod_opt_array[2].set("block_size", storage_env_.default_block_size_);
@@ -158,28 +155,35 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
   } else if (0 != system(cmd)) {
     ret = OB_ERR_SYS;
     LOG_WARN("failed to exec cmd", K(ret), K(cmd), K(errno), KERRMSG);
-  } else if (OB_FAIL(THE_IO_DEVICE->init(iod_opts))) {
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(slog_dir))) {
+    LOG_WARN("failed to create slog dir", K(ret), K(slog_dir));
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(file_dir))) {
+    LOG_WARN("failed to create file dir", K(ret), K(file_dir));
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.init(iod_opts))) {
     LOG_WARN("fail to init io device", K(ret), K_(storage_env));
   } else if (OB_FAIL(ObIOManager::get_instance().init())) {
     LOG_WARN("fail to init io manager", K(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(THE_IO_DEVICE, async_io_thread_count,
+  } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(&LOCAL_DEVICE_INSTANCE,
+                                                                    async_io_thread_count,
                                                                     sync_io_thread_count, max_io_depth))) {
     LOG_WARN("add device channel failed", K(ret));
+  } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(false/*is_shared_storage*/))) {
+    LOG_WARN("fail to init storage meta service", K(ret));
+  } else if (FALSE_IT(SERVER_STORAGE_META_SERVICE.get_slogger_manager().need_reserved_ = false)) {
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.init(false, storage_env_.default_block_size_))) {
+    LOG_WARN("init block manager fail", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     LOG_WARN("fail to start io manager", K(ret));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE, storage_env_.default_block_size_))) {
-    STORAGE_LOG(WARN, "init block manager fail", K(ret));
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(file_dir))) {
     STORAGE_LOG(WARN, "failed to create file dir", K(ret), K(file_dir));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.start(0 /*reserver_size*/))) {
-    STORAGE_LOG(WARN, "Fail to start server block mgr", K(ret));
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.start(0/*reserved_size*/))) {
+    STORAGE_LOG(WARN, "Fail to start storage object mgr", K(ret));
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.first_mark_device())) {
     STORAGE_LOG(WARN, "Fail to start first mark device", K(ret));
   } else if (OB_FAIL(OB_STORE_CACHE.init(10, 1, 1, 1, 1, 10000, 10))) {
     LOG_WARN("fail to init OB_STORE_CACHE, ", K(ret));
   } else {
   }
-  FILE_MANAGER_INSTANCE_V2.init();
   return ret;
 }
 
@@ -293,7 +297,7 @@ ObOperator *TestOpEngine::subtitude_table_scan_to_fake(ObOperator *root)
 }
 
 int TestOpEngine::get_tested_op_from_string(const std::string &sql, bool vector_2, ObOperator *&op,
-                                            ObExecutor &executor)
+                                            ObExecutor &executor, bool use_old_ctx)
 {
   int ret = OB_SUCCESS;
   ObStmt *stmt = NULL;
@@ -302,7 +306,7 @@ int TestOpEngine::get_tested_op_from_string(const std::string &sql, bool vector_
   ObArenaAllocator *p_alloc = NULL;
   ObExecContext *p_exec_ctx = NULL;
 
-  if (vector_2) {
+  if (vector_2 || !use_old_ctx) {
     p_alloc = &vec_2_alloc_;
     p_exec_ctx = &vec_2_exec_ctx_;
   } else {
@@ -331,7 +335,7 @@ int TestOpEngine::get_tested_op_from_string(const std::string &sql, bool vector_
     option.with_tree_line_ = true;
     ObSqlPlan sql_plan(log_plan->get_allocator());
     ObSEArray<common::ObString, 64> plan_strs;
-    if (OB_FAIL(sql_plan.print_sql_plan(log_plan, EXPLAIN_EXTENDED_NOADDR, option, plan_strs))) {
+    if (OB_FAIL(sql_plan.print_sql_plan(log_plan->get_plan_root(), EXPLAIN_EXTENDED_NOADDR, option, plan_strs))) {
       LOG_WARN("failed to store sql plan", K(ret));
     } else {
       LOG_INFO("Generate Logical plan:");
@@ -536,7 +540,7 @@ int TestOpEngine::print_and_cmp_final_output(const ObBatchRows *brs, ObOperator 
     if (!brs->skip_->exist(i)) {
       for (int j = 0; j < root->get_spec().output_.count(); j++) {
         ObExpr *output_expr = root->get_spec().output_.at(j);
-        string result_str = get_data_by_datum_type(root, output_expr, root->eval_ctx_, i);
+        std::string result_str = get_data_by_datum_type(root, output_expr, root->eval_ctx_, i);
         output_line += result_str + " ";
 
         // compare whether is the same output
@@ -571,7 +575,7 @@ int TestOpEngine::print_to_file(const ObBatchRows *brs, ObOperator *root, const 
     if (!brs->skip_->exist(i)) {
       for (int j = 0; j < exprs.count(); j++) {
         ObExpr *expr = exprs.at(j);
-        string result_str = get_data_by_datum_type(root, expr, root->eval_ctx_, i);
+        std::string result_str = get_data_by_datum_type(root, expr, root->eval_ctx_, i);
         output_line += result_str;
         if (j != exprs.count() - 1) { output_line += ", "; }
       }

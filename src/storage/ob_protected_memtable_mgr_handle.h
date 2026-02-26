@@ -59,7 +59,7 @@ int function(Args &&...args) \
     ret = OB_SUCCESS; \
   } else { \
     ret = OB_ENTRY_NOT_EXIST; \
-    STORAGE_LOG(INFO, "ObMemtableMgr is not exist, there is no memtable", KR(ret)); \
+    STORAGE_LOG(DEBUG, "ObMemtableMgr is not exist, there is no memtable", KR(ret)); \
   } \
   return ret; \
 }
@@ -123,6 +123,16 @@ public:
       ret = static_cast<ObTabletMemtableMgr*>(memtable_mgr_handle_.get_memtable_mgr())->has_active_memtable();
     }
     return ret;
+  }
+
+  int64_t get_memtable_count()
+  {
+    int64_t memtable_count = 0;
+    SpinRLockGuard guard(memtable_mgr_handle_lock_);
+    if (memtable_mgr_handle_.is_valid()) {
+      memtable_count = static_cast<ObTabletMemtableMgr*>(memtable_mgr_handle_.get_memtable_mgr())->get_memtable_count();
+    }
+    return memtable_count;
   }
 
   bool has_memtable()

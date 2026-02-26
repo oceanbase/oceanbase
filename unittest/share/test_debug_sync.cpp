@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "share/ob_debug_sync.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_array_iterator.h"
 #include "rpc/mock_ob_common_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include <pthread.h>
 
 namespace oceanbase
 {

@@ -45,12 +45,15 @@ public:
       const share::SCN &genesis_scn,
       const int64_t base_piece_id,
       const share::ObTenantLogArchiveStatus::COMPATIBLE compatible,
-      const share::ObBackupDest &dest);
+      const share::ObBackupDest &dest,
+      const int64_t dest_id);
   void set_archive_force_stop(const ArchiveKey &key);
   void set_archive_interrupt(const ArchiveKey &key);
   void set_archive_suspend(const ArchiveKey &key);
-  int get_backup_dest(const ArchiveKey &key,
-      share::ObBackupDest &dest);
+  int reset_backup_dest(const ArchiveKey &key);
+  int get_backup_dest_and_id(const ArchiveKey &key,
+      share::ObBackupDest &dest,
+      int64_t &dest_id);
   int get_piece_info(const ArchiveKey &key,
       int64_t &piece_switch_interval,
       share::SCN &genesis_scn,
@@ -71,6 +74,8 @@ public:
                K_(compatible),
                K_(log_archive_state),
                K_(backup_dest));
+private:
+  int get_backup_path_str_(char *buf, const int64_t buf_size) const;
 
 private:
   typedef common::SpinRWLock RWLock;
@@ -86,6 +91,7 @@ private:
   bool                  compatible_;            // 该轮次兼容性处理
   ObArchiveRoundState   log_archive_state_;
   share::ObBackupDest   backup_dest_;
+  int64_t               backup_dest_id_;
   RWLock                rwlock_;
 
 private:

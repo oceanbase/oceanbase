@@ -11,13 +11,43 @@
  */
 
 #define USING_LOG_PREFIX SQL_PARSER
-#include "sql/parser/parse_malloc.h"
-#include <string.h>
+#include "parse_malloc.h"
 #include <lib/alloc/alloc_assist.h>
+#include "parse_node.h"
 #include "lib/charset/ob_ctype.h"
 #include "sql/parser/parse_define.h"
 #include "sql/parser/parser_proxy_func.h"
 
+char* charset_upper(const struct ObCharsetInfo* src_cs,
+                    char *src_ptr, int64_t src_len,
+                    void *malloc_pool)
+{
+  char *buf = NULL;
+
+  if (OB_ISNULL(src_ptr)) {
+  } else if (OB_ISNULL(src_cs)) {
+  } else if (OB_ISNULL(src_cs->cset)) {
+  } else if (OB_ISNULL(malloc_pool)) {
+  } else if (OB_UNLIKELY(src_len <= 0)) {
+  } else if (src_cs->number == ob_charset_bin.number) {
+    buf = str_toupper(src_ptr, src_len);
+  } else {
+    int casemulti = src_cs->caseup_multiply;
+    int64_t buf_len = src_len * casemulti;
+    if(OB_LIKELY(NULL != (buf = static_cast<char *>(parse_malloc(buf_len + 1, malloc_pool))))) {
+      if (1 == casemulti) {
+        MEMCPY(buf, src_ptr, buf_len);
+        size_t size = src_cs->cset->caseup(src_cs, buf, buf_len, buf, buf_len);
+      } else {
+        size_t size = src_cs->cset->caseup(src_cs, src_ptr, src_len, buf, buf_len);
+      }
+      buf[buf_len] = '\0';
+    } else {
+    }
+  }
+
+  return buf;
+}
 
 void *malloc_parentheses_info(const size_t nbyte, void *malloc_pool)
 {
@@ -121,10 +151,12 @@ char *replace_invalid_character(const struct ObCharsetInfo* src_cs, const struct
 {
   char *out_str = NULL;
   if (OB_ISNULL(str) || OB_ISNULL(extra_errno) || OB_ISNULL(out_len)) {
-  } else if (NULL == oracle_db_cs) {
+  } else if (NULL == src_cs || NULL == oracle_db_cs) {
     out_str = const_cast<char *>(str);
   } else {
-    ob_wc_t replace_char = !!(oracle_db_cs->state & OB_CS_UNICODE) ? 0xFFFD : '?';
+    ob_wc_t replace_char = (!!(oracle_db_cs->state & OB_CS_UNICODE)) &&
+                           (!!(src_cs->state & OB_CS_UNICODE))
+                           ? 0xFFFD : '?';
     uint errors = 0;
     size_t str_len = STRLEN(str);
     char *temp_str = NULL;
@@ -233,67 +265,78 @@ char *parse_strdup_with_replace_multi_byte_char(const char *str, int *connection
     int64_t len = 0;
     int64_t dup_len = strlen(str);
     for (int64_t i = 0; i < dup_len; ++i) {
-      switch (*connection_collation_) {
-        case 28/*CS_TYPE_GBK_CHINESE_CI*/:
-        case 87/*CS_TYPE_GBK_BIN*/:
-        case 216/*CS_TYPE_GB18030_2022_BIN*/:
-        case 217/*CS_TYPE_GB18030_2022_PINYIN_CI*/:
-        case 218/*CS_TYPE_GB18030_2022_PINYIN_CS*/:
-        case 219/*CS_TYPE_GB18030_2022_RADICAL_CI*/:
-        case 220/*CS_TYPE_GB18030_2022_RADICAL_CS*/:
-        case 221/*CS_TYPE_GB18030_2022_STROKE_CI*/:
-        case 222/*CS_TYPE_GB18030_2022_STROKE_CS*/:
-        case 248/*CS_TYPE_GB18030_CHINESE_CI*/:
-        case 249/*CS_TYPE_GB18030_BIN*/: {
-          if (i + 1 < dup_len) {
-            if (str[i] == (char)0xa1 && str[i+1] == (char)0xa1) {//gbk multi byte space
-              out_str[len++] = ' ';
-              ++i;
-            } else if (str[i] == (char)0xa3 && str[i+1] == (char)0xa8) {
-              //gbk multi byte left parenthesis
-              out_str[len++] = '(';
-              ++i;
-            } else if (str[i] == (char)0xa3 && str[i+1] == (char)0xa9) {
-              //gbk multi byte right parenthesis
-              out_str[len++] = ')';
-              ++i;
-            } else {
-              out_str[len++] = str[i];
-            }
+      if (*connection_collation_ == 28/*CS_TYPE_GBK_CHINESE_CI*/
+       || *connection_collation_ == 87/*CS_TYPE_GBK_BIN*/
+       || *connection_collation_ == 248/*CS_TYPE_GB18030_CHINESE_CI*/
+       || *connection_collation_ == 249/*CS_TYPE_GB18030_BIN*/
+       || (*connection_collation_ >= 216/*CS_TYPE_GB18030_2022_BIN*/
+           && *connection_collation_ <= 222/*CS_TYPE_GB18030_2022_STROKE_CS*/)) {
+        if (i + 1 < dup_len) {
+          if (str[i] == (char)0xa1 && str[i+1] == (char)0xa1) {//gbk multi byte space
+            out_str[len++] = ' ';
+            ++i;
+          } else if (str[i] == (char)0xa3 && str[i+1] == (char)0xa8) {
+            //gbk multi byte left parenthesis
+            out_str[len++] = '(';
+            ++i;
+          } else if (str[i] == (char)0xa3 && str[i+1] == (char)0xa9) {
+            //gbk multi byte right parenthesis
+            out_str[len++] = ')';
+            ++i;
           } else {
             out_str[len++] = str[i];
           }
-          break;
+        } else {
+          out_str[len++] = str[i];
         }
-        case 45/*CS_TYPE_UTF8MB4_GENERAL_CI*/:
-        case 46/*CS_TYPE_UTF8MB4_BIN*/:
-        case 63/*CS_TYPE_BINARY*/:
-        case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/:
-        //case 8/*CS_TYPE_LATIN1_SWEDISH_CI*/:
-        //case 47/*CS_TYPE_LATIN1_BIN*/:
-        {
-          if (i + 2 < dup_len) {
-            if (str[i] == (char)0xe3 && str[i+1] == (char)0x80 && str[i+2] == (char)0x80) {
-              //utf8 multi byte space
-              out_str[len++] = ' ';
-              i = i + 2;
-            } else if (str[i] == (char)0xef && str[i+1] == (char)0xbc && str[i+2] == (char)0x88) {
-            //utf8 multi byte left parenthesis
-              out_str[len++] = '(';
-              i = i + 2;
-            } else if (str[i] == (char)0xef && str[i+1] == (char)0xbc && str[i+2] == (char)0x89) {
-            //utf8 multi byte right parenthesis
-              out_str[len++] = ')';
-              i = i + 2;
-            } else {
-              out_str[len++] = str[i];
-            }
+      } else if (
+        *connection_collation_ == 45/*CS_TYPE_UTF8MB4_GENERAL_CI*/
+        || *connection_collation_ == 46/*CS_TYPE_UTF8MB4_BIN*/
+        || *connection_collation_ == 63/*CS_TYPE_BINARY*/
+        || *connection_collation_ == 255/*CS_TYPE_UTF8MB4_0900_AI_CI*/
+        || (*connection_collation_ >= 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/
+        && *connection_collation_ <= 247/*CS_TYPE_UTF8MB4_VIETNAMESE_CI*/)) {
+        if (i + 2 < dup_len) {
+          if (str[i] == (char)0xe3 && str[i+1] == (char)0x80 && str[i+2] == (char)0x80) {
+            //utf8 multi byte space
+            out_str[len++] = ' ';
+            i = i + 2;
+          } else if (str[i] == (char)0xef && str[i+1] == (char)0xbc && str[i+2] == (char)0x88) {
+          //utf8 multi byte left parenthesis
+            out_str[len++] = '(';
+            i = i + 2;
+          } else if (str[i] == (char)0xef && str[i+1] == (char)0xbc && str[i+2] == (char)0x89) {
+          //utf8 multi byte right parenthesis
+            out_str[len++] = ')';
+            i = i + 2;
           } else {
             out_str[len++] = str[i];
           }
-          break;
+        } else {
+          out_str[len++] = str[i];
         }
-      default:
+      } else if (
+        *connection_collation_ == 152
+        || *connection_collation_ == 153) {
+        if (i + 1 < dup_len) {
+          if (str[i] == (char)0xa1 && str[i+1] == (char)0x40) {//hkscs multi byte space
+            out_str[len++] = ' ';
+            ++i;
+          } else if (str[i] == (char)0xa1 && str[i+1] == (char)0x5d) {
+            //hkscs multi byte left parenthesis
+            out_str[len++] = '(';
+            ++i;
+          } else if (str[i] == (char)0xa1 && str[i+1] == (char)0x5e) {
+            //hkscs multi byte right parenthesis
+            out_str[len++] = ')';
+            ++i;
+          } else {
+            out_str[len++] = str[i];
+          }
+        } else {
+          out_str[len++] = str[i];
+        }
+      } else {
         out_str[len++] = str[i];
       }
     }

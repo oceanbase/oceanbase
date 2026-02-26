@@ -1599,6 +1599,8 @@ drop table a;
 drop procedure p;
 
 create table a(a1 int);
+drop procedure if exists p1;
+drop procedure if exists p;
 create procedure p1(
 INOUT arg1 int,
 INOUT arg2 int,

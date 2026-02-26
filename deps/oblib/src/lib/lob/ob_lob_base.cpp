@@ -11,7 +11,6 @@
  */
 #define USING_LOG_PREFIX LIB
 #include "ob_lob_base.h"
-#include "lib/utility/serialization.h"
 
 namespace oceanbase {
 namespace common {

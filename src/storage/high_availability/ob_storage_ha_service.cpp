@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 
 
 namespace oceanbase
@@ -145,6 +144,7 @@ void ObStorageHAService::run1()
     if (has_set_stop() || wakeup_cnt_ > 0) {
       wakeup_cnt_ = 0;
     } else {
+      ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.wait(SCHEDULER_WAIT_TIME_MS);
     }
   }

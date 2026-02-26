@@ -4,7 +4,7 @@ CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_P
 select schema_name from schemata;
 show create view schemata;
 View	Create View	character_set_client	collation_connection
-SCHEMATA	CREATE VIEW `SCHEMATA` AS    SELECT 'def' AS CATALOG_NAME,          DATABASE_NAME collate utf8mb4_name_case AS SCHEMA_NAME,          b.charset AS DEFAULT_CHARACTER_SET_NAME,          b.collation AS DEFAULT_COLLATION_NAME,          CAST(NULL AS CHAR(512)) as SQL_PATH,          'NO' as DEFAULT_ENCRYPTION   FROM oceanbase.__all_database a inner join oceanbase.__tenant_virtual_collation b ON a.collation_type = b.collation_type   WHERE a.tenant_id = 0     and in_recyclebin = 0     and a.database_name not in ('__recyclebin', '__public')     and 0 = sys_privilege_check('db_acc', 0, a.database_name, '')   ORDER BY a.database_id 	utf8mb4	utf8mb4_general_ci
+SCHEMATA	CREATE VIEW `SCHEMATA` AS    SELECT 'def' AS CATALOG_NAME,          DATABASE_NAME collate utf8mb4_name_case AS SCHEMA_NAME,          b.charset AS DEFAULT_CHARACTER_SET_NAME,          b.collation AS DEFAULT_COLLATION_NAME,          CAST(NULL AS CHAR(512)) as SQL_PATH,          'NO' as DEFAULT_ENCRYPTION   FROM oceanbase.__all_database a inner join oceanbase.__tenant_virtual_collation b ON a.collation_type = b.collation_type   WHERE a.tenant_id = 0     and in_recyclebin = 0     and a.database_name not in ('__recyclebin', '__public')     and 0 = sys_privilege_check('db_acc', 0, a.database_name)   ORDER BY a.database_id 	utf8mb4	utf8mb4_general_ci
 desc schemata;
 Field	Type	Null	Key	Default	Extra
 CATALOG_NAME	varchar(3)	NO			

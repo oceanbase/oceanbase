@@ -16,6 +16,11 @@
 
 namespace oceanbase
 {
+
+namespace sql {
+  struct ObCompactRow;
+  struct RowMeta;
+}
 namespace common
 {
 
@@ -41,15 +46,13 @@ public:
                          const int64_t fixed_len, const int64_t start_idx,
                          const int64_t read_rows, char *data)
   {
-    has_null_ = has_null;
-    // TODO: fix deep copy bug
-    //nulls_->deep_copy(nulls, start_idx, start_idx + read_rows);
+    UNUSED(has_null);
+    has_null_ = false;
     nulls_->reset(read_rows);
-    if (has_null) {
-      for (int64_t i = 0; i < read_rows; ++i) {
-        if (nulls.at(start_idx + i)) {
-          nulls_->set(i);
-        }
+    for (int64_t i = 0; i < read_rows; ++i) {
+      if (nulls.at(start_idx + i)) {
+        nulls_->set(i);
+        has_null_ = true;
       }
     }
     len_ = static_cast<int32_t> (fixed_len);
@@ -62,16 +65,37 @@ public:
       set_payload(idx, datum.ptr_, datum.len_);
     }
   }
-  virtual void to_rows(const sql::RowMeta &row_meta,
+  virtual int to_rows(const sql::RowMeta &row_meta,
                        sql::ObCompactRow **stored_rows,
                        const uint16_t selector[],
                        const int64_t size,
                        const int64_t col_idx) const override final;
+
+  virtual void append_rows_multiple_times(const sql::ObBitVector *src_nulls,
+                                          char *values, ObLength len,
+                                          const int64_t src_start_idx,
+                                          const int64_t src_end_idx,
+                                          const int64_t times,
+                                          const int64_t start_dst_idx) = 0;
+
+  virtual int to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+                       const int64_t size, const int64_t col_idx) const override final;
+
   inline void from(ObLength len, char *data)
   {
     len_ = len;
     data_ = data;
   }
+
+  // only used in ob_fixed_length_base.cpp
+  template<int len>
+  void set_fixed_cell_payloads(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+      const uint16_t selector[], const int64_t size, const int64_t col_idx, const int64_t offset) const;
+
+  // only used in ob_fixed_length_base.cpp
+  template<int len>
+  void set_fixed_cell_payloads(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+      const int64_t size, const int64_t col_idx, const int64_t offset) const;
 
 protected:
   ObLength len_; // each cell value length

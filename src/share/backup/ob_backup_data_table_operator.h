@@ -17,6 +17,7 @@
 #include "share/ob_dml_sql_splicer.h"
 #include "lib/container/ob_iarray.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/ob_ls_id.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
 
 
@@ -58,6 +59,15 @@ private:
   static int do_parse_skip_tablet_result_(sqlclient::ObMySQLResult &result, ObBackupSkipTabletAttr &backup_set_desc);
 };
 
+class ObBackupMViewOperator {
+public:
+  static int get_all_major_compaction_mview_dep_tablet_list(common::ObMySQLProxy &proxy,
+                                                            const uint64_t tenant_id,
+                                                            const share::SCN &snapshot,
+                                                            common::ObIArray<common::ObTabletID> &tablet_list,
+                                                            common::ObIArray<share::SCN> &tablet_mview_dep_scn_list);
+};
+
 class ObBackupSetFileOperator : public ObBackupBaseTableOperator
 {
 public:
@@ -75,6 +85,17 @@ public:
       const int64_t expired_time,
       const char *backup_path_str,
       common::ObIArray<ObBackupSetFileDesc> &backup_set_descs);
+  static int get_oldest_full_backup_set(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    ObBackupSetFileDesc &oldest_backup_desc);
+  static int get_latest_full_backup_set_with_limit(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    const int64_t backup_set_id_limit,
+    ObBackupSetFileDesc &latest_backup_desc);
   static int get_all_backup_set_between(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
@@ -97,6 +118,12 @@ private:
   static int parse_backup_sets_(
       sqlclient::ObMySQLResult &result, 
       common::ObIArray<ObBackupSetFileDesc> &backup_set_descs);
+  static int get_boundary_full_backup_set_(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const char *backup_path_str,
+      const bool get_latest, // true: get latest, false: get oldest
+      ObBackupSetFileDesc &boundary_desc);
 };
 
 class ObBackupJobOperator : public ObBackupBaseTableOperator
@@ -144,6 +171,24 @@ private:
 class ObBackupLSTaskOperator : public ObBackupBaseTableOperator
 {
 public:
+  class LSTaskIterator final
+  {
+  public:
+    LSTaskIterator() : sql_proxy_(nullptr), tenant_id_(OB_INVALID_TENANT_ID),
+                       result_(nullptr), is_inited_(false) {}
+    ~LSTaskIterator() { reset(); }
+    int init(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, const int64_t job_id);
+    int next(ObBackupLSTaskAttr &ls_task);
+    void reset();
+    bool is_inited() const { return is_inited_; }
+  private:
+    common::ObISQLClient *sql_proxy_;
+    uint64_t tenant_id_;
+    ObMySQLProxy::ReadResult res_;
+    sqlclient::ObMySQLResult *result_;
+    bool is_inited_;
+  };
+
   static int insert_ls_task(common::ObISQLClient &proxy, const ObBackupLSTaskAttr &ls_attr);
   static int report_ls_task(common::ObISQLClient &proxy, const ObBackupLSTaskAttr &ls_attr, const ObSqlString &extra_condition);
   static int report_ls_task(common::ObISQLClient &proxy, const ObBackupLSTaskAttr &ls_attr);
@@ -176,6 +221,8 @@ public:
   static int get_statistics_info(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
       const ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, ObIArray<ObBackupLSTaskInfoAttr> &task_infos);
   static int move_ls_task_info_to_his(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id);
+  static int get_distinct_ls_ids(common::ObISQLClient &proxy, const int64_t task_id,
+      const uint64_t tenant_id, ObIArray<ObLSID> &ls_ids);
 private:
   static int parse_ls_task_info_(sqlclient::ObMySQLResult &result, ObIArray<ObBackupLSTaskInfoAttr> &task_infos);
   static int do_parse_ls_task_info_(sqlclient::ObMySQLResult &result, ObBackupLSTaskInfoAttr &task_info);
@@ -194,7 +241,7 @@ public:
   };
 public:
   static int get_next_job_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &job_id);
-  static int get_next_task_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &task_id);
+  static int get_next_task_id(common::ObISQLClient &trans, const uint64_t tenant_id, const int64_t batch_size, int64_t &start_task_id);
   static int get_next_backup_set_id(common::ObISQLClient &trans, const uint64_t &tenant_id, int64_t &backup_set_id);
   static int get_next_dest_id(common::ObISQLClient &trans, const uint64_t &tenant_id, int64_t &dest_id);
   static int set_backup_version(common::ObISQLClient &trans, const uint64_t tenant_id, const uint64_t data_version);

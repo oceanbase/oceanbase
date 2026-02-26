@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "ob_geo_latlong_check_visitor.h"
-#include <cmath>
 
 namespace oceanbase {
 namespace common {

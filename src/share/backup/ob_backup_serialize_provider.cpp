@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_backup_serialize_provider.h"
-#include "lib/oblog/ob_log_module.h"
 
 using namespace oceanbase;
 using namespace common;

@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_agent_table_base.h"
-#include "share/ob_i_tablet_scan.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_inner_sql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/schema/ob_schema_utils.h"
-#include "common/object/ob_object.h"
+#include "src/share/interrupt/ob_interrupt_rpc_proxy.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -246,6 +242,7 @@ int ObAgentTableBase::construct_columns(
       query_timeout = query_timeout * 10;
       rest_time = rest_time / 10;
     }
+    query_timeout = MIN(query_timeout, OB_MAX_USER_SPECIFIED_TIMEOUT);
     if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc buf", KR(ret), K(buf_len));
@@ -327,9 +324,13 @@ int ObAgentTableBase::cast_as_default_value(
       if (column->get_meta_type().is_varchar()
           || column->get_meta_type().is_varbinary()) {
         // 1. varchar, varbinary
-        if (OB_FAIL(sql.append_fmt("%s '%s' AS %.*s",
+        ObCStringHelper helper;
+        const char *default_value_str = nullptr;
+        if (OB_FAIL(helper.convert(ObHexEscapeSqlStr(default_value.get_string()), default_value_str))) {
+          LOG_WARN("fail to convert default_value", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt("%s '%s' AS %.*s",
             first_column ? "" : ", ",
-            to_cstring(ObHexEscapeSqlStr(default_value.get_string())),
+            default_value_str,
             name.length(), name.ptr()))) {
           LOG_WARN("append sql failed", KR(ret));
         }
@@ -521,6 +522,7 @@ int ObAgentTableBase::rowkey2condition(common::ObSqlString &cols,  common::ObSql
         convert_alloc_.reuse();
         int64_t val_pos = vals.length();
         ObObj new_value = c;
+        ObObjPrintParams params(session_->get_timezone_info());
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(rowkey_info.get_column_id(i, cid))) {
           LOG_WARN("get column id failed", K(ret), K(i), K(rowkey_info));
@@ -530,7 +532,7 @@ int ObAgentTableBase::rowkey2condition(common::ObSqlString &cols,  common::ObSql
           LOG_WARN("reserve buffer failed", K(ret), K(buf_len));
         } else if (OB_FAIL(change_column_value(mapping_[cid], convert_alloc_, new_value))) {
           LOG_WARN("fail to change column value", K(ret), K(new_value));
-        } else if (OB_FAIL(new_value.print_sql_literal(vals.ptr(), vals.capacity(), val_pos))) {
+        } else if (OB_FAIL(new_value.print_sql_literal(vals.ptr(), vals.capacity(), val_pos, params))) {
           LOG_WARN("print obj to sql literal failed", K(ret), K(c));
         } else if (OB_FAIL(vals.set_length(val_pos))) {
           LOG_WARN("set sql string length failed", K(ret), K(val_pos), K(vals));

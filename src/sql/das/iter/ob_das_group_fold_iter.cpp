@@ -101,8 +101,8 @@ int ObGroupResultSaveRows::to_expr(bool is_vectorized, int64_t start_pos, int64_
 
 int64_t ObGroupResultSaveRows::cur_group_idx()
 {
-  return start_pos_ >= saved_size_ ?
-      OB_INVALID_INDEX : store_rows_[start_pos_].store_row_->cells()[group_id_idx_].get_int();
+  return start_pos_ >= saved_size_ ? OB_INVALID_INDEX :
+      ObNewRange::get_group_idx(store_rows_[start_pos_].store_row_->cells()[group_id_idx_].get_int());
 }
 
 
@@ -140,13 +140,12 @@ int ObDASGroupFoldIter::set_scan_group(int64_t group_id)
     cur_group_idx_ = group_id;
   }
   if (group_save_rows_.need_check_output_datum_) {
-      reset_expr_datum_ptr();
+    reset_expr_datum_ptr();
   }
   if (cur_group_idx_ >= group_size_) {
     ret = OB_ITER_END;
   }
   LOG_TRACE("set group id for fold iter", K(cur_group_idx_), K(group_id), K(group_size_), K(lbt()));
-  LOG_DEBUG("set scan group", K(ret), K(group_id), K(*this));
   return ret;
 }
 
@@ -164,7 +163,7 @@ void ObDASGroupFoldIter::reset_expr_datum_ptr()
     {
       (*e)->locate_datums_for_update(*group_save_rows_.eval_ctx_, group_save_rows_.max_size_);
       ObEvalInfo &info = (*e)->get_eval_info(*group_save_rows_.eval_ctx_);
-      info.point_to_frame_ = true;
+      info.set_point_to_frame(true);
     }
   }
 }
@@ -240,7 +239,8 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   int64_t storage_count = 0;
   int64_t ret_count = 0;
   int64_t group_idx = MIN_GROUP_INDEX;
-  LOG_DEBUG("das group fold iter get next rows begin", K_(available_group_idx), K_(cur_group_idx));
+  available_group_idx_ = group_save_rows_.cur_group_idx();
+  LOG_TRACE("das group fold iter get next rows begin", K_(available_group_idx), K_(cur_group_idx));
 
   if (available_group_idx_ > cur_group_idx_) {
     ret = OB_ITER_END;
@@ -263,7 +263,7 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
         if (storage_count > 0) {
           ret = OB_SUCCESS;
         } else {
-          LOG_DEBUG("underlying iter tree reached iter end", K_(available_group_idx), K_(cur_group_idx));
+          LOG_TRACE("underlying iter tree reached iter end", K_(available_group_idx), K_(cur_group_idx));
           // subsequent calls to get next rows will no longer be able to return rows.
           available_group_idx_ = INT64_MAX;
         }
@@ -277,7 +277,7 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_, storage_count, skip);
       ObDatum *group_idx_batch = group_id_expr_->locate_batch_datums(*group_save_rows_.eval_ctx_);
       for (int64_t i = 0; OB_SUCC(ret) && i < storage_count; i++) {
-        group_idx = group_idx_batch[i].get_int();
+        group_idx = ObNewRange::get_group_idx(group_idx_batch[i].get_int());
         if (group_idx >= cur_group_idx_) {
           if (OB_FAIL(group_save_rows_.save(true, i, storage_count - i))) {
             LOG_WARN("das group fold iter failed to save batch result", K(ret));
@@ -293,17 +293,10 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   if (OB_SUCC(ret)) {
     if (available_group_idx_ == cur_group_idx_) { // there are rows available in row_store_.
       int64_t start_pos = group_save_rows_.get_start_pos();
-      while (cur_group_idx_ == available_group_idx_) {
-        group_idx = group_save_rows_.cur_group_idx();
-        if (cur_group_idx_ == group_idx) {
-          group_save_rows_.next_start_pos();
-          ret_count++;
-        } else {
-          available_group_idx_ = group_idx;
-          if (OB_INVALID_INDEX == available_group_idx_) {
-            available_group_idx_ = MIN_GROUP_INDEX;
-          }
-        }
+      while (cur_group_idx_ == available_group_idx_ && ret_count < capacity) {
+        ret_count++;
+        group_save_rows_.next_start_pos();
+        available_group_idx_ = group_save_rows_.cur_group_idx();
       } // while end
 
       if (ret_count > 0) {
@@ -326,7 +319,7 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   }
   count = ret_count;
 
-  LOG_DEBUG("das group fold iter get next rows end", K(ret_count), K(storage_count), K(*this));
+  LOG_TRACE("das group fold iter get next rows end", K(ret_count), K(storage_count), K(*this));
   return ret;
 }
 
@@ -352,7 +345,7 @@ int ObDASGroupFoldIter::inner_get_next_row()
       } else if (OB_FAIL(group_id_expr_->eval(*group_save_rows_.eval_ctx_, group_idx))) {
         LOG_WARN("failed to eval group id", K(ret));
       } else {
-        available_group_idx_ = group_idx->get_int();
+        available_group_idx_ = ObNewRange::get_group_idx(group_idx->get_int());
       }
     } // while end
 

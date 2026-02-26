@@ -11,8 +11,6 @@
  */
 
 #include "sql/resolver/ddl/ob_create_table_like_resolver.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase

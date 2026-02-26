@@ -44,11 +44,8 @@
 
 #include "ob_binlog_record_printer.h"
 
-#include "rpc/obmysql/ob_mysql_global.h"  // MYSQL_TYPE_*
 #include "lib/file/file_directory_utils.h"
-#include "lib/time/ob_time_utility.h"     // ObTimeUtility
 
-#include "ob_log_utils.h"                 // calc_md5_cstr
 #include "ob_log_binlog_record.h"         // ObLogBR
 #include "ob_log_part_trans_task.h"       // PartTransTask
 
@@ -553,10 +550,17 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   ObStringBuffer enum_set_values_str(&str_allocator);
   bool is_geometry = is_geometry_type(ctype);
   bool is_xml = is_xml_type(ctype);
+  bool is_roaringbitmap = is_roaringbitmap_type(ctype);
+  bool is_collection = is_collection_type(ctype);
   bool is_diff = (index < new_cols_count) && new_cols[index].m_diff_val;
   constexpr int64_t string_print_md5_threshold = 4L << 10;
-  const bool is_type_for_md5_printing = is_lob || is_json || is_geometry || is_xml ||
-    (is_string && col_data_length >= string_print_md5_threshold);
+  const bool is_type_for_md5_printing = is_lob
+    || is_json
+    || is_geometry
+    || is_xml
+    || is_roaringbitmap
+    || is_collection
+    || (is_string && col_data_length >= string_print_md5_threshold);
   // TODO 止尘 patch the code
   // bool is_json_diff = br->isJsonDiffColVal(cname);
   bool is_json_diff = false;
@@ -637,7 +641,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
       size_t new_col_value_len = new_cols[index].buf_used_size;
 
       if (! is_new_value_origin_redo) {
-         ROW_PRINTF(ptr, size, pos, ri, "C[%ld] column_value_new_origin: %s",
+         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_new_origin: %s",
              column_index, newValueOrigin == 2 ? "PADDING" : "BACK_QUERY");
       }
 
@@ -826,7 +830,8 @@ bool ObBinlogRecordPrinter::need_print_hex(int ctype)
       || obmysql::MYSQL_TYPE_OB_NVARCHAR2 == ctype
       || obmysql::MYSQL_TYPE_OB_NCHAR == ctype
       || obmysql::MYSQL_TYPE_JSON == ctype
-      || obmysql::MYSQL_TYPE_GEOMETRY == ctype);
+      || obmysql::MYSQL_TYPE_GEOMETRY == ctype
+      || obmysql::MYSQL_TYPE_ROARINGBITMAP == ctype);
 }
 
 int ObBinlogRecordPrinter::write_data_file(const int fd,

@@ -34,7 +34,6 @@ class ObPhysicalPlanCtx;
 class ObTaskExecutorCtx;
 class ObTableModify;
 
-#define ENG_OP typename ObEngineOpTraits<NEW_ENG>
 class ObTaskSpliter
 {
 public:
@@ -62,19 +61,13 @@ public:
   VIRTUAL_TO_STRING_KV(K_(server));
 
   static int find_scan_ops(common::ObIArray<const ObTableScanSpec*> &scan_ops, const ObOpSpec &op);
+  static int find_all_scan_ops(common::ObIArray<const ObTableScanSpec*> &scan_ops, const ObOpSpec &op);
+  static int find_scan_ops_under_qc(common::ObIArray<const ObTableScanSpec*> &scan_ops, const ObOpSpec &op);
 
-  static int find_insert_ops(common::ObIArray<const ObTableModifySpec *> &insert_ops,
-                             const ObOpSpec &op);
+  static int find_insert_ops(common::ObIArray<const ObTableModifySpec*> &insert_ops, const ObOpSpec &op);
   bool is_inited() const { return NULL != job_; }
 protected:
   int create_task_info(ObTaskInfo *&task);
-
-  template <bool NEW_ENG>
-  static int find_scan_ops_inner(common::ObIArray<const ENG_OP::TSC *> &scan_ops, const ENG_OP::Root &op);
-
-  template <bool NEW_ENG>
-  static int find_insert_ops_inner(common::ObIArray<const ENG_OP::TableModify *> &insert_ops,
-                             const ENG_OP::Root &op);
 protected:
   common::ObAddr server_;
   ObPhysicalPlanCtx *plan_ctx_;
@@ -84,7 +77,6 @@ protected:
   common::ObSEArray<ObTaskInfo *, 16> task_store_;
 };
 
-#undef ENG_OP
 
 }
 }

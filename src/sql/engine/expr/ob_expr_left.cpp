@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_left.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "lib/charset/ob_charset.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
@@ -97,9 +94,10 @@ int ObExprLeft::calc_result_type2(ObExprResType &type,
       type.set_length(int_obj.get_int());
     }
 
-    OZ(aggregate_charsets_for_string_result(type, &type1, 1, type_ctx.get_coll_type()));
+    OZ(aggregate_charsets_for_string_result(type, &type1, 1, type_ctx));
     OX(type1.set_calc_type(ObVarcharType));
     OX(type1.set_calc_collation_type(type.get_collation_type()));
+    OX(type1.set_calc_collation_level(type.get_collation_level()));
   }
   return ret;
 }

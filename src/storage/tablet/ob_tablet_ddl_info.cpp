@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_ddl_info.h"
-#include "lib/ob_define.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/utility/utility.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {

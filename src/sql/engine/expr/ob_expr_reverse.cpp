@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_reverse.h"
-#include <string.h>
-#include "lib/charset/ob_charset.h"
-#include "share/object/ob_obj_cast.h"
-#include "objit/common/ob_item_type.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -89,6 +85,37 @@ int calc_reverse_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
     LOG_WARN("eval arg failed", K(ret));
   } else if (arg->is_null()) {
     res_datum.set_null();
+  } else if (ob_is_collection_sql_type(expr.args_[0]->datum_meta_.get_type())) {
+    // array type
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+    const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
+    ObIArrayType *src_arr = NULL;
+    ObIArrayType *res_arr = NULL;
+    if (subschema_id != expr.obj_meta_.get_subschema_id()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subschema id not match", K(ret), K(subschema_id), K(expr.obj_meta_.get_subschema_id()));
+    } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arg->get_string(), src_arr))) {
+      LOG_WARN("construct array obj failed", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, subschema_id, res_arr, false))) {
+      LOG_WARN("construct child array obj failed", K(ret));
+    }
+    for (int64_t i = 0; i < src_arr->size() && OB_SUCC(ret); i++) {
+      int64_t idx = src_arr->size() - i - 1;
+      if (OB_FAIL(res_arr->insert_from(*src_arr, idx, 1))) {
+        LOG_WARN("failed to insert elem", K(ret), K(i), K(idx));
+      }
+    } //end for
+    if (OB_FAIL(ret)) {
+    } else {
+      ObString res_str;
+      if (OB_FAIL(ObArrayExprUtils::set_array_res(
+              res_arr, res_arr->get_raw_binary_len(), expr, ctx, res_str))) {
+        LOG_WARN("get array binary string failed", K(ret));
+      } else {
+        res_datum.set_string(res_str);
+      }
+    }
   } else {
     const ObString &arg_str = arg->get_string();
     const ObCollationType &arg_cs_type = expr.args_[0]->datum_meta_.cs_type_;

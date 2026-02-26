@@ -34,6 +34,11 @@ class ObLogService;
 class ObServerLogBlockMgr : public palf::ILogBlockPool
 {
 public:
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  static const int64_t OB_SERVER_LOG_DISK_CAPACITY_IN_SHARED_LOG_SERVICE = INT64_MAX - 1;
+#endif
+
+public:
   static int check_clog_directory_is_empty(const char *clog_dir, bool &result);
 private:
   static const char *LOG_POOL_PATH;

@@ -12,7 +12,6 @@
 
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_committer_define.h"
 
 namespace oceanbase
 {
@@ -308,7 +307,12 @@ int ObPartTransCtx::check_and_response_scheduler_(ObTxState next_phase, int resu
 int ObPartTransCtx::update_local_max_commit_version_(const SCN &commit_version)
 {
   int ret = OB_SUCCESS;
-  trans_service_->get_tx_version_mgr().update_max_commit_ts(commit_version, false);
+  if (is_for_sslog_()) {
+    // for sslog
+    trans_service_->get_tx_version_mgr_for_sslog().update_max_commit_ts(commit_version, false);
+  } else {
+    trans_service_->get_tx_version_mgr().update_max_commit_ts(commit_version, false);
+  }
   return ret;
 }
 
@@ -351,7 +355,7 @@ int ObPartTransCtx::on_abort()
   }
   if (OB_FAIL(on_dist_end_(false /*commit*/))) {
     TRANS_LOG(WARN, "transaciton end error", KR(ret), "context", *this);
-  } else if (OB_FAIL(trans_clear_())) {
+  } else if (OB_FAIL(trans_clear_(ctx_tx_data_.get_end_log_ts()))) {
     TRANS_LOG(WARN, "transaciton clear error", KR(ret), "context", *this);
   }
 
@@ -377,7 +381,7 @@ int ObPartTransCtx::on_clear()
   int ret = OB_SUCCESS;
 
   (void)unregister_timeout_task_();
-  (void)trans_clear_();
+  (void)trans_clear_(exec_info_.max_applied_log_ts_);
   (void)set_exiting_();
 
   return ret;

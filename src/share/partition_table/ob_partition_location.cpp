@@ -14,8 +14,6 @@
 
 #include "ob_partition_location.h"
 
-#include "lib/utility/serialization.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {

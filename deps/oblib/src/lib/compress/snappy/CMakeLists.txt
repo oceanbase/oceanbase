@@ -11,5 +11,5 @@ oblib_add_library(snappy
   snappy_src/snappy-stubs-internal.h
   snappy_src/snappy-stubs-public.h)
 
-target_link_libraries(snappy PUBLIC oblib_base_base)
+target_link_libraries(snappy PUBLIC oblib_base)
 

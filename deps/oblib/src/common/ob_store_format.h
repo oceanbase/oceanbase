@@ -28,6 +28,7 @@ enum ObRowStoreType : uint8_t
   ENCODING_ROW_STORE = 1,
   SELECTIVE_ENCODING_ROW_STORE = 2,
   CS_ENCODING_ROW_STORE = 3,
+  FLAT_OPT_ROW_STORE = 4,
   MAX_ROW_STORE,
   DUMMY_ROW_STORE = UINT8_MAX, // invalid dummy row store type for compatibility
 };
@@ -61,6 +62,22 @@ enum ObTableStoreType : uint8_t
   OB_TABLE_STORE_MAX
 };
 
+enum class ObMergeEngineType : uint8_t
+{
+  OB_MERGE_ENGINE_PARTIAL_UPDATE = 0,
+  OB_MERGE_ENGINE_DELETE_INSERT = 1,
+  OB_MERGE_ENGINE_APPEND_ONLY = 2, //FARM COMPAT WHITELIST
+  OB_MERGE_ENGINE_UNKNOWN = 3,
+  OB_MERGE_ENGINE_MAX = 255
+};
+
+enum ObSkipIndexLevel : uint8_t
+{
+  OB_SKIP_INDEX_LEVEL_BASE_ONLY = 0,
+  OB_SKIP_INDEX_LEVEL_BASE_AND_DELTA_SSTABLE = 1,
+  OB_SKIP_INDEX_LEVEL_MAX
+};
+
 struct ObStoreFormatItem
 {
   const char* format_name_;
@@ -75,6 +92,8 @@ public:
   static const ObStoreFormatType STORE_FORMAT_MYSQL_DEFAULT = OB_STORE_FORMAT_DYNAMIC_MYSQL;
   static const ObStoreFormatType STORE_FORMAT_ORACLE_START = OB_STORE_FORMAT_NOCOMPRESS_ORACLE;
   static const ObStoreFormatType STORE_FORMAT_ORACLE_DEFAULT = OB_STORE_FORMAT_ARCHIVE_ORACLE;
+  // originally row store type of mini / minor sstable is flat
+  static const ObRowStoreType DEFAULT_MINOR_ROW_STORE_TYPE = FLAT_ROW_STORE;
 private:
   ObStoreFormat() {};
   virtual ~ObStoreFormat() {};
@@ -108,6 +127,20 @@ public:
   {
     return is_oracle_mode ? is_store_format_oracle(store_format) : is_store_format_mysql(store_format);
   }
+  static inline bool is_minor_row_store_type_valid(const ObRowStoreType type)
+  {
+    return is_row_store_type_with_flat(type) || CS_ENCODING_ROW_STORE == type;
+  }
+  static int resolve_delta_row_store_type(const ObString& delta_format, ObRowStoreType& row_store_type);
+  static const char* get_delta_format_name(const ObRowStoreType row_store_type)
+  {
+    return is_minor_row_store_type_valid(row_store_type) ? delta_format_name[row_store_type] : nullptr;
+  }
+  static bool is_delta_format_valid(const ObString &delta_format)
+  {
+    ObRowStoreType row_store_type;
+    return OB_SUCCESS == resolve_delta_row_store_type(delta_format, row_store_type);
+  }
   static inline const char* get_store_format_name(const ObStoreFormatType store_format)
   {
     return is_store_format_valid(store_format) ? store_format_items[store_format].format_name_ : NULL;
@@ -123,6 +156,10 @@ public:
   static inline ObRowStoreType get_row_store_type(const ObStoreFormatType store_format)
   {
     return is_store_format_valid(store_format) ? store_format_items[store_format].row_store_type_: MAX_ROW_STORE;
+  }
+  static inline bool is_row_store_type_with_flat(const ObRowStoreType type)
+  {
+    return FLAT_ROW_STORE == type || FLAT_OPT_ROW_STORE == type;
   }
   static inline bool is_row_store_type_with_encoding(const ObRowStoreType type)
   {
@@ -150,6 +187,7 @@ public:
 private:
   static const ObStoreFormatItem store_format_items[OB_STORE_FORMAT_MAX];
   static const char *row_store_name[MAX_ROW_STORE];
+  static const char *delta_format_name[MAX_ROW_STORE];
 };
 
 class ObTableStoreFormat {
@@ -171,6 +209,70 @@ public:
     return type > OB_TABLE_STORE_ROW && type < OB_TABLE_STORE_MAX;
   }
   static int find_table_store_type(const ObString &store_format, ObTableStoreType &table_store_type);
+};
+
+// store type of sstable of LS replica
+enum ObLSStoreType : uint8_t
+{
+  OB_LS_STORE_NORMAL = 1,
+  OB_LS_STORE_COLUMN_ONLY = 2,
+  OB_LS_STORE_MAX
+};
+
+// this class is used to describe the format of sstable of LS replica
+class ObLSStoreFormat
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObLSStoreFormat() { reset(); }
+  ObLSStoreFormat(const ObLSStoreType &store_type) : store_type_(store_type) {};
+  ObLSStoreFormat(const ObLSStoreFormat &other) { store_type_ = other.store_type_; }
+  ObLSStoreFormat &operator=(const ObLSStoreFormat &rhs);
+  void reset() { store_type_ = OB_LS_STORE_NORMAL; } // default type is NORMAL
+  void set(ObLSStoreType store_type) { store_type_ = store_type; }
+  bool is_valid() const;
+  OB_INLINE bool is_columnstore() const { return OB_LS_STORE_COLUMN_ONLY == store_type_; }
+  const char *to_str() const;
+  TO_STRING_KV(K_(store_type), "store_type_str", to_str());
+private:
+  ObLSStoreType store_type_;
+};
+
+static const char *MergeEngineTypeStr[] = { "PARTIAL_UPDATE",
+                                            "DELETE_INSERT",
+                                            "MAX" };
+class ObMergeEngineStoreFormat
+{
+public:
+  static inline bool is_merge_engine_valid(const ObMergeEngineType type)
+  {
+    return type >= ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE && type < ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+  }
+  static inline const char *get_merge_engine_type_name(const ObMergeEngineType merge_engine_type)
+  {
+    const int64_t merge_engine_type_idx = static_cast<int64_t>(merge_engine_type);
+    const char *str = "INVALID";
+    switch (merge_engine_type) {
+      case ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE: {
+        str = "PARTIAL_UPDATE";
+        break;
+      }
+      case ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT: {
+        str = "DELETE_INSERT";
+        break;
+      }
+      case ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY: {
+        str = "APPEND_ONLY";
+        break;
+      }
+      case ObMergeEngineType::OB_MERGE_ENGINE_MAX:
+      default: {
+        str = "INVALID";
+        break;
+      }
+    }
+    return str;
+  }
 };
 
 }//end namespace common

@@ -11,7 +11,6 @@
  */
 
 #include "lib/hash/ob_iteratable_hashset.h"
-#include "lib/allocator/ob_malloc.h"
 #include <gtest/gtest.h>
 
 using namespace oceanbase::common;

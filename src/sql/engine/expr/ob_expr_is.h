@@ -86,6 +86,19 @@ class ObExprIs: public ObExprIsBase
   static int calc_collection_is_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int decimal_int_is_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int decimal_int_is_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
+  static int calc_vector_is_null(const ObExpr &expr,
+                                 ObEvalCtx &ctx,
+                                 const ObBitVector &skip,
+                                 const EvalBound &bound);
+  static int calc_vector_is_true(const ObExpr &expr,
+                                 ObEvalCtx &ctx,
+                                 const ObBitVector &skip,
+                                 const EvalBound &bound);
+  static int calc_vector_is_false(const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  const ObBitVector &skip,
+                                  const EvalBound &bound);
 private:
   // types and constants
 private:
@@ -125,10 +138,69 @@ public:
                                     const ObBitVector &skip, const int64_t batch_size);
   static int decimal_int_is_not_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int decimal_int_is_not_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
+  static int calc_vector_is_not_null(const ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     const ObBitVector &skip,
+                                     const EvalBound &bound);
+  static int calc_vector_is_not_true(const ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     const ObBitVector &skip,
+                                     const EvalBound &bound);
+  static int calc_vector_is_not_false(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      const ObBitVector &skip,
+                                      const EvalBound &bound);
 private:
   // types and constants
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIsNot);
+  // function members
+private:
+  // data members
+};
+
+/**
+ * inner_is_true(expr, is_start) is used by extract query range only
+ * if expr is true
+ *    inner_is_true(expr, 1) return min_value
+ *    inner_is_true(expr, 0) return max_value
+ * if expr is false
+ *    inner_is_true(expr, 1) return max_value
+ *    inner_is_true(expr, 0) return min_value
+*/
+class ObExprInnerIsTrue: public ObExprIsBase
+{
+  public:
+  explicit  ObExprInnerIsTrue(common::ObIAllocator &alloc)
+     : ObExprIsBase(alloc, T_FUNC_SYS_INNER_IS_TRUE, N_INEER_IS_TRUE) {};
+  virtual ~ObExprInnerIsTrue() {};
+
+  int calc_result_type2(ObExprResType &type,
+                        ObExprResType &type1,
+                        ObExprResType &type2,
+                        common::ObExprTypeCtx &type_ctx) const;
+
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+
+  static int int_is_true_start(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int int_is_true_end(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int float_is_true_start(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int float_is_true_end(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int double_is_true_start(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int double_is_true_end(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int number_is_true_start(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int number_is_true_end(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int decimal_int_is_true_start(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int decimal_int_is_true_end(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int json_is_true_start(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int json_is_true_end(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+private:
+  // types and constants
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprInnerIsTrue);
   // function members
 private:
   // data members

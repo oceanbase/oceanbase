@@ -48,7 +48,8 @@ class ObScalarAggregateVecOp: public ObGroupByVecOp
 public:
   ObScalarAggregateVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input) :
     ObGroupByVecOp(exec_ctx, spec, input), started_(false), dir_id_(-1), row_(nullptr),
-    row_meta_(&exec_ctx.get_allocator()), mem_context_(nullptr)
+    row_meta_(&exec_ctx.get_allocator()), profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
+    sql_mem_processor_(profile_, op_monitor_info_), hp_infras_mgr_(MTL_ID()), mem_context_(nullptr)
   {}
 
   virtual int inner_open() override;
@@ -62,12 +63,17 @@ private:
   int add_batch_rows_for_3stage(const ObBatchRows &brs, aggregate::AggrRowPtr row);
   DISALLOW_COPY_AND_ASSIGN(ObScalarAggregateVecOp);
   int init_mem_context();
+  int init_one_aggregate_row();
+  int init_hp_infras_group_mgr();
 
 private:
   bool started_;
   int64_t dir_id_;
   ObCompactRow *row_;
   RowMeta row_meta_;
+  ObSqlWorkAreaProfile profile_;
+  ObSqlMemMgrProcessor sql_mem_processor_;
+  ObHashPartInfrasVecMgr hp_infras_mgr_;
   lib::MemoryContext mem_context_;
 };
 } // end sql

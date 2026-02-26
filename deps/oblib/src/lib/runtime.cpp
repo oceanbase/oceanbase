@@ -9,8 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
-#include "lib/runtime.h"
+#include "runtime.h"
 
 namespace oceanbase {
 namespace lib {

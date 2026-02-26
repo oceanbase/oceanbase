@@ -20,6 +20,20 @@ namespace oceanbase
 namespace pl
 {
 
+enum ObPlanDirectiveParamType {
+    PLAN = 0,
+    GROUP = 1,
+    COMMENT = 2,
+    MGMT_P1 = 3,
+    UTILIZATION_LIMIT = 4,
+    MIN_IOPS = 5,
+    MAX_IOPS = 6,
+    WEIGHT_IOPS = 7,
+    MAX_NET_BANDWIDTH = 8,
+    NET_BANDWIDTH_WEIGHT = 9,
+    MAX_PARAM
+};
+
 class ObPlDBMSResourceManager
 {
 public:

@@ -16,9 +16,7 @@
 #include <arm_neon.h>
 #endif
 
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 #include "storage/blocksstable/encoding/ob_raw_decoder.h"
-#include "ob_encoding_neon_util.h"
 
 namespace oceanbase {
 namespace blocksstable {
@@ -185,7 +183,7 @@ struct RawFixFilterNeonArrayInit
 
 bool init_raw_fix_neon_simd_filter_funcs()
 {
-  return ObNDArrayIniter<RawFixFilterNeonArrayInit, 2, 4, 6>::apply();
+  return ObNDArrayIniter<RawFixFilterNeonArrayInit, 2, 2, 6>::apply();
 }
 
 } // namespace blocksstable

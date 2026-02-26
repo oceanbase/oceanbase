@@ -102,7 +102,8 @@ public:
       inited_(false),
       var_table_(),
       condition_table_(),
-      cursor_table_(allocator_) {}
+      cursor_table_(allocator_),
+      public_syn_count_(0) {}
   virtual ~ObPLPackage();
 
   int init(const ObPLPackageAST &package_ast);
@@ -141,8 +142,12 @@ public:
   int deep_copy(const ObPLPackage &package, common::ObIAllocator &alloc);
   int instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
                                 ObExecContext &exec_ctx,
-                                ObPLPackageState &package_state);
+                                ObPLPackageState &package_state,
+                                const ObPLPackage *spec,
+                                const ObPLPackage *body);
   int execute_init_routine(ObIAllocator &allocator, ObExecContext &exec_ctx);
+  void set_public_syn_count(int64_t public_syn_count) { public_syn_count_ = public_syn_count; }
+  int64_t get_public_syn_count() const { return public_syn_count_; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLPackage);
@@ -151,6 +156,7 @@ private:
   common::ObArray<ObPLVar *> var_table_;
   common::ObArray<ObPLCondition *> condition_table_;
   ObPLCursorTable cursor_table_;
+  int64_t public_syn_count_;
 };
 
 }

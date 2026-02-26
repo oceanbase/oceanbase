@@ -10,20 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include<dirent.h>
-#include <memory>
-#include <net/if.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
 
 #define private public
 #define protected public
 
-#include "lib/oblog/ob_log.h"
 #include "ob_simple_server.h"
 #include "ob_simple_server_restart_helper.h"
-#include "observer/ob_server.h"
-#include "storage/tx_storage/ob_ls_service.h"
 
 #undef private
 #undef protected
@@ -35,9 +27,10 @@
 
 namespace oceanbase
 {
+const char *shared_storage_info __attribute__((weak)) = NULL;
+
 namespace observer
 {
-
 uint32_t get_local_addr(const char *dev_name)
 {
   int fd, intrface;
@@ -78,11 +71,13 @@ uint32_t get_local_addr(const char *dev_name)
 ObSimpleServer::ObSimpleServer(const std::string &env_prefix,
                                const char *log_disk_size,
                                const char *memory_limit,
+                               const char *datafile_size,
                                ObServer &server,
                                const std::string &dir_prefix)
   : server_(server),
     log_disk_size_(log_disk_size),
     memory_limit_(memory_limit),
+    datafile_size_(datafile_size),
     data_dir_(dir_prefix),
     run_dir_(env_prefix)
 {
@@ -135,7 +130,10 @@ int ObSimpleServer::simple_init()
   opts.rs_list_ = rs_list_.c_str();
   // NOTE: memory_limit must keep same with log_disk_size
   optstr_ = std::string();
-  optstr_ = optstr_ + "log_disk_size=" + std::string(log_disk_size_) + ",memory_limit=" + std::string(memory_limit_) + ",cache_wash_threshold=1G,net_thread_count=4,cpu_count=16,schema_history_expire_time=1d,workers_per_cpu_quota=10,datafile_disk_percentage=2,__min_full_resource_pool_memory=1073741824,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_size=10G,stack_size=512K";
+  optstr_ = optstr_ + "log_disk_size=" + std::string(log_disk_size_) + ",memory_limit=" + std::string(memory_limit_) + ",cache_wash_threshold=1G,net_thread_count=4,cpu_count=16,schema_history_expire_time=1d,workers_per_cpu_quota=10,datafile_disk_percentage=2,__min_full_resource_pool_memory=1073741824,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_size=" + std::string(datafile_size_) +",stack_size=512K,_enable_palf_kv=0";
+  if (!extra_optstr_.empty()) {
+    optstr_ = optstr_ + "," + extra_optstr_;
+  }
   opts.optstr_ = optstr_.c_str();
   //opts.devname_ = "eth0";
   opts.use_ipv6_ = false;
@@ -155,6 +153,9 @@ int ObSimpleServer::simple_init()
     system(("rm -rf " + run_dir_).c_str());
     system(("rm -f *born*log*"));
     system(("rm -f *restart*log*"));
+
+    //check admin sys package exist
+    DIR *admin_dir = opendir("admin");
     SERVER_LOG(INFO, "create dir and change work dir start.", K(run_dir_.c_str()));
     if (OB_FAIL(mkdir(run_dir_.c_str(), 0777))) {
     } else if (OB_FAIL(chdir(run_dir_.c_str()))) {
@@ -170,6 +171,7 @@ int ObSimpleServer::simple_init()
     dirs.push_back("etc");
     dirs.push_back("log");
     dirs.push_back("wallet");
+    dirs.push_back("admin");
 
     dirs.push_back(data_dir + "/clog");
     dirs.push_back(data_dir + "/slog");
@@ -177,9 +179,13 @@ int ObSimpleServer::simple_init()
     for (auto &dir : dirs) {
       ret = mkdir(dir.c_str(), 0777);
       if (OB_FAIL(ret)) {
-        SERVER_LOG(ERROR, "ObSimpleServer mkdir", K(ret), K(dir.c_str()));
+        SERVER_LOG(ERROR, "ObSimpleServer mkdir", K(ret), K(errno), KERRMSG,
+                   K(run_dir_.c_str()), K(dir.c_str()));
         return ret;
       }
+    }
+    if (admin_dir != NULL) {
+      system(("cp ../admin/* admin/"));
     }
 
     std::string port_file_name = std::string("port.txt");
@@ -203,6 +209,7 @@ int ObSimpleServer::simple_init()
   }
 
   ObPLogWriterCfg log_cfg;
+
   ret = server_.init(opts, log_cfg);
   if (OB_FAIL(ret)) {
     return ret;
@@ -236,7 +243,8 @@ int ObSimpleServer::init_sql_proxy()
   return ret;
 }
 
-int ObSimpleServer::init_sql_proxy2(const char *tenant_name, const char *db_name, const bool oracle_mode)
+int ObSimpleServer::init_sql_proxy2(const char *tenant_name, const char *db_name,
+    const bool oracle_mode, const ObMySQLConnection::Mode connection_mode)
 {
   int ret = OB_SUCCESS;
   std::string user = oracle_mode ? "sys@" : "root@";
@@ -254,7 +262,7 @@ int ObSimpleServer::init_sql_proxy2(const char *tenant_name, const char *db_name
   param.sqlclient_per_observer_conn_limit_ = 10000;
   ret = sql_conn_pool2_.init(db_addr, param);
   if (OB_SUCC(ret)) {
-    sql_conn_pool2_.set_mode(common::sqlclient::ObMySQLConnection::DEBUG_MODE);
+    sql_conn_pool2_.set_mode(connection_mode);
     ret = sql_proxy2_.init(&sql_conn_pool2_);
   }
 
@@ -321,6 +329,10 @@ int ObSimpleServer::simple_start()
     // fprintf(stdout, "start failed. ret = %d\n", ret);
     ob_abort();
   }
+  // wait rs enter full service
+  while (!GCTX.root_service_->is_full_service()) {
+    ::sleep(1);
+  }
   return ret;
 }
 
@@ -366,6 +378,12 @@ int ObSimpleServer::bootstrap()
     obrpc::ObBootstrapArg arg;
     arg.cluster_role_ = common::PRIMARY_CLUSTER;
     arg.server_list_.push_back(server_info);
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (NULL != shared_storage_info) {
+      ObString shared_storage_info_str(strlen(shared_storage_info), shared_storage_info);
+      arg.shared_storage_info_ = shared_storage_info_str;
+    }
+#endif
     if (OB_FAIL(srv_proxy.bootstrap(arg))) {
       SERVER_LOG(WARN, "bootstrap failed", K(arg), K(ret));
     }

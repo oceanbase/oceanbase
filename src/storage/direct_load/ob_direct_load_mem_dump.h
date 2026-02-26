@@ -18,14 +18,15 @@
 #include "storage/direct_load/ob_direct_load_multi_map.h"
 #include "storage/direct_load/ob_direct_load_sstable_builder.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
+#include "storage/direct_load/ob_direct_load_mem_worker.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-class ObIDirectLoadPartitionTable;
+class ObDirectLoadITable;
 
-class ObDirectLoadMemDump
+class ObDirectLoadMemDump : public ObDirectLoadMemWorker
 {
   typedef ObDirectLoadConstExternalMultiPartitionRow RowType;
   typedef ObDirectLoadExternalMultiPartitionRowChunk ChunkType;
@@ -35,10 +36,10 @@ public:
   class Context
   {
   public:
-    Context();
+    Context(ObDirectLoadMemContext *mem_ctx);
     ~Context();
     int add_table(const common::ObTabletID &tablet_id, int64_t range_idx,
-                  ObIDirectLoadPartitionTable *table);
+                  const ObDirectLoadTableHandle &table);
 
     int init()
     {
@@ -50,7 +51,7 @@ public:
   public:
     ObSafeArenaAllocator safe_allocator_;
     //注意，如果这个tables_会被多线程操作，必须加锁
-    ObDirectLoadMultiMap<common::ObTabletID, std::pair<int64_t, ObIDirectLoadPartitionTable *>>
+    ObDirectLoadMultiMap<common::ObTabletID, std::pair<int64_t, ObDirectLoadTableHandle>>
       tables_;
     common::ObArray<ChunkType *> mem_chunk_array_;
     int64_t finished_sub_dump_count_;
@@ -58,7 +59,8 @@ public:
 
   private:
     lib::ObMutex mutex_;
-    ObArray<ObIDirectLoadPartitionTable *> all_tables_;
+    ObDirectLoadTableHandleArray all_tables_;
+    ObDirectLoadMemContext *mem_ctx_;
   };
 
 public:
@@ -66,9 +68,11 @@ public:
                       ObDirectLoadMemContext *mem_ctx,
                       const RangeType &range,
                       table::ObTableLoadHandle<Context> context_ptr, int64_t range_idx);
-  ~ObDirectLoadMemDump();
+  virtual ~ObDirectLoadMemDump();
+  virtual int add_table(const ObDirectLoadTableHandle &table_handle) override { return OB_SUCCESS; }
+  virtual int work();
   int do_dump();
-
+  VIRTUAL_TO_STRING_KV(KP(mem_ctx_), K_(range));
 private:
   // dump tables
   int new_table_builder(const ObTabletID &tablet_id,

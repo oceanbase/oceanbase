@@ -13,6 +13,7 @@
 #include "ob_all_virtual_thread.h"
 #include "lib/file/file_directory_utils.h"
 #include "lib/thread/protected_stack_allocator.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 
 #define GET_OTHER_TSI_ADDR(var_name, addr) \
 const int64_t var_name##_offset = ((int64_t)addr - (int64_t)pthread_self()); \
@@ -130,12 +131,14 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
             case WAIT_EVENT: {
               GET_OTHER_TSI_ADDR(rpc_dest_addr, &Thread::rpc_dest_addr_);
               GET_OTHER_TSI_ADDR(event, &Thread::wait_event_);
+              GET_OTHER_TSI_ADDR(event_no, &Thread::event_no_);
               ObAddr addr;
               struct iovec local_iov = {&addr, sizeof(ObAddr)};
               struct iovec remote_iov = {thread_base + rpc_dest_addr_offset, sizeof(ObAddr)};
               wait_event_[0] = '\0';
+              size_t buf_size = sizeof(wait_event_);
               if (0 != join_addr) {
-                IGNORE_RETURN snprintf(wait_event_, 64, "thread %u", *(uint32_t*)(join_addr + tid_offset));
+                IGNORE_RETURN snprintf(wait_event_, buf_size, "thread %u", *(uint32_t*)(join_addr + tid_offset));
               } else if (OB_NOT_NULL(wait_addr)) {
                 uint32_t val = 0;
                 struct iovec local_iov = {&val, sizeof(val)};
@@ -143,9 +146,9 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                 ssize_t n = process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0);
                 if (n != sizeof(val)) {
                 } else if (0 != (val & (1<<30))) {
-                  IGNORE_RETURN snprintf(wait_event_, 64, "wrlock on %u", val & 0x3fffffff);
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "wrlock on %u", val & 0x3fffffff);
                 } else {
-                  IGNORE_RETURN snprintf(wait_event_, 64, "%u rdlocks", val & 0x3fffffff);
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%u rdlocks", val & 0x3fffffff);
                 }
               } else if (sizeof(ObAddr) == process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0)
                          && addr.is_valid()) {
@@ -155,20 +158,33 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                 if (((pos1 = snprintf(wait_event_, 37, "rpc 0x%X(%s", pcode, obrpc::ObRpcPacketSet::instance().name_of_idx(obrpc::ObRpcPacketSet::instance().idx_of_pcode(pcode)) + 3)) > 0)
                     && ((pos2 = snprintf(wait_event_ + std::min(36L, pos1), 6, ") to ")) > 0)) {
                   int64_t pos = std::min(36L, pos1) + std::min(5L, pos2);
-                  pos += addr.to_string(wait_event_ + pos, 64 - pos);
+                  pos += addr.to_string(wait_event_ + pos, buf_size - pos);
                 }
               } else if (0 != blocking_ts && (0 != (Thread::WAIT_IN_TENANT_QUEUE & event))) {
-                IGNORE_RETURN snprintf(wait_event_, 64, "tenant worker requests");
+                IGNORE_RETURN snprintf(wait_event_, buf_size, "tenant worker requests");
               } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_IO_EVENT & event))) {
-                IGNORE_RETURN snprintf(wait_event_, 64, "IO events");
+                IGNORE_RETURN snprintf(wait_event_, buf_size, "IO events");
               } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_LOCAL_RETRY & event))) {
-                IGNORE_RETURN snprintf(wait_event_, 64, "local retry");
+                if (event_no > 0) {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%s", common::OB_WAIT_EVENTS[event_no].event_name_);
+                } else {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "local retry");
+                }
               } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_PX_MSG & event))) {
-                IGNORE_RETURN snprintf(wait_event_, 64, "px message");
+                IGNORE_RETURN snprintf(wait_event_, buf_size, "px message");
               } else if (0 != sleep_us) {
-                IGNORE_RETURN snprintf(wait_event_, 64, "%ld us", sleep_us);
+                if (event_no > 0) {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%s, sleep %ld us", common::OB_WAIT_EVENTS[event_no].event_name_, sleep_us);
+                } else {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%ld us", sleep_us);
+                }
               } else if (0 != blocking_ts) {
-                IGNORE_RETURN snprintf(wait_event_, 64, "%ld us", common::ObTimeUtility::fast_current_time() - blocking_ts);
+                if (event_no > 0) {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%s, blocked for %ld us", common::OB_WAIT_EVENTS[event_no].event_name_,
+                                         common::ObTimeUtility::fast_current_time() - blocking_ts);
+                } else {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%ld us", common::ObTimeUtility::fast_current_time() - blocking_ts);
+                }
               }
               cells[i].set_varchar(wait_event_);
               cells[i].set_collation_type(
@@ -231,6 +247,16 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                 snprintf(cgroup_path_buf_, PATH_BUFSIZE, "/proc/%ld/task/%ld/cgroup", pid, tid);
                 cells[i].set_varchar(cgroup_path_buf_);
               }
+              break;
+            }
+            case NUMA_NODE: {
+              GET_OTHER_TSI_ADDR(numa_node, &ObAffinityCtrl::get_tls_node());
+              int64_t numa_node_display = -1;
+              if (numa_node == OB_NUMA_SHARED_INDEX) {
+              } else {
+                numa_node_display = numa_node;
+              }
+              cells[i].set_int(numa_node_display);
               break;
             }
             default: {

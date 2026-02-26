@@ -1,3 +1,6 @@
+// owner: gengli.wzy
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -19,9 +22,7 @@
 #include "env/ob_simple_cluster_test_base.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "logservice/ob_log_base_type.h"
 #include "mtlenv/tablelock/table_lock_tx_common_env.h"
-#include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
 
 namespace oceanbase
 {
@@ -124,7 +125,7 @@ void ObTabletFlushTest::prepare_ddl_lock_table_data(ObLS *&ls)
   ObLockID lock_id2;
   lock_id2.obj_type_ = ObLockOBJType::OBJ_TYPE_TABLE;
   lock_id2.obj_id_ = 1002;
-  table_lock_op1.owner_id_.convert_from_value(1);
+  table_lock_op1.owner_id_.convert_from_value(static_cast<transaction::tablelock::ObLockOwnerType>(0), 1);
   table_lock_op2.lock_id_ = lock_id2;
   table_lock_op2.lock_mode_ = ROW_SHARE;
   table_lock_op2.create_trans_id_ = 3;
@@ -228,10 +229,10 @@ TEST_F(ObTabletFlushTest, test_special_tablet_flush)
             ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
             ->common_checkpoints_[ObCommonCheckpointType::TX_CTX_MEMTABLE_TYPE]);
 
-  ObLockMemtable *lock_memtable
-    = dynamic_cast<ObLockMemtable *>(dynamic_cast<ObLSTxService *>(checkpoint_executor
-            ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
-            ->common_checkpoints_[ObCommonCheckpointType::LOCK_MEMTABLE_TYPE]);
+  ObTableHandleV2 table_handle;
+  ObLockMemtable *lock_memtable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ls->lock_table_.get_lock_memtable(table_handle));
+  ASSERT_EQ(OB_SUCCESS, table_handle.get_lock_memtable(lock_memtable));
 
   ObTxDataMemtableMgr *tx_data_mgr
     = dynamic_cast<ObTxDataMemtableMgr *>(dynamic_cast<ObLSTxService *>(checkpoint_executor

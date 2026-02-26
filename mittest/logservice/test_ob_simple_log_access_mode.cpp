@@ -1,3 +1,6 @@
+// owner: yunlong.cb
+// owner group: log
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,13 +13,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include "share/scn.h"
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
-#include "env/ob_simple_log_server.h"
 #undef private
 
 const std::string TEST_NAME = "access_mode";
@@ -41,6 +39,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 4;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 
 // 1. basic change_access_mode
 // 2. change_access_mode(block a follower), then switch this follower to leader

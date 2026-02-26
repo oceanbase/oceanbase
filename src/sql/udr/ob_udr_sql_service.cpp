@@ -11,18 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_QRR
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_schema_utils.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_statement.h"
-#include "lib/mysqlclient/ob_mysql_connection_pool.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_dml_sql_splicer.h"
 #include "share/ob_max_id_fetcher.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "sql/printer/ob_raw_expr_printer.h"

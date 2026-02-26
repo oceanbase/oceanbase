@@ -14,9 +14,6 @@
 #include "ob_ps_cache.h"
 #include "sql/plan_cache/ob_ps_sql_utils.h"
 #include "sql/plan_cache/ob_ps_cache_callback.h"
-#include "sql/resolver/cmd/ob_call_procedure_stmt.h"
-#include "sql/udr/ob_udr_mgr.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "lib/rc/ob_rc.h"
 
 namespace oceanbase
@@ -59,6 +56,7 @@ void ObPsCache::destroy()
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = NULL;
   }
+  tg_id_ = -1;
 }
 
 ObPsCache::~ObPsCache()
@@ -391,6 +389,7 @@ int ObPsCache::get_or_add_stmt_info(const PsCacheInfoCtx &info_ctx,
       tmp_stmt_info.assign_sql_key(*ps_item);
       tmp_stmt_info.set_stmt_type(info_ctx.stmt_type_);
       tmp_stmt_info.set_ps_item(ps_item);
+      tmp_stmt_info.set_ps_need_parameterization(info_ctx.ps_need_parameterization_);
       // calc check_sum with normalized sql
       uint64_t ps_stmt_checksum = ob_crc64(info_ctx.normalized_sql_.ptr(),
                                            info_ctx.normalized_sql_.length()); // actual is crc32
@@ -527,7 +526,10 @@ int ObPsCache::fill_ps_stmt_info(const ObResultSet &result,
     }
   }
   if (OB_SUCC(ret)) {
+    ps_stmt_info.set_is_prexecute(sql_ctx->is_pre_execute_);
     ps_stmt_info.set_question_mark_count(param_cnt);
+    ps_stmt_info.set_parse_question_mark_count(result.get_parse_question_mark_cnt());
+    ps_stmt_info.set_external_params_count(result.get_external_params_cnt());
     // only used when returning into
     ps_stmt_info.set_num_of_returning_into(returning_into_parm_num);
   }
@@ -763,7 +765,7 @@ int ObPsCache::inner_cache_evict(bool is_evict_all)
           }
       } else {
         if (op.get_used_size() > get_mem_high()) {
-          std::sort(closed_stmt_ids.begin(), closed_stmt_ids.end(), PsTimeCmp());
+          lib::ob_sort(closed_stmt_ids.begin(), closed_stmt_ids.end(), PsTimeCmp());
           for (int64_t i = 0; i < closed_stmt_ids.count() / 2; ++i) { //ignore ret
             LOG_TRACE("ps close time", K(i), K(closed_stmt_ids.at(i).first), K(closed_stmt_ids.at(i).second));
             if (OB_FAIL(destroy_cached_ps(closed_stmt_ids.at(i).first))) {

@@ -12,8 +12,6 @@
 
 #include <gtest/gtest.h>
 #include "lib/container/ob_concurrent_bitset.h"
-#include "lib/random/ob_random.h"
-#include "lib/atomic/ob_atomic.h"
 using namespace oceanbase::common;
 class TestConcurrentBitset : public ::testing::Test
 {

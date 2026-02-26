@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX OBLOG
 #include "ob_all_zone_info.h"
-#include "share/ob_errno.h"                                     // KR
 
 namespace oceanbase
 {

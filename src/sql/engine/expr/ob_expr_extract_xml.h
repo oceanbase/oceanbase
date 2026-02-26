@@ -36,13 +36,6 @@ class ObExprExtractXml : public ObFuncExprOperator
                       ObExpr &rt_expr)
                       const override;
 private:
-  static int concat_xpath_result(const ObExpr &expr,
-                                 ObEvalCtx &eval_ctx,
-                                 ObPathExprIter &xpath_iter,
-                                 ObCollationType cs_type,
-                                 ObDatum &res,
-                                 ObMulModeNodeType &node_type,
-                                 ObMulModeMemCtx* ctx);
   static int check_and_set_res(const ObExpr &expr,
                                ObEvalCtx &ctx,
                                ObDatum &res,

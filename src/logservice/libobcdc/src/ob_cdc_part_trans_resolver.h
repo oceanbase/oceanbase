@@ -35,6 +35,7 @@ namespace libobcdc
 struct TransStatInfo;
 class IObLogFetcherDispatcher;
 class IObLogClusterIDFilter;
+class IObLogLsnFilter;
 struct PartServeInfo;
 };
 
@@ -81,13 +82,18 @@ public:
 
     void reset()
     {
+      part_trans_id_.reset();
       miss_redo_lsn_arr_.reset();
       miss_record_or_state_log_lsn_.reset();
       need_reconsume_commit_log_entry_ = false;
       is_resolving_miss_log_ = false;
       is_reconsuming_ = false;
+      last_misslog_process_ = 0;
     }
   public:
+    void set_tls_id(const logservice::TenantLSID &tls_id) { part_trans_id_.tls_id_ = tls_id; }
+    void set_trans_id(const transaction::ObTransID &trans_id) { part_trans_id_.trans_id_ = trans_id; }
+    const PartTransID &get_part_trans_id() const { return part_trans_id_; }
     /// has misslog or not
     /// @retval bool      ture if has miss_log(including redo/commit_info/prepare/commit and record_log)
     bool is_empty() const { return miss_redo_lsn_arr_.count() <= 0 && !miss_record_or_state_log_lsn_.is_valid(); }
@@ -112,8 +118,12 @@ public:
 
     int64_t get_total_misslog_cnt() const;
     int sort_and_unique_missing_log_lsn();
+    int64_t get_last_misslog_progress() const { return last_misslog_process_; }
+    void set_last_misslog_progress(int64_t last_misslog_process) { last_misslog_process_ = last_misslog_process; }
 
     TO_STRING_KV(
+        K_(part_trans_id),
+        K_(last_misslog_process),
         "miss_redo_count", miss_redo_lsn_arr_.count(),
         K_(miss_redo_lsn_arr),
         K_(miss_record_or_state_log_lsn),
@@ -122,6 +132,7 @@ public:
         K_(is_reconsuming));
 
   private:
+    PartTransID part_trans_id_;
     // miss redo log lsn array
     ObLogLSNArray miss_redo_lsn_arr_;
     // miss record log or state log(commit_info/prepare) lsn
@@ -140,6 +151,7 @@ public:
     // will ignore other type log while reconsuming commit_log_entry
     bool is_reconsuming_;
     // TODO use a int8_t instead above bool variable, may add is_reconsuming var for handle commit_info and commit log
+    int64_t last_misslog_process_;
   };
 
 public:
@@ -211,7 +223,8 @@ public:
       TaskPool &task_pool,
       PartTransTaskMap &task_map,
       IObLogFetcherDispatcher &dispatcher,
-      IObLogClusterIDFilter &cluster_id_filter);
+      IObLogClusterIDFilter &cluster_id_filter,
+      IObLogLsnFilter &lsn_filter);
   virtual ~ObCDCPartTransResolver();
 
 public:
@@ -303,6 +316,11 @@ private:
       const int64_t submit_ts,
       const bool handling_miss_log,
       transaction::ObTxLogBlock &tx_log_block);
+
+  int handle_direct_log_inc_major_log_(
+      const transaction::ObTransID &tx_id,
+      const palf::LSN &lsn,
+      const bool handling_miss_log);
 
   // read ObTxRecordLog
   int handle_record_(
@@ -438,6 +456,7 @@ private:
   PartTransDispatcher       part_trans_dispatcher_;
   IObLogClusterIDFilter     &cluster_id_filter_;
   bool                      enable_direct_load_inc_;
+  IObLogLsnFilter           &lsn_filter_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCDCPartTransResolver);
 };

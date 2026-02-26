@@ -14,8 +14,9 @@
 
 #include "rootserver/freeze/ob_tenant_major_freeze.h"
 
-#include "share/ob_errno.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
+#include "share/schema/ob_mview_info.h"
+#include "storage/compaction/ob_compaction_diagnose.h"
 
 namespace oceanbase
 {
@@ -163,19 +164,53 @@ bool ObTenantMajorFreeze::is_paused() const
   return is_paused;
 }
 
-int ObTenantMajorFreeze::set_freeze_info()
+int ObTenantMajorFreeze::set_freeze_info(const ObMajorFreezeReason freeze_reason)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(major_merge_info_mgr_.set_freeze_info())) {
+  } else if (OB_FAIL(major_merge_info_mgr_.set_freeze_info(freeze_reason))) {
     LOG_WARN("fail to set_freeze_info", KR(ret), K_(tenant_id));
   }
   return ret;
 }
 
-int ObTenantMajorFreeze::launch_major_freeze()
+int ObTenantMajorFreeze::try_schedule_minor_before_major_()
+{
+  /*
+   * when user use large memory, hope use large memtable optimise performance
+   * now major merge read data from sstable so we need schedule minor befor major
+   * make memtable freeze to promise upper_trans_version < new_merge_version
+   */
+  int ret = OB_SUCCESS;
+  bool contains = false;
+  ObAddr rs_addr;
+  obrpc::ObRootMinorFreezeArg arg;
+  if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid gctx", K(GCTX.rs_rpc_proxy_), K(GCTX.rs_mgr_), K(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObMViewInfo::contains_major_refresh_mview(*GCTX.sql_proxy_, tenant_id_, contains))) {
+    LOG_WARN("failed to check contain major mview", KR(ret));
+  } else if (!contains) {
+    // do nothing
+  } else if (OB_FAIL(arg.tenant_ids_.push_back(tenant_id_))) {
+    LOG_WARN("faiedl to push back tenant_id", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
+    LOG_WARN("get rootservice address failed", K(ret));
+  } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).timeout(GCONF.rpc_timeout)
+                                                    .root_minor_freeze(arg))) {
+    LOG_WARN("fail to execute root_minor_freeze rpc", KR(ret), K(arg));
+  } else {
+    LOG_INFO("try_schedule_minor_before_major_", KR(ret), K(contains), K(rs_addr));
+    // wait for freeze finish
+    const int64_t wait_us = GCONF.rpc_timeout;
+    ob_usleep(wait_us);
+  }
+  return ret;
+}
+
+int ObTenantMajorFreeze::launch_major_freeze(const ObMajorFreezeReason freeze_reason)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("launch_major_freeze", K_(tenant_id));
@@ -200,7 +235,8 @@ int ObTenantMajorFreeze::launch_major_freeze()
     } else {
       LOG_WARN("fail to check freeze info", KR(ret), K_(tenant_id));
     }
-  } else if (OB_FAIL(set_freeze_info())) {
+  } else if (FALSE_IT(/*ignore ret*/(void)try_schedule_minor_before_major_())) {
+  } else if (OB_FAIL(set_freeze_info(freeze_reason))) {
     LOG_WARN("fail to set_freeze_info", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(major_merge_info_detector_.signal())) {
     LOG_WARN("fail to signal", KR(ret), K_(tenant_id));
@@ -277,10 +313,11 @@ int ObTenantMajorFreeze::clear_merge_error()
     if (-1 == expected_epoch) {
       ret = OB_EAGAIN;
       LOG_WARN("epoch has not been updated, will retry", KR(ret), K_(tenant_id));
-    } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_status(tenant_id_,
-                                                                         expected_epoch))) {
+    } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_status(tenant_id_, expected_epoch))) {
       LOG_WARN("fail to batch update status", KR(ret), K_(tenant_id), K(expected_epoch));
-    } else if (OB_FAIL(major_merge_info_mgr_.get_zone_merge_mgr().set_merge_error(error_type, expected_epoch))) {
+    }
+
+    if (FAILEDx(major_merge_info_mgr_.get_zone_merge_mgr().set_merge_status(error_type, expected_epoch))) {
       LOG_WARN("fail to set merge error", KR(ret), K_(tenant_id), K(error_type), K(expected_epoch));
     }
   }
@@ -325,14 +362,14 @@ int ObTenantMajorFreeze::check_tenant_status() const
 int ObTenantMajorFreeze::check_freeze_info()
 {
   int ret = OB_SUCCESS;
-  SCN latest_frozen_scn;
+  share::ObFreezeInfo latest_freeze_info;
   SCN global_last_merged_scn;
   ObZoneMergeInfo::MergeStatus global_merge_status = ObZoneMergeInfo::MergeStatus::MERGE_STATUS_MAX;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(major_merge_info_mgr_.get_local_latest_frozen_scn(latest_frozen_scn))) {
+  } else if (OB_FAIL(major_merge_info_mgr_.get_local_latest_freeze_info(latest_freeze_info))) {
     LOG_WARN("fail to get local latest frozen_scn", KR(ret), K_(tenant_id));
   } else {
     ObZoneMergeManager &zone_merge_mgr = major_merge_info_mgr_.get_zone_merge_mgr();
@@ -344,17 +381,34 @@ int ObTenantMajorFreeze::check_freeze_info()
       LOG_WARN("fail to get_global_merge_status", KR(ret), K_(tenant_id));
     } else {
       // check pending freeze_info
-      if (latest_frozen_scn > global_last_merged_scn) {
+      if (latest_freeze_info.frozen_scn_ > global_last_merged_scn) {
         if (global_merge_status == ObZoneMergeInfo::MergeStatus::MERGE_STATUS_IDLE) {
           ret = OB_FROZEN_INFO_ALREADY_EXIST;
         } else {
           ret = OB_MAJOR_FREEZE_NOT_FINISHED;
         }
         LOG_WARN("cannot do major freeze now, need wait current major_freeze finish", KR(ret),
-                K(global_last_merged_scn), K(latest_frozen_scn), K_(tenant_id));
+                K(global_last_merged_scn), K(latest_freeze_info), K_(tenant_id));
+        if (latest_freeze_info.is_modified_) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(compaction::ADD_SUSPECT_LS_INFO(
+                      compaction::MAJOR_MERGE,
+                      ObDiagnoseTabletType::TYPE_RS_MAJOR_MERGE,
+                      ObLSID(1)/*ls_id*/,
+                      ObSuspectInfoType::SUSPECT_RS_FROZEN_SCN_ERROR,
+                      static_cast<int64_t>(latest_freeze_info.frozen_scn_.get_val_for_inner_table_field()),
+                      static_cast<int64_t>(global_last_merged_scn.get_val_for_inner_table_field())))) {
+            LOG_WARN("failed to add suspect info", KR(tmp_ret));
+          } else {
+            LOG_INFO("succ to add suspect info", KR(tmp_ret), K(latest_freeze_info), K(global_last_merged_scn));
+          }
+        }
       } else if (merge_scheduler_.is_paused()) {
         ret = OB_LEADER_NOT_EXIST;
         LOG_WARN("leader may switch", KR(ret), K_(tenant_id));
+      }
+      if (OB_SUCC(ret)) {
+        DEL_SUSPECT_INFO(compaction::MAJOR_MERGE, ObLSID(1)/*ls_id*/, UNKNOW_TABLET_ID, share::ObDiagnoseTabletType::TYPE_RS_MAJOR_MERGE);
       }
     }
   }

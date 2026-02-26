@@ -13,17 +13,11 @@
 #define USING_LOG_PREFIX SERVER_OMT
 
 #include "ob_worker_processor.h"
-#include "share/ob_define.h"
-#include "lib/utility/utility.h"
-#include "lib/oblog/ob_trace_log.h"
 #include "lib/profile/ob_perf_event.h"  // SET_PERF_EVENT
-#include "lib/profile/ob_trace_id_adaptor.h"
 #include "lib/oblog/ob_warning_buffer.h"
-#include "rpc/ob_request.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
+#include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/frame/ob_req_translator.h"
 #include "rpc/frame/ob_req_processor.h"
-#include "share/config/ob_server_config.h"
 #include "observer/omt/ob_th_worker.h"
 #include "lib/utility/ob_hang_fatal_error.h"
 
@@ -51,6 +45,7 @@ void ObWorkerProcessor::th_destroy()
 
 #ifdef ERRSIM
 ERRSIM_POINT_DEF(EN_WORKER_PROCESS_REQUEST)
+ERRSIM_POINT_DEF(EN_WORKER_PROCESS_HANG_FATAL_ERROR)
 #endif
 
 OB_NOINLINE int ObWorkerProcessor::process_err_test()
@@ -58,13 +53,12 @@ OB_NOINLINE int ObWorkerProcessor::process_err_test()
   int ret = OB_SUCCESS;
 
 #ifdef ERRSIM
-  ret = EN_WORKER_PROCESS_REQUEST;
-#endif
-
-  if(OB_FAIL(ret))
-  {
+  if (0 != (ret = EN_WORKER_PROCESS_REQUEST)) {
     LOG_WARN("process err_test", K(ret));
+  } else if (0 != (ret = EN_WORKER_PROCESS_HANG_FATAL_ERROR)) {
+    right_to_die_or_duty_to_live();
   }
+#endif
   return ret;
 }
 
@@ -89,6 +83,9 @@ inline int ObWorkerProcessor::process_one(rpc::ObRequest &req)
       LOG_WARN("process request fail", K(ret));
     }
     translator_.release(processor);
+    if (ObQueryRetryAshGuard::get_info_ptr() != nullptr) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "retry info ptr is not null, maybe crash", K(ObLocalDiagnosticInfo::get()->get_ash_stat()));
+    }
   }
 
   return ret;
@@ -109,6 +106,11 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
                OB_ID(receive_ts), req.get_receive_timestamp(),
                OB_ID(enqueue_ts), req.get_enqueue_timestamp());
   ObRequest::Type req_type = req.get_type(); // bugfix note: must be obtained in advance
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (di != nullptr && !di->get_ash_stat().has_user_module_) {
+    //di->get_ash_stat().has_user_module_ == true means these module and action specified by user, we can't rewrite it
+    ObLocalDiagnosticInfo::set_service_module(THIS_THWORKER.get_module_name());
+  }
   if (ObRequest::OB_RPC == req_type) {
     // internal RPC request
     const obrpc::ObRpcPacket &packet
@@ -131,7 +133,12 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
   } else if (ObRequest::OB_MYSQL == req_type) {
     NG_TRACE_EXT(start_sql, OB_ID(addr), SQL_REQ_OP.get_peer(&req));
     // mysql command request
+      const obmysql::ObMySQLRawPacket &pkt
+          = static_cast<const obmysql::ObMySQLRawPacket &>(req.get_packet());
     ObCurTraceId::set(req.generate_trace_id(myaddr_));
+    if (OB_NOT_NULL(di) && !di->get_ash_stat().has_user_action_) {
+      ObLocalDiagnosticInfo::get()->get_ash_stat().mysql_cmd_ = static_cast<int64_t>(pkt.get_cmd());
+    }
   }
   // record trace id
   ObTraceIdAdaptor trace_id_adaptor;
@@ -153,6 +160,7 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
   // go!
   try {
     in_try_stmt = true;
+    in_exception_state = false;
     if (OB_FAIL(process_one(req))) {
       LOG_WARN("process request fail", K(ret));
     }

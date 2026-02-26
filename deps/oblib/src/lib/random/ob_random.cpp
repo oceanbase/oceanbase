@@ -11,24 +11,27 @@
  */
 
 #include "lib/random/ob_random.h"
-#include <stdlib.h>
-#include <math.h>
 
 namespace oceanbase
 {
 namespace common
 {
 ObRandom::ObRandom()
-    : seed_()
+    : seed_(), is_inited(false)
+{
+}
+
+ObRandom::~ObRandom()
+{
+}
+
+void ObRandom::gen_seed()
 {
   seed_[0] = (uint16_t)rand(0, 65535);
   seed_[1] = (uint16_t)rand(0, 65535);
   seed_[2] = (uint16_t)rand(0, 65535);
   seed48(seed_);
-}
-
-ObRandom::~ObRandom()
-{
+  is_inited = true;
 }
 
 void ObRandom::seed(const uint64_t seed)
@@ -37,6 +40,7 @@ void ObRandom::seed(const uint64_t seed)
   seed_[1] = (uint16_t)(seed >> 16);
   seed_[2] = (uint16_t)(seed >> 32);
   seed48(seed_);
+  is_inited = true;
 }
 
 int64_t ObRandom::rand(const int64_t a, const int64_t b)
@@ -62,6 +66,9 @@ int64_t ObRandom::rand(const int64_t a, const int64_t b)
 
 int64_t ObRandom::get()
 {
+  if (!is_inited) {
+    gen_seed();
+  }
   const int64_t r1 = jrand48(seed_);
   const int64_t r2 = jrand48(seed_);
   return ((r1 << 32) | r2);
@@ -76,6 +83,9 @@ int64_t ObRandom::get(const int64_t a, const int64_t b)
 
 int32_t ObRandom::get_int32()
 {
+  if (!is_inited) {
+    gen_seed();
+  }
   return static_cast<int32_t>(jrand48(seed_));
 }
 

@@ -67,15 +67,11 @@ TEST_F(ObEmptyTableScanTest, basic_test)
   ObArenaAllocator allocator;
   ObSQLSessionInfo session;
   ObPhyTableLocationFixedArray table_locs;
-  ObPhyTableLocation table_loc;
   ObPartitionReplicaLocation partition_loc;
   partition_loc.set_table_id(TEST_TABLE_ID);
   partition_loc.set_partition_id(9);
-  table_loc.set_table_location_key(TEST_TABLE_ID, TEST_TABLE_ID);
   ASSERT_EQ(OB_SUCCESS, session.test_init(0, 0, 0, &allocator));
   ASSERT_EQ(OB_SUCCESS, session.load_default_configs_in_pc());
-  ASSERT_EQ(OB_SUCCESS, table_loc.add_partition_location(partition_loc));
-  ASSERT_EQ(OB_SUCCESS, table_locs.push_back(table_loc));
   exec_ctx.set_my_session(&session);
   exec_ctx.create_physical_plan_ctx();
   ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
@@ -84,7 +80,6 @@ TEST_F(ObEmptyTableScanTest, basic_test)
   ObTaskExecutorCtx *task_exe_ctx = exec_ctx.get_task_executor_ctx();
   ASSERT_TRUE(NULL != task_exe_ctx);
   ASSERT_EQ(OB_SUCCESS, task_exe_ctx->init_table_location(table_locs.count()));
-  ASSERT_EQ(OB_SUCCESS, task_exe_ctx->set_table_locations(table_locs));
 
   ObPhysicalPlan *local_phy_plan = NULL;
   ASSERT_EQ(OB_SUCCESS, ObCacheObjectFactory::alloc(local_phy_plan, OB_SYS_TENANT_ID));

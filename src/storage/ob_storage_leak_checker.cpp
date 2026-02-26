@@ -10,8 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "ob_storage_leak_checker.h"
+#include "lib/utility/ob_sort.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/io/ob_io_define.h"
 
 
 namespace oceanbase
@@ -37,7 +39,10 @@ int ObStorageCheckerKey::hash(uint64_t &hash_value) const
   int ret = OB_SUCCESS;
   hash_value = 0;
   if (nullptr != handle_) {
-    ret = murmurhash(&handle_, sizeof(handle_), hash_value);
+    hash_value = murmurhash(&handle_, sizeof(handle_), hash_value);
+  } else {
+    ret = OB_STATE_NOT_MATCH;
+    COMMON_LOG(WARN, "[STORAGE-CHECKER] handle is null, cannot get hash value", K(ret));
   }
   return ret;
 }
@@ -53,7 +58,7 @@ bool ObStorageCheckerKey::operator== (const ObStorageCheckerKey &other) const
  */
 ObStorageCheckerValue::ObStorageCheckerValue()
   : tenant_id_(OB_INVALID_TENANT_ID),
-    check_id_(INVALID_CACHE_ID),
+    check_id_(ObStorageCheckID::INVALID_ID),
     bt_()
 {
 }
@@ -66,8 +71,7 @@ ObStorageCheckerValue::ObStorageCheckerValue(const ObStorageCheckerValue &other)
 int ObStorageCheckerValue::hash(uint64_t &hash_value) const
 {
   int ret = OB_SUCCESS;
-  hash_value = 0;
-  ret = murmurhash(bt_, sizeof(bt_), hash_value);
+  hash_value = murmurhash(bt_, sizeof(bt_), hash_value);
   return ret;
 }
 
@@ -95,17 +99,14 @@ ObStorageCheckerValue & ObStorageCheckerValue::operator= (const ObStorageChecker
 const char ObStorageLeakChecker::ALL_CACHE_NAME[MAX_CACHE_NAME_LENGTH] = "all_cache";
 const char ObStorageLeakChecker::IO_HANDLE_CHECKER_NAME[MAX_CACHE_NAME_LENGTH] = "io_handle";
 const char ObStorageLeakChecker::ITER_CHECKER_NAME[MAX_CACHE_NAME_LENGTH] = "storage_iter";
+ObStorageLeakChecker ObStorageLeakChecker::instance_;
 
 ObStorageLeakChecker::ObStorageLeakChecker()
-  : check_id_(INVALID_CACHE_ID),
-    checker_info_(),
-    is_inited_(false)
+    : checker_info_()
 {
   INIT_SUCC(ret);
   if (OB_FAIL(checker_info_.create(HANDLE_BT_MAP_BUCKET_NUM, "STRG_CHECKER_M", "STRG_CHECKER_M"))) {
     COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to create handle ref info", K(ret));
-  } else {
-    is_inited_ = true;
   }
 }
 
@@ -114,144 +115,76 @@ ObStorageLeakChecker::~ObStorageLeakChecker()
   reset();
 }
 
-ObStorageLeakChecker &ObStorageLeakChecker::get_instance()
-{
-  static ObStorageLeakChecker storage_checker_;
-  return storage_checker_;
-}
-
 void ObStorageLeakChecker::reset()
 {
-  check_id_ = INVALID_CACHE_ID;
   checker_info_.reuse();
-  is_inited_ = false;
 }
 
-void ObStorageLeakChecker::handle_hold(const void *handle, const ObStorageCheckID type_id)
+OB_NOINLINE void ObStorageLeakChecker::inner_handle_hold(
+    ObStorageCheckedObjectBase* handle, const ObStorageCheckID check_id)
 {
   INIT_SUCC(ret);
   ObStorageCheckerKey key(handle);
   ObStorageCheckerValue value;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] The ObKVCaheHandleRefChecker is not inited", K(ret));
-  } else if (OB_UNLIKELY(nullptr == handle || type_id < ALL_CACHE || type_id > STORAGE_ITER)) {
+  if (OB_UNLIKELY(OB_ISNULL(handle) || !is_valid_check_id(check_id))) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] Invalid argument", K(ret), KP(handle), K(type_id));
-  } else if (INVALID_CACHE_ID == check_id_
-             || (type_id != check_id_ && (type_id != ALL_CACHE || check_id_ > ALL_CACHE))) {
+    COMMON_LOG(WARN, "[STORAGE-CHECKER] Invalid argument", K(ret), K(handle), K(check_id));
+  } else if (checker_info_.size() > MAP_SIZE_LIMIT) {
   } else {
-    bool need_record = true;
-    value.check_id_ = check_id_;
+    value.check_id_ = check_id;
     value.tenant_id_ = MTL_ID();
-    if (ALL_CACHE == type_id) {
-      const ObKVCacheHandle *cache_handle = reinterpret_cast<const ObKVCacheHandle *>(handle);
-      if (cache_handle->is_valid() && (check_id_ == ALL_CACHE
-                                       || check_id_ == cache_handle->mb_handle_->inst_->cache_id_)) {
-        value.tenant_id_ = cache_handle->mb_handle_->inst_->tenant_id_;
-        value.check_id_ = cache_handle->mb_handle_->inst_->cache_id_;
-      } else {
-        need_record = false;
-      }
-    } else if (IO_HANDLE == type_id) {
-      const ObIOHandle *io_handle = reinterpret_cast<const ObIOHandle *>(handle);
-      if (io_handle->is_empty()) {
-        need_record = false;
-      }
-    }
-    if (need_record) {
-      lbt(value.bt_, sizeof(value.bt_));
-      if (OB_FAIL(checker_info_.set_refactored(key, value))) {
-        COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to record backtrace", K(ret), K(key), K(value));
-      }
+    lbt(value.bt_, sizeof(value.bt_));
+    if (OB_FAIL(checker_info_.set_refactored(key, value))) {
+      COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to record backtrace", K(ret), K(key), K(value));
+    } else {
+      handle->is_traced_ = true;
     }
   }
-  COMMON_LOG(DEBUG, "[STORAGE-CHECKER] handle hold details", K(ret), K(check_id_),
-             KP(handle), K(type_id), K(key), K(value));
+  COMMON_LOG(DEBUG, "[STORAGE-CHECKER] handle hold details", K(ret), K(check_id),
+             KP(handle), K(check_id), K(key), K(value));
 }
 
-void ObStorageLeakChecker::handle_reset(const void *handle, const ObStorageCheckID type_id)
+OB_NOINLINE void ObStorageLeakChecker::inner_handle_reset(
+    ObStorageCheckedObjectBase* handle, const ObStorageCheckID check_id)
 {
   INIT_SUCC(ret);
   ObStorageCheckerKey key(handle);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] The ObKVCaheHandleRefChecker is not inited", K(ret));
-  } else if (OB_UNLIKELY(nullptr == handle || type_id < ALL_CACHE || type_id > STORAGE_ITER)) {
+  if (OB_UNLIKELY(nullptr == handle || !is_valid_check_id(check_id))) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] Invalid argument", K(ret), KP(handle), K(type_id));
-  } else if (INVALID_CACHE_ID == check_id_
-             || (type_id != check_id_ && (type_id != ALL_CACHE || check_id_ > ALL_CACHE))) {
+    COMMON_LOG(WARN, "[STORAGE-CHECKER] Invalid argument", K(ret), KP(handle), K(check_id));
   } else {
-    bool need_erase = true;
-    if (ALL_CACHE == type_id) {
-      const ObKVCacheHandle *cache_handle = reinterpret_cast<const ObKVCacheHandle *>(handle);
-      if (!cache_handle->is_valid() || (check_id_ != ALL_CACHE
-                                        && check_id_ != cache_handle->mb_handle_->inst_->cache_id_)) {
-        need_erase = false;
-      }
-    } else if (IO_HANDLE == type_id) {
-      const ObIOHandle *io_handle = reinterpret_cast<const ObIOHandle *>(handle);
-      if (io_handle->is_empty()) {
-        need_erase = false;
+    if (OB_FAIL(checker_info_.erase_refactored(key))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to erase cache handle backtrace", K(ret), K(key));
       }
     }
-    if (need_erase) {
-      if (OB_FAIL(checker_info_.erase_refactored(key))) {
-        if (OB_HASH_NOT_EXIST != ret) {
-          COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to erase cache handle backtrace", K(ret), K(key));
-        }
-      }
-    }
+    handle->is_traced_ = false;
   }
-  COMMON_LOG(DEBUG, "[STORAGE-CHECKER] handle reset details", K(ret), K(check_id_),
-             KP(handle), K(type_id), K(key));
-}
-
-int ObStorageLeakChecker::set_check_id(const int64_t check_id)
-{
-  INIT_SUCC(ret);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] The ObStorageLeakChecker is not inited", K(ret));
-  } else if (OB_UNLIKELY(check_id < INVALID_CACHE_ID || check_id > STORAGE_ITER)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] Invalid argument", K(ret), K(check_id));
-  } else {
-    check_id_ = check_id;
-    checker_info_.reuse();
-  }
-  COMMON_LOG(INFO, "[STORAGE-CHECKER] set check id details", K(ret), K(check_id_), K(check_id));
-  return ret;
+  COMMON_LOG(DEBUG, "[STORAGE-CHECKER] handle reset details", K(ret), K(check_id), KP(handle), K(check_id), K(key));
 }
 
 int ObStorageLeakChecker::get_aggregate_bt_info(hash::ObHashMap<ObStorageCheckerValue, int64_t> &bt_info)
 {
   INIT_SUCC(ret);
   bt_info.reuse();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] The ObKVCacheHanleRefChecker is not inited", K(ret));
-  } else {
-    for (hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::bucket_iterator bucket_iter = checker_info_.bucket_begin() ;
-        OB_SUCC(ret) && bucket_iter != checker_info_.bucket_end() ; ++bucket_iter) {
-      hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::hashtable::bucket_lock_cond blk(*bucket_iter);
-      hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::hashtable::readlocker locker(blk.lock());
-      for (hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::hashtable::hashbucket::const_iterator node_iter = bucket_iter->node_begin() ;
-          OB_SUCC(ret) && node_iter != bucket_iter->node_end() ; ++node_iter) {
-        int64_t bt_count = 0;
-        if (OB_FAIL(bt_info.get_refactored(node_iter->second, bt_count))) {
-          if (OB_HASH_NOT_EXIST == ret) {
-            bt_count = 1;
-            if (OB_FAIL(bt_info.set_refactored(node_iter->second, bt_count))) {
-              COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to set aggregated info", K(ret));
-            }
-          } else {
-            COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to get aggregated info", K(ret), K(node_iter->second));
+  for (hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::bucket_iterator bucket_iter = checker_info_.bucket_begin() ;
+      OB_SUCC(ret) && bucket_iter != checker_info_.bucket_end() ; ++bucket_iter) {
+    hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::hashtable::bucket_lock_cond blk(*bucket_iter);
+    hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::hashtable::readlocker locker(blk.lock());
+    for (hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue>::hashtable::hashbucket::const_iterator node_iter = bucket_iter->node_begin() ;
+        OB_SUCC(ret) && node_iter != bucket_iter->node_end() ; ++node_iter) {
+      int64_t bt_count = 0;
+      if (OB_FAIL(bt_info.get_refactored(node_iter->second, bt_count))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          bt_count = 1;
+          if (OB_FAIL(bt_info.set_refactored(node_iter->second, bt_count))) {
+            COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to set aggregated info", K(ret));
           }
-        } else if (OB_FAIL(bt_info.set_refactored(node_iter->second, bt_count+1, 1, 0, 1))) {
-          COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail wo update aggregated info", K(ret), K(node_iter->second), K(bt_count));
+        } else {
+          COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to get aggregated info", K(ret), K(node_iter->second));
         }
+      } else if (OB_FAIL(bt_info.set_refactored(node_iter->second, bt_count+1, 1, 0, 1))) {
+        COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail wo update aggregated info", K(ret), K(node_iter->second), K(bt_count));
       }
     }
   }

@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_coalesce.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -38,7 +35,6 @@ int ObExprCoalesce::calc_result_typeN(ObExprResType &type,
                                       ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
   if (OB_ISNULL(types)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null types", K(ret));
@@ -49,9 +45,8 @@ int ObExprCoalesce::calc_result_typeN(ObExprResType &type,
                        type,
                        types,
                        param_num,
-                       type_ctx.get_coll_type(),
                        lib::is_oracle_mode(),
-                       default_length_semantics,
+                       type_ctx,
                        true,
                        true,
                        is_called_in_sql_))) {
@@ -64,18 +59,22 @@ int ObExprCoalesce::calc_result_typeN(ObExprResType &type,
       LOG_WARN("cast basic session to sql session info failed", K(ret));
     } else {
       ObExprOperator::calc_result_flagN(type, types, param_num);
-      ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_type()]];
       bool is_expr_integer_type = (ob_is_int_tc(type.get_type()) ||
                              ob_is_uint_tc(type.get_type()));
       bool all_null_type = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
         all_null_type = (types[i].get_type() != ObNullType) ? false : all_null_type;
         if (ob_is_enumset_tc(types[i].get_type())) {
+          ObObjType calc_type = get_enumset_calc_type(type.get_type(), i);
           if (OB_UNLIKELY(ObMaxType == calc_type)) {
             ret = OB_ERR_UNEXPECTED;
             SQL_ENG_LOG(WARN, "invalid type of parameter ", K(i), K(ret));
           } else {
             types[i].set_calc_type(calc_type);
+            if (ob_is_string_type(calc_type)) {
+              types[i].set_calc_collation_type(type.get_collation_type());
+              types[i].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+            }
           }
         } else {
           bool is_arg_integer_type = (ob_is_int_tc(types[i].get_type()) ||
@@ -104,13 +103,17 @@ int ObExprCoalesce::calc_result_typeN(ObExprResType &type,
 
 int calc_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
-  int ret = OB_SUCCESS;
+  int  ret = OB_SUCCESS;
+  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
+  bool v = false;
   res_datum.set_null();
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
     ObDatum *child_res = NULL;
     if (OB_FAIL(expr.args_[i]->eval(ctx, child_res))) {
       LOG_WARN("eval arg failed", K(ret), K(i));
-    } else if (!(child_res->is_null())) {
+    } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(child_res, is_udt_type, v))) {
+      LOG_WARN("failed to check datum null", K(ret), K(child_res), K(is_udt_type));
+    } else if (!v) {
       // TODO: @shaoge coalesce的结果可以不用预分配内存，直接使用某个子节点的结果
       res_datum.set_datum(*child_res);
       break;
@@ -138,7 +141,9 @@ int ObExprCoalesce::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
 int ObExprCoalesce::calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
                                              const ObBitVector &skip, const int64_t batch_size)
 {
-  int ret = OB_SUCCESS;
+  int  ret = OB_SUCCESS;
+  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
+  bool v = false;
   LOG_DEBUG("calculate batch coalesce expr", K(batch_size));
 
   ObDatum *results = expr.locate_batch_datums(ctx);
@@ -162,13 +167,15 @@ int ObExprCoalesce::calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
           my_skip,
           batch_size,
           [&](int64_t idx) __attribute__((always_inline)) {
-            if (!dv.at(idx)->is_null()) {
+            if (OB_FAIL(pl::ObPLDataType::datum_is_null(dv.at(idx), is_udt_type, v))) {
+              LOG_WARN("failed to check datum null", K(ret), K(dv.at(idx)), K(is_udt_type));
+            } else if (!v) {
               results[idx].set_datum(*dv.at(idx));
               eval_flags.set(idx);
               my_skip.set(idx);
               skip_cnt++;
             }
-            return OB_SUCCESS;
+            return ret;
           }
         );
       }

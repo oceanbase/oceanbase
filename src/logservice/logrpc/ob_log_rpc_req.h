@@ -256,6 +256,83 @@ public:
   share::SCN flashback_scn_;
   bool is_flashback_req_;
 };
+
+struct LogProbeRsReq
+{
+  OB_UNIS_VERSION(1);
+public:
+  LogProbeRsReq();
+  LogProbeRsReq(const common::ObAddr src);
+  ~LogProbeRsReq() {
+    reset();
+  }
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(src));
+  common::ObAddr src_;
+};
+
+struct LogProbeRsResp
+{
+  OB_UNIS_VERSION(1);
+public:
+  LogProbeRsResp();
+  ~LogProbeRsResp() {
+    reset();
+  }
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(ret));
+  int ret_;
+};
+
+struct LogGetCkptReq {
+  OB_UNIS_VERSION(1);
+public:
+  LogGetCkptReq(): src_(), tenant_id_(OB_INVALID_TENANT_ID), ls_id_() { }
+  LogGetCkptReq(const common::ObAddr &src,
+                const uint64_t tenant_id,
+                const share::ObLSID &ls_id);
+  ~LogGetCkptReq();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(src), K_(tenant_id), K_(ls_id));
+  common::ObAddr src_;
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
+struct LogGetCkptResp {
+  OB_UNIS_VERSION(1);
+public:
+  LogGetCkptResp() : ckpt_scn_(), ckpt_lsn_()  { }
+  LogGetCkptResp(const share::SCN &scn, const palf::LSN &lsn);
+  ~LogGetCkptResp();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(ckpt_scn), K_(ckpt_lsn));
+  share::SCN ckpt_scn_;
+  palf::LSN ckpt_lsn_;
+};
+
+struct LogSyncBaseLSNReq
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  LogSyncBaseLSNReq();
+  LogSyncBaseLSNReq(const common::ObAddr &src, const share::ObLSID &id,
+                    const palf::LSN &base_lsn);
+  ~LogSyncBaseLSNReq();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(src), K_(ls_id), K_(base_lsn));
+public:
+  common::ObAddr src_;
+  share::ObLSID ls_id_;
+  palf::LSN base_lsn_;
+};
+
 } // end namespace logservice
 }// end namespace oceanbase
 

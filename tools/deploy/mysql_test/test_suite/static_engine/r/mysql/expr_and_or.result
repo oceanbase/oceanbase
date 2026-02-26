@@ -1,7 +1,9 @@
 result_format: 4
 
+alter system set default_table_store_format = "row";
 set ob_enable_plan_cache = 0;
 drop table if exists t1;
+alter system set default_table_store_format = "row";
 create table t1(col_int int, 
                 col_zero int,
                 col_null int, 
@@ -885,7 +887,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1 AND 2 AND 3 AND t1.col_int]), filter(nil), rowset=16
+  0 - output([(T_OP_AND, 1, 2, 3, t1.col_int)]), filter(nil), rowset=16
       access([t1.col_int]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -905,7 +907,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1 AND t1.col_null AND 3 AND t1.col_int]), filter(nil), rowset=16
+  0 - output([(T_OP_AND, 1, t1.col_null, 3, t1.col_int)]), filter(nil), rowset=16
       access([t1.col_null], [t1.col_int]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -925,7 +927,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1 AND t1.col_null AND 3 AND t1.col_zero]), filter(nil), rowset=16
+  0 - output([(T_OP_AND, 1, t1.col_null, 3, t1.col_zero)]), filter(nil), rowset=16
       access([t1.col_null], [t1.col_zero]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -945,7 +947,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1 AND t1.col_null AND 3 AND cast(t1.col_empty_str, DOUBLE(-1, -1))]), filter(nil), rowset=16
+  0 - output([(T_OP_AND, 1, t1.col_null, 3, cast(t1.col_empty_str, DOUBLE(-1, -1)))]), filter(nil), rowset=16
       access([t1.col_null], [t1.col_empty_str]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -967,7 +969,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1 OR 2 OR t1.col_int]), filter(nil), rowset=16
+  0 - output([(T_OP_OR, 1, 2, t1.col_int)]), filter(nil), rowset=16
       access([t1.col_int]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -987,7 +989,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1 OR 2 OR t1.col_null]), filter(nil), rowset=16
+  0 - output([(T_OP_OR, 1, 2, t1.col_null)]), filter(nil), rowset=16
       access([t1.col_null]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -1007,7 +1009,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast('', DOUBLE(-1, -1)) OR 0 OR t1.col_null]), filter(nil), rowset=16
+  0 - output([(T_OP_OR, cast('', DOUBLE(-1, -1)), 0, t1.col_null)]), filter(nil), rowset=16
       access([t1.col_null]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true

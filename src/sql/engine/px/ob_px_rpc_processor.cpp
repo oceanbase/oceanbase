@@ -12,19 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_px_rpc_processor.h"
-#include "ob_px_sub_coord.h"
-#include "ob_px_task_process.h"
-#include "ob_px_admission.h"
 #include "ob_px_sqc_handler.h"
-#include "lib/signal/ob_signal_struct.h"
-#include "lib/ash/ob_active_session_guard.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
-#include "sql/dtl/ob_dtl_channel_group.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
 #include "sql/engine/px/ob_px_target_mgr.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/dtl/ob_dtl_basic_channel.h"
-#include "share/detect/ob_detect_callback.h"
 #include "share/detect/ob_detect_manager_utils.h"
 
 using namespace oceanbase::common;
@@ -39,6 +30,8 @@ int ObInitSqcP::init()
     LOG_WARN("unexpected sqc handler", K(ret));
   } else if (OB_FAIL(sqc_handler->init())) {
     LOG_WARN("Failed to init sqc handler", K(ret));
+    sqc_handler->reset();
+    op_reclaim_free(sqc_handler);
   } else {
     arg_.sqc_handler_ = sqc_handler;
     arg_.sqc_handler_->reset_reference_count(); //设置sqc_handler的引用计数为1.
@@ -58,12 +51,23 @@ void ObInitSqcP::destroy()
     int report_ret = OB_SUCCESS;
     ObPxSqcHandler::release_handler(arg_.sqc_handler_, report_ret);
   }
-  ObActiveSessionGuard::setup_default_ash();
+}
+
+int ObInitSqcP::deserialize()
+{
+  int ret = OB_SUCCESS;
+  int64_t *sqc_des_cost = nullptr;
+  if (OB_NOT_NULL(arg_.sqc_handler_)) {
+    sqc_des_cost = &arg_.sqc_handler_->get_sqc_metrics().sqc_des_cost_;
+  }
+  ScopedTimer timer(sqc_des_cost);
+  ret = ObRpcProcessorBase::deserialize();
+  return ret;
 }
 
 int ObInitSqcP::process()
 {
-  ObActiveSessionGuard::get_stat().in_px_execution_ = true;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_px_execution_ = true;
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
@@ -72,7 +76,12 @@ int ObInitSqcP::process()
    * 只要能进process，after process一定会被调用，所以可以用中断覆盖整个
    * SQC的生命周期。
    */
-  if (OB_NOT_NULL(sqc_handler)) {
+  int64_t *sqc_rpc_process_cost = nullptr;
+  if (OB_ISNULL(sqc_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Sqc handler can't be nullptr", K(ret));
+  } else {
+    sqc_rpc_process_cost = &arg_.sqc_handler_->get_sqc_metrics().sqc_rpc_process_cost_;
     ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
     if (OB_FAIL(SET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_))) {
       LOG_WARN("sqc failed to SET_INTERRUPTABLE");
@@ -80,29 +89,32 @@ int ObInitSqcP::process()
       unregister_interrupt_ = true;
     }
   }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(sqc_handler)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Sqc handler can't be nullptr", K(ret));
-  } else if (OB_FAIL(sqc_handler->init_env())) {
-    LOG_WARN("Failed to init sqc env", K(ret));
-  } else if (OB_FAIL(sqc_handler->pre_acquire_px_worker(result_.reserved_thread_count_))) {
-    LOG_WARN("Failed to pre acquire px worker", K(ret));
-  } else if (OB_FAIL(pre_setup_op_input(*sqc_handler))) {
-    LOG_WARN("pre setup op input failed", K(ret));
-  } else if (OB_FAIL(sqc_handler->thread_count_auto_scaling(result_.reserved_thread_count_))) {
-    LOG_WARN("fail to do thread auto scaling", K(ret), K(result_.reserved_thread_count_));
-  } else if (result_.reserved_thread_count_ <= 0) {
-    ret = OB_ERR_INSUFFICIENT_PX_WORKER;
-    LOG_WARN("Worker thread res not enough", K_(result));
-  } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
-    LOG_WARN("Failed to link qc sqc channel", K(ret));
-  } else if (sqc_handler->get_phy_plan().is_enable_px_fast_reclaim() &&
-      OB_FAIL(ObDetectManagerUtils::sqc_register_into_dm(sqc_handler, sqc_handler->get_sqc_init_arg().sqc_))) {
-    LOG_WARN("[DM] sqc failed to register_into_dm");
-  } else {
-    /*do nothing*/
+  if (OB_SUCC(ret)) {
+    ScopedTimer timer(sqc_rpc_process_cost);
+    if (OB_FAIL(sqc_handler->init_env())) {
+      LOG_WARN("Failed to init sqc env", K(ret));
+    } else if (OB_FAIL(sqc_handler->pre_acquire_px_worker(result_.reserved_thread_count_))) {
+      LOG_WARN("Failed to pre acquire px worker", K(ret));
+    } else if (OB_FAIL(pre_setup_op_input(*sqc_handler))) {
+      LOG_WARN("pre setup op input failed", K(ret));
+    } else if (OB_FAIL(sqc_handler->thread_count_auto_scaling(result_.reserved_thread_count_))) {
+      LOG_WARN("fail to do thread auto scaling", K(ret), K(result_.reserved_thread_count_));
+    } else if (OB_FAIL(sqc_handler->prepare_tablets_info())) {
+      LOG_WARN("failed to prepare tablets_info");
+    } else if (result_.reserved_thread_count_ <= 0) {
+      ret = OB_ERR_INSUFFICIENT_PX_WORKER;
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, sqc_handler->get_phy_plan().get_px_dop());
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(required_px_workers_number_, 1);
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(admitted_px_workers_number_, result_.reserved_thread_count_);
+      LOG_WARN("Worker thread res not enough", K_(result));
+    } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
+      LOG_WARN("Failed to link qc sqc channel", K(ret));
+    } else if (sqc_handler->get_phy_plan().is_enable_px_fast_reclaim() &&
+        OB_FAIL(ObDetectManagerUtils::sqc_register_into_dm(sqc_handler, sqc_handler->get_sqc_init_arg().sqc_))) {
+      LOG_WARN("[DM] sqc failed to register_into_dm");
+    } else {
+      /*do nothing*/
+    }
   }
 
 #ifdef ERRSIM
@@ -151,6 +163,9 @@ int ObInitSqcP::pre_setup_op_input(ObPxSqcHandler &sqc_handler)
   if (sqc.is_single_tsc_leaf_dfo() &&
       OB_FAIL(sub_coord.rebuild_sqc_access_table_locations())) {
     LOG_WARN("fail to rebuild sqc access location", K(ret));
+  } else if (sqc.is_single_tsc_leaf_dfo() &&
+             OB_FAIL(sub_coord.rebuild_sqc_lake_table_file_map())) {
+    LOG_WARN("failed to rebuild sqc lake table file map");
   } else if (OB_FAIL(sub_coord.pre_setup_op_input(*ctx, *root, sub_coord.get_sqc_ctx(),
       sqc.get_access_table_locations(),
       sqc.get_access_table_location_keys()))) {
@@ -175,6 +190,15 @@ int ObInitSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_current_trace_id(ObCurTraceId::get_trace_id());
     session->set_peer_addr(arg.sqc_.get_qc_addr());
+    /*
+       Sometimes, PX workers may evaluate temporary expressions which alter the execution context's
+       frames, while other workers are still in the process of deserializing task args. This
+       could lead to a crash, so we retain the original frames to assist with
+       deserialization for PX.
+    */
+    arg.exec_ctx_->set_ori_frames(arg.exec_ctx_->get_frames());
+    arg.exec_ctx_->set_ori_frame_cnt(arg.exec_ctx_->get_frame_cnt());
+    arg.exec_ctx_->set_ori_expr_op_size(arg.exec_ctx_->get_expr_op_size());
     if (OB_FAIL(session->store_query_string(ObString::make_string("PX SUB COORDINATOR")))) {
       LOG_WARN("store query string to session failed", K(ret));
     } else if (OB_FAIL(sub_coord.pre_process())) {
@@ -207,6 +231,10 @@ int ObInitSqcP::after_process(int error_code)
   UNUSED(error_code);
   ObSQLSessionInfo *session = nullptr;
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
+  int64_t *sqc_rpc_after_cost = nullptr;
+  if (OB_NOT_NULL(sqc_handler)) {
+    sqc_rpc_after_cost = &sqc_handler->get_sqc_metrics().sqc_rpc_after_cost_;
+  }
   bool no_need_startup_normal_sqc = (OB_SUCCESS != result_.rc_);
   if (no_need_startup_normal_sqc) {
     /**
@@ -220,6 +248,7 @@ int ObInitSqcP::after_process(int error_code)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Session can't be null", K(ret));
   } else {
+    ScopedTimer timer(sqc_rpc_after_cost);
     lib::CompatModeGuard g(session->get_compatibility_mode() == ORACLE_MODE ?
         lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
 
@@ -233,7 +262,7 @@ int ObInitSqcP::after_process(int error_code)
     session->set_session_sleep();
   }
 
-  ObActiveSessionGuard::get_stat().in_px_execution_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_px_execution_ = false;
   /**
    * 此处需要清理中断，并把分配的线程数和handler释放.
    * worker正常启动后，此时它的引用计数被更新成了
@@ -363,6 +392,8 @@ int ObInitFastSqcP::init()
     LOG_WARN("unexpected sqc handler", K(ret));
   } else if (OB_FAIL(sqc_handler->init())) {
     LOG_WARN("Failed to init sqc handler", K(ret));
+    sqc_handler->reset();
+    op_reclaim_free(sqc_handler);
   } else {
     arg_.sqc_handler_ = sqc_handler;
     arg_.sqc_handler_->reset_reference_count(); //设置sqc_handler的引用计数为1.
@@ -382,15 +413,27 @@ void ObInitFastSqcP::destroy()
     int report_ret = OB_SUCCESS;
     ObPxSqcHandler::release_handler(arg_.sqc_handler_, report_ret);
   }
-  ObActiveSessionGuard::setup_default_ash();
+}
+
+int ObInitFastSqcP::deserialize()
+{
+  int ret = OB_SUCCESS;
+  int64_t *sqc_des_cost = nullptr;
+  if (OB_NOT_NULL(arg_.sqc_handler_)) {
+    sqc_des_cost = &arg_.sqc_handler_->get_sqc_metrics().sqc_des_cost_;
+  }
+  ScopedTimer timer(sqc_des_cost);
+  ret = ObRpcProcessorBase::deserialize();
+  return ret;
 }
 
 int ObInitFastSqcP::process()
 {
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = true;
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
+  int64_t start_time = OB_TSC_TIMESTAMP.fast_current_time();
   ObSQLSessionInfo *session = nullptr;
   if (OB_ISNULL(sqc_handler)) {
     ret = OB_ERR_UNEXPECTED;
@@ -425,6 +468,8 @@ int ObInitFastSqcP::process()
                 K(arg),
                 K(session->get_compatibility_mode()),
                 K(sqc_handler->get_reserved_px_thread_count()));
+      sqc_handler->get_sqc_metrics().sqc_rpc_process_cost_ =
+          (OB_TSC_TIMESTAMP.fast_current_time() - start_time) * 1000LL;
       if (OB_FAIL(startup_normal_sqc(*sqc_handler))) {
         LOG_WARN("fail to startup normal sqc", K(ret));
       }
@@ -436,7 +481,7 @@ int ObInitFastSqcP::process()
     ObInterruptUtil::update_schema_error_code(&(sqc_handler->get_exec_ctx()), ret);
   }
 
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
   if (OB_NOT_NULL(sqc_handler)) {
     // link channel之前或者link过程可能会失败.
     // 如果sqc和qc没有link, 由response将 ret 通知给px.
@@ -469,6 +514,7 @@ int ObInitFastSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_peer_addr(arg.sqc_.get_qc_addr());
+    ObDIActionGuard action_guard("PX SUB COORDINATOR");
     if (OB_FAIL(session->store_query_string(ObString::make_string("PX SUB COORDINATOR")))) {
       LOG_WARN("store query string to session failed", K(ret));
     } else if (OB_FAIL(sub_coord.pre_process())) {
@@ -603,8 +649,8 @@ int ObPxTenantTargetMonitorP::process()
   const uint64_t tenant_id = arg_.get_tenant_id();
   const uint64_t follower_version = arg_.get_version();
   // server id of the leader that the follower sync with previously.
-  const uint64_t prev_leader_server_id = ObPxTenantTargetMonitor::get_server_id(follower_version);
-  const uint64_t leader_server_id  = GCTX.server_id_;
+  const uint64_t prev_leader_server_index = ObPxTenantTargetMonitor::get_server_index(follower_version);
+  const uint64_t leader_server_index  = GCTX.get_server_index();
   bool is_leader;
   uint64_t leader_version;
   result_.set_tenant_id(tenant_id);
@@ -612,7 +658,7 @@ int ObPxTenantTargetMonitorP::process()
     LOG_ERROR("get is_leader failed", K(ret), K(tenant_id));
   } else if (!is_leader) {
     result_.set_status(MONITOR_NOT_MASTER);
-  } else if (arg_.need_refresh_all_ || prev_leader_server_id != leader_server_id) {
+  } else if (arg_.need_refresh_all_ || prev_leader_server_index != leader_server_index) {
     if (OB_FAIL(OB_PX_TARGET_MGR.reset_leader_statistics(tenant_id))) {
       LOG_ERROR("reset leader statistics failed", K(ret));
     } else if (OB_FAIL(OB_PX_TARGET_MGR.get_version(tenant_id, leader_version))) {
@@ -621,7 +667,7 @@ int ObPxTenantTargetMonitorP::process()
       result_.set_status(MONITOR_VERSION_NOT_MATCH);
       result_.set_version(leader_version);
       LOG_INFO("need refresh all", K(tenant_id), K(arg_.need_refresh_all_),
-               K(follower_version), K(prev_leader_server_id), K(leader_server_id));
+               K(follower_version), K(prev_leader_server_index), K(leader_server_index));
     }
   } else if (OB_FAIL(OB_PX_TARGET_MGR.get_version(tenant_id, leader_version))) {
     LOG_WARN("get master_version failed", K(ret), K(tenant_id));
@@ -662,6 +708,13 @@ int ObPxCleanDtlIntermResP::process()
 {
   int ret = OB_SUCCESS;
   dtl::ObDTLIntermResultKey key;
+#ifdef ERRSIM
+  int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
+  if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
+    LOG_WARN("rpc not erase_dtl_interm_result by design", K(ret));
+    return OB_SUCCESS;
+  }
+#endif
   int64_t batch_size = 0 == arg_.batch_size_ ? 1 : arg_.batch_size_;
   for (int64_t i = 0; i < arg_.info_.count(); i++) {
     ObPxCleanDtlIntermResInfo &info = arg_.info_.at(i);
@@ -684,7 +737,7 @@ int ObPxCleanDtlIntermResP::process()
                 ret = OB_SUCCESS;
                 break;
               } else {
-                LOG_WARN("fail to release recieve internal result", K(ret), K(ret));
+                LOG_WARN("fail to release receive internal result", K(ret), K(ret));
               }
             }
           }

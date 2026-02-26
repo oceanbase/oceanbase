@@ -16,7 +16,6 @@
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/container/ob_array.h"
-#include "lib/string/ob_fixed_length_string.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
@@ -42,6 +41,7 @@ class ObSchemaGetterGuard;
 class ObPartitionSchema;
 class ObPartition;
 class ObTableSchema;
+class ObLatestSchemaGuard;
 }
 }
 namespace observer
@@ -105,7 +105,7 @@ public:
   ObBalanceGroupLSStatOperator();
   virtual ~ObBalanceGroupLSStatOperator();
   int init(
-      common::ObMySQLProxy *sql_proxy);
+      common::ObISQLClient *sql_proxy);
 public:
   int get_balance_group_ls_stat(
       const int64_t timeout,
@@ -148,7 +148,7 @@ private:
       common::ObSqlString &sql_string);
 private:
   bool inited_;
-  common::ObMySQLProxy *sql_proxy_;
+  common::ObISQLClient *sql_proxy_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBalanceGroupLSStatOperator);
 };
@@ -156,32 +156,40 @@ private:
 class ObNewTableTabletAllocator
 {
 public:
+  // when doing prepare() during parallel create local index, the data table should be the latest.
+  // thus, need the data_table_schema from the latest_schema_guard.
   ObNewTableTabletAllocator(
       const uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
-      common::ObMySQLProxy *sql_proxy,
-      const bool use_parallel_ddl = false);
+      common::ObISQLClient *sql_proxy,
+      const bool use_parallel_ddl = false,
+      const share::schema::ObTableSchema *data_table_schema = nullptr);
   virtual ~ObNewTableTabletAllocator();
 public:
   int init();
+  // tablegroup_schema can be NULL
   int prepare(
       ObMySQLTransaction &trans,
       const share::schema::ObTableSchema &table_schema,
-      bool is_add_partition = false);
+      const share::schema::ObTablegroupSchema *tablegroup_schema,
+      bool is_add_partition = false,
+      share::schema::ObLatestSchemaGuard *latest_schema_guard = NULL);
   int prepare_like(
       const share::schema::ObTableSchema &table_schema);
   int get_ls_id_array(
       common::ObIArray<share::ObLSID> &ls_id_array);
   int finish(const bool commit);
 private:
-  int alloc_ls_for_meta_or_sys_tenant_tablet(
+  int alloc_ls_for_sys_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_local_index_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_global_index_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_in_tablegroup_tablet(
-      const share::schema::ObTableSchema &table_schema);
+      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTablegroupSchema &tablegroup_schema,
+      share::schema::ObLatestSchemaGuard *latest_schema_guard = NULL);
   int alloc_ls_for_normal_table_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_duplicate_table_(
@@ -189,11 +197,11 @@ private:
 private:
   int alloc_tablet_for_tablegroup(
       const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObSimpleTablegroupSchema &tablegroup_schema);
+      const share::schema::ObTablegroupSchema &tablegroup_schema);
   int alloc_tablet_for_tablegroup(
       const share::schema::ObTableSchema &primary_schema,
       const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObSimpleTablegroupSchema &tablegroup_schema);
+      const share::schema::ObTablegroupSchema &tablegroup_schema);
   int wait_ls_elect_leader_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
@@ -266,7 +274,7 @@ private:
 private:
   uint64_t tenant_id_;
   share::schema::ObSchemaGetterGuard &schema_guard_;
-  common::ObMySQLProxy *sql_proxy_;
+  common::ObISQLClient *sql_proxy_;
   ObBalanceGroupLSStatOperator bg_ls_stat_operator_;
   MyStatus status_;
   common::ObArray<share::ObLSID> ls_id_array_;
@@ -274,6 +282,7 @@ private:
   bool is_add_partition_;
   static int64_t alloc_tablet_ls_offset_;
   bool use_parallel_ddl_;
+  const share::schema::ObTableSchema *data_table_schema_;
 };
 
 }//end namespace rootserver

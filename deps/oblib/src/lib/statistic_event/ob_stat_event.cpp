@@ -11,7 +11,6 @@
  */
 
 #include "lib/statistic_event/ob_stat_event.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -24,11 +23,11 @@ namespace common
 #define STAT_DEF_false(def, name, stat_class, stat_id, summary_in_session, can_visible)
 
 const ObStatEvent OB_STAT_EVENTS[] = {
-#define STAT_EVENT_ADD_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible, enable) \
+#define STAT_EVENT_ADD_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible, enable, ...) \
   STAT_DEF_##enable(def, name, stat_class, stat_id, summary_in_session, can_visible)
 #include "lib/statistic_event/ob_stat_event.h"
 #undef STAT_EVENT_ADD_DEF
-#define STAT_EVENT_SET_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible, enable) \
+#define STAT_EVENT_SET_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible, enable, ...) \
   STAT_DEF_##enable(def, name, stat_class, stat_id, summary_in_session, can_visible)
 #include "lib/statistic_event/ob_stat_event.h"
 #undef STAT_EVENT_SET_DEF
@@ -44,15 +43,8 @@ ObStatEventAddStat::ObStatEventAddStat()
 
 int ObStatEventAddStat::add(const ObStatEventAddStat &other)
 {
-  int ret = OB_SUCCESS;
-  if (other.is_valid()) {
-    if (is_valid()) {
-      stat_value_ += other.stat_value_;
-    } else {
-      *this = other;
-    }
-  }
-  return ret;
+  stat_value_ += other.stat_value_;
+  return OB_SUCCESS;
 }
 
 int ObStatEventAddStat::add(int64_t value)
@@ -62,14 +54,19 @@ int ObStatEventAddStat::add(int64_t value)
   return ret;
 }
 
+int ObStatEventAddStat::atomic_add(int64_t value)
+{
+  IGNORE_RETURN ATOMIC_AAF(&stat_value_, value);
+  return OB_SUCCESS;
+}
+
 void ObStatEventAddStat::reset()
 {
   stat_value_ = 0;
 }
 
 ObStatEventSetStat::ObStatEventSetStat()
-  : stat_value_(0),
-    set_time_(0)
+  : stat_value_(0)
 {
 }
 
@@ -77,13 +74,7 @@ int ObStatEventSetStat::add(const ObStatEventSetStat &other)
 {
   int ret = OB_SUCCESS;
   if (other.is_valid()) {
-    if (is_valid()) {
-      if (set_time_ < other.set_time_) {
-        *this = other;
-      }
-    } else {
-      *this = other;
-    }
+    *this = other;
   }
   return ret;
 }
@@ -91,7 +82,6 @@ int ObStatEventSetStat::add(const ObStatEventSetStat &other)
 void ObStatEventSetStat::reset()
 {
   stat_value_ = 0;
-  set_time_ = 0;
 }
 
 

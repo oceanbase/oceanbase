@@ -40,6 +40,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_next_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  static int reset_curr_value(const ObExpr &expr, ObEvalCtx &ctx);
 private:
 	DISALLOW_COPY_AND_ASSIGN(ObExprGeneratorFunc);
 };

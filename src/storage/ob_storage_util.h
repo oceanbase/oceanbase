@@ -16,6 +16,7 @@
 #include "lib/allocator/ob_allocator.h"
 #include "share/datum/ob_datum_funcs.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "common/ob_common_types.h"
 
 namespace oceanbase
 {
@@ -29,6 +30,7 @@ class ObColumnParam;
 namespace common
 {
 class ObBitmap;
+struct ObVersionRange;
 }
 namespace sql
 {
@@ -88,19 +90,30 @@ int fill_exprs_lob_locator(const ObTableIterParam &iter_param,
 
 int check_skip_by_monotonicity(sql::ObBlackFilterExecutor &filter,
                                blocksstable::ObStorageDatum &min_datum,
+                               const bool is_min_prefix,
                                blocksstable::ObStorageDatum &max_datum,
+                               const bool is_max_prefix,
                                const sql::ObBitVector &skip_bit,
                                const bool has_null,
+                               const bool is_pad_coll,
                                ObBitmap *result_bitmap,
                                sql::ObBoolMask &bool_mask);
 
 int cast_obj(const common::ObObjMeta &src_meta, common::ObIAllocator &cast_allocator, common::ObObj &obj);
 
-int init_expr_vector_header(
+
+OB_INLINE int init_expr_vector_header(
     sql::ObExpr &expr,
     sql::ObEvalCtx &eval_ctx,
     const int64_t size,
-    const VectorFormat format = VectorFormat::VEC_UNIFORM);
+    const VectorFormat format = VectorFormat::VEC_UNIFORM)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.init_vector(eval_ctx, format, size, true))) {
+    STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(expr));
+  }
+  return ret;
+}
 
 OB_INLINE int init_exprs_uniform_header(
     const sql::ObExprPtrIArray *exprs,
@@ -122,10 +135,51 @@ OB_INLINE int init_exprs_uniform_header(
   return ret;
 }
 
-int init_exprs_new_format_header(
+OB_INLINE int init_exprs_vector_header(
+    const sql::ObExprPtrIArray *exprs,
+    sql::ObEvalCtx &eval_ctx,
+    const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != exprs) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < exprs->count(); ++i) {
+      sql::ObExpr *expr = exprs->at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected null expr", K(ret), KPC(exprs));
+      } else if (OB_FAIL(init_expr_vector_header(*expr, eval_ctx, size, expr->get_default_res_format()))) {
+        STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(expr));
+      }
+    }
+  }
+  return ret;
+}
+
+OB_INLINE int init_exprs_new_format_header(
     const common::ObIArray<int32_t> &cols_projector,
     const sql::ObExprPtrIArray &exprs,
-    sql::ObEvalCtx &eval_ctx);
+    sql::ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
+    sql::ObExpr *expr = exprs.at(i);
+    if (OB_FAIL(expr->init_vector_default(eval_ctx, eval_ctx.max_batch_size_))) {
+      STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
+    }
+  }
+  return ret;
+}
+
+OB_INLINE void set_not_null_for_exprs(
+    const common::ObIArray<int32_t> &cols_projector,
+    const sql::ObExprPtrIArray &exprs,
+    sql::ObEvalCtx &eval_ctx)
+{
+  for (int64_t i = 0; i < cols_projector.count(); ++i) {
+    sql::ObExpr *expr = exprs.at(i);
+    expr->set_all_not_null(eval_ctx, eval_ctx.max_batch_size_);
+  }
+}
 
 OB_INLINE bool can_do_ascii_optimize(common::ObCollationType cs_type)
 {
@@ -295,7 +349,12 @@ inline static common::ObDatumCmpFuncType get_datum_cmp_func(const common::ObObjM
         is_oracle_mode,
         col_obj_type.has_lob_header() || param_obj_type.has_lob_header());
   } else {
-    sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(col_obj_type.get_type(), col_obj_type.get_collation_type());
+    sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
+        col_obj_type.get_type(),
+        col_obj_type.get_collation_type(),
+        col_obj_type.get_scale(),
+        is_oracle_mode,
+        col_obj_type.is_lob_storage());
     cmp_func = is_oracle_mode ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
   }
   return cmp_func;
@@ -304,10 +363,11 @@ inline static common::ObDatumCmpFuncType get_datum_cmp_func(const common::ObObjM
 struct ObDatumComparator
 {
 public:
-  ObDatumComparator(const ObDatumCmpFuncType cmp_func, int &ret, bool &equal)
+  ObDatumComparator(const ObDatumCmpFuncType cmp_func, int &ret, bool &equal, bool reverse=false)
     : cmp_func_(cmp_func),
       ret_(ret),
-      equal_(equal)
+      equal_(equal),
+      reverse_(reverse)
   {}
   ~ObDatumComparator() {}
   OB_INLINE bool operator() (const ObDatum &datum1, const ObDatum &datum2)
@@ -316,17 +376,20 @@ public:
     int cmp_ret = 0;
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(cmp_func_(datum1, datum2, cmp_ret))) {
+    } else if (!reverse_ && OB_FAIL(cmp_func_(datum1, datum2, cmp_ret))) {
+      STORAGE_LOG(WARN, "Failed to compare datum", K(ret), K(datum1), K(datum2), K_(cmp_func));
+    } else if (reverse_ && OB_FAIL(cmp_func_(datum2, datum1, cmp_ret))) {
       STORAGE_LOG(WARN, "Failed to compare datum", K(ret), K(datum1), K(datum2), K_(cmp_func));
     } else if (0 == cmp_ret && !equal_) {
       equal_ = true;
     }
-    return cmp_ret < 0;
+    return reverse_ ? cmp_ret > 0 : cmp_ret < 0;
   }
 private:
   ObDatumCmpFuncType cmp_func_;
   int &ret_;
   bool &equal_;
+  bool reverse_;
 };
 
 enum class ObFilterInCmpType {
@@ -382,6 +445,91 @@ inline ObFilterInCmpType get_filter_in_cmp_type(
   }
   return cmp_type;
 }
+
+inline int reverse_trans_version_val(common::ObDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(datum.is_nop() || datum.is_null() || datum.get_int() > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected datum value", K(ret), K(datum));
+  } else {
+    datum.set_int(-datum.get_int());
+  }
+  return ret;
+}
+int reverse_trans_version_val(common::ObDatum *datums, const int64_t count);
+int reverse_trans_version_val(ObIVector *vector, const int64_t count);
+
+enum class StorageScanType : int8_t
+{
+  NORMAL = 0,
+  MVIEW_FIRST_DELETE = 1,
+  MVIEW_LAST_INSERT = 2,
+  MVIEW_FINAL_ROW = 3,
+};
+OB_INLINE bool is_mview_scan_old_row(const StorageScanType type)
+{
+  return  StorageScanType::MVIEW_FIRST_DELETE == type;
+}
+OB_INLINE bool is_mview_scan_new_row(const StorageScanType type)
+{
+  return  StorageScanType::MVIEW_LAST_INSERT == type;
+}
+OB_INLINE bool is_mview_scan_final_row(const StorageScanType type)
+{
+  return  StorageScanType::MVIEW_FINAL_ROW == type;
+}
+OB_INLINE bool is_mview_table_scan(const StorageScanType type)
+{
+  return  StorageScanType::NORMAL < type && type <= StorageScanType::MVIEW_FINAL_ROW;
+}
+OB_INLINE bool is_mview_need_deleted_row(const StorageScanType type)
+{
+  return is_mview_scan_old_row(type) || is_mview_scan_final_row(type);
+}
+
+struct ObMviewScanInfo
+{
+  static const char *OLD_ROW;
+  static const char *NEW_ROW;
+  ObMviewScanInfo(ObIAllocator *alloc) : is_mv_refresh_query_(false),
+                                         scan_type_(StorageScanType::NORMAL),
+                                         begin_version_(-1),
+                                         end_version_(-1)
+  {
+  }
+  int init(
+      const bool is_mv_refresh_query,
+      const StorageScanType scan_type,
+      const int64_t begin_version,
+      const int64_t end_version);
+  OB_INLINE bool is_begin_valid() const { return -1 != begin_version_; }
+  OB_INLINE bool is_end_valid() const { return -1 != end_version_; }
+  OB_INLINE bool is_valid() const
+  {
+    return is_mview_table_scan(scan_type_) &&
+           is_begin_valid() &&
+           (!is_end_valid() || begin_version_ < end_version_);
+  }
+  int check_and_update_version_range(const int64_t multi_version_start, common::ObVersionRange &origin_range);
+  TO_STRING_KV(K_(is_mv_refresh_query), K_(scan_type), K_(begin_version), K_(end_version));
+  bool is_mv_refresh_query_;
+  StorageScanType scan_type_;
+  // (begin_version, end_version]
+  int64_t begin_version_;
+  int64_t end_version_;
+};
+int build_mview_scan_info_if_need(
+    const common::ObQueryFlag query_flag,
+    const sql::ObExprPtrIArray *op_filters,
+    sql::ObEvalCtx &eval_ctx,
+    common::ObIAllocator *alloc,
+    ObMviewScanInfo *&mview_scan_info);
+int get_query_begin_version_for_mlog(
+    const sql::ObExprPtrIArray &op_filters,
+    sql::ObEvalCtx &eval_ctx,
+    int64_t &begin_version);
+void release_mview_scan_info(common::ObIAllocator *alloc, ObMviewScanInfo *&mview_scan_info);
 
 }
 }

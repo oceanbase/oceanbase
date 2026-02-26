@@ -11,13 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/ob_define.h"
-#include "lib/random/ob_random.h"
-#include "lib/alloc/ob_malloc_allocator.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "share/allocator/ob_tenant_mutil_allocator.h"
-#include "lib/oblog/ob_log.h"
-#include "storage/ob_file_system_router.h"
 
 namespace oceanbase
 {

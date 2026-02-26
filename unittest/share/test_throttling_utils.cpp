@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include <gtest/gtest.h>
-#include <random>
-#include <string>
-#include <pthread.h>
 
-#include "lib/ob_define.h"
-#include "lib/utility/ob_print_utils.h" // Print*
 #include "logservice/palf/log_define.h"
 #include "share/ob_throttling_utils.h"
 

@@ -33,6 +33,7 @@ public:
   {
     UNIT_STATUS_ACTIVE = 0,
     UNIT_STATUS_DELETING,
+    UNIT_STATUS_ADDING,
     UNIT_STATUS_MAX,
   };
 public:
@@ -43,12 +44,33 @@ public:
   ~ObUnit() {}
   inline bool operator <(const ObUnit &unit) const;
   int assign(const ObUnit& that);
+  int init(const uint64_t unit_id,
+           const uint64_t resource_pool_id,
+           const uint64_t unit_group_id,
+           const common::ObZone &zone,
+           const common::ObAddr &server,
+           const common::ObAddr &migrate_from_server,
+           const bool is_manual_migrate,
+           const Status &status,
+           const common::ObReplicaType &replica_type,
+           const int64_t time_stamp);
   void reset();
   bool is_valid() const;
+  static bool is_valid_status(const Status status);
   bool is_manual_migrate() const { return is_manual_migrate_; }
-  bool is_active_status() const { return UNIT_STATUS_ACTIVE == status_; }
+  // unit in ADDING status is fully functional as ACTIVE status
+  bool is_active_or_adding_status() const { return UNIT_STATUS_ACTIVE == status_ || UNIT_STATUS_ADDING == status_; }
   int get_unit_status_str(const char *&status) const;
   Status get_unit_status() const { return status_; }
+  static bool compare_with_zone(const ObUnit &lu, const ObUnit &ru);
+  bool has_same_unit_group_info(const ObUnit &ohter) const
+  {
+    return unit_id_ == ohter.unit_id_
+        && unit_group_id_ == ohter.unit_group_id_
+        && zone_ == ohter.zone_
+        && resource_pool_id_ == ohter.resource_pool_id_
+        && status_ == ohter.status_;
+  }
 
   DECLARE_TO_STRING;
 
@@ -66,6 +88,7 @@ public:
   bool is_manual_migrate_;
   Status status_;
   common::ObReplicaType replica_type_;
+  int64_t time_stamp_ =  OB_INVALID_TIMESTAMP;
 };
 
 inline bool ObUnit::operator <(const ObUnit &unit) const
@@ -90,33 +113,48 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObUnitInfo);
 };
 
-struct ObSimpleUnitGroup
+class ObTenantServers
 {
 public:
- ObSimpleUnitGroup(uint64_t unit_group_id, ObUnit::Status status) : unit_group_id_(unit_group_id), status_(status) {}
- ObSimpleUnitGroup(){reset();}
- ~ObSimpleUnitGroup() {}
- void reset()
- {
-  unit_group_id_ = OB_INVALID_ID;
-  status_ = ObUnit::UNIT_STATUS_MAX;
- }
- bool is_valid() const;
- int assign(const ObSimpleUnitGroup &other)
- {
-  unit_group_id_ = other.unit_group_id_;
-  status_ = other.status_;
-  return OB_SUCCESS;
- }
- bool is_active() const
- { return ObUnit::UNIT_STATUS_ACTIVE == status_; }
- uint64_t get_unit_group_id() const { return unit_group_id_; }
- ObUnit::Status get_status() const  { return status_; }
- TO_STRING_KV(K_(unit_group_id), K_(status));
- bool operator<(const ObSimpleUnitGroup &that) { return unit_group_id_ < that.unit_group_id_; }
+  ObTenantServers();
+  virtual ~ObTenantServers();
+  /*
+    If ObTenantServers is invalid, initialize it with tenant_id,
+    and insert both server and a valid migrate_server to server_.
+    If ObTenantServers is valid and the server to be inserted belongs to the same tenant,
+    perform only the insertion operation without changing the tenant_id.
+
+    @param[in] tenant_id        The server belongs to which tenant，
+                                Used for initialization
+    @param[in] server           The server to be inserted
+    @param[in] migrate_server   The server to be inserted
+                                If invalid, do not perform the insertion
+    @return
+      - OB_INVALID_ARGUMENT     Tenant_id, server, or renew_time is invalid.
+      - OB_CONFLICT_VALUE       Already initialized; tenant mismatch
+  */
+  virtual int init_or_insert_server(
+      const uint64_t tenant_id,
+      const common::ObAddr &server,
+      const common::ObAddr &migrate_server,
+      const int64_t renew_time);
+  virtual int assign(const ObTenantServers &other);
+  virtual void reset();
+  virtual bool is_valid() const;
+  virtual inline common::ObArray<common::ObAddr> get_servers() const { return servers_; }
+  virtual inline uint64_t get_tenant_id() const { return tenant_id_; }
+  virtual inline int64_t get_renew_time() const { return renew_time_; };
+  TO_STRING_KV(K_(tenant_id), K_(servers), K_(renew_time));
 private:
-  uint64_t unit_group_id_;
-  ObUnit::Status status_;
+  /*
+    The input server will be inserted into the server_ of ObTenantServers.
+    If the server already exists in server_, it will not be inserted.
+  */
+  virtual int insert_server_(const common::ObAddr &server);
+protected:
+  uint64_t tenant_id_;
+  common::ObArray<common::ObAddr> servers_;
+  int64_t renew_time_;
 };
 
 }//end namespace share

@@ -149,6 +149,34 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTriggerColumnsInfo);
 };
 
+struct ObTriggerRowRefType
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum RefType {
+    RT_NONE = 0,  // trigger not reference the column
+    RT_READ = 1,  // trigger only read the column
+    RT_WRITE = 2, // trigger write(include read) the column
+  };
+  ObTriggerRowRefType()
+    : old_type_(RT_NONE),
+      new_type_(RT_NONE)
+  {}
+  inline bool is_none_old_column() const { return old_type_ == RT_NONE; }
+  inline bool is_read_old_column() const { return old_type_ == RT_READ; }
+  inline bool is_write_old_column() const { return old_type_ == RT_WRITE; }
+  inline bool is_none_new_column() const { return new_type_ == RT_NONE; }
+  inline bool is_read_new_column() const { return new_type_ == RT_READ; }
+  inline bool is_write_new_column() const { return new_type_ == RT_WRITE; }
+  inline void set_read_old_column() { old_type_ = RT_READ; }
+  inline void set_write_old_column() { old_type_ = RT_WRITE; }
+  inline void set_read_new_column() { new_type_ = RT_READ; }
+  inline void set_write_new_column() { new_type_ = RT_WRITE; }
+  TO_STRING_KV(K_(old_type), K_(new_type));
+  RefType old_type_;
+  RefType new_type_;
+};
+
 class ObTriggerArg
 {
   OB_UNIS_VERSION(1);
@@ -157,13 +185,27 @@ public:
     : trigger_id_(common::OB_INVALID_ID),
       trigger_events_(),
       timing_points_(),
-      analyze_flag_(0)
+      analyze_flag_(0),
+      trigger_type_(0),
+      ref_types_()
   {}
+  ObTriggerArg(ObIAllocator &alloc)
+    : trigger_id_(common::OB_INVALID_ID),
+      trigger_events_(),
+      timing_points_(),
+      analyze_flag_(0),
+      trigger_type_(0),
+      ref_types_(alloc)
+  {}
+public:
   inline void reset()
   {
     trigger_id_ = common::OB_INVALID_ID;
     trigger_events_.reset();
     timing_points_.reset();
+    analyze_flag_ = 0;
+    trigger_type_ = 0;
+    ref_types_.reset();
   }
 
   inline void set_trigger_id(uint64_t trigger_id)
@@ -205,6 +247,10 @@ public:
   inline bool has_after_stmt_point() const { return timing_points_.has_after_stmt(); }
   inline const share::schema::ObTriggerEvents &get_trigger_events() const { return trigger_events_; }
   inline const share::schema::ObTimingPoints &get_timing_points() const { return timing_points_; }
+  inline void set_trigger_type(int64_t trigger_type) { trigger_type_ = trigger_type; }
+  inline int64_t get_trigger_type() const { return trigger_type_; }
+  inline ObFixedArray<ObTriggerRowRefType, ObIAllocator> &get_ref_types() { return ref_types_; }
+  inline const ObFixedArray<ObTriggerRowRefType, ObIAllocator> &get_ref_types() const { return ref_types_; }
 
   TO_STRING_KV(K(trigger_id_),
                K(trigger_events_.bit_value_),
@@ -234,6 +280,9 @@ private:
       uint64_t reserved_:54;
     };
   };
+  int64_t trigger_type_;
+  // pair<old_row_ref_type, new_row_ref_type>
+  ObFixedArray<ObTriggerRowRefType, ObIAllocator> ref_types_;
 };
 typedef common::ObFixedArray<ObTriggerArg, common::ObIAllocator> ObTriggerArgArray;
 
@@ -250,12 +299,16 @@ public:
       old_row_exprs_(alloc),
       new_row_exprs_(alloc),
       rowid_old_expr_(nullptr),
-      rowid_new_expr_(nullptr)
+      rowid_new_expr_(nullptr),
+      ref_types_(alloc),
+      trig_flags_(0)
   { }
   TO_STRING_KV(K_(tg_event),
                K_(tg_args),
                K_(trig_col_info),
-               K_(all_tm_points_.bit_value));
+               K_(all_tm_points_.bit_value),
+               K_(ref_types),
+               K_(trig_flags));
   uint64_t tg_event_;
   ObTriggerArgArray tg_args_;
   share::schema::ObTimingPoints all_tm_points_;
@@ -264,6 +317,22 @@ public:
   ExprFixedArray new_row_exprs_;
   ObExpr *rowid_old_expr_;
   ObExpr *rowid_new_expr_;
+  ObFixedArray<ObTriggerRowRefType, common::ObIAllocator> ref_types_;
+  union {
+    uint64_t trig_flags_;
+    struct {
+      uint64_t is_ref_old_row_ : 1;
+      uint64_t is_ref_new_row_ : 1;
+      uint64_t is_ref_old_rowid_ : 1;
+      uint64_t is_ref_new_rowid_ : 1;
+      uint64_t is_prune_columns_ : 1;
+      uint64_t reserved_: 59;
+    };
+  };
+  bool inline is_ref_old_row() const { return is_ref_old_row_ || !is_prune_columns_; }
+  bool inline is_ref_new_row() const { return is_ref_new_row_ || !is_prune_columns_; }
+  bool inline is_ref_old_rowid() const { return is_ref_old_rowid_ || !is_prune_columns_; }
+  bool inline is_ref_new_rowid() const { return is_ref_new_rowid_ || !is_prune_columns_; }
 };
 
 //trigger runtime context definition
@@ -272,7 +341,6 @@ struct ObTrigDMLRtDef
   ObTrigDMLRtDef()
     : old_record_(nullptr),
       new_record_(nullptr),
-      tg_when_point_params_(nullptr),
       tg_row_point_params_(),
       tg_all_params_(nullptr),
       update_columns_(nullptr),
@@ -280,12 +348,10 @@ struct ObTrigDMLRtDef
   { }
   TO_STRING_KV(K_(old_record),
                K_(new_record),
-               K_(tg_when_point_params),
                K_(tg_row_point_params),
                KPC_(tg_all_params));
   pl::ObPLRecord *old_record_;
   pl::ObPLRecord *new_record_;
-  ParamStore *tg_when_point_params_;
   ParamStore *tg_row_point_params_;
   common::ObObjParam *tg_all_params_;
   ObObj *update_columns_;
@@ -357,6 +423,8 @@ public:
     : ref_action_(share::schema::ACTION_INVALID),
       database_name_(),
       table_name_(),
+      foreign_key_database_name_(),
+      foreign_key_name_(),
       columns_(),
       is_self_ref_(false),
       table_id_(0),
@@ -368,6 +436,8 @@ public:
     : ref_action_(share::schema::ACTION_INVALID),
       database_name_(),
       table_name_(),
+      foreign_key_database_name_(),
+      foreign_key_name_(),
       columns_(alloc),
       is_self_ref_(false),
       table_id_(0),
@@ -379,14 +449,18 @@ public:
     ref_action_ = share::schema::ACTION_INVALID;
     database_name_.reset();
     table_name_.reset();
+    foreign_key_database_name_.reset();
+    foreign_key_name_.reset();
     table_id_ = OB_INVALID_ID;
     columns_.reset();
   }
-  TO_STRING_KV(K_(ref_action), K_(database_name), K_(table_name), K_(columns), K_(is_self_ref), K_(table_id));
+  TO_STRING_KV(K_(ref_action), K_(database_name), K_(table_name), K_(foreign_key_database_name), K_(foreign_key_name), K_(columns), K_(is_self_ref), K_(table_id));
 public:
   share::schema::ObReferenceAction ref_action_;
   common::ObString database_name_;
   common::ObString table_name_;
+  common::ObString foreign_key_database_name_;
+  common::ObString foreign_key_name_;
   common::ObFixedArray<ObForeignKeyColumn, common::ObIAllocator> columns_;
   bool is_self_ref_;
   // the index table id of unique index for parent key, used to build das task to scan index table
@@ -469,9 +543,11 @@ public:
                        K_(full_row),
                        K_(view_check_exprs),
                        K_(is_primary_index),
-                       K_(is_heap_table),
+                       K_(is_table_without_pk),
                        K_(has_instead_of_trigger),
-                       KPC_(trans_info_expr));
+                       KPC_(trans_info_expr),
+                       K_(is_vec_hnsw_index_vid_opt),
+                       K_(is_table_with_clustering_key));
 
   ObDMLOpType dml_type_;
   ExprFixedArray check_cst_exprs_;
@@ -492,9 +568,11 @@ public:
   ObErrLogCtDef error_logging_ctdef_;
   ExprFixedArray view_check_exprs_;
   bool is_primary_index_;
-  bool is_heap_table_;
+  bool is_table_without_pk_;
   bool has_instead_of_trigger_;
   ObExpr *trans_info_expr_;
+  bool is_table_with_clustering_key_;
+  bool is_vec_hnsw_index_vid_opt_;
 protected:
   ObDMLBaseCtDef(common::ObIAllocator &alloc,
                  ObDASDMLBaseCtDef &das_base_ctdef,
@@ -511,9 +589,11 @@ protected:
       error_logging_ctdef_(alloc),
       view_check_exprs_(alloc),
       is_primary_index_(false),
-      is_heap_table_(false),
+      is_table_without_pk_(false),
       has_instead_of_trigger_(false),
-      trans_info_expr_(nullptr)
+      trans_info_expr_(nullptr),
+      is_table_with_clustering_key_(false),
+      is_vec_hnsw_index_vid_opt_(false)
   { }
 };
 
@@ -632,6 +712,7 @@ public:
     : ObDMLBaseCtDef(alloc, dupd_ctdef_, DAS_OP_TABLE_UPDATE),
       dupd_ctdef_(alloc),
       need_check_filter_null_(false),
+      need_check_table_cycle_(false),
       distinct_algo_(T_DISTINCT_NONE),
       assign_columns_(alloc),
       ddel_ctdef_(nullptr),
@@ -647,6 +728,7 @@ public:
   INHERIT_TO_STRING_KV("ObDMLBaseCtDef", ObDMLBaseCtDef,
                        K_(dupd_ctdef),
                        K_(need_check_filter_null),
+                       K_(need_check_table_cycle),
                        K_(distinct_algo),
                        K_(assign_columns),
                        K_(distinct_key),
@@ -660,6 +742,8 @@ public:
                        K_(related_ins_ctdefs));
   ObDASUpdCtDef dupd_ctdef_;
   bool need_check_filter_null_;
+  // need_check_table_cycle_ is true if the fk cascade update may cause a cycle reference.
+  bool need_check_table_cycle_;
   DistinctType distinct_algo_;
   ColContentFixedArray assign_columns_;
   //if update target column involve the partition key,
@@ -689,6 +773,7 @@ public:
       dlock_rtdef_(nullptr),
       primary_rtdef_(nullptr),
       is_row_changed_(false),
+      has_table_cycle_(false),
       found_rows_(0),
       related_upd_rtdefs_(),
       related_del_rtdefs_(),
@@ -721,6 +806,7 @@ public:
                        KPC_(dins_rtdef),
                        KPC_(dlock_rtdef),
                        K_(is_row_changed),
+                       K_(has_table_cycle),
                        K_(found_rows),
                        K_(related_upd_rtdefs),
                        K_(related_del_rtdefs),
@@ -732,6 +818,7 @@ public:
   ObDASLockRtDef *dlock_rtdef_;
   ObUpdRtDef *primary_rtdef_; //reference the data table's rtdef
   bool is_row_changed_;
+  bool has_table_cycle_;
   int64_t found_rows_;
   DASUpdRtDefArray related_upd_rtdefs_;
   DASDelRtDefArray related_del_rtdefs_;
@@ -962,14 +1049,35 @@ public:
     : ins_ctdef_(NULL),
       upd_ctdef_(NULL),
       is_upd_rowkey_(false),
+      do_opt_path_(false),
+      do_index_lookup_(false),
+      unique_key_conv_exprs_(alloc),
+      unique_index_rowkey_exprs_(alloc),
+      das_index_scan_ctdef_(NULL),
+      lookup_ctdef_for_batch_(NULL),
+      enable_do_update_directly_(false),
       alloc_(alloc)
   { }
   TO_STRING_KV(KPC_(ins_ctdef),
                KPC_(upd_ctdef),
-               K_(is_upd_rowkey))
+               K_(das_index_scan_ctdef),
+               K_(lookup_ctdef_for_batch),
+               K_(is_upd_rowkey),
+               K_(do_opt_path),
+               K_(enable_do_update_directly))
   ObInsCtDef *ins_ctdef_;
   ObUpdCtDef *upd_ctdef_;
   bool is_upd_rowkey_;
+
+  /* for opt path */
+  bool do_opt_path_;                         // is do opt path
+  bool do_index_lookup_;                     // is do index lookup
+  ExprFixedArray unique_key_conv_exprs_;     // index unique conv exprs
+  ExprFixedArray unique_index_rowkey_exprs_; // index unique rowkey exprs
+  ObDASScanCtDef *das_index_scan_ctdef_;     // scan the unique index table
+  ObDASScanCtDef *lookup_ctdef_for_batch_;   // lookup data table by batch
+
+  bool enable_do_update_directly_;
   common::ObIAllocator &alloc_;
 };
 
@@ -1015,13 +1123,16 @@ struct ObDMLRtCtx
     : das_ref_(eval_ctx, exec_ctx),
       das_task_status_(),
       op_(op),
-      cached_row_size_(0)
+      exec_ctx_(exec_ctx),
+      das_task_memory_size_(0),
+      das_parallel_task_size_(0)
   { }
 
   void reuse()
   {
     das_ref_.reuse();
-    cached_row_size_ = 0;
+    das_task_memory_size_ = 0;
+    das_parallel_task_size_ = 0;
   }
 
   void cleanup()
@@ -1038,13 +1149,31 @@ struct ObDMLRtCtx
   { return das_task_status_.need_pick_del_task_first(); }
   bool need_non_sub_full_task()
   { return das_task_status_.need_non_sub_full_task(); }
-  void add_cached_row_size(const int64_t row_size) { cached_row_size_ += row_size; }
-  int64_t get_row_buffer_size() const { return cached_row_size_; }
+  void add_das_task_memory_size(const int64_t row_size) { das_task_memory_size_ += row_size; }
+  int64_t get_das_task_memory_size() const { return das_task_memory_size_; }
+  void add_das_parallel_task_size(const int64_t row_size) { das_parallel_task_size_ += row_size; }
+  int64_t get_das_parallel_task_size() const { return das_parallel_task_size_; }
+
+  bool need_submit_all_tasks()
+  {
+    bool bret = false;
+    int64_t simulate_buffer_size = - EVENT_CALL(EventTable::EN_DAS_DML_BUFFER_OVERFLOW);
+    int64_t buffer_size_limit = is_meta_tenant(MTL_ID()) ? das::OB_DAS_MAX_META_TENANT_PACKET_SIZE : das::OB_DAS_MAX_TOTAL_PACKET_SIZE;
+    if (OB_UNLIKELY(simulate_buffer_size > 0)) {
+      buffer_size_limit = simulate_buffer_size;
+    }
+    if ((das_task_memory_size_ - das_parallel_task_size_) >= buffer_size_limit) {
+      bret = true;
+    }
+    return bret;
+  }
 
   ObDASRef das_ref_;
   DasTaskStatus das_task_status_;
   ObTableModifyOp &op_;
-  int64_t cached_row_size_;
+  ObExecContext &exec_ctx_;
+  int64_t das_task_memory_size_;
+  int64_t das_parallel_task_size_;
 };
 
 template <typename T>
@@ -1080,6 +1209,11 @@ public:
             dml_rtdef_(dml_rtdef),
             dml_event_(dml_event)
   {}
+
+  TO_STRING_KV(KPC_(new_row),
+               KPC_(old_row),
+               KPC_(full_row),
+               K_(dml_event));
   ObChunkDatumStore::StoredRow *new_row_;
   ObChunkDatumStore::StoredRow *old_row_;
   ObChunkDatumStore::StoredRow *full_row_;

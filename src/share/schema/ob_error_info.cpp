@@ -11,15 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "lib/container/ob_array_serialization.h"
 #include "ob_error_info.h"
-#include "ob_schema_getter_guard.h"
 #include "lib/oblog/ob_warning_buffer.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase
@@ -107,7 +100,8 @@ bool ObErrorInfo::is_valid() const
 
 int ObErrorInfo::collect_error_info(const IObErrorInfo *info, 
                                     const ObWarningBuffer *buf, 
-                                    bool fill_info)
+                                    bool fill_info,
+                                    const ObObjectType obj_type)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(info)) {
@@ -119,7 +113,7 @@ int ObErrorInfo::collect_error_info(const IObErrorInfo *info,
       (set_database_id(info->get_database_id()));
       (set_tenant_id(info->get_tenant_id()));
       (set_schema_version(info->get_schema_version()));
-      (set_obj_type(static_cast<uint64_t>(info->get_object_type())));
+      (set_obj_type(static_cast<uint64_t>(obj_type == ObObjectType::INVALID ? info->get_object_type() : obj_type)));
       if (NULL != buf) {
         (set_error_number(buf->get_err_code()));
         set_line((const_cast<ObWarningBuffer *>(buf))->get_error_line());
@@ -147,7 +141,8 @@ int ObErrorInfo::collect_error_info(const IObErrorInfo *info,
   return ret;
 }
 
-int ObErrorInfo::collect_error_info(const IObErrorInfo *info)
+int ObErrorInfo::collect_error_info(const IObErrorInfo *info,
+                                    const ObObjectType obj_type)
 {
   int ret = OB_SUCCESS;
   if (NULL == info) {
@@ -157,7 +152,7 @@ int ObErrorInfo::collect_error_info(const IObErrorInfo *info)
     const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
     if (OB_NOT_NULL(warnings_buf)) {
       uint16_t wcnt = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
-      if (OB_FAIL(collect_error_info(info, warnings_buf, wcnt > 0))) {
+      if (OB_FAIL(collect_error_info(info, warnings_buf, wcnt > 0, obj_type))) {
         LOG_WARN("failed to fill error info", K(ret), K(*this));
       } else {
         // do nothing
@@ -226,7 +221,7 @@ int ObErrorInfo::gen_error_dml(const uint64_t exec_tenant_id,
   return ret;
 }
 
-int ObErrorInfo::update_error_info(const IObErrorInfo *info) {
+int ObErrorInfo::update_error_info(const IObErrorInfo *info, const ObObjectType obj_type) {
   int ret = OB_SUCCESS;
   
   if (NULL == info) {
@@ -234,7 +229,7 @@ int ObErrorInfo::update_error_info(const IObErrorInfo *info) {
     LOG_WARN("update update error info failed due to null info", K(ret));
   } else {
     (set_obj_id(info->get_object_id()));
-    (set_obj_type(static_cast<uint64_t>(info->get_object_type())));
+    (set_obj_type(static_cast<uint64_t>(obj_type == ObObjectType::INVALID ? info->get_object_type() : obj_type)));
     (set_database_id(info->get_database_id()));
     (set_tenant_id(info->get_tenant_id()));
     (set_schema_version(info->get_schema_version()));
@@ -399,11 +394,12 @@ int ObErrorInfo::get_error_obj_seq(common::ObISQLClient &sql_client,
   return ret;
 }
 
-int ObErrorInfo::handle_error_info(ObMySQLTransaction &trans, const IObErrorInfo *info)
+int ObErrorInfo::handle_error_info(ObMySQLTransaction &trans, const IObErrorInfo *info,
+                                   const ObObjectType obj_type)
 {
   int ret = OB_SUCCESS;
   ObErrorInfo &error_info = *this;
-  if (OB_NOT_NULL(info) && OB_FAIL(update_error_info(info))) {
+  if (OB_NOT_NULL(info) && OB_FAIL(update_error_info(info, obj_type))) {
     LOG_WARN("update error info failed.", K(ret));
   } else if (error_info.is_valid()) {
     bool exist = false;
@@ -437,15 +433,19 @@ int ObErrorInfo::handle_error_info(ObMySQLTransaction &trans, const IObErrorInfo
   return ret;
 }
 
-int ObErrorInfo::handle_error_info(const IObErrorInfo *info)
+int ObErrorInfo::handle_error_info(const IObErrorInfo *info,
+                                   const ObObjectType obj_type)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
-  if (OB_FAIL(collect_error_info(info))) {
+  if (OB_FAIL(collect_error_info(info, obj_type))) {
     LOG_WARN("collect error info failed", K(ret));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, get_tenant_id(), true))) {
+  } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
+    // do nothing
+  }
+  else if (OB_FAIL(trans.start(GCTX.sql_proxy_, get_tenant_id(), true))) {
     LOG_WARN("fail start trans", K(ret));
-  } else if (OB_FAIL(handle_error_info(trans, info))) {
+  } else if (OB_FAIL(handle_error_info(trans, info, obj_type))) {
     LOG_WARN("handle error info failed.", K(ret));
   }
   if (trans.is_started()) {
@@ -458,7 +458,8 @@ int ObErrorInfo::handle_error_info(const IObErrorInfo *info)
   return ret;
 }
 
-int ObErrorInfo::delete_error(const IObErrorInfo *info)
+int ObErrorInfo::delete_error(const IObErrorInfo *info,
+                              const ObObjectType obj_type)
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy *sql_proxy = nullptr;
@@ -467,7 +468,7 @@ int ObErrorInfo::delete_error(const IObErrorInfo *info)
   } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    if (OB_FAIL(collect_error_info(info, NULL, true))) {
+    if (OB_FAIL(collect_error_info(info, NULL, true, obj_type))) {
       LOG_WARN("collect error info failed.", K(ret), K(info), K(*this));
     } else {
       if (OB_FAIL(del_error(sql_proxy))) {

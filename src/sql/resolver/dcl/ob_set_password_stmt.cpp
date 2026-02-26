@@ -37,7 +37,8 @@ ObSetPasswordStmt::~ObSetPasswordStmt()
 
 int ObSetPasswordStmt::set_user_password(const common::ObString &user_name,
                                          const common::ObString &host_name,
-                                         const common::ObString &password)
+                                         const common::ObString &password,
+                                         const common::ObString &plugin)
 {
   int ret = OB_SUCCESS;
   if (0 != user_pwd_.count()) {
@@ -48,6 +49,8 @@ int ObSetPasswordStmt::set_user_password(const common::ObString &user_name,
   } else if (OB_FAIL(user_pwd_.add_string(host_name))) {
     LOG_WARN("failed to add string", K(ret));
   } else if (OB_FAIL(user_pwd_.add_string(password))) {
+    LOG_WARN("failed to add string", K(ret));
+  } else if (OB_FAIL(plugins_.add_string(plugin))) {
     LOG_WARN("failed to add string", K(ret));
   } else {
     //do nothing

@@ -208,7 +208,7 @@ select _utf8mb4'a' collate gbk_bin;
 ERROR 42000: COLLATION 'gbk_bin' is not valid for CHARACTER SET 'utf8mb4'
 // 下面的是等号表达式在类型推导时，进行aggregate collation发现collation不一致报错
 select _utf8mb4'a' collate utf8mb4_general_ci = _utf8mb4'A' collate utf8mb4_bin;
-ERROR HY000: Illegal mix of collations
+ERROR HY000: Illegal mix of collations (utf8mb4_general_ci,EXPLICIT), (utf8mb4_bin,EXPLICIT)
 select _utf8mb4'a' collate utf8mb4_general_ci = _utf8mb4'A' collate utf8mb4_general_ci;
 +---------------------------------------------------------------------------------+
 | _utf8mb4'a' collate utf8mb4_general_ci = _utf8mb4'A' collate utf8mb4_general_ci |

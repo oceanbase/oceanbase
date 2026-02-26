@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX RPC_OBMYSQL
 
 #include "rpc/obmysql/ob_mysql_row.h"
-#include "rpc/obmysql/ob_mysql_global.h"
-#include "rpc/obmysql/ob_mysql_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
@@ -53,7 +51,9 @@ int ObMySQLRow::serialize(char *buf, const int64_t len, int64_t &pos) const
       //      }
       //    } else
       if (OB_FAIL(encode_cell(cell_idx, buf, len, pos, bitmap))) {
-        LOG_WARN("failed to encode cell", K(ret), K(cell_idx), K(len), K(pos), K(bitmap));
+        if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret && OB_BUF_NOT_ENOUGH != ret)) {
+          LOG_WARN("failed to encode cell", K(ret), K(cell_idx), K(len), K(pos));
+        }
       }
     }
   } else {

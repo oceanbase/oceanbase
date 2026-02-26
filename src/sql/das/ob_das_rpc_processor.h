@@ -23,10 +23,6 @@
 
 namespace oceanbase
 {
-namespace observer
-{
-struct ObGlobalContext;
-}
 namespace sql
 {
 typedef obrpc::ObRpcProcessor<obrpc::ObDASRpcProxy::ObRpc<obrpc::OB_DAS_SYNC_FETCH_RESULT> > ObDASSyncFetchResRpcProcessor;
@@ -41,7 +37,10 @@ public:
     : das_factory_(CURRENT_CONTEXT->get_arena_allocator()),
       exec_ctx_(CURRENT_CONTEXT->get_arena_allocator(), gctx.session_mgr_),
       frame_info_(CURRENT_CONTEXT->get_arena_allocator()),
-      das_remote_info_()
+      das_remote_info_(),
+      is_enable_sqlstat_(false),
+      sqlstat_key_(),
+      sqlstat_record_()
   {
     RpcProcessor::set_preserve_recv_data();
   }
@@ -62,6 +61,12 @@ protected:
   ObExprFrameInfo frame_info_;
   share::schema::ObSchemaGetterGuard schema_guard_;
   ObDASRemoteInfo das_remote_info_;
+  bool is_enable_sqlstat_;
+  ObSqlStatRecordKey sqlstat_key_;
+  ObExecutingSqlStatRecord sqlstat_record_;
+  //tsc monitor info
+  int64_t monitor_val_[10];
+  ObTSCMonitorInfo tsc_monitor_info_;
 };
 
 class ObDASSyncAccessP final : public ObDASBaseAccessP<obrpc::OB_DAS_SYNC_ACCESS> {
@@ -85,18 +90,23 @@ class ObDASAsyncAccessP final : public ObDASBaseAccessP<obrpc::OB_DAS_ASYNC_ACCE
 class ObDasAsyncRpcCallBackContext
 {
 public:
-  ObDasAsyncRpcCallBackContext(ObDASRef &das_ref,
-                               const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops,
-                               int64_t timeout_ts)
-      : das_ref_(das_ref), task_ops_(task_ops), alloc_(), timeout_ts_(timeout_ts) {}
+  ObDasAsyncRpcCallBackContext(DASRefCountContext &ref_count_ctx,
+                                 const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops,
+                                 int64_t timeout_ts)
+    : ref_count_ctx_(ref_count_ctx),
+      task_ops_(task_ops),
+      alloc_(),
+      timeout_ts_(timeout_ts)
+  {
+  }
   ~ObDasAsyncRpcCallBackContext() = default;
   int init(const ObMemAttr &attr);
-  ObDASRef &get_das_ref() { return das_ref_; };
   const common::ObSEArray<ObIDASTaskOp*, 2> &get_task_ops() const { return task_ops_; };
   common::ObArenaAllocator &get_alloc() { return alloc_; };
   int64_t get_timeout_ts() const { return timeout_ts_; }
+  DASRefCountContext &get_ref_count_ctx() { return ref_count_ctx_; }
 private:
-  ObDASRef &das_ref_;
+  DASRefCountContext &ref_count_ctx_;
   const common::ObSEArray<ObIDASTaskOp*, 2> task_ops_;
   common::ObArenaAllocator alloc_;  // used for async rpc result allocation.
   int64_t timeout_ts_;
@@ -106,15 +116,25 @@ class ObRpcDasAsyncAccessCallBack
       : public obrpc::ObDASRpcProxy::AsyncCB<obrpc::OB_DAS_ASYNC_ACCESS>
 {
 public:
-  ObRpcDasAsyncAccessCallBack(ObDasAsyncRpcCallBackContext *context)
-      : context_(context)
+  ObRpcDasAsyncAccessCallBack(ObDasAsyncRpcCallBackContext *context, ObDASTaskFactory *factory)
+      : is_processed_(false),
+        is_timeout_(false),
+        is_invalid_(false),
+        is_visited_(false),
+        context_(context)
   {
     // we need das_factory to allocate task op result on receiving rpc response.
-    result_.set_das_factory(&context->get_das_ref().get_das_factory());
+    result_.set_das_factory(factory);
   }
   ~ObRpcDasAsyncAccessCallBack() = default;
   void on_timeout() override;
   void on_invalid() override;
+  void set_visited(bool value) { is_visited_ = value; }
+  bool is_visited() const { return is_visited_; }
+  void set_invalid(bool value) { is_invalid_ = value; }
+  bool is_invalid() const { return is_invalid_; }
+  bool is_timeout() const { return is_timeout_; }
+  bool is_processed() const { return is_processed_; }
   void set_args(const Request &arg);
   oceanbase::rpc::frame::ObReqTransport::AsyncCB *clone(
       const oceanbase::rpc::frame::SPAlloc &alloc) const;
@@ -126,6 +146,10 @@ public:
   common::ObIAllocator &get_result_alloc() { return context_->get_alloc(); }
   ObDasAsyncRpcCallBackContext *get_async_cb_context() { return context_; };
 private:
+  bool is_processed_;
+  bool is_timeout_;
+  bool is_invalid_;
+  bool is_visited_;
   ObDasAsyncRpcCallBackContext *context_;
 };
 
@@ -134,8 +158,10 @@ class ObDASSyncFetchP : public ObDASSyncFetchResRpcProcessor
 public:
   ObDASSyncFetchP() {}
   ~ObDASSyncFetchP() {}
+  virtual int before_process();
   virtual int process() override;
   virtual int after_process(int error_code);
+  virtual void cleanup() override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDASSyncFetchP);
 };

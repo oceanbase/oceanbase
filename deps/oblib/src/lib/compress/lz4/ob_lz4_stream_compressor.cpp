@@ -11,7 +11,6 @@
  */
 
 #include "lib/compress/lz4/ob_lz4_stream_compressor.h"
-#include "lib/ob_errno.h"
 #include "lib/compress/lz4/lz4_wrapper.h"
 
 using namespace oceanbase::lib::lz4_171;

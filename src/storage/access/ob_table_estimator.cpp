@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_table_estimator.h"
-#include "storage/tablet/ob_table_store_util.h"
-#include "storage/tablet/ob_tablet.h"
 #include "ob_index_sstable_estimator.h"
-#include "storage/memtable/mvcc/ob_mvcc_engine.h"
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
@@ -101,6 +97,7 @@ int ObTableEstimator::estimate_row_count_for_scan(
         continue;
       } else if (OB_FAIL(estimate_multi_scan_row_count(base_input, table, ranges, table_est))) {
         LOG_WARN("failed to estimate cost", K(ret), K(ranges), K(table->get_key()), K(i));
+      } else if (FALSE_IT(fix_invalid_logic_row(part_estimate, table_est))) {
       } else if (OB_FAIL(part_estimate.add(table_est))) {
         LOG_WARN("failed to add table estimation", K(ret), K(i), K(table_est), K(table->get_key()));
       } else {
@@ -148,7 +145,9 @@ int ObTableEstimator::estimate_multi_scan_row_count(
       tmp_cost.logical_row_count_ = tmp_cost.physical_row_count_ = 1;
     } else if (current_table->is_sstable()) {
       ObSSTable *sstable = static_cast<ObSSTable *>(current_table);
-      if (OB_FAIL(estimate_sstable_scan_row_count(base_input, sstable, range, tmp_cost))) {
+      if (sstable->is_inc_major_ddl_aggregate_sstable()) {
+        // do nothing
+      } else if (OB_FAIL(estimate_sstable_scan_row_count(base_input, sstable, range, tmp_cost))) {
         LOG_WARN("failed to estimate sstable row count", K(ret), K(*current_table));
       }
     } else if (current_table->is_data_memtable()) {
@@ -227,10 +226,9 @@ int ObTableEstimator::estimate_sstable_scan_row_count(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid get arguments", K(ret), K(base_input.table_id_), K(key_range));
   } else {
-    const ObIndexSSTableEstimateContext context(
-        *sstable, base_input.tablet_handle_, base_input.query_flag_, key_range);
+    const ObIndexSSTableEstimateContext context(base_input.tablet_handle_, base_input.query_flag_);
     ObIndexBlockScanEstimator scan_estimator(context);
-    if (OB_FAIL(scan_estimator.estimate_row_count(part_est))) {
+    if (OB_FAIL(scan_estimator.estimate_row_count(*sstable, key_range, part_est))) {
       LOG_WARN("Fail to estimate cost of scan.", K(ret), K(base_input.table_id_));
     } else {
       LOG_DEBUG("estimate_scan_cost", K(ret), K(base_input.table_id_),
@@ -274,6 +272,21 @@ int ObTableEstimator::estimate_memtable_scan_row_count(
   }
 
   return ret;
+}
+
+void ObTableEstimator::fix_invalid_logic_row(
+    const ObPartitionEst &part_estimate,
+    ObPartitionEst &table_est)
+{
+  if (table_est.logical_row_count_ < 0) {
+    if (part_estimate.logical_row_count_ <= 0) {
+      LOG_TRACE("[STORAGE ESTIMATE ROW] the result logical row count is already 0", K(part_estimate), K(table_est));
+      table_est.logical_row_count_ = 0;
+    } else if (table_est.logical_row_count_ < -part_estimate.logical_row_count_) {
+      LOG_TRACE("[STORAGE ESTIMATE ROW] the deleted row count is greater than result logical row count", K(part_estimate), K(table_est));
+      table_est.logical_row_count_ = -0.5 * part_estimate.logical_row_count_;
+    }
+  }
 }
 
 

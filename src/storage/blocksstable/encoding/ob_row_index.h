@@ -27,13 +27,13 @@ public:
   virtual int get(const int64_t row_id, const char *&data, int64_t &len) const = 0;
   // Batch read row data in row_datas, row_len in datums.len_ for batch decode
   virtual int batch_get(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const bool has_ext,
       const char **row_datas,
       ObDatum *datums) const = 0;
   virtual int batch_get(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const bool has_ext,
       const char **row_datas,
@@ -50,13 +50,13 @@ public:
       const int64_t row_cnt, const int64_t index_byte);
   inline virtual int get(const int64_t row_id, const char *&data, int64_t &len) const;
   inline virtual int batch_get(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const bool has_ext,
       const char **row_datas,
       ObDatum *datums) const;
   inline virtual int batch_get(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const bool has_ext,
       const char **row_datas,
@@ -78,13 +78,13 @@ public:
   inline int init(const char *data, const int64_t len, const int64_t row_cnt);
   inline virtual int get(const int64_t row_id, const char *&data, int64_t &len) const;
   inline virtual int batch_get(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const bool has_ext,
       const char **row_datas,
       ObDatum *datums) const;
   inline virtual int batch_get(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const bool has_ext,
       const char **row_datas,
@@ -131,7 +131,7 @@ inline int ObVarRowIndex::get(const int64_t row_id, const char *&data, int64_t &
 }
 
 inline int ObVarRowIndex::batch_get(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const bool has_ext,
     const char **row_datas,
@@ -159,7 +159,7 @@ inline int ObVarRowIndex::batch_get(
 }
 
 inline int ObVarRowIndex::batch_get(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const bool has_ext,
     const char **row_datas,
@@ -214,7 +214,7 @@ inline int ObFixRowIndex::get(const int64_t row_id, const char *&data, int64_t &
 }
 
 inline int ObFixRowIndex::batch_get(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const bool has_ext,
     const char **row_datas,
@@ -241,7 +241,7 @@ inline int ObFixRowIndex::batch_get(
 }
 
 inline int ObFixRowIndex::batch_get(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const bool has_ext,
     const char **row_datas,

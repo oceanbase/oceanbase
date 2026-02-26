@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
+#include "ob_hash_join_basic.h"
 #include "sql/engine/join/ob_hash_join_op.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {

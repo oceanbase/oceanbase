@@ -11,8 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "share/ob_define.h"
-#include "lib/oblog/ob_log.h"
 #include "logservice/libobcdc/src/ob_log_svr_blacklist.h"
 
 using namespace oceanbase;

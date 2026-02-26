@@ -17,6 +17,7 @@
 #include "lib/utility/utility.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "common/ob_string_buf.h"
+#include "share/ob_cluster_version.h"
 
 
 namespace oceanbase
@@ -287,6 +288,11 @@ public:
   static const int64_t MIN_VERSION = 0;
 
   ObVersionRange();
+  ObVersionRange(const int64_t base_version, const int64_t snapshot_version)
+    : multi_version_start_(base_version),
+      base_version_(base_version),
+      snapshot_version_(snapshot_version)
+  {}
   OB_INLINE void reset();
   OB_INLINE bool is_valid() const;
   int64_t hash() const;
@@ -335,7 +341,8 @@ public:
     struct {
       int64_t group_idx_: 32;
       int64_t is_physical_rowid_range_: 1;
-      int64_t reserved_: 31;
+      int64_t index_ordered_idx_ : 16;  // used for keep order of global index lookup
+      int64_t reserved_: 15;
     };
   };
 
@@ -378,9 +385,28 @@ public:
     return end_key_;
   }
 
-  inline int32_t get_group_idx() const
+  inline int32_t get_index_ordered_idx() const
   {
-    return group_idx_;
+    return index_ordered_idx_;
+  }
+
+  // pseudo-column [GROUP_ID], with high 32 bits as group_idx_ and low 32 bits as index_ordered_idx_
+  // when cluster version < 4.3.2, the das keep order optimization is disabled, we should only fill
+  // group_idx to [GROUP_ID] for compatibility.
+  inline int64_t get_group_id() const
+  {
+    return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0 ? group_idx_ :
+        (static_cast<int64_t>(group_idx_) << 32) | (index_ordered_idx_ & 0xffffffff);
+  }
+  // get group_idx from [GROUP_ID]
+  static int64_t get_group_idx(int64_t group_id)
+  {
+    return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0 ? group_id : (group_id >> 32);
+  }
+  // get index_order_idx from [GROUP_ID]
+  static int64_t get_index_ordered_idx(int64_t group_id)
+  {
+    return group_id & 0xffffffff;
   }
 
   int build_range(uint64_t table_id, ObRowkey rowkey)
@@ -439,6 +465,33 @@ public:
           cmp = -1;
         } else if (!border_flag_.inclusive_start() && r.border_flag_.inclusive_start()) {
           cmp = 1;
+        }
+      }
+    }
+    return cmp;
+  }
+
+  /**
+   * compare endkey of current range with startkey of other range
+   * if endkey is equal to startkey, return value follows these rules:
+   *  1. if last obj of endkey is max_value or min value, compare result is 0
+   *  2. if last obj of endkey is not max_value or min_value, check inclusive_end
+   *     of current range and inclusive_start of other range. current range only
+   *     less than other range when inclusive_end and inclusive_start are both false.
+  */
+  inline int compare_endkey_with_startkey(const ObNewRange &r) const
+  {
+    int cmp = 0;
+    if (end_key_.is_max_row()) {
+      cmp = 1;
+    } else {
+      cmp = end_key_.compare(r.start_key_);
+      if (0 == cmp) {
+        if (end_key_.get_obj_ptr()[end_key_.get_obj_cnt() - 1].is_max_value() ||
+            end_key_.get_obj_ptr()[end_key_.get_obj_cnt() - 1].is_min_value()) {
+          // do nothing
+        } else if (!border_flag_.inclusive_end() && !r.border_flag_.inclusive_start()) {
+          cmp = -1;
         }
       }
     }
@@ -544,7 +597,12 @@ public:
     return equal(other);
   };
 
-  TO_YSON_KV(OB_ID(range), to_cstring(*this));
+  int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    ObCStringHelper helper;
+    return oceanbase::yson::databuff_encode_elements(buf, buf_len, pos,
+        ::oceanbase::name::range, helper.convert(*this));
+  }
   int64_t to_string(char *buffer, const int64_t length) const;
   int64_t to_simple_string(char *buffer, const int64_t length) const;
   int64_t to_plain_string(char *buffer, const int64_t length) const;

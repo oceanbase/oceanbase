@@ -14,16 +14,6 @@
 
 #include "share/ob_max_id_fetcher.h"
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "common/ob_zone.h"
-#include "common/object/ob_object.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/ob_schema_status_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
 
@@ -52,7 +42,7 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_lock_owner_id", "max used lock owner id"},
   { "ob_max_used_rewrite_rule_version", "max used rewrite rule version"},
   { "ob_max_used_ttl_task_id", "max used ttl task id"},
-  /* the following id_type will be changed to ob_max_used_object_id and won't be persisted. */
+  /* OB_MAX_USED_TABLE_ID_TYPE ~ OB_MAX_USED_RLS_CONTEXT_ID_TYPE ObMaxIdType will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted. */
   { "ob_max_used_table_id", "max used table id"},
   { "ob_max_used_database_id", "max used database id"},
   { "ob_max_used_user_id", "max used user id"},
@@ -82,6 +72,17 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_rls_policy_id", "max used ddl rls policy id"},
   { "ob_max_used_rls_group_id", "max used ddl rls group id"},
   { "ob_max_used_rls_context_id", "max used ddl rls context id"},
+  /* the following ObMaxIdType will be persisted. */
+  { "ob_max_used_service_name_id", "max used service name id"},
+  { "ob_max_used_storage_id", "max used storage id"},
+  { "ob_max_used_storage_op_id", "max used storage op id"},
+  { "ob_max_used_catalog_id", "max used catalog id"},
+  { "ob_max_used_ccl_rule_id", "max used ccl rule id"},
+  {"ob_max_used_external_resource_id", "max used external resources id"}, // OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted.
+  { "ob_max_used_location_id", "max used location id"},
+  { "ob_max_sensitive_rule_id", "max sensitive rule id"},
+  { "ob_max_used_ai_model_id", "max used ai model id"},
+  { "ob_max_used_ai_model_endpoint_id", "max used ai model endpoint id"}
 };
 
 lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
@@ -114,6 +115,8 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_RESOURCE_POOL_ID_TYPE:
     case OB_MAX_USED_SERVER_ID_TYPE:
     case OB_MAX_USED_DDL_TASK_ID_TYPE:
+    case OB_MAX_USED_STORAGE_ID_TYPE:
+    case OB_MAX_USED_STORAGE_OP_ID_TYPE:
     case OB_MAX_USED_UNIT_GROUP_ID_TYPE:
     case OB_MAX_USED_NORMAL_ROWID_TABLE_TABLET_ID_TYPE:
     case OB_MAX_USED_EXTENDED_ROWID_TABLE_TABLET_ID_TYPE:
@@ -123,6 +126,8 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_OBJECT_ID_TYPE:
     case OB_MAX_USED_LOCK_OWNER_ID_TYPE:
     case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE:
+    case OB_MAX_USED_SERVICE_NAME_ID_TYPE:
+    case OB_MAX_USED_AI_MODEL_ENDPOINT_ID_TYPE:
     case OB_MAX_USED_TTL_TASK_ID_TYPE: {
       dst = src;
       break;
@@ -155,7 +160,13 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_PARTITION_ID_TYPE:
     case OB_MAX_USED_RLS_POLICY_ID_TYPE:
     case OB_MAX_USED_RLS_GROUP_ID_TYPE:
-    case OB_MAX_USED_RLS_CONTEXT_ID_TYPE: {
+    case OB_MAX_USED_RLS_CONTEXT_ID_TYPE:
+    case OB_MAX_USED_CATALOG_ID_TYPE:
+    case OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE:
+    case OB_MAX_USED_AI_MODEL_ID_TYPE:
+    case OB_MAX_USED_LOCATION_ID_TYPE:
+    case OB_MAX_USED_CCL_RULE_ID_TYPE:
+    case OB_MAX_USED_SENSITIVE_RULE_ID_TYPE: {
       dst = OB_MAX_USED_OBJECT_ID_TYPE;
       break;
     }
@@ -309,11 +320,16 @@ int ObMaxIdFetcher::fetch_new_max_id(const uint64_t tenant_id,
         case OB_MAX_USED_RESOURCE_POOL_ID_TYPE:
         case OB_MAX_USED_SERVER_ID_TYPE:
         case OB_MAX_USED_DDL_TASK_ID_TYPE:
+        case OB_MAX_USED_STORAGE_ID_TYPE:
+        case OB_MAX_USED_STORAGE_OP_ID_TYPE:
         case OB_MAX_USED_UNIT_GROUP_ID_TYPE:
         case OB_MAX_USED_LOCK_OWNER_ID_TYPE:
         case OB_MAX_USED_LS_ID_TYPE:
         case OB_MAX_USED_LS_GROUP_ID_TYPE:
         case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE:
+        case OB_MAX_USED_SERVICE_NAME_ID_TYPE:
+        case OB_MAX_USED_AI_MODEL_ID_TYPE:
+        case OB_MAX_USED_AI_MODEL_ENDPOINT_ID_TYPE:
         case OB_MAX_USED_TTL_TASK_ID_TYPE: {
           // won't check other id
           break;
@@ -412,6 +428,34 @@ int ObMaxIdFetcher::fetch_new_max_id(const uint64_t tenant_id,
   return ret;
 }
 
+int ObMaxIdFetcher::update_server_max_id(const uint64_t max_server_id, const uint64_t next_max_server_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t fetched_max_server_id = OB_INVALID_ID;
+  ObMySQLTransaction trans;
+  if (OB_FAIL(trans.start(&proxy_, OB_SYS_TENANT_ID, false))) {
+    LOG_WARN("fail to to start transaction", KR(ret));
+  } else if (OB_FAIL(fetch_max_id(trans, OB_SYS_TENANT_ID, OB_MAX_USED_SERVER_ID_TYPE, fetched_max_server_id))) {
+    LOG_WARN("failed to get max id", KR(ret));
+  } else if (OB_UNLIKELY(max_server_id != fetched_max_server_id)) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("max_server_id has been increased, please retry", KR(ret), K(max_server_id), K(fetched_max_server_id));
+  } else if (OB_FAIL(update_max_id(trans, OB_SYS_TENANT_ID, OB_MAX_USED_SERVER_ID_TYPE, next_max_server_id))) {
+    LOG_WARN("failed to update max id", KR(ret), K(next_max_server_id));
+  }
+
+  if (trans.is_started()) {
+    const bool is_commit = (OB_SUCC(ret));
+    int temp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (temp_ret = trans.end(is_commit))) {
+      LOG_WARN("failed to end trans", K(is_commit), K(temp_ret));
+      ret = (OB_SUCCESS == ret) ? temp_ret : ret;
+    }
+  }
+  LOG_INFO("update server max id", KR(ret), K(fetched_max_server_id), K(max_server_id), K(next_max_server_id));
+  return ret;
+}
+
 int ObMaxIdFetcher::update_max_id(ObISQLClient &sql_client, const uint64_t tenant_id,
                                   ObMaxIdType max_id_type, const uint64_t max_id)
 {
@@ -425,9 +469,6 @@ int ObMaxIdFetcher::update_max_id(ObISQLClient &sql_client, const uint64_t tenan
       || OB_INVALID_ID == max_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(max_id_type), K(max_id));
-  } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("can't write sys table now", K(ret), K(tenant_id));
   } else if (OB_ISNULL(id_name = get_max_id_name(max_id_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL name", K(ret));
@@ -528,9 +569,6 @@ int ObMaxIdFetcher::insert_initial_value(common::ObISQLClient &sql_client, uint6
   if (OB_INVALID_ID == tenant_id || !valid_max_id_type(max_id_type) || UINT64_MAX == initial_value) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(max_id_type), K(initial_value));
-  } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("can't write sys table now", K(ret), K(tenant_id));
   } else if (OB_ISNULL(name) || OB_ISNULL(info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL name or info", K(ret), KP(name), KP(info));

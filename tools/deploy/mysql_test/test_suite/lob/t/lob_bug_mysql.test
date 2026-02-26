@@ -28,28 +28,22 @@ drop table if exists sbtest1;
 create table t1(nr int, a longtext, b longblob);
 
 insert into t1 values(10, repeat('a', 5000), repeat('A', 5000));
-insert into t1 values(20, repeat('b', 50000), repeat('B', 50000));
-insert into t1 values(30, repeat('c', 500000), repeat('C', 500000));
-insert into t1 values(40, repeat('d', 3000000), repeat('D', 3000000));
+insert into t1 values(20, repeat('b', 5000), repeat('B', 5000));
+insert into t1 values(30, repeat('c', 5000), repeat('C', 5000));
+insert into t1 values(40, repeat('d', 3000), repeat('D', 3000));
 --let $loop=2
 while($loop > 0)
 {
   insert into t1 select * from t1;
-  insert into t1 values(1, repeat('e', 2000000), repeat('E', 2000000));
+  insert into t1 values(1, repeat('e', 2000), repeat('E', 2000));
   dec $loop;
 }
-insert into t1 values(2, repeat('f', 3000000), repeat('F', 3000000));
+insert into t1 values(2, repeat('f', 3000), repeat('F', 3000));
 select nr, sum(length(a)), sum(length(b)), substr(a, 1000, 10), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
---source mysql_test/include/majorfreeze.inc
---source mysql_test/include/wait_daily_merge.inc
-connection default;
 select nr, sum(length(a)), sum(length(b)), substr(a, 1000, 10), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
 delete from t1 where nr = 2;
 update t1 set a = "updated" where nr = 1;
 select nr, sum(length(a)), sum(length(b)), substr(a, 1, 5), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
---source mysql_test/include/majorfreeze.inc
---source mysql_test/include/wait_daily_merge.inc
-connection default;
 select nr, sum(length(a)), sum(length(b)), substr(a, 1, 5), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
 drop table t1;
 

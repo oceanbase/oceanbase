@@ -271,7 +271,7 @@ public:                                                                         
   {                                                                                       \
     const int64_t start_time = ObTimeUtility::current_time();                             \
     info.diagnose_info_time##_ = start_time;                                              \
-    TRANS_LOG(INFO, ""#function"", K(info), K(param_));                                   \
+    TRANS_LOG(DEBUG, ""#function"", K(info), K(param_));                                   \
   }                                                                                       \
 private:                                                                                  \
   const ObCheckpointDiagnoseParam &param_;                                                      \

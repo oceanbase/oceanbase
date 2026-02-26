@@ -11,18 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/optimizer/ob_log_merge.h"
 #include "sql/optimizer/ob_merge_log_plan.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "sql/optimizer/ob_log_link_dml.h"
-#include "common/ob_smart_call.h"
-#include "sql/rewrite/ob_stmt_comparer.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
 
 using namespace oceanbase;
@@ -207,22 +198,22 @@ int ObMergeLogPlan::create_merge_plans(ObIArray<CandidatePlan> &candi_plans,
   for (int64_t i = 0; OB_SUCC(ret) && i < candi_plans.count(); i++) {
     equal_pairs.reuse();
     candi_plan = candi_plans.at(i);
-    is_multi_part_dml = force_multi_part;
+    int64_t dist_method = 0;
     if (OB_ISNULL(candi_plan.plan_tree_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (!force_multi_part &&
-               OB_FAIL(check_merge_need_multi_partition_dml(*candi_plan.plan_tree_,
-                                                            insert_table_part,
-                                                            insert_sharding,
-                                                            is_multi_part_dml,
-                                                            equal_pairs))) {
-      LOG_WARN("failed to check need multi-partition dml", K(ret));
-    } else if (is_multi_part_dml && force_no_multi_part) {
+    } else if (OB_FAIL(get_best_merge_dist_method(*candi_plan.plan_tree_,
+                                                  insert_sharding,
+                                                  force_multi_part,
+                                                  force_no_multi_part,
+                                                  dist_method,
+                                                  is_multi_part_dml,
+                                                  equal_pairs))) {
+      LOG_WARN("failed to get merge dist method", K(ret));
+    } else if (0 == dist_method) {
       /*do nothing*/
-    } else if (candi_plan.plan_tree_->is_sharding()
-               && (is_multi_part_dml || (insert_sharding != NULL && insert_sharding->is_local()))
-               && OB_FAIL(allocate_exchange_as_top(candi_plan.plan_tree_, exch_info))) {
+    } else if (DIST_PULL_TO_LOCAL == dist_method &&
+               OB_FAIL(allocate_exchange_as_top(candi_plan.plan_tree_, exch_info))) {
       LOG_WARN("failed to allocate exchange as top", K(ret));
     } else if (OB_FAIL(allocate_merge_as_top(candi_plan.plan_tree_, insert_table_part,
                                              is_multi_part_dml, &equal_pairs))) {
@@ -272,6 +263,7 @@ int ObMergeLogPlan::candi_allocate_pdml_merge()
                                                           *target_table_partition,
                                                           *index_dml_info,
                                                           false,/*is_index_maintenance*/
+                                                          false,/*is_pdml_update_split*/
                                                           exch_info))) {
     LOG_WARN("failed to compute exchange info for insert", K(ret));
   } else if (!get_stmt()->has_insert_clause() &&
@@ -279,6 +271,7 @@ int ObMergeLogPlan::candi_allocate_pdml_merge()
                                                             *target_table_partition,
                                                             *index_dml_info,
                                                             false,
+                                                            true, /* need_duplicate_date */
                                                             exch_info))) {
     LOG_WARN("fail to compute exchange info for pdml merge", K(ret));
   } else {
@@ -337,9 +330,6 @@ int ObMergeLogPlan::candi_allocate_subplan_filter_for_merge()
     LOG_WARN("failed to get insert conditions", K(ret));
   } else if (OB_FAIL(merge_stmt->get_assignments_exprs(assign_exprs))) {
     LOG_WARN("failed to get table assignment", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::get_subquery_exprs(assign_exprs,
-                                                         target_subquery_exprs))) {
-    LOG_WARN("failed to get subquery exprs", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::get_subquery_exprs(merge_stmt->get_values_vector(),
                                                          target_subquery_exprs))) {
     LOG_WARN("failed to get target subquery exprs", K(ret));
@@ -349,6 +339,8 @@ int ObMergeLogPlan::candi_allocate_subplan_filter_for_merge()
   } else if (!get_subquery_filters().empty() &&
              candi_allocate_subplan_filter_for_where()) {
     LOG_WARN("failed to allocate subplan filter", K(ret));
+  } else if (OB_FAIL(candi_allocate_subplan_filter_for_assignments(assign_exprs))) {
+    LOG_WARN("failed to allocate subplan filter for assignments", K(ret));
   } else if (condition_subquery_exprs.empty() && target_subquery_exprs.empty() &&
              delete_subquery_exprs.empty()) {
     // do nothing
@@ -388,6 +380,9 @@ int ObMergeLogPlan::allocate_merge_as_top(ObLogicalOperator *&top,
     merge_op->set_child(ObLogicalOperator::first_child, top);
     merge_op->set_is_multi_part_dml(is_multi_part_dml);
     merge_op->set_table_partition_info(table_partition_info);
+    if (get_can_use_parallel_das_dml()) {
+      merge_op->set_das_dop(max_dml_parallel_);
+    }
     if (NULL != equal_pairs && OB_FAIL(merge_op->set_equal_pairs(*equal_pairs))) {
       LOG_WARN("failed to set equal pairs", K(ret));
     } else if (OB_FAIL(merge_op->compute_property())) {
@@ -399,36 +394,29 @@ int ObMergeLogPlan::allocate_merge_as_top(ObLogicalOperator *&top,
   return ret;
 }
 
-/*
- * for insert stmt to check whether need multi-partition dml
- *  1. check basic need multi part dml
- *  2. check insert need multi part dml basic
- *  3. get insert sharding and check update/insert sharding matched
- */
-int ObMergeLogPlan::check_merge_need_multi_partition_dml(ObLogicalOperator &top,
-                                                         ObTablePartitionInfo *insert_table_partition,
-                                                         ObShardingInfo *insert_sharding,
-                                                         bool &is_multi_part_dml,
-                                                         ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs)
+int ObMergeLogPlan::check_need_multi_partition_dml(ObLogicalOperator &top,
+                                                   const bool force_multi_part,
+                                                   bool &is_multi_part_dml,
+                                                   ObShardingInfo *&update_sharding)
 {
   int ret = OB_SUCCESS;
-  is_multi_part_dml = false;
-  equal_pairs.reset();
-  bool is_one_part_table = false;
-  bool is_partition_wise = false;
-  bool is_basic = false;
   const ObMergeStmt *merge_stmt = NULL;
   bool is_result_local = false;
-  ObShardingInfo *update_sharding = NULL;
+  is_multi_part_dml = false;
+  update_sharding = NULL;
   if (OB_ISNULL(merge_stmt = get_stmt()) ||
       OB_UNLIKELY(index_dml_infos_.empty()) || OB_ISNULL(index_dml_infos_.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(merge_stmt), K(index_dml_infos_));
+  } else if (force_multi_part) {
+    is_multi_part_dml = true;
   } else if (OB_FAIL(check_stmt_need_multi_partition_dml(*merge_stmt, index_dml_infos_, is_multi_part_dml))) {
     LOG_WARN("failed to check stmt need multi partition dml", K(ret));
   } else if (is_multi_part_dml) {
     /*do nothing*/
-  } else if (OB_FAIL(check_merge_stmt_need_multi_partition_dml(is_multi_part_dml, is_one_part_table))) {
+  } else if (use_parallel_das_dml_) {
+    is_multi_part_dml = true;
+  } else if (OB_FAIL(check_merge_stmt_need_multi_partition_dml(is_multi_part_dml))) {
     LOG_WARN("failed to check need multi-partition dml", K(ret));
   } else if (is_multi_part_dml) {
     /*do nothing*/
@@ -438,69 +426,135 @@ int ObMergeLogPlan::check_merge_need_multi_partition_dml(ObLogicalOperator &top,
                                                              is_result_local,
                                                              update_sharding))) {
     LOG_WARN("failed to check whether location need multi-partition dml", K(ret));
-  } else if (is_multi_part_dml) {
-    /*do nothing*/
-  } else if (!merge_stmt->has_insert_clause() || is_one_part_table) {
-    is_multi_part_dml = false;
-  } else if (OB_FAIL(check_update_insert_sharding_basic(top,
-                                                        insert_sharding,
-                                                        update_sharding,
-                                                        is_basic,
-                                                        equal_pairs))) {
-    LOG_WARN("failed to check update insert sharding basic", K(ret));
-  } else if (is_basic) {
-    is_multi_part_dml = false;
-  } else if (OB_FAIL(check_update_insert_sharding_partition_wise(top, insert_sharding,
-                                                                 is_partition_wise))) {
-    LOG_WARN("failed to check update insert match partition wise", K(ret));
-  } else if (is_partition_wise) {
-    is_multi_part_dml = false;
-  } else {
-    is_multi_part_dml = true;
-  }
-
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("succeed to check merge_stmt need multi-partition-dml", K(is_multi_part_dml),
-                                                          K(is_partition_wise), K(equal_pairs));
   }
   return ret;
 }
 
-int ObMergeLogPlan::check_update_insert_sharding_basic(ObLogicalOperator &top,
-                                                       ObShardingInfo *insert_sharding,
-                                                       ObShardingInfo *update_sharding,
-                                                       bool &is_basic,
-                                                       ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs)
+int ObMergeLogPlan::get_best_merge_dist_method(ObLogicalOperator &top,
+                                               ObShardingInfo *insert_sharding,
+                                               const bool force_multi_part,
+                                               const bool force_no_multi_part,
+                                               int64_t &dist_method,
+                                               bool &is_multi_part_dml,
+                                               ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs)
 {
   int ret = OB_SUCCESS;
-  is_basic = false;
-  bool can_gen_cons = false;
-  ObSEArray<ObShardingInfo*, 2> input_sharding;
-  bool is_sharding_basic = false;
-  bool is_match_same_partition = false;
-  if (NULL == insert_sharding || NULL == update_sharding) {
-    /* do nothing */
-  } else if (OB_FAIL(input_sharding.push_back(insert_sharding))
-             || OB_FAIL(input_sharding.push_back(update_sharding))) {
-    LOG_WARN("failed to push back sharding info", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::check_basic_sharding_info(get_optimizer_context().get_local_server_addr(),
-                                                                input_sharding,
-                                                                is_sharding_basic))) {
-    LOG_WARN("failed to check basic sharding info", K(ret));
-  } else if (!is_sharding_basic) {
-    /* do nothing */
-  } else if (false == (is_match_same_partition = match_same_partition(*insert_sharding, *update_sharding))) {
-    /* insert_sharding and update_sharding match basic,
-       but the partition is different, need multi part merge */
-    is_basic = false;
-  } else if (OB_FAIL(generate_equal_constraint(top, *insert_sharding, can_gen_cons, equal_pairs))) {
-    LOG_WARN("failed to generate equal constraint", K(ret));
-  } else if (can_gen_cons) {
-    is_basic = true;
+  is_multi_part_dml = false;
+  equal_pairs.reset();
+  bool is_partition_wise = false;
+  bool is_basic = false;
+  const ObMergeStmt *merge_stmt = NULL;
+  bool is_result_local = false;
+  bool is_single_part = false;
+  ObShardingInfo *update_sharding = NULL;
+  ObShardingInfo *local_sharding = get_optimizer_context().get_local_sharding();
+  dist_method = 0;
+  if (OB_ISNULL(merge_stmt = get_stmt()) || OB_ISNULL(local_sharding)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(merge_stmt), K(local_sharding));
+  } else if (OB_FAIL(check_need_multi_partition_dml(top,
+                                                    force_multi_part,
+                                                    is_multi_part_dml,
+                                                    update_sharding))) {
+    LOG_WARN("failed to check need multi part dml", K(ret));
+  } else if (is_multi_part_dml) {
+    // do nothing
+  } else if (!merge_stmt->has_insert_clause()) {
+    // merge into ... when matched then update
+    if (OB_ISNULL(update_sharding)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected update sharding", KPC(update_sharding));
+    } else if (!top.is_exchange_allocated() && update_sharding->is_distributed()) {
+      dist_method = DIST_PARTITION_WISE;
+      OPT_TRACE("merge into plan without insert will use partition wise method");
+    } else if (OB_FAIL(check_basic_sharding_for_dml_stmt(*update_sharding,
+                                                         top,
+                                                         is_basic))) {
+      LOG_WARN("failed to check basic sharding for dml stmt", K(ret));
+    } else if (is_basic) {
+      dist_method = DIST_BASIC_METHOD;
+      OPT_TRACE("merge into plan without insert will use basic method");
+    } else if (update_sharding->is_local()) {
+      dist_method = DIST_PULL_TO_LOCAL;
+      OPT_TRACE("merge into plan without insert will use pull to local method");
+    } else {
+      is_multi_part_dml = true;
+    }
+  } else if (NULL != insert_sharding && insert_sharding->is_distributed() &&
+             OB_FAIL(check_update_insert_sharding_partition_wise(top, insert_sharding,
+                                                                 is_partition_wise))) {
+    LOG_WARN("failed to check update insert match partition wise", K(ret));
+  } else if (is_partition_wise) {
+    dist_method = DIST_PARTITION_WISE;
+    OPT_TRACE("merge into plan will use partition wise method");
+  } else if (OB_FAIL(check_update_insert_single_part(top,
+                                                     index_dml_infos_.at(0)->loc_table_id_,
+                                                     insert_sharding,
+                                                     update_sharding,
+                                                     is_single_part,
+                                                     equal_pairs))) {
+    LOG_WARN("failed to check update insert single part", K(ret));
+  } else if (is_single_part) {
+    if (OB_ISNULL(insert_sharding)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected update sharding", KPC(insert_sharding));
+    } else if (OB_FAIL(check_basic_sharding_for_dml_stmt(*insert_sharding,
+                                                         top,
+                                                         is_basic))) {
+      LOG_WARN("failed to check basic sharding for dml stmt", K(ret));
+    } else if (is_basic) {
+      dist_method = DIST_BASIC_METHOD;
+      OPT_TRACE("single part merge into plan without update will use basic method");
+    } else if (insert_sharding->is_local()) {
+      dist_method = DIST_PULL_TO_LOCAL;
+      OPT_TRACE("single part merge into plan without update will use pull to local method");
+    } else {
+      is_multi_part_dml = true;
+    }
   } else {
-    is_basic = false;
+    is_multi_part_dml = true;
   }
-  LOG_TRACE("finish check update insert sharding basic", K(is_basic), K(is_sharding_basic),
+  if (OB_SUCC(ret) && is_multi_part_dml) {
+    if (force_no_multi_part) {
+      is_multi_part_dml = false;
+      dist_method = 0;
+    } else if (OB_FAIL(check_basic_sharding_for_dml_stmt(*local_sharding,
+                                                  top,
+                                                  is_basic))) {
+      LOG_WARN("failed to check basic sharding for dml stmt", K(ret));
+    } else if (is_basic) {
+      dist_method = DIST_BASIC_METHOD;
+      OPT_TRACE("distributed merge into plan will use basic method");
+    } else {
+      dist_method = DIST_PULL_TO_LOCAL;
+      OPT_TRACE("distributed merge into plan will use pull to local method");
+    }
+  }
+  return ret;
+}
+
+int ObMergeLogPlan::check_update_insert_single_part(ObLogicalOperator &top,
+                                                    uint64_t table_id,
+                                                    ObShardingInfo *insert_sharding,
+                                                    ObShardingInfo *update_sharding,
+                                                    bool &is_match_same_partition,
+                                                    ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs)
+{
+  int ret = OB_SUCCESS;
+  bool can_gen_cons = false;
+  if (NULL == insert_sharding || NULL == update_sharding) {
+    is_match_same_partition = false;
+  } else {
+    is_match_same_partition = match_same_partition(*insert_sharding, *update_sharding);
+  }
+  if (is_match_same_partition) {
+    if (OB_FAIL(generate_equal_constraint(top, table_id, *insert_sharding, can_gen_cons, equal_pairs))) {
+      LOG_WARN("failed to generate equal constraint", K(ret));
+    } else {
+      is_match_same_partition = can_gen_cons;
+    }
+  }
+  LOG_TRACE("finish check update insert single partition",
           K(is_match_same_partition), K(can_gen_cons), KPC(insert_sharding), KPC(update_sharding));
   return ret;
 }
@@ -526,6 +580,7 @@ bool ObMergeLogPlan::match_same_partition(const ObShardingInfo &l_sharding_info,
 // When insert_sharding and update_sharding match same partition,
 // need add equal constraints for const params in sharding conditions which equal to part key.
 int ObMergeLogPlan::generate_equal_constraint(ObLogicalOperator &top,
+                                              uint64_t table_id,
                                               ObShardingInfo &insert_sharding,
                                               bool &can_gen_cons,
                                               ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs)
@@ -538,16 +593,11 @@ int ObMergeLogPlan::generate_equal_constraint(ObLogicalOperator &top,
   ObSEArray<ObRawExpr*, 4> right_part_keys;
   ObSEArray<ObRawExpr*, 4> right_conds;
   const ObMergeStmt *stmt = NULL;
-  const TableItem *target_table = NULL;
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt));
-  } else if (OB_ISNULL(target_table = stmt->get_table_item_by_id(stmt->get_target_table_id()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get target table", K(ret));
-  } else if (OB_FAIL(get_target_table_scan(target_table->get_base_table_item().table_id_,
-                                           &top, target_table_scan))) {
-    LOG_WARN("get target table scan failed", K(ret), K(*target_table));
+  } else if (OB_FAIL(get_target_table_scan(table_id, &top, target_table_scan))) {
+    LOG_WARN("get target table scan failed", K(ret), K(table_id));
   } else if (OB_ISNULL(target_table_scan) || OB_ISNULL(target_table_scan->get_sharding())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(target_table_scan));
@@ -658,6 +708,7 @@ int ObMergeLogPlan::get_const_expr_values(const ObRawExpr *part_expr,
     ObRawExpr *const_expr = NULL;
     ObRawExpr *param_1 = NULL;
     ObRawExpr *param_2 = NULL;
+    ObRawExpr *orig_const_expr = NULL;
     bool is_const = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < conds.count(); ++i) {
       const_expr = NULL;
@@ -676,15 +727,17 @@ int ObMergeLogPlan::get_const_expr_values(const ObRawExpr *part_expr,
         LOG_WARN("failed to get expr without lossless cast", K(ret));
       } else if (part_expr == param_1 && param_2->is_const_expr()) {
         const_expr = param_2;
+        orig_const_expr = cur_expr->get_param_expr(1);
       } else if (part_expr == param_2 && param_1->is_const_expr()) {
         const_expr = param_1;
+        orig_const_expr = cur_expr->get_param_expr(0);
       }
 
       if (NULL != const_expr && ob_is_valid_obj_tc(const_expr->get_type_class())) {
         if (OB_FAIL(ObObjCaster::is_const_consistent(const_expr->get_result_type().get_obj_meta(),
                                                       part_expr->get_result_type().get_obj_meta(),
-                                                      cur_expr->get_result_type().get_calc_type(),
-                                                      cur_expr->get_result_type().get_calc_meta().get_collation_type(),
+                                                      orig_const_expr->get_result_type().get_type(),
+                                                      orig_const_expr->get_result_type().get_collation_type(),
                                                       is_const))) {
           LOG_WARN("check expr type is strict monotonic failed", K(ret));
         } else if (!is_const) {
@@ -866,6 +919,8 @@ int ObMergeLogPlan::prepare_table_dml_info_update(const ObMergeTableInfo& merge_
   } else if (!merge_info.is_link_table_ &&
              OB_FAIL(check_update_part_key(index_schema, table_dml_info))) {
     LOG_WARN("failed to check update part key", K(ret));
+  } else if (OB_FAIL(check_update_primary_key(*schema_guard, index_schema, table_dml_info))) {
+    LOG_WARN("fail to check update primary key", K(ret), KPC(table_dml_info));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_dml_info->ck_cst_exprs_.count(); ++i) {
       if (OB_FAIL(ObDMLResolver::copy_schema_expr(optimizer_context_.get_expr_factory(),
@@ -915,6 +970,9 @@ int ObMergeLogPlan::prepare_table_dml_info_update(const ObMergeTableInfo& merge_
       } else if (!merge_info.is_link_table_ &&
                  OB_FAIL(check_update_part_key(index_schema, index_dml_info))) {
         LOG_WARN("faield to check update part key", K(ret));
+      } else if (!merge_info.is_link_table_ &&
+                 OB_FAIL(check_update_primary_key(*schema_guard, index_schema, index_dml_info))) {
+        LOG_WARN("fail to check update primary key", K(ret), KPC(index_dml_info));
       } else if (OB_FAIL(index_dml_infos.push_back(index_dml_info))) {
         LOG_WARN("failed to push back index dml info", K(ret));
       }
@@ -978,8 +1036,7 @@ int ObMergeLogPlan::prepare_table_dml_info_delete(const ObMergeTableInfo& merge_
   return ret;
 }
 
-int ObMergeLogPlan::check_merge_stmt_need_multi_partition_dml(bool &is_multi_part_dml,
-                                                              bool &is_one_part_table)
+int ObMergeLogPlan::check_merge_stmt_need_multi_partition_dml(bool &is_multi_part_dml)
 {
   int ret = OB_SUCCESS;
   bool has_rand_part_key = false;
@@ -992,7 +1049,7 @@ int ObMergeLogPlan::check_merge_stmt_need_multi_partition_dml(bool &is_multi_par
   const ObMergeStmt *merge_stmt = get_stmt();
   ObSEArray<ObObjectID, 4> part_ids;
   is_multi_part_dml = false;
-  is_one_part_table = false;
+  bool is_one_part_table = false;
   if (OB_ISNULL(merge_stmt) || OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(merge_stmt), K(schema_guard), K(session_info), K(ret));
@@ -1034,6 +1091,28 @@ int ObMergeLogPlan::check_merge_stmt_need_multi_partition_dml(bool &is_multi_par
   } else { /*do nothing*/ }
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to check insert_stmt need multi-partition-dml", K(is_multi_part_dml));
+  }
+  return ret;
+}
+
+int ObMergeLogPlan::perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else {
+    ObMergeTableInfo &table_info = static_cast<ObMergeStmt*>(stmt)->get_merge_table_info();
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_info.assignments_.count(); ++i) {
+      ObRawExpr *value = table_info.assignments_.at(i).expr_;
+      bool replace_happened = false;
+      if (OB_FAIL(replace_alias_ref_expr(value, replace_happened))) {
+        LOG_WARN("failed to replace alias ref expr", K(ret));
+      } else if (replace_happened && OB_FAIL(value->formalize(session_info))) {
+        LOG_WARN("failed to formalize expr", K(ret));
+      }
+    }
   }
   return ret;
 }

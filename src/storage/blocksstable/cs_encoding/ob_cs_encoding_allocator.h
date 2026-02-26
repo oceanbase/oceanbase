@@ -27,6 +27,8 @@
 #include "ob_string_column_decoder.h"
 #include "ob_int_dict_column_decoder.h"
 #include "ob_str_dict_column_decoder.h"
+#include "semistruct_encoding/ob_semistruct_column_encoder.h"
+#include "semistruct_encoding/ob_semistruct_column_decoder.h"
 
 namespace oceanbase
 {
@@ -72,6 +74,7 @@ private:
   Pool string_pool_;
   Pool int_dict_pool_;
   Pool str_dict_pool_;
+  Pool semistruct_pool_;
   Pool *pools_[ObCSColumnHeader::MAX_TYPE];
   int64_t pool_cnt_;
 };

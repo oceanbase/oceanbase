@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_str_dict_column_encoder.h"
-#include "ob_cs_encoding_util.h"
 #include "ob_string_stream_encoder.h"
-#include "ob_column_datum_iter.h"
-#include "storage/blocksstable/ob_imicro_block_writer.h"
-#include "lib/codec/ob_codecs.h"
 
 namespace oceanbase
 {
@@ -37,9 +33,9 @@ int ObStrDictColumnEncoder::init(
     LOG_WARN("init base column encoder failed", K(ret), K(ctx), K(column_index), K(row_count));
   } else {
     column_header_.type_ = type_;
-    dict_encoding_meta_.distinct_val_cnt_ = ctx.ht_->size();
+    dict_encoding_meta_.distinct_val_cnt_ = ctx.ht_->distinct_val_cnt();
     dict_encoding_meta_.ref_row_cnt_ = row_count_;
-    if (ctx_->null_cnt_ > 0) {
+    if (ctx_->null_or_nop_cnt_ > 0) {
       dict_encoding_meta_.set_has_null();
     }
     if (OB_FAIL(build_string_dict_encoder_ctx_())) {
@@ -62,7 +58,7 @@ int ObStrDictColumnEncoder::build_string_dict_encoder_ctx_()
   int ret = OB_SUCCESS;
   int32_t int_stream_idx = -1;
 
-  if (row_count_ == ctx_->null_cnt_) { // empty dict
+  if (row_count_ == ctx_->null_or_nop_cnt_) { // empty dict
     if (dict_encoding_meta_.distinct_val_cnt_ != 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected dict count", K(ret), KPC_(ctx), K_(dict_encoding_meta));
@@ -74,14 +70,20 @@ int ObStrDictColumnEncoder::build_string_dict_encoder_ctx_()
       ++int_stream_count_;
       int_stream_idx = 0;
     }
+    ObPreviousColumnEncoding *pre_col_encoding = nullptr;
+    // has_nop is marked in dict meta
     if (OB_FAIL(string_dict_enc_ctx_.build_string_stream_meta(
         ctx_->fix_data_size_, false/*use_zero_len_as_null*/, ctx_->dict_var_data_size_))) {
       LOG_WARN("fail to build_string_stream_meta", K(ret));
+    } else if (OB_FAIL(get_previous_cs_encoding(pre_col_encoding))) {
+      LOG_WARN("get_previous_cs_encoding fail", K(ret));
     } else if (OB_FAIL(string_dict_enc_ctx_.build_string_stream_encoder_info(
         ctx_->encoding_ctx_->compressor_type_, is_force_raw_,
         &ctx_->encoding_ctx_->cs_encoding_opt_,
-        ctx_->encoding_ctx_->previous_cs_encoding_.get_column_encoding(column_index_),
-        int_stream_idx, ctx_->allocator_))) {
+        pre_col_encoding,
+        int_stream_idx,
+        ctx_->encoding_ctx_->major_working_cluster_version_,
+        ctx_->allocator_))) {
       LOG_WARN("fail to build_string_stream_encoder_info", K(ret), KPC_(ctx));
     }
   }
@@ -96,9 +98,7 @@ int ObStrDictColumnEncoder::store_column(ObMicroBufferWriter &buf_writer)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(sort_dict_())) {
-    LOG_WARN("fail to do_sort_dict", K(ret));
-  } else if (OB_FAIL(store_dict_encoding_meta_(buf_writer))) {
+  } else if (! ctx_->has_stored_meta_ && OB_FAIL(store_column_meta(buf_writer))) {
     LOG_WARN("fail to store dict encoding meta", K(ret), K_(dict_encoding_meta));
   } else if (OB_FAIL(store_dict_(buf_writer))) {
     LOG_WARN("fail to store dict", K(ret), K_(dict_encoding_meta));
@@ -117,6 +117,19 @@ int ObStrDictColumnEncoder::sort_dict_()
     // do nothing
   } else if (OB_FAIL(do_sort_dict_())) {
     LOG_WARN("fail to do_sort_dict", K(ret));
+  }
+  return ret;
+}
+
+int ObStrDictColumnEncoder::store_column_meta(ObMicroBufferWriter &buf_writer)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sort_dict_())) {
+    LOG_WARN("fail to do_sort_dict", K(ret));
+  } else if (OB_FAIL(store_dict_encoding_meta_(buf_writer))) {
+    LOG_WARN("fail to store dict encoding meta", K(ret), K_(dict_encoding_meta));
+  } else if (OB_FAIL(store_nop_bitmap(buf_writer))) {
+    LOG_WARN("fail to store nop bitmap", K(ret));
   }
   return ret;
 }

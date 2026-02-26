@@ -14,9 +14,6 @@
 
 #include "ob_hex_string_encoder.h"
 
-#include "lib/container/ob_array_iterator.h"
-#include "storage/blocksstable/ob_data_buffer.h"
-#include "ob_bit_stream.h"
 
 namespace oceanbase
 {

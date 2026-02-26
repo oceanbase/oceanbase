@@ -50,6 +50,7 @@ struct MethodOptSizeConf
   inline bool is_repeat() const { return mode_ == 0 && val_ == 1; }
   inline bool is_skewonly() const { return mode_ == 0 && val_ == 2; }
   inline bool is_manual() const {return mode_ == 1; }
+  inline void set_manual(int32_t bucket_size) { mode_ = 1; val_ = bucket_size; }
 
   int32_t mode_;
   int32_t val_;
@@ -62,15 +63,18 @@ public:
 
   static int gather_table_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int gather_schema_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int gather_index_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int gather_table_index_stats(ObExecContext &ctx,
                                       const ObTableStatParam &data_param,
@@ -83,84 +87,102 @@ public:
 
   static int set_table_stats(sql::ObExecContext &ctx,
                              sql::ParamStore &params,
-                             common::ObObj &result);
+                             common::ObObj &result,
+                             ObPLExecCtx& pl_exec_ctx);
 
   static int set_column_stats(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int set_index_stats(sql::ObExecContext &ctx,
                              sql::ParamStore &params,
-                             common::ObObj &result);
+                             common::ObObj &result,
+                             ObPLExecCtx& pl_exec_ctx);
 
   static int delete_table_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int delete_column_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int delete_schema_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int delete_index_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int delete_table_index_stats(sql::ObExecContext &ctx,
                                       const ObTableStatParam data_param);
 
   static int create_stat_table(sql::ObExecContext &ctx,
                                sql::ParamStore &params,
-                               common::ObObj &result);
+                               common::ObObj &result,
+                               ObPLExecCtx& pl_exec_ctx);
 
   static int drop_stat_table(sql::ObExecContext &ctx,
                              sql::ParamStore &params,
-                             common::ObObj &result);
+                             common::ObObj &result,
+                             ObPLExecCtx& pl_exec_ctx);
 
   static int export_table_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int export_column_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int export_schema_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int export_index_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int export_table_index_stats(sql::ObExecContext &ctx,
                                       const ObTableStatParam data_param);
 
   static int import_table_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int import_column_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int import_schema_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int import_index_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int import_table_index_stats(sql::ObExecContext &ctx,
                                       const ObTableStatParam data_param);
 
   static int lock_table_stats(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int lock_or_unlock_index_stats(sql::ObExecContext &ctx,
                                         const ObTableStatParam data_param,
@@ -168,92 +190,119 @@ public:
 
   static int lock_partition_stats(sql::ObExecContext &ctx,
                                   sql::ParamStore &params,
-                                  common::ObObj &result);
+                                  common::ObObj &result,
+                                  ObPLExecCtx& pl_exec_ctx);
 
   static int lock_schema_stats(sql::ObExecContext &ctx,
                                sql::ParamStore &params,
-                               common::ObObj &result);
+                               common::ObObj &result,
+                               ObPLExecCtx& pl_exec_ctx);
 
   static int unlock_table_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int unlock_partition_stats(sql::ObExecContext &ctx,
                                     sql::ParamStore &params,
-                                    common::ObObj &result);
+                                    common::ObObj &result,
+                                    ObPLExecCtx& pl_exec_ctx);
 
   static int unlock_schema_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int restore_table_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int restore_schema_stats(sql::ObExecContext &ctx,
                                   sql::ParamStore &params,
-                                  common::ObObj &result);
+                                  common::ObObj &result,
+                                  ObPLExecCtx& pl_exec_ctx);
 
   static int purge_stats(sql::ObExecContext &ctx,
                          sql::ParamStore &params,
-                         common::ObObj &result);
+                         common::ObObj &result,
+                         ObPLExecCtx& pl_exec_ctx);
 
   static int alter_stats_history_retention(sql::ObExecContext &ctx,
                                            sql::ParamStore &params,
-                                           common::ObObj &result);
+                                           common::ObObj &result,
+                                           ObPLExecCtx& pl_exec_ctx);
 
   static int get_stats_history_availability(sql::ObExecContext &ctx,
                                             sql::ParamStore &params,
-                                            common::ObObj &result);
+                                            common::ObObj &result,
+                                            ObPLExecCtx& pl_exec_ctx);
 
   static int get_stats_history_retention(sql::ObExecContext &ctx,
                                          sql::ParamStore &params,
-                                         common::ObObj &result);
+                                         common::ObObj &result,
+                                         ObPLExecCtx& pl_exec_ctx);
 
   static int reset_global_pref_defaults(sql::ObExecContext &ctx,
                                         sql::ParamStore &params,
-                                        common::ObObj &result);
+                                        common::ObObj &result,
+                                        ObPLExecCtx& pl_exec_ctx);
 
   static int set_global_prefs(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int set_schema_prefs(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int set_table_prefs(sql::ObExecContext &ctx,
                              sql::ParamStore &params,
-                             common::ObObj &result);
+                             common::ObObj &result,
+                             ObPLExecCtx& pl_exec_ctx);
 
   static int get_prefs(sql::ObExecContext &ctx,
                        sql::ParamStore &params,
-                       common::ObObj &result);
+                       common::ObObj &result,
+                       ObPLExecCtx& pl_exec_ctx);
 
   static int delete_schema_prefs(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int delete_table_prefs(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int copy_table_stats(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int cancel_gather_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
+
+  static int async_gather_stats_job_proc(sql::ObExecContext &ctx,
+                                         sql::ParamStore &params,
+                                         common::ObObj &result,
+                                         ObPLExecCtx& pl_exec_ctx);
 
   static int parse_method_opt(sql::ObExecContext &ctx,
                               ObIAllocator *allocator,
                               ObIArray<ObColumnStatParam> &column_params,
                               const ObString &method_opt,
+                              const bool is_async_gather,
                               bool &use_size_auto);
 
   static int parser_for_all_clause(const ParseNode *for_all_node,
                                    ObIArray<ObColumnStatParam> &column_params,
+                                   const bool is_async_gather,
                                    bool &use_size_auto);
 
   static int parser_for_columns_clause(const ParseNode *for_col_node,
@@ -316,6 +365,7 @@ public:
                                     const ObObjParam &colname,
                                     const ObObjParam &part_name,
                                     ObObjMeta &col_meta,
+                                    ObAccuracy &col_accuracy,
                                     ObTableStatParam &param);
 
   static int parse_set_column_stats_options(ObExecContext &ctx,
@@ -340,10 +390,11 @@ public:
                                        const ObObjParam &cascade,
                                        const ObObjParam &no_invalidate,
                                        const ObObjParam &force,
+                                       const ObObjParam *hist_est_percent,
+                                       const ObObjParam *hist_block_sample,
                                        ObTableStatParam &param);
 
   static int use_default_gather_stat_options(ObExecContext &ctx,
-                                             const StatTable &stat_table,
                                              ObTableStatParam &param);
 
   static int get_default_stat_options(ObExecContext &ctx,
@@ -396,6 +447,10 @@ public:
                                const ObTableStatParam &param,
                                ObOptStatRunningMonitor *running_monitor = NULL);
 
+  static int update_stat_cache(const uint64_t tenant_id,
+                               obrpc::ObUpdateStatCacheArg &stat_arg,
+                               ObOptStatRunningMonitor *running_monitor = NULL);
+
   static int parse_set_table_stat_options(ObExecContext &ctx,
                                           const ObObjParam &stattab,
                                           const ObObjParam &statid,
@@ -424,13 +479,16 @@ public:
                                           const ObObjParam &eavs,
                                           ObHistogramParam &hist_param);
 
-  static int parser_pl_numarray(const ObObjParam &numarray_param,
+  static int parser_pl_numarray(const ObString &func_name,
+                                const ObObjParam &numarray_param,
                                 ObIArray<int64_t> &num_array);
 
-  static int parser_pl_chararray(const ObObjParam &chararray_param,
+  static int parser_pl_chararray(const ObString &func_name,
+                                 const ObObjParam &chararray_param,
                                  ObIArray<ObString> &char_array);
 
-  static int parser_pl_rawarray(const ObObjParam &rawarray_param,
+  static int parser_pl_rawarray(const ObString &func_name,
+                                const ObObjParam &rawarray_param,
                                 ObIArray<ObString> &raw_array);
 
   static int find_selected_part_infos(const ObString &part_name,
@@ -443,7 +501,8 @@ public:
 
   static int flush_database_monitoring_info(sql::ObExecContext &ctx,
                                             sql::ParamStore &params,
-                                            common::ObObj &result);
+                                            common::ObObj &result,
+                                            ObPLExecCtx& pl_exec_ctx);
 
   static int process_not_size_manual_column(sql::ObExecContext &ctx, ObTableStatParam &table_param);
 
@@ -454,7 +513,8 @@ public:
 
   static int gather_database_stats_job_proc(sql::ObExecContext &ctx,
                                             sql::ParamStore &params,
-                                            common::ObObj &result);
+                                            common::ObObj &result,
+                                            ObPLExecCtx& pl_exec_ctx);
 
   static int gather_database_table_stats(sql::ObExecContext &ctx,
                                          const int64_t duration_time,
@@ -474,6 +534,12 @@ public:
                                     const int64_t duration_time,
                                     int64_t &succeed_cnt,
                                     ObOptStatTaskInfo &task_info);
+
+  static int build_stat_table_by_async_table(sql::ObExecContext &ctx,
+                                             const uint64_t tenant_id,
+                                             const ObTableSchema &table_schema,
+                                             const AsyncStatTable &async_table,
+                                             StatTable &stat_table);
 
   static int get_table_stale_percent(sql::ObExecContext &ctx,
                                      const uint64_t tenant_id,
@@ -499,7 +565,7 @@ public:
                                    int64_t task_table_count,
                                    ObOptStatTaskInfo &task_info);
 
-  static int get_table_stale_percent_threshold(sql::ObExecContext &ctx,
+  static int get_table_stale_percent_threshold(ObMySQLProxy *mysql_proxy,
                                                const uint64_t tenant_id,
                                                const uint64_t table_id,
                                                double &stale_percent_threshold);
@@ -513,21 +579,30 @@ public:
 
   static int gather_system_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int delete_system_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int set_system_stats(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int update_system_stats_cache(const uint64_t rpc_tenant_id,
                                       const uint64_t tenant_id);
 
   static void update_optimizer_gather_stat_info(const ObOptStatTaskInfo *task_info,
                                                 const ObOptStatGatherStat *gather_stat);
+
+  static int get_stats_consumer_group_id(ObTableStatParam &param);
+  static int convert_vaild_ident_name(common::ObIAllocator &allocator,
+                                      const common::ObDataTypeCastParams &dtc_params,
+                                      ObString &ident_name,
+                                      bool need_extra_conv = false);
 
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
@@ -552,26 +627,20 @@ private:
                                bool is_global_prefs,
                                ObStatPrefs *&stat_pref);
 
-  static int convert_vaild_ident_name(common::ObIAllocator &allocator,
-                                      const common::ObDataTypeCastParams &dtc_params,
-                                      ObString &ident_name,
-                                      bool need_extra_conv = false);
+  static int get_non_partitioned_table_stale_percent(sql::ObExecContext &ctx,
+                                                     const uint64_t tenant_id,
+                                                     const share::schema::ObTableSchema &table_schema,
+                                                     StatTable &stat_table);
 
+  static int get_partition_table_stale_percent(sql::ObExecContext &ctx,
+                                               const uint64_t tenant_id,
+                                               const share::schema::ObTableSchema &table_schema,
+                                               const double stale_percent_threshold,
+                                               StatTable &stat_table);
 
-  static int get_common_table_stale_percent(sql::ObExecContext &ctx,
-                                            const uint64_t tenant_id,
-                                            const share::schema::ObTableSchema &table_schema,
-                                            StatTable &stat_table);
-
-  static int get_user_partition_table_stale_percent(sql::ObExecContext &ctx,
-                                                    const uint64_t tenant_id,
-                                                    const share::schema::ObTableSchema &table_schema,
-                                                    const double stale_percent_threshold,
-                                                    StatTable &stat_table);
-
-  static bool is_table_gather_global_stats(const int64_t global_id,
-                                           const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
-                                           int64_t &cur_row_cnt);
+  static bool is_missing_global_stats(const int64_t global_id,
+                                      const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                      int64_t &cur_row_cnt);
 
   static int parse_index_part_info(ObExecContext &ctx,
                                    const ObObjParam &owner,
@@ -579,13 +648,6 @@ private:
                                    const ObObjParam &part_name,
                                    const ObObjParam &table_name,
                                    ObTableStatParam &param);
-
-  static int get_table_index_infos(share::schema::ObSchemaGetterGuard *schema_guard,
-                                   const uint64_t tenant_id,
-                                   const uint64_t table_id,
-                                   uint64_t *index_tid_arr,
-                                   int64_t &index_count);
-
   static int get_table_partition_infos(const ObTableSchema &table_schema,
                                        ObIAllocator &allocator,
                                        ObIArray<PartInfo> &partition_infos);
@@ -602,9 +664,11 @@ private:
 
   static bool need_gather_index_stats(const ObTableStatParam &table_param);
 
-  static int resovle_granularity(ObGranularityType granu_type,
-                                 const bool use_size_auto,
-                                 ObTableStatParam &param);
+  static int adjust_gather_param(ObExecContext &ctx,
+                                 const share::schema::ObTableSchema *table_schema,
+                                 ObTableStatParam &stat_param);
+
+  static int resovle_granularity(ObGranularityType granu_type, const bool use_size_auto, ObTableStatParam &param);
 
   static void decide_modified_part(ObTableStatParam &param, const bool cascade_parts);
 
@@ -626,6 +690,53 @@ private:
 
   static int check_system_stat_table_ready(int64_t tenant_id);
 
+  static int async_gather_table_stats(sql::ObExecContext &ctx,
+                                      const int64_t duration_time,
+                                      int64_t &succeed_cnt,
+                                      ObOptStatTaskInfo &task_info);
+
+  static int do_async_gather_table_stats(sql::ObExecContext &ctx,
+                                         const uint64_t tenant_id,
+                                         const AsyncStatTable &async_table,
+                                         const int64_t duration_time,
+                                         int64_t &succeed_cnt,
+                                         ObOptStatTaskInfo &task_info);
+
+  static int adjust_async_gather_stat_option(ObExecContext &ctx,
+                                             const ObIArray<int64_t> &async_partition_ids,
+                                             ObTableStatParam &param);
+  static int adjust_index_column_params(ObExecContext &ctx,
+                                        ObTableStatParam &index_param,
+                                        ObIArray<uint64_t> &filter_column_ids);
+
+  static int get_no_deduce_basic_stats_column_ids(const ObTableStatParam &param, ObIArray<uint64_t> &column_ids);
+
+  static int adjust_text_column_basic_stats(ObExecContext &ctx,
+                                            const share::schema::ObTableSchema &schema,
+                                            ObTableStatParam &param);
+
+  static int determine_auto_sample_table(ObExecContext &ctx,
+                                         ObTableStatParam &param);
+
+  static int update_analyze_failed_count(const ObTableStatParam &stat_param,
+                                         const ObSEArray<int64_t, 4> &failed_part_ids,
+                                         const StatTable &stat_table);
+
+  static int gather_table_stats_by_parts(ObExecContext &ctx,
+                                         const int64_t task_start_time,
+                                         const int64_t duration_time,
+                                         ObTableStatParam &stat_param,
+                                         ObSEArray<int64_t, 4> &failed_part_ids,
+                                         ObSEArray<int64_t, 4> &succ_part_and_subpart_ids,
+                                         ObOptStatRunningMonitor &running_monitor);
+  static int collect_executed_part_ids(const ObTableStatParam &stat_param, ObSEArray<int64_t, 4> &part_ids);
+
+
+  static int append_part_id_if_valid(hash::ObHashMap<int64_t, ObPartitionStatInfo *> &id_to_part_stat_map,
+                                     int64_t part_id,
+                                     ObIArray<int64_t> &part_ids);
+
+  static bool sample_not_supported(const ObTableStatParam &param);
 };
 
 }

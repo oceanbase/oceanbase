@@ -28,13 +28,15 @@
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
 #include "sql/ob_sql_trans_control.h"
 #include "lib/allocator/ob_safe_arena.h"
+#include "storage/ddl/ob_ddl_dag_thread_pool.h"
 
 
 namespace oceanbase
 {
-namespace observer
+
+namespace storage
 {
-struct ObGlobalContext;
+class ObColumnClusteredDag;
 }
 
 namespace sql
@@ -52,7 +54,8 @@ public:
         local_worker_factory_(gctx, allocator_),
         thread_worker_factory_(gctx, allocator_),
         is_single_tsc_leaf_dfo_(false),
-        all_shared_rf_msgs_()
+        all_shared_rf_msgs_(),
+        ddl_dag_(nullptr)
   {}
   virtual ~ObPxSubCoord() = default;
   int pre_process();
@@ -62,9 +65,10 @@ public:
   int init_exec_env(ObExecContext &exec_ctx);
   ObPxSQCProxy &get_sqc_proxy() { return sqc_ctx_.sqc_proxy_; }
   ObSqcCtx &get_sqc_ctx() { return sqc_ctx_; }
-  int64_t get_ddl_context_id() const { return ddl_ctrl_.context_id_; }
-  int set_partitions_info(ObIArray<ObPxTabletInfo> &partitions_info) {
-    return sqc_ctx_.partitions_info_.assign(partitions_info);
+  const ObDDLCtrl &get_ddl_control() { return ddl_ctrl_; }
+  ObColumnClusteredDag *get_ddl_dag() { return ddl_dag_; }
+  int set_tablets_info(ObIArray<ObPxTabletInfo> &tablets_info) {
+    return sqc_ctx_.px_tablets_info_.assign(tablets_info);
   }
   int report_sqc_finish(int end_ret) {
     return sqc_ctx_.sqc_proxy_.report(end_ret);
@@ -82,6 +86,7 @@ public:
       const DASTabletLocIArray &tsc_locations,
       const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
   int rebuild_sqc_access_table_locations();
+  int rebuild_sqc_lake_table_file_map();
   void set_is_single_tsc_leaf_dfo(bool flag) { is_single_tsc_leaf_dfo_ = flag; }
   int get_participants(ObPxSqcMeta &sqc,
                        const int64_t table_id,
@@ -132,6 +137,10 @@ private:
            sqc_arg_.sqc_.get_p2p_dh_map_info());
   }
 private:
+  void ddl_rewrite_ret_code(int &ret_code);
+  int sync_table_autoinc_value();
+
+private:
   const observer::ObGlobalContext &gctx_;
   ObPxRpcInitSqcArgs &sqc_arg_;
   ObSqcCtx sqc_ctx_;
@@ -143,6 +152,8 @@ private:
   int64_t reserved_thread_count_;
   bool is_single_tsc_leaf_dfo_;
   ObArray<int64_t> all_shared_rf_msgs_; // for clear
+  storage::ObColumnClusteredDag *ddl_dag_;
+  storage::ObDDLDagThreadPool ddl_dag_threads_;
   DISALLOW_COPY_AND_ASSIGN(ObPxSubCoord);
 };
 }

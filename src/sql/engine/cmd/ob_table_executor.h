@@ -145,12 +145,12 @@ private:
       ObSQLSessionInfo &session_info,
       common::ObIAllocator &allocator,
       const bool is_sub_part,
-      ObExprResType &dst_res_type);
+      ObRawExprResType &dst_res_type);
   template<class T>
   int calc_range_part_high_bound(
       const ObPartitionFuncType part_func_type,
       const ObString &col_name,
-      const ObExprResType &dst_res_type,
+      const ObRawExprResType &dst_res_type,
       T &part,
       ObExecContext &ctx);
   int calc_range_values_exprs(
@@ -166,7 +166,7 @@ private:
   int calc_list_part_rows(
     const ObPartitionFuncType part_func_type,
     const ObString &col_name,
-    const ObExprResType &dst_res_type,
+    const ObRawExprResType &dst_res_type,
     const T &orig_part,
     T &new_part,
     ObExecContext &ctx,
@@ -194,9 +194,22 @@ private:
     const common::ObString &access_info,
     common::ObIAllocator &allocator,
     common::ObStorageType &storage_type);
+  int populate_based_schema_obj_info_(obrpc::ObAlterTableArg &alter_table_arg);
 
 private:
   //DISALLOW_COPY_AND_ASSIGN(ObAlterTableExecutor);
+};
+
+class ObCommentExecutor
+{
+public:
+  ObCommentExecutor();
+  virtual ~ObCommentExecutor();
+  int execute(ObExecContext &ctx, ObAlterTableStmt &stmt);
+private:
+  // because of the lack of the assign in alter table schema and alter column schema, this function is implemented for
+  // assigning args needed for parallel comment.
+  int assign_alter_to_comment_(const obrpc::ObAlterTableArg &alter_table_arg, obrpc::ObSetCommentArg &set_comment_arg);
 };
 
 class ObDropTableStmt;

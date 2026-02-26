@@ -14,9 +14,6 @@
 #include "sql/resolver/ddl/ob_create_directory_stmt.h"
 #include "sql/resolver/ddl/ob_drop_directory_stmt.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "lib/worker.h"
 
 namespace oceanbase
 {

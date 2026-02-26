@@ -64,23 +64,30 @@ static_assert(ObObjTypeTraits<ObMaxType>::tc_ == ObMaxTC
 //       INITER<X, Y>::init_array();
 //     }
 //   }
+template <int M, template <int, int> class INITER, int X, int Y>
+struct Ob2DArrayConstIniterLoop
+{
+  static bool init()
+  {
+    if constexpr (Y < M) {
+      INITER<X, Y>::init_array();
+      Ob2DArrayConstIniterLoop<M, INITER, X, Y + 1>::init();
+    }
+
+      return true;
+  }
+};
+
 template <int N, int M, template <int, int> class INITER, int X = 0, int Y = 0>
 struct Ob2DArrayConstIniter
 {
-  constexpr static int NEXT_X = X + 1;
-  constexpr static int NEXT_Y = Y + 1;
   static bool init()
   {
-    if (X < N && Y < M) {
-      INITER<X, Y>::init_array();
+    if constexpr (X < N) {
+      Ob2DArrayConstIniterLoop<M, INITER, X, Y>::init();
+      Ob2DArrayConstIniter<N, M, INITER, X + 1, Y>::init();
     }
-    if (X < N - 1) {
-      return Ob2DArrayConstIniter<N, M, INITER, NEXT_X, Y>::init();
-    } else if (X == N - 1) {
-      return Ob2DArrayConstIniter<N, M, INITER, 0, NEXT_Y>::init();
-    } else {
-      return true;
-    }
+    return true;
   }
 };
 

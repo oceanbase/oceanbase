@@ -36,6 +36,7 @@ IMPL_ON_DEMAND_PRINT_FUNC(ObTxSubState)
     TX_KV_PRINT_WITH_ERR(flag_.prepare_notify_ > 0, prepare_notify, flag_.prepare_notify_, " ");
     TX_KV_PRINT_WITH_ERR(flag_.force_abort_ > 0, force_abort, flag_.force_abort_, " ");
     TX_KV_PRINT_WITH_ERR(flag_.transfer_blocking_ > 0, transfer_blocking, flag_.transfer_blocking_, " ");
+    TX_KV_PRINT_WITH_ERR(flag_.commit_submitting_redo_ > 0, commit_submitting_redo, flag_.commit_submitting_redo_, " ");
 
     ON_DEMAND_END_PRINT(SubState);
   // }
@@ -102,8 +103,6 @@ IMPL_ON_DEMAND_PRINT_FUNC(ObPartTransCtx)
 
   TX_KV_PRINT_WITH_ERR(!busy_cbs_.is_empty(), busy_cbs_cnt, busy_cbs_.get_size(), ", ");
   TX_KV_PRINT_WITH_ERR(!busy_cbs_.is_empty(), oldest_busy_cb, busy_cbs_.get_first(), ", ");
-  TX_KV_PRINT_WITH_ERR(final_log_cb_.is_valid() && !final_log_cb_.is_callbacked(), final_log_cb,
-                       final_log_cb_, ", ");
 
   TX_PRINT_FUNC_WITH_ERR(sub_state_.is_valid(), sub_state_.on_demand_print_, ", ");
 

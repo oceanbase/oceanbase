@@ -69,16 +69,6 @@ public:
                                        share::schema::ObTableSchema &table_schema,
                                        ObPartitionedStmt &stmt,
                                        bool is_subpart);
-                                       
-  static int check_transition_interval_valid(const stmt::StmtType stmt_type,
-                                             ObExecContext &ctx,
-                                             ObRawExpr *transition_expr,
-                                             ObRawExpr *interval_expr);
-
-  static int set_interval_value(ObExecContext &ctx,
-                                const stmt::StmtType stmt_type,
-                                share::schema::ObTableSchema &table_schema,
-                                ObRawExpr *interval_expr);
 
   /*--------------tablegroup related start------------------*/
   static int calc_values_exprs(ObExecContext &ctx, ObCreateTablegroupStmt &stmt);
@@ -127,7 +117,7 @@ public:
   static int expr_cal_and_cast(const sql::stmt::StmtType &stmt_type,
                                bool is_list_part,
                                ObExecContext &ctx,
-                               const sql::ObExprResType &dst_res_type,
+                               const sql::ObRawExprResType &dst_res_type,
                                const common::ObCollationType fun_collation_type,
                                ObRawExpr *expr,
                                common::ObObj &value_obj);
@@ -135,7 +125,7 @@ public:
   static int expr_cal_and_cast_with_check_varchar_len(const stmt::StmtType &stmt_type,
                                                       bool is_list_part,
                                                       ObExecContext &ctx,
-                                                      const sql::ObExprResType &dst_res_type,
+                                                      const sql::ObRawExprResType &dst_res_type,
                                                       ObRawExpr *expr,
                                                       common::ObObj &value_obj);
 

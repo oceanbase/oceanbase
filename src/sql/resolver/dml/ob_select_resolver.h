@@ -71,7 +71,6 @@ public:
   void set_in_exists_subquery(bool in_exists_subquery) { in_exists_subquery_ = in_exists_subquery; }
   bool is_in_exists_subquery() const { return in_exists_subquery_; }
   virtual int resolve_column_ref_expr(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
-  void set_transpose_item(const TransposeItem *transpose_item) { transpose_item_ = transpose_item; }
   void set_is_left_child(const bool is_left_child) { is_left_child_ = is_left_child; }
   void set_having_has_self_column() { having_has_self_column_ = true; }
   bool has_having_self_column() const { return having_has_self_column_; }
@@ -95,6 +94,8 @@ public:
   bool is_top_stmt() const { return is_top_stmt_; }
   void set_has_resolved_field_list(bool has_resolved_field_list) { has_resolved_field_list_ = has_resolved_field_list; }
   bool has_resolved_field_list() const { return has_resolved_field_list_; }
+  void set_is_right_child_of_sq_cmp(bool is_right_child_of_sq_cmp) { is_right_child_of_sq_cmp_ = is_right_child_of_sq_cmp; }
+  bool is_right_child_of_sq_cmp() const { return is_right_child_of_sq_cmp_; }
   // function members
   TO_STRING_KV(K_(has_calc_found_rows),
                K_(has_top_limit),
@@ -105,18 +106,15 @@ public:
 
 protected:
   int resolve_set_query(const ParseNode &parse_node);
-  int do_resolve_set_query_in_cte(const ParseNode &parse_tree, bool swap_branch);
-  int do_resolve_set_query(const ParseNode &parse_tree);
+  int do_resolve_set_query_in_recursive_cte(const ParseNode &parse_tree);
+  int do_resolve_set_query_in_normal(const ParseNode &parse_tree);
   int resolve_set_query_hint();
-  int do_resolve_set_query(const ParseNode &parse_tree,
-                           common::ObIArray<ObSelectStmt*> &child_stmt,
-                           const bool is_left_child = false);
   virtual int do_resolve_set_query(const ParseNode &parse_tree,
                                    ObSelectStmt *&child_stmt,
                                    const bool is_left_child = false);
   int check_cte_set_types(ObSelectStmt &left_stmt, ObSelectStmt &right_stmt);
   int set_stmt_set_type(ObSelectStmt *select_stmt, ParseNode *set_node);
-  int is_set_type_same(const ObSelectStmt *select_stmt, ParseNode *set_node, bool &is_type_same);
+  int is_set_type_same(const ObSelectStmt &select_stmt, const ParseNode *set_node, bool &is_type_same);
   int check_recursive_cte_limited();
   int check_pseudo_column_name_legal(const ObString& name);
   int search_connect_group_by_clause(const ParseNode &parent,
@@ -141,6 +139,7 @@ protected:
   int add_parent_cte_table_item(TableItem *table_item);
   int resolve_from_clause(const ParseNode *node);
   int resolve_field_list(const ParseNode &node);
+  int prepare_get_child_at(const ParseNode* node, const int32_t idx);
   inline bool is_colum_without_alias(ParseNode *project_node);
   int resolve_star(const ParseNode *node);
   int resolve_group_clause(const ParseNode *node);
@@ -161,12 +160,21 @@ protected:
                                 bool &has_explicit_dir,
                                 bool is_groupby_expr);
   int check_rollup_clause(const ParseNode *node, bool &has_rollup);
-
+  int check_oracle_compat_groupby(const ParseNode *node, bool &is_oracle_compat_groupby);
+  int resolve_group_by_element(const ParseNode *node,
+                               common::ObIArray<ObRawExpr*> &groupby_exprs,
+                               common::ObIArray<ObRawExpr*> &rollup_exprs,
+                               common::ObIArray<OrderItem> &order_items,
+                               bool &has_explicit_dir);
   int resolve_group_by_list(const ParseNode *node,
                             common::ObIArray<ObRawExpr*> &groupby_exprs,
                             common::ObIArray<ObRawExpr*> &rollup_exprs,
                             common::ObIArray<OrderItem> &order_items,
                             bool &has_explicit_dir);
+  int resolve_groupby_node_for_rollup_cube(const ParseNode *group_key_node,
+                                           ObIArray<ObRawExpr*> &dummy_groupby_exprs,
+                                           ObIArray<OrderItem> &dummy_order_items,
+                                           ObIArray<ObGroupbyExpr> &expr_list);
   int resolve_rollup_list(const ParseNode *node, ObRollupItem &rollup_item);
   int resolve_cube_list(const ParseNode *node, ObCubeItem &cube_item);
   int resolve_grouping_sets_list(const ParseNode *node,
@@ -178,7 +186,8 @@ protected:
                                  bool &has_explicit_dir);
   int resolve_for_update_clause(const ParseNode *node);
   int resolve_for_update_clause_oracle(const ParseNode &node);
-  int set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us);
+  int get_cursor_for_update_table(ObSelectStmt *select_stmt, int64_t &for_update_cnt, TableItem *&add_rowid_table_item, uint64_t &base_table_id);
+  int set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us, bool skip_locked);
   int set_for_update_oracle(ObSelectStmt &stmt,
                             const int64_t wait_us,
                             bool skip_locked,
@@ -192,8 +201,6 @@ protected:
   int check_cycle_values(const ParseNode &cycle_node);
   int check_unsupported_operation_in_recursive_branch();
   int check_recursive_cte_usage(const ObSelectStmt &select_stmt);
-  int gen_unpivot_target_column(const int64_t table_count, ObSelectStmt &select_stmt,
-                                TableItem &table_item);
 
   //resolve select into
   int resolve_into_clause(const ParseNode *node);
@@ -202,8 +209,9 @@ protected:
   int resolve_into_line_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_variable_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_file_node(const ParseNode *node, ObSelectIntoItem &into_item);
-  int resolve_max_file_size_node(const ParseNode *file_size_node, ObSelectIntoItem &into_item);
-  int resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value) const;
+  int resolve_file_partition_node(const ParseNode *node, ObSelectIntoItem &into_item);
+  int resolve_into_outfile_without_format(const ParseNode *node, ObSelectIntoItem &into_item);
+  int resolve_into_outfile_with_format(const ParseNode *node, ObSelectIntoItem &into_item);
   // resolve_star related functions
   int resolve_star_for_table_groups(ObStarExpansionInfo &star_expansion_info);
   int find_joined_table_group_for_table(const uint64_t table_id, int64_t &jt_idx);
@@ -244,14 +252,15 @@ protected:
   int resolve_table_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_alias_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_column_ref_in_group_by(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
+public:
   int resolve_all_function_table_columns(const TableItem &table_item, ObIArray<ColumnItem> *column_items);
   int resolve_all_json_table_columns(const TableItem &table_item, ObIArray<ColumnItem> *column_items);
   int resolve_all_generated_table_columns(const TableItem &table_item, common::ObIArray<ColumnItem> *column_items);
+protected:
   virtual int set_select_item(SelectItem &select_item, bool is_auto_gen);
   int resolve_query_options(const ParseNode *node);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
   virtual int resolve_column_ref_for_subquery(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
-  inline bool column_need_check_group_by(const ObQualifiedName &q_name) const;
   int check_column_ref_in_group_by_or_field_list(const ObRawExpr *column_ref) const;
   int wrap_alias_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   virtual int check_need_use_sys_tenant(bool &use_sys_tenant) const;
@@ -262,6 +271,7 @@ protected:
   int check_grouping_columns();
   int check_grouping_columns(ObSelectStmt &stmt, ObRawExpr *&expr);
   int check_window_exprs();
+  int check_window_func_in_group_by_exprs(const ObIArray<ObGroupbyExpr> &group_by_exprs);
   int check_sequence_exprs();
   int check_udt_set_query();
   int set_having_self_column(const ObRawExpr *real_ref_expr);
@@ -269,11 +279,14 @@ protected:
                                const ObItemType func_type,
                                common::ObIArray<ObRawExpr *> &arg_exp_arr,
                                common::ObIArray<ObRawExpr *> &partition_exp_arr);
-  int check_query_is_recursive_union(const ParseNode &parse_tree, bool &recursive_union, bool &need_swap_child);
+  int check_query_is_recursive_union(const ParseNode &parse_tree, bool &recursive_union);
   int do_check_basic_table_in_cte_recursive_union(const ParseNode &parse_tree, bool &recursive_union);
   int do_check_node_in_cte_recursive_union(const ParseNode* node, bool &recursive_union);
   int resolve_fetch_clause(const ParseNode *node);
   int resolve_check_option_clause(const ParseNode *node);
+  int check_set_child_stmt_pullup(const ObSelectStmt &child_stmt, bool &enable_pullup);
+  int transfer_rb_iterate_items();
+  int check_set_child_into_pullup(ObSelectStmt &select_stmt, ObSelectStmt &child_stmt, bool is_first_child);
 private:
   int parameterize_fields_name(const ParseNode *project_node,
                                const ObString &org_alias_name,
@@ -340,7 +353,7 @@ private:
                             const ObIArray<ObCubeItem> &cube_items,
                             bool &can_find,
                             ObStmtCompareContext *check_context = NULL);
-  int check_subquery_return_one_column(const ObRawExpr &expr, bool is_exists_param = false);
+  int check_subquery_return_one_column(const ObRawExpr &expr, bool is_compare_param = false);
 
   int mark_nested_aggr_if_required(const ObIArray<ObAggFunRawExpr*> &aggr_exprs);
 
@@ -363,6 +376,44 @@ private:
   int check_aggr_in_select_scope(ObSelectStmt *select_stmt);
   int mark_aggr_in_select_scope(ObSelectStmt *select_stmt);
 
+  int check_audit_log_stmt(ObSelectStmt *select_stmt);
+  int try_resolve_values_table_from_union(const ParseNode &parse_node, bool &resolve_happened);
+  int check_union_to_values_table_valid(const ParseNode &parse_node,
+                                        const ObSelectStmt &select_stmt,
+                                        ObIArray<int64_t> &leaf_nodes,
+                                        bool &is_valid);
+  int check_union_leaf_to_values_table_valid(const ParseNode &parse_node, bool &is_valid);
+  int resolve_values_table_from_union(const ObIArray<int64_t> &values_nodes,
+                                      ObValuesTableDef *&table_def);
+  // sensitive rule related functions
+  int resolve_sensitive_rule(ObSelectStmt *select_stmt);
+  int get_sensitive_rules(ObSelectStmt *select_stmt,
+                          ObRawExpr *expr,
+                          ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int get_sensitive_rules_in_column_ref_exprs(ObSelectStmt *select_stmt,
+                                              ObRawExpr *expr,
+                                              ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int get_sensitive_rules_in_query_ref_exprs(ObSelectStmt *select_stmt,
+                                             ObRawExpr *expr,
+                                             ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int get_sensitive_rules_in_ref_query(ObSelectStmt *ref_query,
+                                       ObRawExpr *outer_column_expr,
+                                       ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int get_sensitive_rules_in_cte_generated_col(ObSelectStmt *select_stmt,
+                                               ObColumnRefRawExpr *fake_cte_col_expr,
+                                               ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int get_real_cte_column_expr(ObColumnRefRawExpr *fake_cte_col_expr,
+                               TableItem *fake_cte_table_item,
+                               ObSelectStmt *select_stmt,
+                               ObColumnRefRawExpr *&real_cte_col_expr,
+                               ObSelectStmt *&real_cte_stmt);
+  int try_add_sensitive_field_expr(SelectItem &select_item,
+                                   ObIArray<const ObSensitiveRuleSchema *> &sensitive_rules);
+  int add_sensitive_field_expr(SelectItem &select_item,
+                               const ObSensitiveRuleSchema &sensitive_rule,
+                               ObSysFunRawExpr *&sensitive_field_expr);
+  bool is_child_resolver_of_dml();
+  // end of sensitive rule related functions
 protected:
   // data members
   /*these member is only for with clause*/
@@ -379,7 +430,6 @@ protected:
   // query is subquery in exists
   bool in_exists_subquery_;
   ObStandardGroupChecker standard_group_checker_;
-  const TransposeItem *transpose_item_;
   bool is_left_child_;
   uint64_t auto_name_id_;
   // denote having exists ref columns that belongs to current stmt
@@ -392,6 +442,8 @@ protected:
   bool is_top_stmt_;
   //当前query的field list是否解析成功, 用于force view解析失败时的column schema持久化
   bool has_resolved_field_list_;
+  bool is_oracle_compat_groupby_; // true if has rollup/cube/grouping sets in mysql mode
+  bool is_right_child_of_sq_cmp_; // true if current stmt is the right branch of a subquery-comparison expr
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSelectResolver);

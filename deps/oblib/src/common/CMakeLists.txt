@@ -5,6 +5,7 @@ ob_set_subtarget(oblib_common common
   ob_clock_generator.cpp
   ob_common_utility.cpp
   ob_field.cpp
+  ob_file_common_header.cpp
   ob_member.cpp
   ob_member_list.ipp
   ob_learner_list.ipp
@@ -23,6 +24,8 @@ ob_set_subtarget(oblib_common common
   ob_target_specific.cpp
   ob_timeout_ctx.cpp
   ob_zone_type.cpp
+  ob_version_def.cpp
+  ob_tenant_data_version_mgr.cpp
 )
 
 ob_set_subtarget(oblib_common common_mixed

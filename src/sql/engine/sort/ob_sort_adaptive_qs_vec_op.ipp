@@ -333,5 +333,165 @@ int ObAdaptiveQS<Store_Row>::compare_vals(int64_t l, int64_t r, int64_t &differ_
 
 /*********************************** end ObAdaptiveQS **********************************/
 
+template <typename StoreRow, typename SortingItem>
+ObFixedKeySort<StoreRow, SortingItem>::ObFixedKeySort(
+	common::ObIArray<StoreRow *> &sort_rows, const RowMeta &row_meta,
+	common::ObIAllocator &alloc)
+		: row_meta_(row_meta), orig_sort_rows_(sort_rows), alloc_(alloc),
+			buf_(nullptr), sorting_items_(nullptr), tmp_items_(nullptr),
+			item_cnt_(0), key_size_(0), item_size_(0), buckets_(nullptr)
+{}
+
+template <typename StoreRow, typename SortingItem>
+int ObFixedKeySort<StoreRow, SortingItem>::init(common::ObIArray<StoreRow *> &sort_rows,
+    common::ObIAllocator &alloc, int64_t rows_begin, int64_t rows_end, bool &can_encode)
+{
+  int ret = OB_SUCCESS;
+  can_encode = true;
+  if (rows_end - rows_begin <= 0) {
+    // do nothing
+  } else if (rows_begin < 0 || rows_end > sort_rows.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_ENG_LOG(WARN, "invalid argument", K(rows_begin), K(rows_end), K(sort_rows.count()), K(ret));
+  } else if (OB_FAIL(prepare_sorting_items(rows_begin, rows_end))) {
+    SQL_ENG_LOG(WARN, "failed to prepare items", K(ret));
+  } else {
+    for (int64_t i = 0; can_encode && i < item_cnt_; i++) {
+      SortingItem &item = sorting_items_[i];
+      StoreRow *row = sort_rows.at(i + rows_begin);
+      if (row->is_null(0)) {
+        can_encode = false;
+        break;
+      }
+      item.init(row, row_meta_);
+    }
+  }
+  return ret;
+}
+
+template <typename StoreRow, typename SortingItem>
+int ObFixedKeySort<StoreRow, SortingItem>::prepare_sorting_items(
+    int64_t rows_begin, int64_t rows_end)
+{
+  int ret = OB_SUCCESS;
+  key_size_ = SortingItem::KeyType::get_key_size();
+  item_size_ = SortingItem::get_item_size();
+  item_cnt_ = rows_end - rows_begin;
+  SQL_ENG_LOG(DEBUG, "prepare sorting items", K(key_size_), K(item_size_), K(item_cnt_));
+  int64_t items_size = item_size_ * item_cnt_;
+  int64_t buckets_size = RADIX_LOCATIONS * sizeof(int64_t) * key_size_;
+  buf_ = reinterpret_cast<DataPtr>(alloc_.alloc(items_size * 2 + buckets_size));
+  if (OB_ISNULL(buf_)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SQL_ENG_LOG(WARN, "failed to alloc memory", K(ret));
+  } else {
+    memset(buf_, 0, items_size * 2 + buckets_size);
+    sorting_items_ = reinterpret_cast<SortingItem *>(buf_);
+    tmp_items_ = reinterpret_cast<SortingItem *>(buf_ + items_size);
+    buckets_ = reinterpret_cast<int64_t *>(buf_ + items_size * 2);
+  }
+  return ret;
+}
+
+template <typename StoreRow, typename SortingItem>
+void ObFixedKeySort<StoreRow, SortingItem>::reset()
+{
+  if (buf_ != nullptr) {
+    alloc_.free(buf_);
+    buf_ = nullptr;
+    sorting_items_ = nullptr;
+    tmp_items_ = nullptr;
+  }
+  item_cnt_ = 0;
+  key_size_ = 0;
+  item_size_ = 0;
+}
+
+template <typename StoreRow, typename SortingItem>
+void ObFixedKeySort<StoreRow, SortingItem>::insertion_sort(const DataPtr orig_ptr,
+    const int64_t count)
+{
+  const SortingItem *source_ptr = reinterpret_cast<const SortingItem *>(orig_ptr);
+  if (count > 1) {
+    for (int64_t i = 1; i < count; i++) {
+      int64_t j = i;
+      SortingItem insert_item = source_ptr[i];
+      while (j > 0) {
+        const SortingItem &cur_item = source_ptr[j - 1];
+        if (cur_item.key_.key_cmp(insert_item.key_) > 0) {
+          memcpy((void *)(source_ptr + j), (void *)(source_ptr + (j - 1)), item_size_);
+          j--;
+        } else {
+          break;
+        }
+      }
+      memcpy((void *)(source_ptr + j), (void *)(&insert_item), item_size_);
+    }
+  }
+}
+template <typename StoreRow, typename SortingItem>
+void ObFixedKeySort<StoreRow, SortingItem>::radix_sort(const DataPtr orig_ptr,
+    const DataPtr tmp_ptr, const int64_t count, const int64_t offset, int64_t *locations, bool swap)
+{
+  if (0 == count || offset == key_size_) {
+    // if swap is true, orig_ptr and tmp_ptr is swaped
+    if (swap) {
+      memcpy(tmp_ptr, orig_ptr, count * item_size_);
+    }
+  } else if (count <= INSERTION_SORT_THRESHOLD) {
+    insertion_sort(orig_ptr, count);
+    if (swap) {
+      memcpy(tmp_ptr, orig_ptr, count * item_size_);
+    }
+  } else {
+    int64_t real_offset;
+    real_offset = offset;
+    const DataPtr source_ptr = orig_ptr;
+    const DataPtr target_ptr = tmp_ptr;
+    // init counts to 0
+    memset(locations, 0, RADIX_LOCATIONS * sizeof(int64_t));
+    int64_t *counts = locations + 1;
+    // collect counts
+    DataPtr offset_ptr = source_ptr + real_offset;
+    for (int64_t i = 0; i < count; i++) {
+      counts[*offset_ptr]++;
+      offset_ptr += item_size_;
+    }
+    // compute locations from buckets
+    int64_t max_count = 0;
+    for (int64_t radix = 0; radix < VALUES_PER_RADIX; radix++) {
+      max_count = std::max(max_count, counts[radix]);
+      counts[radix] += locations[radix];
+    }
+    if (max_count != count) {
+      // reorder items into tmp array
+      DataPtr item_ptr = source_ptr;
+      for (int64_t i = 0; i < count; i++) {
+        const int64_t &radix_offset = locations[*(item_ptr + real_offset)]++;
+        memcpy(target_ptr + radix_offset * item_size_, item_ptr, item_size_);
+        item_ptr += item_size_;
+      }
+      swap = !swap;
+    }
+    if (max_count == count) {
+      radix_sort(orig_ptr, tmp_ptr, count, offset + 1, locations + RADIX_LOCATIONS, swap);
+    } else {
+      int64_t radix_count = locations[0];
+      for (int64_t radix = 0; radix < VALUES_PER_RADIX; radix++) {
+        if (radix_count != 0) {
+          const int64_t loc = (locations[radix] - radix_count) * item_size_;
+          radix_sort(tmp_ptr + loc,
+              orig_ptr + loc,
+              radix_count,
+              offset + 1,
+              locations + RADIX_LOCATIONS,
+              swap);
+        }
+        radix_count = locations[radix + 1] - locations[radix];
+      }
+    }
+  }
+}
+
 } // namespace sql
 } // namespace oceanbase

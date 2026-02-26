@@ -22,7 +22,7 @@ namespace storage
 using namespace common;
 
 ObDirectLoadMultipleHeapTableTabletWholeScanner::ObDirectLoadMultipleHeapTableTabletWholeScanner()
-  : heap_table_(nullptr), is_iter_end_(false), is_inited_(false)
+  : is_iter_end_(false), is_inited_(false)
 {
 }
 
@@ -31,7 +31,7 @@ ObDirectLoadMultipleHeapTableTabletWholeScanner::~ObDirectLoadMultipleHeapTableT
 }
 
 int ObDirectLoadMultipleHeapTableTabletWholeScanner::init(
-  ObDirectLoadMultipleHeapTable *heap_table,
+  const ObDirectLoadTableHandle &heap_table,
   const ObTabletID &tablet_id,
   const ObDirectLoadTableDataDesc &table_data_desc)
 {
@@ -39,14 +39,15 @@ int ObDirectLoadMultipleHeapTableTabletWholeScanner::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadMultipleHeapTableTabletWholeScanner init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(nullptr == heap_table || !heap_table->is_valid() ||
-                         !tablet_id.is_valid() || !table_data_desc.is_valid())) {
+  } else if (OB_UNLIKELY(!heap_table.is_valid() || !heap_table.get_table()->is_multiple_heap_table() || !tablet_id.is_valid() ||
+                         !table_data_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KPC(heap_table), K(tablet_id), K(table_data_desc));
+    LOG_WARN("invalid args", KR(ret), K(heap_table), K(tablet_id), K(table_data_desc));
   } else {
     heap_table_ = heap_table;
     tablet_id_ = tablet_id;
-    if (OB_FAIL(index_scanner_.init(heap_table, tablet_id, table_data_desc))) {
+    ObDirectLoadMultipleHeapTable *multi_heap_table = static_cast<ObDirectLoadMultipleHeapTable *>(heap_table.get_table());
+    if (OB_FAIL(index_scanner_.init(multi_heap_table, tablet_id, table_data_desc))) {
       LOG_WARN("fail to init index scanner", KR(ret));
     } else if (OB_FAIL(data_block_reader_.init(table_data_desc.sstable_data_block_size_,
                                                table_data_desc.compressor_type_))) {
@@ -70,13 +71,14 @@ int ObDirectLoadMultipleHeapTableTabletWholeScanner::switch_next_fragment()
 {
   int ret = OB_SUCCESS;
   const ObDirectLoadMultipleHeapTableTabletIndex *tablet_index = nullptr;
+  ObDirectLoadMultipleHeapTable *table = static_cast<ObDirectLoadMultipleHeapTable *>(heap_table_.get_table());
   if (OB_FAIL(index_scanner_.get_next_index(tablet_index))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get next index", KR(ret));
     }
   } else {
     const ObDirectLoadMultipleHeapTableDataFragment &data_fragment =
-      heap_table_->get_data_fragments().at(tablet_index->fragment_idx_);
+      table->get_data_fragments().at(tablet_index->fragment_idx_);
     data_block_reader_.reuse();
     if (OB_FAIL(data_block_reader_.open(data_fragment.file_handle_, tablet_index->offset_,
                                         data_fragment.file_size_ - tablet_index->offset_))) {

@@ -65,7 +65,7 @@ private:
     ENUM_OPT_PURGE,
     ENUM_TOTAL_COUNT
   };
-  bool is_heap_table_;
+  bool is_table_with_logic_pk_;
   DISALLOW_COPY_AND_ASSIGN(ObCreateMLogResolver);
 };
 } // sql

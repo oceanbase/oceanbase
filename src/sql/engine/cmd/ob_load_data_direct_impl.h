@@ -12,6 +12,7 @@
 #pragma once
 
 #include "lib/allocator/page_arena.h"
+#include "lib/oblog/ob_warning_buffer.h"
 #include "observer/table_load/ob_table_load_object_allocator.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "share/table/ob_table_load_array.h"
@@ -24,6 +25,7 @@
 #include "observer/table_load/ob_table_load_exec_ctx.h"
 #include "observer/table_load/ob_table_load_instance.h"
 #include "storage/direct_load/ob_direct_load_struct.h"
+#include "sql/engine/cmd/ob_load_data_storage_info.h"
 
 namespace oceanbase
 {
@@ -35,6 +37,7 @@ class ObTableLoadExecCtx;
 class ObTableLoadCoordinator;
 class ObITableLoadTaskScheduler;
 class ObTableLoadInstance;
+class ObTableLoadBackupTable;
 } // namespace observer
 namespace sql
 {
@@ -65,10 +68,11 @@ private:
     TO_STRING_KV(K_(file_location), K_(file_column_num), K_(file_cs_type));
   public:
     ObLoadFileLocation file_location_;
-    share::ObBackupStorageInfo access_info_;
+    ObLoadDataStorageInfo access_info_;
     int64_t file_column_num_; // number of column in file
     ObDataInFileStruct file_format_;
     common::ObCollationType file_cs_type_;
+    ObCSVGeneralFormat::ObCSVCompression compression_format_;
   };
 
   struct LoadExecuteParam
@@ -91,9 +95,14 @@ private:
                  K_(dup_action),
                  "method", storage::ObDirectLoadMethod::get_type_string(method_),
                  "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
-                 "load_mode", storage::ObDirectLoadMode::get_type_string(load_mode_),
+                 K_(load_level),
                  K_(data_access_param),
-                 K_(column_ids));
+                 K_(column_ids),
+                 K_(compressor_type),
+                 K_(online_sample_percent),
+                 K_(tablet_ids),
+                 K_(enable_inc_major),
+                 K_(is_backup));
   public:
     uint64_t tenant_id_;
     uint64_t database_id_;
@@ -112,9 +121,14 @@ private:
     sql::ObLoadDupActionType dup_action_;
     storage::ObDirectLoadMethod::Type method_;
     storage::ObDirectLoadInsertMode::Type insert_mode_;
-    storage::ObDirectLoadMode::Type load_mode_;
+    storage::ObDirectLoadLevel::Type load_level_;
     DataAccessParam data_access_param_;
     ObArray<uint64_t> column_ids_;
+    ObCompressorType compressor_type_;
+    double online_sample_percent_;
+    ObArray<ObTabletID> tablet_ids_;
+    bool enable_inc_major_;
+    bool is_backup_;
   };
 
   struct LoadExecuteContext
@@ -124,7 +138,7 @@ private:
     bool is_valid() const;
     TO_STRING_KV(K_(exec_ctx), KP_(allocator), KP_(direct_loader), KP_(job_stat), KP_(logger));
   public:
-    observer::ObTableLoadSqlExecCtx exec_ctx_;
+    observer::ObTableLoadExecCtx exec_ctx_;
     common::ObIAllocator *allocator_;
     observer::ObTableLoadInstance *direct_loader_;
     sql::ObLoadDataStat *job_stat_;
@@ -367,6 +381,7 @@ private:
       table::ObTableLoadArray<ObObj> objs_;
     };
   protected:
+    ObArenaAllocator allocator_;
     const LoadExecuteParam *execute_param_;
     LoadExecuteContext *execute_ctx_;
     observer::ObTableLoadObjectAllocator<observer::ObTableLoadTask> task_allocator_;
@@ -378,6 +393,8 @@ private:
     ObConcurrentFixedCircularArray<TaskHandle *> handle_reserve_queue_;
     common::ObArray<TaskHandle *> handle_resource_; // 用于释放资源
     int64_t total_line_count_;
+    // trans
+    observer::ObTableLoadInstance::TransCtx trans_ctx_;
     bool is_inited_;
   private:
     DISALLOW_COPY_AND_ASSIGN(FileLoadExecutor);
@@ -438,6 +455,49 @@ private:
   };
 
   class MultiFilesLoadTaskProcessor;
+
+private:
+  /**
+   * BackupLoadExecutor
+   */
+  class BackupLoadExecutor
+  {
+    const int64_t MIN_TASK_PER_WORKER = 4;
+  public:
+    BackupLoadExecutor();
+    ~BackupLoadExecutor();
+    int init(const LoadExecuteParam &execute_param, LoadExecuteContext &execute_ctx,
+             const ObString &path);
+    int execute();
+    int get_next_partition_task(int64_t &partition_idx, int64_t &subpart_count,
+                                int64_t &subpart_idx);
+    int process_partition(int32_t session_id, int64_t partition_idx, int64_t subpart_count = 1,
+                          int64_t subpart_idx = 0);
+    void task_finished(observer::ObTableLoadTask *task, int ret_code);
+    int64_t get_total_line_count() const { return total_line_count_; }
+    int check_status();
+  private:
+    ObArenaAllocator allocator_;
+    const LoadExecuteParam *execute_param_;
+    LoadExecuteContext *execute_ctx_;
+    observer::ObTableLoadBackupTable *backup_table_;
+    observer::ObTableLoadObjectAllocator<observer::ObTableLoadTask> task_allocator_;
+    observer::ObITableLoadTaskScheduler *task_scheduler_;
+    ObParallelTaskController task_controller_;
+    int64_t worker_count_;
+    int64_t partition_count_;
+    int64_t subpart_count_;
+    lib::ObMutex mutex_;
+    int64_t next_partition_idx_;
+    int64_t next_subpart_idx_;
+    int64_t total_line_count_;
+    int task_error_code_;
+    char task_error_msg_[ObWarningBuffer::WarningItem::STR_LEN];
+    bool is_inited_;
+  };
+
+  class BackupLoadTaskProcessor;
+  class BackupLoadTaskCallback;
 
 private:
   int init_file_iter();

@@ -25,7 +25,7 @@ ObCompactionTimeGuard::~ObCompactionTimeGuard()
   }
   total_cost += common::ObTimeUtility::current_time() - last_click_ts_;
   if (OB_UNLIKELY(total_cost >= warn_threshold_)) {
-    ::oceanbase::common::OB_PRINT(log_mod_, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(WARN), OB_SUCCESS, "cost too much time", LOG_KVS(K(*this)));
+    OB_MOD_LOG_RET(log_mod_, WARN, OB_SUCCESS, "cost too much time", KPC(this));
   }
 }
 
@@ -125,6 +125,8 @@ uint16_t ObCompactionTimeGuard::get_max_event_count(const ObCompactionTimeGuardT
     max_event_count =  ObCompactionScheduleTimeGuard::COMPACTION_EVENT_MAX;
   } else if (STORAGE_COMPACT_TIME_GUARD == guard_type) {
     max_event_count = ObStorageCompactionTimeGuard::COMPACTION_EVENT_MAX;
+  } else if (CO_MERGE_TIME_GUARD == guard_type) {
+    max_event_count = ObCOMergeTimeGuard::COMPACTION_EVENT_MAX;
   }
   return max_event_count;
 }
@@ -168,10 +170,10 @@ int64_t ObRSCompactionTimeGuard::to_string(char *buf, const int64_t buf_len) con
  */
 const char *ObCompactionScheduleTimeGuard::CompactionEventStr[] = {
     "GET_TABLET",
-    "UPDATE_TABLET_REPORT_STATUS",
+    "INIT_TABLET_STATUS",
     "READ_MEDIUM_INFO",
     "SCHEDULE_NEXT_MEDIUM",
-    "SCHEDULE_TABLET_MEDIUM",
+    "SCHEDULE_TABLET_EXECUTE",
     "FAST_FREEZE",
     "SEARCH_META_TABLE",
     "CHECK_META_TABLE",
@@ -208,6 +210,7 @@ int64_t ObCompactionScheduleTimeGuard::to_string(char *buf, const int64_t buf_le
  *  ----------------------------------------------ObCompactionTimeGuard--------------------------------------------------
  */
 constexpr float ObStorageCompactionTimeGuard::COMPACTION_SHOW_PERCENT_THRESHOLD;
+constexpr float ObStorageCompactionTimeGuard::EXECUTE_PERCENT_THRESHOLD;
 const char *ObStorageCompactionTimeGuard::CompactionEventStr[] = {
     "WAIT_TO_SCHEDULE",
     "COMPACTION_POLICY",
@@ -219,7 +222,8 @@ const char *ObStorageCompactionTimeGuard::CompactionEventStr[] = {
     "UPDATE_TABLET",
     "RELEASE_MEMTABLE",
     "SCHEDULE_OTHER_COMPACTION",
-    "DAG_FINISH"
+    "DAG_FINISH",
+    "PRE_WARM"
 };
 
 const char *ObStorageCompactionTimeGuard::get_comp_event_str(const enum CompactionEvent event)
@@ -235,6 +239,23 @@ const char *ObStorageCompactionTimeGuard::get_comp_event_str(const enum Compacti
   return str;
 }
 
+bool ObStorageCompactionTimeGuard::need_print() const
+{
+  bool bret = false;
+  if (size_ > DAG_WAIT_TO_SCHEDULE && event_times_[DAG_WAIT_TO_SCHEDULE] > COMPACTION_SHOW_TIME_THRESHOLD) {
+    bret = true;
+  } else {
+    int64_t total_cost = 0;
+    for (int64_t idx = COMPACTION_POLICY; idx < size_; ++idx) {
+      total_cost += event_times_[idx];
+    }
+    if (total_cost > COMPACTION_SHOW_TIME_THRESHOLD && EXECUTE < size_ && event_times_[EXECUTE] < total_cost * EXECUTE_PERCENT_THRESHOLD) {
+      bret = true;
+    }
+  }
+  return bret;
+}
+
 int64_t ObStorageCompactionTimeGuard::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -247,12 +268,14 @@ int64_t ObStorageCompactionTimeGuard::to_string(char *buf, const int64_t buf_len
   for (int64_t idx = COMPACTION_POLICY; idx < size_; ++idx) {
     total_cost += event_times_[idx];
   }
+  bool exist_other_slow_event = false;
   if (total_cost > COMPACTION_SHOW_TIME_THRESHOLD) {
     float ratio = 0;
     for (int64_t idx = COMPACTION_POLICY; idx < size_; ++idx) {
       const uint32_t time_interval = event_times_[idx]; // include the retry time since previous event
       ratio = (float)(time_interval)/ total_cost;
-      if (ratio >= COMPACTION_SHOW_PERCENT_THRESHOLD || time_interval >= COMPACTION_SHOW_TIME_THRESHOLD) {
+      if (EXECUTE != idx && (ratio >= COMPACTION_SHOW_PERCENT_THRESHOLD || time_interval >= COMPACTION_SHOW_TIME_THRESHOLD)) {
+        exist_other_slow_event = true;
         fmt_ts_to_meaningful_str(buf, buf_len, pos, get_comp_event_str(static_cast<CompactionEvent>(idx)), event_times_[idx]);
         if (ratio > 0.01) {
           common::databuff_printf(buf, buf_len, pos, "(%.2f)", ratio);
@@ -261,17 +284,77 @@ int64_t ObStorageCompactionTimeGuard::to_string(char *buf, const int64_t buf_len
       }
     }
   }
-  fmt_ts_to_meaningful_str(buf, buf_len, pos, "total", total_cost);
-  if (pos != 0 && pos < buf_len) {
-    buf[pos - 1] = ';';
+  if (exist_other_slow_event) {
+    fmt_ts_to_meaningful_str(buf, buf_len, pos, "total", total_cost);
+    if (pos != 0 && pos < buf_len) {
+      buf[pos - 1] = ';';
+    }
   }
-
   if (pos != 0 && pos < buf_len) {
     pos -= 1;
   }
   return pos;
 }
 
+/**
+ * --------------------------------------ObSSCompactionTimeGuard--------------------------------------
+ */
+const char *ObSSCompactionTimeGuard::CompactionEventStr[] = {
+    "GET_SCHEDULE_TABLET",
+    "PREPARE_CLOG",
+    "UPDATE_TABLET_OBJ",
+    "GET_TABLET",
+    "SCHEDULE_MERGE",
+    "REFRESH",
+    "FORCE_FREEZE"
+};
+
+const char *ObSSCompactionTimeGuard::get_comp_event_str(enum CompactionEvent event)
+{
+  STATIC_ASSERT(static_cast<int64_t>(COMPACTION_EVENT_MAX) == ARRAYSIZEOF(CompactionEventStr), "events str len is mismatch");
+  const char *str = "";
+  if (event >= COMPACTION_EVENT_MAX || event < GET_SCHEDULE_TABLET) {
+    str = "invalid_type";
+  } else {
+    str = CompactionEventStr[event];
+  }
+  return str;
+}
+
+/**
+ * --------------------------------------ObCOMergeTimeGuard--------------------------------------
+ */
+const char *ObCOMergeTimeGuard::CompactionEventStr[] = {
+    "MOVE_NEXT",
+    "COMPARE",
+    "BUILD_LOG",
+    "REPLAY_BASE_CG",
+    "PERSIST_LOG",
+    "REPLAY_LOG"
+};
+
+const char *ObCOMergeTimeGuard::get_comp_event_str(enum CompactionEvent event)
+{
+  STATIC_ASSERT(static_cast<int64_t>(COMPACTION_EVENT_MAX) == ARRAYSIZEOF(CompactionEventStr), "events str len is mismatch");
+  const char *str = "";
+  if (event >= COMPACTION_EVENT_MAX || event < MOVE_NEXT) {
+    str = "invalid_type";
+  } else {
+    str = CompactionEventStr[event];
+  }
+  return str;
+}
+
+int64_t ObCOMergeTimeGuard::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  for (int64_t idx = 0; idx < size_; ++idx) {
+    if (event_times_[idx] > 0) {
+      fmt_ts_to_meaningful_str(buf, buf_len, pos, get_comp_event_str(static_cast<CompactionEvent>(idx)), event_times_[idx]);
+    }
+  }
+  return pos;
+}
 
 } // namespace compaction
 } // namespace oceanbase

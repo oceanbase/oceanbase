@@ -58,6 +58,8 @@ private:
   int inner_get_next_row_udf();
   int inner_get_next_row_sys_func();
   int get_current_result(common::ObObj &result);
+  int reset_udtf_ctx();
+
   int64_t node_idx_;
   bool already_calc_;
   int64_t row_count_;

@@ -11,25 +11,7 @@
  */
 
 #include "mds_tenant_service.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_errno.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/string/ob_string_holder.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/utility.h"
-#include "ob_clock_generator.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "storage/meta_mem/ob_tablet_map_key.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_memtable_mgr.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "share/scn.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/multi_data_source/mds_table_handle.h"
-#include "storage/ls/ob_ls_tablet_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 
 namespace oceanbase
@@ -53,7 +35,7 @@ void set_mds_mem_check_thread_local_info(const storage::mds::MdsWriter &writer,
                                          const uint32_t alloc_line)
 {
   int64_t pos = 0;
-  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, "%s", to_cstring(writer));
+  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, writer);
   __thread_mds_alloc_type__ = alloc_ctx_type;
   __thread_mds_alloc_file__ = alloc_file;
   __thread_mds_alloc_func__ = alloc_func;
@@ -68,7 +50,9 @@ void set_mds_mem_check_thread_local_info(const share::ObLSID &ls_id,
                                          const uint32_t alloc_line)
 {
   int64_t pos = 0;
-  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, "%s, %s", to_cstring(ls_id), to_cstring(tablet_id));
+  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, ls_id);
+  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, ", ");
+  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, tablet_id);
   __thread_mds_alloc_type__ = data_type;
   __thread_mds_alloc_file__ = alloc_file;
   __thread_mds_alloc_func__ = alloc_func;
@@ -233,6 +217,8 @@ int ObTenantMdsService::for_each_ls_in_tenant(const ObFunction<int(ObLS &)> &op)
         }
       } else if (MDS_FAIL(op(*ls))) {
         MDS_LOG_NONE(WARN, "fail to for each ls", K(succ_num));
+      } else {
+        MDS_LOG_NONE(DEBUG, "succeed to operate one ls", K(ret), "ls_id", ls->get_ls_id());
       }
     } while (++succ_num && OB_SUCC(ret));
   }
@@ -286,13 +272,14 @@ int ObTenantMdsService::for_each_mds_table_in_ls(ObLS &ls, const ObFunction<int(
   #define PRINT_WRAPPER KR(ret), K(ls), K(mds_table_total_num), K(ids_in_t3m_array.count())
   int ret = OB_SUCCESS;
   int64_t succ_num = 0;
-  ObLSTabletIterator tablet_iter(storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   MDS_TG(10_s);
 
   int64_t mds_table_total_num = 0;
   MdsTableMgrHandle mgr_handle;
   ObArray<ObTabletID> ids_in_t3m_array;
-  if (MDS_FAIL(ls.get_mds_table_mgr(mgr_handle))) {
+  if (ObReplicaTypeCheck::is_log_replica(ls.get_replica_type())) {
+    MDS_LOG_NONE(TRACE, "skip logonly replica", K(ls));
+  } else if (MDS_FAIL(ls.get_mds_table_mgr(mgr_handle))) {
     MDS_LOG_NONE(WARN, "fail to get mds table mgr");
   } else if (MDS_FAIL(mgr_handle.get_mds_table_mgr()->for_each_in_t3m_mds_table(
     [&mds_table_total_num, &ids_in_t3m_array, &ls](MdsTableBase &mds_table) -> int {// with map's bucket lock protected
@@ -321,8 +308,10 @@ int ObTenantMdsService::for_each_mds_table_in_ls(ObLS &ls, const ObFunction<int(
 
 int ObTenantMdsTimer::process_with_tablet_(ObTablet &tablet)
 {
-  #define PRINT_WRAPPER KR(ret), KPC(this), K(tablet_oldest_scn), K(tablet.get_tablet_meta().tablet_id_)
+  #define PRINT_WRAPPER KR(ret), KPC(this), K(tablet_oldest_scn), K(ls_id), K(tablet_id)
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet.get_ls_id();
+  const common::ObTabletID &tablet_id = tablet.get_tablet_id();
   share::SCN tablet_oldest_scn;
   MDS_TG(10_ms);
   if (MDS_FAIL(get_tablet_oldest_scn_(tablet, tablet_oldest_scn))) {
@@ -344,25 +333,32 @@ int ObTenantMdsTimer::process_with_tablet_(ObTablet &tablet)
 
 int ObTenantMdsTimer::get_tablet_oldest_scn_(ObTablet &tablet, share::SCN &oldest_scn)
 {
-  #define PRINT_WRAPPER KR(ret), K(tablet.get_tablet_meta().tablet_id_), K(oldest_scn), KPC(this)
+  #define PRINT_WRAPPER KR(ret), K(ls_id), K(tablet_id), K(oldest_scn), K(op.min_mds_ckpt_scn_), KPC(this)
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet.get_ls_id();
+  const common::ObTabletID &tablet_id = tablet.get_tablet_id();
   MDS_TG(5_ms);
+  oldest_scn = SCN::min_scn();// means can not recycle any node
+  ScanAllVersionTabletsOp::GetMinMdsCkptScnOp op(oldest_scn);
   if (OB_ISNULL(MTL(ObTenantMetaMemMgr*))) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG_GC(ERROR, "MTL ObTenantMetaMemMgr is NULL");
-  } else if (MDS_FAIL(MTL(ObTenantMetaMemMgr*)->get_min_mds_ckpt_scn(ObTabletMapKey(tablet.get_tablet_meta().ls_id_,
-                                                                                    tablet.get_tablet_meta().tablet_id_),
-                                                                     oldest_scn))) {
+  } else if (MDS_FAIL(MTL(ObTenantMetaMemMgr*)->scan_all_version_tablets(ObTabletMapKey(ls_id, tablet_id), op))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       MDS_LOG_GC(WARN, "get_min_mds_ckpt_scn meet OB_ENTRY_NOT_EXIST");
+    } else if (OB_ITEM_NOT_SETTED == ret) {
+      ret = OB_SUCCESS;
+      MDS_LOG_GC(WARN, "get_min_mds_ckpt_scn meet OB_ITEM_NOT_SETTED");
     } else {
       MDS_LOG_GC(WARN, "fail to get oldest tablet min_mds_ckpt_scn");
     }
-    oldest_scn = SCN::min_scn();// means can not recycle any node
-  } else if (oldest_scn.is_max() || !oldest_scn.is_valid()) {
-    oldest_scn = SCN::min_scn();// means can not recycle any node
   }
+  if (oldest_scn.is_max() || !oldest_scn.is_valid()) {
+    MDS_LOG_GC(WARN, "get min_mds_ckpt_scn, but is invalid");
+    oldest_scn.set_min();
+  }
+  MDS_LOG_GC(DEBUG, "get tablet oldest scn");
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -373,11 +369,11 @@ int ObTenantMdsTimer::try_recycle_mds_table_(ObTablet &tablet,
   #define PRINT_WRAPPER KR(ret), K(tablet.get_tablet_meta().tablet_id_), K(tablet_oldest_scn), KPC(this)
   int ret = OB_SUCCESS;
   const ObTabletPointerHandle &pointer_handle = tablet.get_pointer_handle();
-  ObTabletPointer *tablet_pointer = pointer_handle.get_resource_ptr();
+  ObTabletPointer *tablet_pointer = pointer_handle.get_tablet_pointer();
   MDS_TG(5_ms);
   if (OB_ISNULL(tablet_pointer)) {
     ret = OB_BAD_NULL_ERROR;
-    MDS_LOG_GC(ERROR, "down cast to tablet pointer failed");
+    MDS_LOG_GC(ERROR, "down cast to tablet pointer failed", K(pointer_handle));
   } else if (MDS_FAIL(tablet_pointer->try_release_mds_nodes_below(tablet_oldest_scn))) {
     MDS_LOG_GC(WARN, "fail to release mds nodes");
   } else {
@@ -392,11 +388,11 @@ int ObTenantMdsTimer::try_gc_mds_table_(ObTablet &tablet)
   #define PRINT_WRAPPER KR(ret), K(tablet.get_tablet_meta().tablet_id_), KPC(this)
   int ret = OB_SUCCESS;
   const ObTabletPointerHandle &pointer_handle = tablet.get_pointer_handle();
-  ObTabletPointer *tablet_pointer = pointer_handle.get_resource_ptr();
+  ObTabletPointer *tablet_pointer = pointer_handle.get_tablet_pointer();
   MDS_TG(5_ms);
   if (OB_ISNULL(tablet_pointer)) {
     ret = OB_BAD_NULL_ERROR;
-    MDS_LOG_GC(ERROR, "down cast to tablet pointer failed");
+    MDS_LOG_GC(ERROR, "down cast to tablet pointer failed", K(pointer_handle));
   } else if (MDS_FAIL(tablet_pointer->try_gc_mds_table())) {
     if (OB_EAGAIN != ret) {
       MDS_LOG_GC(WARN, "try gc mds table failed");

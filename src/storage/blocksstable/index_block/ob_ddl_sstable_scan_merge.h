@@ -29,7 +29,7 @@ public:
     : equal_with_next_(false),
       is_scan_left_border_(false),
       is_scan_right_border_(false),
-      end_key_(nullptr),
+      end_key_(),
       header_(nullptr),
       iter_idx_(0),
       agg_buf_size_(0),
@@ -41,7 +41,7 @@ public:
   ~ObDDLSSTableMergeLoserTreeItem() = default;
   void reset()
   {
-    end_key_ = nullptr;
+    end_key_.reset();
     header_ = nullptr;
     idx_minor_info_ = nullptr;
     agg_row_buf_ = nullptr;
@@ -52,13 +52,13 @@ public:
     is_scan_left_border_ = false;
     is_scan_right_border_ = false;
   }
-  TO_STRING_KV(K_(equal_with_next), KPC_(end_key), KPC(header_), K_(iter_idx), K_(is_scan_left_border), K_(is_scan_right_border),
+  TO_STRING_KV(K_(equal_with_next), K_(end_key), KPC(header_), K_(iter_idx), K_(is_scan_left_border), K_(is_scan_right_border),
                K_(agg_buf_size), K_(row_offset), KP_(idx_minor_info), KP_(agg_row_buf));
 public:
   bool equal_with_next_; // for simple row merger
   bool is_scan_left_border_;
   bool is_scan_right_border_;
-  const blocksstable::ObDatumRowkey *end_key_;
+  ObCommonDatumRowkey end_key_;
   const blocksstable::ObIndexBlockRowHeader *header_;
   int64_t iter_idx_;
   int64_t agg_buf_size_;

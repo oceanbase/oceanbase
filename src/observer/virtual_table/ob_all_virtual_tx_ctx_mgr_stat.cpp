@@ -12,7 +12,6 @@
 
 #include "observer/virtual_table/ob_all_virtual_tx_ctx_mgr_stat.h"
 #include "observer/ob_server.h"
-#include "storage/tx/ob_trans_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::transaction;
@@ -111,11 +110,13 @@ int ObGVTxCtxMgrStat::inner_get_next_row(ObNewRow *&row)
           // state_
           cur_row_.cells_[i].set_int(ls_tx_ctx_mgr_stat.get_state());
           break;
-        case OB_APP_MIN_COLUMN_ID + 6:
+        case OB_APP_MIN_COLUMN_ID + 6: {
           // state_str
-          cur_row_.cells_[i].set_varchar(ls_tx_ctx_mgr_stat.get_state_str());
+          const int64_t state = ls_tx_ctx_mgr_stat.get_state();
+          cur_row_.cells_[i].set_varchar(ObTxLSStateMgr::state_str(state));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
+        }
         case OB_APP_MIN_COLUMN_ID + 7:
           // total_tx_ctx_count
           cur_row_.cells_[i].set_int(ls_tx_ctx_mgr_stat.get_total_tx_ctx_count());

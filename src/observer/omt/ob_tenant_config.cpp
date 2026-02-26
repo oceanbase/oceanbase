@@ -13,15 +13,6 @@
 #define USING_LOG_PREFIX SERVER_OMT
 
 #include "ob_tenant_config.h"
-#include "common/ob_common_utility.h"
-#include "lib/net/ob_net_util.h"
-#include "lib/oblog/ob_log.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "share/errsim_module/ob_errsim_module_interface_imp.h"
 
@@ -35,9 +26,9 @@ ObTenantConfig::ObTenantConfig() : ObTenantConfig(OB_INVALID_TENANT_ID)
 }
 
 ObTenantConfig::ObTenantConfig(uint64_t tenant_id)
-    : tenant_id_(tenant_id), current_version_(INITIAL_TENANT_CONF_VERSION),
+    : tenant_id_(tenant_id), current_version_(INITIAL_TENANT_CONF_VERSION), version_(0), last_version_(0), update_local_(false),
       mutex_(),
-      update_task_(), system_config_(), config_mgr_(nullptr),
+      system_config_(), config_mgr_(nullptr),
       ref_(0L), is_deleting_(false), create_timestamp_(0L)
 {
 }
@@ -49,8 +40,6 @@ int ObTenantConfig::init(ObTenantConfigMgr *config_mgr)
   create_timestamp_ = ObTimeUtility::current_time();
   if (OB_FAIL(system_config_.init())) {
     LOG_ERROR("init system config failed", K(ret));
-  } else if (OB_FAIL(update_task_.init(config_mgr, this))) {
-    LOG_ERROR("init tenant config updata task failed", K_(tenant_id), K(ret));
   }
   return ret;
 }
@@ -67,6 +56,17 @@ void ObTenantConfig::print() const
     }
   }
   OB_LOG(INFO, "===================== * stop tenant config report * =======================", K(tenant_id_));
+}
+
+void ObTenantConfig::trace_all_config() const
+{
+  ObConfigContainer::const_iterator it = container_.begin();
+  for (; it != container_.end(); ++it) {
+    if (OB_ISNULL(it->second)) {
+    } else if (it->second->case_compare(it->second->default_str()) != 0) {
+      OPT_TRACE("  ", it->first.str(), " = ", it->second->str());
+    }
+  }
 }
 
 int ObTenantConfig::read_config()
@@ -101,109 +101,21 @@ int ObTenantConfig::read_config()
   return ret;
 }
 
-void ObTenantConfig::TenantConfigUpdateTask::runTimerTask()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(config_mgr_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("invalid argument", K_(config_mgr), K(ret));
-  } else if (OB_ISNULL(tenant_config_)){
-    ret = OB_NOT_INIT;
-    LOG_WARN("invalid argument", K_(tenant_config), K(ret));
-  } else {
-    const int64_t saved_current_version = tenant_config_->current_version_;
-    const int64_t version = version_;
-    THIS_WORKER.set_timeout_ts(INT64_MAX);
-    if (tenant_config_->current_version_ >= version) {
-      ret = OB_ALREADY_DONE;
-    } else if (update_local_) {
-      tenant_config_->current_version_ = version;
-      if (OB_FAIL(tenant_config_->system_config_.clear())) {
-        LOG_WARN("Clear system config map failed", K(ret));
-      } else if (OB_FAIL(config_mgr_->update_local(tenant_config_->tenant_id_, version))) {
-        LOG_WARN("ObTenantConfigMgr update_local failed", K(ret), K(tenant_config_));
-      } else {
-        config_mgr_->notify_tenant_config_changed(tenant_config_->tenant_id_);
-      }
-
-      sql::ObFLTControlInfoManager mgr(tenant_config_->tenant_id_);
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_FAIL(mgr.init())) {
-        LOG_WARN("fail to init", KR(ret));
-      } else if (OB_FAIL(mgr.apply_control_info())) {
-        LOG_WARN("fail to apply control info", KR(ret));
-      } else {
-        LOG_TRACE("apply control info", K(tenant_config_->tenant_id_));
-      }
-
-      if (OB_FAIL(ret)) {
-        int tmp_ret = OB_SUCCESS;
-        uint64_t tenant_id = tenant_config_->tenant_id_;
-        tenant_config_->current_version_ = saved_current_version;
-        share::schema::ObSchemaGetterGuard schema_guard;
-        share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
-        bool tenant_dropped = false;
-        // 租户如果正在删除过程中,schema失效，则返回添加反复失败，会导致定时器任务超量
-        if (OB_ISNULL(schema_service)) {
-          tmp_ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("schema_service is null", K(ret), K(tmp_ret));
-        } else if (OB_SUCCESS != (tmp_ret = schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-          LOG_WARN("fail to get schema guard", K(ret), K(tmp_ret), K(tenant_id));
-        } else if (OB_SUCCESS != (tmp_ret = schema_guard.check_if_tenant_has_been_dropped(tenant_id, tenant_dropped))) {
-          LOG_WARN("fail to check if tenant has been dropped", K(ret), K(tmp_ret), K(tenant_id));
-        } else {
-          if (tenant_dropped) {
-            LOG_INFO("tenant has dropped", K(tenant_id));
-          } else if ((ATOMIC_FAA(&running_task_count_, 1) < 2)) {
-            if (OB_FAIL(config_mgr_->schedule(*this, 0))) {
-              LOG_WARN("schedule task failed", K(tenant_id), K(ret));
-              ATOMIC_DEC(&running_task_count_);
-            } else if (tenant_config_->is_deleting_) {
-              LOG_INFO("tenant under deleting, cancel task", K(tenant_id));
-              if (OB_FAIL(config_mgr_->cancel(*this))) {
-                LOG_WARN("cancel task failed", K(tenant_id), K(ret));
-              } else {
-                ATOMIC_DEC(&running_task_count_);
-              }
-            } else {
-              LOG_INFO("Schedule a retry task!", K(tenant_id));
-            }
-          } else {
-            ATOMIC_DEC(&running_task_count_);
-            LOG_INFO("already 2 running task, temporory no need more", K(tenant_id));
-          }
-        }
-      } else {
-        const int64_t read_version = tenant_config_->system_config_.get_version();
-        LOG_INFO("loaded new tenant config",
-                 "tenant_id", tenant_config_->tenant_id_,
-                 "read_version", read_version,
-                 "old_version", saved_current_version,
-                 "current_version", tenant_config_->current_version_,
-                 "expected_version", version);
-        tenant_config_->print();
-      }
-    }
-  }
-
-  ATOMIC_DEC(&running_task_count_);
-}
-
 // 需要解决的场景：
 // 场景1：脚本中更新上百个参数，每个参数触发一次 got_version，如果不加以防范，
 //        会导致 timer 线程 32 个槽位被耗尽，导致参数更新丢失。
 // 场景2: heartbeat 始终广播相同的 version，只需要响应最多一次
-int ObTenantConfig::got_version(int64_t version, const bool remove_repeat)
+int ObTenantConfig::got_version(int64_t version, const bool remove_repeat, bool &need_update)
 {
   UNUSED(remove_repeat);
   int ret = OB_SUCCESS;
-  bool schedule_task = false;
   if (version < 0) {
-    update_task_.update_local_ = false;
-    schedule_task = true;
+    update_local_ = false;
+    need_update = true;
   } else if (0 == version) {
     LOG_DEBUG("root server restarting");
+  } else if (is_deleting_) {
+    LOG_INFO("tenant config is deleting, no need update", K(tenant_id_));
   } else if (current_version_ == version) {
   } else if (version < current_version_) {
     LOG_WARN("Local tenant config is newer than rs, weird", K_(current_version), K(version));
@@ -213,71 +125,16 @@ int ObTenantConfig::got_version(int64_t version, const bool remove_repeat)
     } else {
       LOG_INFO("Got new tenant config version", K_(tenant_id),
                 K_(current_version), K(version));
-      update_task_.update_local_ = true;
-      update_task_.version_ = version;
-      update_task_.scheduled_time_ = ObClockGenerator::getClock();
-      schedule_task = true;
+      update_local_ = true;
+      version_ = version;
+      need_update = true;
       mutex_.unlock();
-    }
-  }
-  if (schedule_task) {
-    bool schedule = true;
-    if (!config_mgr_->inited()) {
-      schedule = false;
-      ret = OB_NOT_INIT;
-      LOG_WARN("Couldn't update config because timer is NULL", K(ret));
-    }
-    if (schedule && !is_deleting_) {
-      // 为了避免极短时间内上百个变量被更新导致生成上百个update_task
-      // 占满 timer slots （32个），我们需要限定短时间内生成的 update_task
-      // 数量。考虑到每个 update_task 的任务都是同质的（不区分version，都是
-      // 负责把 parameter 刷到最新），我们只需要为这数百个变量更新生成
-      // 1个 update task 即可。但是，考虑到 update  task 执行过程中还会有
-      // 新的变量更新到来，为了让这些更新不丢失，需要另外在生成一个任务负责
-      // “扫尾”。整个时序如下图：
-      //
-      // t----> 时间增长的方向
-      // '~' 表示在 timer 队列中等待调度
-      // '-' 表示 task 被 timer 调度执行中
-      //
-      // case1: task3 在 task1 结束后进入 timer 队列
-      // |~~~~|--- task1 ----|
-      //            |~~~~~~~~|--- task2 ----|
-      //                      |~~~~~~~~~~~~~|--- task3 ----|
-      //
-      // case2: task3 在 task1 结束前就进入了 timer 队列
-      // |~~~~|--- task1 ----|
-      //            |~~~~~~~~|--- task2 ----|
-      //                    |~~~~~~~~~~~~~~~|--- task3 ----|
-      //
-      //
-
-      // running_task_count_ 可以
-      // 不甚精确地限定同一时刻只能有两个 update_task，要么两个都在
-      // 调度队列中等待，要么一个在运行另一个在调度队列中等待（上图 case1)。
-      // 之所以说“不甚精确”，是因为 running_task_count_-- 操作是在
-      // runTimerTask() 的结尾调用的，那么存在一种小概率的情况，某一很短的
-      // 时刻，有大于 2 个 update_task 在调度队列中等待（上图的case2）。
-      // 不过我们认为，这种情况可以接受，不会影响正确性。
-      if ((ATOMIC_FAA(&update_task_.running_task_count_, 1) < 2)) {
-        if (OB_FAIL(config_mgr_->schedule(update_task_, 0))) {
-          LOG_WARN("schedule task failed", K_(tenant_id), K(ret));
-          ret = OB_SUCCESS; // if task reach 32 limit, it has chance to retry later
-          ATOMIC_DEC(&update_task_.running_task_count_);
-        } else {
-          LOG_INFO("Schedule update tenant config task successfully!", K_(tenant_id));
-        }
-      } else {
-        ATOMIC_DEC(&update_task_.running_task_count_);
-        LOG_INFO("already 2 running task, temporory no need more", K_(tenant_id));
-      }
     }
   }
   return ret;
 }
 
-int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLResult &result,
-                                 bool save2file /* = true */)
+int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLResult &result)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(system_config_.update(result))) {
@@ -294,18 +151,10 @@ int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLRe
   }
 
   if (OB_SUCC(ret)) {
+    DRWLock::WRLockGuard guard(config_mgr_->rwlock_);
     if (OB_FAIL(read_config())) {
       LOG_ERROR("Read tenant config failed", K_(tenant_id), K(ret));
-    } else if (save2file && OB_FAIL(config_mgr_->dump2file())) {
-      LOG_WARN("Dump to file failed", K(ret));
-    } else if (OB_FAIL(publish_special_config_after_dump())) {
-      LOG_WARN("publish special config after dump failed", K(tenant_id_), K(ret));
     }
-#ifdef ERRSIM
-    else if (OB_FAIL(build_errsim_module_())) {
-      LOG_WARN("failed to build errsim module", K(ret), K(tenant_id_));
-    }
-#endif
     print();
   } else {
     LOG_WARN("Read tenant config from inner table error", K_(tenant_id), K(ret));
@@ -322,23 +171,41 @@ int ObTenantConfig::publish_special_config_after_dump()
     LOG_WARN("Invalid config string", K(tenant_id_), K(ret));
   } else if (!(*pp_item)->dump_value_updated()) {
     LOG_INFO("config dump value is not set, no need read", K(tenant_id_), K((*pp_item)->spfile_str()));
-  } else if (!(*pp_item)->set_value((*pp_item)->spfile_str())) {
-    ret = OB_INVALID_CONFIG;
-    LOG_WARN("Invalid config value", K(tenant_id_), K((*pp_item)->spfile_str()), K(ret));
   } else {
-    FLOG_INFO("[COMPATIBLE] read data_version after dump",
-              KR(ret), K_(tenant_id),
-              "version", (*pp_item)->version(),
-              "value", (*pp_item)->str(),
-              "value_updated", (*pp_item)->value_updated(),
-              "dump_version", (*pp_item)->dumped_version(),
-              "dump_value", (*pp_item)->spfile_str(),
-              "dump_value_updated", (*pp_item)->dump_value_updated());
+    uint64_t new_data_version = 0;
+    uint64_t old_data_version = 0;
+    bool value_updated = (*pp_item)->value_updated();
+    if (OB_FAIL(ObClusterVersion::get_version((*pp_item)->spfile_str(), new_data_version))) {
+      LOG_ERROR("parse data_version failed", KR(ret), K((*pp_item)->spfile_str()));
+    } else if (OB_FAIL(ObClusterVersion::get_version((*pp_item)->str(), old_data_version))) {
+      LOG_ERROR("parse data_version failed", KR(ret), K((*pp_item)->str()));
+    } else if (!value_updated && old_data_version != DATA_CURRENT_VERSION) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(ERROR, "unexpected data_version", KR(ret), KDV(old_data_version));
+    } else if (value_updated && new_data_version <= old_data_version) {
+      LOG_INFO("[COMPATIBLE] [DATA_VERSION] no need to update", K(tenant_id_),
+               "old_data_version", DVP(old_data_version),
+               "new_data_version", DVP(new_data_version));
+      // do nothing
+    } else {
+      if (!(*pp_item)->set_value_unsafe((*pp_item)->spfile_str())) {
+        ret = OB_INVALID_CONFIG;
+        LOG_WARN("Invalid config value", K(tenant_id_), K((*pp_item)->spfile_str()), K(ret));
+      } else {
+        FLOG_INFO("[COMPATIBLE] [DATA_VERSION] read data_version after dump",
+                  KR(ret), K_(tenant_id), "version", (*pp_item)->version(),
+                  "value", (*pp_item)->str(), "value_updated",
+                  (*pp_item)->value_updated(), "dump_version",
+                  (*pp_item)->dumped_version(), "dump_value",
+                  (*pp_item)->spfile_str(), "dump_value_updated",
+                  (*pp_item)->dump_value_updated());
+      }
+    }
   }
   return ret;
 }
 
-int ObTenantConfig::add_extra_config(const char *config_str,
+int ObTenantConfig::add_extra_config_unsafe(const char *config_str,
                                      int64_t version /* = 0 */ ,
                                      bool check_config /* = true */)
 {
@@ -348,6 +215,7 @@ int ObTenantConfig::add_extra_config(const char *config_str,
   char *buf = NULL;
   char *saveptr = NULL;
   char *token = NULL;
+  const char *delimiter = "|\n";
   if (OB_ISNULL(config_str)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("config str is null", K(ret));
@@ -360,8 +228,13 @@ int ObTenantConfig::add_extra_config(const char *config_str,
   } else {
     MEMCPY(buf, config_str, config_str_length);
     buf[config_str_length] = '\0';
-    token = STRTOK_R(buf, ",\n", &saveptr);
+    token = STRTOK_R(buf, delimiter, &saveptr);
+    if (0 == STRLEN(saveptr)) {
+      delimiter = ",\n";
+      token = STRTOK_R(buf, delimiter, &saveptr);
+    }
     const ObString compatible_cfg(COMPATIBLE);
+    const ObString enable_compatible_monotonic_cfg(ENABLE_COMPATIBLE_MONOTONIC);
     while (OB_SUCC(ret) && OB_LIKELY(NULL != token)) {
       char *saveptr_one = NULL;
       char *name = NULL;
@@ -404,23 +277,46 @@ int ObTenantConfig::add_extra_config(const char *config_str,
               LOG_WARN("Invalid config string, no such config item", K(name), K(value), K(ret));
             }
             if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
-            } else if (compatible_cfg.case_compare(name) == 0) {
-              if (!(*pp_item)->set_dump_value(value)) {
-                ret = OB_INVALID_CONFIG;
-                LOG_WARN("Invalid config value", K(name), K(value), K(ret));
+            } else if (0 == compatible_cfg.case_compare(name)) {
+              // init tenant and observer reload with -o will use this interface to update tenant's
+              // config. considering the -o situation, we need to ensure the new_data_version won't
+              // go back
+              uint64_t new_data_version = 0;
+              uint64_t old_data_version = 0;
+              if (OB_FAIL(ObClusterVersion::get_version(value, new_data_version))) {
+                LOG_ERROR("parse data_version failed", KR(ret), K(value));
+              } else if (((*pp_item)->value_updated() || (*pp_item)->dump_value_updated()) &&
+                         OB_FAIL(ObClusterVersion::get_version(
+                             (*pp_item)->spfile_str(), old_data_version))) {
+                LOG_ERROR("parse data_version failed", KR(ret), K((*pp_item)->spfile_str()));
+              } else if (new_data_version <= old_data_version) {
+                // do nothing
+                LOG_INFO("[COMPATIBLE] DATA_VERSION no need to update",
+                         K(tenant_id_), K(old_data_version),
+                         K(new_data_version));
               } else {
-                (*pp_item)->set_dump_value_updated();
-                (*pp_item)->set_version(version);
-                FLOG_INFO("[COMPATIBLE] init data_version before dump",
-                          KR(ret), K_(tenant_id),
-                          "version", (*pp_item)->version(),
-                          "value", (*pp_item)->str(),
-                          "value_updated", (*pp_item)->value_updated(),
-                          "dump_version", (*pp_item)->dumped_version(),
-                          "dump_value", (*pp_item)->spfile_str(),
-                          "dump_value_updated", (*pp_item)->dump_value_updated());
+                if (!(*pp_item)->set_dump_value(value)) {
+                  ret = OB_INVALID_CONFIG;
+                  LOG_WARN("Invalid config value", K(name), K(value), K(ret));
+                } else {
+                  (*pp_item)->set_dump_value_updated();
+                  (*pp_item)->set_version(version);
+                  int tmp_ret = 0;
+                  if (OB_TMP_FAIL(ODV_MGR.set(tenant_id_, new_data_version))) {
+                    LOG_WARN("fail to set data_version", KR(tmp_ret),
+                             K(tenant_id_), K(new_data_version));
+                  }
+                  FLOG_INFO("[COMPATIBLE] [DATA_VERSION] init data_version before dump",
+                            KR(ret), K_(tenant_id), "version",
+                            (*pp_item)->version(), "value", (*pp_item)->str(),
+                            "value_updated", (*pp_item)->value_updated(),
+                            "dump_version", (*pp_item)->dumped_version(),
+                            "dump_value", (*pp_item)->spfile_str(),
+                            "dump_value_updated", (*pp_item)->dump_value_updated(),
+                            K(old_data_version), K(new_data_version));
+                }
               }
-            } else if (!(*pp_item)->set_value(value)) {
+            } else if (!(*pp_item)->set_value_unsafe(value)) {
               ret = OB_INVALID_CONFIG;
               LOG_WARN("Invalid config value", K(name), K(value), K(ret));
             } else if (check_config && (!(*pp_item)->check_unit(value) || !(*pp_item)->check())) {
@@ -434,10 +330,15 @@ int ObTenantConfig::add_extra_config(const char *config_str,
             } else {
               (*pp_item)->set_version(version);
               LOG_INFO("Load tenant config succ", K(name), K(value));
+              if (0 == enable_compatible_monotonic_cfg.case_compare(name)) {
+                ObString v_str((*pp_item)->str());
+                ODV_MGR.set_enable_compatible_monotonic(0 == v_str.case_compare("True") ? true
+                                                                                        : false);
+              }
             }
           }
         }
-        token = STRTOK_R(NULL, ",\n", &saveptr);
+        token = STRTOK_R(NULL, delimiter, &saveptr);
       }
     }
   }

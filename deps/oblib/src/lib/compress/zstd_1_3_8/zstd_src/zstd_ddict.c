@@ -14,15 +14,10 @@
 /*-*******************************************************
 *  Dependencies
 *********************************************************/
-#include <string.h>      /* memcpy, memmove, memset */
-#include "cpu.h"         /* bmi2 */
-#include "mem.h"         /* low level memory routines */
 #define FSE_STATIC_LINKING_ONLY
-#include "fse.h"
 #define HUF_STATIC_LINKING_ONLY
-#include "huf.h"
-#include "zstd_decompress_internal.h"
 #include "zstd_ddict.h"
+#include "zstd_decompress_internal.h"
 
 #if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
 #  include "zstd_legacy.h"

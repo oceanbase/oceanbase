@@ -48,6 +48,7 @@ public:
   bool is_remove_member() const { return TYPE::LS_REMOVE_MEMBER == type_; }
   bool is_modify_replica_number() const { return TYPE::LS_MODIFY_REPLICA_NUMBER == type_; }
   bool is_transform_member() const { return TYPE::LS_TRANSFORM_MEMBER == type_; }
+  int convert_to_dr_type(const bool is_paxos_member, obrpc::ObDRTaskType &dr_type) const;
   TYPE get_type() const { return type_; }
   int set_type(int32_t type);
   void reset();

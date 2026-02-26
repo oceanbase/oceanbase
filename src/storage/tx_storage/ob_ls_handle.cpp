@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tx_storage/ob_ls_handle.h"
 
-#include "share/rc/ob_tenant_base.h"
+#include "ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_map.h"
 
 namespace oceanbase
@@ -85,6 +84,7 @@ void ObLSHandle::reset()
     ls_map_ = nullptr;
     ls_ = nullptr;
     mod_ = ObLSGetMod::INVALID_MOD;
+    RESET_OBJ_LEAK_DEBUG_NODE(node_);
   }
 }
 } // namespace storage

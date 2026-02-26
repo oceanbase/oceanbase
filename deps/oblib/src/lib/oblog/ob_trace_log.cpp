@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/oblog/ob_trace_log.h"
-#include "lib/ob_define.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {

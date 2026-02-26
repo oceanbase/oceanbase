@@ -22,6 +22,7 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/dblink/ob_pl_dblink_info.h"
+#include "share/schema/ob_table_schema.h"
 #endif
 
 namespace oceanbase
@@ -47,6 +48,7 @@ typedef share::schema::ObRoutineType ObRoutineType;
 typedef share::schema::ObRoutineParam ObRoutineParam;
 typedef share::schema::ObSchemaUtils ObSchemaUtils;
 typedef oceanbase::common::ObSqlString ObSqlString;
+typedef oceanbase::share::schema::ObTableSchema ObTableSchema;
 class ObPLDbLinkGuard
 {
 public:
@@ -60,6 +62,9 @@ public:
     for (int64_t i = 0; i < dblink_infos_.count(); i++) {
       dblink_infos_.at(i)->~ObPLDbLinkInfo();
     }
+    for (int64_t i = 0; i < table_schemas_.count(); i++) {
+      table_schemas_.at(i)->~ObTableSchema();
+    }
 #endif
     reset();
   }
@@ -67,6 +72,7 @@ public:
   {
 #ifdef OB_BUILD_ORACLE_PL
     dblink_infos_.reset();
+    table_schemas_.reset();
 #endif
     next_link_object_id_ = 1;
   }
@@ -99,6 +105,15 @@ public:
                               const common::ObString &pkg_name,
                               const common::ObString &udt_name,
                               const pl::ObUserDefinedType *&udt);
+
+  int get_dblink_table_by_name(sql::ObSQLSessionInfo &session_info,
+                               share::schema::ObSchemaGetterGuard &schema_guard,
+                               const common::ObString &dblink_name,
+                               const common::ObString &db_name,
+                               const common::ObString &table_name,
+                               const ObTableSchema *&table_schema);
+  int get_dblink_table_by_type_id(const uint64_t type_id,
+                                  const ObTableSchema *&table_schema);
 #ifdef OB_BUILD_ORACLE_PL
   int get_dblink_info(const uint64_t dblink_id,
                       const ObPLDbLinkInfo *&dblink_info);
@@ -123,7 +138,8 @@ private:
                                const common::ObString &db_name,
                                const common::ObString &pkg_name,
                                const common::ObString &routine_name,
-                               common::ObIArray<const share::schema::ObIRoutineInfo *> &routine_infos);
+                               common::ObIArray<const share::schema::ObIRoutineInfo *> &routine_infos,
+                               uint32_t remote_version);
 
   int get_dblink_type_by_name(common::ObDbLinkProxy *dblink_proxy,
                               common::sqlclient::ObISQLConnection *dblink_conn,
@@ -133,13 +149,19 @@ private:
                               const common::ObString &db_name,
                               const common::ObString &pkg_name,
                               const common::ObString &udt_name,
-                              const pl::ObUserDefinedType *&udt);
+                              const pl::ObUserDefinedType *&udt,
+                              uint32_t remote_version);
+
+  int check_remote_version(common::ObDbLinkProxy &dblink_proxy,
+                           common::sqlclient::ObISQLConnection &dblink_conn,
+                           uint32_t &remote_version);
 
 private:
   uint64_t next_link_object_id_;
   common::ObArenaAllocator &alloc_;
 #ifdef OB_BUILD_ORACLE_PL
   common::ObSEArray<const ObPLDbLinkInfo *, 1> dblink_infos_;
+  common::ObSEArray<const ObTableSchema *, 1> table_schemas_;
 #endif
 };
 

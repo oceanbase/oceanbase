@@ -12,17 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_proxy.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_process.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_proxy.h"
-#include "sql/engine/expr/ob_expr_join_filter.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/engine/ob_operator.h"
 #include "share/detect/ob_detect_manager_utils.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
+#include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -40,7 +33,8 @@ OB_DEF_SERIALIZE(ObRFBloomFilterMsg)
               next_peer_addrs_,
               expect_first_phase_count_,
               piece_size_,
-              use_rich_format_);
+              use_rich_format_,
+              use_hash_join_seed_);
   return ret;
 }
 
@@ -57,7 +51,8 @@ OB_DEF_DESERIALIZE(ObRFBloomFilterMsg)
               next_peer_addrs_,
               expect_first_phase_count_,
               piece_size_,
-              use_rich_format_);
+              use_rich_format_,
+              use_hash_join_seed_);
   return ret;
 }
 
@@ -71,7 +66,8 @@ OB_DEF_SERIALIZE_SIZE(ObRFBloomFilterMsg)
               next_peer_addrs_,
               expect_first_phase_count_,
               piece_size_,
-              use_rich_format_);
+              use_rich_format_,
+              use_hash_join_seed_);
   return len;
 }
 
@@ -102,7 +98,8 @@ OB_DEF_DESERIALIZE(ObRFRangeFilterMsg)
               cmp_funcs_,
               query_range_info_,
               build_obj_metas_);
-  if (OB_FAIL(adjust_cell_size())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(adjust_cell_size())) {
     LOG_WARN("fail do adjust cell size", K(ret));
   }
   return ret;
@@ -243,6 +240,16 @@ int ObRFBloomFilterMsg::process_msg_internal(bool &need_free)
       need_free = true;
     } else {
       need_merge = false; // set success, not need to merge
+      if (is_first_phase() && get_msg_receive_expect_cnt() == 1 && expect_first_phase_count_ == 1) {
+        // for the bloom filter which only contain one piece, we should forward
+        // the second phase message directly, otherwise, we will forward the
+        // second phase message in the process of merge.
+        if (OB_FAIL(forward_second_phase_message(bloom_filter_.get_begin_idx(),
+                                                 bloom_filter_.get_end_idx(),
+                                                 get_next_phase_addrs()))) {
+          LOG_WARN("failed to forward second phase message");
+        }
+      }
       int reg_dm_ret = OB_SUCCESS;
 #ifdef ERRSIM
       reg_dm_ret = OB_E(EventTable::EN_PX_P2P_MSG_REG_DM_FAILED) OB_SUCCESS;
@@ -314,7 +321,7 @@ int ObRFBloomFilterMsg::reuse()
   int ret = OB_SUCCESS;
   is_empty_ = true;
   bloom_filter_.reset_filter();
-  need_send_msg_ = true;
+  is_active_ = true;
   return ret;
 }
 
@@ -324,7 +331,7 @@ int ObRFBloomFilterMsg::process_first_phase_recieve_count(
   int ret = OB_SUCCESS;
   CK(msg.get_msg_receive_expect_cnt() > 0 && msg_receive_expect_cnt_ > 0);
   int64_t begin_idx = msg.bloom_filter_.get_begin_idx();
-  // msg_receive_cur_cnt_ is msg total cnt, msg_receive_expect_cnt_ equals to sqc_count * peice_count
+  // msg_receive_cur_cnt_ is msg total cnt, msg_receive_expect_cnt_ equals to sqc_count * piece_count
   int64_t received_cnt = ATOMIC_AAF(&msg_receive_cur_cnt_, 1);
   if (received_cnt > msg_receive_expect_cnt_) {
     ret = OB_INVALID_ARGUMENT;
@@ -337,7 +344,7 @@ int ObRFBloomFilterMsg::process_first_phase_recieve_count(
     bool find = false;
     for (int i = 0; OB_SUCC(ret) && i < receive_count_array_.count(); ++i) {
       if (begin_idx == receive_count_array_.at(i).begin_idx_) {
-        // receive count of a specific peice msg, expect_first_phase_count_ equals to sqc count
+        // receive count of a specific piece msg, expect_first_phase_count_ equals to sqc count
         int64_t cur_count = ATOMIC_AAF(&receive_count_array_.at(i).reciv_count_, 1);
         first_phase_end = (cur_count == expect_first_phase_count_);
         find = true;
@@ -347,6 +354,36 @@ int ObRFBloomFilterMsg::process_first_phase_recieve_count(
     if (!find) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected process first phase", K(ret), K(receive_count_array_.count()));
+    }
+  }
+  return ret;
+}
+
+int ObRFBloomFilterMsg::forward_second_phase_message(
+    int64_t begin_idx,
+    int64_t end_idx, const ObIArray<ObAddr> &next_phase_addrs) {
+  int ret = OB_SUCCESS;
+  obrpc::ObP2PDhRpcProxy &rpc_proxy = PX_P2P_DH.get_proxy();
+  ObPxP2PDatahubArg arg;
+  ObRFBloomFilterMsg second_phase_msg;
+  arg.msg_ = &second_phase_msg;
+  if (OB_FAIL(second_phase_msg.shadow_copy(*this))) {
+    LOG_WARN("fail to shadow copy second phase msg", K(ret));
+  } else {
+    second_phase_msg.phase_ = SECOND_LEVEL;
+    second_phase_msg.set_msg_cur_cnt(expect_first_phase_count_);
+    second_phase_msg.bloom_filter_.set_begin_idx(begin_idx);
+    second_phase_msg.bloom_filter_.set_end_idx(end_idx);
+  }
+  for (int i = 0; OB_SUCC(ret) && i < next_phase_addrs.count(); ++i) {
+    if (next_phase_addrs.at(i) != GCTX.self_addr()) {
+      if (OB_FAIL(rpc_proxy.to(next_phase_addrs.at(i))
+                      .by(get_tenant_id())
+                      .timeout(get_timeout_ts())
+                      .compressed(ObCompressorType::LZ4_COMPRESSOR)
+                      .send_p2p_dh_message(arg, NULL))) {
+        LOG_WARN("fail to send bloom filter", K(ret));
+      }
     }
   }
   return ret;
@@ -376,28 +413,10 @@ int ObRFBloomFilterMsg::process_receive_count(ObP2PDatahubMsgBase &rf_msg)
     if (OB_FAIL(process_first_phase(bf_msg))) {
       LOG_WARN("fail to process first phase", K(ret));
     } else if (first_phase_end && !bf_msg.get_next_phase_addrs().empty()) {
-      obrpc::ObP2PDhRpcProxy &rpc_proxy = PX_P2P_DH.get_proxy();
-      ObPxP2PDatahubArg arg;
-      ObRFBloomFilterMsg second_phase_msg;
-      arg.msg_ = &second_phase_msg;
-      if (OB_FAIL(second_phase_msg.shadow_copy(*this))) {
-        LOG_WARN("fail to shadow copy second phase msg", K(ret));
-      } else {
-        second_phase_msg.phase_ = SECOND_LEVEL;
-        second_phase_msg.set_msg_cur_cnt(expect_first_phase_count_);
-        second_phase_msg.bloom_filter_.set_begin_idx(bf_msg.bloom_filter_.get_begin_idx());
-        second_phase_msg.bloom_filter_.set_end_idx(bf_msg.bloom_filter_.get_end_idx());
-      }
-      for (int i = 0; OB_SUCC(ret) && i < bf_msg.get_next_phase_addrs().count(); ++i) {
-        if (bf_msg.get_next_phase_addrs().at(i) != GCTX.self_addr()) {
-          if (OB_FAIL(rpc_proxy.to(bf_msg.get_next_phase_addrs().at(i))
-              .by(bf_msg.get_tenant_id())
-              .timeout(bf_msg.get_timeout_ts())
-              .compressed(ObCompressorType::LZ4_COMPRESSOR)
-              .send_p2p_dh_message(arg, NULL))) {
-            LOG_WARN("fail to send bloom filter", K(ret));
-          }
-        }
+      if (OB_FAIL(forward_second_phase_message(bf_msg.bloom_filter_.get_begin_idx(),
+                                               bf_msg.bloom_filter_.get_end_idx(),
+                                               bf_msg.get_next_phase_addrs()))) {
+        LOG_WARN("failed to forward second phase message");
       }
       (void)check_finish_receive();
     } else if (bf_msg.get_next_phase_addrs().empty()) {
@@ -436,6 +455,7 @@ int ObRFBloomFilterMsg::assign(const ObP2PDatahubMsgBase &msg)
   expect_first_phase_count_ = other_msg.expect_first_phase_count_;
   piece_size_ = other_msg.piece_size_;
   use_rich_format_ = other_msg.use_rich_format_;
+  use_hash_join_seed_ = other_msg.use_hash_join_seed_;
   if (OB_FAIL(ObP2PDatahubMsgBase::assign(msg))) {
     LOG_WARN("failed to assign base data", K(ret));
   } else if (OB_FAIL(next_peer_addrs_.assign(other_msg.next_peer_addrs_))) {
@@ -465,6 +485,7 @@ int ObRFBloomFilterMsg::shadow_copy(const ObRFBloomFilterMsg &other_msg)
   expect_first_phase_count_ = other_msg.expect_first_phase_count_;
   piece_size_ = other_msg.piece_size_;
   use_rich_format_ = other_msg.use_rich_format_;
+  use_hash_join_seed_ = other_msg.use_hash_join_seed_;
   if (OB_FAIL(ObP2PDatahubMsgBase::assign(other_msg))) {
     LOG_WARN("failed to assign base data", K(ret));
   } else if (OB_FAIL(bloom_filter_.init(&other_msg.bloom_filter_))) {
@@ -536,9 +557,24 @@ int ObRFBloomFilterMsg::might_contain(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   uint64_t hash_val = ObExprJoinFilter::JOIN_FILTER_SEED;
+  if (use_hash_join_seed_) {
+    // hash value explained in:
+    //        hash join            simd block bloom filter
+    //  10001111....1011010         10001111....1011010
+    //  ||_______63_______|          |___32___||__32___|
+    //  |     hash               _______|_______   |-->locate block
+    //  |                        |    |    |    |
+    // is match                  8bit 8bit 8bit 8bit -> split to 4 byte
+    //                           |    |    |    |
+    //                           6bit 6bit 6bit 6bit -> each low 6bit are used, high 2 bit is useless
+    // the highest bit of hash values is not used in bloom filter
+    hash_val = ObHashJoinVecOp::HASH_SEED;
+  }
   ObDatum *datum = nullptr;
   ObHashFunc hash_func;
-  if (OB_UNLIKELY(is_empty_)) {
+  if (!is_active_) {
+    res.set_int(1);
+  } else if (OB_UNLIKELY(is_empty_)) {
     res.set_int(0);
     filter_ctx.filter_count_++;
     filter_ctx.check_count_++;
@@ -581,7 +617,7 @@ int ObRFBloomFilterMsg::might_contain(const ObExpr &expr,
         }
         filter_ctx.check_count_++;
         res.set_int(is_match ? 1 : 0);
-        ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+        filter_ctx.collect_sample_info(!is_match, 1);
       }
     }
   }
@@ -656,7 +692,7 @@ int ObRFBloomFilterMsg::might_contain_batch(
       filter_ctx.filter_count_ += filter_count;
       filter_ctx.check_count_ += total_count;
       filter_ctx.total_count_ += total_count;
-      ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+      filter_ctx.collect_sample_info(filter_count, total_count);
     }
   }
   return ret;
@@ -755,8 +791,26 @@ int ObRFBloomFilterMsg::fill_vec_result(ResVec *res_vec, const ObBitVector &skip
 {
   int ret = OB_SUCCESS;
   bool is_match = true;
-  const int64_t is_match_payload = 1; // for VEC_FIXED set set_payload, always 1
-  if (OB_FAIL(ObBitVector::flip_foreach(
+  static const int64_t is_match_payload = 1; // for set_payload, always 1
+  if (bound.get_all_rows_active()) {
+    for (int64_t i = bound.start(); i < bound.end(); ++i) {
+      (void)bloom_filter_.prefetch_bits_block(hash_values[i]);
+    }
+    for (int64_t i = bound.start(); i < bound.end(); ++i) {
+      (void)bloom_filter_.might_contain(hash_values[i], is_match);
+      if (is_match) {
+        if (ResFormat == VEC_FIXED) {
+          res_vec->set_payload(i, &is_match_payload, sizeof(int64_t));
+        } else {
+          res_vec->set_int(i, is_match_payload);
+        }
+      } else {
+        // already set not match in preset_not_match
+        filter_count += 1;
+      }
+    }
+    total_count += bound.end() - bound.start();
+  } else if (OB_FAIL(ObBitVector::flip_foreach(
           skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
             bloom_filter_.prefetch_bits_block(hash_values[idx]);
             return OB_SUCCESS;
@@ -796,15 +850,22 @@ int ObRFBloomFilterMsg::do_might_contain_vector(
   int64_t filter_count = 0;
   bool is_match = true;
   uint64_t seed = ObExprJoinFilter::JOIN_FILTER_SEED;
+  if (use_hash_join_seed_) {
+    // hash value explained in:
+    //        hash join            simd block bloom filter
+    //  10001111....1011010         10001111....1011010
+    //  ||_______63_______|          |___32___||__32___|
+    //  |     hash               _______|_______   |-->locate block
+    //  |                        |    |    |    |
+    // is match                  8bit 8bit 8bit 8bit -> split to 4 byte
+    //                           |    |    |    |
+    //                           6bit 6bit 6bit 6bit -> each low 6bit are used, high 2 bit is useless
+    // the highest bit of hash values is not used in bloom filter
+    seed = ObHashJoinVecOp::HASH_SEED;
+  }
+
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   uint64_t *hash_values = filter_ctx.right_hash_vals_;
-  VectorFormat res_format = expr.get_format(ctx);
-  if (VEC_FIXED == res_format) {
-    IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-    if (OB_FAIL(preset_not_match(res_vec, bound))) {
-      LOG_WARN("failed to preset_not_match", K(ret));
-    }
-  }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
     ObExpr *e = expr.args_[i];
@@ -820,14 +881,9 @@ int ObRFBloomFilterMsg::do_might_contain_vector(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (VEC_UNIFORM == res_format) {
-    IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-    ret = fill_vec_result<VEC_UNIFORM, IntegerUniVec>(res_vec, skip, bound, hash_values,
-                                                      total_count, filter_count);
-  } else if (VEC_FIXED == res_format) {
-    IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-    ret = fill_vec_result<VEC_FIXED, IntegerFixedVec>(res_vec, skip, bound, hash_values,
-                                                      total_count, filter_count);
+  } else {
+    ret = bloom_filter_.might_contain_vector(expr, ctx, skip, bound, hash_values, total_count,
+                                             filter_count);
   }
   if (OB_FAIL(ret)) {
   } else {
@@ -835,7 +891,7 @@ int ObRFBloomFilterMsg::do_might_contain_vector(
     filter_ctx.check_count_ += total_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.filter_count_ += filter_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -848,7 +904,20 @@ int ObRFBloomFilterMsg::might_contain_vector(
     ObExprJoinFilter::ObExprJoinFilterContext &filter_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_empty_)) {
+  if (!is_active_) {
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_UNIFORM == res_format) {
+      IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
+      ret = proc_filter_not_active(res_vec, skip, bound);
+    } else if (VEC_FIXED == res_format) {
+      IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
+      ret = proc_filter_not_active(res_vec, skip, bound);
+    }
+    if (OB_SUCC(ret)) {
+      eval_flags.set_all(true);
+    }
+  } else if (OB_UNLIKELY(is_empty_)) {
     int64_t total_count = 0;
     int64_t filter_count = 0;
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
@@ -889,6 +958,18 @@ int ObRFBloomFilterMsg::insert_partition_bloom_filter(ArgVec *arg_vec,
     } else if (is_empty_) {
       is_empty_ = false;
     }
+  }
+  return ret;
+}
+
+int ObRFBloomFilterMsg::insert_bloom_filter_with_hash_values(
+    const ObBatchRows *child_brs,
+    uint64_t *batch_hash_values)
+{
+  int ret = OB_SUCCESS;
+  EvalBound bound(child_brs->size_, child_brs->all_rows_active_);
+  if (OB_FAIL(bloom_filter_.put_batch(batch_hash_values, bound, *child_brs->skip_, is_empty_))) {
+    LOG_WARN("failed to push hash value to px bloom filter");
   }
   return ret;
 }
@@ -947,14 +1028,9 @@ int ObRFBloomFilterMsg::insert_by_row_vector(
           arg_vec->murmur_hash_v3(*expr, batch_hash_values, *(child_brs->skip_), bound, is_batch_seed ? batch_hash_values : &seed, is_batch_seed);
         }
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < child_brs->size_; ++i) {
-        if (child_brs->skip_->at(i)) {
-          continue;
-        } else if (OB_FAIL(bloom_filter_.put(batch_hash_values[i]))) {
-          LOG_WARN("fail to put  hash value to px bloom filter", K(ret));
-        } else if (is_empty_) {
-          is_empty_ = false;
-        }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(bloom_filter_.put_batch(batch_hash_values, bound, *child_brs->skip_, is_empty_))) {
+        LOG_WARN("failed to push hash value to px bloom filter");
       }
     }
   }
@@ -1001,7 +1077,6 @@ int ObRFBloomFilterMsg::broadcast(ObIArray<ObAddr> &target_addrs,
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
-  CK(OB_NOT_NULL(filter_idx_) && OB_NOT_NULL(create_finish_));
   int64_t cur_idx = 0;
   ObRFBloomFilterMsg msg;
   ObPxP2pDhMsgCB msg_cb(GCTX.self_addr(),
@@ -1012,23 +1087,18 @@ int ObRFBloomFilterMsg::broadcast(ObIArray<ObAddr> &target_addrs,
   ObPxP2PDatahubArg arg;
 
   arg.msg_ = &msg;
-  while (!*create_finish_ && need_send_msg_ && OB_SUCC(ret)) {
+  while (!create_finish_ && OB_SUCC(ret)) {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail to check status", K(ret));
     }
     ob_usleep(10);
   }
   if (OB_FAIL(ret)) {
-  } else if (!need_send_msg_) {
-    // when drain_exch, not need to send msg
   } else if (OB_FAIL(msg.shadow_copy(*this))) {
     LOG_WARN("fail to shadow copy second phase msg", K(ret));
-  } else if (OB_ISNULL(create_finish_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected create finish ptr", K(ret));
   } else {
-    while (*filter_idx_ <  filter_indexes_.count() && OB_SUCC(ret)) {
-      cur_idx = ATOMIC_FAA(filter_idx_, 1);
+    while (filter_idx_ < filter_indexes_.count() && OB_SUCC(ret)) {
+      cur_idx = ATOMIC_FAA(&filter_idx_, 1);
       if (cur_idx < filter_indexes_.count()) {
         msg.next_peer_addrs_.reuse();
         const BloomFilterIndex &addr_filter_idx = filter_indexes_.at(cur_idx);
@@ -1123,7 +1193,7 @@ int ObRFBloomFilterMsg::generate_filter_indexes(
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(filter_indexes_.prepare_allocate(tmp_filter_indexes.count()))) {
-    LOG_WARN("failed to prepare_allocate filter_indexes_");
+    LOG_WARN("failed to prepare_allocate filter_indexes_", K(tmp_filter_indexes.count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_filter_indexes.count(); ++i) {
       filter_indexes_.at(i).channel_ids_.set_allocator(&allocator_);
@@ -1278,7 +1348,7 @@ int ObRFRangeFilterMsg::get_min(ObCmpFunc &func, ObDatum &l, ObDatum &r, int64_t
   // the lower bound l, with ptr==NULL and null_==true, should not be covered by a.
   //
   // the reason we remove the OB_ISNULL(l.ptr_) condition is that when l is a empty char with l.ptr=0x0 and
-  // l.len=0 and null_=false, it should not be corver by r directly
+  // l.len=0 and null_=false, it should not be covered by r directly
   if (is_empty_) {
     if (OB_FAIL(dynamic_copy_cell(r, l, cell_size))) {
       LOG_WARN("fail to deep copy datum");
@@ -1302,7 +1372,7 @@ int ObRFRangeFilterMsg::prepare_query_range()
   } else if (is_empty_) {
     // make empty range
     if (OB_FAIL(fill_empty_query_range(query_range_info_, query_range_allocator_, query_range_))) {
-      LOG_WARN("faild to fill_empty_query_range");
+      LOG_WARN("failed to fill_empty_query_range");
     } else {
       is_query_range_ready_ = true;
     }
@@ -1360,7 +1430,8 @@ void ObRFRangeFilterMsg::after_process()
   (void)prepare_query_range();
 }
 
-int ObRFRangeFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges)
+int ObRFRangeFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                                                bool need_deep_copy, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (!is_query_range_ready_) {
@@ -1368,9 +1439,18 @@ int ObRFRangeFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNe
   } else {
     // overwrite ranges
     ranges.reset();
-    if (OB_FAIL(ranges.push_back(query_range_))) {
-      LOG_WARN("failed to push_back range");
+    if (need_deep_copy) {
+      if (OB_FAIL(ranges.prepare_allocate(1))) {
+        LOG_WARN("failed to prepare_allocate");
+      } else if (OB_FAIL(deep_copy_range(*allocator, query_range_, ranges.at(0)))) {
+        LOG_WARN("failed to deep_copy_range");
+      }
     } else {
+      if (OB_FAIL(ranges.push_back(query_range_))) {
+        LOG_WARN("failed to push_back range");
+      }
+    }
+    if (OB_SUCC(ret)) {
       has_extract = true;
     }
   }
@@ -1396,7 +1476,7 @@ int ObRFRangeFilterMsg::dynamic_copy_cell(const ObDatum &src, ObDatum &target, i
   int ret = OB_SUCCESS;
   int64_t need_size = src.len_;
   if (src.is_null()) {
-    target.null_ = 1;
+    target.set_null();
   } else {
     if (need_size > cell_size) {
       need_size = need_size * 2;
@@ -1552,7 +1632,7 @@ int ObRFRangeFilterMsg::might_contain(const ObExpr &expr,
       }
       filter_ctx.check_count_++;
       res.set_int(is_match ? 1 : 0);
-      ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+      filter_ctx.collect_sample_info(!is_match, 1);
     }
   }
   return ret;
@@ -1608,7 +1688,7 @@ int ObRFRangeFilterMsg::do_might_contain_batch(const ObExpr &expr,
     filter_ctx.filter_count_ += filter_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.check_count_ += total_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -1881,7 +1961,7 @@ int ObRFInFilterMsg::ObRFInFilterNode::hash(uint64_t &hash_ret) const
 // the ObRFInFilterNode stores in ObRFInFilter always be the datum of build table,
 // while the other node can be the build table(during insert or merge process)
 // or the probe table(during filter process),
-// so the compare process relys on the other node, always using other's cmp_func_.
+// so the compare process relies on the other node, always using other's cmp_func_.
 bool ObRFInFilterMsg::ObRFInFilterNode::operator==(const ObRFInFilterNode &other) const
 {
   int cmp_ret = 0;
@@ -1971,7 +2051,7 @@ int ObRFInFilterMsg::might_contain(const ObExpr &expr,
       }
       filter_ctx.check_count_++;
       res.set_int(is_match ? 1 : 0);
-      ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+      filter_ctx.collect_sample_info(!is_match, 1);
     }
   }
   return ret;
@@ -1984,16 +2064,17 @@ int ObRFInFilterMsg::reuse()
   serial_rows_.reset();
   rows_set_.reuse();
   (void)reuse_query_range();
+  is_active_ = true;
   return ret;
 }
 
 void ObRFInFilterMsg::check_finish_receive()
 {
-  if (ATOMIC_LOAD(&is_active_)) {
-    if (msg_receive_expect_cnt_ == ATOMIC_LOAD(&msg_receive_cur_cnt_)) {
+  if (msg_receive_expect_cnt_ == ATOMIC_LOAD(&msg_receive_cur_cnt_)) {
+    if (ATOMIC_LOAD(&is_active_)) {
       (void)after_process();
-      is_ready_ = true;
     }
+    is_ready_ = true;
   }
 }
 
@@ -2051,7 +2132,7 @@ int ObRFInFilterMsg::do_might_contain_batch(const ObExpr &expr,
     filter_ctx.filter_count_ += filter_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.check_count_ += total_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -2092,11 +2173,11 @@ int ObRFInFilterMsg::prepare_storage_white_filter_data(ObDynamicFilterExecutor &
 {
   int ret = OB_SUCCESS;
   int col_idx = dynamic_filter.get_col_idx();
-  if (is_empty_) {
-    dynamic_filter.set_filter_action(DynamicFilterAction::FILTER_ALL);
-    is_data_prepared = true;
-  } else if (!is_active_) {
+  if (!is_active_) {
     dynamic_filter.set_filter_action(DynamicFilterAction::PASS_ALL);
+    is_data_prepared = true;
+  } else if (is_empty_) {
+    dynamic_filter.set_filter_action(DynamicFilterAction::FILTER_ALL);
     is_data_prepared = true;
   } else {
     for (int64_t i = 0; i < serial_rows_.count() && OB_SUCC(ret); ++i) {
@@ -2144,7 +2225,7 @@ int ObRFInFilterMsg::prepare_query_ranges()
     // make empty range
     ObNewRange query_range;
     if (OB_FAIL(fill_empty_query_range(query_range_info_, query_range_allocator_, query_range))) {
-      LOG_WARN("faild to fill_empty_query_range");
+      LOG_WARN("failed to fill_empty_query_range");
     } else if (OB_FAIL(query_range_.push_back(query_range))) {
       LOG_WARN("failed to push back query_range");
     } else {
@@ -2152,7 +2233,7 @@ int ObRFInFilterMsg::prepare_query_ranges()
     }
   } else if (query_range_info_.prefix_col_idxs_.count() == col_cnt_) {
     // col count matches, the hashmap make sure all rows in the filter are different
-    // so not need to dedupcate
+    // so not need to deduplicate
     ret = process_query_ranges_without_deduplicate();
   } else {
     // prefix col less than index column, need do deduplicate
@@ -2361,7 +2442,8 @@ void ObRFInFilterMsg::after_process()
   (void)prepare_query_ranges();
 }
 
-int ObRFInFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges)
+int ObRFInFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                                             bool need_deep_copy, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (!is_query_range_ready_) {
@@ -2369,9 +2451,22 @@ int ObRFInFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRa
   } else {
     // overwrite ranges
     ranges.reset();
-    if (OB_FAIL(ranges.assign(query_range_))) {
-      LOG_WARN("failed to assign range");
+    if (need_deep_copy) {
+      if (OB_FAIL(ranges.prepare_allocate(query_range_.count()))) {
+        LOG_WARN("failed to prepare_allocate");
+      } else if (need_deep_copy) {
+        for (int64_t i = 0; i < ranges.count() && OB_SUCC(ret); ++i) {
+          if (OB_FAIL(deep_copy_range(*allocator, query_range_.at(i), ranges.at(i)))) {
+            LOG_WARN("failed to deep_copy_range");
+          }
+        }
+      }
     } else {
+      if (OB_FAIL(ranges.assign(query_range_))) {
+        LOG_WARN("failed to assign");
+      }
+    }
+    if (OB_SUCC(ret)) {
       has_extract = true;
     }
   }

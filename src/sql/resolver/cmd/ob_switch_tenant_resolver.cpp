@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/cmd/ob_switch_tenant_resolver.h"
-#include "sql/resolver/cmd/ob_switch_tenant_stmt.h"
 #include "sql/session/ob_sql_session_info.h"  // ObSQLSessionInfo
 
 namespace oceanbase

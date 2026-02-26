@@ -11,14 +11,11 @@
  */
 
 #include "ob_log_apply_service.h"
+#include "logservice/ob_append_callback.h"
 #include "logservice/ob_log_handler.h"
 #include "logservice/ob_ls_adapter.h"
+#include "logservice/ipalf/ipalf_handle.h"
 #include "logservice/palf/palf_env.h"
-#include "share/scn.h"
-#include "common/ob_clock_generator.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/ob_thread_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -262,7 +259,7 @@ ObApplyStatus::ObApplyStatus()
       max_applied_cb_scn_(),
       submit_task_(),
       palf_env_(NULL),
-      palf_handle_(),
+      palf_handle_(NULL),
       fs_cb_(),
       lock_(ObLatchIds::APPLY_STATUS_LOCK),
       mutex_(common::ObLatchIds::MAX_APPLY_SCN_LOCK),
@@ -282,14 +279,14 @@ ObApplyStatus::~ObApplyStatus()
 }
 
 int ObApplyStatus::init(const share::ObLSID &id,
-                        palf::PalfEnv *palf_env,
+                        ipalf::IPalfEnv *palf_env,
                         ObLogApplyService *ap_sv)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "apply status has already been inited", K(ret));
-  } else if (!id.is_valid() || OB_ISNULL(ap_sv)) {
+  } else if (!id.is_valid() || OB_ISNULL(palf_env) || OB_ISNULL(ap_sv)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(id), K(ap_sv), K(ret));
   } else if (OB_FAIL(palf_env->open(id.id(), palf_handle_))) {
@@ -314,10 +311,10 @@ int ObApplyStatus::init(const share::ObLSID &id,
       try_wrlock_debug_time_ = OB_INVALID_TIMESTAMP;
       IGNORE_RETURN new (&fs_cb_) ObApplyFsCb(this);
       is_in_stop_state_ = false;
-      if (OB_FAIL(palf_handle_.register_file_size_cb(&fs_cb_))) {
+      is_inited_ = true;
+      if (OB_FAIL(palf_handle_->register_file_size_cb(&fs_cb_))) {
         CLOG_LOG(ERROR, "failed to register cb", K(ret), K(id));
       } else {
-        is_inited_ = true;
         CLOG_LOG(INFO, "apply status init success", K(ret), KPC(this), KP(&cb_append_stat_),
                  KP(&cb_wait_thread_stat_), KP(&cb_wait_commit_stat_), KP(&cb_execute_stat_));
       }
@@ -479,6 +476,7 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
         CLOG_LOG(ERROR, "cb is NULL", KPC(cb_queue), KPC(this), K(ret));
       } else if ((lsn = cb->__get_lsn()).val_ < ATOMIC_LOAD(&palf_committed_end_lsn_.val_)) {
         // 小于确认日志位点的cb可以回调on_success
+        ObDIActionGuard di_action_guard(cb->get_cb_name());
         if (OB_FAIL(cb_queue->pop())) {
           CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
         } else {
@@ -626,9 +624,22 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
       if (is_in_stop_state_) {
         //skip
         CLOG_LOG(WARN, "apply status has been stopped", K(ret), KPC(this));
+      } else if (proposal_id < curr_proposal_id) {
+        if (!GCONF.enable_logservice) {
+            // proposal_id can not recede
+            ret = OB_ERR_UNEXPECTED;
+            CLOG_LOG(ERROR, "invalid proposal_id", K(end_lsn), K(proposal_id), K(curr_proposal_id), KPC(this));
+        } else if (palf_committed_end_lsn_ > end_lsn) {
+            // for logservice, proposal_id may recede, but committed_end_lsn can not recede
+            ret = OB_ERR_UNEXPECTED;
+            CLOG_LOG(ERROR, "invalid new end_lsn", K(end_lsn), K(proposal_id), K(curr_proposal_id), KPC(this));
+        }
+
       } else if (proposal_id == curr_proposal_id && LEADER == role_) {
-        if (palf_committed_end_lsn_ >= end_lsn) {
+        if (palf_committed_end_lsn_ > end_lsn) {
           CLOG_LOG(ERROR, "invalid new end_lsn", KPC(this), K(proposal_id), K(end_lsn));
+        } else if (palf_committed_end_lsn_ == end_lsn) {
+            // ignore
         } else {
           palf_committed_end_scn_.atomic_store(end_scn);
           palf_committed_end_lsn_ = end_lsn;
@@ -636,8 +647,7 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
             CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret), K(proposal_id), K(end_lsn));
           }
         }
-      } else if ((proposal_id == curr_proposal_id && FOLLOWER == role_)
-                 || proposal_id < curr_proposal_id) {
+      } else if (!GCONF.enable_logservice && proposal_id == curr_proposal_id && FOLLOWER == role_) {
         // apply切为follower之后, 同proposal_id的日志不应该还能滑出
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(ERROR, "invalid new end_lsn", KPC(this), K(proposal_id), K(end_lsn));
@@ -660,19 +670,23 @@ share::SCN ObApplyStatus::get_palf_committed_end_scn() const
 int ObApplyStatus::unregister_file_size_cb()
 {
   int ret = OB_SUCCESS;
-  if (palf_handle_.is_valid()) {
-    if (OB_FAIL(palf_handle_.unregister_file_size_cb())) {
-      CLOG_LOG(ERROR, "failed to unregister cb", K(ret), K(ls_id_));
-    } else {
-      // do nothing
-    }
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "apply status has not been inited", K(ret));
+  } else if (is_in_stop_state_) {
+    // file size cb already unregistered
+    CLOG_LOG(WARN, "apply status has been stopped", K(ret), K(ls_id_));
+  } else if (OB_FAIL(palf_handle_->unregister_file_size_cb())) {
+    CLOG_LOG(WARN, "failed to unregister cb", K(ret), K(ls_id_));
+  } else {
+    // do nothing
   }
   return ret;
 }
 
 void ObApplyStatus::close_palf_handle()
 {
-  if (palf_handle_.is_valid()) {
+  if (OB_NOT_NULL(palf_env_) && OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid()) {
     palf_env_->close(palf_handle_);
   } else {
     // do nothing
@@ -700,10 +714,7 @@ int ObApplyStatus::get_max_applied_scn(SCN &scn)
     palf::LSN apply_end_lsn;
     bool is_done = false;
     const SCN cur_palf_committed_end_scn = palf_committed_end_scn_.atomic_load();
-    if (max_applied_cb_scn_ > cur_palf_committed_end_scn) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "invalid max_applied_cb_scn", KPC(this));
-    } else if (max_applied_cb_scn_ == cur_palf_committed_end_scn) {
+    if (max_applied_cb_scn_ == cur_palf_committed_end_scn) {
       //no need to push up
     } else if (OB_FAIL(is_apply_done(is_done, apply_end_lsn))) {
       CLOG_LOG(WARN, "check is_apply_done failed", K(ret), KPC(this));
@@ -838,9 +849,15 @@ int ObApplyStatus::update_last_check_scn_()
   int64_t palf_proposal_id = -1;
   bool is_pending_state = true;
   SCN palf_max_scn;
-  if (OB_FAIL(palf_handle_.get_max_scn(palf_max_scn))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObApplyStatus not init", K(ret), K(ls_id_));
+  } else if (is_in_stop_state_) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "apply status is in stop state", K(ret), K(ls_id_));
+  } else if (OB_FAIL(palf_handle_->get_max_scn(palf_max_scn))) {
     CLOG_LOG(WARN, "get_max_scn failed", K(ret), K(ls_id_));
-  } else if (OB_FAIL(palf_handle_.get_role(palf_role, palf_proposal_id, is_pending_state))) {
+  } else if (OB_FAIL(palf_handle_->get_role(palf_role, palf_proposal_id, is_pending_state))) {
     CLOG_LOG(WARN, "palf get_role failed", K(ret), K(ls_id_));
   } else if (max_applied_cb_scn_.is_valid() && palf_max_scn < max_applied_cb_scn_) {
     //防御性检查, palf的max_scn不应该回退到已达成一致的max_applied_cb_scn_之前
@@ -982,22 +999,9 @@ void ObApplyStatusGuard::set_apply_status_(ObApplyStatus *apply_status)
 }
 
 //---------------ObLogApplyService---------------//
-bool ObLogApplyService::GetApplyStatusFunctor::operator()(const share::ObLSID &id,
-                                                          ObApplyStatus *apply_status)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(apply_status)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "apply status is NULL", K(id), KR(ret));
-  } else {
-    guard_.set_apply_status_(apply_status);
-  }
-  ret_code_ = ret;
-  return OB_SUCCESS == ret;
-}
 
-bool ObLogApplyService::RemoveApplyStatusFunctor::operator()(const share::ObLSID &id,
-                                                             ObApplyStatus *apply_status)
+bool ObLogApplyService::RemoveApplyStatusFunctor::operator()(const palf::LSKey &id,
+                                                            ObApplyStatus *apply_status)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(apply_status)) {
@@ -1005,16 +1009,12 @@ bool ObLogApplyService::RemoveApplyStatusFunctor::operator()(const share::ObLSID
     CLOG_LOG(WARN, "apply status is NULL", K(id), KR(ret));
   } else if (OB_FAIL(apply_status->unregister_file_size_cb())) {
     CLOG_LOG(ERROR, "apply_status unregister_file_size_cb failed", K(ret), K(id));
-  } else if (0 == apply_status->dec_ref()) {
-    CLOG_LOG(INFO, "free apply status", KPC(apply_status));
-    apply_status->~ObApplyStatus();
-    mtl_free(apply_status);
   }
   ret_code_ = ret;
   return OB_SUCCESS == ret;
 }
 
-bool ObLogApplyService::ResetApplyStatusFunctor::operator()(const share::ObLSID &id,
+bool ObLogApplyService::ResetApplyStatusFunctor::operator()(const palf::LSKey &id,
                                                             ObApplyStatus *apply_status)
 {
   int ret = OB_SUCCESS;
@@ -1025,10 +1025,20 @@ bool ObLogApplyService::ResetApplyStatusFunctor::operator()(const share::ObLSID 
     CLOG_LOG(ERROR, "apply_status handle_drop_cb failed", K(ret), K(id));
   } else if (OB_FAIL(apply_status->unregister_file_size_cb())) {
     CLOG_LOG(ERROR, "apply_status unregister_file_size_cb failed", K(ret), K(id));
-  } else if (0 == apply_status->dec_ref()) {
-    CLOG_LOG(INFO, "free apply status", KPC(apply_status));
-    apply_status->~ObApplyStatus();
-    mtl_free(apply_status);
+  }
+  ret_code_ = ret;
+  return OB_SUCCESS == ret;
+}
+
+bool ObLogApplyService::StatApplyStatusFunctor::operator()(const palf::LSKey &id,
+                                                            ObApplyStatus *apply_status)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(apply_status)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "apply status is NULL", K(id), KR(ret));
+  } else if (OB_FAIL(func_(*apply_status))) {
+    CLOG_LOG(WARN, "iter apply stat failed", K(ret));
   }
   ret_code_ = ret;
   return OB_SUCCESS == ret;
@@ -1048,7 +1058,7 @@ ObLogApplyService::~ObLogApplyService()
   destroy();
 }
 
-int ObLogApplyService::init(PalfEnv *palf_env,
+int ObLogApplyService::init(ipalf::IPalfEnv *palf_env,
                             ObLSAdapter *ls_adapter)
 {
   int ret = OB_SUCCESS;
@@ -1139,10 +1149,14 @@ int ObLogApplyService::add_ls(const share::ObLSID &id)
 {
   int ret = OB_SUCCESS;
   ObApplyStatus *apply_status = NULL;
+  LSKey hash_map_key(id.id());
   ObMemAttr attr(MTL_ID(), ObModIds::OB_LOG_APPLY_STATUS);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "apply service not init", K(ret));
+  } else if (OB_UNLIKELY(!id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "Invalid argument", K(id));
   } else if (false == ATOMIC_LOAD(&is_running_)) {
     ret = OB_STATE_NOT_MATCH;
     CLOG_LOG(ERROR, "apply service has been stopped", K(ret));
@@ -1157,10 +1171,11 @@ int ObLogApplyService::add_ls(const share::ObLSID &id)
       CLOG_LOG(WARN, "failed to init apply status", K(ret), K(id), K(palf_env_), K(this));
     } else {
       apply_status->inc_ref();
-      if (OB_FAIL(apply_status_map_.insert(id, apply_status))) {
+      if (OB_FAIL(apply_status_map_.insert_and_get(hash_map_key, apply_status))) {
         CLOG_LOG(ERROR, "insert apply status failed", K(ret), K(id), KPC(apply_status));
         revert_apply_status(apply_status);
       } else {
+        apply_status_map_.revert(apply_status);
         CLOG_LOG(TRACE, "add_ls success", K(ret), K(id), KPC(apply_status));
       }
     }
@@ -1172,10 +1187,21 @@ int ObLogApplyService::remove_ls(const share::ObLSID &id)
 {
   int ret = OB_SUCCESS;
   RemoveApplyStatusFunctor functor;
+  LSKey hash_map_key(id.id());
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "apply service not init", K(ret));
-  } else if (OB_FAIL(apply_status_map_.erase_if(id, functor))) {
+  } else if (OB_UNLIKELY(!id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(id));
+  } else if (OB_FAIL(apply_status_map_.operate(hash_map_key, functor))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      CLOG_LOG(WARN, "apply service remove ls failed", K(ret), K(id));
+      ret = OB_SUCCESS;
+    } else {
+      CLOG_LOG(ERROR, "apply service remove ls failed", K(ret), K(id));
+    }
+  } else if (OB_FAIL(apply_status_map_.del(hash_map_key))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       CLOG_LOG(WARN, "apply service remove ls failed", K(ret), K(id));
       ret = OB_SUCCESS;
@@ -1307,7 +1333,7 @@ int ObLogApplyService::push_task(ObApplyServiceTask *task)
   } else {
     while (OB_FAIL(TG_PUSH_TASK(tg_id_, task)) && OB_EAGAIN == ret) {
       //预期不会失败
-      ob_usleep(1000); //1ms
+      ob_throttle_usleep(1000, ret); //1ms
       CLOG_LOG(ERROR, "failed to push", K(ret));
     }
   }
@@ -1318,14 +1344,22 @@ int ObLogApplyService::get_apply_status(const share::ObLSID &id,
                                         ObApplyStatusGuard &guard)
 {
   int ret = OB_SUCCESS;
-  GetApplyStatusFunctor functor(guard);
+  LSKey hash_map_key(id.id());
+  ObApplyStatus *apply_status = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObLogApplyServicenot init", K(ret));
-  } else if (OB_FAIL(apply_status_map_.operate(id, functor))) {
+  } else if (OB_UNLIKELY(!id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "Invalid argument", K(id));
+  } else if (OB_FAIL(apply_status_map_.get(hash_map_key, apply_status))) {
     CLOG_LOG(WARN, "get_apply_statusfailed", K(ret), K(id));
   } else {
+    guard.set_apply_status_(apply_status);
     CLOG_LOG(TRACE, "get_apply_status success", K(ret), K(id));
+  }
+  if (NULL != apply_status) {
+    apply_status_map_.revert(apply_status);
   }
   return ret;
 }
@@ -1345,6 +1379,7 @@ void ObLogApplyService::revert_apply_status(ObApplyStatus *apply_status)
 void ObLogApplyService::handle(void *task)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard ag("LogService", "LogApplyService", "ApplyTask");
   ObApplyServiceTask *task_to_handle = static_cast<ObApplyServiceTask *>(task);
   ObApplyStatus *apply_status = NULL;
   bool need_push_back = false;
@@ -1440,16 +1475,17 @@ int ObLogApplyService::wait_append_sync(const share::ObLSID &ls_id)
 
 int ObLogApplyService::stat_for_each(const common::ObFunction<int (const ObApplyStatus &)> &func)
 {
-  auto stat_func = [&func](const share::ObLSID &id, ObApplyStatus *apply_status) -> bool {
-    int ret = OB_SUCCESS;
-    bool bret = true;
-    if (OB_FAIL(func(*apply_status))) {
-      bret = false;
-      CLOG_LOG(WARN, "iter apply stat failed", K(ret));
-    }
-    return bret;
-  };
-  return apply_status_map_.for_each(stat_func);
+  StatApplyStatusFunctor functor(func);
+  int ret = OB_SUCCESS;
+  if (false == ATOMIC_LOAD(&is_running_)) {
+    CLOG_LOG(WARN, "apply service has been stopped");
+  } else if (!func.is_valid()) {
+    // ObFunction will be invalid when allocating memory failed.
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    ret = apply_status_map_.for_each(functor);
+  }
+  return ret;
 }
 
 int ObLogApplyService::diagnose(const share::ObLSID &id,
@@ -1505,7 +1541,7 @@ int ObLogApplyService::remove_all_ls_()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "apply service not init", K(ret));
-  } else if (OB_FAIL(apply_status_map_.for_each(functor))) {
+  } else if (OB_FAIL(apply_status_map_.remove_if(functor))) {
     CLOG_LOG(ERROR, "apply service remove all ls failed", K(ret));
   } else {
     CLOG_LOG(INFO, "apply service remove all ls");

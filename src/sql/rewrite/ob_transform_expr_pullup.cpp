@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "ob_transform_expr_pullup.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "common/ob_smart_call.h"
 
 namespace oceanbase {
 namespace sql {
@@ -154,10 +152,13 @@ int ObTransformExprPullup::need_transform(const ObIArray<ObParentDMLStmt> &paren
   int ret = OB_SUCCESS;
   bool is_valid = false;
   need_trans = false;
-
-  if (OB_FAIL(check_stmt_validity(&stmt, is_valid))) {
+  bool bypass = false;
+  if (OB_FAIL(check_rule_bypass(stmt, bypass))) {
     LOG_WARN("fail check stmt validity", K(ret));
-  } else if (is_valid) {
+  } else if (bypass) {
+    need_trans = false;
+    OPT_TRACE("transform rule bypassed");
+  } else {
     const ObSelectStmt &select_stmt = static_cast<const ObSelectStmt &>(stmt);
     const ObQueryHint *query_hint = NULL;
     if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
@@ -228,34 +229,34 @@ int ObTransformExprPullup::transform_view_recursively(TableItem *table_item,
       // (fill null or fill the origin value).
       // Do not rewrite for the non-determined side.
       if (joined_table->is_left_join()) {
-        if (OB_FAIL(transform_view_recursively(joined_table->left_table_, stmt,
+        if (OB_FAIL(SMART_CALL(transform_view_recursively(joined_table->left_table_, stmt,
                                                parent_reject_expr_map,
                                                parent_reject_subquery_map,
                                                transformed_views,
-                                               stmt_may_reduce_row_count, trans_happened))) {
+                                               stmt_may_reduce_row_count, trans_happened)))) {
           LOG_WARN("fail to pullup epr from view", K(ret));
         }
       } else if (joined_table->is_right_join()) {
-        if (OB_FAIL(transform_view_recursively(joined_table->right_table_, stmt,
+        if (OB_FAIL(SMART_CALL(transform_view_recursively(joined_table->right_table_, stmt,
                                                parent_reject_expr_map,
                                                parent_reject_subquery_map,
                                                transformed_views,
-                                               stmt_may_reduce_row_count, trans_happened))) {
+                                               stmt_may_reduce_row_count, trans_happened)))) {
           LOG_WARN("fail to pullup epr from view", K(ret));
         }
       }
     } else {
-      if (OB_FAIL(transform_view_recursively(joined_table->left_table_, stmt,
+      if (OB_FAIL(SMART_CALL(transform_view_recursively(joined_table->left_table_, stmt,
                                              parent_reject_expr_map,
                                              parent_reject_subquery_map,
                                              transformed_views,
-                                             stmt_may_reduce_row_count, trans_happened))) {
+                                             stmt_may_reduce_row_count, trans_happened)))) {
         LOG_WARN("fail to pullup epr from view", K(ret));
-      } else if (OB_FAIL(transform_view_recursively(joined_table->right_table_, stmt,
+      } else if (OB_FAIL(SMART_CALL(transform_view_recursively(joined_table->right_table_, stmt,
                                                     parent_reject_expr_map,
                                                     parent_reject_subquery_map,
                                                     transformed_views,
-                                                    stmt_may_reduce_row_count, trans_happened))) {
+                                                    stmt_may_reduce_row_count, trans_happened)))) {
         LOG_WARN("fail to pullup epr from view", K(ret));
       }
     }
@@ -509,7 +510,8 @@ int ObTransformExprPullup::check_stmt_validity(const ObDMLStmt *stmt, bool &is_v
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt);
     if (!select_stmt->is_set_stmt()
         && !select_stmt->is_hierarchical_query()
-        && !select_stmt->has_rollup()) {
+        && !select_stmt->has_rollup()
+        && !select_stmt->has_grouping_sets()) {
       is_valid = true;
     }
   }
@@ -793,9 +795,9 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
         if (OB_FAIL(parent.replace_relation_exprs(old_child_project_columns,
                                                   select_exprs_can_pullup))) {
           LOG_WARN("fail to replace inner stmt expr", K(ret));
-        } else if (OB_FAIL(parent.formalize_stmt(ctx_->session_info_))) {
+        } else if (OB_FAIL(parent.formalize_stmt(ctx_->session_info_, false))) {
           LOG_WARN("fail to formalize stmt", K(ret));
-        } else if (OB_FAIL(child.formalize_stmt(ctx_->session_info_))) {
+        } else if (OB_FAIL(child.formalize_stmt(ctx_->session_info_, false))) {
           LOG_WARN("fail to formalize stmt", K(ret));
         }
       }

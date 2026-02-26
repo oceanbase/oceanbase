@@ -14,6 +14,7 @@
 #define OCEANBASE_COMMON_OB_TARGET_SPECIFIC_H_
 
 #include <stdint.h>
+#include "lib/cpu/ob_cpu_topology.h"
 
 namespace oceanbase
 {
@@ -26,6 +27,7 @@ enum ObTargetArch : uint32_t
   AVX      = (1 << 1),
   AVX2     = (1 << 2),
   AVX512    = (1 << 3),
+  NEON    = (1 << 4),
 };
 
 bool is_arch_supported(ObTargetArch arch);
@@ -36,16 +38,16 @@ bool is_arch_supported(ObTargetArch arch);
 
 #if defined(__clang__)
 
-#define OB_AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw")))
-#define OB_AVX2_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2")))
+#define OB_AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl,fma")))
+#define OB_AVX2_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,fma")))
 #define OB_AVX_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx")))
 #define OB_SSE42_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt")))
 #define OB_DEFAULT_FUNCTION_SPECIFIC_ATTRIBUTE
 
 #   define OB_BEGIN_AVX512_SPECIFIC_CODE \
-        _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw\"))),apply_to=function)")
+        _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl,fma\"))),apply_to=function)")
 #   define OB_BEGIN_AVX2_SPECIFIC_CODE \
-        _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2\"))),apply_to=function)")
+        _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,fma\"))),apply_to=function)")
 #   define OB_BEGIN_AVX_SPECIFIC_CODE \
         _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx\"))),apply_to=function)")
 #   define OB_BEGIN_SSE42_SPECIFIC_CODE \
@@ -56,18 +58,18 @@ bool is_arch_supported(ObTargetArch arch);
 #   define OB_DUMMY_FUNCTION_DEFINITION [[maybe_unused]] void _dummy_function_definition();
 #else
 
-#define OB_AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,tune=native")))
-#define OB_AVX2_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,tune=native")))
+#define OB_AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl,fma,tune=native")))
+#define OB_AVX2_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,fma,tune=native")))
 #define OB_AVX_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,tune=native")))
-#define OB_SSE42_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt",tune=native)))
+#define OB_SSE42_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,tune=native")))
 #define OB_DEFAULT_FUNCTION_SPECIFIC_ATTRIBUTE
 
 #   define OB_BEGIN_AVX512_SPECIFIC_CODE \
         _Pragma("GCC push_options") \
-        _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,tune=native\")")
+        _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl,fma,tune=native\")")
 #   define OB_BEGIN_AVX2_SPECIFIC_CODE \
         _Pragma("GCC push_options") \
-        _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,tune=native\")")
+        _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,fma,tune=native\")")
 #   define OB_BEGIN_AVX_SPECIFIC_CODE \
         _Pragma("GCC push_options") \
         _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,tune=native\")")
@@ -213,6 +215,14 @@ OB_DECLARE_AVX512_SPECIFIC_CODE(
     FUNCTION_BODY \
 
 #endif
+
+void init_arches();
+extern uint32_t arches;
+
+OB_INLINE bool is_arch_supported(ObTargetArch arch)
+{
+  return arch == ObTargetArch::Default || (arches & static_cast<uint32_t>(arch));
+}
 
 } // namespace common
 } // namespace oceanbase

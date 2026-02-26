@@ -18,5 +18,6 @@ namespace common
 {
 DEFINE_DBA_EVENT_LIST_CPP(server_start)
 DEFINE_DBA_EVENT_LIST_CPP(bootstrap)
+DEFINE_DBA_EVENT_LIST_CPP(replace_sys)
 }
 }

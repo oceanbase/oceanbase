@@ -12,14 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_virtual_sql_plan_monitor.h"
-#include "common/ob_smart_call.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "sql/monitor/ob_monitor_info_manager.h"
 #include "sql/monitor/ob_phy_plan_monitor_info.h"
-#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
-#include "observer/ob_server.h"
-#include <algorithm> // std::sort
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -47,10 +40,13 @@ ObVirtualSqlPlanMonitor::ObVirtualSqlPlanMonitor() :
     rt_nodes_(),
     rt_node_idx_(0),
     rt_start_idx_(INT64_MAX),
-    rt_end_idx_(INT64_MIN)
+    rt_end_idx_(INT64_MIN),
+    fetch_profile_(false)
 {
   server_ip_[0] = '\0';
   trace_id_[0] = '\0';
+  profile_allocator_.set_label("MonRTProfile");
+  profile_allocator_.set_tenant_id(MTL_ID());
 }
 
 ObVirtualSqlPlanMonitor::~ObVirtualSqlPlanMonitor()
@@ -82,6 +78,7 @@ void ObVirtualSqlPlanMonitor::reset()
   need_rt_node_ = false;
   rt_nodes_.reset();
   rt_node_idx_ = 0;
+  profile_allocator_.reset();
 }
 
 int ObVirtualSqlPlanMonitor::inner_open()
@@ -93,6 +90,13 @@ int ObVirtualSqlPlanMonitor::inner_open()
   }
 
   SERVER_LOG(DEBUG, "tenant ids", K(tenant_id_array_));
+  for (int64_t i = 0; i < output_column_ids_.count(); ++i) {
+    const uint64_t column_id = output_column_ids_.at(i);
+    if (column_id == RAW_PROFILE) {
+      fetch_profile_ = true;
+      break;
+    }
+  }
 
   if (OB_SUCC(ret)) {
     if (NULL == allocator_) {
@@ -176,7 +180,7 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
     SERVER_LOG(WARN, "invalid argument", KP(allocator_), K(ret));
   } else if (is_first_get_) {
     bool is_valid = true;
-    // init inner iterator varaibales
+    // init inner iterator variables
     tenant_id_array_idx_ = is_reverse_scan() ? tenant_id_array_.count() : -1;
     cur_mysql_req_mgr_ = nullptr;
 
@@ -207,16 +211,20 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
 
   if (OB_SUCC(ret) && !need_rt_node_) {
     void *rec = NULL;
-    if (ref_.idx_ != -1) {
-      cur_mysql_req_mgr_->revert(&ref_);
-    }
+    int64_t iter_step = is_reverse_scan() ? -1 : 1;
     do {
+      if (ref_.idx_ != -1) {
+        cur_mysql_req_mgr_->revert(&ref_);
+      }
       ref_.reset();
       if (OB_ENTRY_NOT_EXIST == (ret = cur_mysql_req_mgr_->get(cur_id_, rec, &ref_))) {
-        if (is_reverse_scan()) {
-          cur_id_ -= 1;
-        } else {
-          cur_id_ += 1;
+        cur_id_ += iter_step;
+      }
+      if (OB_SUCC(ret) && !fetch_profile_ && nullptr != rec) {
+        ObMonitorNode *node = static_cast<ObMonitorNode *>(rec);
+        if (node->op_id_ < 0) {
+          cur_id_ += iter_step;
+          ret = OB_ENTRY_NOT_EXIST;
         }
       }
     } while (OB_ENTRY_NOT_EXIST == ret && cur_id_ < end_id_ && cur_id_ >= start_id_);
@@ -236,13 +244,7 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
 
     // move to next slot
     if (OB_SUCC(ret)) {
-      if (!is_reverse_scan()) {
-        // forwards
-        cur_id_++;
-      } else {
-        // backwards
-        cur_id_--;
-      }
+      cur_id_ += iter_step;
     }
     if (OB_ENTRY_NOT_EXIST == ret) {
       // may be all the record is flushed, call inner_get_next_row recursively
@@ -256,9 +258,11 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
 int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  int64_t iter_step = is_reverse_scan() ? -1 : 1;
   if (need_rt_node_ && OB_NOT_NULL(cur_mysql_req_mgr_)) {
     if (rt_nodes_.empty()) {
-      if (OB_FAIL(cur_mysql_req_mgr_->convert_node_map_2_array(rt_nodes_))) {
+      if (OB_FAIL(cur_mysql_req_mgr_->convert_node_map_2_array(rt_nodes_, &profile_allocator_,
+                                                               fetch_profile_))) {
         LOG_WARN("fail to convert node map to array", K(ret));
       } else {
         rt_start_idx_ = MAX(rt_start_idx_, 0);
@@ -270,6 +274,17 @@ int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
         }
       }
     }
+    if (OB_SUCC(ret) && !fetch_profile_) {
+      // if not fetch profile, skip read node with op id < 0
+      while (rt_node_idx_ >= rt_start_idx_ && rt_node_idx_ < rt_end_idx_) {
+        const ObMonitorNode &node = rt_nodes_.at(rt_node_idx_);
+        if (node.op_id_ < 0) {
+          rt_node_idx_ += iter_step;
+        } else {
+          break;
+        }
+      }
+    }
     if (OB_FAIL(ret)) {
     } else if (rt_node_idx_ >= rt_end_idx_ || rt_node_idx_ < rt_start_idx_) {
       ret = OB_ITER_END;
@@ -278,11 +293,9 @@ int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
       LOG_WARN("fail to convert node to row", K(ret));
     } else if (OB_ISNULL(row)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpectd null row", K(ret));
-    } else if (!is_reverse_scan()) {
-      rt_node_idx_++;
+      LOG_WARN("unexpected null row", K(ret));
     } else {
-      rt_node_idx_--;
+      rt_node_idx_ += iter_step;
     }
   }
   LOG_TRACE("check rt_nodes_.count()", K(rt_nodes_.count()), K(rt_node_idx_), K(ret));
@@ -493,7 +506,7 @@ int ObVirtualSqlPlanMonitor::extract_tenant_ids()
       if (is_always_false) {
         tenant_id_array_.reset();
       } else {
-        std::sort(tenant_id_array_.begin(), tenant_id_array_.end());
+        lib::ob_sort(tenant_id_array_.begin(), tenant_id_array_.end());
         SERVER_LOG(DEBUG, "get tenant ids from req mgr map", K(tenant_id_array_));
       }
     }
@@ -563,7 +576,7 @@ int ObVirtualSqlPlanMonitor::extract_tenant_ids()
       if (is_always_false) {
         tenant_id_array_.reset();
       } else {
-        std::sort(tenant_id_array_.begin(), tenant_id_array_.end());
+        lib::ob_sort(tenant_id_array_.begin(), tenant_id_array_.end());
         SERVER_LOG(DEBUG, "get tenant ids from req mgr map", K(tenant_id_array_));
       }
     }
@@ -694,7 +707,6 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
   }
-  uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
   for (int64_t cell_idx = 0;
        OB_SUCC(ret) && cell_idx < output_column_ids_.count();
        ++cell_idx) {
@@ -733,11 +745,11 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       }
       case DB_TIME: {
         // concept:
-        cells[cell_idx].set_int(node.db_time_ / cpu_khz);
+        cells[cell_idx].set_int(node.db_time_);
         break;
       }
       case USER_IO_WAIT_TIME: {
-        cells[cell_idx].set_int(node.block_time_ / cpu_khz);
+        cells[cell_idx].set_int(node.block_time_);
         break;
       }
       case FIRST_REFRESH_TIME: {
@@ -782,10 +794,10 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       CASE_OTHERSTAT(4);
       CASE_OTHERSTAT(5);
       CASE_OTHERSTAT(6);
-      CASE_OTHERSTAT_RESERVED(7);
-      CASE_OTHERSTAT_RESERVED(8);
-      CASE_OTHERSTAT_RESERVED(9);
-      CASE_OTHERSTAT_RESERVED(10);
+      CASE_OTHERSTAT(7);
+      CASE_OTHERSTAT(8);
+      CASE_OTHERSTAT(9);
+      CASE_OTHERSTAT(10);
       case THREAD_ID: {
         int64_t thread_id = node.get_thread_id();
         cells[cell_idx].set_int(thread_id);
@@ -793,6 +805,16 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       }
       case PLAN_OPERATION: {
         const char *name = node.get_operator_name();
+        if (node.op_id_ < 0 && strcmp(name, "PHY_INVALID") == 0 && node.raw_profile_ != nullptr) {
+          // op_id_ < 0 means not operator monitor, these nodes only store profile, we should get
+          // name from profile
+          const ObProfileHeads *profile_heads =
+              reinterpret_cast<const ObProfileHeads *>(node.raw_profile_);
+          const ObProfileHead *profile_head = reinterpret_cast<const ObProfileHead *>(
+              node.raw_profile_ + profile_heads->head_offset_);
+          ObProfileId id = profile_head[0].id_;
+          name = ObProfileNameSet::get_profile_name(id);
+        }
         cells[cell_idx].set_varchar(name);
         cells[cell_idx].set_collation_type(
             ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -854,6 +876,26 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       case WORKAREA_MAX_TEMPSEG: {
         int64_t int_value = node.workarea_max_tempseg_;
         cells[cell_idx].set_int(int_value);
+        break;
+      }
+      case SQL_ID: {
+        cells[cell_idx].set_varchar(node.sql_id_);
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                    ObCharset::get_default_charset()));
+        break;
+      }
+      case PLAN_HASH_VALUE: {
+        cells[cell_idx].set_uint64(node.plan_hash_value_);
+        break;
+      }
+      case RAW_PROFILE: {
+        if (OB_ISNULL(node.raw_profile_)) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.raw_profile_, node.raw_profile_len_);
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                    ObCharset::get_default_charset()));
+        }
         break;
       }
       default: {

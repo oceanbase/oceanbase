@@ -1,3 +1,6 @@
+// owner: zjf225077
+// owner group: log
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,21 +13,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
-#include "io/easy_connection.h"
-#include "lib/file/file_directory_utils.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/utility.h"
-#include <cstdio>
-#include <signal.h>
-#include "lib/utility/ob_defer.h"
-#include "share/ob_errno.h"
 #define private public
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/lsn_allocator.h"
-#include "share/scn.h"
-#include "logservice/palf/log_rpc_processor.h"
 #include "env/ob_simple_log_cluster_env.h"
 
 #undef private
@@ -49,6 +38,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 3;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 
 TEST_F(TestObSimpleLogClusterBasicFunc, submit_log)
 {
@@ -80,7 +70,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, submit_log)
 // test_max_padding_size: 测试padding entry最长的场景(2M+16K+88+4K-1B).
 TEST_F(TestObSimpleLogClusterBasicFunc, test_max_padding_size)
 {
-  SET_CASE_LOG_FILE(TEST_NAME, "submit_log");
+  SET_CASE_LOG_FILE(TEST_NAME, "max_padding_size");
   //OB_LOGGER.set_log_level("TRACE");
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   const int64_t create_ts = 100;

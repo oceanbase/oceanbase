@@ -1,12 +1,9 @@
-#include "io/easy_io.h"
 #include "packet/easy_simple_handler.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <easy_test.h>
 #include <sys/wait.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 
 #define TEST_CNT 3
 /**

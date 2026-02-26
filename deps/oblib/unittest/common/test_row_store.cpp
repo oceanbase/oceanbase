@@ -64,7 +64,8 @@ void TestRowStore::add_row(int32_t i, int64_t COL_NUM, ObRowStore &store, int ex
     row.cells_[j].set_int(i*COL_NUM+j);
   } // end for
   ASSERT_EQ(expect_ret, store.add_row(row));
-  //_OB_LOG(INFO, "row=%s", S(row));
+  //ObCStringHelper helper;
+  //_OB_LOG(INFO, "row=%s", helper.convert(row));
 }
 
 void TestRowStore::add_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store)
@@ -74,7 +75,8 @@ void TestRowStore::add_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store)
   for (int i = 0; OB_SUCC(ret) && i < ROW_NUM; ++i) {
     add_row(i, COL_NUM, store);
   } // end for
-  _OB_LOG(INFO, "store=%s", S(store));
+  ObCStringHelper helper;
+  _OB_LOG(INFO, "store=%s", helper.convert(store));
   ASSERT_EQ(ROW_NUM, store.get_row_count());
 }
 
@@ -205,7 +207,8 @@ void TestRowStore::add_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore
     OK(store.add_row(row, stored_row, i, true));
     ASSERT_EQ(5, stored_row->reserved_cells_count_);
   } // end for
-  _OB_LOG(INFO, "store=%s", S(store));
+  ObCStringHelper helper;
+  _OB_LOG(INFO, "store=%s", helper.convert(store));
   ASSERT_EQ(ROW_NUM, store.get_row_count());
 }
 

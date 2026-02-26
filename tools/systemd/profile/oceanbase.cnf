@@ -21,3 +21,7 @@ enable_syslog_wf=false
 enable_syslog_recycle=true
 max_syslog_file_count=4
 __min_full_resource_pool_memory=1073741824
+compaction_high_thread_score=1
+compaction_low_thread_score=1
+compaction_mid_thread_score=1
+ob_sql_work_area_percentage=10

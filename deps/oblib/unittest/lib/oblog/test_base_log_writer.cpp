@@ -11,9 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <thread>
 #include "lib/oblog/ob_base_log_writer.h"
-#include "lib/ob_errno.h"
 
 //using namespace ::oblib;
 

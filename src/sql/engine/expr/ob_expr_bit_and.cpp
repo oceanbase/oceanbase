@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_bit_and.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;

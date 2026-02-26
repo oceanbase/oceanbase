@@ -11,15 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "share/stat/ob_stat_define.h"
 #include "share/stat/ob_dbms_stats_executor.h"
 #include "pl/sys_package/ob_dbms_stats.h"
 #include "sql/engine/cmd/ob_analyze_executor.h"
-#include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_dbms_stats_lock_unlock.h"
 #include "share/stat/ob_dbms_stats_utils.h"
-#include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "src/observer/virtual_table/ob_all_virtual_dml_stats.h"
 
 //#define COMPUTE_FREQUENCY_HISTOGRAM
 //   "SELECT /*+NO_USE_PX*/ col, sum(val) over (order by col rows between unbounded preceding and current row) "
@@ -45,21 +42,24 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObTableStatParam,1> params;
-  share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   ObSQLSessionInfo *session = ctx.get_my_session();
-  bool in_restore = false;
-  if (OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
+  if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(schema_guard), K(session));
-  } else if (OB_FAIL(schema_guard->check_tenant_is_restore(session->get_effective_tenant_id(),
-                                                           in_restore))) {
-    LOG_WARN("failed to check tenant is restore", K(ret));
-  } else if (OB_UNLIKELY(in_restore) ||
-             GCTX.is_standby_cluster()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "analyze table during restore or standby cluster");
-  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("get unexpected null", K(ret), K(session));
+  } else {
+    uint64_t tenant_id = session->get_effective_tenant_id();
+    bool is_primary = true;
+    if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+      LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(!is_primary)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "analyze table during non-primary tenant");
+    }
+  }
+  if (FAILEDx(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
     LOG_WARN("failed to implicit commit before gather stats", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::cancel_async_gather_stats(ctx))) {
+    LOG_WARN("failed to cancel async gather stats", K(ret));
   } else if (OB_FAIL(stmt.fill_table_stat_params(ctx, params))) {
     LOG_WARN("failed to fill table stat param", K(ret));
   } else {
@@ -107,9 +107,12 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
             start_time = ObTimeUtility::current_time();
             ObOptStatGatherStat gather_stat(task_info);
             ObOptStatGatherStatList::instance().push(gather_stat);
-            ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, param.allocator_->used(), gather_stat);
+            ObOptStatGatherAudit audit(tmp_alloc);
+            ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, param.allocator_->used(), gather_stat, audit);
             if (OB_FAIL(running_monitor.add_monitor_info(ObOptStatRunningPhase::GATHER_PREPARE))) {
               LOG_WARN("failed to add add monitor info", K(ret));
+            } else if (OB_FAIL(pl::ObDbmsStats::get_stats_consumer_group_id(param))) {
+              LOG_WARN("failed to get stats consumer gourp id");
             } else if (OB_FAIL(running_monitor.add_table_info(param))) {
               LOG_WARN("failed to add table info", K(ret));
             } else if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
@@ -122,6 +125,14 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
               LOG_WARN("failed to update stat cache", K(ret));
             } else {
               LOG_TRACE("succeed to gather table stats", K(param));
+            }
+            if (ret == OB_SUCCESS || ret == OB_TIMEOUT) {
+              int tmp_ret = ret;
+              if (OB_FAIL(running_monitor.flush_gather_audit())) {
+                LOG_WARN("failed to flush gather audit", K(ret));
+              } else {
+                ret = tmp_ret;
+              }
             }
             running_monitor.set_monitor_result(ret, ObTimeUtility::current_time(), param.allocator_->used());
             pl::ObDbmsStats::update_optimizer_gather_stat_info(NULL, &gather_stat);

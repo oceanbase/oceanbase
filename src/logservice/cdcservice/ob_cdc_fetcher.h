@@ -18,13 +18,13 @@
 #include "logservice/palf/lsn.h"                // LSN
 #include "logservice/palf/log_group_entry.h"    // LogGroupEntry
 #include "logservice/palf/log_entry.h"          // LogEntry
-#include "logservice/palf/palf_iterator.h"      // PalfGroupBufferIterator
 #include "logservice/palf_handle_guard.h"       // PalfHandleGuard
 #include "ob_cdc_req.h"                         // RPC Request and Response
 #include "ob_cdc_raw_log_req.h"
 #include "ob_cdc_define.h"
 #include "ob_cdc_struct.h"                      // ClientLSCtx
 #include "logservice/archiveservice/large_buffer_pool.h" // LargeBufferPool
+#include "logservice/ob_log_handler.h" // PalfGroupBufferIterator
 
 namespace oceanbase
 {
@@ -63,7 +63,9 @@ public:
 public:
   // Fetch LogGroupEntry
   int fetch_log(const obrpc::ObCdcLSFetchLogReq &req,
-      obrpc::ObCdcLSFetchLogResp &resp);
+      obrpc::ObCdcLSFetchLogResp &resp,
+      ClientLSCtx &ctx,
+      ObCdcFetchLogTimeStats &fetch_log_time_stat);
 
   // Fetch Missing LogEntry
   // TODO optimize fetch LogEntry(Random read)
@@ -71,7 +73,8 @@ public:
       obrpc::ObCdcLSFetchLogResp &resp);
 
   int fetch_raw_log(const obrpc::ObCdcFetchRawLogReq &req,
-      obrpc::ObCdcFetchRawLogResp &resp);
+      obrpc::ObCdcFetchRawLogResp &resp,
+      ClientLSCtx &ctx);
 
 private:
   // @retval OB_SUCCESS         Success
@@ -79,12 +82,6 @@ private:
   int init_palf_handle_guard_(const ObLSID &ls_id,
       palf::PalfHandleGuard &palf_handle_guard);
 
-  // @retval OB_SUCCESS         Success
-  // @retval OB_ENTRY_NOT_EXIST LS not exist in this server
-  int init_group_iterator_(const ObLSID &ls_id,
-      const LSN &start_lsn,
-      palf::PalfHandleGuard &palf_handle_guard,
-      palf::PalfGroupBufferIterator &group_iter);
   int do_fetch_log_(const obrpc::ObCdcLSFetchLogReq &req,
       FetchRunTime &fetch_runtime,
       obrpc::ObCdcLSFetchLogResp &resp,
@@ -119,8 +116,7 @@ private:
   // return OB_ITER_END when no more log could be iterated
   template <class LogEntryType>
   int fetch_log_in_palf_(const ObLSID &ls_id,
-      palf::PalfIterator<palf::DiskIteratorStorage, LogEntryType> &iter,
-      palf::PalfHandleGuard &palf_guard,
+      ipalf::IPalfIterator<LogEntryType> &iter,
       const LSN &start_lsn,
       const bool need_init_iter,
       const SCN &replayable_point_scn,
@@ -143,6 +139,28 @@ private:
       LogEntryType &log_group_entry,
       LSN &lsn,
       ClientLSCtx &ctx);
+
+  int fetch_missing_logs_in_palf_(const ObLSID &ls_id,
+      palf::PalfHandleGuard &palf_handle_guard,
+      const obrpc::ObCdcLSFetchMissLogReq::MissLogParamArray &miss_log_array,
+      int64_t &cur_idx,
+      obrpc::ObCdcLSFetchLogResp &resp,
+      FetchRunTime &frt);
+
+  int fetch_missing_logs_in_archive_(const ObLSID &ls_id,
+      ClientLSCtx &ctx,
+      const obrpc::ObCdcLSFetchMissLogReq::MissLogParamArray &miss_log_array,
+      int64_t &cur_idx,
+      obrpc::ObCdcLSFetchLogResp &resp,
+      FetchRunTime &frt);
+
+  int calc_raw_read_size_(const obrpc::ObCdcLSFetchMissLogReq::MissLogParamArray &miss_log_array,
+      const int64_t cur_idx,
+      const int64_t read_buf_len,
+      int64_t &read_size,
+      int64_t &target_idx);
+
+  int init_archive_source_(ClientLSCtx &ctx, ObLSID ls_id);
   // Check whether has reached time limit
   inline bool is_time_up_(const int64_t scan_round, const int64_t end_tstamp)
   {
@@ -159,7 +177,7 @@ private:
   }
   // Check the next LogGroupEntry to determine whether need to continue fetching logs.
   void check_next_group_entry_(const LSN &next_lsn,
-      const LogGroupEntry &next_log_group_entry,
+      const ipalf::IGroupEntry &next_log_group_entry,
       const int64_t fetched_log_count,
       obrpc::ObCdcLSFetchLogResp &resp,
       FetchRunTime &frt,
@@ -169,7 +187,7 @@ private:
   // TODO Consider compression and decryption
   int prefill_resp_with_group_entry_(const ObLSID &ls_id,
       const LSN &lsn,
-      LogGroupEntry &log_group_entry,
+      ipalf::IGroupEntry &log_group_entry,
       obrpc::ObCdcLSFetchLogResp &resp,
       ObCdcFetchLogTimeStats &fetch_time_stat);
   void handle_when_buffer_full_(FetchRunTime &frt);
@@ -198,14 +216,14 @@ private:
       ClientLSCtx &ctx);
   // Check the next LogEntry to determine whether need to continue fetching logs.
   void check_next_entry_(const LSN &next_lsn,
-      const LogEntry &next_log_entry,
+      const ipalf::ILogEntry &next_log_entry,
       obrpc::ObCdcLSFetchLogResp &resp,
       FetchRunTime &frt);
   // Fill Log Entry directly into resp_buf.
   // TODO Consider compression and decryption
   int prefill_resp_with_log_entry_(const ObLSID &ls_id,
       const LSN &lsn,
-      LogEntry &log_entry,
+      ipalf::ILogEntry &log_entry,
       obrpc::ObCdcLSFetchLogResp &resp);
   int prepare_berfore_fetch_missing_(const ObLSID &ls_id,
       ClientLSCtx &ctx,

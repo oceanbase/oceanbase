@@ -56,6 +56,7 @@ public:
   int transform(ObDMLStmt *&stmt);
   int do_transform(ObDMLStmt *&stmt);
   int do_transform_pre_precessing(ObDMLStmt *&stmt);
+  int do_prepare_mv_rewrite(const ObDMLStmt *stmt);
   int do_transform_dblink_write(ObDMLStmt *&stmt, bool &trans_happened);
   int do_transform_dblink_read(ObDMLStmt *&stmt);
   int transform_heuristic_rule(ObDMLStmt *&stmt);
@@ -66,7 +67,7 @@ public:
   int transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
                                           uint64_t needed_types,
                                           bool &trans_happened);
-  int do_after_transform(ObDMLStmt *stmt);
+  int do_after_transform(ObDMLStmt *stmt, const ObSQLSessionInfo *session);
   int get_all_stmts(ObDMLStmt *stmt,
                     ObIArray<ObDMLStmt*> &all_stmts);
   int add_param_and_expr_constraints(ObExecContext &exec_ctx,
@@ -121,7 +122,8 @@ public:
       contain_link_table_(false),
       contain_json_table_(false),
       contain_fulltext_search_(false),
-      contain_dml_with_doc_id_(false)
+      contain_dml_with_doc_id_(false),
+      contain_vec_index_approx_(false)
     {}
 
     bool all_found() const {
@@ -135,7 +137,8 @@ public:
           contain_link_table_ &&
           contain_json_table_ &&
           contain_fulltext_search_ &&
-          contain_dml_with_doc_id_;
+          contain_dml_with_doc_id_ &&
+          contain_vec_index_approx_;
     }
 
     bool contain_hie_query_;
@@ -149,10 +152,12 @@ public:
     bool contain_json_table_;
     bool contain_fulltext_search_;
     bool contain_dml_with_doc_id_;
+    bool contain_vec_index_approx_;
   };
   static int check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &func);
   int check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &func);
   inline ObTransformerCtx *get_trans_ctx() { return ctx_; }
+  int set_transformation_parameters(ObQueryCtx *query_ctx);
 private:
 
   int collect_trans_stat(const ObTransformRule &rule);
@@ -169,6 +174,7 @@ private:
   int adjust_global_dependency_tables(ObDMLStmt *stmt);
   int verify_all_stmt_exprs(ObDMLStmt *stmt);
   int verify_stmt_exprs(ObDMLStmt *stmt);
+  int verify_all_expr_types(ObDMLStmt *stmt, const ObSQLSessionInfo *session);
 
   template<typename T>
   int transform_one_rule(ObDMLStmt *&stmt,

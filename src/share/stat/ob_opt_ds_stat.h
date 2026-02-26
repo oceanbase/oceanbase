@@ -67,6 +67,7 @@ public:
     {
     }
     uint64_t hash() const { return common::murmurhash(this, sizeof(Key), 0); }
+    int hash(uint64_t &result) const { result = hash(); return OB_SUCCESS; }
     bool operator==(const ObIKVCacheKey &other) const
     {
       const Key &other_key = reinterpret_cast<const Key&>(other);

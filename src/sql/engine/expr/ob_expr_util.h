@@ -43,6 +43,10 @@ typedef ObNumStackAllocator<1> ObNumStackOnceAlloc;
 
 #define array_elements(A) ((uint) (sizeof(A)/sizeof(A[0])))
 
+template <typename T>
+class ObTextStringVectorResult;
+using ObTextStringDatumResult = ObTextStringVectorResult<common::ObIVector>;
+
 class ObExprUtil
 {
 public:
@@ -115,6 +119,12 @@ public:
   // e.g.:
   //   dump() need result is NLS_CHARACTERSET, but we can only generate ASCII string in code,
   //   this function is used to convert the result characterset.
+  static int set_expr_asscii_result(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      ObTextStringDatumResult &out_res,
+                                      const ObString &ascii, const int64_t datum_idx,
+                                      const bool is_ascii,
+                                      const common::ObCollationType src_coll_type = CS_TYPE_UTF8MB4_BIN);
   static int set_expr_ascii_result(const ObExpr &expr,
                                 ObEvalCtx &ctx,
                                 common::ObDatum &expr_datum,
@@ -133,6 +143,11 @@ public:
                                       common::ObString &out_str,
                                       const common::ObCollationType &out_collation,
                                       common::ObIAllocator &alloc);
+  static int convert_string_collation_for_regexp(const common::ObString &in_str,
+                                                 const common::ObCollationType &in_collation,
+                                                 common::ObString &out_str,
+                                                 const common::ObCollationType &out_collation,
+                                                 common::ObIAllocator &alloc);
   static int need_convert_string_collation(const common::ObCollationType &in_collation,
                                            const common::ObCollationType &out_collation,
                                            bool &need_convert);
@@ -154,6 +169,7 @@ public:
                                   const common::ObCollationType& from_collation,
                                   const common::ObString &from_string,
                                   common::ObString &dest_string);
+  static int get_real_expr_without_cast(const ObExpr *expr, const ObExpr *&out_expr);
 
 private:
   static int get_int64_from_num(common::number::ObNumber &nmb,
@@ -235,7 +251,7 @@ public:
     local_tz_wrap_(NULL)
   {
   }
-  ObSolidifiedVarsContext(share::schema::ObLocalSessionVar *local_var, common::ObIAllocator *alloc) :
+  ObSolidifiedVarsContext(ObLocalSessionVar *local_var, common::ObIAllocator *alloc) :
     local_session_var_(local_var),
     alloc_(alloc),
     local_tz_wrap_(NULL)
@@ -250,10 +266,10 @@ public:
     }
   }
   int get_local_tz_info(const sql::ObBasicSessionInfo *session, const common::ObTimeZoneInfo *&tz_info);
-  share::schema::ObLocalSessionVar *get_local_vars() const { return local_session_var_; }
+  ObLocalSessionVar *get_local_vars() const { return local_session_var_; }
   DECLARE_TO_STRING;
 private:
-  share::schema::ObLocalSessionVar *local_session_var_;
+  ObLocalSessionVar *local_session_var_;
   common::ObIAllocator *alloc_;
   //cached vars
   ObTimeZoneInfoWrap *local_tz_wrap_;
@@ -279,7 +295,7 @@ public:
   int get_max_allowed_packet(int64_t &max_size);
   int get_compat_version(uint64_t &compat_version);
   //get the specified solidified var
-  int get_local_var(share::ObSysVarClassType var_type, share::schema::ObSessionSysVar *&sys_var);
+  int get_local_var(share::ObSysVarClassType var_type, ObSessionSysVar *&sys_var);
 private:
   const ObSolidifiedVarsContext *local_session_var_;
   const ObBasicSessionInfo *session_;

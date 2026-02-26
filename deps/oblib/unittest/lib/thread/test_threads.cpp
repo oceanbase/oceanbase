@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "atomic"
 #include "lib/thread/threads.h"
 
 using namespace oceanbase::lib;

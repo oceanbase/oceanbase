@@ -39,9 +39,6 @@ class ObCommonRpcProxy;
 
 namespace sql
 {
-
-typedef common::ObIArray<ObPhyTableLocation> ObPhyTableLocationIArray;
-typedef common::ObIArray<ObCandiTableLoc> ObCandiTableLocIArray;
 typedef common::ObSEArray<ObPhyTableLocation, 2> ObPhyTableLocationFixedArray;
 
 class ObJobControl;
@@ -71,8 +68,6 @@ public:
   virtual ~ObTaskExecutorCtx();
 
   int get_addr_by_virtual_partition_id(int64_t partition_id, common::ObAddr &addr);
-  int set_table_locations(const ObTablePartitionInfoArray &table_partition_infos);
-  int append_table_location(const ObCandiTableLoc &phy_location_info);
 
   const ObTablePartitionInfoArray &get_partition_infos() const;
   inline RemoteExecuteStreamHandle* get_stream_handler()

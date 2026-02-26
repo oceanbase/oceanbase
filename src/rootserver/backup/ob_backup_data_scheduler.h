@@ -46,7 +46,7 @@ public:
   // if can_remove return true, scheudler can remove task from scheduler
   virtual int handle_execute_over(const ObBackupScheduleTask *task, const share::ObHAResultInfo &result_info, bool &can_remove) override;
   // reloading task from inner table which status is pending or doing
-  virtual int get_need_reload_task(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) override; 
+  virtual int reload_task(common::ObIAllocator &allocator, ObBackupTaskSchedulerQueue &queue) override;
 public:
   // common func used by backup
   static int get_backup_scn(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, const bool is_start, share::SCN &scn);
@@ -73,7 +73,6 @@ private:
   int start_sys_backup_data_(const share::ObBackupJobAttr &job_attr);
   int check_log_archive_status_(const uint64_t tenant_id, bool &is_doing);
   int check_initiate_twice_by_same_tenant_(const uint64_t tenant_id, const uint64_t initiator_tenant_id);
-  int check_tenant_set_backup_dest_(const uint64_t tenant_id, bool &is_setted);
   int get_all_tenants_(const bool with_backup_dest, ObIArray<uint64_t> &tenants);
 
   int start_tenant_backup_data_(const share::ObBackupJobAttr &job_attr);
@@ -81,9 +80,14 @@ private:
       const share::ObBackupPathString &backup_path, share::ObBackupType &backup_type);
   int get_need_cancel_tenants_(const uint64_t tenant_id, const common::ObIArray<uint64_t> &backup_tenant_ids, 
       common::ObIArray<uint64_t> &need_cancel_backup_tenants);
-  int do_get_need_reload_task_(const share::ObBackupJobAttr &job, const share::ObBackupSetTaskAttr &set_task_attr, 
-      ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
-      common::ObIAllocator &allocator, ObIArray<ObBackupScheduleTask *> &tasks);
+  int reload_ls_tasks_(
+      const share::ObBackupJobAttr &job, const share::ObBackupSetTaskAttr &set_task_attr,
+      const bool for_update,
+      common::ObIAllocator &allocator, ObBackupTaskSchedulerQueue &queue);
+  int do_reload_single_ls_task_(
+      const share::ObBackupJobAttr &job, const share::ObBackupSetTaskAttr &set_task_attr,
+      share::ObBackupLSTaskAttr &ls_task,
+      common::ObIAllocator &allocator, ObBackupTaskSchedulerQueue &queue);
   int build_task_(const share::ObBackupJobAttr &job, const share::ObBackupSetTaskAttr &set_task_attr, 
       const share::ObBackupLSTaskAttr &ls_task,
       ObIAllocator &allocator, ObBackupScheduleTask *&task);
@@ -97,6 +101,7 @@ private:
       const int64_t result,
       ObIBackupJobMgr &job_mgr,
       share::ObBackupJobAttr &job_attr);
+  bool check_has_canceling_job_(const ObIArray<share::ObBackupJobAttr> &backup_jobs);
 private:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -162,6 +167,7 @@ private:
   int check_dest_validity_();
   int cancel_();
   int update_set_task_to_canceling_();
+  int select_mview_for_update_(const uint64_t tenant_id);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUserTenantBackupJobMgr);
 };

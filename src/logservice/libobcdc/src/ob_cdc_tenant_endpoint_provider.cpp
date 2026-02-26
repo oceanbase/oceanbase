@@ -16,7 +16,6 @@
 
 #include "ob_cdc_tenant_endpoint_provider.h"
 
-#include "ob_log_mysql_connector.h"         // ObLogMySQLConnector
 #include "ob_log_config.h"                  // TCONF
 
 namespace oceanbase

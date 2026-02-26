@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_column_stat_cache.h"
-#include "lib/stat/ob_diagnose_info.h"
 
 namespace oceanbase
 {

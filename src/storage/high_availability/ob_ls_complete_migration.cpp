@@ -12,18 +12,18 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_complete_migration.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "ob_storage_ha_utils.h"
-#include "storage/tablet/ob_tablet.h"
 #include "ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
-#include "observer/omt/ob_tenant.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/high_availability/ob_ls_warmup_migration.h"
+#include "close_modules/shared_storage/storage/high_availability/ob_migration_warmup_dag.h"
+#endif
 
 using namespace oceanbase;
 using namespace common;
@@ -32,6 +32,8 @@ using namespace storage;
 
 ERRSIM_POINT_DEF(WAIT_CLOG_SYNC_FAILED);
 ERRSIM_POINT_DEF(SERVER_STOP_BEFORE_UPDATE_MIGRATION_STATUS);
+ERRSIM_POINT_DEF(COMPLETE_START_RUNNING_FAILED);
+ERRSIM_POINT_DEF(CHANGE_MEMBER_LIST_RETRY_TIMES);
 /******************ObLSCompleteMigrationCtx*********************/
 ObLSCompleteMigrationCtx::ObLSCompleteMigrationCtx()
   : ObIHADagNetCtx(),
@@ -40,7 +42,8 @@ ObLSCompleteMigrationCtx::ObLSCompleteMigrationCtx()
     task_id_(),
     start_ts_(0),
     finish_ts_(0),
-    rebuild_seq_(0)
+    rebuild_seq_(0),
+    chosen_src_()
 {
 }
 
@@ -62,6 +65,7 @@ void ObLSCompleteMigrationCtx::reset()
   start_ts_ = 0;
   finish_ts_ = 0;
   ObIHADagNetCtx::reset();
+  chosen_src_.reset();
 }
 
 int ObLSCompleteMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
@@ -75,11 +79,19 @@ int ObLSCompleteMigrationCtx::fill_comment(char *buf, const int64_t buf_len) con
   } else if (NULL == buf || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ls complete migration : task_id = %s, "
-      "tenant_id = %s, ls_id = %s, src = %s, dest = %s",
-      to_cstring(task_id_), to_cstring(tenant_id_), to_cstring(arg_.ls_id_), to_cstring(arg_.src_.get_server()),
-      to_cstring(arg_.dst_.get_server())))) {
-    LOG_WARN("failed to set comment", K(ret), K(buf), K(pos), K(buf_len));
+  } else {
+    ret = databuff_printf(buf, buf_len, pos, "ls complete migration : task_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, task_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", tenant_id = %lu, ls_id = ", tenant_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", src = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.src_.get_server());
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", dest = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.dst_.get_server());
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to set comment", K(ret), K(buf), K(pos), K(buf_len));
+    }
   }
   return ret;
 }
@@ -94,13 +106,18 @@ ObLSCompleteMigrationParam::ObLSCompleteMigrationParam()
   : arg_(),
     task_id_(),
     result_(OB_SUCCESS),
-    rebuild_seq_(0)
+    rebuild_seq_(0),
+    svr_rpc_proxy_(nullptr),
+    storage_rpc_(nullptr),
+    chosen_src_()
 {
 }
 
 bool ObLSCompleteMigrationParam::is_valid() const
 {
-  return arg_.is_valid() && !task_id_.is_invalid() && rebuild_seq_ >= 0;
+  return arg_.is_valid()
+      && !task_id_.is_invalid() && rebuild_seq_ >= 0
+      && OB_NOT_NULL(svr_rpc_proxy_) && OB_NOT_NULL(storage_rpc_);
 }
 
 void ObLSCompleteMigrationParam::reset()
@@ -109,6 +126,9 @@ void ObLSCompleteMigrationParam::reset()
   task_id_.reset();
   result_ = OB_SUCCESS;
   rebuild_seq_ = 0;
+  svr_rpc_proxy_ = nullptr;
+  storage_rpc_ = nullptr;
+  chosen_src_.reset();
 }
 
 
@@ -141,6 +161,7 @@ int ObLSCompleteMigrationDagNet::init_by_param(const ObIDagInitParam *param)
     ctx_.arg_ = init_param->arg_;
     ctx_.task_id_ = init_param->task_id_;
     ctx_.rebuild_seq_ = init_param->rebuild_seq_;
+    ctx_.chosen_src_ = init_param->chosen_src_;
     if (OB_SUCCESS != init_param->result_) {
       if (OB_FAIL(ctx_.set_result(init_param->result_, false /*allow_retry*/))) {
         LOG_WARN("failed to set result", K(ret), KPC(init_param));
@@ -148,6 +169,8 @@ int ObLSCompleteMigrationDagNet::init_by_param(const ObIDagInitParam *param)
     }
 
     if (OB_SUCC(ret)) {
+      svr_rpc_proxy_ = init_param->svr_rpc_proxy_;
+      storage_rpc_ = init_param->storage_rpc_;
       is_inited_ = true;
     }
   }
@@ -196,6 +219,17 @@ int ObLSCompleteMigrationDagNet::start_running_for_migration_()
     LOG_WARN("failed to add initial dag into dag net", K(ret));
   } else if (OB_FAIL(initial_dag->create_first_task())) {
     LOG_WARN("failed to create first task", K(ret));
+  }
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = COMPLETE_START_RUNNING_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake COMPLETE_START_RUNNING_FAILED", K(ret));
+      }
+    }
+#endif
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(scheduler->add_dag(initial_dag))) {
     LOG_WARN("failed to add initial dag", K(ret), K(*initial_dag));
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
@@ -212,6 +246,13 @@ int ObLSCompleteMigrationDagNet::start_running_for_migration_()
     }
     scheduler->free_dag(*initial_dag); // contain reset_children
     initial_dag = nullptr;
+  }
+
+  if (OB_FAIL(ret)) {
+    const bool need_retry = false;
+    if (OB_SUCCESS != (tmp_ret = ctx_.set_result(ret, need_retry))) {
+      LOG_ERROR("failed to set migration ctx result", K(ret), K(tmp_ret), K(ctx_));
+    }
   }
   return ret;
 }
@@ -235,7 +276,7 @@ bool ObLSCompleteMigrationDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObLSCompleteMigrationDagNet::hash() const
+uint64_t ObLSCompleteMigrationDagNet::hash() const
 {
   int64_t hash_value = 0;
   int tmp_ret = OB_SUCCESS;
@@ -258,11 +299,17 @@ int ObLSCompleteMigrationDagNet::fill_comment(char *buf, const int64_t buf_len) 
     LOG_WARN("ls complete migration dag net do not init ", K(ret));
   } else if (OB_UNLIKELY(0 > ctx_.task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
     ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("failed to get trace id string", K(ret), K(ctx_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-          "ObLSCompleteMigrationDagNet: tenant_id=%s, ls_id=%s, migration_type=%d, trace_id=%s",
-          to_cstring(ctx_.tenant_id_), to_cstring(ctx_.arg_.ls_id_), ctx_.arg_.type_, task_id_str))) {
-    LOG_WARN("failed to fill comment", K(ret), K(ctx_));
+    LOG_WARN("failed to get trace id string", K(ret), "arg", ctx_.arg_);
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos,
+        "ObLSCompleteMigrationDagNet: tenant_id=%lu, ls_id=", ctx_.tenant_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type=%d, trace_id=%s",  ctx_.arg_.type_, task_id_str);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), "arg", ctx_.arg_);
+    }
   }
   return ret;
 }
@@ -273,10 +320,15 @@ int ObLSCompleteMigrationDagNet::fill_dag_net_key(char *buf, const int64_t buf_l
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls complete migration dag net do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObLSCompleteMigrationDagNet: ls_id = %s, migration_type = %s",
-      to_cstring(ctx_.arg_.ls_id_), ObMigrationOpType::get_str(ctx_.arg_.type_)))) {
-    LOG_WARN("failed to fill comment", K(ret), K(ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObLSCompleteMigrationDagNet: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type = %s", ObMigrationOpType::get_str(ctx_.arg_.type_));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(ctx_));
+    }
   }
   return ret;
 }
@@ -285,10 +337,11 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
   int32_t result = OB_SUCCESS;
-  ObLSMigrationHandler *ls_migration_handler = nullptr;
   ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObLSMigrationHandler *ls_migration_handler = nullptr;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   LOG_INFO("start clear dag net ctx", K(ctx_));
 
   if (!is_inited_) {
@@ -299,27 +352,43 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("ls should not be NULL", K(ret), K(ctx_));
+  } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), K(ctx_));
   } else {
-    if (OB_SUCCESS != (tmp_ret = update_migration_status_(ls))) {
+    if (OB_TMP_FAIL(update_migration_status_(ls))) {
       LOG_WARN("failed to update migration status", K(tmp_ret), K(ret), K(ctx_));
     }
 
-    if (OB_SUCCESS != (tmp_ret = report_ls_meta_table_(ls))) {
+    if (OB_TMP_FAIL(report_ls_meta_table_(ls))) {
       LOG_WARN("failed to report ls meta table", K(tmp_ret), K(ret), K(ctx_));
     }
 
-    if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls migration handler should not be NULL", K(tmp_ret), K(ctx_));
-    } else if (OB_FAIL(ctx_.get_result(result))) {
+    if (OB_FAIL(ctx_.get_result(result))) {
       LOG_WARN("failed to get ls complate migration ctx result", K(ret), K(ctx_));
-    } else if (OB_FAIL(ls_migration_handler->switch_next_stage(result))) {
-      LOG_WARN("failed to report result", K(ret), K(result), K(ctx_));
+    } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
+      LOG_WARN("failed to set result", K(ret), K(result), K(ctx_));
+    }
+
+    if (is_shared_storage) {
+#ifdef OB_BUILD_SHARED_STORAGE
+      int tmp_ret = OB_SUCCESS;
+      ObSSMicroCache *micro_cache = nullptr;
+      if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("micro_cache should not be nullptr", K(tmp_ret), K(ret), K(ctx_));
+      } else if (FALSE_IT(micro_cache->finish_free_space_for_prewarm())) {
+      }
+#endif
     }
 
     ctx_.finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_.finish_ts_ - ctx_.start_ts_;
     FLOG_INFO("finish ls complete migration dag net", "ls id", ctx_.arg_.ls_id_, "type", ctx_.arg_.type_, K(cost_ts));
+  }
+
+  if (OB_NOT_NULL(ls_migration_handler)) {
+    ls_migration_handler->set_dag_net_cleared();
   }
   return ret;
 }
@@ -432,16 +501,8 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
             }
             LOG_ERROR("current migration status is final state and unexpected", K(OB_ERR_UNEXPECTED), K(current_migration_status), K(ctx_));
           }
-        } else if (ctx_.is_failed()) {
-          if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_) {
-            if (OB_FAIL(trans_rebuild_fail_status_(*ls, current_migration_status, new_migration_status))) {
-              LOG_WARN("failed check rebuild status", K(ret), K(current_migration_status), K(new_migration_status));
-            }
-          } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status, new_migration_status))) {
-            LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status), K(new_migration_status));
-          }
-        } else {
-          new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+        } else if (OB_FAIL(get_next_migration_status_(ls, current_migration_status, new_migration_status))) {
+          LOG_WARN("failed to get next migration status", K(ret), K(ctx_));
         }
 
         if (OB_FAIL(ret)) {
@@ -470,6 +531,53 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
       LOG_ERROR("failed to set result", K(ret), K(ret), K(tmp_ret), K(ctx_));
     }
   }
+  return ret;
+}
+
+int ObLSCompleteMigrationDagNet::get_next_migration_status_(
+    ObLS *ls,
+    const ObMigrationStatus current_migration_status,
+    ObMigrationStatus &next_migration_status)
+{
+  int ret = OB_SUCCESS;
+  if (ctx_.is_failed()) {
+    if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_) {
+      if (OB_FAIL(trans_rebuild_fail_status_(*ls, current_migration_status, next_migration_status))) {
+        LOG_WARN("failed check rebuild status", K(ret), K(current_migration_status), K(next_migration_status));
+      }
+    } else if (OB_MIGRATION_STATUS_REPLACE_HOLD == current_migration_status) {
+      bool is_valid_member = false;
+      if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member_after_inc_config_version(ctx_.arg_.ls_id_,
+                                                                                            false /* with_leader */,
+                                                                                            is_valid_member))) {
+        LOG_WARN("failed check self valid member after inc config version", K(ret), K(ctx_), K(current_migration_status));
+      } else if (is_valid_member) {
+        ctx_.reset_result();
+        next_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+        LOG_INFO("self is valid member after inc config version", K(ctx_), K(current_migration_status));
+      } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status, next_migration_status))) {
+        LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status), K(next_migration_status));
+      } else {
+        LOG_INFO("self is not valid member after inc config version", K(ctx_), K(current_migration_status));
+      }
+
+      if (OB_SUCC(ret)) {
+        SERVER_EVENT_ADD("storage_ha", "check_self_is_valid_member_after_inc_config_version",
+                         "tenant_id", ctx_.tenant_id_,
+                         "ls_id", ctx_.arg_.ls_id_.id(),
+                         "current_migration_status", current_migration_status,
+                         "next_migration_status", next_migration_status,
+                         "task_id", ctx_.task_id_,
+                         "ret", ret,
+                         ObMigrationOpType::get_str(ctx_.arg_.type_));
+      }
+    } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status, next_migration_status))) {
+      LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status), K(next_migration_status));
+    }
+  } else {
+    next_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+  }
+
   return ret;
 }
 
@@ -583,7 +691,7 @@ bool ObCompleteMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObCompleteMigrationDag::hash() const
+uint64_t ObCompleteMigrationDag::hash() const
 {
   int ret = OB_SUCCESS;
   int64_t hash_value = 0;
@@ -610,13 +718,16 @@ int ObCompleteMigrationDag::fill_info_param(compaction::ObIBasicInfoParam *&out_
   ObLSCompleteMigrationCtx *ctx = nullptr;
 
   if (FALSE_IT(ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                 static_cast<int64_t>(ctx->tenant_id_), ctx->arg_.ls_id_.id(),
                                 static_cast<int64_t>(ctx->arg_.type_),
-                                "dag_net_task_id", to_cstring(ctx->task_id_),
-                                "src", to_cstring(ctx->arg_.src_.get_server()),
-                                "dest", to_cstring(ctx->arg_.dst_.get_server())))) {
-    LOG_WARN("failed to fill info param", K(ret));
+                                "dag_net_task_id", helper.convert(ctx->task_id_),
+                                "src", helper.convert(ctx->arg_.src_.get_server()),
+                                "dest", helper.convert(ctx->arg_.dst_.get_server())))) {
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -659,6 +770,7 @@ int ObInitialCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len
 {
   int ret = OB_SUCCESS;
   ObLSCompleteMigrationCtx *self_ctx = nullptr;
+  ObCStringHelper helper;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial prepare migration dag do not init", K(ret));
@@ -668,7 +780,7 @@ int ObInitialCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len
   } else if (FALSE_IT(self_ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
          "ObInitialCompleteMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
+         helper.convert(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
          ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
   }
@@ -742,8 +854,10 @@ int ObInitialCompleteMigrationTask::init()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(prepare_dag_net = static_cast<ObLSCompleteMigrationDagNet*>(dag_net))) {
+  } else if (OB_ISNULL(ctx_ = prepare_dag_net->get_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx_ is nullptr", K(ret), KPC(prepare_dag_net));
   } else {
-    ctx_ = prepare_dag_net->get_ctx();
     dag_net_ = dag_net;
     is_inited_ = true;
     LOG_INFO("succeed init initial complete migration task", "ls id", ctx_->arg_.ls_id_,
@@ -756,12 +870,30 @@ int ObInitialCompleteMigrationTask::process()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial complete migration task do not init", K(ret));
-  } else if (OB_FAIL(generate_migration_dags_())) {
-    LOG_WARN("failed to generate migration dags", K(ret), K(*ctx_));
+  } else {
+    bool open_migration_warmup = true;
+    const bool is_replace_ls_op = ObMigrationOpType::REPLACE_LS_OP == ctx_->arg_.type_;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx_->tenant_id_));
+    if (tenant_config.is_valid()) {
+      open_migration_warmup = tenant_config->_enable_ss_migration_prewarm;
+    }
+    if (is_shared_storage && !is_replace_ls_op && open_migration_warmup && !ctx_->is_failed()) {
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (OB_FAIL(generate_migration_dags_after_ss_mode_())) {
+        LOG_WARN("failed to generate migration dags", K(ret), K(*ctx_));
+      }
+#endif
+    } else if (OB_FAIL(generate_migration_dags_())) {
+      LOG_WARN("failed to generate migration dags", K(ret), K(*ctx_));
+    }
   }
+
+
+
   if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
     LOG_WARN("failed to record server event", K(tmp_ret), K(ret));
   }
@@ -799,7 +931,7 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObStartCompleteMigrationDag *start_complete_dag = nullptr;
+  ObWaitDataReadyDag *wait_data_ready_dag = nullptr;
   ObFinishCompleteMigrationDag *finish_complete_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   ObInitialCompleteMigrationDag *initial_complete_migration_dag = nullptr;
@@ -817,19 +949,19 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, start_complete_dag))) {
-      LOG_WARN("failed to alloc start complete migration dag ", K(ret));
+    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, wait_data_ready_dag))) {
+      LOG_WARN("failed to alloc wait data ready dag ", K(ret));
     } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, finish_complete_dag))) {
       LOG_WARN("failed to alloc finish complete migration dag", K(ret));
-    } else if (OB_FAIL(start_complete_dag->init(dag_net_))) {
-      LOG_WARN("failed to init start complete migration dag", K(ret));
+    } else if (OB_FAIL(wait_data_ready_dag->init(dag_net_))) {
+      LOG_WARN("failed to init wait data ready dag", K(ret));
     } else if (OB_FAIL(finish_complete_dag->init(dag_net_))) {
       LOG_WARN("failed to init finish complete migration dag", K(ret));
-    } else if (OB_FAIL(this->get_dag()->add_child(*start_complete_dag))) {
-      LOG_WARN("failed to add start complete dag", K(ret), KPC(start_complete_dag));
-    } else if (OB_FAIL(start_complete_dag->create_first_task())) {
+    } else if (OB_FAIL(this->get_dag()->add_child(*wait_data_ready_dag))) {
+      LOG_WARN("failed to add wait data ready dag", K(ret), KPC(wait_data_ready_dag));
+    } else if (OB_FAIL(wait_data_ready_dag->create_first_task())) {
       LOG_WARN("failed to create first task", K(ret));
-    } else if (OB_FAIL(start_complete_dag->add_child(*finish_complete_dag))) {
+    } else if (OB_FAIL(wait_data_ready_dag->add_child(*finish_complete_dag))) {
       LOG_WARN("failed to add finish complete migration dag as child", K(ret));
     } else if (OB_FAIL(finish_complete_dag->create_first_task())) {
       LOG_WARN("failed to create first task", K(ret));
@@ -839,8 +971,8 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
         LOG_WARN("Fail to add task", K(ret));
         ret = OB_EAGAIN;
       }
-    } else if (OB_FAIL(scheduler->add_dag(start_complete_dag))) {
-      LOG_WARN("failed to add dag", K(ret), K(*start_complete_dag));
+    } else if (OB_FAIL(scheduler->add_dag(wait_data_ready_dag))) {
+      LOG_WARN("failed to add dag", K(ret), K(*wait_data_ready_dag));
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
         LOG_WARN("Fail to add task", K(ret));
         ret = OB_EAGAIN;
@@ -848,13 +980,11 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
 
       if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_complete_dag))) {
         LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_complete_migration_dag));
-      } else {
-        finish_complete_dag = nullptr;
       }
       finish_complete_dag = nullptr;
     } else {
-      LOG_INFO("succeed to schedule start complete migration dag", K(*start_complete_dag));
-      start_complete_dag = nullptr;
+      LOG_INFO("succeed to add all dag", K(*wait_data_ready_dag), K(*finish_complete_dag));
+      wait_data_ready_dag = nullptr;
       finish_complete_dag = nullptr;
     }
 
@@ -864,9 +994,9 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
         finish_complete_dag = nullptr;
       }
 
-      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_complete_dag)) {
-        scheduler->free_dag(*start_complete_dag);
-        start_complete_dag = nullptr;
+      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(wait_data_ready_dag)) {
+        scheduler->free_dag(*wait_data_ready_dag);
+        wait_data_ready_dag = nullptr;
       }
 
       if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/, this->get_dag()->get_type()))) {
@@ -877,21 +1007,160 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
   return ret;
 }
 
-/******************ObStartCompleteMigrationDag*********************/
-ObStartCompleteMigrationDag::ObStartCompleteMigrationDag()
-  : ObCompleteMigrationDag(share::ObDagType::DAG_TYPE_START_COMPLETE_MIGRATION),
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObInitialCompleteMigrationTask::generate_migration_dags_after_ss_mode_()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const bool enable_migration_warmup_dag = ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) ? true : false);
+  ObWaitDataReadyDag *wait_data_ready_dag = nullptr;
+  ObFinishCompleteMigrationDag *finish_complete_dag = nullptr;
+  ObTenantDagScheduler *scheduler = nullptr;
+  ObInitialCompleteMigrationDag *initial_complete_migration_dag = nullptr;
+  ObMigrationWarmupDag *migration_warmup_dag = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("initial prepare migration task do not init", K(ret));
+  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_ISNULL(initial_complete_migration_dag = static_cast<ObInitialCompleteMigrationDag *>(this->get_dag()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("initial complete migration dag should not be NULL", K(ret), KP(initial_complete_migration_dag));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
+  } else {
+    if (enable_migration_warmup_dag) {
+      if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, migration_warmup_dag))) {
+        LOG_WARN("failed to alloc migrate warmup dag ", K(ret));
+      }
+    }
+    if (FAILEDx(scheduler->alloc_dag_with_priority(prio, wait_data_ready_dag))) {
+      LOG_WARN("failed to alloc wait data ready dag ", K(ret));
+    } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, finish_complete_dag))) {
+      LOG_WARN("failed to alloc finish complete migration dag", K(ret));
+    }
+    if (OB_SUCC(ret) && enable_migration_warmup_dag) {
+      if (OB_FAIL(migration_warmup_dag->init(dag_net_))) {
+        LOG_WARN("failed to init migrate warmup dag", K(ret));
+      }
+    }
+    if (FAILEDx(wait_data_ready_dag->init(dag_net_))) {
+      LOG_WARN("failed to init wait data ready dag", K(ret));
+    } else if (OB_FAIL(finish_complete_dag->init(dag_net_))) {
+      LOG_WARN("failed to init finish complete migration dag", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (enable_migration_warmup_dag) {
+        if (OB_FAIL(this->get_dag()->add_child(*migration_warmup_dag))) {
+          LOG_WARN("failed to add migrate warmup dag", K(ret), KPC(migration_warmup_dag));
+        } else if (OB_FAIL(migration_warmup_dag->create_first_task())) {
+          LOG_WARN("failed to create first task", K(ret));
+        } else if (OB_FAIL(migration_warmup_dag->add_child(*wait_data_ready_dag))) {
+          LOG_WARN("failed to add finish complete migration dag as child", K(ret));
+        }
+      } else { // !enable_migration_warmup_dag
+        if (OB_FAIL(this->get_dag()->add_child(*wait_data_ready_dag))) {
+          LOG_WARN("failed to add wait data ready dag", K(ret), KPC(wait_data_ready_dag));
+        }
+      }
+    }
+    if (FAILEDx(wait_data_ready_dag->create_first_task())) {
+      LOG_WARN("failed to create first task", K(ret));
+    } else if (OB_FAIL(wait_data_ready_dag->add_child(*finish_complete_dag))) {
+      LOG_WARN("failed to add finish complete migration dag as child", K(ret));
+    } else if (OB_FAIL(finish_complete_dag->create_first_task())) {
+      LOG_WARN("failed to create first task", K(ret));
+    } else if (OB_FAIL(scheduler->add_dag(finish_complete_dag))) {
+      LOG_WARN("failed to add finish complete migration dag", K(ret), K(*finish_complete_dag));
+      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+        LOG_WARN("Fail to add task", K(ret));
+        ret = OB_EAGAIN;
+      }
+    } else if (OB_FAIL(scheduler->add_dag(wait_data_ready_dag))) {
+      LOG_WARN("failed to add dag", K(ret), K(*wait_data_ready_dag));
+      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+        LOG_WARN("Fail to add task", K(ret));
+        ret = OB_EAGAIN;
+      }
+
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_complete_dag))) {
+        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_complete_migration_dag));
+      }
+      finish_complete_dag = nullptr;
+    }
+    if (OB_SUCC(ret) && enable_migration_warmup_dag) {
+      if (OB_FAIL(scheduler->add_dag(migration_warmup_dag))) {
+        LOG_WARN("failed to add dag", K(ret), K(*migration_warmup_dag));
+        if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+          LOG_WARN("Fail to add task", K(ret));
+          ret = OB_EAGAIN;
+        }
+
+        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_complete_dag))) {
+          LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_complete_migration_dag));
+        }
+
+        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(wait_data_ready_dag))) {
+          LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_complete_migration_dag));
+        }
+        finish_complete_dag = nullptr;
+        wait_data_ready_dag = nullptr;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (enable_migration_warmup_dag) {
+        LOG_INFO("succeed to add all dag", K(*migration_warmup_dag), K(*wait_data_ready_dag), K(*finish_complete_dag));
+      } else { // !enable_migration_warmup_dag
+        LOG_INFO("succeed to add all dag", K(*wait_data_ready_dag), K(*finish_complete_dag));
+      }
+      migration_warmup_dag = nullptr;
+      wait_data_ready_dag = nullptr;
+      finish_complete_dag = nullptr;
+    }
+
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_complete_dag)) {
+        scheduler->free_dag(*finish_complete_dag);
+        finish_complete_dag = nullptr;
+      }
+
+      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(wait_data_ready_dag)) {
+        scheduler->free_dag(*wait_data_ready_dag);
+        wait_data_ready_dag = nullptr;
+      }
+
+      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(migration_warmup_dag)) {
+        scheduler->free_dag(*migration_warmup_dag);
+        migration_warmup_dag = nullptr;
+      }
+
+      if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/, this->get_dag()->get_type()))) {
+        LOG_WARN("failed to set complete migration result", K(ret), K(tmp_ret), K(*ctx_));
+      }
+    }
+  }
+  return ret;
+}
+#endif
+/******************ObWaitDataReadyDag*********************/
+ObWaitDataReadyDag::ObWaitDataReadyDag()
+  : ObCompleteMigrationDag(share::ObDagType::DAG_TYPE_WAIT_DATA_READY),
     is_inited_(false)
 {
 }
 
-ObStartCompleteMigrationDag::~ObStartCompleteMigrationDag()
+ObWaitDataReadyDag::~ObWaitDataReadyDag()
 {
 }
 
-int ObStartCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
+int ObWaitDataReadyDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
   ObLSCompleteMigrationCtx *self_ctx = nullptr;
+  ObCStringHelper helper;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial prepare migration dag do not init", K(ret));
@@ -900,24 +1169,24 @@ int ObStartCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) 
     LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
   } else if (FALSE_IT(self_ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-         "ObStartPrepareMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
-         ObIDag::get_dag_prio_str(this->get_priority())))) {
+         "ObWaitDataReadyDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+         helper.convert(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
+	 ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
   }
   return ret;
 }
 
-int ObStartCompleteMigrationDag::init(ObIDagNet *dag_net)
+int ObWaitDataReadyDag::init(ObIDagNet *dag_net)
 {
   int ret = OB_SUCCESS;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("start complete migration dag init twice", K(ret));
+    LOG_WARN("wait data ready dag init twice", K(ret));
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init start complete migration dag get invalid argument", K(ret), KP(dag_net));
+    LOG_WARN("init wait data ready dag get invalid argument", K(ret), KP(dag_net));
   } else if (OB_FAIL(prepare_ctx(dag_net))) {
     LOG_WARN("failed to prepare ctx", K(ret));
   } else {
@@ -926,18 +1195,18 @@ int ObStartCompleteMigrationDag::init(ObIDagNet *dag_net)
   return ret;
 }
 
-int ObStartCompleteMigrationDag::create_first_task()
+int ObWaitDataReadyDag::create_first_task()
 {
   int ret = OB_SUCCESS;
-  ObStartCompleteMigrationTask *task = NULL;
+  ObWaitDataReadyTask *task = NULL;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration dag do not init", K(ret));
+    LOG_WARN("wait data ready dag do not init", K(ret));
   } else if (OB_FAIL(alloc_task(task))) {
     LOG_WARN("Fail to alloc task", K(ret));
   } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init start complete migration task", K(ret), KPC(ha_dag_net_ctx_));
+    LOG_WARN("failed to init wait data ready task", K(ret), KPC(ha_dag_net_ctx_));
   } else if (OB_FAIL(add_task(*task))) {
     LOG_WARN("Fail to add task", K(ret));
   } else {
@@ -946,8 +1215,8 @@ int ObStartCompleteMigrationDag::create_first_task()
   return ret;
 }
 
-/******************ObStartCompleteMigrationTask*********************/
-ObStartCompleteMigrationTask::ObStartCompleteMigrationTask()
+/******************ObWaitDataReadyTask*********************/
+ObWaitDataReadyTask::ObWaitDataReadyTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
     ls_handle_(),
@@ -957,11 +1226,11 @@ ObStartCompleteMigrationTask::ObStartCompleteMigrationTask()
 {
 }
 
-ObStartCompleteMigrationTask::~ObStartCompleteMigrationTask()
+ObWaitDataReadyTask::~ObWaitDataReadyTask()
 {
 }
 
-int ObStartCompleteMigrationTask::init()
+int ObWaitDataReadyTask::init()
 {
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
@@ -969,7 +1238,7 @@ int ObStartCompleteMigrationTask::init()
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("start complete migration task init twice", K(ret));
+    LOG_WARN("wait data ready task init twice", K(ret));
   } else if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
@@ -985,34 +1254,41 @@ int ObStartCompleteMigrationTask::init()
   } else {
     ctx_ = complete_dag_net->get_ctx();
     is_inited_ = true;
-    LOG_INFO("succeed init start complete migration task", "ls id", ctx_->arg_.ls_id_,
+    LOG_INFO("succeed init wait data ready task", "ls id", ctx_->arg_.ls_id_,
         "dag_id", *ObCurTraceId::get_trace_id(), "dag_net_id", ctx_->task_id_);
   }
   return ret;
 }
 
-int ObStartCompleteMigrationTask::process()
+int ObWaitDataReadyTask::process()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  bool with_ssstore = true;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("start wait data ready task do not init", K(ret));
   } else if (ctx_->is_failed()) {
     //do nothing
-  } else if (OB_FAIL(update_ls_migration_status_wait_())) {
-    LOG_WARN("failed to update ls migration wait", K(ret), KPC(ctx_));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (OB_FAIL(force_elect_and_wait_become_leader_())) {
+    LOG_WARN("failed wait elect as leader", K(ret), KPC(ctx_));
+#endif
+  } else if (FALSE_IT(with_ssstore = ObReplicaTypeCheck::is_replica_with_ssstore(ctx_->arg_.dst_.get_replica_type()))) {
   } else if (OB_FAIL(wait_log_sync_())) {
     LOG_WARN("failed wait log sync", K(ret), KPC(ctx_));
   } else if (OB_FAIL(wait_log_replay_sync_())) {
     LOG_WARN("failed to wait log replay sync", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(wait_transfer_table_replace_())) {
-    LOG_WARN("failed to wait transfer table replace", K(ret), KPC(ctx_));
   } else if (OB_FAIL(check_all_tablet_ready_())) {
     LOG_WARN("failed to check all tablet ready", K(ret), KPC(ctx_));
   } else if (OB_FAIL(wait_log_replay_to_max_minor_end_scn_())) {
     LOG_WARN("failed to wait log replay to max minor end scn", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ObStorageHAUtils::check_disk_space())) {
+  } else if (OB_FAIL(update_ls_migration_status_wait_())) {
+    LOG_WARN("failed to update ls migration wait", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(wait_transfer_table_replace_())) {
+    LOG_WARN("failed to wait transfer table replace", K(ret), KPC(ctx_));
+  } else if (with_ssstore && OB_FAIL(ObStorageHAUtils::check_disk_space())) {
     LOG_WARN("failed to check disk space", K(ret), KPC(ctx_));
   } else if (OB_FAIL(update_ls_migration_status_hold_())) {
     LOG_WARN("failed to update ls migration status hold", K(ret), KPC(ctx_));
@@ -1032,7 +1308,7 @@ int ObStartCompleteMigrationTask::process()
   return ret;
 }
 
-int ObStartCompleteMigrationTask::get_wait_timeout_(int64_t &timeout)
+int ObWaitDataReadyTask::get_wait_timeout_(int64_t &timeout)
 {
   int ret = OB_SUCCESS;
   timeout = 10_min;
@@ -1043,7 +1319,7 @@ int ObStartCompleteMigrationTask::get_wait_timeout_(int64_t &timeout)
   return ret;
 }
 
-int ObStartCompleteMigrationTask::wait_log_sync_()
+int ObWaitDataReadyTask::wait_log_sync_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -1057,7 +1333,7 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("migration finish task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(ctx_));
@@ -1105,7 +1381,7 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
         LOG_WARN("failed to get end scn", K(ret), KPC(ctx_));
       } else {
         bool is_timeout = false;
-        if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("log is not sync, retry next loop", "arg", ctx_->arg_);
         }
 
@@ -1156,7 +1432,7 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
   return ret;
 }
 
-int ObStartCompleteMigrationTask::wait_log_replay_sync_()
+int ObWaitDataReadyTask::wait_log_replay_sync_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -1175,7 +1451,7 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (OB_ISNULL(log_service = (MTL(logservice::ObLogService *)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log service should not be NULL", K(ret), KP(log_replay_service));
@@ -1188,11 +1464,11 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(ctx_));
-  } else if (OB_FAIL(check_need_wait_(ls, need_wait))) {
+  } else if (OB_FAIL(check_need_wait_log_replay_(ls, need_wait))) {
     LOG_WARN("failed to check need wait log replay", K(ret), KPC(ctx_));
   } else if (!need_wait) {
     FLOG_INFO("no need wait replay log sync", KPC(ctx_));
-  } else if (!is_primay_tenant && OB_FAIL(ObStorageHAUtils::get_readable_scn_with_retry(readable_scn))) {
+  } else if (OB_FAIL(ObStorageHAUtils::get_readable_scn_with_retry(readable_scn))) {
     LOG_WARN("failed to get readable scn", K(ret), KPC(ctx_));
   } else if (OB_FAIL(get_wait_timeout_(timeout))) {
     LOG_WARN("failed to get wait timeout", K(ret));
@@ -1224,12 +1500,6 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
           ret = OB_LS_NEED_REBUILD;
           LOG_WARN("ls need rebuild", K(ret), KPC(ls));
         }
-      } else if (OB_FAIL(log_replay_service->is_replay_done(ls->get_ls_id(), log_sync_lsn_, is_done))) {
-        LOG_WARN("failed to check is replay done", K(ret), KPC(ls), K(log_sync_lsn_));
-      } else if (is_done) {
-        wait_log_replay_success = true;
-        const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
-        LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts));
       } else if (OB_FAIL(ls->get_max_decided_scn(current_replay_scn))) {
         LOG_WARN("failed to get current replay log ts", K(ret), KPC(ctx_));
       } else if (!is_primay_tenant && current_replay_scn >= readable_scn) {
@@ -1237,12 +1507,18 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
         LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts),
             K(is_primay_tenant), K(current_replay_scn), K(readable_scn));
+      } else if (OB_FAIL(log_replay_service->is_replay_done(ls->get_ls_id(), log_sync_lsn_, is_done))) {
+        LOG_WARN("failed to check is replay done", K(ret), KPC(ls), K(log_sync_lsn_));
+      } else if (is_done && current_replay_scn >= readable_scn) {
+        wait_log_replay_success = true;
+        const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
+        LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts), K(current_replay_scn), K(readable_scn));
       }
 
       if (OB_SUCC(ret) && !wait_log_replay_success) {
         current_ts = ObTimeUtility::current_time();
         bool is_timeout = false;
-        if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("replay log is not sync, retry next loop", "arg", ctx_->arg_,
               "current_replay_scn", current_replay_scn,
               "log_sync_lsn", log_sync_lsn_);
@@ -1286,19 +1562,22 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
   return ret;
 }
 
-int ObStartCompleteMigrationTask::wait_transfer_table_replace_()
+int ObWaitDataReadyTask::wait_transfer_table_replace_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   const int64_t check_all_tablet_start_ts = ObTimeUtility::current_time();
   const bool need_initial_state = false;
+  const bool need_sorted_tablet_id = false;
   bool need_wait_transfer_table_replace = false;
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 10_min;
 
+  SCN transfer_scn;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to change member list", K(ret), KP(ls));
@@ -1306,15 +1585,14 @@ int ObStartCompleteMigrationTask::wait_transfer_table_replace_()
     LOG_WARN("failed to check need wait transfer table replace", K(ret), KPC(ctx_));
   } else if (!need_wait_transfer_table_replace) {
     LOG_INFO("no need wait transfer table replace", KPC(ls));
+  } else if (OB_FAIL(get_transfer_scn_and_wait_barrier_match_if_need_(ls, transfer_scn))) {
+    LOG_WARN("failed to get transfer scn and wait barrier match", K(ret), KPC(ctx_));
   } else if (OB_FAIL(get_wait_timeout_(timeout))) {
     LOG_WARN("failed to get wait timeout", K(ret));
   } else if (OB_FAIL(init_timeout_ctx_(timeout, timeout_ctx))) {
     LOG_WARN("failed to init timeout ctx", K(ret));
   } else {
-    SERVER_EVENT_ADD("storage_ha", "wait_transfer_table_replace",
-                  "tenant_id", ctx_->tenant_id_,
-                  "ls_id", ls->get_ls_id().id());
-    ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
+    ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state, need_sorted_tablet_id);
     ObTabletID tablet_id;
     if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
       LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));
@@ -1327,30 +1605,301 @@ int ObStartCompleteMigrationTask::wait_transfer_table_replace_()
           } else {
             LOG_WARN("failed to get tablet id", K(ret));
           }
-        } else if (OB_FAIL(check_tablet_transfer_table_ready_(tablet_id, ls, timeout))) {
+        } else if (OB_FAIL(check_tablet_transfer_table_ready_(tablet_id, transfer_scn, ls, timeout))) {
           LOG_WARN("failed to check tablet ready", K(ret), K(tablet_id), KPC(ls));
         }
       }
-      LOG_INFO("check all tablet transfer table ready finish", K(ret), "ls_id", ctx_->arg_.ls_id_,
-          "cost ts", ObTimeUtility::current_time() - check_all_tablet_start_ts);
     }
+
+    const int64_t cost = ObTimeUtility::current_time() - check_all_tablet_start_ts;
+    LOG_INFO("check all tablet transfer table ready finish", K(ret), "ls_id", ctx_->arg_.ls_id_,
+             K(transfer_scn), K(cost));
+
+    SERVER_EVENT_ADD("storage_ha", "wait_transfer_table_replace",
+                     "tenant_id", ctx_->tenant_id_,
+                     "ls_id", ls->get_ls_id().id(),
+                     "transfer_scn", transfer_scn,
+                     "cost", cost,
+                     "task_id", ctx_->task_id_,
+                     "ret", ret,
+                     ObMigrationOpType::get_str(ctx_->arg_.type_));
   }
   return ret;
 }
 
-int ObStartCompleteMigrationTask::change_member_list_with_retry_()
+int ObWaitDataReadyTask::get_transfer_scn_and_wait_barrier_match_if_need_(
+    ObLS *ls,
+    SCN &transfer_scn)
+{
+  int ret = OB_SUCCESS;
+
+  ObLSTransferMetaInfo transfer_meta_info;
+
+  if (OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret));
+  } else if (ObMigrationOpType::REPLACE_LS_OP != ctx_->arg_.type_) {
+    // all transfer tasks should complete the replace operation.
+    transfer_scn.set_max();
+  } else if (OB_FAIL(ls->get_transfer_meta(transfer_scn, transfer_meta_info))) {
+    LOG_WARN("failed to get transfer meta", K(ret), KPC(ls));
+  } else if (!transfer_meta_info.is_prepare_status()) {
+    LOG_INFO("no need check last transfer match barrier if not in prepare status",
+      "ls_id", ls->get_ls_id(), K(transfer_scn), K(transfer_meta_info));
+  } else {
+    // need check barrier for last active transfer task
+    // 1. check if each tablet in the last transfer task has completed the replace operation.
+    bool is_complete = true;
+    ObTabletHandle tablet_handle;
+    ObTablet *tablet = nullptr;
+    ARRAY_FOREACH_X(transfer_meta_info.tablet_id_array_, i, cnt, OB_SUCC(ret) && is_complete) {
+      const common::ObTabletID &tablet_id = transfer_meta_info.tablet_id_array_.at(i);
+      if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle))) {
+        if (OB_TABLET_NOT_EXIST == ret) {
+          if (OB_FAIL(ctx_->set_result(OB_TABLET_NOT_EXIST, false /*allow_retry*/, this->get_dag()->get_type()))) {
+            LOG_WARN("failed to set result", K(ret), KPC(ctx_));
+          } else {
+            LOG_WARN("transfer in tablet is not exist", K(ret), KPC(ctx_),
+              K(tablet_id), KPC(ls), K(transfer_scn), K(transfer_meta_info));
+          }
+        } else {
+          LOG_WARN("failed to get tablet", K(ret), KPC(ctx_),
+            K(tablet_id), KPC(ls), K(transfer_scn), K(transfer_meta_info));
+        }
+      } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_handle), K(tablet_id));
+      } else if (tablet->get_tablet_meta().transfer_info_.transfer_start_scn_ != transfer_meta_info.src_scn_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("transfer scn not match", K(ret), KPC(tablet), KPC(ls), K(transfer_scn), K(transfer_meta_info));
+      } else if (!tablet->get_tablet_meta().has_transfer_table()) {
+        LOG_INFO("dest tablet does not have transfer table", "ls_id", ls->get_ls_id(), "tablet_meta", tablet->get_tablet_meta());
+      } else {
+        is_complete = false;
+        LOG_INFO("dest tablet has transfer table", "ls_id", ls->get_ls_id(), "tablet_meta", tablet->get_tablet_meta());
+      }
+    }
+
+    // 2. wait source ls match barrier
+    if (OB_FAIL(ret)) {
+    } else if (is_complete) {
+      LOG_INFO("each tablet in the last transfer task has completed the replace operation",
+        "ls_id", ls->get_ls_id(), K(transfer_scn), K(transfer_meta_info));
+    } else if (OB_FAIL(wait_src_ls_match_barrier_(transfer_scn, transfer_meta_info))) {
+      LOG_WARN("failed to wait source ls match barrier", K(ret), K(transfer_scn), K(transfer_meta_info));
+    }
+  }
+
+  return ret;
+}
+
+int ObWaitDataReadyTask::wait_src_ls_match_barrier_(
+    const share::SCN &transfer_scn,
+    const ObLSTransferMetaInfo &transfer_meta_info)
+{
+  int ret = OB_SUCCESS;
+
+  // TODO(zeyong): timeout ctx is required to control all data ready task timeout.
+  ObTimeoutCtx timeout_ctx;
+  int64_t timeout = 10_min;
+
+  if (!transfer_meta_info.is_prepare_status()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("transfer status not prepare", K(ret), K(transfer_meta_info));
+  } else if (OB_FAIL(get_wait_timeout_(timeout))) {
+    LOG_WARN("failed to get wait timeout", K(ret));
+  } else if (OB_FAIL(init_timeout_ctx_(timeout, timeout_ctx))) {
+    LOG_WARN("failed to init timeout ctx", K(ret));
+  } else {
+    const int64_t wait_barrier_start_ts = ObTimeUtility::current_time();
+    const ObLSID src_ls_id = transfer_meta_info.src_ls_;
+    const SCN transfer_start_scn = transfer_meta_info.src_scn_;
+
+    LOG_INFO("wait source ls match barrier", "ls_id", transfer_meta_info.src_ls_,
+                                              K(transfer_scn),
+                                              K(transfer_meta_info));
+
+    // 1. wait source ls migration status none
+    ObLSService *ls_service = nullptr;
+    ObLSHandle src_ls_handle;
+    ObLS *src_ls = nullptr;
+    ObMigrationStatus src_ls_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+    SCN max_decided_scn;
+
+    if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get ObLSService from MTL", K(ret));
+    }
+
+    // TODO(zeyong): exit the while loop after dag net is cancel
+    while(OB_SUCC(ret)) {
+      if (timeout_ctx.is_timeouted()) {
+        if (OB_FAIL(ctx_->set_result(OB_TRANSFER_SRC_LS_NOT_EXIST,
+                                     true /*allow_retry*/,
+                                     this->get_dag()->get_type()))) {
+          LOG_WARN("failed to set result", K(ret), KPC(ctx_));
+        } else {
+          ret = OB_TRANSFER_SRC_LS_NOT_EXIST;
+          LOG_WARN("source ls is not exist or migration status is not none", K(ret), KPC(ctx_));
+        }
+      } else if (OB_FAIL(ls_service->get_ls(src_ls_id, src_ls_handle, ObLSGetMod::HA_MOD))) {
+        if (OB_LS_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          LOG_INFO("src ls is not exist, need wait", K(src_ls_id));
+          ob_usleep(CHECK_CONDITION_INTERVAL);
+        } else {
+          LOG_WARN("failed to get src ls", K(ret), K(transfer_meta_info));
+        }
+      } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("src ls should not be NULL", K(ret));
+      } else if (OB_FAIL(src_ls->get_migration_status(src_ls_migration_status))) {
+        LOG_WARN("failed to get src ls migration status", K(ret), KPC(src_ls));
+      } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != src_ls_migration_status) {
+        LOG_INFO("src ls migration status is not none, need wait", K(src_ls_id), K(src_ls_migration_status));
+        ob_usleep(CHECK_CONDITION_INTERVAL);
+      } else {
+        LOG_INFO("src ls migration status is none, check pass", K(src_ls_id), K(src_ls_migration_status));
+        break;
+      }
+    }
+
+
+    // 2 wait source ls replay over transfer start scn
+    while(OB_SUCC(ret)) {
+      if (timeout_ctx.is_timeouted()) {
+        if (OB_FAIL(ctx_->set_result(OB_WAIT_REPLAY_TIMEOUT,
+                                     true /*allow_retry*/,
+                                     this->get_dag()->get_type()))) {
+          LOG_WARN("failed to set result", K(ret), KPC(ctx_));
+        } else {
+          ret = OB_WAIT_REPLAY_TIMEOUT;
+          LOG_WARN("failed to wait replay over transfer start scn",
+            K(ret), KPC(ctx_), K(transfer_meta_info));
+        }
+      } else if (OB_FAIL(src_ls->get_max_decided_scn(max_decided_scn))) {
+        if (OB_STATE_NOT_MATCH == ret) {
+          ret = OB_SUCCESS;
+          ob_usleep(CHECK_CONDITION_INTERVAL);
+        } else {
+          LOG_WARN("failed to get max decided scn", K(ret), KPC(src_ls));
+        }
+      } else if (max_decided_scn < transfer_start_scn) {
+        LOG_INFO("src ls max decided scn is smaller than transfer start scn",
+          K(src_ls_id), K(max_decided_scn), K(transfer_start_scn));
+        ob_usleep(CHECK_CONDITION_INTERVAL);
+      } else {
+        LOG_INFO("src ls max decided scn is bigger than transfer start scn, check pass",
+          K(src_ls_id), K(max_decided_scn), K(transfer_start_scn));
+        break;
+      }
+    }
+
+    // 3 check source tablets exist
+    ObTabletHandle tablet_handle;
+    ObTablet *tablet = nullptr;
+    ARRAY_FOREACH_X(transfer_meta_info.tablet_id_array_, i, cnt, OB_SUCC(ret)) {
+      const common::ObTabletID &tablet_id = transfer_meta_info.tablet_id_array_.at(i);
+      if (OB_FAIL(src_ls->ha_get_tablet(tablet_id, tablet_handle))) {
+        if (OB_TABLET_NOT_EXIST == ret) {
+          if (OB_FAIL(ctx_->set_result(OB_TRANSFER_SRC_TABLET_NOT_EXIST,
+                                       false /*allow_retry*/,
+                                       this->get_dag()->get_type()))) {
+            LOG_WARN("failed to set result", K(ret), KPC(ctx_));
+          } else {
+            ret = OB_TRANSFER_SRC_TABLET_NOT_EXIST;
+            LOG_WARN("transfer out tablet is not exist", K(ret), KPC(ctx_),
+              K(tablet_id), KPC(src_ls), K(transfer_scn), K(transfer_meta_info));
+          }
+        } else {
+          LOG_WARN("failed to get tablet", K(ret), KPC(ctx_),
+            K(tablet_id), KPC(src_ls), K(transfer_scn), K(transfer_meta_info));
+        }
+      } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_handle), K(tablet_id));
+      } else {
+        LOG_INFO("source tablet exist, check pass", "src_ls_id", transfer_meta_info.src_ls_,
+          "tablet_meta", tablet->get_tablet_meta());
+      }
+    }
+
+    const int64_t cost = ObTimeUtility::current_time() - wait_barrier_start_ts;
+    LOG_INFO("end wait source ls match barrier",  K(src_ls_id), K(transfer_scn), K(transfer_meta_info), K(cost));
+
+    SERVER_EVENT_ADD("storage_ha", "wait_transfer_barrier_batch",
+                     "tenant_id", ctx_->tenant_id_,
+                     "ls_id", ctx_->arg_.ls_id_.id(),
+                     "src_ls_id", src_ls_id,
+                     "cost", cost,
+                     "task_id", ctx_->task_id_,
+                     "ret", ret,
+                     ObMigrationOpType::get_str(ctx_->arg_.type_));
+  }
+
+  return ret;
+}
+
+ERRSIM_POINT_DEF(EN_SPECIFIED_LS_CHECK_VALID_MEMBER_FAIL);
+int ObWaitDataReadyTask::check_self_is_valid_member_(bool &is_valid_member) const
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  if (ctx_->tenant_id_ == GCONF.errsim_tenant_id && ctx_->arg_.ls_id_.id() == GCONF.errsim_migration_ls_id) {
+    ret = EN_SPECIFIED_LS_CHECK_VALID_MEMBER_FAIL ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("errsim EN_SPECIFIED_LS_CHECK_VALID_MEMBER_FAIL", K(ret),
+        "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_.id());
+      return ret;
+    }
+  }
+#else
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (ObMigrationOpType::REPLACE_LS_OP == ctx_->arg_.type_) {
+    if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member_with_log_service(
+        ctx_->arg_.ls_id_, is_valid_member))) {
+      LOG_WARN("failed to check self is valid member with log service", K(ret), KPC(ctx_));
+    }
+  } else {
+#endif
+    if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ctx_->arg_.ls_id_, is_valid_member))) {
+      LOG_WARN("failed to check self is valid member", K(ret), KPC(ctx_));
+    }
+#ifdef OB_BUILD_SHARED_STORAGE
+  }
+#endif
+#endif
+
+  return ret;
+}
+
+int ObWaitDataReadyTask::change_member_list_with_retry_()
 {
   //change to HOLD status do not allow failed
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  static const int64_t CHANGE_MEMBER_LIST_RETRY_INTERVAL = 2_s;
+  const int64_t CHANGE_MEMBER_LIST_RETRY_INTERVAL = 2_s;
   int64_t retry_times = 0;
   bool is_valid_member = false;
+  int64_t CHANGE_MEMBER_LIST_MAX_RETRY_TIMES = OB_MAX_RETRY_TIMES;
+
+#ifdef ERRSIM
+  ret = CHANGE_MEMBER_LIST_RETRY_TIMES ? : OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    CHANGE_MEMBER_LIST_MAX_RETRY_TIMES = 1;
+  } else {
+    CHANGE_MEMBER_LIST_MAX_RETRY_TIMES = OB_MAX_RETRY_TIMES;
+  }
+  ret = OB_SUCCESS;
+#endif
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else {
-    while (retry_times < OB_MAX_RETRY_TIMES) {
+    while (retry_times < CHANGE_MEMBER_LIST_MAX_RETRY_TIMES) {
       if (retry_times >= 1) {
         LOG_WARN("retry change member list", K(retry_times));
       }
@@ -1363,9 +1912,10 @@ int ObStartCompleteMigrationTask::change_member_list_with_retry_()
 
       if (OB_FAIL(ret)) {
         //overwrite ret
-        if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ctx_->arg_.ls_id_, is_valid_member))) {
+        if (OB_FAIL(check_self_is_valid_member_(is_valid_member))) {
           LOG_WARN("failed to check self is valid member", K(ret), KPC(ctx_));
         } else if (is_valid_member) {
+          LOG_INFO("self ls is valid member", "ls_id", ctx_->arg_.ls_id_);
           break;
         } else {
           ret = OB_EAGAIN;
@@ -1387,29 +1937,152 @@ int ObStartCompleteMigrationTask::change_member_list_with_retry_()
   return ret;
 }
 
-int ObStartCompleteMigrationTask::change_member_list_()
+ERRSIM_POINT_DEF(EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_FAIL);
+ERRSIM_POINT_DEF(EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_RETURN_FAIL);
+ERRSIM_POINT_DEF(EN_INJECT_INC_MEMBER_LIST_CONFIG_VERSION);
+int ObWaitDataReadyTask::change_member_list_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  const ObMigrationOpType::TYPE op_type = ctx_->arg_.type_;
+  bool need_enable_debug_sync = true;
+#ifdef ERRSIM
+  if (GCONF.errsim_migration_ls_id != 0 && ctx_->arg_.ls_id_.id() != GCONF.errsim_migration_ls_id) {
+    need_enable_debug_sync = false;
+  }
+#endif
+  if (need_enable_debug_sync) {
+    DEBUG_SYNC(MEMBERLIST_CHANGE_MEMBER);
+  }
+
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_SET_MEMBER_LIST_FAIL) OB_SUCCESS;
+#endif
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (ctx_->tenant_id_ == GCONF.errsim_tenant_id && ctx_->arg_.ls_id_.id() == GCONF.errsim_migration_ls_id) {
+      ret = EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_FAIL ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_ERROR("errsim EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_FAIL", K(ret),
+          "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_.id());
+        return ret;
+      }
+    }
+  }
+#endif
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (ctx_->tenant_id_ == GCONF.errsim_tenant_id && ctx_->arg_.ls_id_.id() == GCONF.errsim_migration_ls_id) {
+      if (OB_UNLIKELY(EN_INJECT_INC_MEMBER_LIST_CONFIG_VERSION)) {
+        if (OB_FAIL(ObStorageHADagUtils::inc_member_list_config_version(ctx_->arg_.ls_id_, false /* with_leader */))) {
+          LOG_WARN("failed to inc member list config version", K(ret), KPC_(ctx));
+        }
+
+        SERVER_EVENT_SYNC_ADD("storage_ha", "inject_inc_member_list_config_version",
+                              "tenant_id", ctx_->tenant_id_,
+                              "ls_id", ctx_->arg_.ls_id_.id(),
+                              "task_id", ctx_->task_id_,
+                              "ret", ret,
+                              "op_type", ObMigrationOpType::get_str(ctx_->arg_.type_));
+      }
+    }
+  }
+#endif
+
+  if (OB_SUCC(ret)) {
+    switch(op_type) {
+    case ObMigrationOpType::MIGRATE_LS_OP: {
+      if (OB_FAIL(change_member_list_with_leader_())) {
+        LOG_WARN("failed to change member list with leader", K(ret), K(op_type));
+      }
+      break;
+    }
+    case ObMigrationOpType::ADD_LS_OP: {
+      if (OB_FAIL(change_member_list_with_leader_())) {
+        LOG_WARN("failed to change member list with leader", K(ret), K(op_type));
+      }
+      break;
+    }
+#ifdef OB_BUILD_SHARED_STORAGE
+    case ObMigrationOpType::REPLACE_LS_OP: {
+      if (OB_FAIL(change_member_list_with_log_service_())) {
+        LOG_WARN("failed to change member list with leader", K(ret), K(op_type));
+      }
+      break;
+    }
+#endif
+    default: {
+      LOG_INFO("no need change member list", K(op_type));
+      break;
+    }
+    }
+  }
+
+  const int64_t cost = ObTimeUtility::current_time() - start_ts;
+  LOG_INFO("change member list", K(ret), "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_, K(op_type), K(cost));
+
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (ctx_->tenant_id_ == GCONF.errsim_tenant_id && ctx_->arg_.ls_id_.id() == GCONF.errsim_migration_ls_id) {
+      ret = EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_RETURN_FAIL ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_ERROR("errsim EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_RETURN_FAIL", K(ret),
+          "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_.id());
+      }
+    }
+  }
+
+#endif
+
+
+#ifdef ERRSIM
+  #define SERVER_EVENT_RECORD SERVER_EVENT_SYNC_ADD
+#else
+  #define SERVER_EVENT_RECORD SERVER_EVENT_ADD
+#endif
+
+  SERVER_EVENT_RECORD("storage_ha", "change_member_list",
+                      "tenant_id", ctx_->tenant_id_,
+                      "ls_id", ctx_->arg_.ls_id_.id(),
+                      "src", ctx_->arg_.src_.get_server(),
+                      "cost", cost,
+                      "task_id", ctx_->task_id_,
+                      "ret", ret,
+                      ObMigrationOpType::get_str(ctx_->arg_.type_));
+  #undef SERVER_EVENT_RECORD
+
+  if (OB_SUCC(ret)) {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (!is_tenant_sslog_ls(MTL_ID(), ctx_->arg_.ls_id_)) {
+      DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
+    }
+#else
+    DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
+#endif
+  }
+
+  return ret;
+}
+
+int ObWaitDataReadyTask::change_member_list_with_leader_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
-  DEBUG_SYNC(MEMBERLIST_CHANGE_MEMBER);
-  const int64_t start_ts = ObTimeUtility::current_time();
   common::ObAddr leader_addr;
   share::SCN ls_transfer_scn;
   uint64_t cluster_version = 0;
   palf::LogConfigVersion fake_config_version;
-#ifdef ERRSIM
-  ret = OB_E(EventTable::EN_SET_MEMBER_LIST_FAIL) OB_SUCCESS;
-#endif
-  if (OB_FAIL(ret)) {
-  } else if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
-  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+
+  if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to change member list", K(ret), KP(ls));
+    LOG_WARN("ls is null", K(ret), KP(ls));
   } else if (ObMigrationOpType::ADD_LS_OP != ctx_->arg_.type_
       && ObMigrationOpType::MIGRATE_LS_OP != ctx_->arg_.type_) {
-    //do nothing
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should not change member list with leader", K(ret), KPC(ctx_));
   } else if (FALSE_IT(cluster_version = GET_MIN_CLUSTER_VERSION())) {
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(ctx_->tenant_id_, ctx_->arg_.ls_id_, leader_addr))) {
     LOG_WARN("failed to get ls leader", K(ret), KPC(ctx_));
@@ -1438,23 +2111,23 @@ int ObStartCompleteMigrationTask::change_member_list_()
   } else {
     const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_) {
-      if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
+      if (ObReplicaTypeCheck::is_paxos_replica(ctx_->arg_.dst_.get_replica_type())) {
         if (OB_FAIL(switch_learner_to_acceptor_(ls))) {
           LOG_WARN("failed to switch learner to acceptor", K(ret), K(leader_addr), K(ls_transfer_scn));
         }
       } else {
-        // R-replica
+        // R-replica, C-replica
         if (OB_FAIL(replace_learners_for_add_(ls))) {
           LOG_WARN("failed to replace learners for add", K(ret), K(leader_addr), K(ls_transfer_scn));
         }
       }
     } else if (ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_) {
-      if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
+      if (ObReplicaTypeCheck::is_paxos_replica(ctx_->arg_.dst_.get_replica_type())) {
         if (OB_FAIL(replace_member_with_learner_(ls))) {
           LOG_WARN("failed to replace member with learner", K(ret), K(leader_addr), K(ls_transfer_scn));
         }
       } else {
-        // R-replica
+        // R-replica, C-replica
         if (OB_FAIL(replace_learners_for_migration_(ls))) {
           LOG_WARN("failed to replace learners for migration", K(ret), K(leader_addr), K(ls_transfer_scn));
         }
@@ -1464,16 +2137,105 @@ int ObStartCompleteMigrationTask::change_member_list_()
       LOG_WARN("change member list get invalid type", K(ret), KPC(ctx_));
     }
   }
-  if (OB_SUCC(ret)) {
-    const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-    LOG_INFO("succeed change member list", "cost", cost_ts, "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_);
-  }
 
-  DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
   return ret;
 }
 
-int ObStartCompleteMigrationTask::get_ls_transfer_scn_(ObLS *ls, share::SCN &transfer_scn)
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObWaitDataReadyTask::force_elect_and_wait_become_leader_()
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  logservice::ObLogHandler *log_handler = nullptr;
+  ObLSMigrationHandler *migration_handler = nullptr;
+  ObTimeoutCtx timeout_ctx;
+  int64_t timeout = 10_min;
+
+  if (ObMigrationOpType::REPLACE_LS_OP != ctx_->arg_.type_) {
+    // ignore
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(ctx_));
+  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls log handler should not be NULL", K(ret), KPC(ls));
+  } else if (OB_ISNULL(migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), KPC(ls));
+  } else if (OB_FAIL(get_wait_timeout_(timeout))) {
+    LOG_WARN("failed to get wait timeout", K(ret));
+  } else if (OB_FAIL(init_timeout_ctx_(timeout, timeout_ctx))) {
+    LOG_WARN("failed to init timeout ctx", K(ret));
+  } else {
+    LOG_INFO("start wait ls become leader", "arg", ctx_->arg_);
+
+    const int64_t start_ts = ObTimeUtility::current_time();
+    int64_t leader_proposal_id = 0;
+
+    if (OB_FAIL(log_handler->set_allow_election_without_memlist(true))) {
+      LOG_WARN("failed to initiate new election", K(ret), KPC(ls));
+    } else if (OB_FAIL(migration_handler->wait_notified_switch_to_leader(timeout_ctx, leader_proposal_id))) {
+      LOG_WARN("failed to wait switch to leader", K(ret), KPC(ctx_));
+    }
+
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ctx_->set_result(ret, false /*allow_retry*/, this->get_dag()->get_type()))) {
+        LOG_WARN("failed to set result", K(ret), KPC(ctx_));
+      }
+    }
+
+    const int64_t cost = ObTimeUtility::current_time() - start_ts;
+    LOG_INFO("end wait switch to leader", K(ret), "arg", ctx_->arg_, K(leader_proposal_id), K(cost));
+
+    SERVER_EVENT_ADD("storage_ha", "force_elect_and_wait_become_leader",
+                     "tenant_id", ctx_->tenant_id_,
+                     "ls_id", ctx_->arg_.ls_id_.id(),
+                     "proposal_id", leader_proposal_id,
+                     "cost", cost,
+                     "task_id", ctx_->task_id_,
+                     "ret", ret,
+                     ObMigrationOpType::get_str(ctx_->arg_.type_));
+  }
+
+  return ret;
+}
+
+int ObWaitDataReadyTask::change_member_list_with_log_service_()
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+
+  if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret), KP(ls));
+  } else if (ObMigrationOpType::REPLACE_LS_OP != ctx_->arg_.type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should not change member list with log service", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(force_set_self_as_only_member_(ls))) {
+    LOG_WARN("failed to force set self as only member", K(ret), KP(ls));
+  } else {
+    LOG_INFO("succeed change member list with log service", K(ret), KPC(ctx_));
+  }
+  return ret;
+}
+
+int ObWaitDataReadyTask::force_set_self_as_only_member_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
+
+  if (OB_FAIL(ls->get_log_handler()->force_set_as_single_replica(ctx_->arg_.member_list_config_version_,
+                                                                 change_member_list_timeout_us))) {
+    LOG_WARN("failed to force set self as only member", K(ret), KPC(ctx_));
+  } else {
+    LOG_INFO("succeed force set self as only member", KPC(ctx_));
+  }
+  return ret;
+}
+#endif
+
+int ObWaitDataReadyTask::get_ls_transfer_scn_(ObLS *ls, share::SCN &transfer_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ls)) {
@@ -1485,7 +2247,7 @@ int ObStartCompleteMigrationTask::get_ls_transfer_scn_(ObLS *ls, share::SCN &tra
   return ret;
 }
 
-int ObStartCompleteMigrationTask::switch_learner_to_acceptor_(ObLS *ls)
+int ObWaitDataReadyTask::switch_learner_to_acceptor_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
   const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
@@ -1500,7 +2262,7 @@ int ObStartCompleteMigrationTask::switch_learner_to_acceptor_(ObLS *ls)
   return ret;
 }
 
-int ObStartCompleteMigrationTask::replace_member_with_learner_(ObLS *ls)
+int ObWaitDataReadyTask::replace_member_with_learner_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
   const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
@@ -1515,7 +2277,7 @@ int ObStartCompleteMigrationTask::replace_member_with_learner_(ObLS *ls)
   return ret;
 }
 
-int ObStartCompleteMigrationTask::replace_learners_for_add_(ObLS *ls)
+int ObWaitDataReadyTask::replace_learners_for_add_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
   ObMemberList added_learners, removed_learners;
@@ -1536,7 +2298,7 @@ int ObStartCompleteMigrationTask::replace_learners_for_add_(ObLS *ls)
   return ret;
 }
 
-int ObStartCompleteMigrationTask::replace_learners_for_migration_(ObLS *ls)
+int ObWaitDataReadyTask::replace_learners_for_migration_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
   ObMemberList added_learners, removed_learners;
@@ -1561,7 +2323,26 @@ int ObStartCompleteMigrationTask::replace_learners_for_migration_(ObLS *ls)
   return ret;
 }
 
-int ObStartCompleteMigrationTask::check_need_wait_(
+int ObWaitDataReadyTask::check_need_wait_log_replay_(
+    ObLS *ls,
+    bool &need_wait)
+{
+  int ret = OB_SUCCESS;
+  need_wait = false;
+  if (OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(ls));
+  } else if (OB_FAIL(check_need_wait_(ls, need_wait))) {
+    LOG_WARN("fail to check need ls wait", KR(ret));
+  } else if (need_wait) {
+    if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+      need_wait = false;
+    }
+  }
+  return ret;
+}
+
+int ObWaitDataReadyTask::check_need_wait_(
     ObLS *ls,
     bool &need_wait)
 {
@@ -1571,15 +2352,18 @@ int ObStartCompleteMigrationTask::check_need_wait_(
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check need wait log sync get invalid argument", K(ret), KP(ls));
   } else if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
-  } else if (ls_restore_status.is_in_restore()) {
+  } else if (ls_restore_status.is_in_restore_and_before_quick_restore_finish() || ls_restore_status.is_failed()) {
     need_wait = false;
   } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
+    need_wait = false;
+  } else if (ObMigrationOpType::REPLACE_LS_OP == ctx_->arg_.type_) {
+    // The replica will become leader, and apply all log, you can not get replay stat.
     need_wait = false;
   } else if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_
       || ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_) {
@@ -1594,7 +2378,7 @@ int ObStartCompleteMigrationTask::check_need_wait_(
   return ret;
 }
 
-int ObStartCompleteMigrationTask::check_need_wait_transfer_table_replace_(
+int ObWaitDataReadyTask::check_need_wait_transfer_table_replace_(
     ObLS *ls,
     bool &need_wait)
 {
@@ -1603,10 +2387,12 @@ int ObStartCompleteMigrationTask::check_need_wait_transfer_table_replace_(
   need_wait = true;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check need wait log sync get invalid argument", K(ret), KP(ls));
+  } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(ctx_->arg_.dst_.get_replica_type())) {
+    need_wait = false;
   } else if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
   } else if (ls_restore_status.is_before_restore_to_consistent_scn()) {
@@ -1615,7 +2401,7 @@ int ObStartCompleteMigrationTask::check_need_wait_transfer_table_replace_(
   return ret;
 }
 
-int ObStartCompleteMigrationTask::update_ls_migration_status_wait_()
+int ObWaitDataReadyTask::update_ls_migration_status_wait_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -1623,10 +2409,11 @@ int ObStartCompleteMigrationTask::update_ls_migration_status_wait_()
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (ObMigrationOpType::MIGRATE_LS_OP != ctx_->arg_.type_
       && ObMigrationOpType::ADD_LS_OP != ctx_->arg_.type_
-      && ObMigrationOpType::REBUILD_LS_OP != ctx_->arg_.type_) {
+      && ObMigrationOpType::REBUILD_LS_OP != ctx_->arg_.type_
+      && ObMigrationOpType::REPLACE_LS_OP != ctx_->arg_.type_) {
     ret = OB_ERR_SYS;
     LOG_WARN("no other type should update migration status wait", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ObMigrationOpType::get_ls_wait_status(ctx_->arg_.type_, wait_status))) {
@@ -1649,17 +2436,19 @@ int ObStartCompleteMigrationTask::update_ls_migration_status_wait_()
   return ret;
 }
 
-int ObStartCompleteMigrationTask::update_ls_migration_status_hold_()
+int ObWaitDataReadyTask::update_ls_migration_status_hold_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
-  const ObMigrationStatus hold_status = ObMigrationStatus::OB_MIGRATION_STATUS_HOLD;
+  ObMigrationStatus hold_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
     //do nothing
+  } else if (OB_FAIL(ObMigrationOpType::get_ls_hold_status(ctx_->arg_.type_, hold_status))) {
+    LOG_WARN("failed to get ls wait status", K(ret));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to change member list", K(ret), KP(ls));
@@ -1679,31 +2468,38 @@ int ObStartCompleteMigrationTask::update_ls_migration_status_hold_()
   return ret;
 }
 
-int ObStartCompleteMigrationTask::check_all_tablet_ready_()
+int ObWaitDataReadyTask::check_all_tablet_ready_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   const int64_t check_all_tablet_start_ts = ObTimeUtility::current_time();
   const bool need_initial_state = false;
+  const bool need_sorted_tablet_id = false;
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 10_min;
+  bool need_wait = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to change member list", K(ret), KP(ls));
+  } else if (FALSE_IT(need_wait = ObReplicaTypeCheck::is_replica_with_ssstore(ls->get_replica_type()))) {
+    // shall nenver be here
+  } else if (!need_wait) {
+    LOG_INFO("replica no need wait to check all tablet ready", K(ret), KPC(ctx_));
   } else if (OB_FAIL(get_wait_timeout_(timeout))) {
     LOG_WARN("failed to get wait timeout", K(ret));
   } else if (OB_FAIL(init_timeout_ctx_(timeout, timeout_ctx))) {
     LOG_WARN("failed to init timeout ctx", K(ret));
   } else {
-    ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
+    ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state, need_sorted_tablet_id);
     ObTabletID tablet_id;
     if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
       LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));
     } else {
+      max_minor_end_scn_.set_min();
       while (OB_SUCC(ret)) {
         if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
           if (OB_ITER_END == ret) {
@@ -1716,14 +2512,20 @@ int ObStartCompleteMigrationTask::check_all_tablet_ready_()
           LOG_WARN("failed to check tablet ready", K(ret), K(tablet_id), KPC(ls));
         }
       }
-      LOG_INFO("check all tablet ready finish", K(ret), "ls_id", ctx_->arg_.ls_id_,
+
+      const SCN transfer_scn = ls->get_ls_meta().get_transfer_scn();
+      if (OB_SUCC(ret)) {
+        max_minor_end_scn_ = MAX(max_minor_end_scn_, transfer_scn);
+      }
+      LOG_INFO("check all tablet ready finish", K(ret),
+          "ls_id", ctx_->arg_.ls_id_, K_(max_minor_end_scn), K(transfer_scn),
           "cost ts", ObTimeUtility::current_time() - check_all_tablet_start_ts);
     }
   }
   return ret;
 }
 
-int ObStartCompleteMigrationTask::check_tablet_ready_(
+int ObWaitDataReadyTask::check_tablet_ready_(
     const common::ObTabletID &tablet_id,
     ObLS *ls,
     const int64_t timeout)
@@ -1733,11 +2535,12 @@ int ObStartCompleteMigrationTask::check_tablet_ready_(
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (!tablet_id.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check tablet ready get invalid argument", K(ret), K(tablet_id), KP(ls));
   } else {
+    DEBUG_SYNC(BEFORE_CHECK_TABLET_READY);
     const int64_t wait_tablet_start_ts = ObTimeUtility::current_time();
 
     while (OB_SUCC(ret)) {
@@ -1776,7 +2579,7 @@ int ObStartCompleteMigrationTask::check_tablet_ready_(
         break;
       } else {
         const int64_t current_ts = ObTimeUtility::current_time();
-        if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("tablet not ready, retry next loop", "arg", ctx_->arg_, "tablet_id", tablet_id,
               "ha_status", tablet->get_tablet_meta().ha_status_,
               "wait_tablet_start_ts", wait_tablet_start_ts,
@@ -1805,8 +2608,9 @@ int ObStartCompleteMigrationTask::check_tablet_ready_(
   return ret;
 }
 
-int ObStartCompleteMigrationTask::check_tablet_transfer_table_ready_(
+int ObWaitDataReadyTask::check_tablet_transfer_table_ready_(
     const common::ObTabletID &tablet_id,
+    const share::SCN &transfer_scn,
     ObLS *ls,
     const int64_t timeout)
 {
@@ -1815,7 +2619,7 @@ int ObStartCompleteMigrationTask::check_tablet_transfer_table_ready_(
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (!tablet_id.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check tablet ready get invalid argument", K(ret), K(tablet_id), KP(ls));
@@ -1823,18 +2627,19 @@ int ObStartCompleteMigrationTask::check_tablet_transfer_table_ready_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transfer service should not be NULL", K(ret), KP(transfer_service));
   } else {
+    DEBUG_SYNC(BEFORE_CHECK_TABLET_TRANSFER_TABLE_READY);
     const int64_t wait_tablet_start_ts = ObTimeUtility::current_time();
     bool need_check_again = false;
 
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_ls_and_task_status_(ls))) {
         LOG_WARN("failed to check ls and task status", K(ret), KPC(ctx_));
-      } else if (OB_FAIL(inner_check_tablet_transfer_table_ready_(tablet_id, ls, need_check_again))) {
-        LOG_WARN("failed to inner check tablet transfer table ready", K(ret), K(tablet_id), KP(ls));
+      } else if (OB_FAIL(inner_check_tablet_transfer_table_ready_(tablet_id, transfer_scn, ls, need_check_again))) {
+        LOG_WARN("failed to inner check tablet transfer table ready", K(ret), K(tablet_id), K(transfer_scn), KP(ls));
       } else if (!need_check_again) {
         break;
       } else {
-        LOG_INFO("tablet has transfer table", K(ret), K(tablet_id), "ls_id", ls->get_ls_id());
+        LOG_INFO("tablet has transfer table", K(ret), K(tablet_id), "ls_id", ls->get_ls_id(), K(transfer_scn));
         const int64_t current_ts = ObTimeUtility::current_time();
         transfer_service->wakeup();
         if (current_ts - wait_tablet_start_ts < timeout) {
@@ -1845,7 +2650,7 @@ int ObStartCompleteMigrationTask::check_tablet_transfer_table_ready_(
           } else {
             ret = OB_WAIT_TABLET_READY_TIMEOUT;
             STORAGE_LOG(WARN, "failed to check tablet ready, timeout, stop migration task",
-                K(ret), K(*ctx_), K(tablet_id), KPC(ls), K(current_ts), K(wait_tablet_start_ts));
+                K(ret), K(*ctx_), K(tablet_id), K(transfer_scn), KPC(ls), K(current_ts), K(wait_tablet_start_ts));
           }
         }
 
@@ -1858,8 +2663,9 @@ int ObStartCompleteMigrationTask::check_tablet_transfer_table_ready_(
   return ret;
 }
 
-int ObStartCompleteMigrationTask::inner_check_tablet_transfer_table_ready_(
+int ObWaitDataReadyTask::inner_check_tablet_transfer_table_ready_(
     const common::ObTabletID &tablet_id,
+    const share::SCN &transfer_scn,
     ObLS *ls,
     bool &need_check_again)
 {
@@ -1876,6 +2682,9 @@ int ObStartCompleteMigrationTask::inner_check_tablet_transfer_table_ready_(
   ObLS *src_ls = nullptr;
   SCN scn;
   ObTabletHandle src_tablet_handle;
+  ObTablet *src_tablet = nullptr;
+  int64_t src_transfer_seq = 0;
+  int64_t dest_transfer_seq = 0;
 
   if (!tablet_id.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1898,6 +2707,10 @@ int ObStartCompleteMigrationTask::inner_check_tablet_transfer_table_ready_(
   } else if (!tablet->get_tablet_meta().has_transfer_table()) {
     LOG_INFO("tablet do not has transfer table", K(ret), K(tablet_id), "ls_id", ls->get_ls_id());
     need_check_again = false;
+  } else if (tablet->get_tablet_meta().transfer_info_.transfer_start_scn_ >= transfer_scn) {
+    LOG_INFO("ignore these tablets whose transfer_start_scn >= transfer_scn",
+      "tablet_meta", tablet->get_tablet_meta(), K(transfer_scn));
+    need_check_again = false;
   } else if (OB_FAIL(ls_service->get_ls(tablet->get_tablet_meta().transfer_info_.ls_id_, src_ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get transfer src ls", K(ret), KPC(tablet));
     if (OB_LS_NOT_EXIST == ret) {
@@ -1918,7 +2731,7 @@ int ObStartCompleteMigrationTask::inner_check_tablet_transfer_table_ready_(
     }
   } else if (scn <= tablet->get_tablet_meta().transfer_info_.transfer_start_scn_) {
     need_check_again = true;
-    if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000/*5s*/)) {
+    if (REACH_THREAD_TIME_INTERVAL(5 * 1000 * 1000/*5s*/)) {
       LOG_INFO("need to wait for the max_decided_scn to be greater than transfer_start_scn", K(tablet_id), K(scn),
           "transfer_start_scn", tablet->get_tablet_meta().transfer_info_.transfer_start_scn_,
           "ls_id", tablet->get_tablet_meta().transfer_info_.ls_id_);
@@ -1930,10 +2743,24 @@ int ObStartCompleteMigrationTask::inner_check_tablet_transfer_table_ready_(
         LOG_WARN("failed to set result", K(ret), K(tmp_ret), KPC(ctx_));
       }
     }
+  } else if (OB_ISNULL(src_tablet = src_tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src tablet should not be NULL", K(ret), K(src_tablet_handle));
+  } else if (FALSE_IT(src_transfer_seq = src_tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
+  } else if (FALSE_IT(dest_transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
+  } else if (src_transfer_seq > dest_transfer_seq) {
+    ret = OB_TRANSFER_SRC_TABLET_NOT_EXIST;
+    LOG_WARN("src transfer seq is bigger than dest transfer seq, need retry", KPC(src_tablet), KPC(tablet));
+    if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/))) {
+      LOG_WARN("failed to set result", K(ret), K(tmp_ret), KPC(ctx_));
+    }
+  } else if (src_transfer_seq != dest_transfer_seq - 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src transfer seq is not match with dest transfer seq, unexpected", KPC(src_tablet), KPC(tablet));
   } else {
     need_check_again = true;
 #ifdef ERRSIM
-    if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+    if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) {
       SERVER_EVENT_ADD("TRANSFER", "still_has_transfer_table",
                       "ls_id", ls->get_ls_id(),
                       "tablet_id", tablet_id.id(),
@@ -1944,7 +2771,7 @@ int ObStartCompleteMigrationTask::inner_check_tablet_transfer_table_ready_(
   return ret;
 }
 
-int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
+int ObWaitDataReadyTask::wait_log_replay_to_max_minor_end_scn_()
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -1956,13 +2783,13 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("start complete migration task do not init", K(ret));
+    LOG_WARN("wait data ready task do not init", K(ret));
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(ctx_));
-  } else if (OB_FAIL(check_need_wait_(ls, need_wait))) {
+  } else if (OB_FAIL(check_need_wait_log_replay_(ls, need_wait))) {
     LOG_WARN("failed to check need replay to max minor end scn", K(ret), KPC(ls), KPC(ctx_));
   } else if (!need_wait) {
     LOG_INFO("no need to wait ls checkpoint ts push", K(ret), KPC(ctx_));
@@ -1971,6 +2798,7 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
   } else if (OB_FAIL(init_timeout_ctx_(timeout, timeout_ctx))) {
     LOG_WARN("failed to init timeout ctx", K(ret));
   } else {
+    DEBUG_SYNC(BEFORE_LOG_REPLAY_TO_MAX_MINOR_END_SCN);
     const int64_t wait_replay_start_ts = ObTimeUtility::current_time();
     while (OB_SUCC(ret)) {
       if (timeout_ctx.is_timeouted()) {
@@ -1988,7 +2816,7 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
         break;
       } else {
         const int64_t current_ts = ObTimeUtility::current_time();
-        if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("ls wait replay to max minor sstable end log ts, retry next loop", "arg", ctx_->arg_,
               "wait_replay_start_ts", wait_replay_start_ts,
               "current_ts", current_ts,
@@ -2017,12 +2845,14 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
   return ret;
 }
 
-int ObStartCompleteMigrationTask::check_ls_and_task_status_(
+int ObWaitDataReadyTask::check_ls_and_task_status_(
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
   bool is_cancel = false;
   bool is_ls_deleted = true;
+  int32_t result = OB_SUCCESS;
+  ObIDagNet *dag_net = nullptr;
 
   if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2030,31 +2860,51 @@ int ObStartCompleteMigrationTask::check_ls_and_task_status_(
   } else if (ctx_->is_failed()) {
     ret = OB_CANCELED;
     STORAGE_LOG(WARN, "ls migration task is failed", K(ret), KPC(ctx_));
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("storage_ha", "wait_data_ready_task_cancel",
+                          "tenant_id", ctx_->tenant_id_,
+                          "ls_id", ctx_->arg_.ls_id_.id(),
+                          "ret", ret);
+#endif
   } else if (ls->is_stopped()) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls is not running, stop migration dag net", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
-    STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
-  } else if (is_cancel) {
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+  } else if (dag_net->is_cancel()) {
     ret = OB_CANCELED;
-    STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
+    LOG_WARN("task is cancelled", K(ret), K(*this));
   } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls->get_ls_id(), is_ls_deleted))) {
     LOG_WARN("failed to get ls status from inner table", K(ret));
   } else if (is_ls_deleted) {
     ret = OB_CANCELED;
     LOG_WARN("ls will be removed, no need run migration", K(ret), KPC(ls), K(is_ls_deleted));
+  } else if (OB_FAIL(ObStorageHAUtils::check_log_status(ls->get_tenant_id(), ls->get_ls_id(), result))) {
+    LOG_WARN("failed to check log status", K(ret), KPC(ls));
+  } else if (OB_SUCCESS != result) {
+    LOG_INFO("can not replay log, it will retry", K(result));
+    if (OB_FAIL(ctx_->set_result(result/*result*/, false/*need_retry*/, this->get_dag()->get_type()))) {
+      LOG_WARN("failed to set result", K(ret), KPC(ctx_));
+    } else {
+      ret = result;
+      LOG_WARN("log sync or replay error, need retry", K(ret), KPC(ls));
+    }
   }
   return ret;
 }
 
-int ObStartCompleteMigrationTask::record_server_event_()
+int ObWaitDataReadyTask::record_server_event_()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx should not be null", K(ret));
   } else {
-    SERVER_EVENT_ADD("storage_ha", "start_complete_migration_task",
+    SERVER_EVENT_ADD("storage_ha", "wait_data_ready_task",
         "tenant_id", ctx_->tenant_id_,
         "ls_id", ctx_->arg_.ls_id_.id(),
         "src", ctx_->arg_.src_.get_server(),
@@ -2066,7 +2916,7 @@ int ObStartCompleteMigrationTask::record_server_event_()
   return ret;
 }
 
-int ObStartCompleteMigrationTask::init_timeout_ctx_(
+int ObWaitDataReadyTask::init_timeout_ctx_(
     const int64_t timeout,
     ObTimeoutCtx &timeout_ctx)
 {
@@ -2095,6 +2945,7 @@ int ObFinishCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
   ObLSCompleteMigrationCtx *self_ctx = nullptr;
+  ObCStringHelper helper;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial prepare migration dag do not init", K(ret));
@@ -2104,7 +2955,7 @@ int ObFinishCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len)
   } else if (FALSE_IT(self_ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
          "ObFinishCompleteMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
+         helper.convert(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
          ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
   }

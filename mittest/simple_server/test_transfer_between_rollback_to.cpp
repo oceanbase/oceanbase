@@ -1,3 +1,6 @@
+// owner: handora.qc
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -11,7 +14,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <iostream>
 #define protected public
 #define private public
 
@@ -19,9 +21,7 @@
 #include "rootserver/ob_tenant_balance_service.h"
 #include "share/balance/ob_balance_job_table_operator.h"
 #include "mittest/env/ob_simple_server_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_tx_loop_worker.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
 {
@@ -64,8 +64,9 @@ int ObTransService::batch_post_rollback_savepoint_msg_(ObTxDesc &tx,
       msg.set_for_transfer();
     }
 
+    ObCStringHelper helper;
     if (global_ls_id.is_valid() && global_ls_id == msg.receiver_) {
-      fprintf(stdout, "qcc encounter failure %ld, %s\n", global_ls_id.id(), to_cstring(tx));
+      fprintf(stdout, "qcc encounter failure %ld, %s\n", global_ls_id.id(), helper.convert(tx));
     }
 
     if ((!global_ls_id.is_valid() || global_ls_id != msg.receiver_)
@@ -131,7 +132,6 @@ public:
     WRITE_SQL_BY_CONN(connection, "set GLOBAL ob_query_timeout = 10000000000");
     WRITE_SQL_BY_CONN(connection, "alter system set enable_early_lock_release = False;");
     WRITE_SQL_BY_CONN(connection, "alter system set undo_retention = 1800;");
-    WRITE_SQL_BY_CONN(connection, "alter system set partition_balance_schedule_interval = '10s';");
     sleep(5);
   }
 
@@ -213,13 +213,14 @@ public:
     MTL_SWITCH(tenant_id) {
       TRANS_LOG(INFO, "worker to do partition_balance");
       auto b_svr = MTL(rootserver::ObTenantBalanceService*);
+      b_svr->stop();
       b_svr->reset();
       int64_t job_cnt = 0;
       int64_t start_time = OB_INVALID_TIMESTAMP, finish_time = OB_INVALID_TIMESTAMP;
       ObBalanceJob job;
       if (OB_FAIL(b_svr->gather_stat_())) {
         TRANS_LOG(WARN, "failed to gather stat", KR(ret));
-      } else if (OB_FAIL(b_svr->gather_ls_status_stat(tenant_id, b_svr->ls_array_))) {
+      } else if (OB_FAIL(b_svr->gather_ls_status_stat(tenant_id, b_svr->ls_array_, true))) {
         TRANS_LOG(WARN, "failed to gather ls stat", KR(ret));
       } else if (OB_FAIL(ObBalanceJobTableOperator::get_balance_job(
                            tenant_id, false, *GCTX.sql_proxy_, job, start_time, finish_time))) {
@@ -409,6 +410,22 @@ TEST_F(ObTransferBetweenRollbackTo, transfer_between_rollback_to)
     }
   }
   ASSERT_EQ(loc1, loc2);
+
+  while (true) {
+    int64_t transfer_task_count = 0;
+    if (OB_FAIL(SSH::g_select_int64(tenant_id, "select count(*) as val from __all_transfer_task", transfer_task_count))) {
+      TRANS_LOG(WARN, "fail to wait for transfer task");
+    } else if (transfer_task_count == 0) {
+      fprintf(stdout, "succeed wait for balancer v2\n");
+      break;
+    } else if (ObTimeUtility::current_time() - begin_time > 300 * 1000 * 1000) {
+      fprintf(stdout, "ERROR: fail to wait for balancer\n");
+      break;
+    } else {
+      fprintf(stdout, "wait for balancer v2\n");
+      ob_usleep(200 * 1000);
+    }
+  }
 
   usleep(1000 * 1000);
 

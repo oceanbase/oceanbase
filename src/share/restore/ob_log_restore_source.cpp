@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_log_restore_source.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "share/ob_define.h"
 
 using namespace oceanbase::share;

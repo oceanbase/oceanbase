@@ -36,7 +36,8 @@ public:
   static const int64_t GET_LEADER_RETRY_TIMEOUT = 1 * 1000LL * 1000LL; // 1s
 public:
 	ObTableLoadResourceService()
-    : resource_manager_(nullptr),
+    : rw_lock_(common::ObLatchIds::TABLE_LOAD_RESOURCE_SERVICE_LOCK),
+      resource_manager_(nullptr),
       tenant_id_(common::OB_INVALID_ID),
       is_inited_(false)
   {
@@ -72,7 +73,6 @@ public:
 	int switch_to_follower_gracefully();
 	void switch_to_follower_forcedly();
 
-  static int check_tenant();
   static int get_leader_addr(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader);
   static int local_apply_resource(ObDirectLoadResourceApplyArg &arg, ObDirectLoadResourceOpRes &res);
   static int local_release_resource(ObDirectLoadResourceReleaseArg &arg);
@@ -88,7 +88,7 @@ private:
 	int check_inner_stat();
 private:
   mutable lib::ObMutex switch_lock_;
-  mutable obsys::ObRWLock rw_lock_;
+  mutable obsys::ObRWLock<> rw_lock_;
 	ObTableLoadResourceManager *resource_manager_;
   uint64_t tenant_id_;
 	bool is_inited_;

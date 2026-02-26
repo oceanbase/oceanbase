@@ -11,9 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <vector>
 #include "storage/blocksstable/encoding/ob_bit_stream.h"
-#include "lib/time/ob_time_utility.h"
 
 namespace oceanbase
 {

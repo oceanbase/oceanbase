@@ -133,7 +133,11 @@ TEST_F(ObTestTxPerf, test_sp_trans_perf)
 
 int main(int argc, char **argv)
 {
-  system("rm -rf test_tx_perf.log*");
+  std::string log_file_name = "test_tx_perf.log";
+  #ifdef TX_NODE_MEMTABLE_USE_HASH_INDEX_FLAG
+      log_file_name = "test_tx_perf_no_hash_index.log";
+  #endif
+  system("rm -rf " + log_file_name + "*");
   if (argc > 1) {
     oceanbase::worker_cnt = atoi(argv[1]);
   }
@@ -141,10 +145,11 @@ int main(int argc, char **argv)
     oceanbase::test_time = atoi(argv[2]);
   }
   ObLogger &logger = ObLogger::get_logger();
-  logger.set_file_name("test_tx_perf.log", true, false,
-                       "test_tx_perf.log", // rs
-                       "test_tx_perf.log", // election
-                       "test_tx_perf.log"); // audit
+  system(std::string("rm -rf " + log_file_name + "*").c_str());
+  logger.set_file_name(log_file_name.c_str(), true, false,
+                       log_file_name.c_str(), // rs
+                       log_file_name.c_str(), // election
+                       log_file_name.c_str()); // audit
   OB_LOGGER.set_log_level("ERROR");
   STORAGE_LOG(INFO, "begin unittest: test tx perf");
   ::testing::InitGoogleTest(&argc, argv);

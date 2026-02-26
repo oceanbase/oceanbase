@@ -88,7 +88,8 @@ public:
       K_(server),
       K_(role),
       K_(sql_port),
-      K_(replica_type),
+      "replica_type",
+      ObShareUtil::replica_type_to_string(replica_type_),
       K_(property),
       K_(restore_status),
       K_(proposal_id));
@@ -190,7 +191,7 @@ public:
   inline uint64_t get_tenant_id() const { return cache_key_.get_tenant_id(); }
   inline ObLSID get_ls_id() const { return cache_key_.get_ls_id(); }
   const ObLSLocationCacheKey &get_cache_key() const { return cache_key_; }
-  int get_replica_count(int64_t &full_replica_cnt, int64_t &readonly_replica_cnt);
+  int get_replica_count(int64_t &full_replica_cnt, int64_t &non_paxos_replica_cnt);
   inline const common::ObIArray<ObLSReplicaLocation> &get_replica_locations() const
   {
     return replica_locations_;
@@ -334,50 +335,6 @@ class ObLocationServiceUtility
 {
 public:
   static bool treat_sql_as_timeout(const int error_code);
-};
-
-class ObVTableLocationCacheKey : public common::ObIKVCacheKey
-{
-public:
-  ObVTableLocationCacheKey();
-  explicit ObVTableLocationCacheKey(
-      const uint64_t tenant_id,
-      const uint64_t table_id);
-  ~ObVTableLocationCacheKey();
-  virtual bool operator ==(const ObIKVCacheKey &other) const;
-  virtual bool operator !=(const ObIKVCacheKey &other) const;
-  virtual uint64_t get_tenant_id() const;
-  virtual uint64_t hash() const;
-  virtual int64_t size() const;
-  virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const;
-  inline uint64_t get_table_id() const { return table_id_; }
-  TO_STRING_KV(K_(tenant_id), K_(table_id));
-private:
-  uint64_t tenant_id_;
-  uint64_t table_id_;
-};
-
-class ObLocationKVCacheValue : public common::ObIKVCacheValue
-{
-public:
-  ObLocationKVCacheValue() : size_(0), buffer_(NULL) {}
-  ObLocationKVCacheValue(const int64_t size, char *buffer)
-      : size_(size), buffer_(buffer) {}
-  virtual ~ObLocationKVCacheValue() {}
-  virtual int64_t size() const
-  {
-    return static_cast<int64_t>(sizeof(*this) + size_);
-  }
-  virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const;
-  void reset();
-  inline int64_t get_size() const { return size_; }
-  inline char *get_buffer_ptr() const { return buffer_; }
-  void set_size(const int64_t size) { size_ = size; }
-  void set_buffer(char *buffer) { buffer_ = buffer; }
-  TO_STRING_KV(K_(size), "buffer", reinterpret_cast<int64_t>(buffer_));
-private:
-  int64_t size_;
-  char *buffer_;
 };
 
 class ObLocationSem

@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_fetch_log_task.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "storage/tx_storage/ob_ls_service.h"           // ObLSService
-#include "storage/ls/ob_ls.h"                           // ObLS
-#include "ob_log_restore_handler.h"                     // ObLogRestore
-#include "ob_log_restore_allocator.h"                  // ObLogRestoreeHandler
 
 namespace oceanbase
 {
@@ -89,6 +83,7 @@ ObFetchLogTask::ObFetchLogTask(const share::ObLSID &id,
   iter_(get_source_func, update_source_func, refresh_storage_info_func)
 {
   pre_scn_ = pre_scn;
+  task_stat_.gen_ts_ = common::ObTimeUtility::current_time();
 }
 
 bool ObFetchLogTask::is_valid() const

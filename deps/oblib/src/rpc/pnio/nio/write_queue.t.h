@@ -33,7 +33,7 @@ static int my_sk_do_flush(my_sk_t* s, int64_t* remain) {
   dlink_t* h = NULL;
   int err = my_wq_flush((sock_t*)s, &s->wq, &h);
   my_t* io = structof(s->fty, my_t, sf);
-  int64_t flushed_time_us = rk_get_us();
+  int64_t flushed_time_us = rk_get_corse_us();
   if (0 == err && NULL != h) {
     dlink_t* stop = dqueue_top(&s->wq.queue);
     while(h != stop) {

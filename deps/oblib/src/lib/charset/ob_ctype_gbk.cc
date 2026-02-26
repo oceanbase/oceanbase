@@ -11,7 +11,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/charset/ob_mysql_global.h"
 #include "lib/charset/ob_ctype.h"
 #include "lib/charset/ob_ctype_gbk_tab.h"
 
@@ -191,7 +190,7 @@ size_t ob_varlen_encoding_gbk_for_spacecmp(const struct ObCharsetInfo* cs,
   *is_valid_unicode = 1;
 
   // trim
-  while (*(se-1) == 0x20 && se>src) se--;
+  while (se > src && *(se-1) == 0x20) se--;
   for (;*is_valid_unicode && dst < de && src < se && nweights; nweights--)
   {
     int16_t space_cnt = 0;
@@ -345,6 +344,7 @@ static ObCollationHandler ob_collation_gbk_ci_handler =
 
 static ObCharsetHandler ob_charset_gbk_handler=
 {
+  NULL,
   ismbchar_gbk,
   mbcharlen_gbk,
   ob_numchars_mb,
@@ -367,7 +367,8 @@ static ObCharsetHandler ob_charset_gbk_handler=
   ob_strntoull_8bit,
   ob_strntod_8bit,
   ob_strntoull10rnd_8bit,
-  ob_scan_8bit
+  ob_scan_8bit,
+  skip_trailing_space
 };
 
 
@@ -384,6 +385,8 @@ ObCharsetInfo ob_charset_gbk_chinese_ci=
     to_lower_gbk,
     to_upper_gbk,
     sort_order_gbk,
+    NULL,
+    NULL,
     NULL,
     &ob_caseinfo_gbk,
     NULL,
@@ -416,6 +419,8 @@ ObCharsetInfo ob_charset_gbk_bin=
     ctype_gbk,
     to_lower_gbk,
     to_upper_gbk,
+    NULL,
+    NULL,
     NULL,
     NULL,
     &ob_caseinfo_gbk,

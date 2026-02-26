@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_delete_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include <stdio.h>
 
 namespace oceanbase
 {

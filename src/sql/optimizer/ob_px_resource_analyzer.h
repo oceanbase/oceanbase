@@ -261,12 +261,17 @@ int update_max_thead_group_info(
     int64_t &max_groups,
     ObHashMap<ObAddr, int64_t> &max_parallel_thread_map,
     ObHashMap<ObAddr, int64_t> &max_parallel_group_map);
+  // generate access location addrs of sql and each temp table.
+  int get_access_location_addrs(const ObLogicalOperator &root_op, ObHashSet<ObAddr> &addr_set);
 private:
   void print_px_usage(const ObHashMap<ObAddr, int64_t> &max_map);
 private:
   /* variables */
   common::ObArenaAllocator allocator_;
   ObArray<PxInfo *> px_trees_;
+  ObHashSet<ObAddr> all_access_addrs_;
+  // key is temp_table_id, value is a set of addrs of the temp table.
+  ObHashMap<uint64_t, ObArray<ObAddr>> temp_tables_addr_map_;
   DISALLOW_COPY_AND_ASSIGN(ObPxResourceAnalyzer);
 };
 

@@ -14,9 +14,6 @@
 
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 
-#include "lib/ob_define.h"
-#include "lib/utility/ob_print_utils.h"
-#include "common/ob_range.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;

@@ -12,9 +12,6 @@
 
 #include "ob_all_virtual_io_stat.h"
 
-#include "storage/blocksstable/ob_block_manager.h"
-#include "observer/ob_server.h"
-#include "share/io/ob_io_manager.h"
 
 namespace oceanbase
 {

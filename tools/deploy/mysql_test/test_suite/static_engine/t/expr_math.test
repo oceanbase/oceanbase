@@ -9,14 +9,15 @@ connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 
 connection conn_admin;
 --sleep 2
-alter system set enable_async_syslog = false;
+
 set @@ob_enable_plan_cache = 0;
 #set @@ob_log_level='debug';
 
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
-
+alter system set default_table_store_format = "row";
+--sleep 5
 create table t1 (c1 int, c2 int unsigned, 
     c3 tinyint, c4 tinyint unsigned,
     c5 smallint, c6 smallint unsigned,

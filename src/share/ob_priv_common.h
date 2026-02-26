@@ -34,7 +34,7 @@ typedef common::ObSEArray<ObRawPriv, 4> ObRawPrivArray;   // used in grant priv,
 
 typedef common::ObSEArray<ObRawObjPriv, 4> ObRawObjPrivArray; // used in grant, revoke objpriv
 
-typedef common::ObSEArray<ObPrivSet, 3> ObPackedPrivArray;  // used in priv schema, packed
+typedef common::ObSEArray<ObPrivSet, 4> ObPackedPrivArray;  // used in priv schema, packed
 
 typedef ObPrivSet ObPackedObjPriv;  // used in obj priv in priv schema packed
 

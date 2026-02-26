@@ -16,6 +16,7 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "logservice/ob_log_base_type.h"
 #include "storage/ls/ob_ls.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 namespace oceanbase
 {
 
@@ -28,9 +29,10 @@ class ObBackupBaseService : public lib::TGRunnable,
                             public logservice::ObICheckpointSubHandler
 {
 public:
+  static const int64_t OB_SERVICE_DEFAULT_IDLE_TIME = 10 * 60 * 1000 * 1000LL; // 10min
   static const int64_t OB_MAX_IDLE_TIME = 60 * 1000 * 1000; // 1min
   static const int64_t OB_MIDDLE_IDLE_TIME = 30 * 1000 * 1000; // 30s
-  static const int64_t OB_FALST_IDLE_TIME = 10 * 1000 * 1000; // 1s
+  static const int64_t OB_FAST_IDLE_TIME = 1 * 1000 * 1000; // 1s
 public:
   ObBackupBaseService();
   virtual ~ObBackupBaseService();
@@ -51,6 +53,7 @@ public:
   int64_t get_idle_time() const { return interval_idle_time_us_; }
   // role change
   int check_leader();
+  int end_transaction(common::ObMySQLTransaction &trans, const int upstream_ret);
   virtual void switch_to_follower_forcedly() override;
   virtual int switch_to_leader() override;
   virtual int switch_to_follower_gracefully() override;

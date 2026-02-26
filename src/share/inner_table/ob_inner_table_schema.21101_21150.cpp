@@ -60,7 +60,7 @@ int ObInnerTableSchema::gv_ob_sstables_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT  M.SVR_IP,  M.SVR_PORT,  (case M.TABLE_TYPE     when 0 then 'MEMTABLE' when 1 then 'TX_DATA_MEMTABLE' when 2 then 'TX_CTX_MEMTABLE'     when 3 then 'LOCK_MEMTABLE' when 4 then 'DIRECT_LOAD_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'     when 12 then 'MINI' when 13 then 'META'     when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'DDL_MEM'     when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG' when 20 then 'COL_ORIENTED_META'     when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'     when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'     when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'     else 'INVALID'   end) as TABLE_TYPE,  M.TENANT_ID,  M.LS_ID,  M.TABLET_ID,  M.CG_IDX,  M.START_LOG_SCN,  M.END_LOG_SCN,  M.DATA_CHECKSUM,  M.SIZE,  M.REF,  M.UPPER_TRANS_VERSION,  M.IS_ACTIVE,  M.CONTAIN_UNCOMMITTED_ROW FROM  oceanbase.__all_virtual_table_mgr M )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT  M.SVR_IP,  M.SVR_PORT,  (case M.TABLE_TYPE     when 0 then 'MEMTABLE' when 1 then 'TX_DATA_MEMTABLE' when 2 then 'TX_CTX_MEMTABLE'     when 3 then 'LOCK_MEMTABLE' when 4 then 'DIRECT_LOAD_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'     when 12 then 'MINI' when 13 then 'META'     when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'DDL_MEM'     when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG' when 20 then 'COL_ORIENTED_META'     when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'     when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'     when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'     when 29 then 'INC_MAJOR' when 30 then 'INC_CO_MAJOR' when 31 then 'INC_NORMAL_CG' when 32 then 'INC_ROWKEY_CG'     when 33 then 'INC_DDL_DUMP' when 34 then 'INC_DDL_MERGE_CO' when 35 then 'INC_DDL_MERGE_CG'     when 36 then 'INC_DDL_MEM_CO' when 37 then 'INC_DDL_MEM_CG' when 38 then 'INC_DDL_MEM'     else 'INVALID'   end) as TABLE_TYPE,  M.TENANT_ID,  M.LS_ID,  M.TABLET_ID,  M.CG_IDX,  M.START_LOG_SCN,  M.END_LOG_SCN,  M.DATA_CHECKSUM,  M.SIZE,  M.REF,  M.UPPER_TRANS_VERSION,  M.IS_ACTIVE,  M.CONTAIN_UNCOMMITTED_ROW FROM  oceanbase.__all_virtual_table_mgr M )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -70,6 +70,7 @@ int ObInnerTableSchema::gv_ob_sstables_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -120,6 +121,7 @@ int ObInnerTableSchema::v_ob_sstables_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -160,7 +162,7 @@ int ObInnerTableSchema::cdb_ob_restore_progress_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     P.TENANT_ID AS TENANT_ID,     P.JOB_ID AS JOB_ID,     RESTORE_TENANT_NAME,     RESTORE_TENANT_ID,     BACKUP_TENANT_NAME,     BACKUP_TENANT_ID,     BACKUP_CLUSTER_NAME,     BACKUP_DEST,     RESTORE_OPTION,     RESTORE_TYPE,     RESTORE_SCN,     CASE       WHEN RESTORE_SCN IS NULL         THEN NULL       WHEN RESTORE_SCN=0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RESTORE_SCN)       END AS RESTORE_SCN_DISPLAY,     CASE       WHEN STATUS = 'RESTORE_PRE'         THEN 'RESTORING'       WHEN STATUS = 'RESTORE_CREATE_INIT_LS'         THEN 'RESTORING'       WHEN STATUS = 'PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN'         THEN 'RESTORING'       WHEN STATUS = 'RESTORE_WAIT_LS'         THEN 'RESTORING'       WHEN STATUS = 'POST_CHECK'         THEN 'RESTORING'       ELSE STATUS       END AS STATUS,     CASE       WHEN START_TIMESTAMP IS NULL         THEN NULL       WHEN START_TIMESTAMP=''         THEN NULL       WHEN START_TIMESTAMP='0'         THEN NULL       ELSE         USEC_TO_TIME(START_TIMESTAMP)       END AS START_TIMESTAMP,     BACKUP_SET_LIST,     BACKUP_PIECE_LIST,     TOTAL_BYTES,     CASE       WHEN TOTAL_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN TOTAL_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN TOTAL_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(TOTAL_BYTES/1024/1024,2), 'MB')       END AS TOTAL_BYTES_DISPLAY,     FINISH_BYTES,     CASE       WHEN FINISH_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN FINISH_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN FINISH_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(FINISH_BYTES/1024/1024,2), 'MB')       END AS FINISH_BYTES_DISPLAY,     DESCRIPTION     FROM   (       SELECT       TENANT_ID,       JOB_ID,       MAX(CASE NAME WHEN 'tenant_name' THEN VALUE ELSE '' END) AS RESTORE_TENANT_NAME,       MAX(CASE NAME WHEN 'tenant_id' THEN VALUE ELSE '' END) AS RESTORE_TENANT_ID,       MAX(CASE NAME WHEN 'backup_tenant_name' THEN VALUE ELSE '' END) AS BACKUP_TENANT_NAME,       MAX(CASE NAME WHEN 'backup_tenant_id' THEN VALUE ELSE '' END) AS BACKUP_TENANT_ID,       MAX(CASE NAME WHEN 'backup_cluster_name' THEN VALUE ELSE '' END) AS BACKUP_CLUSTER_NAME,       MAX(CASE NAME WHEN 'target_tenant_role' THEN VALUE ELSE '' END) AS TENANT_ROLE,       MAX(CASE NAME WHEN 'backup_dest' THEN VALUE ELSE '' END) AS BACKUP_DEST,       MAX(CASE NAME WHEN 'restore_option' THEN VALUE ELSE '' END) AS RESTORE_OPTION,       MAX(CASE NAME WHEN 'status' THEN VALUE ELSE '' END) AS STATUS,       MAX(CASE NAME WHEN 'restore_scn' THEN VALUE ELSE '' END) AS RESTORE_SCN,       MAX(CASE NAME WHEN 'restore_start_ts' THEN VALUE ELSE '' END) AS START_TIMESTAMP,       MAX(CASE NAME WHEN 'backup_set_list' THEN VALUE ELSE '' END) AS BACKUP_SET_LIST,       MAX(CASE NAME WHEN 'backup_piece_list' THEN VALUE ELSE '' END) AS BACKUP_PIECE_LIST,       MAX(CASE NAME WHEN 'description' THEN VALUE ELSE '' END) AS DESCRIPTION,       MAX(CASE NAME WHEN 'restore_type' THEN VALUE ELSE '' END) AS RESTORE_TYPE       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID   ) P LEFT JOIN   (       SELECT       TENANT_ID,       JOB_ID,       TOTAL_BYTES,       FINISH_BYTES       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_PROGRESS   ) J     ON P.TENANT_ID=J.TENANT_ID AND P.JOB_ID=J.JOB_ID )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     P.TENANT_ID AS TENANT_ID,     P.JOB_ID AS JOB_ID,     RESTORE_TENANT_NAME,     RESTORE_TENANT_ID,     BACKUP_TENANT_NAME,     BACKUP_TENANT_ID,     BACKUP_CLUSTER_NAME,     BACKUP_DEST,     RESTORE_OPTION,     RESTORE_TYPE,     RESTORE_SCN,     CASE       WHEN RESTORE_SCN IS NULL         THEN NULL       WHEN RESTORE_SCN=0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RESTORE_SCN)       END AS RESTORE_SCN_DISPLAY,     CASE       WHEN STATUS = 'RESTORE_PRE'         THEN 'RESTORING'       WHEN STATUS = 'RESTORE_CREATE_INIT_LS'         THEN 'RESTORING'       WHEN STATUS = 'PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN'         THEN 'RESTORING'       WHEN STATUS = 'RESTORE_WAIT_LS'         THEN 'RESTORING'       WHEN STATUS = 'POST_CHECK'         THEN 'RESTORING'       ELSE STATUS       END AS STATUS,     CASE       WHEN START_TIMESTAMP IS NULL         THEN NULL       WHEN START_TIMESTAMP=''         THEN NULL       WHEN START_TIMESTAMP='0'         THEN NULL       ELSE         USEC_TO_TIME(START_TIMESTAMP)       END AS START_TIMESTAMP,     BACKUP_SET_LIST,     BACKUP_PIECE_LIST,     RECOVER_SCN,     CASE       WHEN RECOVER_SCN IS NULL         THEN NULL       WHEN RECOVER_SCN <= 1         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RECOVER_SCN)       END AS RECOVER_SCN_DISPLAY,     CASE       WHEN RECOVER_SCN IS NULL         THEN NULL       WHEN STATUS IN ('RESTORE_PRE', 'RESTORE_CREATE_INIT_LS', 'PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN')         THEN CAST(0 AS DECIMAL(6, 2))       WHEN RESTORE_SCN = RECOVER_START_SCN         THEN CAST(100 AS DECIMAL(6, 2))       ELSE CAST(TRUNCATE((RECOVER_SCN - RECOVER_START_SCN) / (RESTORE_SCN - RECOVER_START_SCN) * 100, 2) AS DECIMAL(6, 2))       END AS RECOVER_PROGRESS,     TABLET_COUNT,     FINISH_TABLET_COUNT,     CASE PROGRESS_DISPLAY_MODE       WHEN 'BYTES' THEN         CASE           WHEN FINISH_BYTES IS NULL THEN NULL           ELSE CAST(TRUNCATE((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS DECIMAL(6, 2))           END       WHEN 'TABLET_CNT' THEN         CASE           WHEN FINISH_TABLET_COUNT IS NULL THEN NULL           ELSE CAST(TRUNCATE((FINISH_TABLET_COUNT / TABLET_COUNT) * 100, 2) AS DECIMAL(6, 2))           END       END AS RESTORE_PROGRESS,     TOTAL_BYTES,     CASE       WHEN TOTAL_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN TOTAL_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN TOTAL_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(TOTAL_BYTES/1024/1024,2), 'MB')       END AS TOTAL_BYTES_DISPLAY,     FINISH_BYTES,     CASE       WHEN FINISH_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN FINISH_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN FINISH_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(FINISH_BYTES/1024/1024,2), 'MB')       END AS FINISH_BYTES_DISPLAY,     DESCRIPTION     FROM   (       SELECT       TENANT_ID,       JOB_ID,       MAX(CASE NAME WHEN 'tenant_name' THEN VALUE ELSE '' END) AS RESTORE_TENANT_NAME,       MAX(CASE NAME WHEN 'tenant_id' THEN VALUE ELSE '' END) AS RESTORE_TENANT_ID,       MAX(CASE NAME WHEN 'backup_tenant_name' THEN VALUE ELSE '' END) AS BACKUP_TENANT_NAME,       MAX(CASE NAME WHEN 'backup_tenant_id' THEN VALUE ELSE '' END) AS BACKUP_TENANT_ID,       MAX(CASE NAME WHEN 'backup_cluster_name' THEN VALUE ELSE '' END) AS BACKUP_CLUSTER_NAME,       MAX(CASE NAME WHEN 'target_tenant_role' THEN VALUE ELSE '' END) AS TENANT_ROLE,       MAX(CASE NAME WHEN 'backup_dest' THEN VALUE ELSE '' END) AS BACKUP_DEST,       MAX(CASE NAME WHEN 'restore_option' THEN VALUE ELSE '' END) AS RESTORE_OPTION,       MAX(CASE NAME WHEN 'status' THEN VALUE ELSE '' END) AS STATUS,       MAX(CASE NAME WHEN 'consistent_scn' THEN VALUE ELSE '' END) AS RECOVER_START_SCN,       MAX(CASE NAME WHEN 'restore_scn' THEN VALUE ELSE '' END) AS RESTORE_SCN,       MAX(CASE NAME WHEN 'restore_start_ts' THEN VALUE ELSE '' END) AS START_TIMESTAMP,       MAX(CASE NAME WHEN 'backup_set_list' THEN VALUE ELSE '' END) AS BACKUP_SET_LIST,       MAX(CASE NAME WHEN 'backup_piece_list' THEN VALUE ELSE '' END) AS BACKUP_PIECE_LIST,       MAX(CASE NAME WHEN 'description' THEN VALUE ELSE '' END) AS DESCRIPTION,       MAX(CASE NAME WHEN 'restore_type' THEN VALUE ELSE '' END) AS RESTORE_TYPE,       MAX(CASE NAME WHEN 'progress_display_mode' THEN VALUE ELSE '' END) AS PROGRESS_DISPLAY_MODE       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID   ) P LEFT JOIN   (       SELECT       TENANT_ID,       JOB_ID,       TABLET_COUNT,       FINISH_TABLET_COUNT,       TOTAL_BYTES,       FINISH_BYTES       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_PROGRESS   ) J     ON P.TENANT_ID=J.TENANT_ID AND P.JOB_ID=J.JOB_ID     LEFT JOIN   (       SELECT       TENANT_ID,       READABLE_SCN AS RECOVER_SCN       FROM OCEANBASE.__ALL_VIRTUAL_TENANT_INFO   ) Q     ON P.TENANT_ID=Q.TENANT_ID )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -170,6 +172,7 @@ int ObInnerTableSchema::cdb_ob_restore_progress_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -220,6 +223,7 @@ int ObInnerTableSchema::cdb_ob_restore_history_schema(ObTableSchema &table_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -270,6 +274,7 @@ int ObInnerTableSchema::gv_ob_server_schema_info_schema(ObTableSchema &table_sch
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -320,6 +325,7 @@ int ObInnerTableSchema::v_ob_server_schema_info_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -370,6 +376,7 @@ int ObInnerTableSchema::v_sql_monitor_statname_schema(ObTableSchema &table_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -420,6 +427,7 @@ int ObInnerTableSchema::gv_ob_merge_info_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -470,6 +478,7 @@ int ObInnerTableSchema::v_ob_merge_info_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -510,7 +519,7 @@ int ObInnerTableSchema::v_ob_encrypted_tables_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       A.table_id AS TABLE_ID,       A.table_name AS TABLE_NAME,       B.tablespace_id AS TABLESPACE_ID,       B.encryption_name AS ENCRYPTIONALG,       CASE WHEN B.encryption_name != '' AND sum(encrypted_macro_block_count) = sum(macro_block_count) THEN 'YES'            ELSE 'NO' END AS ENCRYPTED,       hex(B.encrypt_key) AS ENCRYPTEDKEY,       B.master_key_id AS MASTERKEYID,       sum(encrypted_macro_block_count) AS BLOCKS_ENCRYPTED,       (sum(macro_block_count) - sum(encrypted_macro_block_count)) AS BLOCKS_DECRYPTED,       CASE WHEN (B.encryption_name != '' AND sum(encrypted_macro_block_count) < sum(macro_block_count)) THEN 'ENCRYPTING'            WHEN (B.encryption_name = '' AND sum(encrypted_macro_block_count) > 0) THEN 'DECRYPTING'            ELSE 'NORMAL' END AS STATUS,       A.tenant_id as CON_ID     FROM       (SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, T.tablet_id        FROM oceanbase.__all_table T where T.part_level = 0 and T.table_mode >> 12 & 15 in (0,1)        UNION ALL        SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, P.tablet_id        FROM oceanbase.__all_table T, oceanbase.__all_part P        WHERE T.part_level = 1 and T.tenant_id = P.tenant_id and T.table_id = P.table_id        UNION ALL        SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, SP.tablet_id        FROM oceanbase.__all_table T, oceanbase.__all_sub_part SP        WHERE T.part_level = 2 and T.tenant_id = SP.tenant_id and T.table_id = SP.table_id       ) A       JOIN oceanbase.__all_tenant_tablespace B       ON A.tenant_id = B.tenant_id AND A.tablespace_id = B.tablespace_id       JOIN oceanbase.__all_virtual_tablet_encrypt_info E       ON E.tenant_id = effective_tenant_id() and E.tablet_id = A.tablet_id     WHERE A.tenant_id = 0 AND A.table_type != 12 AND A.table_type != 13     GROUP BY A.tenant_id, A.table_id, A.table_name, B.tablespace_id, B.encryption_name, B.encrypt_key, B.master_key_id   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       A.table_id AS TABLE_ID,       A.table_name AS TABLE_NAME,       B.tablespace_id AS TABLESPACE_ID,       B.encryption_name AS ENCRYPTIONALG,       CASE WHEN B.encryption_name != '' AND sum(encrypted_macro_block_count) = sum(macro_block_count) THEN 'YES'            ELSE 'NO' END AS ENCRYPTED,       hex(B.encrypt_key) AS ENCRYPTEDKEY,       B.master_key_id AS MASTERKEYID,       sum(encrypted_macro_block_count) AS BLOCKS_ENCRYPTED,       (sum(macro_block_count) - sum(encrypted_macro_block_count)) AS BLOCKS_DECRYPTED,       CASE WHEN (B.encryption_name != '' AND sum(encrypted_macro_block_count) < sum(macro_block_count)) THEN 'ENCRYPTING'            WHEN (B.encryption_name = '' AND sum(encrypted_macro_block_count) > 0) THEN 'DECRYPTING'            ELSE 'NORMAL' END AS STATUS,       A.tenant_id as CON_ID     FROM       (SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, T.tablet_id        FROM oceanbase.__all_table T where T.part_level = 0 and T.table_mode >> 12 & 15 in (0,1) and T.index_attributes_set & 16 = 0        UNION ALL        SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, P.tablet_id        FROM oceanbase.__all_table T, oceanbase.__all_part P        WHERE T.part_level = 1 and T.tenant_id = P.tenant_id and T.table_id = P.table_id        UNION ALL        SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, SP.tablet_id        FROM oceanbase.__all_table T, oceanbase.__all_sub_part SP        WHERE T.part_level = 2 and T.tenant_id = SP.tenant_id and T.table_id = SP.table_id       ) A       JOIN oceanbase.__all_tenant_tablespace B       ON A.tenant_id = B.tenant_id AND A.tablespace_id = B.tablespace_id       JOIN oceanbase.__all_virtual_tablet_encrypt_info E       ON E.tenant_id = effective_tenant_id() and E.tablet_id = A.tablet_id     WHERE A.tenant_id = 0 AND A.table_type != 12 AND A.table_type != 13     GROUP BY A.tenant_id, A.table_id, A.table_name, B.tablespace_id, B.encryption_name, B.encrypt_key, B.master_key_id   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -520,6 +529,7 @@ int ObInnerTableSchema::v_ob_encrypted_tables_schema(ObTableSchema &table_schema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -570,6 +580,7 @@ int ObInnerTableSchema::v_encrypted_tablespaces_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -620,6 +631,7 @@ int ObInnerTableSchema::cdb_ob_archivelog_piece_files_schema(ObTableSchema &tabl
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -660,7 +672,7 @@ int ObInnerTableSchema::cdb_ob_backup_set_files_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     BACKUP_SET_ID,     DEST_ID,     INCARNATION,     BACKUP_TYPE,     PREV_FULL_BACKUP_SET_ID,     PREV_INC_BACKUP_SET_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE       WHEN END_TS = 0           THEN NULL       ELSE           USEC_TO_TIME(END_TS)       END AS END_TIMESTAMP,     STATUS,     FILE_STATUS,     CASE       WHEN END_TS = 0         THEN 0       ELSE         ROUND((END_TS - START_TS)/1000/1000,0)       END AS ELAPSED_SECONDES,     PLUS_ARCHIVELOG,     START_REPLAY_SCN,     CASE       WHEN START_REPLAY_SCN = 0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(START_REPLAY_SCN)       END AS START_REPLAY_SCN_DISPLAY,     MIN_RESTORE_SCN,     CASE       WHEN MIN_RESTORE_SCN_DISPLAY != ''         THEN MIN_RESTORE_SCN_DISPLAY       WHEN MIN_RESTORE_SCN = 0          THEN NULL       ELSE         SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)       END AS MIN_RESTORE_SCN_DISPLAY,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)       END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     COMMENT,     ENCRYPTION_MODE,     PASSWD,     TENANT_COMPATIBLE,     BACKUP_COMPATIBLE,     PATH,     CLUSTER_VERSION,     CONSISTENT_SCN,     MINOR_TURN_ID,     MAJOR_TURN_ID     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_SET_FILES )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     BACKUP_SET_ID,     DEST_ID,     INCARNATION,     BACKUP_TYPE,     PREV_FULL_BACKUP_SET_ID,     PREV_INC_BACKUP_SET_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE       WHEN END_TS = 0           THEN NULL       ELSE           USEC_TO_TIME(END_TS)       END AS END_TIMESTAMP,     STATUS,     FILE_STATUS,     CASE       WHEN END_TS = 0         THEN 0       ELSE         ROUND((END_TS - START_TS)/1000/1000,0)       END AS ELAPSED_SECONDES,     PLUS_ARCHIVELOG,     START_REPLAY_SCN,     CASE       WHEN START_REPLAY_SCN = 0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(START_REPLAY_SCN)       END AS START_REPLAY_SCN_DISPLAY,     MIN_RESTORE_SCN,     CASE       WHEN MIN_RESTORE_SCN_DISPLAY != ''         THEN MIN_RESTORE_SCN_DISPLAY       WHEN MIN_RESTORE_SCN = 0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)       END AS MIN_RESTORE_SCN_DISPLAY,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)       END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     COMMENT,     ENCRYPTION_MODE,     PASSWD,     TENANT_COMPATIBLE,     BACKUP_COMPATIBLE,     PATH,     CLUSTER_VERSION,     CONSISTENT_SCN,     MINOR_TURN_ID,     MAJOR_TURN_ID     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_SET_FILES )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -670,6 +682,7 @@ int ObInnerTableSchema::cdb_ob_backup_set_files_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -720,6 +733,7 @@ int ObInnerTableSchema::connection_control_failed_login_attempts_schema(ObTableS
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -760,7 +774,7 @@ int ObInnerTableSchema::gv_ob_tenant_memory_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT      TENANT_ID,      svr_ip AS SVR_IP,      svr_port AS SVR_PORT,      hold AS HOLD,      `limit` - hold AS FREE FROM     oceanbase.__all_virtual_tenant_memory_info ORDER BY tenant_id, svr_ip, svr_port )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT      TENANT_ID,      svr_ip AS SVR_IP,      svr_port AS SVR_PORT,      hold AS HOLD,      CASE WHEN `limit` - hold > 0 THEN `limit` - hold ELSE 0 END AS FREE FROM     oceanbase.__all_virtual_tenant_memory_info ORDER BY tenant_id, svr_ip, svr_port )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -770,6 +784,7 @@ int ObInnerTableSchema::gv_ob_tenant_memory_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -820,6 +835,7 @@ int ObInnerTableSchema::v_ob_tenant_memory_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -870,6 +886,7 @@ int ObInnerTableSchema::gv_ob_px_target_monitor_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -920,6 +937,7 @@ int ObInnerTableSchema::v_ob_px_target_monitor_schema(ObTableSchema &table_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;

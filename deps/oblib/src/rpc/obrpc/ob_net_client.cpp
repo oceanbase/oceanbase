@@ -13,11 +13,9 @@
 #define USING_LOG_PREFIX RPC_OBRPC
 #include "rpc/obrpc/ob_net_client.h"
 
-#include "lib/ob_define.h"
-#include "lib/net/ob_addr.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 extern "C" {
-#include "rpc/pnio/interface/group.h"
+  #include "rpc/pnio/interface/group.h"
 };
 
 extern "C" {

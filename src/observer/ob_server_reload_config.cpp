@@ -13,27 +13,20 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_server_reload_config.h"
-#include "lib/alloc/alloc_func.h"
-#include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/alloc/ob_malloc_sample_struct.h"
-#include "lib/allocator/ob_tc_malloc.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
-#include "lib/signal/ob_signal_handlers.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "rpc/obrpc/ob_rpc_handler.h"
-#include "share/ob_cluster_version.h"
-#include "share/ob_task_define.h"
 #include "share/ob_resource_limit.h"
-#include "rootserver/ob_root_service.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_utils.h"
-#include "observer/ob_service.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/slog/ob_storage_logger_manager.h"
-#include "share/ob_ddl_sim_point.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "share/ash/ob_active_sess_hist_list.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/compaction/ob_shared_storage_compaction_util.h"
+#include "storage/shared_storage/ob_disk_space_manager.h"
+#endif
+#include "lib/stat/ob_diagnostic_info_container.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -129,8 +122,23 @@ int ObServerReloadConfig::operator()()
     if (OB_TMP_FAIL(ObSrvNetworkFrame::reload_rpc_auth_method())) {
       LOG_WARN("reload config for rpc auth method fail", K(tmp_ret));
     }
+    if (OB_TMP_FAIL(ObActiveSessHistList::get_instance().resize_ash_size())) {
+      LOG_WARN("failed to change ash size", K(tmp_ret));
+    }
+    ObDiagnosticInfoContainer::get_di_experimental_feature_flag().set_flags(
+        GCONF._enable_di_experimental_feature_flags);
   }
   {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      OB_SERVER_DISK_SPACE_MGR.reload_hidden_sys_data_disk_config(GCONF);
+      OB_SERVER_DISK_SPACE_MGR.reload_ss_cache_max_percentage_config(GCONF);
+      OB_SERVER_DISK_SPACE_MGR.reload_ss_cache_maxsize_percpu_config(GCONF);
+    }
+#endif
+    // The actual semantics of _enable_malloc_v2 is to enable malloc_v3.
+    // Therefore, when _enable_malloc_v2 is true, it means malloc_v3 is enabled and malloc_v2 is disabled.
+    enable_malloc_v2(!GCONF._enable_malloc_v2);
     GMEMCONF.reload_config(GCONF);
     const int64_t limit_memory = GMEMCONF.get_server_memory_limit();
     OB_LOGGER.set_info_as_wdiag(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0);
@@ -159,6 +167,7 @@ int ObServerReloadConfig::operator()()
         cpu_cnt = common::get_cpu_num();
       }
       io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
+      io_config.sync_io_thread_count_ = GCONF.sync_io_thread_count;
       // In the 2.x version, reuse the sys_bkgd_io_timeout configuration item to indicate the data disk io timeout time
       // After version 3.1, use the data_storage_io_timeout configuration item.
       io_config.data_storage_io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
@@ -230,6 +239,7 @@ int ObServerReloadConfig::operator()()
     if (0 != STRNCMP(last_storage_check_mod, GCONF._storage_leak_check_mod.str(), sizeof(last_storage_check_mod))) {
       ObKVGlobalCache::get_instance().set_storage_leak_check_mod(GCONF._storage_leak_check_mod.str());
       STRNCPY(last_storage_check_mod, GCONF._storage_leak_check_mod.str(), sizeof(last_storage_check_mod));
+      last_storage_check_mod[sizeof(last_storage_check_mod) - 1] = '\0';
     }
   }
 #ifndef ENABLE_SANITY
@@ -294,11 +304,10 @@ int ObServerReloadConfig::operator()()
     if (OB_TMP_FAIL(ObServerUtils::get_data_disk_info_in_config(data_disk_size,
                                                                 data_disk_percentage))) {
       LOG_ERROR("cal_all_part_disk_size failed", KR(tmp_ret));
-    } else if (OB_TMP_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+    } else if (OB_TMP_FAIL(SERVER_STORAGE_META_SERVICE.get_reserved_size(reserved_size))) {
       LOG_WARN("fail to get reserved size", KR(tmp_ret), K(reserved_size));
-    } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.resize_file(data_disk_size,
-                                                           data_disk_percentage,
-                                                           reserved_size))) {
+    } else if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.resize_local_device(
+        data_disk_size, data_disk_percentage, reserved_size))) {
       LOG_WARN("fail to resize file", KR(tmp_ret),
           K(data_disk_size), K(data_disk_percentage), K(reserved_size));
     }
@@ -331,8 +340,8 @@ void ObServerReloadConfig::reload_tenant_scheduler_config_()
     LOG_WARN("omt should not be null", K(ret));
   } else {
     auto f = [] () {
-      (void)MTL(ObTenantDagScheduler *)->reload_config();
-      (void)MTL(compaction::ObTenantTabletScheduler *)->reload_tenant_config();
+      (void) MTL(ObTenantDagScheduler *)->reload_config();
+      (void) MTL(compaction::ObTenantTabletScheduler *)->reload_tenant_config();
       return OB_SUCCESS;
     };
     omt->operate_in_each_tenant(f);

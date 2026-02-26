@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "lib/utility/serialization.h"
-#include "sql/executor/ob_task.h"
-#include "sql/executor/ob_job.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_des_exec_context.h"
+#include "ob_task.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/json/ob_yson.h"
 
 using namespace oceanbase::common;
 
@@ -39,7 +32,8 @@ ObTask::ObTask()
       ctrl_svr_(),
       ob_task_id_(),
       location_idx_(OB_INVALID_INDEX),
-      max_sql_no_(-1)
+      max_sql_no_(-1),
+      detectable_id_()
 {
   sql_string_[0] = '\0';
 }
@@ -80,20 +74,21 @@ OB_DEF_SERIALIZE(ObTask)
     if (OB_ISNULL(root_spec_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected status: op root is null", K(ret));
-    } else if (OB_FAIL(ObPxTreeSerializer::serialize_expr_frame_info(
+    } else if (OB_FAIL(ObPxTreeSerializer::serialize_expr_frame_info<true>(
         buf, buf_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
       LOG_WARN("failed to serialize rt expr", K(ret));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_tree(
                 buf, buf_len, pos, *root_spec_, false /**is full tree*/, runner_svr_))) {
       LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
-        buf, buf_len, pos, *root_spec_, exec_ctx_->get_kit_store(), false/*is full tree*/))) {
+        buf, buf_len, pos, *root_spec_, exec_ctx_->get_kit_store()))) {
       LOG_WARN("failed to deserialize kit store", K(ret));
     }
   }
   LST_DO_CODE(OB_UNIS_ENCODE, ranges_);
   LST_DO_CODE(OB_UNIS_ENCODE, max_sql_no_);
   OB_UNIS_ENCODE(ObString(sql_string_));
+  OB_UNIS_ENCODE(detectable_id_);
   return ret;
 }
 
@@ -130,7 +125,7 @@ OB_DEF_DESERIALIZE(ObTask)
 
     if (OB_SUCC(ret)) {
       const ObExprFrameInfo *frame_info = &des_phy_plan_->get_expr_frame_info();
-      if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info(
+      if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
           buf, data_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
         LOG_WARN("failed to serialize rt expr", K(ret));
       } else if (OB_FAIL(ObPxTreeSerializer::deserialize_tree(
@@ -160,6 +155,7 @@ OB_DEF_DESERIALIZE(ObTask)
   if(OB_SUCC(ret)) {
     set_sql_string(sql_string);
   }
+  OB_UNIS_DECODE(detectable_id_);
   return ret;
 }
 
@@ -181,17 +177,18 @@ OB_DEF_SERIALIZE_SIZE(ObTask)
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected status: op root is null");
     } else {
       const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
-      len += ObPxTreeSerializer::get_serialize_expr_frame_info_size(*exec_ctx_,
+      len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_,
                                     *const_cast<ObExprFrameInfo *>(frame_info));
       len += ObPxTreeSerializer::get_tree_serialize_size(*root_spec_, false/*is fulltree*/);
       len += ObPxTreeSerializer::get_serialize_op_input_size(
-        *root_spec_, exec_ctx_->get_kit_store(),  false/*is fulltree*/);
+        *root_spec_, exec_ctx_->get_kit_store());
     }
     LOG_TRACE("trace get ser rpc init sqc args size", K(len));
     LST_DO_CODE(OB_UNIS_ADD_LEN, ranges_);
   }
   LST_DO_CODE(OB_UNIS_ADD_LEN, max_sql_no_);
   OB_UNIS_ADD_LEN(ObString(sql_string_));
+  OB_UNIS_ADD_LEN(detectable_id_);
   return len;
 }
 
@@ -225,7 +222,7 @@ OB_DEF_SERIALIZE(ObMiniTask)
                   buf, buf_len, pos, *extend_root_spec_ , false /**is full tree*/, runner_svr_))) {
         LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
       } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
-          buf, buf_len, pos, *extend_root_spec_, exec_ctx_->get_kit_store(), false/*is full tree*/))) {
+          buf, buf_len, pos, *extend_root_spec_, exec_ctx_->get_kit_store()))) {
         LOG_WARN("failed to deserialize kit store", K(ret));
       }
     }
@@ -273,7 +270,7 @@ OB_DEF_SERIALIZE_SIZE(ObMiniTask)
       len += ObPxTreeSerializer::get_tree_serialize_size(*extend_root_spec_,
                                                          false/*is fulltree*/);
       len += ObPxTreeSerializer::get_serialize_op_input_size(
-        *extend_root_spec_, exec_ctx_->get_kit_store(), false/*is fulltree*/);
+        *extend_root_spec_, exec_ctx_->get_kit_store());
     }
   }
   return len;
@@ -307,15 +304,21 @@ OB_DEF_SERIALIZE(ObRemoteTask)
   int ret = OB_SUCCESS;
   int64_t tenant_id = OB_INVALID_ID;
   ParamStore *ps_params = nullptr;
+  ParamStore empty_param_store;
   //for serialize ObObjParam' param_meta_
   int64_t param_meta_count = 0;
   if (OB_ISNULL(remote_sql_info_)
       || OB_ISNULL(session_info_)
-      || OB_ISNULL(ps_params = remote_sql_info_->ps_params_)) {
+      || OB_ISNULL(remote_sql_info_->ps_params_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("remote task not init", K(ret), K_(remote_sql_info), K_(session_info), K(ps_params));
   } else {
     tenant_id = session_info_->get_effective_tenant_id();
+    if (!remote_sql_info_->use_ps_) {
+      ps_params = &empty_param_store;
+    } else {
+      ps_params = remote_sql_info_->ps_params_;
+    }
     param_meta_count = ps_params->count();
   }
   LST_DO_CODE(OB_UNIS_ENCODE,
@@ -341,6 +344,8 @@ OB_DEF_SERIALIZE(ObRemoteTask)
   }
   OB_UNIS_ENCODE(remote_sql_info_->is_original_ps_mode_);
   OB_UNIS_ENCODE(remote_sql_info_->sql_from_pl_);
+  OB_UNIS_ENCODE(ls_list_);
+  OB_UNIS_ENCODE(detectable_id_);
   return ret;
 }
 
@@ -348,13 +353,19 @@ OB_DEF_SERIALIZE_SIZE(ObRemoteTask)
 {
   int64_t len = 0;
   ParamStore *ps_params = nullptr;
+  ParamStore empty_param_store;
   int64_t param_meta_count = 0;
   if (OB_ISNULL(remote_sql_info_)
       || OB_ISNULL(session_info_)
-      || OB_ISNULL(ps_params = remote_sql_info_->ps_params_)) {
+      || OB_ISNULL(remote_sql_info_->ps_params_)) {
     LOG_WARN_RET(OB_NOT_INIT, "remote task not init", K_(remote_sql_info), K_(session_info), K(ps_params));
   } else {
     int64_t tenant_id = session_info_->get_effective_tenant_id();
+    if (!remote_sql_info_->use_ps_) {
+      ps_params = &empty_param_store;
+    } else {
+      ps_params = remote_sql_info_->ps_params_;
+    }
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 tenant_schema_version_,
                 sys_schema_version_,
@@ -379,6 +390,8 @@ OB_DEF_SERIALIZE_SIZE(ObRemoteTask)
     }
     OB_UNIS_ADD_LEN(remote_sql_info_->is_original_ps_mode_);
     OB_UNIS_ADD_LEN(remote_sql_info_->sql_from_pl_);
+    OB_UNIS_ADD_LEN(ls_list_);
+    OB_UNIS_ADD_LEN(detectable_id_);
   }
   return len;
 }
@@ -426,32 +439,46 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
         session_info_->set_mysql_cmd(obmysql::COM_QUERY);
       }
       OB_UNIS_DECODE(remote_sql_info_->is_batched_stmt_);
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(session_info_->set_session_active(
+            ObString::make_string("REMOTE/DISTRIBUTE SQL EXECUTING"),
+            obmysql::COM_QUERY))) {
+          LOG_WARN("set remote session active failed", K(ret));
+        }
+        EVENT_INC(ACTIVE_SESSIONS);
+      }
     }
     dependency_tables_.set_allocator(&(exec_ctx_->get_allocator()));
     OB_UNIS_DECODE(dependency_tables_);
     OB_UNIS_DECODE(snapshot_);
-    exec_ctx_->get_das_ctx().set_snapshot(snapshot_);
-    //DESERIALIZE param_meta_count if 0, (1) params->count() ==0 (2) old version -> new version
-    //for (2) just set obj.meta as param_meta
-    OB_UNIS_DECODE(param_meta_count);
-    if (OB_SUCC(ret)) {
-      if (param_meta_count > 0) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
-          OB_UNIS_DECODE(tmp_meta);
-          ps_params->at(i).set_param_meta(tmp_meta);
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
-          OB_UNIS_DECODE(tmp_flag);
-          ps_params->at(i).set_param_flag(tmp_flag);
-        }
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < ps_params->count(); ++i) {
-          ps_params->at(i).set_param_meta();
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(exec_ctx_->get_das_ctx().set_snapshot(snapshot_))) {
+      LOG_WARN("fail to set snapshot", K(ret));
+    } else {
+      //DESERIALIZE param_meta_count if 0, (1) params->count() ==0 (2) old version -> new version
+      //for (2) just set obj.meta as param_meta
+      OB_UNIS_DECODE(param_meta_count);
+      if (OB_SUCC(ret)) {
+        if (param_meta_count > 0) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
+            OB_UNIS_DECODE(tmp_meta);
+            ps_params->at(i).set_param_meta(tmp_meta);
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
+            OB_UNIS_DECODE(tmp_flag);
+            ps_params->at(i).set_param_flag(tmp_flag);
+          }
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < ps_params->count(); ++i) {
+            ps_params->at(i).set_param_meta();
+          }
         }
       }
+      OB_UNIS_DECODE(remote_sql_info_->is_original_ps_mode_);
+      OB_UNIS_DECODE(remote_sql_info_->sql_from_pl_);
+      OB_UNIS_DECODE(ls_list_);
+      OB_UNIS_DECODE(detectable_id_);
     }
-    OB_UNIS_DECODE(remote_sql_info_->is_original_ps_mode_);
-    OB_UNIS_DECODE(remote_sql_info_->sql_from_pl_);
   }
   return ret;
 }
@@ -462,6 +489,34 @@ int ObRemoteTask::assign_dependency_tables(const DependenyTableStore &dependency
     LOG_WARN("failed to assign file list", K(ret));
   }
   return ret;
+}
+
+int ObRemoteTask::assign_ls_list(const share::ObLSArray ls_ids) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_list_.assign(ls_ids))) {
+    LOG_WARN("failed to assign ls list", K(ret));
+  }
+  return ret;
+}
+
+// 需保证两个ls array中元素不重复
+bool ObRemoteTask::check_ls_list(share::ObLSArray &ls_ids) const {
+  bool is_valid = true;
+
+  if (ls_ids.count() > ls_list_.count()) {
+    is_valid = false;
+  } else {
+    ARRAY_FOREACH_X(ls_ids, i, ls_ids_cnt, is_valid) {
+      is_valid = false;
+      ARRAY_FOREACH_X(ls_list_, j, ls_list_cnt, !is_valid) {
+        if (ls_ids.at(i) == ls_list_.at(j)) {
+          is_valid = true;
+        }
+      }
+    }
+  }
+
+  return is_valid;
 }
 
 DEFINE_TO_YSON_KV(ObRemoteTask, OB_ID(task_id), task_id_,

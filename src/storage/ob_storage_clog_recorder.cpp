@@ -8,13 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE
-#include "ob_storage_clog_recorder.h"
 
-#include "lib/utility/ob_tracepoint.h"
-#include "logservice/ob_log_base_header.h"
-#include "logservice/ob_log_base_type.h"
-#include "logservice/ob_log_handler.h"
-#include "storage/tx_storage/ob_ls_handle.h"
+#include "ob_storage_clog_recorder.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
@@ -60,12 +55,13 @@ int ObIStorageClogRecorder::ObStorageCLogCb::on_failure()
 }
 
 ObIStorageClogRecorder::ObIStorageClogRecorder()
-  : lock_(false),
-    logcb_finish_flag_(true),
+  : concurrent_lock_(),
     logcb_ptr_(nullptr),
     log_handler_(nullptr),
     max_saved_version_(OB_INVALID_VERSION),
-    clog_scn_()
+    clog_scn_(),
+    lock_(false),
+    logcb_finish_flag_(true)
 {
 }
 
@@ -110,7 +106,7 @@ OB_INLINE void ObIStorageClogRecorder::wait_to_lock(const int64_t update_version
   while (true) {
     int64_t last_time = ObTimeUtility::fast_current_time();
     while (true == ATOMIC_LOAD(&lock_)) {
-      usleep(100);
+      ob_usleep(100);
       if (ObTimeUtility::fast_current_time() + 100 * 1000 > last_time) {
         last_time = ObTimeUtility::fast_current_time();
         LOG_DEBUG("waiting to lock", K(update_version), K(max_saved_version_), KPC(this));
@@ -132,7 +128,7 @@ OB_INLINE void ObIStorageClogRecorder::wait_for_logcb(const int64_t update_versi
       last_time = ObTimeUtility::fast_current_time();
       LOG_DEBUG("waiting for clog callback", K(update_version), K(max_saved_version_), KPC(this));
     }
-    usleep(100);
+    ob_usleep(100);
     WEAK_BARRIER();
   }
 }
@@ -144,21 +140,27 @@ int ObIStorageClogRecorder::try_update_with_lock(
     const int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
-  while ((OB_SUCC(ret) || OB_BLOCK_FROZEN == ret)
-      && update_version > ATOMIC_LOAD(&max_saved_version_)) {
-    logcb_ptr_->set_update_version(update_version);
-    if (OB_FAIL(submit_log(update_version, clog_buf, clog_len))) {
-      if (OB_BLOCK_FROZEN != ret) {
-        LOG_WARN("fail to submit log", K(ret), K(update_version), K(max_saved_version_));
-      } else if (ObTimeUtility::fast_current_time() >= expire_ts) {
-        ret = OB_EAGAIN;
-        LOG_WARN("failed to sync clog", K(ret), K(update_version),
-            K(max_saved_version_), K(expire_ts));
-      }
+  while ((OB_SUCC(ret) || OB_BLOCK_FROZEN == ret)) {
+    ObLatchWGuard guard(concurrent_lock_, ObLatchIds::STORAGE_CLOG_RECORDER_LOCK);
+    if (update_version <= ATOMIC_LOAD(&max_saved_version_)) {
+      break;
     } else {
-      wait_for_logcb(update_version);  // wait clog callback
+      logcb_ptr_->set_update_version(update_version);
+      if (OB_FAIL(reset_for_retry_in_lock())) {
+        LOG_WARN("fail to reset for retry", K(ret), K(update_version), K_(max_saved_version));
+      } else if (OB_FAIL(submit_log(update_version, clog_buf, clog_len))) {
+        if (OB_BLOCK_FROZEN != ret) {
+          LOG_WARN("fail to submit log", K(ret), K(update_version), K(max_saved_version_));
+        } else if (ObTimeUtility::fast_current_time() >= expire_ts) {
+          ret = OB_EAGAIN;
+          LOG_WARN("failed to sync clog", K(ret), K(update_version),
+              K(max_saved_version_), K(expire_ts));
+        }
+      } else {
+        wait_for_logcb(update_version);  // wait clog callback
+      }
+      WEAK_BARRIER();
     }
-    WEAK_BARRIER();
   } // end of while
 
   return ret;
@@ -216,17 +218,20 @@ int ObIStorageClogRecorder::replay_clog(
     int64_t &pos)
 {
   int ret = OB_SUCCESS;
+  ObLatchWGuard guard(concurrent_lock_, ObLatchIds::STORAGE_CLOG_RECORDER_LOCK);
   if (update_version <= ATOMIC_LOAD(&max_saved_version_)) {
     LOG_INFO("skip clog with smaller version", K(update_version), K(max_saved_version_), KPC(this));
-  } else if (OB_FAIL(inner_replay_clog(update_version, scn, buf, size, pos))) {
-    if (OB_NO_NEED_UPDATE == ret) { // not update max_saved_version_
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to replay clog", K(ret), KPC(this));
-    }
   } else {
-    ATOMIC_STORE(&max_saved_version_, update_version);
-    LOG_DEBUG("success to replay clog", K(ret), KPC(this), K(max_saved_version_));
+    if (OB_FAIL(inner_replay_clog(update_version, scn, buf, size, pos))) {
+      if (OB_NO_NEED_UPDATE == ret) { // not update max_saved_version_
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to replay clog", K(ret), KPC(this));
+      }
+    } else {
+      ATOMIC_STORE(&max_saved_version_, update_version);
+      LOG_DEBUG("success to replay clog", K(ret), KPC(this), K(max_saved_version_));
+    }
   }
 
   return ret;

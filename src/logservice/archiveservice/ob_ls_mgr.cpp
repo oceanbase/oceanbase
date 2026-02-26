@@ -11,23 +11,10 @@
  */
 
 #include "ob_ls_mgr.h"
-#include "lib/guard/ob_shared_guard.h"        // ObShareGuard
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"
-#include "share/backup/ob_backup_struct.h"    // ObBackupPathString
-#include "share/ob_debug_sync.h"              // DEBUG
-#include "storage/ls/ob_ls.h"                 // ObLS
-#include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
-#include "storage/tx_storage/ob_ls_service.h" // ObLSService
 #include "logservice/ob_log_service.h"        // ObLogService
-#include "logservice/palf_handle_guard.h"     // PalfHandleGuard
-#include "ob_archive_allocator.h"             // ObArchiveAllocator
 #include "ob_archive_sequencer.h"             // ObArchiveSequencer
-#include "ob_archive_persist_mgr.h"           // ObArchivePersistMgr
-#include "ob_archive_util.h"                  // GET_LS_TASK_CTX
 #include "ob_archive_round_mgr.h"             // ObArchiveRoundMgr
-#include <stdint.h>
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -363,6 +350,7 @@ int ObArchiveLSMgr::authorize_ls_archive_task(const ObLSID &id,
 void ObArchiveLSMgr::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveLSMgr thread start");
+  ObDIActionGuard g("LogService", "LogArchiveService", "LSArchiveMgr");
   lib::set_thread_name("LSArchiveMgr");
   ObCurTraceId::init(GCONF.self_addr_);
 
@@ -375,6 +363,7 @@ void ObArchiveLSMgr::run1()
       int64_t end_tstamp = ObTimeUtility::current_time();
       int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
+        ObBKGDSessInActiveGuard inactive_guard;
         cond_.timedwait(wait_interval);
       }
     }
@@ -581,7 +570,7 @@ void ObArchiveLSMgr::gc_stale_ls_task_(const ArchiveKey &key, const bool is_in_d
   if (OB_FAIL(ls_map_.remove_if(functor))) {
     ARCHIVE_LOG(WARN, "ls_map for each failed", KR(ret));
   } else {
-    ARCHIVE_LOG(INFO, "gc stale ls task succ");
+    ARCHIVE_LOG(TRACE, "gc stale ls task succ");
   }
 }
 

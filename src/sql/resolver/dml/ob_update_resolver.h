@@ -45,6 +45,15 @@ public:
 private:
   int resolve_table_list(const ParseNode &parse_tree);
   int generate_update_table_info(ObTableAssignment &table_assign);
+  int check_primary_key_is_updated(const ObTableSchema *table_schema,
+                                  const common::ObIArray<ObAssignment> &assigns,
+                                  bool &is_updated) const;
+  int check_unique_key_is_updated(const ObTableSchema *table_schema,
+                                  const common::ObIArray<ObAssignment> &assigns,
+                                  bool &is_updated) const;
+  int check_part_key_is_updated(const ObTableSchema *table_schema,
+                                const common::ObIArray<ObAssignment> &assigns,
+                                bool &is_updated) const;
   int check_multi_update_table_conflict();
   int check_join_update_conflict();
   int is_join_table_update(const ObDMLStmt *stmt, bool &is_multi_table);

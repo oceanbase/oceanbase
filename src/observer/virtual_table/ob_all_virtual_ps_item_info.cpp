@@ -13,12 +13,8 @@
 #include "observer/virtual_table/ob_all_virtual_ps_item_info.h"
 
 #include "sql/plan_cache/ob_ps_cache.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_ps_sql_utils.h"
 
 #include "observer/ob_server_utils.h"
-#include "observer/ob_server_struct.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 
 using namespace oceanbase;
 using namespace sql;

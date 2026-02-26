@@ -17,9 +17,6 @@
 #define protected public
 #define private public
 
-#include "lib/oblog/ob_log.h"
-#include "lib/container/ob_se_array.h"
-#include "common/storage/ob_io_device.h"
 #include "share/ob_local_device.h"
 #include "share/ob_thread_pool.h"
 

@@ -18,11 +18,6 @@
 #include "sql/resolver/ddl/ob_drop_database_stmt.h"
 #include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "sql/resolver/ddl/ob_purge_stmt.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "lib/worker.h"
-#include "rootserver/ob_root_utils.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
@@ -116,9 +111,13 @@ int ObUseDatabaseExecutor::execute(ObExecContext &ctx, ObUseDatabaseStmt &stmt)
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "access oceanbase database");
     } else {
       ObCollationType db_coll_type = ObCharset::collation_type(stmt.get_db_collation());
+      ObObj catalog_id_obj;
+      catalog_id_obj.set_uint64(stmt.get_catalog_id());
       if (OB_UNLIKELY(CS_TYPE_INVALID == db_coll_type)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_ENG_LOG(ERROR, "invalid collation", K(ret), K(stmt.get_db_name()), K(stmt.get_db_collation()));
+      } else if (OB_FAIL(session->update_sys_variable(ObSysVarClassType::SYS_VAR__CURRENT_DEFAULT_CATALOG, catalog_id_obj))) {
+        SQL_ENG_LOG(WARN, "set catalog id session variable failed", K(ret));
       } else if (OB_FAIL(session->set_default_database(stmt.get_db_name(), db_coll_type))) {
         SQL_ENG_LOG(WARN, "fail to set default database", K(ret), K(stmt.get_db_name()), K(stmt.get_db_collation()), K(db_coll_type));
       } else {

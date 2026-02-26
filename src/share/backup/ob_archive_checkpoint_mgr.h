@@ -55,17 +55,19 @@ public:
       path_(path),
       file_name_(file_name),
       type_(type),
-      storage_info_(storage_info) {}
+      storage_info_(storage_info),
+      handled_file_num_(0) {}
   virtual ~ObDelHisCheckpointFileOp() {}
   bool is_valid() const;
   int func(const dirent *entry) ;
-
+  int64_t get_handed_file_num() { return handled_file_num_; };
 private:
   uint64_t checkpoint_scn_;
   ObBackupPath path_;
   const char *file_name_;
   ObBackupFileSuffix type_;
   const share::ObBackupStorageInfo *storage_info_;
+  int64_t handled_file_num_;
 
   DISALLOW_COPY_AND_ASSIGN(ObDelHisCheckpointFileOp);
 };
@@ -87,11 +89,12 @@ public:
       const ObBackupStorageInfo *storage_info);
   void reset();
   bool is_valid() const;
-  int write(const uint64_t checkpoint_scn) const;
+  int write(const uint64_t old_checkpoint_scn, const uint64_t checkpoint_scn) const;
   int read(uint64_t &checkpoint_scn) const;
+  int del_history_files(const uint64_t write_checkpoint_scn) const;
 private:
   int get_max_checkpoint_scn_(const ObBackupPath &path, uint64_t &max_checkpoint_scn) const;
-  int del_history_files_(const ObBackupPath &dir_path, const uint64_t write_checkpoint_scn) const;
+  int del_last_ckpt_file_(const ObBackupPath &dir_path, const uint64_t write_checkpoint_scn) const;
   int write_checkpoint_file_(const ObBackupPath &path) const;
   int check_is_tagging_(const ObBackupStorageInfo *storage_info, bool &is_tagging) const;
 

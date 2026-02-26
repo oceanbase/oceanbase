@@ -25,20 +25,22 @@ namespace blocksstable
 struct ObDatumRange
 {
 public:
-  ObDatumRange() : start_key_(), end_key_(), group_idx_(0), border_flag_() { }
+  ObDatumRange() : start_key_(), end_key_(), table_id_(OB_INVALID_ID), flag_(0), border_flag_(), is_skip_prefetch_(nullptr) { }
   ~ObDatumRange() = default;
   OB_INLINE void reset();
   OB_INLINE bool is_valid() const;
   OB_INLINE bool is_memtable_valid() const;
   OB_INLINE const ObDatumRowkey& get_start_key() const { return start_key_; }
   OB_INLINE const ObDatumRowkey& get_end_key() const { return end_key_; }
+  OB_INLINE ObDatumRowkey& get_start_key() { return start_key_; }
+  OB_INLINE ObDatumRowkey& get_end_key() { return end_key_; }
   OB_INLINE const ObBorderFlag& get_border_flag() const { return border_flag_; }
-  OB_INLINE int64_t get_group_idx() const { return group_idx_; }
+  OB_INLINE int64_t get_group_idx() const;
   OB_INLINE void set_inclusive(ObBorderFlag flag) { border_flag_.set_inclusive(flag.get_data()); }
   OB_INLINE void set_border_flag(ObBorderFlag flag) { border_flag_ = flag; }
   OB_INLINE void set_start_key(const ObDatumRowkey &start_key) { start_key_ = start_key; }
   OB_INLINE void set_end_key(const ObDatumRowkey &end_key) { end_key_ = end_key; }
-  OB_INLINE void set_group_idx(const int64_t group_idx) { group_idx_ = group_idx; }
+  OB_INLINE void set_group_idx(const int64_t group_idx);
 
   OB_INLINE bool is_left_open() const { return !border_flag_.inclusive_start(); }
   OB_INLINE bool is_left_closed() const { return border_flag_.inclusive_start(); }
@@ -51,26 +53,43 @@ public:
   OB_INLINE void set_whole_range();
   OB_INLINE bool is_whole_range() const { return start_key_.is_min_rowkey() && end_key_.is_max_rowkey(); }
   OB_INLINE int is_single_rowkey(const ObStorageDatumUtils &datum_utils, bool &is_single) const;
-  OB_INLINE void change_boundary(const ObDatumRowkey &rowkey, bool is_reverse);
+  OB_INLINE void change_boundary(const ObDatumRowkey &rowkey, bool is_reverse, bool is_closed = false);
   OB_INLINE int from_range(const common::ObStoreRange &range, ObIAllocator &allocator);
-  OB_INLINE int from_range(const common::ObNewRange &range, ObIAllocator &allocator);
+  OB_INLINE int from_range(const common::ObNewRange &range, ObIAllocator &allocator, bool enable_new_false_range = false);
   OB_INLINE int to_store_range(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                               common::ObIAllocator &allocator,
                               common::ObStoreRange &store_range) const;
   OB_INLINE int to_multi_version_range(common::ObIAllocator &allocator, ObDatumRange &dest) const;
+  OB_INLINE int to_new_range(common::ObNewRange &range, const ObObjMeta* obj_metas, ObIAllocator & allocator) const;
   OB_INLINE int prepare_memtable_readable(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                                           common::ObIAllocator &allocator);
+  OB_INLINE int is_memtable_single_rowkey(const int64_t schema_rowkey_cnt,
+                                          const ObStorageDatumUtils &datum_utils,
+                                          bool &is_single) const;
   // !!Attension only compare start key
   OB_INLINE int compare(const ObDatumRange &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret) const;
+  OB_INLINE int partial_copy(const ObDatumRange &src, ObIAllocator &allocator);
   // maybe we will need serialize
   // NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(start_key), K_(end_key), K_(group_idx), K_(border_flag));
+  TO_STRING_KV(K_(start_key), K_(end_key), K_(group_idx), K_(border_flag), K_(is_skip_prefetch));
 public:
   ObDatumRowkey start_key_;
   ObDatumRowkey end_key_;
-  int64_t group_idx_;
+  int64_t table_id_;
+private:
+  union {
+    int64_t flag_;
+    struct {
+      int64_t group_idx_: 32;
+      int64_t is_physical_rowid_range_: 1;
+      int64_t index_ordered_idx_ : 16;  // used for keep order of global index lookup
+      int64_t reserved_: 15;
+    };
+  };
+public:
   //TODO maybe we should use a new border flag
   common::ObBorderFlag border_flag_;
+  const bool *is_skip_prefetch_;
 };
 
 template<typename T>
@@ -90,6 +109,22 @@ struct ObDatumComparor
   OB_INLINE bool operator()(const T &left, const T &right)
   {
     return compare<T>(left, right);
+  }
+  OB_INLINE bool is_reverse() const
+  {
+    return reverse_;
+  }
+  OB_INLINE bool is_lower_bound() const
+  {
+    return lower_bound_;
+  }
+  OB_INLINE bool is_compare_datum_cnt() const
+  {
+    return compare_datum_cnt_;
+  }
+  OB_INLINE const ObStorageDatumUtils &get_datum_utils() const
+  {
+    return datum_utils_;
   }
 private:
   template <typename DataType>
@@ -145,8 +180,9 @@ OB_INLINE void ObDatumRange::reset()
 {
   start_key_.reset();
   end_key_.reset();
-  group_idx_ = 0;
+  flag_ = 0;
   border_flag_.set_data(0);
+  is_skip_prefetch_ = nullptr;
 }
 
 //TODO without rowkey type, we cannot judge empty
@@ -164,7 +200,7 @@ OB_INLINE void ObDatumRange::set_whole_range()
 {
   start_key_.set_min_rowkey();
   end_key_.set_max_rowkey();
-  group_idx_= 0;
+  flag_= 0;
   border_flag_.set_all_open();
 }
 
@@ -182,12 +218,43 @@ OB_INLINE int ObDatumRange::is_single_rowkey(const ObStorageDatumUtils &datum_ut
   return ret;
 }
 
-OB_INLINE int ObDatumRange::from_range(const common::ObNewRange &range, ObIAllocator &allocator)
+OB_INLINE int ObDatumRange::is_memtable_single_rowkey(const int64_t schema_rowkey_cnt,
+                                                      const ObStorageDatumUtils &datum_utils,
+                                                      bool &is_single) const
+{
+  int ret = OB_SUCCESS;
+  is_single = false;
+  if (OB_UNLIKELY(!is_memtable_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected invalid memtable range", K(ret), KPC(this));
+  } else if (!border_flag_.inclusive_start() || !border_flag_.inclusive_end()) {
+  } else if (start_key_.is_ext_rowkey() || start_key_.is_static_rowkey() ||
+             end_key_.is_ext_rowkey() || end_key_.is_static_rowkey()) {
+  } else if (OB_UNLIKELY(start_key_.store_rowkey_.get_obj_cnt() < schema_rowkey_cnt ||
+                         end_key_.store_rowkey_.get_obj_cnt() < schema_rowkey_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected rowkey cnt", K(ret), K(schema_rowkey_cnt),
+                K(start_key_.store_rowkey_), K(end_key_.store_rowkey_));
+  } else {
+    bool can_use_single_get = true;
+    for (int64_t i = 0; can_use_single_get && i < schema_rowkey_cnt; i++) {
+      if (ob_is_real_type(start_key_.store_rowkey_.get_obj_ptr()[i].get_type())) {
+        can_use_single_get = false;
+      }
+    }
+
+    if (can_use_single_get && OB_FAIL(start_key_.equal(end_key_, datum_utils, is_single))) {
+      STORAGE_LOG(WARN, "Failed to check datum rowkey equal", K(ret), K(*this));
+    }
+  }
+  return ret;
+}
+
+OB_INLINE int ObDatumRange::from_range(const common::ObNewRange &range, ObIAllocator &allocator, bool enable_new_false_range)
 {
   int ret = OB_SUCCESS;
 
-  //we should not defend the range valid
-  if (OB_UNLIKELY(!range.is_valid())) {
+  if (!enable_new_false_range && OB_UNLIKELY(!range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to ", K(ret), K(range));
   } else if (OB_FAIL(start_key_.from_rowkey(range.get_start_key(), allocator))) {
@@ -196,7 +263,7 @@ OB_INLINE int ObDatumRange::from_range(const common::ObNewRange &range, ObIAlloc
     STORAGE_LOG(WARN, "Failed to from end key", K(ret));
   } else {
     border_flag_ = range.border_flag_;
-    group_idx_ = range.get_group_idx();
+    set_group_idx(range.get_group_id());
   }
 
   return ret;
@@ -225,7 +292,7 @@ OB_INLINE int ObDatumRange::to_store_range(const common::ObIArray<share::schema:
     STORAGE_LOG(WARN, "Failed to transfer end key", K(ret), K(end_key_));
   } else {
     store_range.set_border_flag(border_flag_);
-    store_range.set_group_idx(group_idx_);
+    store_range.set_group_idx(get_group_idx());
   }
 
   return ret;
@@ -243,14 +310,22 @@ OB_INLINE int ObDatumRange::compare(const ObDatumRange &rhs, const ObStorageDatu
   return ret;
 }
 
-OB_INLINE void ObDatumRange::change_boundary(const ObDatumRowkey &rowkey, bool is_reverse)
+OB_INLINE void ObDatumRange::change_boundary(const ObDatumRowkey &rowkey, bool is_reverse, bool is_closed)
 {
   if (is_reverse) {
     end_key_ = rowkey;
-    border_flag_.unset_inclusive_end();
+    if (is_closed) {
+      border_flag_.set_inclusive_end();
+    } else {
+      border_flag_.unset_inclusive_end();
+    }
   }  else {
     start_key_ = rowkey;
-    border_flag_.unset_inclusive_start();
+    if (is_closed) {
+      border_flag_.set_inclusive_start();
+    } else {
+      border_flag_.unset_inclusive_start();
+    }
   }
 }
 
@@ -269,9 +344,24 @@ OB_INLINE int ObDatumRange::to_multi_version_range(common::ObIAllocator &allocat
     STORAGE_LOG(WARN, "Failed to transfer multi version rowkey", K(ret), K(include_end), K_(end_key));
   } else {
     dest.border_flag_ = border_flag_;
-    dest.group_idx_ = group_idx_;
+    dest.flag_ = flag_;
   }
 
+  return ret;
+}
+
+OB_INLINE int ObDatumRange::to_new_range(common::ObNewRange& range, const ObObjMeta* obj_metas, ObIAllocator& allocator) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(start_key_.to_rowkey(range.start_key_, obj_metas, allocator))) {
+    STORAGE_LOG(WARN, "Failed to transfer new rowkey", K(ret), K_(start_key));
+  } else if (OB_FAIL(end_key_.to_rowkey(range.end_key_, obj_metas, allocator))) {
+    STORAGE_LOG(WARN, "Failed to transfer new rowkey", K(ret), K_(end_key));
+  } else {
+    range.table_id_ = table_id_;
+    range.border_flag_ = border_flag_;
+    range.flag_ = flag_;
+  }
   return ret;
 }
 
@@ -285,6 +375,40 @@ OB_INLINE int ObDatumRange::prepare_memtable_readable(const common::ObIArray<sha
     STORAGE_LOG(WARN, "Failed to prepare end key", K(ret), K(end_key_), K(col_descs));
   }
   return ret;
+}
+
+// Note that the deep copy interface of ObDatumRowkey does not actually copy the store_rowkey_, so
+// we refer to the copy interface of ObDatumRange as partial_copy.
+OB_INLINE int ObDatumRange::partial_copy(const ObDatumRange& src, ObIAllocator& allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(src.start_key_.deep_copy/* to */(this->start_key_, allocator))) {
+    STORAGE_LOG(WARN, "Failed to deep copy start key", K(ret), K(src.start_key_));
+  } else if (OB_FAIL(src.end_key_.deep_copy/* to */(this->end_key_, allocator))) {
+    STORAGE_LOG(WARN, "Failed to deep copy end key", K(ret), K(src.end_key_));
+  } else {
+    this->table_id_ = src.table_id_;
+    this->flag_ = src.flag_;
+    this->border_flag_ = src.border_flag_;
+    this->is_skip_prefetch_ = src.is_skip_prefetch_;
+  }
+  return ret;
+}
+
+OB_INLINE int64_t ObDatumRange::get_group_idx() const
+{
+  return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0 ? group_idx_ :
+  (static_cast<int64_t>(group_idx_) << 32) | (index_ordered_idx_ * 0xffffffff);
+}
+
+OB_INLINE void ObDatumRange::set_group_idx(const int64_t group_idx)
+{
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0) {
+    group_idx_ = group_idx;
+  } else {
+    group_idx_ = group_idx >> 32;
+    index_ordered_idx_ = group_idx;
+  }
 }
 
 } // namespace blocksstable

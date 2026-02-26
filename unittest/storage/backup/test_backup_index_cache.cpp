@@ -11,15 +11,11 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 
-#include "storage/backup/ob_backup_tmp_file.h"
-#include "storage/backup/ob_backup_data_struct.h"
 #include "storage/backup/ob_backup_index_cache.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "lib/random/ob_random.h"
 #include "test_backup.h"
 
 using namespace oceanbase;
@@ -38,6 +34,16 @@ public:
   virtual ~TestBackupIndexCache();
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 
 protected:
   int64_t lower_mem_limit_;

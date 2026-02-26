@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/aggregate/ob_merge_groupby_op.h"
-#include "lib/number/ob_number_v2.h"
-#include "sql/engine/px/ob_px_sqc_proxy.h"
-#include "lib/utility/ob_hyperloglog.h"
-#include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
 namespace oceanbase
@@ -37,7 +33,9 @@ OB_SERIALIZE_MEMBER((ObMergeGroupBySpec, ObGroupBySpec),
                     sort_exprs_,
                     sort_collations_,
                     sort_cmp_funcs_,
-                    enable_encode_sort_
+                    enable_encode_sort_,
+                    est_rows_per_group_,
+                    enable_hash_base_distinct_
 );
 
 DEF_TO_STRING(ObMergeGroupBySpec)
@@ -48,7 +46,8 @@ DEF_TO_STRING(ObMergeGroupBySpec)
   J_COLON();
   pos += ObGroupBySpec::to_string(buf + pos, buf_len - pos);
   J_COMMA();
-  J_KV(K_(group_exprs), K_(rollup_exprs), K_(is_duplicate_rollup_expr), K_(has_rollup));
+  J_KV(K_(group_exprs), K_(rollup_exprs), K_(is_duplicate_rollup_expr), K_(has_rollup),
+       K_(est_rows_per_group), K_(enable_hash_base_distinct));
   J_OBJ_END();
   return pos;
 }
@@ -198,11 +197,29 @@ int ObMergeGroupByOp::init_group_rows()
       OB_FAIL(append(all_groupby_exprs_, MY_SPEC.rollup_exprs_))) {
     LOG_WARN("failed to append group exprs", K(ret));
   } else if (!is_vectorized()) {
-    if (OB_FAIL(aggr_processor_.init_group_rows(col_count))) {
+    if (MY_SPEC.enable_hash_base_distinct_) {
+      const int64_t hp_infras_cnt = col_count <= 0 ? 1 : col_count;
+      const int64_t distinct_cnt = aggr_processor_.get_distinct_count();
+      if (aggr_processor_.has_distinct() && distinct_cnt > 0
+        && OB_FAIL(hp_infras_mgr_.reserve_hp_infras(hp_infras_cnt * distinct_cnt))) {
+        LOG_WARN("failed to init hp infras group", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(aggr_processor_.init_group_rows(col_count))) {
       LOG_WARN("failed to initialize init_group_rows", K(ret));
     }
   } else {
-    if (OB_FAIL(aggr_processor_.init_group_rows(col_count - 1))) {
+    if (MY_SPEC.enable_hash_base_distinct_) {
+      const int64_t hp_infras_cnt = col_count - 1 <= 0 ? 1 : col_count;
+      const int64_t distinct_cnt = aggr_processor_.get_distinct_count();
+      if (aggr_processor_.has_distinct() && distinct_cnt > 0
+        && OB_FAIL(hp_infras_mgr_.reserve_hp_infras(hp_infras_cnt * distinct_cnt))) {
+        LOG_WARN("failed to init hp infras group", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(aggr_processor_.init_group_rows(col_count - 1))) {
       LOG_WARN("failed to initialize init_group_rows", K(ret));
     } else if (MY_SPEC.has_rollup_) {
       curr_group_rowid_ = all_groupby_exprs_.count();
@@ -222,10 +239,13 @@ int ObMergeGroupByOp::init_group_rows()
 int ObMergeGroupByOp::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+  if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(ctx_.get_my_session()->get_effective_tenant_id(), dir_id_))) {
     LOG_WARN("failed to alloc dir id", K(ret));
   } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
   } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {
+  } else if (MY_SPEC.enable_hash_base_distinct_
+    && OB_FAIL(init_hp_infras_group_mgr())) {
+    LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(init_group_rows())) {
     LOG_WARN("failed to init group rows", K(ret));
   } else if (!is_vectorized()) {
@@ -238,18 +258,10 @@ int ObMergeGroupByOp::init()
     } else if (OB_FAIL(init_rollup_distributor())) {
       LOG_WARN("failed to init rollup distributor", K(ret));
     } else {
-      const bool is_mysql_mode = lib::is_mysql_mode();
-      max_partial_rollup_idx_ = all_groupby_exprs_.count();
       // prepare initial group
       if (MY_SPEC.has_rollup_) {
-        for (int64_t i = 0; i < MY_SPEC.is_duplicate_rollup_expr_.count(); ++i) {
+        for (int64_t i = 0; !has_dup_group_expr_ && i < MY_SPEC.is_duplicate_rollup_expr_.count(); ++i) {
           has_dup_group_expr_ = MY_SPEC.is_duplicate_rollup_expr_.at(i);
-          if (has_dup_group_expr_) {
-            if (is_mysql_mode) {
-              max_partial_rollup_idx_ = i + MY_SPEC.group_exprs_.count() + 1;
-            }
-            break;
-          }
         }
         aggr_processor_.set_op_eval_infos(&eval_infos_);
       }
@@ -294,16 +306,24 @@ int ObMergeGroupByOp::inner_open()
 
 int ObMergeGroupByOp::inner_close()
 {
+  int ret = OB_SUCCESS;
   reset();
-  return ObGroupByOp::inner_close();
+  inner_sort_.destroy();
+  if (OB_FAIL(ObGroupByOp::inner_close())) {
+    LOG_WARN("failed to inner close", K(ret));
+  }
+  sql_mem_processor_.unregister_profile();
+  return ret;
 }
 
 void ObMergeGroupByOp::destroy()
 {
+  sql_mem_processor_.unregister_profile_if_necessary();
   all_groupby_exprs_.reset();
   distinct_col_idx_in_output_.reset();
   inner_sort_exprs_.reset();
   reset();
+  hp_infras_mgr_.destroy();
   ObGroupByOp::destroy();
 }
 
@@ -416,7 +436,7 @@ int ObMergeGroupByOp::find_candidate_key(ObRollupNDVInfo &ndv_info)
 {
   int ret = OB_SUCCESS;
   int64_t n_group = MY_SPEC.group_exprs_.count();
-  uint64_t candidate_ndv = 0;
+  uint64_t candicate_ndv = 0;
   ObPxSqcHandler *sqc_handle = ctx_.get_sqc_handler();
   ndv_info.dop_ = 1;
   // ndv_info.max_keys_ = 0;
@@ -432,19 +452,18 @@ int ObMergeGroupByOp::find_candidate_key(ObRollupNDVInfo &ndv_info)
     if (0 == n_group && i == MY_SPEC.rollup_exprs_.count()) {
       break;
     }
-    candidate_ndv = ndv_calculator_[i].estimate();
-    if (candidate_ndv >= ObRollupKeyPieceMsgCtx::FAR_GREATER_THAN_RATIO * ndv_info.dop_) {
-      ndv_info.ndv_ = candidate_ndv;
+    candicate_ndv = ndv_calculator_[i].estimate();
+    if (candicate_ndv >= ObRollupKeyPieceMsgCtx::FAR_GREATER_THAN_RATIO * ndv_info.dop_) {
+      ndv_info.ndv_ = candicate_ndv;
       ndv_info.n_keys_ = 0 == n_group ? i + 1 : i + n_group;
       break;
     }
   }
   if (0 == ndv_info.n_keys_) {
     // can't found, use all groupby keys
-    ndv_info.ndv_ = candidate_ndv;
+    ndv_info.ndv_ = candicate_ndv;
     ndv_info.n_keys_ = all_groupby_exprs_.count();
   }
-  LOG_INFO("find candidate rollup key", K(ndv_info));
   return ret;
 }
 
@@ -515,7 +534,6 @@ int ObMergeGroupByOp::process_parallel_rollup_key(ObRollupNDVInfo &ndv_info)
       } else {
         partial_rollup_idx_ = MY_SPEC.group_exprs_.count();
       }
-      partial_rollup_idx_ = MIN(max_partial_rollup_idx_, partial_rollup_idx_);
       aggr_processor_.set_partial_rollup_idx(MY_SPEC.group_exprs_.count(), partial_rollup_idx_);
     }
     LOG_DEBUG("debug partial rollup keys", K(partial_rollup_idx_));
@@ -1922,6 +1940,37 @@ inline int ObMergeGroupByOp::create_groupby_store_row(
       LOG_WARN("failed push back", K(ret));
     }
     (*store_row)->reuse_ = true;
+  }
+  return ret;
+}
+
+int ObMergeGroupByOp::init_hp_infras_group_mgr()
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+  if (aggr_processor_.has_distinct() &&
+      !(MY_SPEC.has_rollup_ && aggr_processor_.has_listagg_non_const_separator())) {
+    int64_t est_rows = MY_SPEC.est_rows_per_group_;
+    aggr_processor_.set_io_event_observer(&io_event_observer_);
+    if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(
+        &ctx_, MY_SPEC.px_est_size_factor_, est_rows, est_rows))) {
+      LOG_WARN("failed to get px size", K(ret));
+    } else if (OB_FAIL(sql_mem_processor_.init(
+                    &ctx_.get_allocator(),
+                    tenant_id,
+                    est_rows * MY_SPEC.width_,
+                    MY_SPEC.type_,
+                    MY_SPEC.id_,
+                    &ctx_))) {
+      LOG_WARN("failed to init sql mem processor", K(ret));
+    } else if (OB_FAIL(hp_infras_mgr_.init(tenant_id,
+      GCONF.is_sql_operator_dump_enabled(), est_rows, MY_SPEC.width_, true/*unique*/, 1/*ways*/,
+      &eval_ctx_, &sql_mem_processor_, &io_event_observer_))) {
+      LOG_WARN("failed to init hash infras group", K(ret));
+    } else {
+      aggr_processor_.set_hp_infras_mgr(&hp_infras_mgr_);
+      aggr_processor_.set_enable_hash_distinct();
+    }
   }
   return ret;
 }

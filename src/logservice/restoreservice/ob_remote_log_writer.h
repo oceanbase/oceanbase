@@ -38,6 +38,7 @@ namespace logservice
 class ObFetchLogTask;
 class ObRemoteFetchWorker;
 class ObLogRestoreService;
+class ObRemoteFetchTaskStat;
 class ObRemoteLogWriter : public share::ObThreadPool
 {
 public:
@@ -53,6 +54,7 @@ public:
   int start();
   void stop();
   void wait();
+  void notify_task();
 
 private:
   void run1();
@@ -62,7 +64,7 @@ private:
   int submit_log_(const share::ObLSID &id, const int64_t proposal_id, const palf::LSN &lsn,
       const share::SCN &scn, const char *buf, const int64_t buf_size);
   int update_max_fetch_info_(const share::ObLSID &id, const int64_t proposal_id,
-      const palf::LSN &lsn, const share::SCN &scn);
+      const palf::LSN &lsn, const share::SCN &scn, const ObRemoteFetchTaskStat &fetch_stat);
   int try_retire_(ObFetchLogTask *&task);
   void inner_free_task_(ObFetchLogTask &task);
   void report_error_(const share::ObLSID &id,
@@ -76,6 +78,7 @@ private:
   storage::ObLSService *ls_svr_;
   ObLogRestoreService *restore_service_;
   ObRemoteFetchWorker *worker_;
+  ObCond task_cond_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRemoteLogWriter);

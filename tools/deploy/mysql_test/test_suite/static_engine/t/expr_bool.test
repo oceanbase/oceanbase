@@ -11,6 +11,8 @@ connection conn_admin;
 drop table if exists t1, t2;
 --enable_warnings
 --explain_protocol 0
+alter system set default_table_store_format = "row";
+--sleep 5
 create table t1 (
   col_tinyint tinyint,
   col_smallint smallint,

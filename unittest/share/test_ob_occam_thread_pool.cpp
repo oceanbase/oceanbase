@@ -15,10 +15,6 @@
 #include "share/ob_occam_thread_pool.h"
 #include <gtest/gtest.h>
 #include <thread>
-#include <iostream>
-#include <vector>
-#include <chrono>
-#include "common/ob_clock_generator.h"
 
 namespace oceanbase {
 namespace unittest {
@@ -59,11 +55,13 @@ TEST_F(TestObOccamThreadPool, ObOccamThread) {
 }
 
 struct TestInt {
+  TestInt() : data_(-1) {}
   TestInt(int a) : data_(a) {}
   int data_;
 };
 
 struct TestBigInt {
+  TestBigInt() { data_[0] = -1; }
   TestBigInt(int a) { data_[0] = a; }
   int data_[100];
 };

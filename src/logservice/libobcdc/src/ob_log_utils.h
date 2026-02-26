@@ -250,6 +250,8 @@ bool is_string_type(const int ctype);
 bool is_json_type(const int ctype);
 bool is_geometry_type(const int ctype);
 bool is_xml_type(const int ctype);
+bool is_roaringbitmap_type(const int ctype);
+bool is_collection_type(const int ctype);
 int64_t get_non_hidden_column_count(const oceanbase::share::schema::ObTableSchema &table_schema);
 
 double get_delay_sec(const int64_t tstamp);
@@ -304,7 +306,7 @@ private:
 
 void column_cast(common::ObObj &obj, const share::schema::ObColumnSchemaV2 &column_schema);
 class ColumnSchemaInfo;
-void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info);
+void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info, const bool is_out_row);
 
 inline void set_cdc_thread_name(const char* name, const int64_t thread_idx = -1)
 {
@@ -522,8 +524,6 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
     lib::Worker::CompatMode &compat_mode,
     const int64_t timeout);
 
-char *lbt_oblog();
-
 bool is_backup_mode();
 
 struct BRColElem
@@ -574,6 +574,8 @@ int print_serilized_br_value(std::string &key,
 
 int c_str_to_int(const char* str, int64_t &num);
 
+int c_str_to_uint64(const char* str, uint64_t &num);
+
 // for sys_table, table_id == tablet_id
 bool is_ddl_tablet(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
 
@@ -587,6 +589,14 @@ struct CDCLSNComparator
     return a < b;
   }
 };
+
+struct LSNComparator
+{
+  static int compare(const palf::LSN& lsn1, const palf::LSN& lsn2) {
+    return lsn1.val_ > lsn2.val_ ? 1 : (lsn1.val_ == lsn2.val_ ? 0 : -1);
+  }
+};
+
 // sort and unique lsn arr.
 // NOT THREAD_SAFE
 int sort_and_unique_lsn_arr(ObLogLSNArray &lsn_arr);
@@ -602,7 +612,7 @@ int sort_and_unique_array(ARRAY &arr, Comparator &comparator)
 
   if (arr.count() > 1) {
     // sort lsn_arr
-    std::sort(arr.begin(), arr.end(), comparator);
+    lib::ob_sort(arr.begin(), arr.end(), comparator);
     auto prev = arr.at(0);
     // get duplicate misslog lsn idx
     for(int64_t idx = 1; OB_SUCC(ret) && idx < arr.count(); idx++) {

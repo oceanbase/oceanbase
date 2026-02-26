@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "sql/executor/ob_local_task_executor.h"
-#include "sql/executor/ob_job.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/executor/ob_execute_result.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "lib/utility/utility.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/profile/ob_perf_event.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

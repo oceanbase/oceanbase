@@ -17,12 +17,13 @@ namespace oceanbase
 namespace lib
 {
 #if defined(__x86_64__)
-int32_t ObMallocSampleLimiter::min_malloc_sample_interval = 16;
-int32_t ObMallocSampleLimiter::max_malloc_sample_interval = 256;
+int32_t ObMallocSampleLimiter::min_sample_size = 16384;
 #else
-int32_t ObMallocSampleLimiter::min_malloc_sample_interval = 10000;
-int32_t ObMallocSampleLimiter::max_malloc_sample_interval = 10000;
+int32_t ObMallocSampleLimiter::min_sample_size = 0;
 #endif
-
+bool malloc_sample_allowed(const int64_t size, const ObMemAttr &attr)
+{
+  return ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
+}
 } // end of namespace lib
 } // end of namespace oceanbase

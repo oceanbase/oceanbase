@@ -483,12 +483,15 @@ private:
       const int32_t group_id,
       ObTransferTask &task);
   static int construct_transfer_tasks_(
+      const uint64_t tenant_id,
       common::sqlclient::ObMySQLResult &res,
       common::ObIArray<ObTransferTask> &tasks);
   static int construct_transfer_task_(
+      const uint64_t tenant_id,
       common::sqlclient::ObMySQLResult &res,
       ObTransferTask &task);
   static int parse_sql_result_(
+      const uint64_t tenant_id,
       common::sqlclient::ObMySQLResult &res,
       const bool with_time,
       ObTransferTask &task,
@@ -501,6 +504,12 @@ private:
       ObDMLSqlSplicer &dml_splicer,
       common::ObArenaAllocator &allocator,
       const ObTransferTask &task);
+  static int convert_data_version_(
+      const uint64_t tenant_id,
+      const bool is_history,
+      const bool column_not_exist,
+      const ObString &data_version_str,
+      uint64_t &data_version);
 };
 
 } // end namespace share

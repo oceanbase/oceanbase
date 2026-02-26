@@ -11,17 +11,7 @@
  */
 
 #include "ob_ls_election_reference_info_operator.h"
-#include "lib/net/ob_addr.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_errno.h"
-#include "share/config/ob_server_config.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "lib/string/ob_sql_string.h"//ObSqlString
-#include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTransaction
-#include "common/ob_timeout_ctx.h"
-#include "share/ob_share_util.h"
 #include "share/ls/ob_ls_status_operator.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -33,11 +23,11 @@ using namespace common;
 int ObLsElectionReferenceInfoOperator::create_new_ls(const ObLSStatusInfo &ls_info,
                                                      const SCN &create_ls_scn,
                                                      const common::ObString &zone_priority,
-                                                     const share::ObTenantSwitchoverStatus &working_sw_status,
+                                                     const int64_t switchover_epoch,
                                                      ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  UNUSEDx(create_ls_scn, working_sw_status);
+  UNUSEDx(create_ls_scn, switchover_epoch);
   if (OB_UNLIKELY(!ls_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid_argument", KR(ret), K(ls_info));

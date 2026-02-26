@@ -25,7 +25,6 @@ class ObMultiStmtItem;
 }
 namespace observer
 {
-struct ObGlobalContext;
 
 class ObMPStmtPrepare : public ObMPBase
 {

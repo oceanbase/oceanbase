@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_macro_block_meta.h"
-#include "storage/blocksstable/ob_sstable_meta.h"
 
 namespace oceanbase
 {
@@ -37,7 +34,7 @@ void ObMacroBlocksWriteCtx::clear()
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret)) {
    for (int64_t i = 0; i < macro_block_list_.count(); ++i) {
-     if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_block_list_.at(i)))) {
+     if (OB_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_block_list_.at(i)))) {
        LOG_ERROR("failed to dec macro block ref cnt", K(ret), K(macro_block_list_.count()), K(i),
                                                    "macro id", macro_block_list_.at(i));
      }
@@ -110,7 +107,7 @@ int ObMacroBlocksWriteCtx::get_macro_id_array(ObIArray<MacroBlockId> &block_ids)
     MacroBlockId &block_id= macro_block_list_.at(i);
     if (OB_FAIL(block_ids.push_back(block_id))) {
       LOG_WARN("failed to push back block id", K(ret));
-    } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(block_id))) {
+    } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(block_id))) {
       block_ids.pop_back();
       LOG_ERROR("failed to inc macro block ref cnt", K(ret));
     }
@@ -127,12 +124,26 @@ int ObMacroBlocksWriteCtx::add_macro_block_id(const MacroBlockId &macro_block_id
   } else if (OB_FAIL(macro_block_list_.push_back(macro_block_id))) {
     LOG_WARN("fail to push back macro block id", K(ret));
   } else {
-    if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_block_id))) {
+    if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_block_id))) {
       LOG_ERROR("failed to inc macro block ref cnt", K(ret));
     }
     if (OB_FAIL(ret)) {
       macro_block_list_.pop_back();
     }
+  }
+  return ret;
+}
+
+int ObMacroBlocksWriteCtx::pop_macro_block_id(MacroBlockId &macro_block_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(macro_block_list_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect macro block list", K(macro_block_list_));
+  } else if (OB_FAIL(macro_block_list_.pop_back(macro_block_id))) {
+    LOG_WARN("fail to pop_back", K(ret));
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_block_id))) {
+    LOG_WARN("fail to dec macro block ref cnt", K(ret), K(macro_block_id));
   }
   return ret;
 }

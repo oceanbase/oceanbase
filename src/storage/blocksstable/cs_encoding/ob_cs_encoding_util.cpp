@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_cs_encoding_util.h"
-#include "lib/wide_integer/ob_wide_integer_cmp_funcs.h"
 
 namespace oceanbase
 {
@@ -36,131 +35,341 @@ int64_t ObCSEncodingUtil::get_bit_size(const uint64_t v)
   }
   return bit_size;
 }
-int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
-  const ObObjTypeStoreClass store_class, const int64_t precision_bytes,
-  ObColumnCSEncodingCtx &col_ctx)
+int ObCSEncodingUtil::build_cs_column_encoding_ctx(
+    const ObObjTypeStoreClass store_class,
+    const int64_t precision_bytes,
+    ObColumnCSEncodingCtx &col_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ht)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ht is null", K(ret));
-  } else {
-    col_ctx.null_cnt_ = ht->get_null_list().size_;
-    col_ctx.nope_cnt_ = ht->get_nope_list().size_;
-    col_ctx.ht_ = ht;
+  if (col_ctx.ht_ != nullptr) {
+    if (OB_FAIL(build_column_encoding_ctx_with_hash_table_(store_class, precision_bytes, col_ctx))) {
+      LOG_WARN("fail to build_column_encoding_ctx_with_hash_table_", K(ret), K(col_ctx));
+    }
+  } else if (OB_FAIL(build_column_encoding_ctx_with_col_datums_(store_class, precision_bytes, col_ctx))) {
+    LOG_WARN("fail to build_column_encoding_ctx_with_col_datums_", K(ret), K(col_ctx));
+  }
+  return ret;
+}
 
-    switch (store_class) {
-    case ObIntSC: {
-      int ret = OB_SUCCESS;
-      int64_t int_min = INT64_MAX;
-      int64_t int_max = INT64_MIN;
-      int64_t value = 0;
-      const int64_t row_count = ht->get_node_cnt();
-      for (int64_t i = 0; i < row_count; ++i) {
-        const ObDatum &datum = *ht->get_node_list()[i].datum_;
-        if (!datum.is_null()) {
-          value = datum.get_int();
-          if (value < int_min) {
-            int_min = value;
-          }
-          if (value > int_max) {
-            int_max = value;
-          }
+int ObCSEncodingUtil::build_column_encoding_ctx_with_hash_table_(
+    const ObObjTypeStoreClass store_class,
+    const int64_t precision_bytes,
+    ObColumnCSEncodingCtx &col_ctx)
+{
+  int ret = OB_SUCCESS;
+  col_ctx.null_or_nop_cnt_ = col_ctx.ht_->get_null_cnt() + col_ctx.ht_->get_nop_cnt();
+  col_ctx.nop_cnt_ = col_ctx.ht_->get_nop_cnt();
+  switch (store_class) {
+  case ObIntSC: {
+    int64_t int_min = INT64_MAX;
+    int64_t int_max = INT64_MIN;
+    int64_t value = 0;
+    FOREACH(node, *col_ctx.ht_) {
+      value = node->datum_.get_int();
+      if (value < int_min) {
+        int_min = value;
+      }
+      if (value > int_max) {
+        int_max = value;
+      }
+    }
+    col_ctx.integer_min_ = static_cast<uint64_t>(int_min);
+    col_ctx.integer_max_ = static_cast<uint64_t>(int_max);
+    break;
+  }
+
+  case ObUIntSC: {
+    int64_t uint_min = UINT64_MAX;
+    int64_t uint_max = 0;
+    uint64_t value = 0;
+    FOREACH(node, *col_ctx.ht_) {
+      value = node->datum_.get_uint64();
+      if (value < uint_min) {
+        uint_min = value;
+      }
+      if (value > uint_max) {
+        uint_max = value;
+      }
+    }
+    col_ctx.integer_min_ = uint_min;
+    col_ctx.integer_max_ = uint_max;
+    break;
+  }
+
+  case ObDecimalIntSC: {
+    int64_t int_min = INT64_MAX;
+    int64_t int_max = INT64_MIN;
+    int64_t value = 0;
+    const int64_t int64_min = INT64_MIN;
+    const int64_t int64_max = INT64_MAX;
+    col_ctx.fix_data_size_ = -1;
+    col_ctx.is_wide_int_ = false;
+    decint_cmp_fp cmp = wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(precision_bytes, sizeof(int64_t));
+    FOREACH_X(node, *col_ctx.ht_, OB_SUCC(ret)) {
+      const ObDatum &datum = node->datum_;
+      if (OB_UNLIKELY(datum.len_ != precision_bytes)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("datum len is not match with precision bytes", K(ret), K(datum), K(precision_bytes));
+      } else if (cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_min) < 0 || cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_max) > 0) {
+        col_ctx.is_wide_int_ = true;
+        break;
+      } else { // value range is not over int64_t, store as integer
+        int64_t value = 0;
+        if (sizeof(int32_t) == precision_bytes) {
+          value = datum.get_decimal_int32();
+        } else {
+          value = datum.get_decimal_int64();
+        }
+        if (value < int_min) {
+          int_min = value;
+        }
+        if (value > int_max) {
+          int_max = value;
         }
       }
-      col_ctx.integer_min_ = static_cast<uint64_t>(int_min);
-      col_ctx.integer_max_ = static_cast<uint64_t>(int_max);
-      break;
     }
 
-    case ObUIntSC: {
-      int ret = OB_SUCCESS;
-      int64_t uint_min = UINT64_MAX;
-      int64_t uint_max = 0;
-      uint64_t value = 0;
-      const int64_t row_count = ht->get_node_cnt();
-      for (int64_t i = 0; i < row_count; ++i) {
-        const ObDatum &datum = *ht->get_node_list()[i].datum_;
-        if (!datum.is_null()) {
-          value = datum.get_uint64();
-          if (value < uint_min) {
-            uint_min = value;
-          }
-          if (value > uint_max) {
-            uint_max = value;
-          }
+    if (OB_SUCC(ret)) {
+      if (col_ctx.is_wide_int_) { // store as fixed len string
+        col_ctx.fix_data_size_ = precision_bytes;
+        FOREACH(node, *col_ctx.ht_) {
+          const int64_t len = node->datum_.len_;
+          col_ctx.var_data_size_ += len * node->duplicate_cnt_;
+          col_ctx.dict_var_data_size_ += len;
         }
-      }
-      col_ctx.integer_min_ = uint_min;
-      col_ctx.integer_max_ = uint_max;
-      break;
-    }
-
-    case ObDecimalIntSC: {
-      int ret = OB_SUCCESS;
-      int64_t int_min = INT64_MAX;
-      int64_t int_max = INT64_MIN;
-      int64_t value = 0;
-      const int64_t int64_min = INT64_MIN;
-      const int64_t int64_max = INT64_MAX;
-      col_ctx.fix_data_size_ = -1;
-      col_ctx.is_wide_int_ = false;
-      decint_cmp_fp cmp = wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(precision_bytes, sizeof(int64_t));
-      const int64_t row_count = ht->get_node_cnt();
-      for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
-        const ObDatum &datum = *ht->get_node_list()[i].datum_;
-        if (!datum.is_null()) {
-          if (OB_UNLIKELY(datum.len_ != precision_bytes)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("datum len is not match with precision bytes",
-                K(ret), K(datum), K(precision_bytes), K(i), K(row_count));
-          } else if (cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_min) < 0 || cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_max) > 0) {
-            col_ctx.is_wide_int_ = true;
-            break;
-          } else { // value range is not over int64_t, store as integer
-            int64_t value = 0;
-            if (sizeof(int32_t) == precision_bytes) {
-              value = datum.get_decimal_int32();
-            } else {
-              value = datum.get_decimal_int64();
-            }
-            if (value < int_min) {
-              int_min = value;
-            }
-            if (value > int_max) {
-              int_max = value;
-            }
-          }
-        }
-      }
-
-      if (OB_SUCC(ret)) {
+      } else {
         col_ctx.integer_min_ = static_cast<uint64_t>(int_min);
         col_ctx.integer_max_ = static_cast<uint64_t>(int_max);
+      }
+    }
+    break;
+  }
 
-        if (col_ctx.is_wide_int_) { // store as fixed len string
-          col_ctx.fix_data_size_ = precision_bytes;
-          FOREACH(l, *ht)
-          {
-            const int64_t len = l->header_->datum_->len_;
-            col_ctx.var_data_size_ += len * l->size_;
-            col_ctx.dict_var_data_size_ += len;
-          }
+  case ObNumberSC: {
+    col_ctx.fix_data_size_ = -1;
+    bool var_store = false;
+    FOREACH(node, *col_ctx.ht_) {
+      const ObDatum &datum = node->datum_;
+      const int64_t len =
+        sizeof(ObNumberDesc) + datum.num_->desc_.len_ * sizeof(datum.num_->digits_[0]);
+      col_ctx.var_data_size_ += len * node->duplicate_cnt_;
+      col_ctx.dict_var_data_size_ += len;
+      if (!var_store) {
+        if (col_ctx.fix_data_size_ < 0) {
+          col_ctx.fix_data_size_ = len;
+        } else if (len != col_ctx.fix_data_size_) {
+          col_ctx.fix_data_size_ = -1;
+          var_store = true;
         }
       }
-      break;
+    }
+    break;
+  }
+  case ObStringSC:
+  case ObTextSC:
+  case ObJsonSC:
+  case ObGeometrySC:
+  case ObRoaringBitmapSC: { // geometry, json and text storage class have the same behavior currently
+    col_ctx.fix_data_size_ = -1;
+    col_ctx.max_string_size_ = -1;
+    bool var_store = false;
+    FOREACH(node, *col_ctx.ht_)
+    {
+      const int64_t len = node->datum_.len_;
+      col_ctx.max_string_size_ = len > col_ctx.max_string_size_ ? len : col_ctx.max_string_size_;
+      col_ctx.var_data_size_ += len * node->duplicate_cnt_;
+      col_ctx.dict_var_data_size_ += len;
+      if (!col_ctx.has_zero_length_datum_ && 0 == len) {
+        col_ctx.has_zero_length_datum_ = true;
+      }
+      if (!var_store) {
+        if (col_ctx.fix_data_size_ < 0) {
+          col_ctx.fix_data_size_ = len;
+        } else if (len != col_ctx.fix_data_size_) {
+          col_ctx.fix_data_size_ = -1;
+          var_store = true;
+        }
+      }
+    }
+    break;
+  }
+
+  case ObOTimestampSC: {
+    col_ctx.fix_data_size_ = -1;
+    bool var_store = false;
+    FOREACH(node, *col_ctx.ht_) {
+      const int64_t len = node->datum_.len_;
+      col_ctx.var_data_size_ += len * node->duplicate_cnt_;
+      col_ctx.dict_var_data_size_ += len;
+      if (!var_store) {
+        if (col_ctx.fix_data_size_ < 0) {
+          col_ctx.fix_data_size_ = len;
+        } else if (len != col_ctx.fix_data_size_) {
+          col_ctx.fix_data_size_ = -1;
+        var_store = true;
+        }
+      }
+    }
+    break;
+  }
+
+  case ObIntervalSC: {
+    col_ctx.fix_data_size_ = -1;
+    bool var_store = false;
+    FOREACH(node, *col_ctx.ht_) {
+      const int64_t len = node->datum_.len_;
+      col_ctx.var_data_size_ += len * node->duplicate_cnt_;
+      col_ctx.dict_var_data_size_ += len;
+      if (!var_store) {
+        if (col_ctx.fix_data_size_ < 0) {
+          col_ctx.fix_data_size_ = len;
+        } else if (len != col_ctx.fix_data_size_) {
+          col_ctx.fix_data_size_ = -1;
+          var_store = true;
+        }
+      }
+    }
+    break;
+  }
+
+  default:
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("not supported store class", K(ret), K(store_class));
+  }
+  return ret;
+}
+
+int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
+    const ObObjTypeStoreClass store_class,
+    const int64_t precision_bytes,
+    ObColumnCSEncodingCtx &col_ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t null_cnt = 0, nop_cnt = 0;
+  int64_t row_count = col_ctx.col_datums_->count();
+
+  switch (store_class) {
+  case ObIntSC: {
+    int64_t int_min = INT64_MAX;
+    int64_t int_max = INT64_MIN;
+    int64_t value = 0;
+    for (int64_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
+      if (datum.is_null()) {
+        null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
+      } else {
+        value = datum.get_int();
+        if (value < int_min) {
+          int_min = value;
+        }
+        if (value > int_max) {
+          int_max = value;
+        }
+      }
+    }
+    col_ctx.integer_min_ = static_cast<uint64_t>(int_min);
+    col_ctx.integer_max_ = static_cast<uint64_t>(int_max);
+    break;
+  }
+
+  case ObUIntSC: {
+    int64_t uint_min = UINT64_MAX;
+    int64_t uint_max = 0;
+    uint64_t value = 0;
+    for (int64_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
+      if (datum.is_null()) {
+        null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
+      } else {
+        value = datum.get_uint64();
+        if (value < uint_min) {
+          uint_min = value;
+        }
+        if (value > uint_max) {
+          uint_max = value;
+        }
+      }
+    }
+    col_ctx.integer_min_ = uint_min;
+    col_ctx.integer_max_ = uint_max;
+    break;
+  }
+
+  case ObDecimalIntSC: {
+    int64_t int_min = INT64_MAX;
+    int64_t int_max = INT64_MIN;
+    int64_t value = 0;
+    const int64_t int64_min = INT64_MIN;
+    const int64_t int64_max = INT64_MAX;
+    col_ctx.fix_data_size_ = -1;
+    col_ctx.is_wide_int_ = false;
+    decint_cmp_fp cmp = wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(precision_bytes, sizeof(int64_t));
+    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; ++row_idx) {
+      const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
+      if (datum.is_null()) {
+        null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
+      } else if (OB_UNLIKELY(datum.len_ != precision_bytes)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("datum len is not match with precision bytes", K(ret), K(datum), K(precision_bytes));
+      } else if (cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_min) < 0 || cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_max) > 0) {
+        col_ctx.is_wide_int_ = true;
+        null_cnt = nop_cnt = 0;
+        break;
+      } else { // value range is not over int64_t, store as integer
+        int64_t value = 0;
+        if (sizeof(int32_t) == precision_bytes) {
+          value = datum.get_decimal_int32();
+        } else {
+          value = datum.get_decimal_int64();
+        }
+        if (value < int_min) {
+          int_min = value;
+        }
+        if (value > int_max) {
+          int_max = value;
+        }
+      }
     }
 
-    case ObNumberSC: {
-      col_ctx.fix_data_size_ = -1;
-      bool var_store = false;
-      FOREACH(l, *ht)
-      {
-        const ObDatum &datum = *l->header_->datum_;
-        const int64_t len =
-          sizeof(ObNumberDesc) + datum.num_->desc_.len_ * sizeof(datum.num_->digits_[0]);
-        col_ctx.var_data_size_ += len * l->size_;
-        col_ctx.dict_var_data_size_ += len;
+    if (OB_SUCC(ret)) {
+      if (col_ctx.is_wide_int_) { // store as fixed len string
+        col_ctx.fix_data_size_ = precision_bytes;
+        for (int64_t row_idx = 0; row_idx < row_count; ++row_idx) {
+          const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
+          if (datum.is_null()) {
+            null_cnt++;
+          } else if (datum.is_nop()) {
+            nop_cnt++;
+          } else {
+            col_ctx.var_data_size_ += datum.len_;
+          }
+        }
+      } else {
+        col_ctx.integer_min_ = static_cast<uint64_t>(int_min);
+        col_ctx.integer_max_ = static_cast<uint64_t>(int_max);
+      }
+    }
+    break;
+  }
+
+  case ObNumberSC: {
+    col_ctx.fix_data_size_ = -1;
+    bool var_store = false;
+    for (int64_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
+      if (datum.is_null()) {
+        null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
+      } else {
+        const int64_t len = sizeof(ObNumberDesc) + datum.num_->desc_.len_ * sizeof(datum.num_->digits_[0]);
+        col_ctx.var_data_size_ += len;
         if (!var_store) {
           if (col_ctx.fix_data_size_ < 0) {
             col_ctx.fix_data_size_ = len;
@@ -170,21 +379,27 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
           }
         }
       }
-      break;
     }
-    case ObStringSC:
-    case ObTextSC:
-    case ObJsonSC:
-    case ObGeometrySC: { // geometry, json and text storage class have the same behavior currently
-      col_ctx.fix_data_size_ = -1;
-      col_ctx.max_string_size_ = -1;
-      bool var_store = false;
-      FOREACH(l, *ht)
-      {
-        const int64_t len = l->header_->datum_->len_;
+    break;
+  }
+  case ObStringSC:
+  case ObTextSC:
+  case ObJsonSC:
+  case ObGeometrySC:
+  case ObRoaringBitmapSC: { // geometry, json and text storage class have the same behavior currently
+    col_ctx.fix_data_size_ = -1;
+    col_ctx.max_string_size_ = -1;
+    bool var_store = false;
+    for (int64_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
+      if (datum.is_null()) {
+        null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
+      } else {
+        const int64_t len = datum.len_;
         col_ctx.max_string_size_ = len > col_ctx.max_string_size_ ? len : col_ctx.max_string_size_;
-        col_ctx.var_data_size_ += len * l->size_;
-        col_ctx.dict_var_data_size_ += len;
+        col_ctx.var_data_size_ += len;
         if (!col_ctx.has_zero_length_datum_ && 0 == len) {
           col_ctx.has_zero_length_datum_ = true;
         }
@@ -197,17 +412,22 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
           }
         }
       }
-      break;
     }
+    break;
+  }
 
-    case ObOTimestampSC: {
-      col_ctx.fix_data_size_ = -1;
-      bool var_store = false;
-      FOREACH(l, *ht)
-      {
-        const int64_t len = l->header_->datum_->len_;
-        col_ctx.var_data_size_ += len * l->size_;
-        col_ctx.dict_var_data_size_ += len;
+  case ObOTimestampSC: {
+    col_ctx.fix_data_size_ = -1;
+    bool var_store = false;
+    for (int64_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
+      if (datum.is_null()) {
+        null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
+      } else {
+        const int64_t len = datum.len_;
+        col_ctx.var_data_size_ += len;
         if (!var_store) {
           if (col_ctx.fix_data_size_ < 0) {
             col_ctx.fix_data_size_ = len;
@@ -217,17 +437,22 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
           }
         }
       }
-      break;
     }
+    break;
+  }
 
-    case ObIntervalSC: {
-      col_ctx.fix_data_size_ = -1;
-      bool var_store = false;
-      FOREACH(l, *ht)
-      {
-        const int64_t len = l->header_->datum_->len_;
-        col_ctx.var_data_size_ += len * l->size_;
-        col_ctx.dict_var_data_size_ += len;
+  case ObIntervalSC: {
+    col_ctx.fix_data_size_ = -1;
+    bool var_store = false;
+    for (int64_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
+      if (datum.is_null()) {
+        null_cnt++;
+      } else if (datum.is_nop()) {
+        nop_cnt++;
+      } else {
+        const int64_t len = datum.len_;
+        col_ctx.var_data_size_ += len;
         if (!var_store) {
           if (col_ctx.fix_data_size_ < 0) {
             col_ctx.fix_data_size_ = len;
@@ -237,13 +462,18 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
           }
         }
       }
-      break;
     }
+    break;
+  }
 
-    default:
-      ret = OB_INNER_STAT_ERROR;
-      LOG_WARN("not supported store class", K(ret), K(store_class));
-    }
+  default:
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("not supported store class", K(ret), K(store_class));
+  }
+
+  if (OB_SUCC(ret)) {
+    col_ctx.null_or_nop_cnt_ = null_cnt + nop_cnt;
+    col_ctx.nop_cnt_ = nop_cnt;
   }
   return ret;
 }

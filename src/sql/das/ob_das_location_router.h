@@ -16,6 +16,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "lib/container/ob_fixed_array.h"
 #include "sql/das/ob_das_define.h"
+#include "sql/optimizer/ob_route_policy.h"
 namespace oceanbase
 {
 namespace common
@@ -35,6 +36,7 @@ struct ObDASTableLocMeta;
 struct ObDASTabletLoc;
 class ObQueryRetryInfo;
 class ObDASCtx;
+struct ValueItemExpr;
 typedef common::ObFixedArray<common::ObAddr, common::ObIAllocator> AddrArray;
 typedef common::hash::ObHashMap<common::ObObjectID, common::ObObjectID, common::hash::NoPthreadDefendMode> ObPartitionIdMap;
 
@@ -224,6 +226,13 @@ public:
       common::ObTabletID &tablet_id,
       common::ObObjectID &object_id);
 
+  int get_tablet_and_object_id(
+      const share::schema::ObPartitionLevel part_level,
+      const common::ObPartID part_id,
+      const int64_t target_partition_id,
+      common::ObTabletID &tablet_id,
+      common::ObObjectID &object_id);
+
   const share::schema::ObTableSchema *get_table_schema() const { return table_schema_; }
 
   int get_non_partition_tablet_id(common::ObIArray<common::ObTabletID> &tablet_ids,
@@ -231,7 +240,8 @@ public:
   int get_all_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
                                    const common::ObPartID part_id,
                                    common::ObIArray<common::ObTabletID> &tablet_ids,
-                                   common::ObIArray<common::ObObjectID> &out_part_ids);
+                                   common::ObIArray<common::ObObjectID> &out_part_ids,
+                                   const bool need_dedup);
   int get_all_tablet_and_object_id(common::ObIArray<common::ObTabletID> &tablet_ids,
                                    common::ObIArray<common::ObObjectID> &out_part_ids);
   int get_default_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
@@ -259,6 +269,71 @@ public:
   }
   int set_partition_id_map(common::ObObjectID first_level_part_id, common::ObObjectID object_id);
   int get_partition_id_map(common::ObObjectID first_level_part_id, common::ObObjectID &object_id);
+  void set_table_schema(const share::schema::ObTableSchema *schema)
+  {
+    table_schema_ = schema;
+  }
+  int get_tablet_and_object_id(
+      const share::schema::ObPartitionLevel part_level,
+      const ObPartID part_id,
+      ObExecContext &exec_ctx,
+      const ParamStore &params,
+      const ObDataTypeCastParams &dtc_params,
+      const common::ObIArray<ValueItemExpr*> &vies,
+      ObIArray<ObTabletID> &tablet_ids,
+      ObIArray<ObObjectID> &object_ids);
+
+  // Only for list partitioned table!!
+  // param[@in]:
+  // - vies: part column related expr like `c1 < 1`, `c2 > 0`. When any list_row_values of one partition
+  //         satisfy all part column expr, that partition will returned.
+  // - table_schema: should be data table/local index/global_index
+  // - related_table: related_tids_ can be the following possbilities:
+  //                  1. data table: if table_schema is local index.
+  //                  2. local indexes: if table_schema is data schema.
+  // param[@out]:
+  // - tablet_ids: tablet_ids is empty if table is secondary-partitioned table.
+  //               Otherwise, it's one-to-one correspondence with between tablet_ids and part_ids.
+  // - part_ids: object ids for partitions.
+  // - related_table:
+  //   1. related_map_ will be set if related_tids_ is not empty.
+  //   2. If dealing with first part in composited-partitioned table, related_map_ will be empty.
+  int get_tablet_and_part_id_for_list_part(
+    const share::schema::ObTableSchema &table_schema,
+    ObExecContext &exec_ctx,
+    const ParamStore &params,
+    const ObDataTypeCastParams &dtc_params,
+    const common::ObIArray<ValueItemExpr*> &vies,
+    common::ObIArray<common::ObTabletID> &tablet_ids,
+    common::ObIArray<common::ObObjectID> &part_ids,
+    share::schema::RelatedTableInfo *related_table = NULL);
+
+    // Only for list sub-partitioned table!!
+    // param[@in]:
+    // - vies: subpart column related expr like `c1 < 1`, `c2 > 0`. When any list_row_values of one subpartition
+    //         satisfy all subpart column expr, that subpartition will returned.
+    // - table_schema: should be data table/local index/global_index
+    // - related_table: related_tids_ can be the following possbilities:
+    //                  1. data table: if table_schema is local index.
+    //                  2. local indexes: if table_schema is data schema.
+    // param[@out]:
+    // - tablet_ids: tablet_ids is empty if table is secondary-partitioned table.
+    //               Otherwise, it's one-to-one correspondence with between tablet_ids and part_ids.
+    // - part_ids: object ids for partitions.
+    // - related_table:
+    //   1. related_map_ will be set if related_tids_ is not empty.
+    //   2. If dealing with first part in composited-partitioned table, related_map_ will be empty.
+  int get_tablet_and_subpart_id_for_list_part(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObPartID &part_id,
+      ObExecContext &exec_ctx,
+      const ParamStore &params,
+      const ObDataTypeCastParams &dtc_params,
+      const common::ObIArray<ValueItemExpr*> &vies,
+      common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObIArray<common::ObObjectID> &subpart_ids,
+      share::schema::RelatedTableInfo *related_table = NULL);
+
 private:
   int mock_vtable_related_tablet_id_map(const common::ObIArray<common::ObTabletID> &tablet_ids,
                                         const common::ObIArray<common::ObObjectID> &out_part_ids);
@@ -284,9 +359,6 @@ class ObDASLocationRouter
 public:
   ObDASLocationRouter(common::ObIAllocator &allocator);
   ~ObDASLocationRouter();
-  int nonblock_get(const ObDASTableLocMeta &loc_meta,
-                   const common::ObTabletID &tablet_id,
-                   share::ObLSLocation &location);
 
   int nonblock_get_candi_tablet_locations(const ObDASTableLocMeta &loc_meta,
                                           const common::ObIArray<ObTabletID> &tablet_ids,
@@ -324,7 +396,8 @@ public:
   void reset_cur_retry_cnt() { cur_retry_cnt_ = 0; }
   void inc_cur_retry_cnt() { ++cur_retry_cnt_; }
   void set_retry_info(const ObQueryRetryInfo* retry_info);
-  int get_external_table_ls_location(share::ObLSLocation &location);
+  static int get_external_table_ls_location(share::ObLSLocation &location,
+                                            const common::ObAddr *server = nullptr);
   void save_cur_exec_status(int err_no)
   {
     if (OB_SUCCESS == cur_errno_) {
@@ -344,9 +417,20 @@ private:
   int get_vt_ls_location(uint64_t table_id,
                          const common::ObTabletID &tablet_id,
                          share::ObLSLocation &location);
+  int nonblock_get(const ObDASTableLocMeta &loc_meta,
+                   const common::ObTabletID &tablet_id,
+                   share::ObLSLocation &location);
   int nonblock_get_readable_replica(const uint64_t tenant_id,
                                     const common::ObTabletID &tablet_id,
-                                    ObDASTabletLoc &tablet_loc);
+                                    ObDASTabletLoc &tablet_loc,
+                                    const bool is_weak_read,
+                                    const ObRoutePolicyType route_policy);
+  int nonblock_get_candi_tablet_location(const ObDASTableLocMeta &loc_meta,
+                                         const common::ObTabletID &tablet_id,
+                                         const common::ObObjectID &partition_id,
+                                         const common::ObObjectID &first_level_part_id,
+                                         share::ObLSLocation &location,
+                                         ObCandiTabletLoc &candi_tablet_loc);
 private:
   int last_errno_;
   int cur_errno_;

@@ -14,8 +14,6 @@
 
 #include "share/ob_priv_common.h"
 #include "ob_define.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {
@@ -76,6 +74,7 @@ int ObPrivPacker::init_packed_array(
 {
   int ret = OB_SUCCESS;
   array.reset();
+  OZ (array.push_back(0));
   OZ (array.push_back(0));
   OZ (array.push_back(0));
   OZ (array.push_back(0));
@@ -214,6 +213,7 @@ int ObPrivPacker::pack_raw_priv(
   if (OB_SUCC(ret)) {
     if (packed_array.count() > 0) {
       if (group_id >= packed_array.count()) {
+        // MODIFY init_packed_array() to expand packed_array if sys priv id exceeds limit
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("group id error", K(ret));
       } else {

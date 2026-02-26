@@ -397,8 +397,7 @@ void ObPdFilterTestBase::init_in_filter(
                 return cmp_ret < 0;
             });
   filter.cmp_func_ = cmp_func;
-  filter.cmp_func_rev_ = cmp_func_rev;
-  filter.param_set_.set_hash_and_cmp_func(col_basic_funcs->murmur_hash_v2_, filter.cmp_func_rev_);
+  filter.param_set_.set_hash_and_cmp_func(col_basic_funcs->murmur_hash_v2_, filter.cmp_func_);
 }
 
 int ObPdFilterTestBase::check_column_store_white_filter(
@@ -468,6 +467,10 @@ int ObPdFilterTestBase::check_column_store_white_filter(
       LOG_WARN("fail to filter pushdown filter", KR(ret));
     } else {
       EXPECT_EQ(res_count, res_bitmap->popcnt());
+      if (res_count != res_bitmap->popcnt()) {
+        LOG_ERROR("result mismatch", K(res_count), K(res_bitmap->popcnt()),
+            K(op_type), K(row_cnt), K(col_cnt), K(col_offset), K(col_meta));
+      }
     }
 
     if (nullptr != expr_buf) {

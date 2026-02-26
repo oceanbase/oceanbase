@@ -11,16 +11,10 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
-#include <limits.h>         /* INT_MAX */
-#include <string.h>         /* memset */
 #include "cpu.h"
-#include "mem.h"
 #include "hist.h"           /* HIST_countFast_wksp */
 #define FSE_STATIC_LINKING_ONLY   /* FSE_encodeSymbol */
-#include "fse.h"
 #define HUF_STATIC_LINKING_ONLY
-#include "huf.h"
-#include "zstd_compress_internal.h"
 #include "zstd_fast.h"
 #include "zstd_double_fast.h"
 #include "zstd_lazy.h"

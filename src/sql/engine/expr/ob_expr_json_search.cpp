@@ -12,12 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_search.h"
-#include "util/easy_string.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "share/object/ob_obj_cast.h"
 #include "share/ob_json_access_utils.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "ob_expr_json_func_helper.h"
+#include "sql/engine/ob_exec_context.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -251,7 +248,8 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   bool is_null = false;
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
@@ -265,7 +263,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) && !is_null) {
     json_arg = expr.args_[1];
     val_type = json_arg->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || json_datum->is_null()) {
       is_null = true;
@@ -299,7 +297,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) && expr.arg_cnt_ >= 4 && !is_null) {
     json_arg = expr.args_[3];
     val_type = json_arg->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || json_datum->is_null()) {
       // do nothing, null type use default escape
@@ -338,7 +336,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) && !is_null) {
     json_arg = expr.args_[2];
     val_type = json_arg->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || json_datum->is_null()) {
       is_null = true;
@@ -378,8 +376,9 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 
       for (uint64_t i = 4; OB_SUCC(ret) && !is_null && i < expr.arg_cnt_; i++) {        
         json_arg = expr.args_[i];
+        bool is_const = json_arg->is_const_expr();
         val_type = json_arg->datum_meta_.type_;
-        if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+        if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
           LOG_WARN("eval json arg failed", K(ret));
         } else if (val_type == ObNullType || json_datum->is_null()) {
           is_null = true;
@@ -400,8 +399,8 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
                                                                     j_path_text,
                                                                     j_path_text))) {
             LOG_WARN("fail to convert string", K(ret));
-          } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path,
-              j_path_text, i, true))) {
+          } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(temp_allocator, path_cache, j_path,
+              j_path_text, i, true, is_const))) {
             LOG_WARN("parse text to path failed", K(j_path_text), K(ret));
           } else if (OB_FAIL(json_paths.push_back(j_path))) {
             LOG_WARN("push new path to vector failed", K(i), K(ret));

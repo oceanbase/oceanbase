@@ -14,10 +14,6 @@
 
 #include "common/row/ob_row_desc.h"
 
-#include "lib/hash_func/murmur_hash.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/serialization.h"
 
 namespace oceanbase
 {

@@ -15,8 +15,6 @@
 
 #define USING_LOG_PREFIX OBLOG_SORTER
 
-#include <queue>                        // std::priority_queue
-#include <vector>                       // vector used by std::priority_queue
 
 #include "ob_log_trans_msg_sorter.h"
 #include "ob_log_instance.h"            // IObLogErrHandler

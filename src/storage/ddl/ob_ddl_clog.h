@@ -14,17 +14,19 @@
 #define OCEANBASE_STORAGE_OB_DDL_CLOG_H_
 
 #include "storage/ob_i_table.h"
+#include "share/ob_rpc_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "logservice/ob_append_callback.h"
-
+#include "storage/tablet/ob_tablet.h"
 namespace oceanbase
 {
 
 namespace storage
 {
+class ObTablet;
 enum class ObDDLClogType : int64_t
 {
   UNKNOWN = -1,
@@ -33,6 +35,10 @@ enum class ObDDLClogType : int64_t
   DDL_TABLET_SCHEMA_VERSION_CHANGE_LOG = 0x10,
   DDL_START_LOG = 0x20,
   DDL_COMMIT_LOG = 0x40,// rename from DDL_PREPARE_LOG
+  DDL_TABLET_SPLIT_START_LOG = 0x41,
+  DDL_TABLET_SPLIT_FINISH_LOG = 0x42,
+  DDL_TABLET_FREEZE_LOG = 0x43,
+  DDL_FINISH_LOG = 0x80,// finish log, smilarity role in shared storage mode
 };
 
 enum ObDDLClogState : uint8_t
@@ -72,6 +78,7 @@ public:
   inline bool is_failed() const { return status_.is_failed(); }
   inline bool is_finished() const { return status_.is_finished(); }
   void try_release();
+  const char *get_cb_name() const override { return "DDLClogCb"; }
 private:
   ObDDLClogCbStatus status_;
 };
@@ -95,6 +102,7 @@ public:
   inline bool is_finished() const { return status_.is_finished(); }
   int get_ret_code() const { return status_.get_ret_code(); }
   void try_release();
+  const char *get_cb_name() const override { return "DDLStartClogCb"; }
   TO_STRING_KV(K(is_inited_), K(status_), K_(table_key), K_(data_format_version), K_(execution_id), K_(lock_tid));
 private:
   bool is_inited_;
@@ -116,7 +124,8 @@ public:
   int init(const share::ObLSID &ls_id,
            const storage::ObDDLMacroBlockRedoInfo &redo_info,
            const blocksstable::MacroBlockId &macro_block_id,
-           ObTabletHandle &tablet_handle);
+           ObTabletHandle &tablet_handle,
+           const ObDirectLoadType &direct_load_type);
   virtual int on_success() override;
   virtual int on_failure() override;
   inline bool is_success() const { return status_.is_success(); }
@@ -124,15 +133,22 @@ public:
   inline bool is_finished() const { return status_.is_finished(); }
   int get_ret_code() const { return status_.get_ret_code(); }
   void try_release();
+  const char *get_cb_name() const override { return "DDLMacroBlockClogCb"; }
 private:
   bool is_inited_;
   ObDDLClogCbStatus status_;
   share::ObLSID ls_id_;
-  storage::ObDDLMacroBlockRedoInfo redo_info_;
   blocksstable::MacroBlockId macro_block_id_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
   ObTabletHandle tablet_handle_;
+  ObDDLMacroBlock ddl_macro_block_;
+  int64_t snapshot_version_;
+  uint64_t data_format_version_;
+  bool with_cs_replica_;
+  ObDirectLoadType direct_load_type_;
+  int64_t block_checksum_;
+  bool is_macro_block_exist_;
 };
 
 class ObDDLCommitClogCb : public logservice::AppendCb
@@ -153,6 +169,7 @@ public:
   inline bool is_finished() const { return status_.is_finished(); }
   int get_ret_code() const { return status_.get_ret_code(); }
   void try_release();
+  const char *get_cb_name() const override { return "DDLCommitClogCb"; }
   TO_STRING_KV(K(is_inited_), K(status_), K(ls_id_), K(tablet_id_), K(start_scn_), K_(lock_tid));
 private:
   bool is_inited_;
@@ -245,6 +262,55 @@ private:
   share::SCN start_scn_;
   ObTabletID lob_meta_tablet_id_; // avoid replay get newest mds data
 };
+#ifdef OB_BUILD_SHARED_STORAGE
+class ObDDLFinishLog final
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObDDLFinishLog();
+  ~ObDDLFinishLog() = default;
+  void reset();
+  int init(const int64_t tenant_id,
+           const share::ObLSID ls_id,
+           const ObITable::TableKey &table_key,
+           const char* buf,
+           const int64_t buf_len,
+           const uint64_t data_format_version);
+  int assign(const storage::ObDDLFinishLogInfo &other);
+
+  bool is_valid() const { return finish_info_.is_valid(); }
+  ObITable::TableKey get_table_key() const { return finish_info_.table_key_; }
+  ObString get_data_buffer() const { return finish_info_.data_buffer_; }
+  share::ObLSID get_ls_id() const { return finish_info_.ls_id_; }
+  storage::ObDDLFinishLogInfo get_log_info() const { return finish_info_; }
+  uint64_t get_data_format_version() const { return finish_info_.data_format_version_; }
+  TO_STRING_KV(K_(finish_info));
+private:
+  storage::ObDDLFinishLogInfo finish_info_;
+};
+
+class ObDDLFinishClogCb : public logservice::AppendCb
+{
+public:
+  ObDDLFinishClogCb();
+  virtual ~ObDDLFinishClogCb() = default;
+  int init(const ObDDLFinishLog &finish_log, ObTabletHandle &tablet_handle);
+  virtual int on_success() override;
+  virtual int on_failure() override;
+  inline bool is_success() const { return status_.is_success(); }
+  inline bool is_failed() const { return status_.is_failed(); }
+  inline bool is_finished() const { return status_.is_finished(); }
+  int get_ret_code() const { return status_.get_ret_code(); }
+  void try_release();
+  const char *get_cb_name() const override { return "DDLFinishClogCb"; }
+  TO_STRING_KV(K(is_inited_), K(status_), K(finish_log_));
+private:
+  bool is_inited_;
+  ObDDLClogCbStatus status_;
+  ObDDLFinishLog finish_log_;
+  ObTabletHandle tablet_handle_;
+};
+#endif
 
 class ObTabletSchemaVersionChangeLog final
 {
@@ -272,6 +338,86 @@ public:
 public:
   share::ObLSID ls_id_;
   common::ObSArray<common::ObTabletID> hidden_tablet_ids_;
+};
+
+// === Log for tablet split start ===
+class ObTabletSplitInfo final
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObTabletSplitInfo();
+  ~ObTabletSplitInfo() = default;
+  int assign(const ObTabletSplitInfo &info);
+  bool is_valid() const;
+  TO_STRING_KV(K_(table_id), K_(lob_table_id), K_(schema_version),
+    K_(task_id), K_(source_tablet_id), K_(dest_tablets_id),
+    K_(compaction_scn), K_(data_format_version), K_(consumer_group_id),
+    K_(can_reuse_macro_block), K_(split_sstable_type), K_(lob_col_idxs),
+    K_(parallel_datum_rowkey_list));
+public:
+  common::ObArenaAllocator rowkey_allocator_; // alloc buf for datum rowkey.
+  uint64_t table_id_; // scan rows needed, index table id or main table id.
+  uint64_t lob_table_id_; // scan rows needed, valid when split lob tablet.
+  int64_t schema_version_; // report replica build status needed.
+  int64_t task_id_; // report replica build status needed.
+  common::ObTabletID source_tablet_id_;
+  common::ObSArray<common::ObTabletID> dest_tablets_id_;
+  int64_t compaction_scn_;
+  int64_t data_format_version_;
+  uint64_t consumer_group_id_;
+  bool can_reuse_macro_block_;
+  share::ObSplitSSTableType split_sstable_type_;
+  common::ObSEArray<uint64_t, 16> lob_col_idxs_;
+  common::ObSArray<blocksstable::ObDatumRowkey> parallel_datum_rowkey_list_;
+};
+
+struct ObTabletSplitStartLog final
+{
+    OB_UNIS_VERSION_V(1);
+public:
+  ObTabletSplitStartLog()
+    : basic_info_()
+  { }
+  ~ObTabletSplitStartLog() = default;
+  int assign(const ObTabletSplitStartLog &log);
+  bool is_valid() const { return basic_info_.is_valid(); }
+  const common::ObTabletID &get_source_tablet_id() const { return basic_info_.source_tablet_id_; }
+  TO_STRING_KV(K_(basic_info));
+public:
+  ObTabletSplitInfo basic_info_;
+};
+
+struct ObTabletSplitFinishLog final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletSplitFinishLog()
+    : basic_info_()
+  { }
+  ~ObTabletSplitFinishLog() = default;
+  int assign(const ObTabletSplitFinishLog &log);
+  bool is_valid() const { return basic_info_.is_valid(); }
+  const common::ObTabletID &get_source_tablet_id() const { return basic_info_.source_tablet_id_; }
+  TO_STRING_KV(K_(basic_info));
+public:
+  ObTabletSplitInfo basic_info_;
+};
+// === Log for tablet split end ===
+
+struct ObTabletFreezeLog final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletFreezeLog()
+    : tablet_id_(common::ObTabletID::INVALID_TABLET_ID)
+  { }
+  ~ObTabletFreezeLog() = default;
+  int assign(const ObTabletFreezeLog &log);
+  bool is_valid() const { return tablet_id_.is_valid(); }
+  const common::ObTabletID &get_source_tablet_id() const { return tablet_id_; }
+  TO_STRING_KV(K(tablet_id_));
+public:
+  common::ObTabletID tablet_id_;
 };
 
 } // namespace storage

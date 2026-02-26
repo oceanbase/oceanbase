@@ -12,79 +12,51 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_standard_group_checker.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/dml/ob_any_value_checker.h"
+#include "sql/rewrite/ob_transform_utils.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 namespace oceanbase
 {
 using namespace common;
 namespace sql
 {
-int ObStandardGroupChecker::add_group_by_expr(const ObRawExpr *expr)
+int ObStandardGroupChecker::init(const ObSelectStmt* select_stmt,
+                                 ObSQLSessionInfo *session_info,
+                                 ObSchemaChecker *schema_checker)
+{
+  int ret = OB_SUCCESS;
+  select_stmt_ = select_stmt;
+  session_info_ = session_info;
+  schema_checker_ = schema_checker;
+  return ret;
+}
+
+int ObStandardGroupChecker::add_group_by_expr(ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null");
-  } else if (OB_HASH_EXIST == (ret = settled_columns_.exist_refactored(reinterpret_cast<int64_t>(expr)))) {
-    //ignore
-    ret = OB_SUCCESS;
-  } else if (OB_HASH_NOT_EXIST == ret) {
-    //add to columns
-    if (OB_FAIL(settled_columns_.set_refactored(reinterpret_cast<int64_t>(expr)))) {
-      LOG_WARN("set expr to settled columns failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && !expr->is_column_ref_expr()) {
-    bool is_found = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < settled_exprs_.count(); ++i) {
-      if (settled_exprs_.at(i) == expr) {
-        is_found = true;
-        break;
-      }
-    }
-    if (!is_found && OB_FAIL(settled_exprs_.push_back(expr))) {
-      LOG_WARN("add expr to settled exprs failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
+    LOG_WARN("group by expr is null", K(ret));
+  } else if (OB_FAIL(group_by_exprs_.push_back(expr))) {
+    LOG_WARN("add expr to settled exprs failed", K(ret));
+  } else {
     //this stmt has group
     set_has_group(true);
+    is_scalar_aggr_ = false;
   }
   return ret;
 }
 
-int ObStandardGroupChecker::add_unsettled_column(const ObRawExpr *column_ref)
-{
-  int ret = OB_SUCCESS;
-  if (column_ref->has_generalized_column()) {
-    if (OB_FAIL(dependent_columns_.push_back(column_ref))) {
-      LOG_WARN("add column to dependent columns failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObStandardGroupChecker::add_unsettled_expr(const ObRawExpr *expr)
+int ObStandardGroupChecker::add_unsettled_expr(ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null");
   } else if (expr->has_generalized_column()) {
-    ObUnsettledExprItem unsettled_expr_item;
-    unsettled_expr_item.expr_ = expr;
     if (expr->has_flag(CNT_AGG)) {
       set_has_group(true);
     }
-    if (unsettled_exprs_.count() <= 0) {
-      unsettled_expr_item.start_idx_ = 0;
-      unsettled_expr_item.dependent_column_cnt_ = dependent_columns_.count();
-    } else {
-      ObUnsettledExprItem &last_unsettled_expr = unsettled_exprs_.at(unsettled_exprs_.count() - 1);
-      unsettled_expr_item.start_idx_ = last_unsettled_expr.start_idx_ + last_unsettled_expr.dependent_column_cnt_;
-      unsettled_expr_item.dependent_column_cnt_ = dependent_columns_.count() - unsettled_expr_item.start_idx_;
-    }
-    if (OB_FAIL(unsettled_exprs_.push_back(unsettled_expr_item))) {
+    if (OB_FAIL(unsettled_exprs_.push_back(expr))) {
       LOG_WARN("add unsettled exprs failed", K(ret));
     }
   }
@@ -94,146 +66,206 @@ int ObStandardGroupChecker::add_unsettled_expr(const ObRawExpr *expr)
 int ObStandardGroupChecker::check_only_full_group_by()
 {
   int ret = OB_SUCCESS;
-  const ObColumnRefRawExpr *undefined_column = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && has_group_ && i < unsettled_exprs_.count(); ++i) {
-    //not check aggregate function or column in aggregate function, such as select count(c1) from t1 group by c2;
-    //but if expr has column outside of aggregate function, we only check the column not in aggregate function
-    //such as: select c1+count(c2) from t1 group by c1;
-    const ObUnsettledExprItem &unsettled_expr = unsettled_exprs_.at(i);
-    common::ObArray<const ObColumnRefRawExpr*> undefined_columns;
-    for (int64_t j = unsettled_expr.start_idx_;
-        OB_SUCC(ret) && j < unsettled_expr.start_idx_ + unsettled_expr.dependent_column_cnt_; ++j) {
-      const ObRawExpr *unsettled_column = NULL;
-      if (j < 0 && j > dependent_columns_.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unsettled column index is invalid", K(j), K(dependent_columns_.count()));
-      } else if (OB_ISNULL(unsettled_column = dependent_columns_.at(j))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unsettled column is null");
-      } else if (OB_FAIL(check_unsettled_column(unsettled_column, undefined_column))) {
-        LOG_WARN("check unsettled column failed", K(ret));
-      } else if (undefined_column != NULL) {
-        //当前stmt中存在undefined的列，根据only full group by语义，如果一个表达式中所有列都是defined，那么该表达式是defined
-        //如果所有列不能保证defined，需要看看表达式本身是否是defined
-        //例如：select c1+c2 from t1 group by c1, c1+c2
-        //c1是defined列，c2不是，c1+c2整体是defined，所以这条语句满足only full group by
-        undefined_columns.push_back(undefined_column);
-        undefined_column = NULL;
-      }
-    }
-   if (OB_SUCC(ret) && 0 != undefined_columns.size()) {
-      //has undefined column, must check expr whether defined in group by or in any_value
-      for (int64_t i = 0; OB_SUCC(ret) && i < undefined_columns.size(); ++i) {
-        if (OB_FAIL(check_unsettled_expr(unsettled_expr.expr_, *(undefined_columns.at(i))))) {
-          LOG_WARN("check unsettled expr failed", K(ret));
-          break;
-        }
-      }
-    }
-    if (OB_SUCC(ret) && !unsettled_expr.expr_->has_flag(CNT_AGG)) {
-      //当前的表达式满足only full group by语义，所以将其加入到settled columns中，作为下次检查的参考列
-      if (OB_FAIL(settled_columns_.set_refactored(reinterpret_cast<int64_t>(unsettled_expr.expr_)))) {
-        if (OB_HASH_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("add settled expr to settled columns failed", K(ret));
-        }
-      }
-    }
-    undefined_column = NULL;
-  }
-  //本次检查结束
-  //无论 被检查的表达式是否满足only full group by语义，
-  //都需要清空待检查表达式和待检查列的缓存，为下次检查做准备
-  unsettled_exprs_.reset();
-  dependent_columns_.reset();
-  return ret;
-}
-
-int ObStandardGroupChecker::check_unsettled_column(const ObRawExpr *unsettled_column,
-                                                   const ObColumnRefRawExpr *&undefined_column)
-{
-  int ret = OB_SUCCESS;
-  undefined_column = NULL;
-  if (OB_HASH_EXIST == (ret = settled_columns_.exist_refactored(reinterpret_cast<int64_t>(unsettled_column)))) {
-    ret = OB_SUCCESS;
-    //continue to check next column
-  } else if (OB_HASH_NOT_EXIST == ret) {
-    if (!unsettled_column->is_column_ref_expr()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unsettled column isn't column reference expr", K(*unsettled_column));
-    } else {
-      //mark undefined column index in unsettled expr after group by
-      undefined_column = static_cast<const ObColumnRefRawExpr*>(unsettled_column);
-      ret = OB_SUCCESS;
-    }
-  } else {
-    LOG_WARN("check column in settled columns failed", K(ret));
-  }
-  return ret;
-}
-
-int ObStandardGroupChecker::check_unsettled_expr(const ObRawExpr *unsettled_expr, const ObColumnRefRawExpr &undefined_column)
-{
-  int ret = OB_SUCCESS;
-  bool scalar_aggr = settled_columns_.size() <= 0 && has_group_;
-  if (OB_ISNULL(unsettled_expr)) {
+  if (OB_ISNULL(select_stmt_) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unsettled expr is null");
-  } else if (scalar_aggr) {
-    //当前语句包含聚集但是却没有group by column，所以是scalar aggregate
-    //对于scalar group by, mysql不允许聚集函数和单列混用
-    //such as select c1+min(c1) from t1
-    //select c2+max(c1) from t1
-    ret = OB_ERR_MIX_OF_GROUP_FUNC_AND_FIELDS;
-  } else if (unsettled_expr->has_flag(CNT_AGG) || unsettled_expr == &undefined_column) {
-    //not check aggregate function or column in aggregate function, such as select count(c1) from t1 group by c2;
-    //but if expr has column outside of aggregate function, we only check the column not in aggregate function
-    //such as: select c1+count(c2) from t1 group by c1;
-    ret = OB_ERR_WRONG_FIELD_WITH_GROUP;
-    LOG_DEBUG("column not in group by", K(*unsettled_expr), K(undefined_column));
-  } else if (OB_HASH_EXIST == (ret = settled_columns_.exist_refactored(reinterpret_cast<int64_t>(unsettled_expr)))) {
-    //this expr satisfy the only full group by semantic constraints
-    ret = OB_SUCCESS;
-  } else if (OB_HASH_NOT_EXIST == ret) {
-    ret = OB_SUCCESS;
-    bool is_defined = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < settled_exprs_.count(); ++i) {
-      if (OB_ISNULL(settled_exprs_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("settled expr is null");
-      } else if (unsettled_expr->same_as(*settled_exprs_.at(i))) {
-        is_defined = true;
-        break;
-      }
-    }
-    if (OB_SUCC(ret) && !is_defined) {
-      ret = OB_ERR_WRONG_FIELD_WITH_GROUP;
-    }
+    LOG_WARN("get unexpected null", K(ret), K(select_stmt_), K(session_info_));
+  } else if (!has_group_) {
+    // do nothing
   } else {
-    LOG_WARN("check unsettled expr failed", K(ret));
-  }
-
-  if (OB_ERR_WRONG_FIELD_WITH_GROUP == ret || OB_ERR_MIX_OF_GROUP_FUNC_AND_FIELDS == ret) {
-    int tmp_ret = ret;
-    ObAnyValueChecker any_value_checker;
-    if (OB_FAIL(any_value_checker.check_any_value(unsettled_expr, &undefined_column))) {
-      LOG_WARN("check any value expr fail", K(ret));
-    } else {
-      if (any_value_checker.is_pass_after_check()) {
-        ret = OB_SUCCESS;
-      } else {
-        ret = tmp_ret;
-        if (OB_ERR_WRONG_FIELD_WITH_GROUP == ret) {
-          ObString column_name = concat_qualified_name(undefined_column.get_database_name(),
-                                                    undefined_column.get_table_name(),
-                                                    undefined_column.get_column_name());
-          LOG_USER_ERROR(OB_ERR_WRONG_FIELD_WITH_GROUP, column_name.length(), column_name.ptr());
-        }
+    ObArenaAllocator alloc("CheckUnique", OB_MALLOC_NORMAL_BLOCK_SIZE,
+                            session_info_->get_effective_tenant_id(),
+                            ObCtxIds::DEFAULT_CTX_ID);
+    ObRawExprFactory expr_factory(alloc);
+    ObFdItemFactory fd_item_factory(alloc);
+    ObStandardGroupVisitor visitor(this);
+    if (OB_FAIL(deduce_settled_exprs(&alloc,
+                                     &expr_factory,
+                                     &fd_item_factory))) {
+      LOG_WARN("failed to deduce settled exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < unsettled_exprs_.count(); ++i) {
+      ObRawExpr *unsettled_expr = unsettled_exprs_.at(i);
+      bool is_valid = false;
+      if (OB_FAIL(expr_exists_in_group_by(unsettled_expr, is_valid))) {
+        LOG_WARN("failed to check column in settled columns", K(ret));
+      } else if (is_valid) {
+        // expr exists in group by columns
+      } else if (OB_FAIL(unsettled_expr->preorder_accept(visitor))) {
+        LOG_WARN("failed to check unsettled expr", K(ret));
       }
+    }
+    if (OB_SUCC(ret)) {
+      expr_factory.destory();
+      fd_item_factory.destory();
     }
   }
   return ret;
 }
+
+int ObStandardGroupChecker::expr_exists_in_group_by(ObRawExpr *expr,
+                                                    bool &is_existed)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret;
+  is_existed = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (ObOptimizerUtil::find_equal_expr(group_by_exprs_, expr)) {
+    is_existed = true;
+  }
+  return ret;
+}
+
+int ObStandardGroupChecker::deduce_settled_exprs(ObArenaAllocator *alloc,
+                                                 ObRawExprFactory *expr_factory,
+                                                 ObFdItemFactory *fd_item_factory)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt_) || OB_ISNULL(session_info_)
+      || OB_ISNULL(alloc) || OB_ISNULL(expr_factory) || OB_ISNULL(fd_item_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(select_stmt_), K(session_info_), K(alloc), K(expr_factory), K(fd_item_factory));
+  } else {
+    ObTransformUtils::UniqueCheckHelper check_helper;
+    check_helper.alloc_ = alloc;
+    check_helper.fd_factory_ = fd_item_factory;
+    check_helper.expr_factory_ = expr_factory;
+    check_helper.schema_checker_ = schema_checker_;
+    check_helper.session_info_ = session_info_;
+    ObSEArray<TableItem*, 8> from_tables;
+    ObTransformUtils::UniqueCheckInfo unique_info;
+    if (OB_FAIL(select_stmt_->get_from_tables(from_tables))) {
+      LOG_WARN("failed to get from tables", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::compute_tables_property(select_stmt_,
+                                                                 check_helper,
+                                                                 from_tables,
+                                                                 select_stmt_->get_condition_exprs(),
+                                                                 unique_info))) {
+      LOG_WARN("failed to compute tables property", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::append_exprs_no_dup(settled_exprs_, unique_info.const_exprs_))) {
+      LOG_WARN("failed to append const exprs", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::append_exprs_no_dup(settled_exprs_, group_by_exprs_))) {
+      LOG_WARN("failed to append group by exprs", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::deduce_determined_exprs(settled_exprs_,
+                                                                select_stmt_,
+                                                                unique_info.fd_sets_,
+                                                                unique_info.equal_sets_,
+                                                                unique_info.const_exprs_))) {
+      LOG_WARN("failed to deduce determined exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObStandardGroupChecker::check_unsettled_column(const ObColumnRefRawExpr *unsettled_column)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = -1;
+  bool is_determined = false;
+  if (OB_ISNULL(unsettled_column)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unsettled column is null", K(ret));
+  } else if (ObOptimizerUtil::find_equal_expr(settled_exprs_, unsettled_column)) {
+    // unsettled_column is in group by column or is a const expr
+  } else {
+    ret = is_scalar_aggr_ ? OB_ERR_MIX_OF_GROUP_FUNC_AND_FIELDS : OB_ERR_WRONG_FIELD_WITH_GROUP;
+    if (OB_ERR_WRONG_FIELD_WITH_GROUP == ret) {
+      ObString column_name = concat_qualified_name(unsettled_column->get_database_name(),
+                                                   unsettled_column->get_table_name(),
+                                                   unsettled_column->get_column_name());
+      LOG_USER_ERROR(OB_ERR_WRONG_FIELD_WITH_GROUP, column_name.length(), column_name.ptr());
+    }
+  }
+  return ret;
+}
+
+int ObStandardGroupVisitor::visit(ObColumnRefRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("standard group checker is null", K(ret));
+  } else if (is_in_subquery_) {
+    // do nothing
+  } else if (OB_FAIL(checker_->check_unsettled_column(&expr))) {
+    LOG_WARN("failed to visit column ref expr", K(ret));
+  }
+  return ret;
+}
+
+int ObStandardGroupVisitor::visit(ObSysFunRawExpr &expr)
+{
+  if (T_FUN_SYS_ANY_VALUE == expr.get_expr_type()) {
+    skip_expr_ = &expr;
+  }
+  return OB_SUCCESS;
+}
+
+int ObStandardGroupVisitor::visit(ObAggFunRawExpr &expr)
+{
+  skip_expr_ = &expr;
+  return OB_SUCCESS;
+}
+
+int ObStandardGroupVisitor::visit(ObExecParamRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  ObStandardGroupVisitor exec_param_visitor(checker_);
+  if (OB_ISNULL(expr.get_ref_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref expr is invalid", K(ret));
+  } else if (OB_FAIL(expr.get_ref_expr()->preorder_accept(exec_param_visitor))) {
+    LOG_WARN("failed to visit child", K(ret));
+  } else {
+    skip_expr_ = &expr;
+  }
+  return ret;
+}
+
+int ObStandardGroupVisitor::visit(ObQueryRefRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *ref_stmt = expr.get_ref_stmt();
+  ObSEArray<ObRawExpr*, 8> relation_exprs;
+  ObStandardGroupVisitor sub_query_visitor(checker_, true);
+  if (OB_ISNULL(ref_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref stmt is null", K(ret), K(expr));
+  } else if (OB_FAIL(ref_stmt->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
+    if (OB_ISNULL(relation_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("relation expr is null", K(ret), K(i));
+    } else if (!relation_exprs.at(i)->has_flag(CNT_DYNAMIC_PARAM)
+               && !relation_exprs.at(i)->has_flag(CNT_SUB_QUERY)) {
+      // do nothing
+    } else if (OB_FAIL(relation_exprs.at(i)->preorder_accept(sub_query_visitor))) {
+      LOG_WARN("failed to check unsettled expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    skip_expr_ = &expr;
+  }
+  return ret;
+}
+
+bool ObStandardGroupVisitor::skip_child(ObRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  if (skip_expr_ == &expr) {
+    bret = true;
+  } else if (OB_ISNULL(checker_)) {
+    // should never reach here
+  } else if (OB_FAIL(checker_->expr_exists_in_group_by(&expr, bret))) {
+    bret = false;
+    LOG_WARN("failed to check column in settled columns", K(ret));
+  }
+  return bret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

@@ -100,6 +100,10 @@ public:
     call_counter_ = 0;
     callback_counter_ = 0;
   }
+  inline bool is_called()
+  {
+    return callback_counter_ == call_counter_;
+  }
 protected:
   // 为了检查是否存在重复调用callback，或漏调callback的问题
   inline void CHECK_BALANCE(const char *type) const

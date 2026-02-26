@@ -15,6 +15,7 @@
 
 #include "storage/blocksstable/ob_micro_block_cache.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
+#include "share/storage/ob_i_pre_warmer.h"
 
 
 namespace oceanbase
@@ -22,17 +23,20 @@ namespace oceanbase
 namespace common
 {
 
-class ObDataBlockCachePreWarmer
+class ObDataBlockCachePreWarmer : public share::ObIPreWarmer
 {
 public:
-  ObDataBlockCachePreWarmer();
+  ObDataBlockCachePreWarmer(const int64_t fixed_percentage = 0);
   virtual ~ObDataBlockCachePreWarmer();
   void reset();
-  void reuse();
-  int init();
-  OB_INLINE bool is_valid() const { return nullptr != cache_; }
-  int reserve_kvpair(const blocksstable::ObMicroBlockDesc &micro_block_desc, const int64_t level = 0);
-  int update_and_put_kvpair(const blocksstable::ObMicroBlockDesc &micro_block_desc);
+  virtual void reuse() override;
+  virtual int init(const ObITableReadInfo *table_read_info) override;
+  virtual int reserve(const blocksstable::ObMicroBlockDesc &micro_block_desc,
+                      bool &reserve_succ_flag,
+                      const int64_t level = 0) override;
+  virtual int add(const blocksstable::ObMicroBlockDesc &micro_block_desc, const bool reserve_succ_flag) override;
+  virtual int close() override { return OB_SUCCESS; }
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(fixed_percentage), K_(base_percentage), K_(rest_size), K_(warm_size_percentage), K_(update_step));
 protected:
   void update_rest();
   void inner_update_rest();
@@ -44,12 +48,14 @@ protected:
       const blocksstable::ObMicroBlockDesc &micro_block_desc,
       blocksstable::ObIMicroBlockCache::BaseBlockCache &kvcache);
 private:
-  bool warm_block(const int64_t level);
+  bool warm_block_for_memory(const int64_t level);
+  bool warm_block_for_percentage();
 protected:
   static const int64_t DATA_BLOCK_CACHE_PERCENTAGE = 5;
   static const int64_t UPDATE_INTERVAL = 50;
   static const int64_t TOP_LEVEL = 6;
 
+  int64_t fixed_percentage_;
   int64_t base_percentage_;
   blocksstable::ObIMicroBlockCache *cache_;
   int64_t rest_size_;
@@ -58,14 +64,15 @@ protected:
   ObKVCachePair *kvpair_;
   ObKVCacheInstHandle inst_handle_;
   ObKVCacheHandle cache_handle_;
+  const ObITableReadInfo *table_read_info_;
 };
 
 class ObIndexBlockCachePreWarmer : public ObDataBlockCachePreWarmer
 {
 public:
-  ObIndexBlockCachePreWarmer();
+  ObIndexBlockCachePreWarmer(const int64_t fixed_percentage = 0);
   virtual ~ObIndexBlockCachePreWarmer();
-  int init();
+  virtual int init(const ObITableReadInfo *table_read_info) override;
 protected:
   virtual void calculate_base_percentage(const int64_t free_memory) override;
   virtual int do_reserve_kvpair(

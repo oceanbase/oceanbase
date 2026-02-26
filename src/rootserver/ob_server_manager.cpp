@@ -16,23 +16,9 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_server_manager.h"
 
-#include "share/ob_define.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/ob_debug_sync.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/ob_disk_usage_table_operator.h"
-#include "rootserver/ob_unit_manager.h"
-#include "rootserver/ob_zone_manager.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "common/storage/ob_freeze_define.h"
-#include "rootserver/ob_rs_job_table_operator.h"
+#include "ob_server_manager.h"
 #include "observer/ob_server.h"
-#include "rootserver/ob_root_service.h"
 #include "storage/ob_file_system_router.h"
 #include "rootserver/ob_heartbeat_service.h"
 namespace oceanbase
@@ -1617,7 +1603,6 @@ int ObServerManager::get_persist_server_statuses(
 
 int ObServerManager::adjust_server_status(
     const common::ObAddr &server,
-    ObDRTaskMgr &disaster_recovery_task_mgr,
     const bool with_rootserver)
 {
   int ret = OB_SUCCESS;
@@ -1656,12 +1641,6 @@ int ObServerManager::adjust_server_status(
       }
     }
   }
-  //if (OB_SUCC(ret) && discard_rebalance_task_time > 0) {
-  //  if (OB_FAIL(disaster_recovery_task_mgr.discard_task(server, discard_rebalance_task_time))) {
-  //    LOG_WARN("discard rebalance task failed", K(ret), K(server),
-  //             K(discard_rebalance_task_time));
-  //  }
-  //}
   return ret;
 }
 

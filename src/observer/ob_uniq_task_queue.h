@@ -38,7 +38,6 @@ public:
   explicit ObHighPrioMemAllocator(const char *label = common::ObModIds::OB_PARTITION_TABLE_TASK)
   {
     attr_.label_ = label;
-    attr_.prio_ = lib::OB_HIGH_ALLOC;
   }
 
   void *alloc(const int64_t sz);
@@ -386,6 +385,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
   Group *group = NULL;
   const int64_t batch_exec_cnt = common::UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM;
   common::ObArray<Task> tasks;
+  ObDIActionGuard ag("UniqTaskThreadPool", thread_name_, nullptr);
   if (thread_name_ != nullptr) {
     lib::set_thread_name(thread_name_, get_thread_idx());
   }
@@ -458,9 +458,11 @@ void ObUniqTaskQueue<Task, Process>::run1()
             }
           }
         } else {
+          common::ObBKGDSessInActiveGuard inactive_guard;
           cond_.wait(QUEUE_WAIT_INTERVAL_MS);
         }
       } else {//end cond_
+        ObBKGDSessInActiveGuard guard;
         ob_usleep(QUEUE_WAIT_INTERVAL_MS * 1000);
       }
       if (common::OB_SUCCESS == ret && tasks.count() > 0) {
@@ -588,6 +590,7 @@ int ObUniqTaskQueue<Task, Process>::process_barrier(Task &task)
 template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::batch_process_tasks(common::ObIArray<Task> &tasks)
 {
+  common::ObDIActionGuard ag(typeid(Task));
   int ret = common::OB_SUCCESS;
   bool stopped = lib::Thread::current().has_set_stop();
   if (0 == tasks.count()) {

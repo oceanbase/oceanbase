@@ -11,16 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_define.h"
-#include "sql/das/ob_das_context.h"
-#include "sql/das/ob_das_utils.h"
-#include "sql/engine/ob_exec_context.h"
+#include "ob_das_define.h"
 #include "pl/ob_pl.h"
-#include "sql/optimizer/ob_phy_table_location_info.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/location_cache/ob_location_service.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -36,6 +28,7 @@ void ObDASTableLocMeta::light_assign(const ObDASTableLocMeta &other)
   table_loc_id_ = other.table_loc_id_;
   ref_table_id_ = other.ref_table_id_;
   flags_ = other.flags_;
+  route_policy_ = other.route_policy_;
 }
 
 int ObDASTableLocMeta::assign(const ObDASTableLocMeta &other)
@@ -66,7 +59,8 @@ OB_SERIALIZE_MEMBER(ObDASTableLocMeta,
                     table_loc_id_,
                     ref_table_id_,
                     related_table_ids_,
-                    flags_);
+                    flags_,
+                    route_policy_);
 
 OB_SERIALIZE_MEMBER(ObDASTabletLoc,
                     tablet_id_,
@@ -341,6 +335,42 @@ int ObDASTableLoc::create_tablet_locs_map()
       if (OB_FAIL(tablet_locs_map_.set(tablet_loc->tablet_id_, tablet_loc))) {
         LOG_WARN("insert into tablet locs map failed", KR(ret), KPC(tablet_loc));
       }
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObDASPushDownTopN,
+                    order_type_,
+                    sort_key_,
+                    limit_expr_,
+                    offset_expr_,
+                    with_ties_,
+                    is_push_into_index_);
+
+int ObDASPushDownTopN::prepare_limit_param(ObEvalCtx &eval_ctx,
+                                           const ObDASPushDownTopN &push_down_topn,
+                                           ObLimitParam &limit_param)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != push_down_topn.limit_expr_) {
+    ObDatum *limit_datum = nullptr;
+    if (OB_FAIL(push_down_topn.limit_expr_->eval(eval_ctx, limit_datum))) {
+      LOG_WARN("failed to eval limit expr", K(ret));
+    } else {
+      limit_param.limit_ = (limit_datum->is_null() || limit_datum->get_int() < 0) ? 0 : limit_datum->get_int();
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (nullptr != push_down_topn.offset_expr_) {
+    ObDatum *offset_datum = nullptr;
+    if (OB_FAIL(push_down_topn.offset_expr_->eval(eval_ctx, offset_datum))) {
+      LOG_WARN("failed to eval limit expr", K(ret));
+    } else if (offset_datum->is_null()) {
+      limit_param.limit_ = 0;
+      limit_param.offset_ = 0;
+    } else {
+      limit_param.offset_ = offset_datum->get_int() < 0 ? 0 : offset_datum->get_int();
     }
   }
   return ret;

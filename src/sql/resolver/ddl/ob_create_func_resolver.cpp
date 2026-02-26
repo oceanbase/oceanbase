@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_func_resolver.h"
-#include "sql/engine/user_defined_function/ob_udf_util.h"
 
 namespace oceanbase
 {

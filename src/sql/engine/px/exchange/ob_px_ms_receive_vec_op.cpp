@@ -13,17 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_ms_receive_vec_op.h"
-#include "lib/container/ob_fixed_array.h"
-#include "sql/engine/px/exchange/ob_row_heap.h"
-#include "sql/engine/px/ob_dfo.h"
-#include "sql/engine/px/ob_px_dtl_msg.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/ob_px_data_ch_provider.h"
-#include "sql/engine/px/ob_px_dtl_proc.h"
-#include "sql/dtl/ob_dtl_channel_loop.h"
-#include "sql/engine/basic/ob_ra_row_store.h"
 #include "sql/engine/px/ob_px_scheduler.h"
-#include "sql/engine/basic/ob_temp_row_store.h"
 
 namespace oceanbase
 {
@@ -39,14 +29,22 @@ OB_SERIALIZE_MEMBER((ObPxMSReceiveVecSpec, ObPxReceiveSpec),
                     all_exprs_,
                     sort_collations_,
                     sort_cmp_funs_,
-                    local_order_);
+                    local_order_,
+                    max_ordered_aggr_code_,
+                    dup_expr_list_,
+                    aggr_code_,
+                    encoded_dup_expr_);
 
 ObPxMSReceiveVecSpec::ObPxMSReceiveVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
   : ObPxReceiveSpec(alloc, type),
     all_exprs_(alloc),
     sort_collations_(alloc),
     sort_cmp_funs_(alloc),
-    local_order_(false)
+    local_order_(false),
+    max_ordered_aggr_code_(0),
+    dup_expr_list_(alloc),
+    aggr_code_(nullptr),
+    encoded_dup_expr_(nullptr)
 {
 }
 
@@ -104,8 +102,13 @@ int ObPxMSReceiveVecOp::init_merge_sort_input(int64_t n_channel)
           msi->alloc_ = &mem_context_->get_malloc_allocator();
           msi->sql_mem_processor_ = &sql_mem_processor_;
           msi->io_event_observer_ = &io_event_observer_;
+          msi->compressor_type_ = MY_SPEC.compress_type_;
           if (OB_FAIL(merge_inputs_.push_back(msi))) {
             LOG_WARN("push back merge sort input fail", K(idx), K(ret));
+            msi->clean_row_store(ctx_);
+            msi->destroy();
+            msi->~MergeSortInput();
+            mem_context_->get_malloc_allocator().free(msi);
           }
         }
       }
@@ -144,7 +147,7 @@ int ObPxMSReceiveVecOp::inner_open()
                      "PxMsOutputStore", ObCtxIds::EXECUTE_CTX_ID);
       if (OB_FAIL(output_store_.init(MY_SPEC.all_exprs_, get_spec().max_batch_size_,
                                      attr, 0 /*mem_limit*/, false /*enable_dump*/,
-                                     0 /*row_extra_size*/))) {
+                                     0 /*row_extra_size*/, NONE_COMPRESSOR))) {
         LOG_WARN("init output store failed", K(ret));
       } else if (OB_ISNULL(mem = ctx_.get_allocator().alloc(
             ObBitVector::memory_size(get_spec().max_batch_size_)))) {
@@ -404,7 +407,7 @@ int ObPxMSReceiveVecOp::GlobalOrderInput::get_rows_from_channels(
   while (OB_SUCC(ret) && !fetched && !is_finish()) {
     got_channel_idx = hint_channel_idx;
     if (OB_FAIL(ms_receive_op->ptr_row_msg_loop_->process_one(got_channel_idx))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         ret = OB_SUCCESS;
         if (OB_FAIL(eval_ctx.exec_ctx_.check_status())) {
           LOG_WARN("check status failed", K(channel_idx), K(ret));
@@ -594,7 +597,8 @@ int ObPxMSReceiveVecOp::GlobalOrderInput::create_temp_row_store(
     const ObPxMSReceiveVecSpec &spec = ms_receive_op.my_spec();
     if (OB_FAIL(row_store->init(spec.all_exprs_, spec.max_batch_size_,
                                 mem_attr, mem_limit, true /* enable_dump*/,
-                                0 /*row_extra_size*/))) {
+                                0 /*row_extra_size*/,
+                                compressor_type_))) {
       row_store->~ObTempRowStore();
       ctx.get_allocator().free(buf);
       row_store = nullptr;
@@ -824,12 +828,16 @@ int ObPxMSReceiveVecOp::new_local_order_input(MergeSortInput *&out_msi)
     ObMemAttr mem_attr(ctx_.get_my_session()->get_effective_tenant_id(), "PxMSRecvLocal", ObCtxIds::WORK_AREA);
     if (OB_FAIL(local_input->row_store_.init(MY_SPEC.all_exprs_, get_spec().max_batch_size_,
                                          mem_attr, 0 /* mem_limit */, true /* enable_dump*/,
-                                         0 /*row_extra_size*/))) {
+                                         0 /*row_extra_size*/,
+                                         local_input->compressor_type_))) {
       LOG_WARN("failed to init temp row store", K(ret));
     } else if (FALSE_IT(local_input->row_store_.set_dir_id(sql_mem_processor_.get_dir_id()))) {
       LOG_WARN("failed to allocate dir id for temp row store", K(ret));
     } else if (OB_FAIL(merge_inputs_.push_back(local_input))) {
       LOG_WARN("fail push back MergeSortInput", K(ret));
+      local_input->clean_row_store(ctx_);
+      local_input->destroy();
+      mem_context_->get_malloc_allocator().free(local_input);
     } else {
       out_msi = local_input;
     }
@@ -868,8 +876,8 @@ int ObPxMSReceiveVecOp::get_all_rows_from_channels(ObPhysicalPlanCtx *phy_plan_c
 
         int64_t got_channel_idx = OB_INVALID_INDEX_INT64;
         if (OB_FAIL(ptr_row_msg_loop_->process_one(got_channel_idx))) {
-          if (OB_EAGAIN == ret) {
-            // If no data fetch, then return OB_EAGAIN after OB_ITER_END
+          if (OB_DTL_WAIT_EAGAIN == ret) {
+            // If no data fetch, then return OB_DTL_WAIT_EAGAIN after OB_ITER_END
             ret = OB_SUCCESS;
             if (OB_FAIL(ctx_.check_status())) {
               LOG_WARN("check status failed", K(ret));
@@ -1070,7 +1078,7 @@ int ObPxMSReceiveVecOp::inner_rescan()
   output_iter_.reset();
   output_store_.reset();
   if (OB_FAIL(ObPxReceiveOp::inner_rescan())) {
-    LOG_WARN("fail to do recieve op rescan", K(ret));
+    LOG_WARN("fail to do receive op rescan", K(ret));
   } else if (!MY_SPEC.local_order_
              && OB_FAIL(row_heap_.init(get_channel_count(),
                                        &MY_SPEC.sort_collations_,

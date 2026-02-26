@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_compaction_dag_ranker.h"
 #include "ob_tablet_merge_task.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/scheduler/ob_dag_scheduler_config.h"
 
 namespace oceanbase
 {
@@ -440,7 +438,7 @@ int ObCompactionDagRanker::sort(
     LOG_WARN("failed to get rank weighed score", K(ret), KPC(rank_helper_), K(dags));
   } else {
     ObCompactionRankScoreCompare comp(ret);
-    std::sort(dags.begin(), dags.end(), comp);
+    lib::ob_sort(dags.begin(), dags.end(), comp);
     if (OB_FAIL(ret)) {
       LOG_ERROR("failed to sort compaction dags", K(ret), K(dags.count()));
 

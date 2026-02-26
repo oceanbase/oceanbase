@@ -12,8 +12,6 @@
 
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
 #include "lib/ob_running_mode.h"
-#include "lib/utility/utility.h"
-#include "lib/cpu/ob_cpu_topology.h"
 
 namespace oceanbase
 {

@@ -14,10 +14,6 @@
 
 #include "ob_expr_convert.h"
 
-#include "lib/charset/ob_charset.h"
-#include "sql/engine/expr/ob_expr_cast.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -60,7 +56,7 @@ int ObExprConvert::calc_result_type2(ObExprResType &type,
       ret = OB_ERR_UNKNOWN_CHARSET;
       LOG_WARN("unknown charset", K(ret), K(cs_name));
     } else {
-      type.set_collation_level(CS_LEVEL_EXPLICIT);
+      type.set_collation_level(CS_LEVEL_IMPLICIT);
       type.set_collation_type(ObCharset::get_default_collation(charset_type));
       //set calc type
       //only set type2 here.

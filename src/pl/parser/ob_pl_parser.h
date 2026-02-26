@@ -17,6 +17,7 @@
 #include "share/ob_define.h"
 #include "share/schema/ob_trigger_info.h"
 #include "sql/parser/ob_parser_utils.h"
+#include "lib/ob_date_unit_type.h"
 
 namespace oceanbase
 {
@@ -35,6 +36,8 @@ namespace pl
 class ObPLParser
 {
 public:
+  static constexpr int64_t MAX_PRINT_LEN = 64;
+
   ObPLParser(common::ObIAllocator &allocator, sql::ObCharsets4Parser charsets4parser, ObSQLMode sql_mode = 0)
     : allocator_(allocator),
       charsets4parser_(charsets4parser),
@@ -48,13 +51,22 @@ public:
             bool is_inner_parse = false);
   int parse_routine_body(const common::ObString &routine_body,
                          ObStmtNodeTree *&routine_stmt,
-                         bool is_for_trigger);
+                         bool is_for_trigger,
+                         bool &is_wrap,
+                         bool need_unwrap = true /* for wrapped procedure/function */);
   int parse_package(const common::ObString &source,
                     ObStmtNodeTree *&package_stmt,
                     const ObDataTypeCastParams &dtc_params,
                     share::schema::ObSchemaGetterGuard *schema_guard,
                     bool is_for_trigger,
-                    const share::schema::ObTriggerInfo *trg_info = NULL);
+                    bool &is_wrap,
+                    const share::schema::ObTriggerInfo *trg_info = NULL,
+                    bool need_unwrap = true /* for wrapped package */,
+                    sql::ObSQLSessionInfo *session = nullptr);
+#ifdef OB_BUILD_ORACLE_PL
+  static bool is_wrapped_parse_tree(const ParseNode &parse_tree);
+  static int check_wrapped_parse_tree_legal(const ParseNode &parse_tree);
+#endif
 private:
   int parse_procedure(const common::ObString &stmt_block,
                       const common::ObString &orig_stmt_block,
@@ -63,13 +75,21 @@ private:
                       bool is_for_trigger,
                       bool is_dynamic,
                       bool is_inner_parse,
-                      bool &is_include_old_new_in_trigger);
+                      bool &is_include_old_new_in_trigger,
+                      bool &contain_sensitive_data);
   int parse_stmt_block(ObParseCtx &parse_ctx,
                        ObStmtNodeTree *&multi_stmt);
   int reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
                                   const share::schema::ObTriggerInfo *trg_info,
                                   const ObDataTypeCastParams &dtc_params,
-                                  share::schema::ObSchemaGetterGuard *schema_guard);
+                                  share::schema::ObSchemaGetterGuard *schema_guard,
+                                  sql::ObSQLSessionInfo *session);
+#ifdef OB_BUILD_ORACLE_PL
+  int decode_cipher_text(common::ObIAllocator &allocator,
+                         const ObStmtNodeTree *cipher_stmt,
+                         ObString &plain_text);
+#endif
+
 private:
   common::ObIAllocator &allocator_;
   sql::ObCharsets4Parser charsets4parser_;

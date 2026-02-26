@@ -9,21 +9,10 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "lib/container/ob_se_array.h"
-#include "lib/ob_errno.h"
-#include "mds_ctx.h"
-#include "ob_tablet_id.h"
-#include "storage/multi_data_source/mds_table_order_flusher.h"
 #define USING_LOG_PREFIX MDS
 
 #include "mds_table_mgr.h"
-#include "mds_table_handle.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/multi_data_source/mds_table_base.h"
-#include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase {
 
@@ -97,7 +86,7 @@ int ObMdsTableMgr::register_to_mds_table_mgr(MdsTableBase *p_mds_table)
   } else if (OB_FAIL(mds_table_map_.insert(tablet_id, p_mds_table))) {
     MDS_LOG(ERROR, "fail to insert mds table to map", KR(ret), KPC(p_mds_table));
   } else {
-    MDS_LOG(INFO, "register success", KR(ret), KPC(p_mds_table));
+    MDS_LOG(INFO, "register to mds table mgr success", KR(ret), KPC(p_mds_table));
   }
   return ret;
 }
@@ -164,6 +153,11 @@ int ObMdsTableMgr::flush(SCN recycle_scn, int64_t trace_id, bool need_freeze)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     MDS_LOG_FREEZE(ERROR, "mds table mgr not inited");
+  } else if (!can_flush()) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL/*10 seconds*/)) {
+      FLOG_INFO("mds flush is disabled", K(ls_->get_ls_id()));
+    }
   } else if (!freeze_guard.can_freeze()) {
     MDS_LOG_FREEZE(INFO, "mds table mgr is doing flush, skip flush once");
   } else if (MDS_FAIL(for_each_in_t3m_mds_table(OrderOp<FlusherForSome>(order_flusher_for_some)))) {
@@ -197,6 +191,11 @@ int ObMdsTableMgr::flush(SCN recycle_scn, int64_t trace_id, bool need_freeze)
   }
   return ret;
   #undef PRINT_WRAPPER
+}
+
+bool ObMdsTableMgr::can_flush()
+{
+  return !ls_->flush_is_disabled();
 }
 
 void ObMdsTableMgr::order_flush_(FlusherForSome &order_flusher_for_some,

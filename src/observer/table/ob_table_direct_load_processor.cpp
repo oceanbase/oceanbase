@@ -23,9 +23,9 @@ using namespace table;
 
 ObTableDirectLoadP::ObTableDirectLoadP(const ObGlobalContext &gctx)
   : ObTableRpcProcessor(gctx),
-    allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     exec_ctx_(allocator_)
 {
+  allocator_.set_attr(ObMemAttr(MTL_ID(), "TbDirectP", ObCtxIds::DEFAULT_CTX_ID));
 }
 
 int ObTableDirectLoadP::check_arg()

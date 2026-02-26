@@ -28,6 +28,8 @@
 #include "lib/json_type/ob_json_diff.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "storage/lob/ob_lob_util.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
+#include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
 
@@ -52,7 +54,7 @@ public:
     error_type_(0),
     is_empty_default_const_(false),
     is_error_default_const_(false),
-    is_alias_(false),
+    is_asis_(false),
     is_multivalue_(false),
     empty_val_(),
     error_val_(),
@@ -76,7 +78,7 @@ public:
   int8_t error_type_;
   bool is_empty_default_const_;
   bool is_error_default_const_;
-  bool is_alias_;
+  bool is_asis_;
   bool is_multivalue_;
   ObDatum *empty_val_;
   ObDatum *error_val_;
@@ -203,6 +205,9 @@ public:
   static int get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
                                   common::ObIAllocator &allocator,
                                   ObString& str, bool& is_null);
+  static int get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
+                                  MultimodeAlloctor &allocator,
+                                  ObString& str, bool& is_null);
   /*
   get json doc to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -214,12 +219,12 @@ public:
   @return Returns OB_SUCCESS on success, error code otherwise.
   */
   static int get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
-                          common::ObArenaAllocator &allocator,
+                          MultimodeAlloctor &allocator,
                           uint16_t index, ObIJsonBase*& j_base,
                           bool &is_null, bool need_to_tree=true,
                           bool relax = true, bool preserve_dup = false);
   static int get_json_schema(const ObExpr &expr, ObEvalCtx &ctx,
-                            common::ObArenaAllocator &allocator,
+                            MultimodeAlloctor &allocator,
                             uint16_t index, ObIJsonBase*& j_base,
                             bool &is_null);
 
@@ -246,7 +251,10 @@ public:
       ObIJsonBase *&j_base);
 
 
-  static int cast_to_json_tree(ObString &text, common::ObIAllocator *allocator, uint32_t parse_flag = 0);
+  static int cast_to_json_tree(ObString &text,
+                               common::ObIAllocator *allocator,
+                               uint32_t parse_flag = 0,
+                               uint32_t max_depth_config = JSON_DOCUMENT_MAX_DEPTH);
   /*
   get json value to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -277,6 +285,10 @@ public:
   static int get_json_val(const common::ObObj &data, ObExecContext *ctx,
                           bool is_bool, common::ObIAllocator *allocator,
                           ObIJsonBase*& j_base, bool to_bin= false);
+  static int refine_range_json_value_const(
+                          const common::ObObj &data, ObExecContext *ctx,
+                          bool is_bool, common::ObIAllocator *allocator,
+                          ObIJsonBase*& j_base, bool to_bin = false);
   static int get_json_val(const common::ObDatum &data,
                           ObExecContext &ctx,
                           ObExpr* expr,
@@ -288,7 +300,7 @@ public:
                                     ObBasicSessionInfo *session, ObIJsonBase*& j_base, bool is_bool_data_type,
                                     bool format_json = false, bool is_strict = false, bool is_bin = false);
 
-  static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, common::ObIAllocator *allocator,
+  static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, MultimodeAlloctor *allocator,
                                 ObIJsonBase*& j_base, bool format_json = false, bool is_strict = false, bool is_bin = false, bool is_absent_null = false);
  
   /*
@@ -301,9 +313,10 @@ public:
   static int json_base_replace(ObIJsonBase *json_old, ObIJsonBase *json_new,
                                ObIJsonBase *&json_doc);
 
-  static int find_and_add_cache(ObJsonPathCache* path_cache, ObJsonPath*& res_path,
+  static int find_and_add_cache(ObIAllocator &allocator,
+                                ObJsonPathCache* path_cache, ObJsonPath*& res_path,
                                 ObString& path_str, int arg_idx, bool enable_wildcard,
-                                bool is_const = false);
+                                bool is_const);
   static int find_and_add_schema_cache(ObJsonSchemaCache* schema_cache, ObIJsonBase*& j_schema,
                                       ObString& schema_str, int arg_idx, const ObJsonInType& in_type);
 
@@ -313,6 +326,15 @@ public:
   static int is_json_zero(const ObString& data, int& result);
 
   static int is_json_true(const ObString& data, int& result);
+
+  static int get_sql_scalar_type(ObEvalCtx& ctx,
+                                 int64_t origin,
+                                 ObObjType& scalar_type,
+                                 int32_t& scalar_len,
+                                 int32_t& precision,
+                                 int32_t& scale,
+                                 ObAccuracy& accuracy,
+                                 ObLengthSemantics& length_semantics);
   
   /*
   try to transfrom scalar data to jsonBase
@@ -462,6 +484,11 @@ public:
   static int get_clause_opt(ObExpr *expr,
                             ObEvalCtx &ctx,
                             int8_t &type);
+  static bool is_json_depth_exceed_limit(uint32_t depth)
+  {
+    return depth > JSON_DOCUMENT_MAX_DEPTH && depth > get_json_max_depth_config();
+  }
+  static int32_t get_json_max_depth_config();
 
   static int is_allow_partial_update(const ObExpr &expr, ObEvalCtx &ctx, const ObString &locator_str, bool &allow_partial_update);
   static bool is_json_partial_update_mode(const ObExpr &expr);
@@ -485,6 +512,17 @@ public:
       ObExpr &rt_expr);
 
   static int get_session_query_timeout_ts(ObEvalCtx &ctx, int64_t &timeout_ts);
+  static bool is_json_special_same_as_expr(ObItemType type, int64_t index);
+  static bool check_json_inner_same_as(const ObSysFunRawExpr *expr1,
+                                       const ObSysFunRawExpr *expr2,
+                                       int64_t index,
+                                       ObExprEqualCheckContext *check_context);
+  static bool check_json_path_can_pushdown(const ObRawExpr &path_expr);
+  static bool check_json_expr_can_pushdown(const ObRawExpr &json_expr);
+  static int get_sub_column_path_from_json_expr(ObIAllocator& allocator, const ObRawExpr &json_expr, share::ObSubColumnPath& sub_col_path);
+
+public:
+  uint64_t tenant_id;
 
 private:
   const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;

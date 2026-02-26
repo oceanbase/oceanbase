@@ -72,11 +72,11 @@ public:
     UNUSED(buf_writer);
     return common::OB_NOT_SUPPORTED;
   }
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, K_(ref_col_idx));
 private:
   OB_INLINE int is_datum_equal(
       const common::ObDatum &left,
       const common::ObDatum &right,
-      const common::ObCmpFunc &cmp_func,
       bool &equal) const;
 
   int64_t ref_col_idx_;
@@ -90,14 +90,11 @@ private:
 OB_INLINE int ObColumnEqualEncoder::is_datum_equal(
       const common::ObDatum &left,
       const common::ObDatum &right,
-      const common::ObCmpFunc &cmp_func,
       bool &equal) const
 {
   int ret = OB_SUCCESS;
   equal = false;
   const bool is_int_type = ObIntSC == store_class_ || ObUIntSC == store_class_;
-  const bool need_binary_equal =
-      store_class_ != ObNumberSC && store_class_ != ObOTimestampSC && store_class_ != ObIntervalSC;
   ObStoredExtValue left_ext = get_stored_ext_value(left);
   ObStoredExtValue right_ext = get_stored_ext_value(right);
   if (left_ext != right_ext) {
@@ -106,12 +103,8 @@ OB_INLINE int ObColumnEqualEncoder::is_datum_equal(
     equal = true;
   } else if (is_int_type) {
     equal = (left.get_uint64() == right.get_uint64());
-  } else if (need_binary_equal) {
-    equal = ObDatum::binary_equal(left, right);
   } else {
-    int cmp_ret = 0;
-    ret = cmp_func.cmp_func_(left, right, cmp_ret);
-    equal = (0 == cmp_ret);
+    equal = ObDatum::binary_equal(left, right);
   }
   return ret;
 }

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX  LIB
 
 #include "lib/queue/ob_ms_queue.h"
-#include "lib/allocator/ob_allocator.h"   // ObIAllocator
 
 namespace oceanbase
 {

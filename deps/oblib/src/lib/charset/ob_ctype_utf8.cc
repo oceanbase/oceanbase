@@ -18,9 +18,8 @@
 *
 */
 
+#include "lib/charset/ob_byteorder.h"
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_dtoa.h"
-#include "lib/charset/ob_uctype.h"
 #include "lib/charset/mb_wc.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/charset/ob_ctype_utf8_tab.h"
@@ -52,7 +51,7 @@ static int ob_valid_mbcharlen_utf8mb3(const uchar *s, const uchar *e)
   return 3;
 }
 
-static int ob_valid_mbcharlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)), const uchar *s, const uchar *e)
+static inline int ob_valid_mbcharlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)), const uchar *s, const uchar *e)
 {
   uchar c;
   if (s >= e)
@@ -97,7 +96,7 @@ static uint ob_mbcharlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused))
   return 0; /* Illegal mb head */;
 }
 
-static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
+static inline size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
                                          const char *b, const char *e,
                                          size_t pos, int *error)
 {
@@ -443,6 +442,7 @@ void ob_strnxfrm_unicode_help(uchar **dst,
   if ((flags & OB_STRXFRM_PAD_TO_MAXLEN) && *dst < *de)
     *dst += ob_strxfrm_pad_unicode(*dst, *de);
 }
+
 size_t ob_strnxfrm_unicode(const ObCharsetInfo *cs,
                     uchar *dst, size_t dstlen, uint nweights,
                     const uchar *src, size_t srclen, uint flags, bool *is_valid_unicode)
@@ -467,9 +467,7 @@ size_t ob_strnxfrm_unicode(const ObCharsetInfo *cs,
     src+= res;
     if (uni_plane)
       ob_tosort_unicode(uni_plane, &wc, cs->state);
-    if ((res= cs->cset->wc_mb(cs, wc, dst, de)) <= 0)
-      break;
-    dst+= res;
+    dst = store16be(dst, wc); //这是是不是bydesign的
   }
   ob_strnxfrm_unicode_help(&dst,&de, nweights, flags, &dst0);
   return dst - dst0;
@@ -878,9 +876,13 @@ size_t ob_strnxfrm_unicode_full_bin(const ObCharsetInfo *cs,
       break;
     }
     src+= res;
-    if ((res= cs->cset->wc_mb(cs, wc, dst, de)) <= 0)
-      break;
-    dst+= res;
+    *dst++= (uchar) (wc >> 16);
+    if (dst < de)
+    {
+      *dst++= (uchar) ((wc >> 8) & 0xFF);
+      if (dst < de)
+        *dst++= (uchar) (wc & 0xFF);
+    }
   }
   if (flags & OB_STRXFRM_PAD_WITH_SPACE)
   {
@@ -944,6 +946,7 @@ int ob_mb_wc_utf8mb4_thunk(const ObCharsetInfo *cs __attribute__((unused)),
 
 ObCharsetHandler ob_charset_utf8mb4_handler=
 {
+  NULL,
   ob_ismbchar_utf8mb4,
   ob_mbcharlen_utf8mb4,
   ob_numchars_mb,
@@ -951,7 +954,7 @@ ObCharsetHandler ob_charset_utf8mb4_handler=
   ob_max_bytes_charpos_mb,
   ob_well_formed_len_utf8mb4,
   ob_lengthsp_8bit,
-  ob_mb_wc_utf8mb4,
+  ob_mb_wc_utf8mb4_thunk,
   ob_wc_mb_utf8mb4,
   ob_mb_ctype_mb,
   ob_caseup_utf8mb4,
@@ -964,7 +967,8 @@ ObCharsetHandler ob_charset_utf8mb4_handler=
   ob_strntod_8bit,
   //ob_strtoll10_8bit,
   ob_strntoull10rnd_8bit,
-  ob_scan_8bit
+  ob_scan_8bit,
+  skip_trailing_space
 };
 
 static ObCollationHandler ob_collation_utf8mb4_general_ci_handler=
@@ -1015,6 +1019,8 @@ ObCharsetInfo ob_charset_utf8mb4_general_ci=
   to_upper_utf8mb4,
   to_upper_utf8mb4,
   NULL,
+  NULL,
+  NULL,
   &ob_unicase_default,
   NULL,
   NULL,
@@ -1048,6 +1054,8 @@ ObCharsetInfo ob_charset_utf8mb4_bin=
   ctype_utf8mb4,
   to_lower_utf8mb4,
   to_upper_utf8mb4,
+  NULL,
+  NULL,
   NULL,
   NULL,
   &ob_unicase_default,

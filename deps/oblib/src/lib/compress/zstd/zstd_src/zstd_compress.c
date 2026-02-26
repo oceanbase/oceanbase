@@ -11,8 +11,6 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
-#include <string.h>         /* memset */
-#include "mem.h"
 #define XXH_STATIC_LINKING_ONLY   /* XXH64_state_t */
 #include "xxhash.h"               /* XXH_reset, update, digest */
 #define FSE_STATIC_LINKING_ONLY   /* FSE_encodeSymbol */
@@ -2170,7 +2168,6 @@ static void ZSTD_compressBlock_btlazy2_extDict(ZSTD_CCtx* ctx, const void* src, 
 
 
 /* The optimal parser */
-#include "zstd_opt.h"
 
 static void ZSTD_compressBlock_btopt(ZSTD_CCtx* ctx, const void* src, size_t srcSize)
 {

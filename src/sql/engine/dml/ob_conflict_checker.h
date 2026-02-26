@@ -14,6 +14,7 @@
 #define OBDEV_SRC_SQL_ENGINE_DML_OB_CONFLICT_ROW_CHECKER_H_
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/das/ob_das_scan_op.h"
+#include "sql/das/ob_das_attach_define.h"
 #include "sql/engine/dml/ob_dml_ctx_define.h"
 
 namespace oceanbase
@@ -23,6 +24,25 @@ namespace sql
 class ObTableModifyOp;
 struct ObDASScanCtDef;
 struct ObDASScanRtDef;
+
+class ObTabletSnapshotMaping
+{
+public:
+  ObTabletSnapshotMaping()
+    : snapshot_(),
+      tablet_id_(),
+      ls_id_()
+  {}
+  ~ObTabletSnapshotMaping() = default;
+  int assign(const ObTabletSnapshotMaping &other);
+  bool operator==(const ObTabletSnapshotMaping &other) const;
+  TO_STRING_KV(K_(snapshot), K_(tablet_id), K_(ls_id));
+  transaction::ObTxReadSnapshot snapshot_;
+  common::ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTabletSnapshotMaping);
+};
 
 struct ObRowkeyCstCtdef
 {
@@ -89,7 +109,7 @@ public:
   int destroy();
 
 public:
-  static const int64_t MAX_ROW_BATCH_SIZE = 500;
+  static const int64_t MAX_ROW_BATCH_SIZE = 1024 * 1024;
   ObConflictRowMap conflict_map_;
   ObRowkey *rowkey_; // 临时的ObRowkey,用于map的compare，循环使用
   common::ObIAllocator *allocator_; // allocator用来创建hash map
@@ -110,10 +130,12 @@ public:
       table_column_exprs_(alloc),
       use_dist_das_(false),
       rowkey_count_(0),
+      attach_spec_(alloc, &das_scan_ctdef_),
       alloc_(alloc)
   {}
   virtual ~ObConflictCheckerCtdef() = default;
-  TO_STRING_KV(K_(cst_ctdefs), K_(das_scan_ctdef), KPC_(calc_part_id_expr));
+  TO_STRING_KV(K_(cst_ctdefs), K_(das_scan_ctdef), KPC_(calc_part_id_expr), K_(attach_spec));
+  static const int64_t MIN_ROW_COUNT_USE_HASHSET_DO_DISTICT = 50;
   // must constraint_infos_.count() == conflict_map_array_.count()
   // constraint_infos_ 用于生成ObConflictRowMap的key
   ObRowkeyCstCtdefArray cst_ctdefs_;
@@ -129,13 +151,74 @@ public:
   ExprFixedArray table_column_exprs_;
   bool use_dist_das_;
   int64_t rowkey_count_;
+  ObDASAttachSpec attach_spec_;
   common::ObIAllocator &alloc_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConflictCheckerCtdef);
 };
 
+struct ObConflictRange {
+  ObConflictRange()
+    : rowkey_(),
+      tablet_id_()
+  {
+  }
+  ~ObConflictRange() {};
+
+  void init_conflict_range(const ObRowkey &rowkey, ObTabletID &tablet_id)
+  {
+    rowkey_ = rowkey;
+    tablet_id_ = tablet_id;
+  }
+
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
+
+  inline uint64_t hash() const
+  {
+    uint64_t hash_val = 0;
+    hash_val += rowkey_.hash();
+    hash_val += tablet_id_.hash();
+    return hash_val;
+  }
+  bool is_valid() const
+  {
+    return rowkey_.is_valid() && tablet_id_.is_valid();
+  }
+  int assign(const ObConflictRange &conflict_range);
+  bool operator==(const ObConflictRange &that) const
+  {
+    return rowkey_ == that.rowkey_ && tablet_id_ == that.tablet_id_;
+  }
+  TO_STRING_KV(K_(rowkey), K_(tablet_id));
+  ObRowkey rowkey_;
+  ObTabletID tablet_id_;
+};
+
+typedef common::hash::ObHashSet<ObConflictRange, common::hash::NoPthreadDefendMode> ConflictRangeDistCtx;
+
 class ObConflictChecker
 {
+public:
+  struct ConflictCheckerBatchGuard
+  {
+  public:
+    ConflictCheckerBatchGuard() : idx_(0), size_(0) {}
+    ~ConflictCheckerBatchGuard() = default;
+
+    OB_INLINE bool is_iter_end() const { return idx_ == size_; }
+    OB_INLINE void reset() { idx_ = 0; size_ = 0; }
+
+    TO_STRING_KV(K_(idx), K_(size));
+
+  public:
+    int64_t idx_;
+    int64_t size_;
+  };
+
 public:
   ObConflictChecker(common::ObIAllocator &allocator,
                     ObEvalCtx &eval_ctx,
@@ -144,11 +227,14 @@ public:
 
   //初始conflict_checker
   int init_conflict_checker(const ObExprFrameInfo *expr_frame_info,
-                            ObDASTableLoc *table_loc);
+                            ObDASTableLoc *table_loc,
+                            bool use_partition_gts_opt);
   void set_local_tablet_loc(ObDASTabletLoc *tablet_loc) { local_tablet_loc_ = tablet_loc; }
 
   //初始conflict_map
   int create_conflict_map(int64_t replace_row_cnt);
+
+  int create_rowkey_check_hashset(int64_t replace_row_cnt);
 
   // 检查当前的主键是否冲突
   int check_duplicate_rowkey(const ObChunkDatumStore::StoredRow *replace_row,
@@ -187,29 +273,46 @@ public:
   // 向主表做回表，根据冲突行的主键，查询出所有对应主表的冲突行, 构建冲突map
   int do_lookup_and_build_base_map(int64_t replace_row_cnt);
 
+  int post_all_das_scan_tasks();
+
   // todo @kaizhan.dkz 构建回表的das scan task
-  int build_primary_table_lookup_das_task();
+  int build_primary_table_lookup_das_task(ObEvalCtx &eval_ctx);
+
+  int add_lookup_range_no_dup(storage::ObTableScanParam &scan_param,
+                              ObNewRange &lookup_range,
+                              common::ObTabletID &tablet_id);
 
   //会被算子的inner_close函数调用
   int close();
 
   int reuse();
 
+  int collect_all_snapshot(transaction::ObTxReadSnapshot &snapshot, const ObDASTabletLoc *tablet_loc);
+  int get_snapshot_by_ids(ObTabletID tablet_id, share::ObLSID ls_id, bool &founded, transaction::ObTxReadSnapshot &snapshot);
+
+  int set_partition_snapshot_for_das_task(ObDASRef &das_ref);
+
   int destroy();
+
+  int get_next_row_from_data_table(DASOpResultIter &result_iter,
+                                   ObChunkDatumStore::StoredRow *&conflict_row,
+                                   bool need_convert_to_stored_row = true);
+
+  int get_next_rows_from_data_table(DASOpResultIter &result_iter, ObEvalCtx &eval_ctx);
+
+  int clear_eval_flags(const ObExprPtrIArray &calc_exprs, ObEvalCtx &eval_ctx);
 
 private:
   int to_expr(const ObChunkDatumStore::StoredRow *replace_row);
-  int calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc);
+  int calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc, ObEvalCtx &eval_ctx);
 
   // get当前行对应的scan_op
   int get_das_scan_op(ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_scan_op);
 
   // 构建回表的range信息
-  int build_data_table_range(ObNewRange &lookup_range);
+  int build_data_table_range(ObEvalCtx &eval_ctx, ObNewRange &lookup_range, ObRowkey &table_rowkey);
 
   // --------------------------
-  int get_next_row_from_data_table(DASOpResultIter &result_iter,
-                                   ObChunkDatumStore::StoredRow *&conflict_row);
 
   // 构建ob_rowkey
   int build_rowkey(ObRowkey *&rowkey, ObRowkeyCstCtdef *rowkey_cst_ctdef);
@@ -218,13 +321,18 @@ private:
   int build_tmp_rowkey(ObRowkey *rowkey, ObRowkeyCstCtdef *rowkey_info);
 
   int init_das_scan_rtdef();
-
+  int init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *&attach_rtdef);
+  int attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDef *attach_rtdef);
   int get_tmp_string_buffer(common::ObIAllocator *&allocator);
 public:
+  static const int64_t MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM = 1 * 1024 * 1024;
   common::ObArrayWrap<ObConflictRowMapCtx> conflict_map_array_;
   ObEvalCtx &eval_ctx_; // 用于表达式的计算
+  ObEvalCtx *batch_eval_ctx_; // for batch exprs
+  const ObDASScanCtDef *das_scan_ctdef_for_lookup_;
   const ObConflictCheckerCtdef &checker_ctdef_;
   ObDASScanRtDef das_scan_rtdef_;
+  ObDASAttachRtInfo *attach_rtinfo_;
   // allocator用来创建hash map, 是ObExecContext内部的allocator 这个不能被reuse
   common::ObIAllocator &allocator_;
   // das_scan回表用
@@ -234,6 +342,9 @@ public:
   ObDASTabletLoc *local_tablet_loc_;
   ObDASTableLoc *table_loc_;
   lib::MemoryContext tmp_mem_ctx_;
+  ObSEArray<ObTabletSnapshotMaping, 16> snapshot_maping_;
+  ConflictRangeDistCtx *conflict_range_dist_ctx_;
+  ConflictCheckerBatchGuard batch_guard_; // vectorized for lookup
 };
 }  // namespace sql
 }  // namespace oceanbase

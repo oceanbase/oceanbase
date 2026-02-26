@@ -7,6 +7,7 @@ PWD="$(cd $(dirname $0); pwd)"
 
 OS_ARCH="$(uname -m)" || exit 1
 OS_RELEASE="0"
+AL3_RELEASE="0"
 
 if [[ ! -f /etc/os-release ]]; then
   echo "[ERROR] os release info not found" 1>&2 && exit 1
@@ -32,6 +33,12 @@ function compat_centos7() {
   OS_RELEASE=7
 }
 
+function compat_alinux3() {
+  echo_log "[NOTICE] '$PNAME' is compatible with Alinux3, use al8 dependencies list"
+  AL3_RELEASE="1"
+  OS_RELEASE=8
+}
+
 function not_supported() {
   echo_log "[ERROR] '$PNAME' is not supported yet."
 }
@@ -52,7 +59,7 @@ function get_os_release() {
   if [[ "${OS_ARCH}x" == "x86_64x" ]]; then
     case "$ID" in
       alinux)
-        version_ge "3.0" && compat_centos9 && return
+        version_ge "3.0" && compat_alinux3 && return
         version_ge "2.1903" && compat_centos7 && return
         ;;
       alios)
@@ -82,6 +89,9 @@ function get_os_release() {
         ;;
       fedora)
         version_ge "33" && compat_centos7 && return
+        ;;
+      kylin)
+        version_ge "V10" && compat_centos8 && return
         ;;
       openEuler)
         version_ge "22" && compat_centos9 && return
@@ -121,9 +131,16 @@ function get_os_release() {
         version_ge "8.0" && OS_RELEASE=8 && return
         version_ge "7.0" && OS_RELEASE=7 && return
         ;;
+      rocky)
+        version_ge "8.0" && OS_RELEASE=8 && return
+        version_ge "7.0" && OS_RELEASE=7 && return
+        ;;
       debian)
         version_ge "12" && compat_centos9 && return
         version_ge "9" && compat_centos7 && return
+        ;;
+      kylin)
+        version_ge "V10" && compat_centos8 && return
         ;;
       openEuler)
         version_ge "22" && compat_centos9 && return
@@ -131,6 +148,9 @@ function get_os_release() {
       ubuntu)
         version_ge "22.04" && compat_centos9 && return
         version_ge "16.04" && compat_centos7 && return
+        ;;
+      alinux)
+        version_ge "3.0" && compat_alinux3 && return
         ;;
     esac
   elif [[ "${OS_ARCH}x" == "sw_64x" ]]; then
@@ -145,7 +165,12 @@ function get_os_release() {
 
 get_os_release || exit 1
 
-OS_TAG="el$OS_RELEASE.$OS_ARCH"
+if [[ "${AL3_RELEASE}x" == "1x" ]]; then
+    OS_TAG="al$OS_RELEASE.$OS_ARCH"
+else
+    OS_TAG="el$OS_RELEASE.$OS_ARCH"
+fi
+
 DEP_FILE="oceanbase.${OS_TAG}.deps"
 
 MD5=`md5sum ${DEP_FILE} | cut -d" " -f1`
@@ -160,8 +185,8 @@ WORKSAPCE_DEPS_3RD_MD5=${WORKSPACE_DEPS_3RD}/${MD5}
 
 # 开始判断本地目录依赖目录是否存在
 if [ -f ${WORKSAPCE_DEPS_3RD_MD5} ]; then
-    if [ -f ${WORKSAPCE_DEPS_3RD_DONE} ]; then
-        echo_log "${DEP_FILE} has been initialized due to ${WORKSAPCE_DEPS_3RD_MD5} and ${WORKSAPCE_DEPS_3RD_DONE} exists"
+    if [ -f "${WORKSAPCE_DEPS_3RD_DONE}" ]; then
+        echo_log "${DEP_FILE} has been initialized due to ${WORKSAPCE_DEPS_3RD_MD5}, ${WORKSAPCE_DEPS_3RD_DONE} exists"
         exit 0
     else
         echo_log "${DEP_FILE} has been not initialized, due to ${WORKSAPCE_DEPS_3RD_DONE} not exists"
@@ -268,11 +293,12 @@ do
     while read -r line
     do
         [[ "$line" == "" ]] && continue
-        pkg=${line%%\ *}
-        target_name="default"
+	pkg=${line%%\ *}
+	target_name="default"
         temp=$(echo "$line" | grep -Eo "target=(\S*)")
         [[ "$temp" != "" ]] && target_name=${temp#*=}
-        if [[ -f "${TARGET_DIR_3RD}/pkg/${pkg}" ]]; then
+
+	if [[ -f "${TARGET_DIR_3RD}/pkg/${pkg}" ]]; then
             echo_log "find package <${pkg}> in cache"
         else
             echo_log "downloading package <${pkg}>"

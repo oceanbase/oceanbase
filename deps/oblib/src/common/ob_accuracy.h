@@ -117,6 +117,9 @@ public:
   static bool is_default_number_int(const ObAccuracy &accuracy)
   { return -1 == accuracy.get_precision() && 0 == accuracy.get_scale(); }
 
+  static bool is_default_number(const int64_t precision, const int64_t scale)
+  { return -1 == precision && 0 != scale; }
+
   // for ObNumberType/ObUNumberType and !is_default_number()
   int64_t get_fixed_number_precision() const {
     int64_t precision = get_precision();

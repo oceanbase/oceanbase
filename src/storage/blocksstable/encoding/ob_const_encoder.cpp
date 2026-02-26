@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_const_encoder.h"
-#include "ob_bit_stream.h"
-#include "storage/blocksstable/ob_data_buffer.h"
 #include "ob_integer_array.h"
-#include "ob_encoding_hash_util.h"
 
 namespace oceanbase
 {
@@ -218,7 +215,8 @@ int ObConstEncoder::get_cell_len(const ObDatum &datum, int64_t &length) const
       case ObJsonSC:
       case ObOTimestampSC:
       case ObIntervalSC:
-      case ObGeometrySC: {
+      case ObGeometrySC:
+      case ObRoaringBitmapSC: {
         length = datum.len_;
         break;
       }
@@ -253,7 +251,8 @@ int ObConstEncoder::store_value(const ObDatum &datum, char *buf)
       case ObJsonSC:
       case ObOTimestampSC:
       case ObIntervalSC:
-      case ObGeometrySC: {
+      case ObGeometrySC:
+      case ObRoaringBitmapSC: {
         MEMCPY(buf, datum.ptr_, datum.len_);
         break;
       }

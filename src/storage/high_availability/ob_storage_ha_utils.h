@@ -41,6 +41,9 @@ public:
   static int check_ls_deleted(
       const share::ObLSID &ls_id,
       bool &is_deleted);
+  static int check_tablet_is_deleted(
+      const ObTabletHandle &tablet_handle,
+      bool &is_deleted);
 
   // When the src_ls of the transfer does not exist, it is necessary to check whether the dest_ls can be rebuilt
   static int check_transfer_ls_can_rebuild(
@@ -56,18 +59,66 @@ public:
       const ObTabletHandle &tablet_handle, int64_t &data_macro_block_count);
   static int check_tenant_will_be_deleted(
       bool &is_deleted);
+  static int make_macro_id_to_datum(
+      const common::ObIArray<MacroBlockId> &macro_block_id_array,
+      char *buf,
+      const int64_t buf_size,
+      ObDatumRowkey &end_key);
+  static int extract_macro_id_from_datum(
+      const ObDatumRowkey &end_key,
+      common::ObIArray<MacroBlockId> &macro_block_id_array);
+  static int get_sstable_read_info(
+      const ObTablet &tablet,
+      const ObITable::TableType &table_type,
+      const bool is_normal_cg_sstable,
+      const storage::ObITableReadInfo *&index_read_info);
 
   static int check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info);
-  static int check_log_need_rebuild(const uint64_t tenant_id, const share::ObLSID &ls_id, bool &need_rebuild);
-
+  static int check_log_status(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      int32_t &result);
+  static int append_tablet_list(
+      const common::ObIArray<ObLogicTabletID> &logic_tablet_id_array,
+      common::ObIArray<ObTabletID> &tablet_id_array);
+  static int build_major_sstable_reuse_info(
+      const ObTabletHandle &tablet_handle,
+      ObMacroBlockReuseMgr &macro_block_reuse_mgr,
+      const bool &is_restore);
+  static void sort_table_key_array_by_snapshot_version(common::ObArray<ObITable::TableKey> &table_key_array);
+  static int get_tablet_backup_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &backup_size);
+  static int get_tablet_occupy_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &occupy_size);
+  static int deal_compat_with_ls_inner_tablet(const ObLSID &ls_id);
+#ifdef ERRSIM
+  static int is_errsim_transfer_server(bool &is_errsim_server);
+#endif
 private:
+  struct TableKeySnapshotVersionComparator final
+  {
+    bool operator()(const ObITable::TableKey &lhs, const ObITable::TableKey &rhs) {
+      return lhs.get_snapshot_version() < rhs.get_snapshot_version();
+    }
+  };
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
   static int fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-    const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client,
-    share::SCN &compaction_scn);
+      const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client,
+      share::SCN &compaction_scn);
   static int check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-    const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
+      const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
   static int get_readable_scn_(share::SCN &readable_scn);
+  static int get_latest_major_sstable_array_(
+      ObTableHandleV2 &latest_major,
+      common::ObArray<ObSSTableWrapper> &major_sstables);
+  static int build_reuse_info_(
+      const common::ObArray<ObSSTableWrapper> &major_sstabls,
+      const ObTabletHandle &tablet_handle,
+      ObMacroBlockReuseMgr &macro_block_reuse_mgr);
+  static int get_latest_available_major_(
+      storage::ObTableStoreIterator &major_sstables_iter,
+      ObTableHandleV2 &latest_major);
+  static int create_ls_inner_tablet_for_compat_(
+      const common::ObIArray<ObTabletID> &tablet_id_array,
+      ObLS *ls);
 };
 
 struct ObTransferUtils
@@ -158,6 +209,21 @@ public:
               const uint64_t timestamp,
               const int64_t start_ts,
               const bool is_report);
+  static void transfer_tablet_restore_stat(
+      const uint64_t tenant_id,
+      const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id);
+  static bool enable_transfer_dml_ctrl(const uint64_t data_version);
+  static int get_ls_member_list(const share::ObLSID &ls_id, common::ObMemberList &member_list);
+  static int get_ls_leader(const share::ObLSID &ls_id, common::ObAddr &addr);
+  static int check_inc_major_backfill(
+      const share::ObLSID &ls_id,
+      const share::SCN &backfill_scn,
+      ObTableHandleV2 &table_handle,
+      bool &need_backfill,
+      bool &is_trans_abort);
+  static int check_ddl_merge_finished(
+    const ObTablet *tablet);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,

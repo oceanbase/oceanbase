@@ -9,6 +9,7 @@ import sys
 import mysql.connector
 from mysql.connector import errorcode
 from my_error import MyError
+from my_utils import SetSessionTimeout
 import logging
 
 class SqlItem:
@@ -18,8 +19,8 @@ class SqlItem:
     self.action_sql = action_sql
     self.rollback_sql = rollback_sql
 
-current_cluster_version = "4.3.2.0"
-current_data_version = "4.3.2.0"
+current_cluster_version = "4.5.1.0"
+current_data_version = "4.5.1.0"
 g_succ_sql_list = []
 g_commit_sql_list = []
 
@@ -113,10 +114,10 @@ def get_min_cluster_version(cur):
   results = cur.fetchall()
   if len(results) != 1:
     logging.exception('min_observer_version is not sync')
-    raise e
+    raise MyError('min_observer_version is not sync')
   elif len(results[0]) != 1:
     logging.exception('column cnt not match')
-    raise e
+    raise MyError('column cnt not match')
   else:
     min_cluster_version = get_version(results[0][0])
   return min_cluster_version
@@ -126,11 +127,6 @@ def set_parameter(cur, parameter, value, timeout = 0):
   logging.info(sql)
   cur.execute(sql)
   wait_parameter_sync(cur, False, parameter, value, timeout)
-
-def set_session_timeout(cur, seconds):
-  sql = "set @@session.ob_query_timeout = {0}".format(seconds * 1000 * 1000)
-  logging.info(sql)
-  cur.execute(sql)
 
 def set_default_timeout_by_tenant(cur, timeout, timeout_per_tenant, min_timeout):
   if timeout > 0:
@@ -159,14 +155,11 @@ def set_tenant_parameter(cur, parameter, value, timeout = 0, only_sys_tenant = F
 
   query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 
-  set_session_timeout(cur, query_timeout)
-
-  for tenants in tenants_list:
-    sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
-    logging.info(sql)
-    cur.execute(sql)
-
-  set_session_timeout(cur, 10)
+  with SetSessionTimeout(cur, query_timeout):
+    for tenants in tenants_list:
+      sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
+      logging.info(sql)
+      cur.execute(sql)
 
   wait_parameter_sync(cur, True, parameter, value, timeout, only_sys_tenant)
 
@@ -189,17 +182,17 @@ def fetch_ori_enable_ddl(cur):
     ori_value = 'True'
   elif len(result) != 1 or len(result[0]) != 1:
     logging.exception('result cnt not match')
-    raise e
+    raise MyError('result cnt not match')
   elif result[0][0].lower() in ["1", "true", "on", "yes", 't']:
     ori_value = 'True'
   elif result[0][0].lower() in ["0", "false", "off", "no", 'f']:
     ori_value = 'False'
   else:
     logging.exception("""result value is invalid, result:{0}""".format(result[0][0]))
-    raise e
+    raise MyError("""result value is invalid, result:{0}""".format(result[0][0]))
   return ori_value
 
-# print version like "x.x.x.x"
+# print(version like "x.x.x.x")
 def print_version(version):
   version = int(version)
   major = (version >> 32) & 0xffffffff
@@ -214,7 +207,7 @@ def get_version(version_str):
 
   if len(versions) != 4:
     logging.exception("""version:{0} is invalid""".format(version_str))
-    raise e
+    raise MyError("""version:{0} is invalid""".format(version_str))
 
   major = int(versions[0])
   minor = int(versions[1])
@@ -223,7 +216,7 @@ def get_version(version_str):
 
   if major > 0xffffffff or minor > 0xffff or major_patch > 0xff or minor_patch > 0xff:
     logging.exception("""version:{0} is invalid""".format(version_str))
-    raise e
+    raise MyError("""version:{0} is invalid""".format(version_str))
 
   version = (major << 32) | (minor << 16) | (major_patch << 8) | (minor_patch)
   return version
@@ -268,29 +261,26 @@ def wait_parameter_sync(cur, is_tenant_config, key, value, timeout, only_sys_ten
     wait_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
     query_timeout = set_default_timeout_by_tenant(cur, timeout, 2, 60)
 
-  set_session_timeout(cur, query_timeout)
+  with SetSessionTimeout(cur, query_timeout):
+    times = wait_timeout / 5
+    while times >= 0:
+      logging.info(sql)
+      cur.execute(sql)
+      result = cur.fetchall()
+      if len(result) != 1 or len(result[0]) != 1:
+        logging.exception('result cnt not match')
+        raise MyError('result cnt not match')
+      elif result[0][0] == 0:
+        logging.info("""{0} is sync, value is {1}""".format(key, value))
+        break
+      else:
+        logging.info("""{0} is not sync, value should be {1}""".format(key, value))
 
-  times = wait_timeout / 5
-  while times >= 0:
-    logging.info(sql)
-    cur.execute(sql)
-    result = cur.fetchall()
-    if len(result) != 1 or len(result[0]) != 1:
-      logging.exception('result cnt not match')
-      raise e
-    elif result[0][0] == 0:
-      logging.info("""{0} is sync, value is {1}""".format(key, value))
-      break
-    else:
-      logging.info("""{0} is not sync, value should be {1}""".format(key, value))
-
-    times -= 1
-    if times == -1:
-      logging.exception("""check {0}:{1} sync timeout""".format(key, value))
-      raise e
-    time.sleep(5)
-
-  set_session_timeout(cur, 10)
+      times -= 1
+      if times == -1:
+        logging.exception("""check {0}:{1} sync timeout""".format(key, value))
+        raise MyError("""check {0}:{1} sync timeout""".format(key, value))
+      time.sleep(5)
 
 def do_begin_upgrade(cur, timeout):
 
@@ -366,15 +356,12 @@ def do_suspend_merge(cur, timeout):
 
   query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 
-  set_session_timeout(cur, query_timeout)
-
-  for tenants in tenants_list:
-    action_sql = "alter system suspend merge tenant = {0}".format(tenants)
-    rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
-    logging.info(action_sql)
-    cur.execute(action_sql)
-
-  set_session_timeout(cur, 10)
+  with SetSessionTimeout(cur, query_timeout):
+    for tenants in tenants_list:
+      action_sql = "alter system suspend merge tenant = {0}".format(tenants)
+      rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
+      logging.info(action_sql)
+      cur.execute(action_sql)
 
 def do_resume_merge(cur, timeout):
   tenants_list = []
@@ -385,15 +372,12 @@ def do_resume_merge(cur, timeout):
 
   query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 
-  set_session_timeout(cur, query_timeout)
-
-  for tenants in tenants_list:
-    action_sql = "alter system resume merge tenant = {0}".format(tenants)
-    rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
-    logging.info(action_sql)
-    cur.execute(action_sql)
-
-  set_session_timeout(cur, 10)
+  with SetSessionTimeout(cur, query_timeout):
+    for tenants in tenants_list:
+      action_sql = "alter system resume merge tenant = {0}".format(tenants)
+      rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
+      logging.info(action_sql)
+      cur.execute(action_sql)
 
 class Cursor:
   __cursor = None
@@ -406,12 +390,12 @@ class Cursor:
       if True == print_when_succ:
         logging.info('succeed to execute sql: %s, rowcount = %d', sql, rowcount)
       return rowcount
-    except mysql.connector.Error, e:
+    except mysql.connector.Error as e:
       logging.exception('mysql connector error, fail to execute sql: %s', sql)
-      raise e
-    except Exception, e:
+      raise
+    except Exception as e:
       logging.exception('normal error, fail to execute sql: %s', sql)
-      raise e
+      raise
   def exec_query(self, sql, print_when_succ = True):
     try:
       self.__cursor.execute(sql)
@@ -420,12 +404,12 @@ class Cursor:
       if True == print_when_succ:
         logging.info('succeed to execute query: %s, rowcount = %d', sql, rowcount)
       return (self.__cursor.description, results)
-    except mysql.connector.Error, e:
+    except mysql.connector.Error as e:
       logging.exception('mysql connector error, fail to execute sql: %s', sql)
-      raise e
-    except Exception, e:
+      raise
+    except Exception as e:
       logging.exception('normal error, fail to execute sql: %s', sql)
-      raise e
+      raise
 
 class DDLCursor:
   _cursor = None
@@ -436,9 +420,9 @@ class DDLCursor:
       # 这里检查是不是ddl，不是ddl就抛错
       check_is_ddl_sql(sql)
       return self._cursor.exec_sql(sql, print_when_succ)
-    except Exception, e:
+    except Exception as e:
       logging.exception('fail to execute ddl: %s', sql)
-      raise e
+      raise
 
 class QueryCursor:
   _cursor = None
@@ -449,9 +433,9 @@ class QueryCursor:
       # 这里检查是不是query，不是query就抛错
       check_is_query_sql(sql)
       return self._cursor.exec_query(sql, print_when_succ)
-    except Exception, e:
+    except Exception as e:
       logging.exception('fail to execute dml query: %s', sql)
-      raise e
+      raise
 
 class DMLCursor(QueryCursor):
   def exec_update(self, sql, print_when_succ = True):
@@ -459,9 +443,9 @@ class DMLCursor(QueryCursor):
       # 这里检查是不是update，不是update就抛错
       check_is_update_sql(sql)
       return self._cursor.exec_sql(sql, print_when_succ)
-    except Exception, e:
+    except Exception as e:
       logging.exception('fail to execute dml update: %s', sql)
-      raise e
+      raise
 
 class BaseDDLAction():
   __ddl_cursor = None
@@ -571,7 +555,7 @@ def fetch_tenant_ids(query_cur):
     for r in results:
       tenant_id_list.append(r[0])
     return tenant_id_list
-  except Exception, e:
+  except Exception as e:
     logging.exception('fail to fetch distinct tenant ids')
-    raise e
+    raise
 

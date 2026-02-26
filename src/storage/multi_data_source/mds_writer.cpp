@@ -24,6 +24,12 @@ MdsWriter::MdsWriter(const WriterType writer_type, const int64_t writer_id) : wr
 
 MdsWriter::MdsWriter(const transaction::ObTransID &tx_id) : writer_type_(WriterType::TRANSACTION), writer_id_(tx_id.get_id()) {}
 
+void MdsWriter::reset()
+{
+  writer_type_ = WriterType::UNKNOWN_WRITER;
+  writer_id_ = DEFAULT_WRITER_ID;
+}
+
 bool MdsWriter::is_valid() const
 {
   return writer_type_ != WriterType::UNKNOWN_WRITER && writer_type_ < WriterType::END;

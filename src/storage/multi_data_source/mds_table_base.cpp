@@ -10,15 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "mds_table_base.h"
-#include "lib/lock/ob_small_spin_lock.h"
-#include "lib/ob_errno.h"
-#include "lib/profile/ob_trace_id.h"
-#include "ob_clock_generator.h"
-#include "share/scn.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
-#include "storage/tx/ob_multi_data_source.h"
 
 namespace oceanbase
 {
@@ -27,7 +21,7 @@ namespace storage
 namespace mds
 {
 
-TLOCAL(transaction::NotifyType, TLOCAL_MDS_TRANS_NOTIFY_TYPE) = transaction::NotifyType::UNKNOWN;
+TLOCAL(MdsTLocalInfo, TLOCAL_MDS_INFO);
 
 int MdsTableBase::advance_state_to(State new_state) const
 {
@@ -51,7 +45,8 @@ int MdsTableBase::advance_state_to(State new_state) const
 
 int MdsTableBase::init(const ObTabletID tablet_id,
                        const share::ObLSID ls_id,
-                       ObTabletPointer *pointer,
+                       const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
+                       ObTabletBasePointer *pointer,
                        ObMdsTableMgr *p_mgr)
 {
   int ret = OB_SUCCESS;
@@ -64,6 +59,7 @@ int MdsTableBase::init(const ObTabletID tablet_id,
   } else {
     tablet_id_ = tablet_id;
     ls_id_ = ls_id;
+    last_inner_recycled_scn_ = mds_ckpt_scn_from_tablet;
     if (OB_NOT_NULL(p_mgr)) {
       mgr_handle_.set_mds_table_mgr(p_mgr);
       debug_info_.do_init_tablet_pointer_ = pointer;
@@ -73,7 +69,6 @@ int MdsTableBase::init(const ObTabletID tablet_id,
         MDS_LOG(WARN, "fail to register mds table", KR(ret), K(*this), K(ls_id), K(tablet_id));
       }
     }
-    MDS_LOG(INFO, "mds table inited", KR(ret), K(*this));
   }
   return ret;
 }
@@ -87,11 +82,13 @@ int MdsTableBase::register_to_mds_table_mgr()
     MDS_LOG(WARN, "mds_table_mgr ptr is null", KR(ret), K(*this));
   } else if (MDS_FAIL(mgr_handle_.get_mds_table_mgr()->register_to_mds_table_mgr(this))) {
     MDS_LOG(WARN, "fail to register mds table", KR(ret), K(*this));
+  } else {
+    report_construct_event_();
   }
   return ret;
 }
 
-void MdsTableBase::mark_removed_from_t3m(ObTabletPointer *pointer)
+void MdsTableBase::mark_removed_from_t3m(ObTabletBasePointer *pointer)
 {
   MDS_TG(1_ms);
   int ret = OB_SUCCESS;
@@ -140,6 +137,8 @@ int MdsTableBase::unregister_from_mds_table_mgr()
     MDS_LOG(INFO, "no need unregister from mds_table_mgr cause invalid id", KR(ret), K(*this));
   } else if (MDS_FAIL(mgr_handle_.get_mds_table_mgr()->unregister_from_mds_table_mgr(this))) {
     MDS_LOG(ERROR, "fail to unregister mds table", K(*this));
+  } else {
+    report_destruct_event_();
   }
   return ret;
 }
@@ -182,7 +181,7 @@ int MdsTableBase::get_ls_max_consequent_callbacked_scn_(share::SCN &max_conseque
 int MdsTableBase::merge(const int64_t construct_sequence, const share::SCN &flushing_scn)
 {
   int ret = OB_SUCCESS;
-  ObMdsTableMergeDagParam param;
+  ObTabletMdsMiniMergeDagParam param;
   param.ls_id_ = ls_id_;
   param.tablet_id_ = tablet_id_;
   param.flush_scn_ = flushing_scn;
@@ -190,6 +189,7 @@ int MdsTableBase::merge(const int64_t construct_sequence, const share::SCN &flus
   param.generate_ts_ = ObClockGenerator::getClock();
   param.merge_type_ = compaction::ObMergeType::MDS_MINI_MERGE;
   param.merge_version_ = 0;
+  param.exec_mode_ = compaction::EXEC_MODE_LOCAL;
   if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_mds_table_merge_dag(param))) {
     if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
       MDS_LOG(WARN, "failed to schedule mds table merge dag", K(ret), K(param));
@@ -251,6 +251,21 @@ void MdsTableBase::try_decline_rec_scn(const share::SCN scn)
       }
     } else {
       break;
+    }
+  }
+}
+
+void MdsTableBase::try_advance_max_aborted_scn(const share::SCN scn)
+{
+  bool success = false;
+  if (scn.is_valid() && !scn.is_max()) {
+    while (!success) {
+      share::SCN old_scn = max_aborted_scn_;
+      if (scn > old_scn) {
+        success = max_aborted_scn_.atomic_bcas(old_scn, scn);
+      } else {
+        break;
+      }
     }
   }
 }

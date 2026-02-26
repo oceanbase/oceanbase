@@ -12,12 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "test_optimizer_utils.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/plan_cache/ob_sql_parameterization.h"
-#include "sql/rewrite/ob_transform_project_pruning.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
 
 namespace test
@@ -154,7 +148,7 @@ int TestOptimizerUtils::generate_logical_plan(ObResultSet &result, //ObIAllocato
       memory_parser = allocator_.total() - memory_parser;
       memory_resolver = allocator_.total();
 
-      resolver_ctx.query_ctx_->question_marks_count_ = param_store.count();
+      resolver_ctx.query_ctx_->set_questionmark_count(param_store.count());
       ObPhysicalPlanCtx *pctx = exec_ctx_.get_physical_plan_ctx();
       if (OB_SUCC(ret)) {
         pctx->set_original_param_cnt(pctx->get_param_store().count());

@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <openssl/evp.h>
-#include <openssl/x509.h>
-#include <openssl/pem.h>
-#include <openssl/err.h>
 #include <openssl/engine.h>
 #include "ob_ssl_config.h"
-#include "lib/ob_define.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/lock/ob_spin_rwlock.h"
 
 namespace oceanbase {
@@ -424,6 +418,10 @@ static SSL_CTX* ob_ssl_create_ssl_ctx(const ObSSLConfig& ssl_config)
     * SSL handshake being unprocessed, forbid it.
     */
     SSL_CTX_set_read_ahead(ctx, 0);
+
+#ifdef SSL_OP_NO_RENEGOTIATION
+    SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION);
+#endif
   }
   return ctx;
 }
@@ -576,8 +574,12 @@ ssize_t ob_read_regard_ssl(int fd, void *buf, size_t nbytes)
         ERR_clear_error();
         int ssl_ret = SSL_do_handshake(ssl);
         if (ssl_ret > 0) {
-          rbytes = -1;
-          errno = EINTR;
+          if ((rbytes = SSL_read(ssl, buf, nbytes)) > 0) {
+            COMMON_LOG(INFO, "read data after SSL_do_handshake succ", K(rbytes), K(fd));
+          } else {
+            rbytes = -1;
+            errno = EINTR;
+          }
           gs_ssl_array[fd].hand_shake_done = 1;
           COMMON_LOG(INFO, "SSL_do_handshake succ", K(fd));
         } else {
@@ -655,10 +657,8 @@ ssize_t ob_write_regard_ssl(int fd, const void *buf, size_t nbytes)
           }
         }
     } else {
-      ERR_clear_error();
       if (0 < (wbytes = SSL_write(ssl, buf, nbytes))) {
       } else {
-        wbytes = -1;
         int ssl_error = 0;
         ssl_error = SSL_get_error(ssl, wbytes);
         if (SSL_ERROR_WANT_WRITE == ssl_error) {
@@ -668,8 +668,9 @@ ssize_t ob_write_regard_ssl(int fd, const void *buf, size_t nbytes)
           COMMON_LOG_RET(ERROR, OB_ERR_SYS, "SSL_write want read", K(fd));
         } else {
           errno = EIO;
-          COMMON_LOG_RET(ERROR, OB_ERR_SYS, "ssl write faild", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
+          COMMON_LOG_RET(WARN, OB_ERR_SYS, "ssl write failed, it might be that the peer has closed the connection", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
         }
+        ERR_clear_error();
       }
     }
   }

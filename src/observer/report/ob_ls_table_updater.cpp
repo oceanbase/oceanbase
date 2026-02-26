@@ -12,12 +12,9 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/report/ob_ls_table_updater.h"
+#include "ob_ls_table_updater.h"
 #include "observer/ob_service.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ls/ob_ls_table_operator.h"
-#include "share/ob_define.h"
-#include "lib/ob_running_mode.h"
 
 namespace oceanbase
 {
@@ -414,7 +411,7 @@ void ObLSTableUpdater::throttle(
   }
   const static int64_t sleep_step_us = 20 * 1000; // 20ms
   for (; !stopped && sleep_us > 0; sleep_us -= sleep_step_us) {
-    ob_usleep(static_cast<int32_t>(std::min(sleep_step_us, sleep_us)));
+    ob_throttle_usleep(static_cast<int32_t>(std::min(sleep_step_us, sleep_us)), return_code);
   }
 }
 

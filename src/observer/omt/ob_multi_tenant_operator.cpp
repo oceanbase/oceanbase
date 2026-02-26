@@ -11,10 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SERVER_OMT
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/omt/ob_multi_tenant_operator.h"
-#include "share/rc/ob_tenant_base.h"
-#include "observer/ob_server_struct.h"
+#include "src/share/ob_server_struct.h"
 #include "observer/omt/ob_tenant.h"
 
 namespace oceanbase

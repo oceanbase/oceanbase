@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "lib/container/ob_array.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/executor/ob_job.h"
-#include "sql/executor/ob_task_info.h"
 #include "sql/executor/ob_remote_job_executor.h"
 
 namespace oceanbase

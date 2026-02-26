@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_time_convert.h"
-#include "sql/engine/cmd/ob_load_data_utils.h"
 
 namespace oceanbase
 {

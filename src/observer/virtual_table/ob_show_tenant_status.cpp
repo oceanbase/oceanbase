@@ -12,7 +12,6 @@
 
 #include "ob_show_tenant_status.h"
 
-#include "lib/string/ob_string.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase

@@ -11,30 +11,9 @@
  */
 
 #include "ob_archive_persist_mgr.h"
-#include <cstdint>
-#include "common/ob_role.h"                     // ObRole
-#include "lib/container/ob_se_array.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"     // ObMySQLProxy
-#include "lib/ob_errno.h"
-#include "lib/string/ob_sql_string.h"           // ObSqlString
-#include "lib/ob_define.h"                      // gen_meta_tenant_id
-#include "lib/guard/ob_shared_guard.h"          // ObShareGuard
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "ob_archive_define.h"
-#include "share/backup/ob_archive_persist_helper.h"
-#include "share/backup/ob_archive_struct.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/ob_ls_id.h"                     // ObLSID
 #include "logservice/ob_log_service.h"          // ObLogService
-#include "share/backup/ob_tenant_archive_mgr.h" // ObTenantArchiveMgr
-#include "storage/tx_storage/ob_ls_map.h"       // ObLSIterator
-#include "storage/tx_storage/ob_ls_service.h"   // ObLSService
 #include "ob_ls_mgr.h"                          // ObArchiveLSMgr
 #include "ob_archive_round_mgr.h"               // ObArchiveRoundMgr
-#include "ob_archive_util.h"                    // GET_LS_TASK_CTX
-#include "storage/tx_storage/ob_ls_handle.h"    // ObLSHandle
-#include "share/ls/ob_ls_recovery_stat_operator.h"         // ObLSRecoveryStatOperator
 
 #define STAT(level, fmt, args...) ARCHIVE_LOG(level, "[LOG_STREAM] [ARCHIVE_PROGRESS] " fmt, ##args);
 #define STAT_RET(level, errcode, fmt, args...) ARCHIVE_LOG_RET(level, errcode, "[LOG_STREAM] [ARCHIVE_PROGRESS] " fmt, ##args);

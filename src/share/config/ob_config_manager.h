@@ -22,6 +22,11 @@
 
 namespace oceanbase
 {
+namespace omt
+{
+  class ObTenantConfigMgr;
+}
+
 namespace common
 {
 class ObMySQLProxy;
@@ -29,6 +34,12 @@ class ObMySQLProxy;
 class ObConfigManager
 {
   friend class UpdateTask;
+  friend class oceanbase::omt::ObTenantConfigMgr;
+public:
+  // update the config of OB_LOGGER and OB_LOG_COMPRESSOR.
+  // notice: this function won't update the syslog_level, if you want to update it,
+  // please use OB_LOGGER.parse_set()
+  static int ob_logger_config_update(const ObServerConfig& config);
 public:
   static const int64_t DEFAULT_VERSION = 1;
 
@@ -85,6 +96,10 @@ private:
   private:
     DISALLOW_COPY_AND_ASSIGN(UpdateTask);
   };
+
+private:
+  // whitout lock, only used inner
+  int dump2file_unsafe(const char *path = NULL) const;
 
 private:
   bool inited_;

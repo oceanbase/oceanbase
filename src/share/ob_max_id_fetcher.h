@@ -45,7 +45,7 @@ enum ObMaxIdType
   OB_MAX_USED_REWRITE_RULE_VERSION_TYPE,
   OB_MAX_USED_TTL_TASK_ID_TYPE,
 
-  /* the following ObMaxIdType will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted. */
+  /* OB_MAX_USED_TABLE_ID_TYPE ~ OB_MAX_USED_RLS_CONTEXT_ID_TYPE ObMaxIdType will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted. */
   OB_MAX_USED_TABLE_ID_TYPE,
   OB_MAX_USED_DATABASE_ID_TYPE,
   OB_MAX_USED_USER_ID_TYPE,
@@ -75,7 +75,17 @@ enum ObMaxIdType
   OB_MAX_USED_RLS_POLICY_ID_TYPE,
   OB_MAX_USED_RLS_GROUP_ID_TYPE,
   OB_MAX_USED_RLS_CONTEXT_ID_TYPE,
+  /* the following ObMaxIdType will be persisted. */
   OB_MAX_USED_SERVICE_NAME_ID_TYPE,
+  OB_MAX_USED_STORAGE_ID_TYPE, /* used for storage id of zone storage */
+  OB_MAX_USED_STORAGE_OP_ID_TYPE, /* used for storage op id of zone storage */
+  OB_MAX_USED_CATALOG_ID_TYPE,
+  OB_MAX_USED_CCL_RULE_ID_TYPE,
+  OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE,  // OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted.
+  OB_MAX_USED_LOCATION_ID_TYPE,
+  OB_MAX_USED_SENSITIVE_RULE_ID_TYPE,
+  OB_MAX_USED_AI_MODEL_ID_TYPE,
+  OB_MAX_USED_AI_MODEL_ENDPOINT_ID_TYPE,
   OB_MAX_ID_TYPE,
 };
 
@@ -90,6 +100,7 @@ public:
   int fetch_new_max_id(const uint64_t tenant_id, ObMaxIdType id_type,
                        uint64_t &max_id, const uint64_t initial = UINT64_MAX,
                        const int64_t size = 1);
+  int update_server_max_id(const uint64_t max_server_id, const uint64_t next_max_server_id);
   // For generate new tablet_ids
   int fetch_new_max_ids(const uint64_t tenant_id, ObMaxIdType id_type,
                         uint64_t &max_id, uint64_t size);

@@ -13,13 +13,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_statement_digest.h"
 
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/plan_cache/ob_sql_parameterization.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "share/ob_encryption_util.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/resolver/ob_resolver_utils.h"
 
 using namespace oceanbase::common;
@@ -30,6 +25,59 @@ namespace oceanbase
 namespace sql
 {
 
+int calc_digest_text_inner(const ObString &query,
+                           const int64_t i,
+                           ObIAllocator &allocator,
+                           ObPlanCacheCtx &pc_ctx,
+                           ObParser &parser,
+                           ObCharsets4Parser &charsets4parser,
+                           ObString &digest_str)
+{
+  int ret = OB_SUCCESS;
+  ParseResult parse_result;
+  ParamStore tmp_params((ObWrapperAllocator(allocator)));
+  stmt::StmtType stmt_type = stmt::T_NONE;
+  ObItemType item_type = T_NULL;
+  if (OB_FAIL(parser.parse(query, parse_result))) {
+    LOG_WARN("fail to parse sql str", K(query), K(ret));
+  } else if (OB_ISNULL(parse_result.result_tree_)
+            || OB_ISNULL(parse_result.result_tree_->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected parse result", K(ret));
+  } else if (FALSE_IT(item_type = parse_result.result_tree_->children_[0]->type_)) {
+  } else if (i > 0) {
+    if (OB_UNLIKELY(T_EMPTY_QUERY != item_type)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid stmt type", K(item_type), K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
+    }
+  } else if (OB_UNLIKELY(T_EMPTY_QUERY == item_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid empty query", K(item_type), K(ret));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
+  } else if (OB_FAIL(ObResolverUtils::resolve_stmt_type(parse_result, stmt_type))) {
+    LOG_WARN("failed to resolve stmt type", K(ret));
+  } else if (ObStmt::is_dml_stmt(stmt_type) && !ObStmt::is_show_stmt(stmt_type)) {
+    if (OB_UNLIKELY(parse_result.result_tree_->children_[0]->value_ > 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("query contains questionmark", K(query), K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
+    } else if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
+                                                                true,
+                                                                pc_ctx,
+                                                                parse_result.result_tree_,
+                                                                tmp_params,
+                                                                charsets4parser))) {
+      LOG_WARN("fail to parameterize syntax tree", K(query), K(ret));
+    } else {
+      digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_;
+    }
+  } else {
+    digest_str = query;
+  }
+  return ret;
+}
+
 int calc_digest_text(ObIAllocator &allocator,
                      const ObString sql_str,
                      const ObCollationType cs_type,
@@ -39,13 +87,13 @@ int calc_digest_text(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator temp_allocator(ObModIds::OB_SQL_EXPR_CALC);
-  HEAP_VAR(ObExecContext, exec_ctx, temp_allocator) {
+  HEAP_VARS_3((ObExecContext, exec_ctx, temp_allocator),
+              (ObPhysicalPlanCtx, phy_plan_ctx, allocator), (ObSqlCtx, sql_ctx))
+  {
     uint64_t tenant_id = session->get_effective_tenant_id();
-    ObPhysicalPlanCtx phy_plan_ctx(allocator);
     exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
     exec_ctx.set_my_session(session);
     exec_ctx.set_mem_attr(ObMemAttr(tenant_id, ObModIds::OB_SQL_EXEC_CONTEXT, ObCtxIds::EXECUTE_CTX_ID));
-    ObSqlCtx sql_ctx;
     sql_ctx.session_info_ = session;
     sql_ctx.schema_guard_ = schema_guard;
     ObPlanCacheCtx pc_ctx(sql_str, PC_TEXT_MODE, allocator, sql_ctx, exec_ctx,
@@ -57,48 +105,12 @@ int calc_digest_text(ObIAllocator &allocator,
     ObMPParseStat parse_stat;
     if (OB_FAIL(parser.split_multiple_stmt(sql_str, queries, parse_stat))) {
       LOG_WARN("failed to split multiple stmt", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < queries.count(); ++i) {
-      ParseResult parse_result;
-      ParamStore tmp_params((ObWrapperAllocator(allocator)));
-      stmt::StmtType stmt_type = stmt::T_NONE;
-      ObItemType item_type = T_NULL;
-      if (OB_FAIL(parser.parse(queries.at(i), parse_result))) {
-        LOG_WARN("fail to parse sql str", K(sql_str), K(ret));
-      } else if (OB_ISNULL(parse_result.result_tree_)
-                || OB_ISNULL(parse_result.result_tree_->children_[0])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected parse result", K(ret));
-      } else if (FALSE_IT(item_type = parse_result.result_tree_->children_[0]->type_)) {
-      } else if (i > 0) {
-        if (OB_UNLIKELY(T_EMPTY_QUERY != item_type)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("invalid stmt type", K(item_type), K(ret));
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < queries.count(); ++i) {
+        if (OB_FAIL(calc_digest_text_inner(queries.at(i), i, allocator, pc_ctx, parser,
+                                           charsets4parser, digest_str))) {
+          LOG_WARN("fail to calc digest test inner", K(ret), K(sql_str));
         }
-      } else if (OB_UNLIKELY(T_EMPTY_QUERY == item_type)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid empty query", K(item_type), K(ret));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
-      } else if (OB_FAIL(ObResolverUtils::resolve_stmt_type(parse_result, stmt_type))) {
-        LOG_WARN("failed to resolve stmt type", K(ret));
-      } else if (ObStmt::is_dml_stmt(stmt_type) && !ObStmt::is_show_stmt(stmt_type)) {
-        if (OB_UNLIKELY(parse_result.result_tree_->children_[0]->value_ > 0)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("query contains questionmark", K(queries.at(i)), K(ret));
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
-        } else if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
-                                                                    true,
-                                                                    pc_ctx,
-                                                                    parse_result.result_tree_,
-                                                                    tmp_params,
-                                                                    charsets4parser))) {
-          LOG_WARN("fail to parameterize syntax tree", K(sql_str), K(ret));
-        } else {
-          digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
-        }
-      } else {
-        digest_str = queries.at(i);
       }
     }
     exec_ctx.set_physical_plan_ctx(NULL);
@@ -126,7 +138,7 @@ int ObExprStatementDigest::calc_result_type1(ObExprResType &type,
   type.set_collation_level(CS_LEVEL_COERCIBLE);
   type.set_length(OB_MAX_SQL_ID_LENGTH);
   type1.set_calc_type(ObVarcharType);
-  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx.get_coll_type()));
+  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx));
   OX (type1.set_calc_collation_type(tmp_type.get_collation_type()));
   OX (type1.set_calc_collation_level(tmp_type.get_collation_level()));
   return ret;
@@ -190,7 +202,7 @@ int ObExprStatementDigestText::calc_result_type1(ObExprResType &type,
   int ret = OB_SUCCESS;
   type.set_clob();
   type1.set_calc_type(ObVarcharType);
-  OZ (aggregate_charsets_for_string_result(type, &type1, 1, type_ctx.get_coll_type()));
+  OZ (aggregate_charsets_for_string_result(type, &type1, 1, type_ctx));
   OX (type1.set_calc_collation_type(type.get_collation_type()));
   OX (type1.set_calc_collation_level(type.get_collation_level()));
   type.set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);

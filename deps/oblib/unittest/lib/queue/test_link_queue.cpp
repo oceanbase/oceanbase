@@ -13,8 +13,6 @@
 #include "lib/objectpool/ob_concurrency_objpool.h"
 #include "lib/queue/ob_link_queue.h"
 #include "lib/queue/ob_lighty_queue.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/metrics/ob_counter.h"
 using namespace oceanbase;
 using namespace oceanbase::common;
 
@@ -124,7 +122,6 @@ void do_perf(QI* qi) {
 //int64_t get_us() { return ObTimeUtility::current_time(); }
 #define PERF(x) {fprintf(stderr, #x "\n"); x ## Wrapper qi; do_perf(&qi); }
 
-#include <locale.h>
 int main()
 {
   setlocale(LC_ALL, "");

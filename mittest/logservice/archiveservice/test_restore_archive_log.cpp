@@ -10,18 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
-#include "logservice/palf/log_define.h"
-#include "share/ob_errno.h"
-#include "share/ob_ls_id.h"
-#include <cstdint>
 #include <gtest/gtest.h>
 #define private public
-#include "logservice/restoreservice/ob_log_archive_piece_mgr.h"
 #undef private
 #include "fake_archive_piece_mgr.h"
-#include "share/ob_thread_pool.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {

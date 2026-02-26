@@ -15,7 +15,6 @@
 #define protected public
 #include "storage/blocksstable/ob_micro_block_writer.h"
 #include "storage/blocksstable/ob_micro_block_reader.h"
-#include "storage/ob_i_store.h"
 #include "ob_row_generate.h"
 
 namespace oceanbase
@@ -118,7 +117,7 @@ void TestMicroBlockWriter::SetUp()
 TEST_F(TestMicroBlockWriter, test_init)
 {
   int ret = OB_SUCCESS;
-  ObMicroBlockWriter writer;
+  ObMicroBlockWriter<> writer;
   writer.data_buffer_.allocator_.set_tenant_id(500);
   writer.index_buffer_.allocator_.set_tenant_id(500);
 
@@ -151,7 +150,7 @@ TEST_F(TestMicroBlockWriter, append_success)
   ObDatumRow multi_version_row;
   ASSERT_EQ(OB_SUCCESS, multi_version_row.init(allocator_, column_num + 2));
 
-  ObMicroBlockWriter writer;
+  ObMicroBlockWriter<> writer;
   writer.data_buffer_.allocator_.set_tenant_id(500);
   writer.index_buffer_.allocator_.set_tenant_id(500);
   ret = writer.init(macro_block_size, rowkey_column_count, column_num + 2);
@@ -172,7 +171,7 @@ TEST_F(TestMicroBlockWriter, append_success)
   ObTableReadInfo read_info;
   ASSERT_EQ(OB_SUCCESS, read_info_.init(
       allocator_, 16000, row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(), columns, nullptr/*storage_cols_index*/));
-  ObMicroBlockReader reader;
+  ObMicroBlockReader<> reader;
   ObMicroBlockData block(buf, size);
   ret = reader.init(block, read_info_);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -186,10 +185,11 @@ TEST_F(TestMicroBlockWriter, append_success)
     //every obj should equal
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
     for (int64_t j = 0; j < column_num ; ++ j){
+      ObCStringHelper helper;
       ASSERT_TRUE(read_row.storage_datums_[j] == row.storage_datums_[j])
         << "\n i: " << i << " j: " << j
-        << "\n writer:  "<< to_cstring(row.storage_datums_[j])
-        << "\n reader:  " << to_cstring(read_row.storage_datums_[j]);
+        << "\n writer:  "<< helper.convert(row.storage_datums_[j])
+        << "\n reader:  " << helper.convert(read_row.storage_datums_[j]);
     }
   }
 }
@@ -202,7 +202,7 @@ TEST_F(TestMicroBlockWriter, append_row_error)
   ObDatumRow multi_version_row;
   ASSERT_EQ(OB_SUCCESS, multi_version_row.init(allocator_, column_num + 2));
   //not init
-  ObMicroBlockWriter writer;
+  ObMicroBlockWriter<> writer;
   writer.data_buffer_.allocator_.set_tenant_id(500);
   writer.index_buffer_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
@@ -228,7 +228,7 @@ TEST_F(TestMicroBlockWriter, build_block_error)
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, column_num));
   //not init
-  ObMicroBlockWriter writer;
+  ObMicroBlockWriter<> writer;
   writer.data_buffer_.allocator_.set_tenant_id(500);
   writer.index_buffer_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
@@ -238,7 +238,7 @@ TEST_F(TestMicroBlockWriter, build_block_error)
 TEST_F(TestMicroBlockWriter, init_max_column_count)
 {
   // data_buffer_ and index_buffer_ in ObMicroBlockWriter should init succeed
-  ObMicroBlockWriter writer;
+  ObMicroBlockWriter<> writer;
   writer.data_buffer_.allocator_.set_tenant_id(500);
   writer.index_buffer_.allocator_.set_tenant_id(500);
   int64_t ret = writer.init(
@@ -269,7 +269,7 @@ TEST_F(TestMicroBlockWriter, append_large_row)
   test_alloc(ptr2, value2_size);
   row.storage_datums_[1].set_string(ObString(value2_size, ptr2));
 
-  ObMicroBlockWriter writer;
+  ObMicroBlockWriter<> writer;
   writer.data_buffer_.allocator_.set_tenant_id(500);
   writer.index_buffer_.allocator_.set_tenant_id(500);
   int64_t ret = writer.init(common::OB_DEFAULT_MACRO_BLOCK_SIZE, 1, large_row_col_cnt);

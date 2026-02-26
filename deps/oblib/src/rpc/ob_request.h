@@ -25,12 +25,18 @@
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/ob_lock_wait_node.h"
 #include "rpc/ob_reusable_mem.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
 namespace obmysql
 {
   int get_fd_from_sess(void *sess);
+  void* get_sql_sess_from_sess(void *sess);
+}
+namespace common
+{
+class ObDiagnosticInfo;
 }
 
 namespace rpc
@@ -43,7 +49,7 @@ class ObRequest: public common::ObLink
 {
 public:
   friend class ObSqlRequestOperator;
-  enum Type { OB_RPC, OB_MYSQL, OB_TASK, OB_TS_TASK, OB_SQL_TASK, OB_SQL_SOCK_TASK };
+  enum Type { OB_RPC, OB_MYSQL, OB_TASK, OB_TS_TASK, OB_SQL_TASK, OB_SQL_SOCK_TASK, OB_DAS_PARALLEL_TASK };
   enum TransportProto { TRANSPORT_PROTO_EASY = 0, TRANSPORT_PROTO_POC = 1 };
   enum Stat {
       OB_EASY_REQUEST_EZ_RECV                 = 0,
@@ -71,13 +77,13 @@ public:
       : ez_req_(NULL), handling_state_(-1), nio_protocol_(nio_protocol), type_(type), handle_ctx_(NULL), group_id_(0), sql_req_level_(0), pkt_(NULL),
         connection_phase_(ConnectionPhaseEnum::CPE_CONNECTED),
         recv_timestamp_(0), enqueue_timestamp_(0),
-        request_arrival_time_(0), recv_mts_(), arrival_push_diff_(0),
+        request_arrival_time_(0), traverse_index_(0), recv_mts_(), arrival_push_diff_(0),
         push_pop_diff_(0), pop_process_start_diff_(0),
         process_start_end_diff_(0), process_end_response_diff_(0),
-        trace_id_(), discard_flag_(false), large_retry_flag_(false), retry_times_(0)
+        trace_id_(), discard_flag_(false), large_retry_flag_(false), retry_times_(0), diagnostic_info_ptr_(nullptr)
   {
   }
-  virtual ~ObRequest() {}
+  virtual ~ObRequest() { reset_diagnostic_info(); }  // not guaranteed to call
 
   int get_nio_protocol() const { return nio_protocol_; }
   void set_server_handle_context(void* ctx) { handle_ctx_ = ctx; }
@@ -118,10 +124,11 @@ public:
   int32_t get_pop_process_start_diff() const;
   int32_t get_process_start_end_diff() const;
   int32_t get_process_end_response_diff() const;
+  int64_t get_traverse_index() const { return traverse_index_; }
   bool get_discard_flag() const;
   int32_t get_retry_times() const;
   int get_connfd();
-
+  int get_pcode();
   void set_connection_phase(ConnectionPhaseEnum connection_phase) { connection_phase_ = connection_phase; }
   bool is_in_connected_phase() const { return ConnectionPhaseEnum:: CPE_CONNECTED == connection_phase_; }
   bool is_from_unix_domain() const;
@@ -133,9 +140,42 @@ public:
   const TraceId &get_trace_id() const { return trace_id_; }
   void reset_trace_id() { trace_id_.reset(); }
   int set_trace_point(int trace_point = 0);
+  int set_traverse_index(int64_t index);
 
   ObLockWaitNode &get_lock_wait_node() { return lock_wait_node_; }
   bool is_retry_on_lock() const { return lock_wait_node_.try_lock_times_ > 0;}
+  common::ObDiagnosticInfo *get_diagnostic_info()
+  {
+    return diagnostic_info_ptr_;
+  };
+  void set_diagnostic_info(common::ObDiagnosticInfo *ptr)
+  {
+    if (OB_NOT_NULL(ptr) && OB_ISNULL(diagnostic_info_ptr_)) {
+#ifdef ENABLE_DEBUG_LOG
+      const bool disable_defensive_check = false;
+#else
+      const bool disable_defensive_check = true;
+#endif
+      if (disable_defensive_check || ptr->set_mysql_ref()) {
+        common::ObLocalDiagnosticInfo::inc_ref(ptr);
+        diagnostic_info_ptr_ = ptr;
+      }
+    }
+  };
+  void reset_diagnostic_info()
+  {
+    if (OB_NOT_NULL(diagnostic_info_ptr_)) {
+#ifdef ENABLE_DEBUG_LOG
+      const bool disable_defensive_check = false;
+#else
+      const bool disable_defensive_check = true;
+#endif
+      if (disable_defensive_check || diagnostic_info_ptr_->reset_mysql_ref()) {
+        common::ObLocalDiagnosticInfo::dec_ref(diagnostic_info_ptr_);
+        diagnostic_info_ptr_ = nullptr;
+      }
+    }
+  };
   VIRTUAL_TO_STRING_KV("packet", pkt_, "type", type_, "group", group_id_, "sql_req_level", sql_req_level_, "connection_phase", connection_phase_, K(recv_timestamp_), K(enqueue_timestamp_), K(request_arrival_time_), K(trace_id_));
 
   ObLockWaitNode lock_wait_node_;
@@ -154,6 +194,7 @@ protected:
   int64_t recv_timestamp_;
   int64_t enqueue_timestamp_;
   int64_t request_arrival_time_;
+  int64_t traverse_index_;
   // only used by transaction
   common::ObMonotonicTs recv_mts_;
   int32_t arrival_push_diff_;
@@ -167,6 +208,7 @@ protected:
   bool large_retry_flag_;
   int32_t retry_times_;
 private:
+  common::ObDiagnosticInfo *diagnostic_info_ptr_;
   DISALLOW_COPY_AND_ASSIGN(ObRequest);
 }; // end of class ObRequest
 

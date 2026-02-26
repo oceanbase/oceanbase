@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "common/row/ob_row_checksum.h"
-
-#include "lib/utility/ob_print_utils.h"
-#include "common/row/ob_row.h"
+#include "lib/utility/ob_sort.h"
 
 namespace oceanbase
 {
@@ -136,7 +134,7 @@ void ObRowChecksumValue::sort()
       }
     }
     if (!sorted) {
-      std::sort(column_checksum_array_, column_checksum_array_ + column_count_);
+      lib::ob_sort(column_checksum_array_, column_checksum_array_ + column_count_);
     }
   }
 }

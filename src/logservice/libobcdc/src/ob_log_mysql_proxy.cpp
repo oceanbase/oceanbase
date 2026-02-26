@@ -17,7 +17,6 @@
 #include "ob_log_mysql_proxy.h"                           // ObLogMysqlProxy
 
 #include "lib/mysqlclient/ob_mysql_server_provider.h"     // ObMySQLServerProvider
-#include "ob_log_utils.h"                                 // is_mysql_client_errno
 #include "share/ob_thread_mgr.h"
 #include "ob_log_mysql_connector.h"                       // ObLogMySQLConnector
 #include "ob_log_config.h"                                // TCONF

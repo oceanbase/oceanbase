@@ -12,7 +12,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
@@ -21,6 +20,25 @@ using namespace oceanbase::sql;
 
 namespace oceanbase
 {
+
+namespace common
+{
+int ob_obj_read_lob_data(
+    ObIAllocator &allocator,
+    const common::ObObj &obj,
+    ObString &data)
+{
+  int ret = OB_SUCCESS;
+  if (MTL(storage::ObLobManager*) == nullptr) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("lob manager is null", K(ret), K(obj), K(lbt()));
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, obj, data, nullptr))) {
+    LOG_WARN("read_real_string_data fail", K(ret), K(obj), K(lbt()));
+  }
+  return ret;
+}
+}
+
 namespace sql
 {
 
@@ -91,8 +109,14 @@ int ObTextStringHelper::read_real_string_data(
 {
   int ret = OB_SUCCESS;
   if (is_lob_storage(type)) {
+    uint64_t tenant_id = MTL_ID();
+    ObArenaAllocator *tmp_alloc_ptr = nullptr;
+    ObArenaAllocator tmp_allocator("ObLobRRSD", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+    if (tenant_id != OB_INVALID_TENANT_ID) {
+      tmp_alloc_ptr = &tmp_allocator;
+    }
     ObTextStringIter str_iter(type, cs_type, str, has_lob_header);
-    if (OB_FAIL(build_text_iter(str_iter, exec_ctx, nullptr/*session*/, allocator))) {
+    if (OB_FAIL(build_text_iter(str_iter, exec_ctx, nullptr/*session*/, allocator, tmp_alloc_ptr))) {
       LOG_WARN("Lob: init lob str iter failed ", K(ret), K(str_iter));
     } else if (OB_FAIL(str_iter.get_full_data(str))) {
       COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
@@ -112,6 +136,11 @@ int ObTextStringHelper::read_real_string_data(
   str = obj.get_string();
   if (meta.is_null()) {
     str.reset();
+  } else if (! obj.is_lob_storage()) {
+  } else if (obj.has_lob_header() && obj.get_string_len() != 0 &&
+      ! obj.get_lob_value()->is_mem_loc_ && obj.get_lob_value()->in_row_) {
+    const ObLobCommon* lob = obj.get_lob_value();
+    str.assign_ptr(lob->get_inrow_data_ptr(), static_cast<int32_t>(lob->get_byte_size(obj.get_string_len())));
   } else if (OB_FAIL(read_real_string_data(
       allocator,
       meta.get_type(),

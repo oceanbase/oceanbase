@@ -56,7 +56,8 @@ public:
            const UpdateManifestCallback &update_manifest_cb,
            ILogBlockPool *log_block_pool,
            LogPlugins *plugins,
-           LogCache *log_cache);
+           LogCache *log_cache,
+           LogIOAdapter *io_adapter);
 
   template <class EntryHeaderType>
   int load(const char *log_dir,
@@ -70,6 +71,7 @@ public:
            ILogBlockPool *log_block_pool,
            LogPlugins *plugins,
            LogCache *log_cache,
+           LogIOAdapter *io_adapter,
            EntryHeaderType &entry_header,
            LSN &lsn);
 
@@ -99,6 +101,9 @@ public:
                               int64_t &out_read_size,
                               LogIOContext &io_ctx);
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  inline const libpalf::LibPalfIteratorMemoryStorageFFI * get_memory_storage() { return nullptr; }
+#endif
   int truncate(const LSN &lsn);
   int truncate_prefix_blocks(const LSN &lsn);
 
@@ -124,6 +129,11 @@ public:
   LogReader *get_log_reader();
   int fill_cache_when_slide(const LSN &begin_lsn, const int64_t size);
 
+  int get_io_statistic_info(int64_t &last_working_time,
+                            int64_t &last_write_size,
+                            int64_t &accum_write_size,
+                            int64_t &accum_write_count,
+                            int64_t &accum_write_rt) const;
   TO_STRING_KV(K_(log_tail),
                K_(readable_log_tail),
                K_(log_block_header),
@@ -144,7 +154,8 @@ private:
                const UpdateManifestCallback &update_manifest_cb,
                ILogBlockPool *log_block_pool,
                LogPlugins *plugins,
-               LogCache *log_cache);
+               LogCache *log_cache,
+               LogIOAdapter *io_adapter);
   // @ret val:
   //   OB_SUCCESS
   //   OB_ERR_OUT_OF_LOWER_BOUND
@@ -194,6 +205,7 @@ private:
   int update_manifest_(const block_id_t expected_next_block_id, const bool in_restart = false);
   int check_read_integrity_(const block_id_t &block_id);
   bool is_log_cache_inited_();
+  bool check_in_flashback_(const int64_t flashback_version) const;
 private:
   // Used to perform IO tasks in the background
   LogBlockMgr block_mgr_;
@@ -237,6 +249,7 @@ int LogStorage::load(const char *base_dir,
                      ILogBlockPool *log_block_pool,
                      LogPlugins *plugins,
                      LogCache *log_cache,
+                     LogIOAdapter *io_adapter,
                      EntryHeaderType &entry_header,
                      LSN &lsn)
 {
@@ -257,7 +270,8 @@ int LogStorage::load(const char *base_dir,
                               update_manifest_cb,
                               log_block_pool,
                               plugins,
-                              log_cache))) {
+                              log_cache,
+                              io_adapter))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
     // NB: if there is no valid data on disk, no need to load last block
   } else if (OB_FAIL(block_mgr_.get_block_id_range(min_block_id, max_block_id))
@@ -294,18 +308,19 @@ int LogStorage::locate_log_tail_and_last_valid_entry_header_(const block_id_t mi
   // the last block may has not valid data, we need iterate prev block
   // for GC, we must ensure that the block which include 'max_committed_lsn' will no be reused
   const bool need_print_error = false;
-  const bool enable_fill_cache = false;
   while (OB_SUCC(ret) && true == is_valid_block_id(iterate_block_id)
          && iterate_block_id >= min_block_id) {
     // NB: 'log_tail_' need point to the tail of 'iterate_block_id', because 'pread' interface
     //      check whether iterating to the end of redo log block depends on this field.
     log_block_header_.reset();
     log_block_header_.update_palf_id_and_curr_block_id(palf_id_, iterate_block_id);
-    PalfIterator<DiskIteratorStorage, EntryType> iterator;
+    PalfIterator<EntryType> iterator;
     auto get_file_end_lsn = []() { return LSN(LOG_MAX_LSN_VAL); };
     LSN start_lsn(iterate_block_id * logical_block_size_);
-    if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, this, enable_fill_cache))) {
+    if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, this))) {
       PALF_LOG(WARN, "PalfGroupBufferIterator init failed", K(ret), K(start_lsn));
+    } else if (OB_FAIL(iterator.set_io_context(palf::LogIOContext(MTL_ID(), palf_id_, palf::LogIOUser::RESTART)))) {
+      PALF_LOG(WARN, "set_io_context failed", K(ret), K(start_lsn));
     } else {
       iterator.set_need_print_error(need_print_error);
       EntryType curr_entry;

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_all_virtual_proxy_base.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;

@@ -1,5 +1,4 @@
-/**
- * Copyright (c) 2021 OceanBase
+/** * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -16,6 +15,8 @@
 #include "share/ob_define.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/worker.h"
+#include "sql/parser/parse_malloc.h"
+#include "common/ob_target_specific.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -29,6 +30,60 @@ do { \
     } \
   } \
 } while (0)
+
+int StringBuffer::resize_buffer(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (0 == capacity_) {
+		int64_t new_size = size < DEFAULT_STR_BUFFER_LEN ? DEFAULT_STR_BUFFER_LEN : next_pow2(size);
+    if (OB_ISNULL(buffer_ = static_cast<char *>(allocator_.alloc(new_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret), K(new_size));
+    } else {
+      length_ = 0;
+      capacity_ = new_size;
+    }
+	} else if (size >= capacity_ - length_) {
+    char *new_buffer = nullptr;
+		int new_size = capacity_ * 2;
+		while (size >= new_size - length_) {
+			new_size *= 2;
+		}
+    if (OB_ISNULL(new_buffer = static_cast<char *>(allocator_.alloc(new_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret), K(new_size));
+    } else {
+      MEMCPY(new_buffer, buffer_, length_);
+      buffer_ = new_buffer;
+      capacity_ = new_size;
+    }
+	}
+  return ret;
+}
+
+int StringBuffer::append(const char *str, const int64_t len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(resize_buffer(len))) {
+    LOG_WARN("failed to resize buffer", K(ret), K(len));
+  } else {
+    MEMCPY(buffer_ + length_, str, len);
+    length_ += len;
+  }
+  return ret;
+}
+
+int StringBuffer::append_character(const char character)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(resize_buffer(1))) {
+    LOG_WARN("failed to resize buffer", K(ret));
+  } else {
+    buffer_[length_++] = character;
+  }
+  return ret;
+}
+
 
 int ObFastParser::parse(const common::ObString &stmt,
                         const FPContext &fp_ctx,
@@ -46,10 +101,16 @@ int ObFastParser::parse(const common::ObString &stmt,
     if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
       LOG_WARN("failed to fast parser", K(stmt));
     }
+    if (OB_ISNULL(fp.param_node_list_)) {
+      param_list = NULL;
+    }
   } else {
     ObFastParserOracle fp(allocator, fp_ctx);
     if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
       LOG_WARN("failed to fast parser", K(stmt));
+    }
+    if (OB_ISNULL(fp.param_node_list_)) {
+      param_list = NULL;
     }
   }
   return ret;
@@ -73,7 +134,6 @@ int ObFastParser::parse(const common::ObString &stmt,
       LOG_WARN("failed to fast parser", K(stmt));
     } else {
       fp_result.question_mark_ctx_ = fp.get_question_mark_ctx();
-      fp_result.values_tokens_.set_capacity(fp.get_values_tokens().count());
       for (int64_t i = 0; OB_SUCC(ret) && i < fp.get_values_tokens().count(); ++i) {
         if (OB_FAIL(fp_result.values_tokens_.push_back(ObValuesTokenPos(
                                                      fp.get_values_tokens().at(i).no_param_sql_pos_,
@@ -93,28 +153,26 @@ int ObFastParser::parse(const common::ObString &stmt,
   return ret;
 }
 
-ObFastParserBase::ObFastParserBase(
-  ObIAllocator &allocator,
-  const FPContext fp_ctx) :
-  no_param_sql_(nullptr), no_param_sql_len_(0),
-  param_num_(0), is_oracle_mode_(false),
+ObFastParserBase::ObFastParserBase(ObIAllocator &allocator, const FPContext fp_ctx) :
+  no_param_sql_(nullptr), no_param_sql_len_(0), param_num_(0), is_oracle_mode_(false),
   is_batched_multi_stmt_split_on_(fp_ctx.enable_batched_multi_stmt_),
-  is_udr_mode_(fp_ctx.is_udr_mode_),
-  def_name_ctx_(fp_ctx.def_name_ctx_),
-  cur_token_begin_pos_(0), copy_begin_pos_(0), copy_end_pos_(0),
-  tmp_buf_(nullptr), tmp_buf_len_(0), last_escape_check_pos_(0),
-  param_node_list_(nullptr), tail_param_node_(nullptr),
+  is_udr_mode_(fp_ctx.is_udr_mode_), def_name_ctx_(fp_ctx.def_name_ctx_), cur_token_begin_pos_(0),
+  copy_begin_pos_(0), copy_end_pos_(0), str_buffer_(allocator), last_escape_check_pos_(0),
+  try_check_tick_(0), param_node_list_(nullptr), tail_param_node_(nullptr),
   cur_token_type_(INVALID_TOKEN), allocator_(allocator),
   found_insert_status_(NOT_FOUND_INSERT_TOKEN), values_token_pos_(0),
   parse_next_token_func_(nullptr), process_idf_func_(nullptr)
 {
-	question_mark_ctx_.count_ = 0;
+  question_mark_ctx_.count_ = 0;
   question_mark_ctx_.capacity_ = 0;
   question_mark_ctx_.by_ordinal_ = false;
   question_mark_ctx_.by_name_ = false;
   question_mark_ctx_.name_ = nullptr;
   charset_type_ = ObCharset::charset_type_by_coll(fp_ctx.charsets4parser_.string_collation_);
   charset_info_ = ObCharset::get_charset(fp_ctx.charsets4parser_.string_collation_);
+  is_format_ = fp_ctx.is_format_;
+  col_type_ = fp_ctx.charsets4parser_.string_collation_;
+  alloc_len_ = 0;
 }
 
 int ObFastParserBase::parse(const ObString &stmt,
@@ -126,10 +184,14 @@ int ObFastParserBase::parse(const ObString &stmt,
 {
   int ret = OB_SUCCESS;
   int64_t len = stmt.length();
+  alloc_len_ = len + 1;
   if (OB_ISNULL(no_param_sql_ =
-      static_cast<char *>(allocator_.alloc((len + 1))))) {
+      static_cast<char *>(allocator_.alloc(alloc_len_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", K(ret), K(len));
+    LOG_WARN("fail to alloc memory", K(ret), K(alloc_len_));
+  } else if (OB_ISNULL(charset_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(charset_info_));
   } else {
     no_param_sql_[0] = '\0';
     while (len > 0 && is_space(stmt[len - 1])) {
@@ -457,8 +519,10 @@ inline int64_t ObFastParserBase::is_identifier_flags(const int64_t pos)
     idf_pos = is_utf8_char(pos);
   } else if (ObCharset::is_gb_charset(charset_type_)) {
     idf_pos = is_gbk_char(pos);
-  } else if (CHARSET_LATIN1 == charset_type_) {
-    idf_pos = is_latin1_char(pos);
+  } else if (charset_info_->mbmaxlen == 1) {
+    idf_pos = is_single_byte_char(pos);
+  } else if (CHARSET_HKSCS == charset_type_ || CHARSET_HKSCS31 == charset_type_) {
+    idf_pos = is_hk_char(pos);
   }
   return idf_pos;
 }
@@ -709,42 +773,40 @@ int ObFastParserBase::process_interval()
   int ret = OB_SUCCESS;
   int64_t byte_len = 0;
   char ch = raw_sql_.char_at(raw_sql_.cur_pos_);
-  tmp_buf_len_ = 0;
+  str_buffer_.reuse();
   ObItemType param_type = T_INVALID;
-  if (nullptr == tmp_buf_ &&
-      OB_ISNULL(tmp_buf_ = static_cast<char *>(allocator_.alloc(raw_sql_.raw_sql_len_ + 1)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", K(ret), K(raw_sql_.raw_sql_len_));
-  } else {
-    // deal with '[^']*'
-    while ('\'' != ch && !raw_sql_.is_search_end()) {
-      tmp_buf_[tmp_buf_len_++] = ch;
-      ch = raw_sql_.scan();
-    }
-    if ('\'' == ch) {
-      ch = raw_sql_.scan();
-      // deal with {space}*
-      while (IS_MULTI_SPACE(raw_sql_.cur_pos_, byte_len)) {
-        ch = raw_sql_.scan(byte_len);
-      }
-      // hit Interval{whitespace}?'[^']*'{space}*(year|month){interval_pricision}?
-      CHECK_EQ_AND_PROCESS_ROLLBACK("year", 4, T_INTERVAL_YM, false);
-      CHECK_EQ_AND_PROCESS_ROLLBACK("month", 5, T_INTERVAL_YM, false);
-      CHECK_EQ_AND_PROCESS_ROLLBACK("minute", 6, T_INTERVAL_DS, false);
-      CHECK_EQ_AND_PROCESS_ROLLBACK("day", 3, T_INTERVAL_DS, false);
-      CHECK_EQ_AND_PROCESS_ROLLBACK("hour", 4, T_INTERVAL_DS, false);
-      CHECK_EQ_AND_PROCESS_ROLLBACK("second", 6, T_INTERVAL_DS, true);
+  // deal with '[^']*'
+  while (OB_SUCC(ret) && '\'' != ch && !raw_sql_.is_search_end()) {
+    if (OB_FAIL(str_buffer_.append_character(ch))) {
+      LOG_WARN("failed to append character", K(ret));
     } else {
-      ret = OB_ERR_PARSER_SYNTAX;
-      LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
+      ch = raw_sql_.scan();
     }
+  }
+  if (OB_FAIL(ret)) {
+  } else if ('\'' == ch) {
+    ch = raw_sql_.scan();
+    // deal with {space}*
+    while (IS_MULTI_SPACE(raw_sql_.cur_pos_, byte_len)) {
+      ch = raw_sql_.scan(byte_len);
+    }
+    // hit Interval{whitespace}?'[^']*'{space}*(year|month){interval_pricision}?
+    CHECK_EQ_AND_PROCESS_ROLLBACK("year", 4, T_INTERVAL_YM, false);
+    CHECK_EQ_AND_PROCESS_ROLLBACK("month", 5, T_INTERVAL_YM, false);
+    CHECK_EQ_AND_PROCESS_ROLLBACK("minute", 6, T_INTERVAL_DS, false);
+    CHECK_EQ_AND_PROCESS_ROLLBACK("day", 3, T_INTERVAL_DS, false);
+    CHECK_EQ_AND_PROCESS_ROLLBACK("hour", 4, T_INTERVAL_DS, false);
+    CHECK_EQ_AND_PROCESS_ROLLBACK("second", 6, T_INTERVAL_DS, true);
+  } else {
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
   }
   if (OB_SUCC(ret) && PARAM_TOKEN == cur_token_type_) {
     char *buf = nullptr;
     int64_t need_mem_size = FIEXED_PARAM_NODE_SIZE;
     int64_t text_len = raw_sql_.cur_pos_ - cur_token_begin_pos_;
     need_mem_size += text_len + 1; // '\0'
-    int64_t str_len = tmp_buf_len_;
+    int64_t str_len = str_buffer_.length();
     need_mem_size += str_len + 1; // '\0'
     // allocate all the memory needed at once
     if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(need_mem_size)))) {
@@ -757,7 +819,7 @@ int ObFastParserBase::process_interval()
       raw_sql_.ptr(cur_token_begin_pos_), text_len, buf, node->text_len_);
       // buf points to the beginning of the next available memory
       buf += text_len + 1;
-      node->str_value_ = parse_strndup(tmp_buf_, tmp_buf_len_, buf);
+      node->str_value_ = parse_strndup(str_buffer_.buffer(), str_buffer_.length(), buf);
       // buf points to the beginning of the next available memory
       buf += str_len + 1;
       node->raw_sql_offset_ = cur_token_begin_pos_;
@@ -930,18 +992,18 @@ int ObFastParserBase::get_one_insert_row_str(ObRawSql &raw_sql,
 inline int64_t ObFastParserBase::notascii_gb_char(const int64_t pos)
 {
   int64_t idf_pos = -1;
-  if (notascii(raw_sql_.char_at(pos))) {
+  if ((idf_pos = is_gbk_char(pos)) != -1) {
+    //do nothing
+  } else if (notascii(raw_sql_.char_at(pos))) {
     idf_pos = pos + 1;
-  } else {
-    idf_pos = is_gbk_char(pos);
   }
   return idf_pos;
 }
 
-inline int64_t ObFastParserBase::is_latin1_char(const int64_t pos)
+inline int64_t ObFastParserBase::is_single_byte_char(const int64_t pos)
 {
   int64_t idf_pos = -1;
-  if (is_latin1(raw_sql_.char_at(pos))) {
+  if (is_single_byte(raw_sql_.char_at(pos))) {
     idf_pos = pos + 1;
   }
   return idf_pos;
@@ -1063,6 +1125,47 @@ inline int64_t ObFastParserBase::is_utf8_multi_byte_right_parenthesis(
   return idf_pos;
 }
 
+inline int64_t ObFastParserBase::is_hk_multi_byte_space(const char *str, const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (0xa1 == static_cast<uint8_t>(str[pos]) &&
+      0x40 == static_cast<uint8_t>(str[pos + 1])) {
+    idf_pos = pos + 2;
+  }
+  return idf_pos;
+}
+inline int64_t ObFastParserBase::is_hk_multi_byte_comma(const char *str, const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (0xa1 == static_cast<uint8_t>(str[pos]) &&
+      0x41 == static_cast<uint8_t>(str[pos + 1])) {
+    idf_pos = pos + 2;
+  }
+  return idf_pos;
+}
+
+inline int64_t ObFastParserBase::is_hk_multi_byte_left_parenthesis(
+                                 const char *str, const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (0xa1 == static_cast<uint8_t>(str[pos]) &&
+      0x5d == static_cast<uint8_t>(str[pos + 1])) {
+    idf_pos = pos + 2;
+  }
+  return idf_pos;
+}
+
+inline int64_t ObFastParserBase::is_hk_multi_byte_right_parenthesis(
+                                 const char *str, const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (0xa1 == static_cast<uint8_t>(str[pos]) &&
+      0x5e == static_cast<uint8_t>(str[pos + 1])) {
+    idf_pos = pos + 2;
+  }
+  return idf_pos;
+}
+
 // ([\\\xa1][\\\xa1])
 inline int64_t ObFastParserBase::is_gbk_multi_byte_space(const char *str, const int64_t pos)
 {
@@ -1121,6 +1224,22 @@ inline int64_t ObFastParserBase::is_gbk_char(const int64_t pos)
       -1 != is_gbk_multi_byte_right_parenthesis(raw_sql_.raw_sql_, pos))) {
     raw_sql_.scan(2);
   } else if (is_gb1(raw_sql_.char_at(pos)) && is_gb2(raw_sql_.char_at(pos + 1))) {
+    idf_pos = pos + 2;
+  }
+  return idf_pos;
+}
+
+inline int64_t ObFastParserBase::is_hk_char(const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (is_oracle_mode_ &&
+     pos + 2 < raw_sql_.raw_sql_len_ &&
+     (-1 != is_hk_multi_byte_space(raw_sql_.raw_sql_, pos) ||
+      -1 != is_hk_multi_byte_comma(raw_sql_.raw_sql_, pos) ||
+      -1 != is_hk_multi_byte_left_parenthesis(raw_sql_.raw_sql_, pos) ||
+      -1 != is_hk_multi_byte_right_parenthesis(raw_sql_.raw_sql_, pos))) {
+    raw_sql_.scan(2);
+  } else if (is_hk1(raw_sql_.char_at(pos)) && is_hk2(raw_sql_.char_at(pos + 1))) {
     idf_pos = pos + 2;
   }
   return idf_pos;
@@ -1264,7 +1383,7 @@ inline void ObFastParserBase::reset_parser_node(ParseNode *node)
   node->pl_str_off_ = 0;
   node->raw_text_ = nullptr;
   node->text_len_ = 0;
-  node->pos_ = 0;
+  node->pos_= 0;
   node->children_ = nullptr;
   node->raw_param_idx_ = 0;
 }
@@ -1398,6 +1517,27 @@ char *ObFastParserBase::parse_strdup_with_replace_multi_byte_char(
       } else {
         out_str[len++] = str[i];
       }
+    } else if (
+       charset_type_ == 152
+       || charset_type_ == 153) {
+       if (i + 1 < dup_len) {
+         if (str[i] == (char)0xa1 && str[i+1] == (char)0x40) {//hkscs multi byte space
+           out_str[len++] = ' ';
+           ++i;
+         } else if (str[i] == (char)0xa1 && str[i+1] == (char)0x5d) {
+           //hkscs multi byte left parenthesis
+           out_str[len++] = '(';
+           ++i;
+         } else if (str[i] == (char)0xa1 && str[i+1] == (char)0x5e) {
+           //hkscs multi byte right parenthesis
+           out_str[len++] = ')';
+           ++i;
+         } else {
+           out_str[len++] = str[i];
+         }
+       } else {
+         out_str[len++] = str[i];
+       }
     } else {
       out_str[len++] = str[i];
     }
@@ -1423,6 +1563,13 @@ inline void ObFastParserBase::lex_store_param(ParseNode *node, char *buf)
   param_num_++;
 }
 
+namespace oceanbase
+{
+namespace common
+{
+extern void process_hex_chars_simd(ObRawSql& raw_sql, bool& is_arch_supported);
+}
+}
 /**
  * The hexadecimal number in mysql mode has the following two representations:
  * x'([0-9A-F])*' or 0x([0-9A-F])+
@@ -1436,9 +1583,21 @@ int ObFastParserBase::process_hex_number(bool is_quote)
   char next_ch = raw_sql_.scan();
   if (is_quote) {
     // X'([0-9A-F])*'
+#if defined(__GNUC__) && defined(__x86_64__)
+    bool is_arch_supported{true};
+    process_hex_chars_simd(raw_sql_, is_arch_supported);
+    if (!is_arch_supported) {
+      while (is_hex(next_ch)) {
+        next_ch = raw_sql_.scan();
+      }
+    } else {
+      next_ch = raw_sql_.char_at(raw_sql_.cur_pos_);
+    }
+#else
     while (is_hex(next_ch)) {
       next_ch = raw_sql_.scan();
     }
+#endif
     if ('\'' == next_ch) {
       cur_token_type_ = PARAM_TOKEN;
       next_ch = raw_sql_.scan();
@@ -1454,9 +1613,19 @@ int ObFastParserBase::process_hex_number(bool is_quote)
     }
   } else {
     // 0X([0-9A-F])+
+#if defined(__GNUC__) && defined(__x86_64__)
+    bool is_arch_supported{true};
+    process_hex_chars_simd(raw_sql_, is_arch_supported);
+    if (!is_arch_supported) {
+      while (is_hex(next_ch)) {
+        next_ch = raw_sql_.scan();
+      }
+    }
+#else
     while (is_hex(next_ch)) {
       next_ch = raw_sql_.scan();
     }
+#endif
     int64_t next_idf_pos = is_first_identifier_flags(raw_sql_.cur_pos_);
     if (-1 != next_idf_pos) {
       // it is possible that the next token is a string and needs to fall back to
@@ -1622,8 +1791,10 @@ inline int64_t ObFastParserBase::is_first_identifier_flags(const int64_t pos)
     idf_pos = is_utf8_char(pos);
   } else if (ObCharset::is_gb_charset(charset_type_)) {
     idf_pos = is_gbk_char(pos);
-  } else if (CHARSET_LATIN1 == charset_type_) {
-    idf_pos = is_latin1_char(pos);
+  } else if (charset_info_->mbmaxlen == 1) {
+    idf_pos = is_single_byte_char(pos);
+  } else if (CHARSET_HKSCS == charset_type_ || CHARSET_HKSCS31 == charset_type_) {
+    idf_pos = is_hk_char(pos);
   }
   return idf_pos;
 }
@@ -1769,40 +1940,42 @@ int ObFastParserBase::add_nowait_type_node()
   return ret;
 }
 
-void ObFastParserBase::process_escape_string(char *str_buf, int64_t &str_buf_len)
+int ObFastParserBase::process_escape_string(StringBuffer &str_buffer)
 {
   // read the next character after the escape character
+  int ret = OB_SUCCESS;
   char ch = raw_sql_.scan();
   if (!raw_sql_.is_search_end()) {
     switch (ch) {
       case 'n':
-        str_buf[str_buf_len++] = '\n';
+        OZ (str_buffer.append_character('\n'));
         break;
       case 't':
-        str_buf[str_buf_len++] = '\t';
+        OZ (str_buffer.append_character('\t'));
         break;
       case 'r':
-        str_buf[str_buf_len++] = '\r';
+        OZ (str_buffer.append_character('\r'));
         break;
       case 'b':
-        str_buf[str_buf_len++] = '\b';
+        OZ (str_buffer.append_character('\b'));
         break;
       case '0':
-        str_buf[str_buf_len++] = '\0';
+        OZ (str_buffer.append_character('\0'));
         break;
       case 'Z': // ctrl + Z
-        str_buf[str_buf_len++] = '\032';
+        OZ (str_buffer.append_character('\032'));
         break;
       case '_':
       case '%':
-        str_buf[str_buf_len++] = '\\';
-        str_buf[str_buf_len++] = ch;
+        OZ (str_buffer.append_character('\\'));
+        OZ (str_buffer.append_character(ch));
         break;
       default:
-        str_buf[str_buf_len++] = ch;
+        OZ (str_buffer.append_character(ch));
         break;
     }
   }
+  return ret;
 }
 
 int ObFastParserBase::process_question_mark()
@@ -1975,11 +2148,14 @@ int ObFastParserBase::process_comment_content(bool is_mysql_comment)
  * Character sets marked with escape_with_backslash_is_dangerous, such as big5, cp932, gbk, sjis
  * The escape character (0x5C) may be part of a multi-byte character and requires special judgment
  */
-inline void ObFastParserBase::check_real_escape(bool &is_real_escape)
+inline int ObFastParserBase::check_real_escape(StringBuffer &str_buffer, bool &is_real_escape)
 {
-  if (OB_NOT_NULL(charset_info_) && charset_info_->escape_with_backslash_is_dangerous) {
-    char *cur_pos = tmp_buf_ + tmp_buf_len_;
-    char *last_check_pos = tmp_buf_ + last_escape_check_pos_;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(str_buffer.resize_buffer(str_buffer.length() + 1))) {
+    LOG_WARN("failed to resize buffer", K(ret));
+  } else if (OB_NOT_NULL(charset_info_) && charset_info_->escape_with_backslash_is_dangerous) {
+    char *cur_pos = str_buffer.seek(str_buffer.length());
+    char *last_check_pos = str_buffer.seek(last_escape_check_pos_);
     int error = 0;
     int expected_well_formed_len = cur_pos - last_check_pos;
 
@@ -1996,6 +2172,7 @@ inline void ObFastParserBase::check_real_escape(bool &is_real_escape)
       }
     }
   }
+  return ret;
 }
 
 // [A-Za-z0-9_]
@@ -2088,6 +2265,97 @@ int ObFastParserBase::process_negative()
   return ret;
 }
 
+int ObFastParserBase::toupper(const ObCollationType collation_type, const ObString &src,
+                              ObString &dst, StringBuffer &str_buffer)
+{
+  int ret = OB_SUCCESS;
+  str_buffer.reuse();
+  const ObCharsetInfo *cs_info = NULL;
+  if (OB_ISNULL(cs_info = ObCharset::get_charset(collation_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid collation type", K(ret), K(collation_type));
+  } else {
+    int casemulti = cs_info->caseup_multiply;
+    int64_t buf_len = src.length() * casemulti;
+    if (OB_FAIL(str_buffer.resize_buffer(buf_len))) {
+      LOG_WARN("failed to resize buffer", K(ret), K(buf_len));
+    } else if (1 == casemulti) {
+      const ObString::obstr_size_t src_len = src.length();
+      if (OB_ISNULL(src.ptr()) || OB_UNLIKELY(0 >= src_len)) {
+        dst.assign(NULL, 0);
+      } else {
+        MEMCPY(str_buffer.buffer(), src.ptr(), src_len);
+        dst.assign_ptr(str_buffer.buffer(), src_len);
+        size_t size = cs_info->cset->caseup(cs_info, dst.ptr(), dst.length(), dst.ptr(), dst.length());
+        dst.assign_ptr(dst.ptr(), static_cast<ObString::obstr_size_t>(size));
+      }
+    } else {
+      size_t size = cs_info->cset->caseup(cs_info, const_cast<char *>(src.ptr()), src.length(),
+                                          str_buffer.buffer(), buf_len);
+      dst.assign_ptr(str_buffer.buffer(), static_cast<ObString::obstr_size_t>(size));
+    }
+  }
+  return ret;
+}
+
+inline int ObFastParserBase::process_format_token() {
+  int ret = OB_SUCCESS;
+  int len = 0;
+  int token_len = raw_sql_.cur_pos_  - copy_begin_pos_;
+
+  if (IGNORE_TOKEN == cur_token_type_) {
+    // ignore this, do nothing
+  } else if (PARAM_TOKEN == cur_token_type_) {
+    if(no_param_sql_len_ + 2 >= alloc_len_ &&
+        OB_FAIL(extend_alloc_sql_buffer())) {
+      LOG_WARN("failed to alloc sql buffer", K(ret));
+    } else {
+      tail_param_node_->node_->pos_ = no_param_sql_len_;
+      no_param_sql_[no_param_sql_len_++] = '?';
+      no_param_sql_[no_param_sql_len_++] = ' ';
+      no_param_sql_[no_param_sql_len_] = '\0';
+    }
+  } else if (token_len > 0) {
+    int64_t pos = copy_begin_pos_;
+    skip_invalid_charactar(pos, token_len, raw_sql_);
+    if(no_param_sql_len_ + 2 * token_len + 3 + 1 >= alloc_len_ &&
+        OB_FAIL(extend_alloc_sql_buffer())) {
+      LOG_WARN("failed to alloc sql buffer", K(ret));
+    } else {
+      if (need_caseup_) {
+        str_buffer_.reuse();
+        ObString str(token_len, raw_sql_.ptr(pos));
+        ObString str_dest;
+        if (OB_FAIL(toupper(col_type_, str, str_dest, str_buffer_))) {
+          LOG_WARN("failed to do uppercase", K(ret));
+        } else {
+          MEMCPY(no_param_sql_ + no_param_sql_len_, str_dest.ptr(), str_dest.length());
+          len = str_dest.length();
+        }
+      } else {
+        MEMCPY(no_param_sql_ + no_param_sql_len_, raw_sql_.ptr(pos), token_len);
+        len = token_len;
+      }
+      no_param_sql_len_ += len;
+      no_param_sql_[no_param_sql_len_] = ' ';
+      no_param_sql_len_++;
+    }
+  }
+
+  if (OB_SUCC(ret) && token_len > 0) {
+    copy_end_pos_ = raw_sql_.cur_pos_;
+    copy_begin_pos_ = raw_sql_.cur_pos_;
+  }
+
+  return ret;
+}
+
+inline int ObFastParserBase::try_check_status()
+{
+  return ((++try_check_tick_) % CHECK_STATUS_TRY_TIMES == 0) ? THIS_WORKER.check_status() :
+                                                               common::OB_SUCCESS;
+}
+
 inline void ObFastParserBase::process_token()
 {
   if (NORMAL_TOKEN == cur_token_type_) {
@@ -2106,6 +2374,41 @@ inline void ObFastParserBase::process_token()
     copy_begin_pos_ = raw_sql_.cur_pos_;
     copy_end_pos_ = raw_sql_.cur_pos_;
   }
+}
+
+inline int ObFastParserBase::extend_alloc_sql_buffer()
+{
+  int ret = OB_SUCCESS;
+  char * buf = NULL;
+  alloc_len_ = alloc_len_ * 2;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(alloc_len_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret), K(alloc_len_));
+  } else {
+    MEMCPY(buf, no_param_sql_, no_param_sql_len_);
+    no_param_sql_ = buf;
+  }
+  return ret;
+}
+
+inline void ObFastParserBase::skip_invalid_charactar(int64_t& pos, int& token_len, ObRawSql &raw_sql)
+{
+  int64_t skip_len = 0;
+  while (is_invalid_character(raw_sql, pos, skip_len)) {
+    pos += skip_len;
+    token_len -= skip_len;
+  }
+}
+
+inline bool ObFastParserBase::is_invalid_character(ObRawSql &raw_sql, int64_t pos, int64_t& skip_len)
+{
+  bool b_ret = false;
+  int64_t s_len = 0;
+  if (IS_MULTI_SPACE_V2(raw_sql, pos, s_len)) {
+    skip_len = s_len;
+    b_ret = true;
+  }
+  return b_ret;
 }
 
 int ObFastParserBase::process_identifier_begin_with_l(bool &need_process_ws)
@@ -2387,117 +2690,118 @@ int ObFastParserMysql::process_string(const char quote)
   bool is_quote_end = false;
   ParseNode **child_node = NULL;
   char ch = INVALID_CHAR;
-  tmp_buf_len_ = 0;
   last_escape_check_pos_ = 0;
-  if (nullptr == tmp_buf_ &&
-      OB_ISNULL(tmp_buf_ = static_cast<char *>(allocator_.alloc(raw_sql_.raw_sql_len_ + 1)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", K(ret), K(raw_sql_.raw_sql_len_));
-  } else {
-    while (OB_SUCC(ret) && !raw_sql_.is_search_end()) {
+  str_buffer_.reuse();
+  while (OB_SUCC(ret) && !raw_sql_.is_search_end()) {
+    ch = raw_sql_.scan();
+    int64_t copy_begin_pos = raw_sql_.cur_pos_;
+    while (!raw_sql_.is_search_end() && '\\' != ch && quote != ch) {
       ch = raw_sql_.scan();
-      int64_t copy_begin_pos = raw_sql_.cur_pos_;
-      while (!raw_sql_.is_search_end() && '\\' != ch && quote != ch) {
-        ch = raw_sql_.scan();
-      }
-      int64_t len = raw_sql_.cur_pos_ - copy_begin_pos;
-      if (len > 0) {
-        MEMCPY(tmp_buf_ + tmp_buf_len_, raw_sql_.ptr(copy_begin_pos), len);
-        tmp_buf_len_ += len;
-      }
-      if (!is_valid_char(ch)) {
-        break;
-      } else if ('\\' == ch) {
-        bool is_real_escape = true;
-        bool is_no_backslash_escapes = false;
-        check_real_escape(is_real_escape);
-        IS_NO_BACKSLASH_ESCAPES(sql_mode_, is_no_backslash_escapes);
-        if (!is_real_escape || is_no_backslash_escapes) {
-          tmp_buf_[tmp_buf_len_++] = '\\';
-        } else {
-          process_escape_string(tmp_buf_, tmp_buf_len_);
+    }
+    int64_t len = raw_sql_.cur_pos_ - copy_begin_pos;
+    if (len > 0 && OB_FAIL(str_buffer_.append(raw_sql_.ptr(copy_begin_pos), len))) {
+      LOG_WARN("failed to append string", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!is_valid_char(ch)) {
+      break;
+    } else if ('\\' == ch) {
+      bool is_real_escape = true;
+      bool is_no_backslash_escapes = false;
+      IS_NO_BACKSLASH_ESCAPES(sql_mode_, is_no_backslash_escapes);
+      if (OB_FAIL(check_real_escape(str_buffer_, is_real_escape))) {
+        LOG_WARN("failed to check real escape", K(ret));
+      } else if (!is_real_escape || is_no_backslash_escapes) {
+        if (OB_FAIL(str_buffer_.append_character('\\'))) {
+          LOG_WARN("failed to append character", K(ret));
         }
-        last_escape_check_pos_ = tmp_buf_len_;
-      } else if (quote == ch) {
-        if (quote == raw_sql_.peek()) { // double quote
-          ch = raw_sql_.scan();
-          tmp_buf_[tmp_buf_len_++] = quote;
-        } else {
-          // deal with sqnewline({quote}{whitespace}{quote})
-          int64_t ws_end_pos = is_whitespace(raw_sql_.cur_pos_ + 1);
-          if (quote != raw_sql_.char_at(ws_end_pos)) {
-            is_quote_end = true;
-            break;
-          }
-          // cur_pos_ points to the position of a quote after sqnewline
-          // continue processing the string
-          raw_sql_.cur_pos_ = ws_end_pos;
-          if (OB_ISNULL(child_node)) {
-            char *buf = nullptr;
-            int64_t need_mem_size = sizeof(ParseNode *) + PARSER_NODE_SIZE + tmp_buf_len_ + 1;
-            if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(need_mem_size)))) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("fail to alloc memory", K(ret), K(need_mem_size));
-            } else {
-              child_node = reinterpret_cast<ParseNode **>(buf);
-              ParseNode *node = *child_node;
-              // buf points to the beginning of the next available memory
-              buf += sizeof(ParseNode *);
-              node = new_node(buf, T_CONCAT_STRING);
-              node->str_len_ = tmp_buf_len_;
-              if (node->str_len_ > 0) {
-                node->str_value_ = parse_strndup(tmp_buf_, tmp_buf_len_, buf);
-              }
-              child_node[0] = node;
-            }
-          }
-        }
-      }
-    } // end while
-    if (OB_SUCC(ret)) {
-      // in ansi_quotes sql_mode, the "" is treated as `, shouldn't parameterize it.
-      bool is_ansi_quotes = false;
-      IS_ANSI_QUOTES(sql_mode_, is_ansi_quotes);
-      raw_sql_.scan();
-      if (!is_quote_end) {
-        cur_token_type_ = IGNORE_TOKEN;
-        ret = OB_ERR_PARSER_SYNTAX;
-        LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
-      } else if (is_ansi_quotes && quote == '"') {
-        cur_token_type_ = NORMAL_TOKEN;
       } else {
-        char *buf = nullptr;
-        cur_token_type_ = PARAM_TOKEN;
-        int64_t need_mem_size = FIEXED_PARAM_NODE_SIZE;
-        int64_t text_len = raw_sql_.cur_pos_ - cur_token_begin_pos_;
-        int64_t str_len = tmp_buf_len_;
-        need_mem_size += str_len + 1; // '\0'
-        // allocate all the memory needed at once
-        if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(need_mem_size)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloc memory", K(ret), K(need_mem_size));
-        } else {
-          ObItemType param_type = T_VARCHAR;
-          if ('n' == raw_sql_.char_at(cur_token_begin_pos_) ||
-              'N' == raw_sql_.char_at(cur_token_begin_pos_)) {
-            param_type = T_NCHAR;
-          }
-          ParseNode *node = new_node(buf, param_type);
-          if (NULL != child_node) {
-            node->num_child_ = 1;
-            node->children_ = child_node;
-          }
-          node->text_len_ = text_len;
-          node->str_len_ = str_len;
-          node->raw_text_ = raw_sql_.ptr(cur_token_begin_pos_);
-          if (node->str_len_ > 0) {
-            node->str_value_ = parse_strndup(tmp_buf_, tmp_buf_len_, buf);
-          }
-          // buf points to the beginning of the next available memory
-          buf += str_len + 1;
-          node->raw_sql_offset_ = cur_token_begin_pos_;
-          lex_store_param(node, buf);
+        if (OB_FAIL(process_escape_string(str_buffer_))) {
+          LOG_WARN("failed to process escape string", K(ret));
         }
+      }
+      last_escape_check_pos_ = str_buffer_.length();
+    } else if (quote == ch) {
+      if (quote == raw_sql_.peek()) { // double quote
+        ch = raw_sql_.scan();
+        if (OB_FAIL(str_buffer_.append_character(quote))) {
+          LOG_WARN("failed to append character", K(ret));
+        }
+      } else {
+        // deal with sqnewline({quote}{whitespace}{quote})
+        int64_t ws_end_pos = is_whitespace(raw_sql_.cur_pos_ + 1);
+        if (quote != raw_sql_.char_at(ws_end_pos)) {
+          is_quote_end = true;
+          break;
+        }
+        // cur_pos_ points to the position of a quote after sqnewline
+        // continue processing the string
+        raw_sql_.cur_pos_ = ws_end_pos;
+        if (OB_ISNULL(child_node)) {
+          char *buf = nullptr;
+          int64_t need_mem_size = sizeof(ParseNode *) + PARSER_NODE_SIZE + str_buffer_.length() + 1;
+          if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(need_mem_size)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc memory", K(ret), K(need_mem_size));
+          } else {
+            child_node = reinterpret_cast<ParseNode **>(buf);
+            ParseNode *node = *child_node;
+            // buf points to the beginning of the next available memory
+            buf += sizeof(ParseNode *);
+            node = new_node(buf, T_CONCAT_STRING);
+            node->str_len_ = str_buffer_.length();
+            if (node->str_len_ > 0) {
+              node->str_value_ = parse_strndup(str_buffer_.buffer(), str_buffer_.length(), buf);
+            }
+            child_node[0] = node;
+          }
+        }
+      }
+    }
+  } // end while
+  if (OB_SUCC(ret)) {
+    // in ansi_quotes sql_mode, the "" is treated as `, shouldn't parameterize it.
+    bool is_ansi_quotes = false;
+    IS_ANSI_QUOTES(sql_mode_, is_ansi_quotes);
+    raw_sql_.scan();
+    if (!is_quote_end) {
+      cur_token_type_ = IGNORE_TOKEN;
+      ret = OB_ERR_PARSER_SYNTAX;
+      LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
+    } else if (is_ansi_quotes && quote == '"') {
+      cur_token_type_ = NORMAL_TOKEN;
+    } else {
+      char *buf = nullptr;
+      cur_token_type_ = PARAM_TOKEN;
+      int64_t need_mem_size = FIEXED_PARAM_NODE_SIZE;
+      int64_t text_len = raw_sql_.cur_pos_ - cur_token_begin_pos_;
+      int64_t str_len = str_buffer_.length();
+      need_mem_size += str_len + 1; // '\0'
+      // allocate all the memory needed at once
+      if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(need_mem_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory", K(ret), K(need_mem_size));
+      } else {
+        ObItemType param_type = T_VARCHAR;
+        if ('n' == raw_sql_.char_at(cur_token_begin_pos_) ||
+            'N' == raw_sql_.char_at(cur_token_begin_pos_)) {
+          param_type = T_NCHAR;
+        }
+        ParseNode *node = new_node(buf, param_type);
+        if (NULL != child_node) {
+          node->num_child_ = 1;
+          node->children_ = child_node;
+        }
+        node->text_len_ = text_len;
+        node->str_len_ = str_len;
+        node->raw_text_ = raw_sql_.ptr(cur_token_begin_pos_);
+        if (node->str_len_ > 0) {
+          node->str_value_ = parse_strndup(str_buffer_.buffer(), str_buffer_.length(), buf);
+        }
+        // buf points to the beginning of the next available memory
+        buf += str_len + 1;
+        node->raw_sql_offset_ = cur_token_begin_pos_;
+        lex_store_param(node, buf);
       }
     }
   }
@@ -2545,11 +2849,15 @@ int ObFastParserMysql::process_values(const char *str)
                     cur_token_begin_pos_ - copy_begin_pos_, param_num_)))) {
           LOG_WARN("failed to push back", K(ret));
         } else {
-          values_token_pos_ = raw_sql_.cur_pos_;
+          if (0 == values_token_pos_) {
+            values_token_pos_ = raw_sql_.cur_pos_;
+          }
           raw_sql_.scan(5);
         }
       } else if (CHECK_EQ_STRNCASECMP("alue", 4)) {
-        values_token_pos_ = raw_sql_.cur_pos_;
+        if (0 == values_token_pos_) {
+          values_token_pos_ = raw_sql_.cur_pos_;
+        }
         raw_sql_.scan(4);
       } else {
         // do nothing
@@ -2695,6 +3003,7 @@ int ObFastParserMysql::parse_next_token()
     process_leading_space();
     char ch = raw_sql_.char_at(raw_sql_.cur_pos_);
     cur_token_begin_pos_ = raw_sql_.cur_pos_;
+    need_caseup_ = true;
     switch (ch) {
       case '0': {
         OZ (process_zero_identifier());
@@ -2720,6 +3029,7 @@ int ObFastParserMysql::parse_next_token()
       }
       case '`': {
         OZ (process_backtick());
+        need_caseup_ = false;
         break;
       }
       case '-': {
@@ -2800,6 +3110,7 @@ int ObFastParserMysql::parse_next_token()
       }
       case '@': {
         char next_ch = raw_sql_.peek();
+        need_caseup_ = false;
         bool is_contain_quote = false;
         if ('@' == next_ch && is_sys_var_first_char(raw_sql_.char_at(raw_sql_.cur_pos_ + 2))) {
           raw_sql_.scan(2);
@@ -2841,7 +3152,12 @@ int ObFastParserMysql::parse_next_token()
         break;
       }
     } // end switch
-    OX (process_token());
+    if (is_format_) {
+      OZ (process_format_token());
+    } else {
+      OX (process_token());
+    }
+    OZ (try_check_status());
   } // end while
   if (OB_SUCC(ret)) {
     // After processing the string, there are still parts that have not been saved, save directly
@@ -2864,114 +3180,118 @@ int ObFastParserOracle::process_string(const bool in_q_quote)
   bool is_quote_end = false;
   ParseNode **child_node = NULL;
   char ch = INVALID_CHAR;
-  tmp_buf_len_ = 0;
-  if (nullptr == tmp_buf_ &&
-      OB_ISNULL(tmp_buf_ = static_cast<char *>(allocator_.alloc(raw_sql_.raw_sql_len_ + 1)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", K(ret), K(raw_sql_.raw_sql_len_));
-  } else {
-    while (OB_SUCC(ret) && !raw_sql_.is_search_end()) {
+  str_buffer_.reuse();
+  while (OB_SUCC(ret) && !raw_sql_.is_search_end()) {
+    ch = raw_sql_.scan();
+    int64_t copy_begin_pos = raw_sql_.cur_pos_;
+    while (!raw_sql_.is_search_end() && '\\' != ch && '\'' != ch) {
       ch = raw_sql_.scan();
-      int64_t copy_begin_pos = raw_sql_.cur_pos_;
-      while (!raw_sql_.is_search_end() && '\\' != ch && '\'' != ch) {
+    }
+    int64_t len = raw_sql_.cur_pos_ - copy_begin_pos;
+    if (len > 0 && OB_FAIL(str_buffer_.append(raw_sql_.ptr(copy_begin_pos), len))) {
+      LOG_WARN("failed to append string", K(ret), K(len));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!is_valid_char(ch)) {
+      break;
+    } else if ('\\' == ch) {
+      if (OB_FAIL(str_buffer_.append_character('\\'))) {
+        LOG_WARN("failed to append character", K(ret));
+      }
+    } else if ('\'' == ch) {
+      if ('\'' == raw_sql_.peek()) { // double quote
         ch = raw_sql_.scan();
-      }
-      int64_t len = raw_sql_.cur_pos_ - copy_begin_pos;
-      if (len > 0) {
-        MEMCPY(tmp_buf_ + tmp_buf_len_, raw_sql_.ptr(copy_begin_pos), len);
-        tmp_buf_len_ += len;
-      }
-      if (!is_valid_char(ch)) {
-        break;
-      } else if ('\\' == ch) {
-        tmp_buf_[tmp_buf_len_++] = '\\';
-      } else if ('\'' == ch) {
-        if ('\'' == raw_sql_.peek()) { // double quote
-          ch = raw_sql_.scan();
-          tmp_buf_[tmp_buf_len_++] = '\'';
-          if (in_q_quote) {
-            tmp_buf_[tmp_buf_len_++] = '\'';
-          }
-        } else {
-          if (in_q_quote) {
-            // eg: q'<test>', nq'[asdfasd\'dfasdf]'
-            int64_t byte_len = 0;
-            if (is_multi_byte_left_parenthesis(tmp_buf_, tmp_buf_len_, 0, byte_len) &&
-                is_multi_byte_right_parenthesis(tmp_buf_, tmp_buf_len_,
-                tmp_buf_len_ - byte_len, byte_len)) {
-              tmp_buf_ += byte_len;
-              tmp_buf_len_ -= (2 * byte_len);
-              is_quote_end = true;
-              break;
-            } else if (tmp_buf_len_ >= 2 &&
-                ((tmp_buf_[0] == tmp_buf_[tmp_buf_len_ - 1] && tmp_buf_[0] != '(' &&
-                tmp_buf_[0] != '[' && tmp_buf_[0] != '{' && tmp_buf_[0] != '<' &&
-                tmp_buf_[0] != ' ' && tmp_buf_[0] != '\t' && tmp_buf_[0] != '\r') ||
-                (tmp_buf_[0] == '(' && tmp_buf_[tmp_buf_len_ - 1] == ')') ||
-                (tmp_buf_[0] == '[' && tmp_buf_[tmp_buf_len_ - 1] == ']') ||
-                (tmp_buf_[0] == '{' && tmp_buf_[tmp_buf_len_ - 1] == '}') ||
-                (tmp_buf_[0] == '<' && tmp_buf_[tmp_buf_len_ - 1] == '>'))) {
-              tmp_buf_ += 1;
-              tmp_buf_len_ -= 2;
-              is_quote_end = true;
-              break;
-            } else {
-              tmp_buf_[tmp_buf_len_++] = '\'';
-            }
-          } else {
+        OZ (str_buffer_.append_character('\''));
+        if (in_q_quote) {
+          OZ (str_buffer_.append_character('\''));
+        }
+      } else {
+        if (in_q_quote) {
+          // eg: q'<test>', nq'[asdfasd\'dfasdf]'
+          int64_t byte_len = 0;
+          if (is_multi_byte_left_parenthesis(str_buffer_.buffer(), str_buffer_.length(), 0,
+                                             byte_len)
+              && is_multi_byte_right_parenthesis(str_buffer_.buffer(), str_buffer_.length(),
+                                                 str_buffer_.length() - byte_len, byte_len)) {
+            str_buffer_.trim_n(byte_len);
             is_quote_end = true;
             break;
+          } else if (str_buffer_.length() >= 2
+                     && ((str_buffer_.begin_character() == str_buffer_.end_character()
+                          && str_buffer_.begin_character() != '('
+                          && str_buffer_.begin_character() != '['
+                          && str_buffer_.begin_character() != '{'
+                          && str_buffer_.begin_character() != '<'
+                          && str_buffer_.begin_character() != ' '
+                          && str_buffer_.begin_character() != '\t'
+                          && str_buffer_.begin_character() != '\r')
+                         || (str_buffer_.begin_character() == '('
+                             && str_buffer_.end_character() == ')')
+                         || (str_buffer_.begin_character() == '['
+                             && str_buffer_.end_character() == ']')
+                         || (str_buffer_.begin_character() == '{'
+                             && str_buffer_.end_character() == '}')
+                         || (str_buffer_.begin_character() == '<'
+                             && str_buffer_.end_character() == '>'))) {
+            str_buffer_.trim_n(1);
+            is_quote_end = true;
+            break;
+          } else {
+            OZ (str_buffer_.append_character('\''));
           }
+        } else {
+          is_quote_end = true;
+          break;
         }
       }
-    } // end while
-    if (OB_SUCC(ret)) {
-      raw_sql_.scan();
-      if (!is_quote_end) {
-        cur_token_type_ = IGNORE_TOKEN;
-        ret = OB_ERR_PARSER_SYNTAX;
-        LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
+    }
+  } // end while
+  if (OB_SUCC(ret)) {
+    raw_sql_.scan();
+    if (!is_quote_end) {
+      cur_token_type_ = IGNORE_TOKEN;
+      ret = OB_ERR_PARSER_SYNTAX;
+      LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
+    } else {
+      char *buf = nullptr;
+      cur_token_type_ = PARAM_TOKEN;
+      ObItemType param_type = T_CHAR;
+      int64_t need_mem_size = FIEXED_PARAM_NODE_SIZE;
+      int64_t text_len = raw_sql_.cur_pos_ - cur_token_begin_pos_;
+      int64_t str_len = str_buffer_.length();
+      need_mem_size += str_len + 1; // '\0'
+      if ('n' == raw_sql_.char_at(cur_token_begin_pos_) ||
+          'N' == raw_sql_.char_at(cur_token_begin_pos_) ||
+          'u' == raw_sql_.char_at(cur_token_begin_pos_) ||
+          'U' == raw_sql_.char_at(cur_token_begin_pos_)) {
+        param_type = T_NCHAR;
+      }
+      // allocate all the memory needed at once
+      if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(need_mem_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory", K(ret), K(need_mem_size));
       } else {
-        char *buf = nullptr;
-        cur_token_type_ = PARAM_TOKEN;
-        ObItemType param_type = T_CHAR;
-        int64_t need_mem_size = FIEXED_PARAM_NODE_SIZE;
-        int64_t text_len = raw_sql_.cur_pos_ - cur_token_begin_pos_;
-        int64_t str_len = tmp_buf_len_;
-        need_mem_size += str_len + 1; // '\0'
-        if ('n' == raw_sql_.char_at(cur_token_begin_pos_) ||
-            'N' == raw_sql_.char_at(cur_token_begin_pos_) ||
-            'u' == raw_sql_.char_at(cur_token_begin_pos_) ||
-            'U' == raw_sql_.char_at(cur_token_begin_pos_)) {
-          param_type = T_NCHAR;
+        ParseNode *node = new_node(buf, param_type);
+        node->text_len_ = text_len;
+        node->str_len_ = str_len;
+        node->raw_text_ = raw_sql_.ptr(cur_token_begin_pos_);
+        if (node->str_len_ > 0) {
+          node->str_value_ = parse_strndup(str_buffer_.buffer(), str_buffer_.length(), buf);
         }
-        // allocate all the memory needed at once
-        if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(need_mem_size)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloc memory", K(ret), K(need_mem_size));
+        // buf points to the beginning of the next available memory
+        buf += str_len + 1;
+        node->raw_sql_offset_ = cur_token_begin_pos_;
+        if (in_q_quote) {
+          node->raw_sql_offset_ = cur_token_begin_pos_ + 1;
         } else {
-          ParseNode *node = new_node(buf, param_type);
-          node->text_len_ = text_len;
-          node->str_len_ = str_len;
-          node->raw_text_ = raw_sql_.ptr(cur_token_begin_pos_);
-          if (node->str_len_ > 0) {
-            node->str_value_ = parse_strndup(tmp_buf_, tmp_buf_len_, buf);
-          }
-          // buf points to the beginning of the next available memory
-          buf += str_len + 1;
           node->raw_sql_offset_ = cur_token_begin_pos_;
-          if (in_q_quote) {
-            node->raw_sql_offset_ = cur_token_begin_pos_ + 1;
-          } else {
-            node->raw_sql_offset_ = cur_token_begin_pos_;
-          }
-
-          if ('u' == raw_sql_.char_at(cur_token_begin_pos_) ||
-              'U' == raw_sql_.char_at(cur_token_begin_pos_)) {
-            node->value_ = -1;
-          }
-          lex_store_param(node, buf);
         }
+
+        if ('u' == raw_sql_.char_at(cur_token_begin_pos_) ||
+            'U' == raw_sql_.char_at(cur_token_begin_pos_)) {
+          node->value_ = -1;
+        }
+        lex_store_param(node, buf);
       }
     }
   }
@@ -3135,6 +3455,7 @@ int ObFastParserOracle::parse_next_token()
     process_leading_space();
     char ch = raw_sql_.char_at(raw_sql_.cur_pos_);
     cur_token_begin_pos_ = raw_sql_.cur_pos_;
+    need_caseup_ = true;
     switch (ch) {
       case '0' ... '9': {
         if (OB_FAIL(process_number(false/*has_minus*/))) {
@@ -3176,6 +3497,7 @@ int ObFastParserOracle::parse_next_token()
       }
       case '\"': {
         OZ (process_double_quote());
+        need_caseup_ = false;
         break;
       }
       case '/': {
@@ -3246,7 +3568,12 @@ int ObFastParserOracle::parse_next_token()
       }
     } // end switch
     last_ch = ch;
-    OX (process_token());
+    if (is_format_) {
+      OZ (process_format_token());
+    } else {
+      OX (process_token());
+    }
+    OZ (try_check_status());
   } // end while
   if (OB_SUCC(ret)) {
     // After processing the string, there are still parts that have not been saved, save directly

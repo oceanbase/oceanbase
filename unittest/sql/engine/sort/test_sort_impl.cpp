@@ -24,7 +24,6 @@
 #include "share/ob_worker.h"
 #include "observer/ob_signal_handle.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "storage/blocksstable/ob_tmp_file.h"
 #include "sql/engine/join/join_data_generator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/ob_simple_mem_limit_getter.h"

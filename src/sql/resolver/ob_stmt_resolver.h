@@ -54,17 +54,29 @@ public:
                                     common::ObString &table_name, common::ObString &synonym_name, common::ObString &db_name);
   int resolve_table_relation_factor(const ParseNode *node, uint64_t &database_id,
                                     common::ObString &table_name, common::ObString &synonym_name, common::ObString &db_name);
+
   /// @param org If org is true, means get original db name.
   /// Else, when db node is NULL, get session db name.
   int resolve_table_relation_node_v2(const ParseNode *node,
                                      common::ObString &table_name,
                                      common::ObString &db_name,
+                                     common::ObString &catalog_name,
                                      bool &is_db_explicit,
                                      bool org = false,
                                      bool is_oracle_sys_view = false,
                                      char **dblink_name_ptr = NULL,
                                      int32_t *dblink_name_len = NULL,
                                      bool *has_dblink_node = NULL);
+
+  int resolve_table_relation_node(const ParseNode *node,
+                                common::ObString &table_name,
+                                common::ObString &db_name,
+                                common::ObString &catalog_name,
+                                bool org = false,
+                                bool is_oracle_sys_view = false,
+                                char **dblink_name_ptr = NULL,
+                                int32_t *dblink_name_len = NULL,
+                                bool *has_dblink_node = NULL);
 
   int resolve_table_relation_node(const ParseNode *node,
                                   common::ObString &table_name,
@@ -89,7 +101,8 @@ public:
   static int resolve_ref_factor(const ParseNode *node, ObSQLSessionInfo *session_info, common::ObString &table_name, common::ObString &db_name);
   static int resolve_dblink_name(const ParseNode *table_node, uint64_t tenant_id, ObString &dblink_name, bool &is_reverse_link, bool &has_dblink_node);
   int resolve_database_factor(const ParseNode *node,
-                              uint64_t tenant_id,
+                              const uint64_t tenant_id,
+                              const uint64_t catalog_id,
                               uint64_t &database_id,
                               common::ObString &db_name);
 
@@ -120,6 +133,7 @@ public:
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "query ctx is null", K(ret));
     } else if (OB_FAIL(params_.stmt_factory_->create_stmt(stmt))) {
+      stmt = NULL;
       SQL_RESV_LOG(WARN, "create stmt failed", K(ret));
     } else if (OB_ISNULL(stmt)) {
       ret = common::OB_ERR_UNEXPECTED;
@@ -128,10 +142,12 @@ public:
       stmt_ = stmt;
       stmt_->set_query_ctx(params_.query_ctx_);
       //mark prepare stmt
-      stmt_->get_query_ctx()->set_is_prepare_stmt(params_.is_prepare_protocol_ && params_.is_prepare_stage_);		
+      stmt_->get_query_ctx()->set_is_prepare_stmt(params_.is_prepare_protocol_ && params_.is_prepare_stage_);
       stmt_->get_query_ctx()->set_timezone_info(get_timezone_info(params_.session_info_));		
       stmt_->get_query_ctx()->set_sql_stmt_coll_type(get_obj_print_params(params_.session_info_).cs_type_);
       if (OB_FAIL(stmt_->set_stmt_id())) {
+        stmt = NULL;
+        stmt_ = NULL;
         SQL_RESV_LOG(WARN, "fail to set stmt id", K(ret));
       }
     }
@@ -152,13 +168,14 @@ public:
                         bool is_link = false);
 
   int check_table_name_equal(const ObString &name1, const ObString &name2, bool &equal);
-
 protected:
   int normalize_table_or_database_names(common::ObString &name);
+  int resolve_catalog_node(const ParseNode *catalog_node, uint64_t &catalog_id, common::ObString &catalog_name);
 
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObStmtResolver);
+  bool is_catalog_supported_stmt_();
 public:
   // data members
   common::ObIAllocator *allocator_;

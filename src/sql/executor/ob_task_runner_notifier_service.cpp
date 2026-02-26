@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "sql/executor/ob_task_runner_notifier_service.h"
-#include "sql/executor/ob_task_info.h"
-#include "sql/executor/ob_task.h"
 using namespace oceanbase::common;
 namespace oceanbase
 {

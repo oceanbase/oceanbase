@@ -12,7 +12,6 @@
 
 #include "observer/virtual_table/ob_all_virtual_ls_snapshot.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
-#include "storage/tenant_snapshot/ob_tenant_snapshot_meta_table.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

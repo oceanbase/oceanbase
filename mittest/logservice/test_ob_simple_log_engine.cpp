@@ -1,3 +1,6 @@
+// owner: zjf225077
+// owner group: log
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -10,28 +13,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/time/ob_time_utility.h"
-#include "logservice/palf/log_group_entry.h"
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include <stdexcept>
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
-#include "logservice/palf/log_reader_utils.h"
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/log_group_entry_header.h"
-#include "logservice/palf/log_io_worker.h"
-#include "logservice/palf/log_shared_queue_thread.h"
-#include "logservice/palf/lsn.h"
-#include "share/scn.h"
-#include "logservice/palf/log_io_task.h"
-#include "logservice/palf/log_writer_utils.h"
-#include "logservice/palf_handle_guard.h"
 #undef private
+#include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 
 const std::string TEST_NAME = "log_engine";
 
@@ -73,10 +58,13 @@ public:
     LogRpc *log_rpc = log_engine_->log_net_service_.log_rpc_;
     LogIOWorker *log_io_worker = log_engine_->log_io_worker_;
     LogSharedQueueTh *log_shared_queue_th = log_engine_->log_shared_queue_th_;
-    LogPlugins *plugins = log_engine_->plugins_;
+    palf::LogPlugins *plugins = log_engine_->plugins_;
     LogEngine log_engine;
     ILogBlockPool *log_block_pool = log_engine_->log_storage_.block_mgr_.log_block_pool_;
-    if (OB_FAIL(log_engine.load(leader_.palf_handle_impl_->palf_id_,
+    LogIOAdapter io_adapter;
+    if (OB_FAIL(io_adapter.init(1002, LOG_IO_DEVICE_WRAPPER.get_local_device(), &G_RES_MGR, &OB_IO_MANAGER))) {
+      PALF_LOG(WARN, "io_adapter init failed", K(ret));
+    } else if (OB_FAIL(log_engine.load(leader_.palf_handle_impl_->palf_id_,
                                 leader_.palf_handle_impl_->log_dir_,
                                 alloc_mgr,
                                 log_block_pool,
@@ -87,9 +75,10 @@ public:
                                 plugins,
                                 entry_header,
                                 palf_epoch_,
-                                is_integrity,
                                 PALF_BLOCK_SIZE,
-                                PALF_META_BLOCK_SIZE))) {
+                                PALF_META_BLOCK_SIZE,
+                                &io_adapter,
+                                is_integrity))) {
       PALF_LOG(WARN, "load failed", K(ret));
     } else if (log_tail_redo != log_engine.log_storage_.log_tail_
         || log_tail_meta != log_engine.log_meta_storage_.log_tail_
@@ -188,6 +177,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
 
 // 验证flashback过程中宕机重启
@@ -330,7 +320,9 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
   EXPECT_EQ(lsn_2_block(log_engine_->log_meta_storage_.log_block_header_.min_lsn_, PALF_BLOCK_SIZE), truncate_block_id + 1);
 
   LogSnapshotMeta snapshot_meta;
-  EXPECT_EQ(OB_SUCCESS, snapshot_meta.generate(LSN(1 * PALF_BLOCK_SIZE)));
+  LogInfo prev_log_info;
+  prev_log_info.generate_by_default();
+  EXPECT_EQ(OB_SUCCESS, snapshot_meta.generate(LSN(1 * PALF_BLOCK_SIZE), prev_log_info, LSN(0)));
   EXPECT_EQ(OB_SUCCESS, log_engine_->log_meta_.update_log_snapshot_meta(snapshot_meta));
   EXPECT_EQ(OB_SUCCESS, log_engine_->append_log_meta_(log_engine_->log_meta_));
   EXPECT_EQ(OB_SUCCESS, log_storage->delete_block(0));
@@ -360,13 +352,12 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
 
   //测试truncate_prefix 场景
   block_id_t truncate_prefix_block_id = 4;
-  LogInfo prev_log_info;
-  prev_log_info.lsn_ = LSN(truncate_prefix_block_id*PALF_BLOCK_SIZE);
+  prev_log_info.lsn_ = LSN(truncate_prefix_block_id*PALF_BLOCK_SIZE)-100;
   prev_log_info.log_id_ = 0;
   prev_log_info.log_proposal_id_ = 0;
   prev_log_info.scn_ = share::SCN::min_scn();
   prev_log_info.accum_checksum_ = 0;
-  EXPECT_EQ(OB_SUCCESS, snapshot_meta.generate(prev_log_info.lsn_, prev_log_info));
+  EXPECT_EQ(OB_SUCCESS, snapshot_meta.generate(LSN(truncate_block_id*PALF_BLOCK_SIZE), prev_log_info, LSN(truncate_prefix_block_id*PALF_BLOCK_SIZE)));
   EXPECT_EQ(OB_SUCCESS, log_engine_->log_meta_.update_log_snapshot_meta(snapshot_meta));
   EXPECT_EQ(OB_SUCCESS, log_engine_->append_log_meta_(log_engine_->log_meta_));
   EXPECT_EQ(OB_SUCCESS,
@@ -380,16 +371,17 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
   // 测试目录清空场景，此时log_tail应该为truncate_prefix_block_id
   // 目录清空之后，会重置log_tail
   truncate_prefix_block_id = max_block_id + 2;
-  prev_log_info.lsn_ = LSN(truncate_prefix_block_id*PALF_BLOCK_SIZE);
+  LSN new_base_lsn(truncate_prefix_block_id*PALF_BLOCK_SIZE);
+  prev_log_info.lsn_ = new_base_lsn - 100;
   prev_log_info.log_id_ = 0;
   prev_log_info.log_proposal_id_ = 0;
   prev_log_info.scn_ =SCN::min_scn();
   prev_log_info.accum_checksum_ = 0;
-  EXPECT_EQ(OB_SUCCESS, snapshot_meta.generate(prev_log_info.lsn_, prev_log_info));
+  EXPECT_EQ(OB_SUCCESS, snapshot_meta.generate(new_base_lsn, prev_log_info, new_base_lsn));
   EXPECT_EQ(OB_SUCCESS, log_engine_->log_meta_.update_log_snapshot_meta(snapshot_meta));
   EXPECT_EQ(OB_SUCCESS, log_engine_->append_log_meta_(log_engine_->log_meta_));
   const LSN old_log_tail = log_engine_->log_storage_.log_tail_;
-  EXPECT_EQ(OB_SUCCESS, log_engine_->truncate_prefix_blocks(prev_log_info.lsn_));
+  EXPECT_EQ(OB_SUCCESS, log_engine_->truncate_prefix_blocks(new_base_lsn));
   EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_storage->get_block_id_range(min_block_id, max_block_id));
   // truncate_prefix_block_id 和 prev_lsn对应的block_id一样
   EXPECT_EQ(log_storage->log_tail_, LSN(truncate_prefix_block_id * PALF_BLOCK_SIZE));

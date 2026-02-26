@@ -12,8 +12,6 @@
 #define USING_LOG_PREFIX LIB
 #include "ob_json_diff.h"
 #include "ob_json_bin.h"
-#include "lib/ob_define.h"
-#include "lib/utility/ob_unify_serialize.h"
 
 namespace oceanbase {
 namespace common {

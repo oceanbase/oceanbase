@@ -21,6 +21,8 @@ namespace common {
 class ObOptTableStat;
 class ObTopkItem;
 
+class ObOptColumnStat;
+
 /**
  * @brief The ObStatItem class
  * Different type of statistics items during gather stats
@@ -202,6 +204,7 @@ public:
     return lib::is_oracle_mode() ? " SUM_OPNSIZE(\"%.*s\")/decode(COUNT(*),0,1,COUNT(*))" : " SUM_OPNSIZE(`%.*s`)/(case when COUNT(*) = 0 then 1 else COUNT(*) end)";
   }
   virtual int decode(ObObj &obj) override;
+  virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
 };
 
 class ObStatLlcBitmap : public ObStatColItem
@@ -223,6 +226,8 @@ public:
 
 class ObStatTopKHist : public ObStatColItem
 {
+  const static int64_t MIN_BUCKET_SIZE = 256;
+  const static int64_t MAX_BUCKET_SIZE = 2048;
 public:
   ObStatTopKHist() : ObStatColItem(), tab_stat_(NULL), max_disuse_cnt_(0) {}
   ObStatTopKHist(const ObColumnStatParam *param,
@@ -259,6 +264,8 @@ public:
   virtual bool is_needed() const override;
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
   virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
+  static int64_t get_window_size(int64_t bucket_num) {
+    return 1000 * (bucket_num < MIN_BUCKET_SIZE ? 1 : bucket_num / MIN_BUCKET_SIZE); }
 protected:
   ObOptTableStat *tab_stat_;
   int64_t max_disuse_cnt_;
@@ -301,11 +308,12 @@ public:
   ObGlobalTableStat()
     : row_count_(0), row_size_(0), data_size_(0),
       macro_block_count_(0), micro_block_count_(0), part_cnt_(0), last_analyzed_(0),
-      cg_macro_cnt_arr_(), cg_micro_cnt_arr_(), stat_locked_(false),
+      cg_macro_cnt_arr_(), cg_micro_cnt_arr_(), stat_locked_(false), stale_stats_(false),
       sstable_row_cnt_(0), memtable_row_cnt_(0)
   {}
 
-  void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic);
+  void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic,
+           int64_t scnt, int64_t mcnt);
   int add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic,
           ObIArray<int64_t> &cg_macro_arr, ObIArray<int64_t> &cg_micro_arr,
           int64_t scnt, int64_t mcnt);
@@ -321,6 +329,8 @@ public:
   void set_last_analyzed(int64_t last_analyzed) { last_analyzed_ = last_analyzed; }
   void set_stat_locked(bool locked) { stat_locked_ = locked; }
   bool get_stat_locked() const { return stat_locked_; }
+  void set_stale_stats(bool stale_stats) { stale_stats_ = stale_stats; }
+  bool get_stale_stats() const { return stale_stats_; }
   int64_t get_sstable_row_cnt() const { return sstable_row_cnt_; }
   int64_t get_memtable_row_cnt() const { return memtable_row_cnt_; }
 
@@ -335,6 +345,7 @@ public:
                K(cg_macro_cnt_arr_),
                K(cg_micro_cnt_arr_),
                K(stat_locked_),
+               K(stale_stats_),
                K(sstable_row_cnt_),
                K(memtable_row_cnt_));
 
@@ -349,35 +360,64 @@ private:
   ObArray<int64_t> cg_macro_cnt_arr_;
   ObArray<int64_t> cg_micro_cnt_arr_;
   bool stat_locked_;
+  bool stale_stats_;
   int64_t sstable_row_cnt_;
   int64_t memtable_row_cnt_;
+};
+
+
+class ObGlobalSkipRateStat
+{
+public:
+  ObGlobalSkipRateStat(): count_(0), skip_sample_cnt_arr_(), cg_skip_rate_arr_() {}
+  int add(const ObIArray<uint64_t> &skip_sample_cnt_arr, const ObIArray<double> &cg_skip_rate_arr);
+  const ObIArray<double> &get_skip_rate_arr() const;
+  const ObIArray<uint64_t> & get_skip_sample_cnt_arr() const;
+  int merge();
+  TO_STRING_KV(K(skip_sample_cnt_arr_), K(cg_skip_rate_arr_));
+
+  uint64_t count() {return count_;}
+
+private:
+  uint64_t count_; //increment when add
+  ObArray<uint64_t> skip_sample_cnt_arr_;
+  ObArray<double> cg_skip_rate_arr_;
 };
 
 class ObGlobalNullEval
 {
 public:
-  ObGlobalNullEval() : global_num_null_(0) {}
+  ObGlobalNullEval() : global_num_null_(0)
+  {}
 
   void add(int64_t num_null)
-  { global_num_null_ += num_null; }
+  {
+    global_num_null_ += num_null;
+  }
 
   int64_t get() const
-  { return global_num_null_; }
+  {
+    return global_num_null_;
+  }
+
 private:
   int64_t global_num_null_;
 };
 
 class ObGlobalNdvEval
 {
-  const int64_t NUM_LLC_BUCKET =  ObOptColumnStat::NUM_LLC_BUCKET;
+  const int64_t NUM_LLC_BUCKET = ObOptColumnStat::NUM_LLC_BUCKET;
+
 public:
-  ObGlobalNdvEval() : global_ndv_(0), part_cnt_(0) {
-    MEMSET(global_llc_bitmap_, 0, ObOptColumnStat::NUM_LLC_BUCKET); }
+  ObGlobalNdvEval() : global_ndv_(0), part_cnt_(0), liner_ndv_(0)
+  {
+    MEMSET(global_llc_bitmap_, 0, ObOptColumnStat::NUM_LLC_BUCKET);
+  }
 
   void add(int64_t ndv, const char *llc_bitmap);
 
   int64_t get() const;
-
+  int64_t get_liner_ndv() const;
   void get_llc_bitmap(char *llc_bitmap, const int64_t llc_bitmap_size) const;
 
   static double select_alpha_value(const int64_t num_bucket);
@@ -388,20 +428,31 @@ private:
   int64_t global_ndv_;
   int64_t part_cnt_;
   char global_llc_bitmap_[ObOptColumnStat::NUM_LLC_BUCKET];
+  int64_t liner_ndv_;
 };
 
 class ObGlobalMaxEval
 {
 public:
-  ObGlobalMaxEval() : global_max_() {
+  ObGlobalMaxEval() : global_max_()
+  {
     global_max_.set_null();
   }
 
   void add(const ObObj &obj);
 
-  bool is_valid() const { return !global_max_.is_null(); }
+  bool is_valid() const
+  {
+    return !global_max_.is_null();
+  }
 
-  const ObObj& get() const { return global_max_; }
+  const ObObj &get() const
+  {
+    return global_max_;
+  }
+
+  int flush(common::ObIAllocator *alloc);
+
 private:
   ObObj global_max_;
 };
@@ -409,15 +460,25 @@ private:
 class ObGlobalMinEval
 {
 public:
-  ObGlobalMinEval() : global_min_() {
+  ObGlobalMinEval() : global_min_()
+  {
     global_min_.set_null();
   }
 
   void add(const ObObj &obj);
 
-  bool is_valid() const { return !global_min_.is_null(); }
+  bool is_valid() const
+  {
+    return !global_min_.is_null();
+  }
 
-  const ObObj& get() const { return global_min_; }
+  const ObObj &get() const
+  {
+    return global_min_;
+  }
+
+  int flush(common::ObIAllocator *alloc);
+
 private:
   ObObj global_min_;
 };
@@ -425,13 +486,19 @@ private:
 class ObGlobalAvglenEval
 {
 public:
-  ObGlobalAvglenEval() : global_avglen_(0), part_cnt_(0) {}
+  ObGlobalAvglenEval() : global_avglen_(0), part_cnt_(0)
+  {}
 
   void add(int64_t avg_len)
-  { global_avglen_ += avg_len; ++part_cnt_; }
+  {
+    global_avglen_ += avg_len;
+    ++part_cnt_;
+  }
 
   int64_t get() const
-  { return part_cnt_ > 0 ? global_avglen_ / part_cnt_ : 0; }
+  {
+    return part_cnt_ > 0 ? global_avglen_ / part_cnt_ : 0;
+  }
 
 private:
   int64_t global_avglen_;
@@ -441,15 +508,78 @@ private:
 class ObGlobalNotNullEval
 {
 public:
-  ObGlobalNotNullEval() : global_num_not_null_(0) {}
+  ObGlobalNotNullEval() : global_num_not_null_(0)
+  {}
 
   void add(int64_t num_not_null)
-  { global_num_not_null_ += num_not_null; }
+  {
+    global_num_not_null_ += num_not_null;
+  }
 
   int64_t get() const
-  { return global_num_not_null_; }
+  {
+    return global_num_not_null_;
+  }
+
 private:
   int64_t global_num_not_null_;
+};
+
+class ObGlobalCgBlockCntEval {
+public:
+  ObGlobalCgBlockCntEval() : cg_macro_blk_cnt_(0), cg_micro_blk_cnt_(0)
+  {}
+
+  void add_cg_blk_cnt(int64_t cg_macro_blk_cnt, int64_t cg_micro_blk_cnt)
+  {
+    cg_macro_blk_cnt_ += cg_macro_blk_cnt;
+    cg_micro_blk_cnt_ += cg_micro_blk_cnt;
+  }
+
+  int64_t get_cg_macro_blk_cnt() const
+  {
+    return cg_macro_blk_cnt_;
+  }
+
+  int64_t get_cg_micro_blk_cnt() const
+  {
+    return cg_micro_blk_cnt_;
+  }
+
+private:
+  int64_t cg_macro_blk_cnt_;
+  int64_t cg_micro_blk_cnt_;
+};
+
+class ObGlobalCgSkipRateEval
+{
+public:
+  ObGlobalCgSkipRateEval() : cg_skip_rate_(0.0), cg_micro_blk_cnt_(0) {}
+
+  void add_cg_skip_rate(double value, int64_t cg_micro_blk_cnt)
+  {
+    cg_micro_blk_cnt_ += cg_micro_blk_cnt;
+    cg_skip_rate_ += (value * (double)cg_micro_blk_cnt);
+  }
+
+public:
+  double cg_skip_rate_;
+  int64_t cg_micro_blk_cnt_;
+};
+
+struct ObGlobalAllColEvals
+{
+  ObGlobalMinEval min_eval_;
+  ObGlobalMaxEval max_eval_;
+  ObGlobalNullEval null_eval_;
+  ObGlobalAvglenEval avglen_eval_;
+  ObGlobalNdvEval ndv_eval_;
+  ObGlobalCgBlockCntEval cg_blk_eval_;
+  ObGlobalCgSkipRateEval cg_skip_rate_eval_;
+  bool column_stat_valid_ = true;
+  int flush(common::ObIAllocator *alloc);
+
+  void merge(const ObOptColumnStat &col_stats);
 };
 
 struct ObGlobalColumnStat
@@ -462,7 +592,7 @@ struct ObGlobalColumnStat
     ndv_val_(0),
     cg_macro_blk_cnt_(0),
     cg_micro_blk_cnt_(0),
-    cg_skip_rate_(1.0)
+    cg_skip_rate_(0.0)
   {
     min_val_.set_min_value();
     max_val_.set_max_value();
@@ -471,6 +601,9 @@ struct ObGlobalColumnStat
   {
     cg_macro_blk_cnt_ += cg_macro_blk_cnt;
     cg_micro_blk_cnt_ += cg_micro_blk_cnt;
+  }
+  void add_cg_skip_rate(double value, int64_t cg_micro_blk_cnt) {
+    cg_skip_rate_ += (value * (double)cg_micro_blk_cnt);
   }
   TO_STRING_KV(K(min_val_),
                K(max_val_),

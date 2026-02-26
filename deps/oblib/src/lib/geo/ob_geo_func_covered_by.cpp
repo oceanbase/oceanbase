@@ -13,10 +13,8 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/geo/ob_geo_dispatcher.h"
-#include "lib/geo/ob_geo_func_covered_by.h"
+#include "ob_geo_func_covered_by.h"
 #include "lib/geo/ob_geo_func_utils.h"
-#include "lib/geo/ob_geo_bin_traits.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -162,10 +160,11 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPoint, ObWkbGeomC
         break;
       }
       case ObGeoType::POLYGON : {
+        ObArenaAllocator tmp_alloc;
         const ObWkbGeomPolygon *polygon = reinterpret_cast<const ObWkbGeomPolygon*>(sub_ptr);
         ObString tmp(polygon->length(), reinterpret_cast<const char*>(sub_ptr));
         ObString pol_data;
-        if (OB_FAIL(ob_write_string(*context.get_allocator(), tmp, pol_data))) {
+        if (OB_FAIL(ob_write_string(tmp_alloc, tmp, pol_data))) {
           LOG_WARN("failed to copy polygon geo", K(ret));
         } else {
           ObWkbGeomPolygon *poly_copy = reinterpret_cast<ObWkbGeomPolygon*>(pol_data.ptr());
@@ -175,10 +174,11 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPoint, ObWkbGeomC
         break;
       }
       case ObGeoType::MULTIPOLYGON : {
+        ObArenaAllocator tmp_alloc;
         const ObWkbGeomMultiPolygon *multi_poly = reinterpret_cast<const ObWkbGeomMultiPolygon*>(sub_ptr);
         ObString tmp(multi_poly->length(), reinterpret_cast<const char*>(sub_ptr));
         ObString multipol_data;
-        if (OB_FAIL(ob_write_string(*context.get_allocator(), tmp, multipol_data))) {
+        if (OB_FAIL(ob_write_string(tmp_alloc, tmp, multipol_data))) {
           LOG_WARN("failed to copy multi_poly geo", K(ret));
         } else {
           ObWkbGeomMultiPolygon *multipoly_copy = reinterpret_cast<ObWkbGeomMultiPolygon*>(multipol_data.ptr());
@@ -655,10 +655,11 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogC
       }
 
       case ObGeoType::POLYGON : {
+        ObArenaAllocator tmp_alloc;
         const ObWkbGeogPolygon *polygon = reinterpret_cast<const ObWkbGeogPolygon*>(sub_ptr);
         ObString tmp(polygon->length(), reinterpret_cast<const char*>(sub_ptr));
         ObString pol_data;
-        if (OB_FAIL(ob_write_string(*context.get_allocator(), tmp, pol_data))) {
+        if (OB_FAIL(ob_write_string(tmp_alloc, tmp, pol_data))) {
           LOG_WARN("failed to copy polygon geo", K(ret));
         } else {
           ObWkbGeogPolygon *poly_copy = reinterpret_cast<ObWkbGeogPolygon*>(pol_data.ptr());
@@ -674,10 +675,11 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogC
         break;
       }
       case ObGeoType::MULTIPOLYGON : {
+        ObArenaAllocator tmp_alloc;
         const ObWkbGeogMultiPolygon *multi_poly = reinterpret_cast<const ObWkbGeogMultiPolygon*>(sub_ptr);
         ObString tmp(multi_poly->length(), reinterpret_cast<const char*>(sub_ptr));
         ObString multipol_data;
-        if (OB_FAIL(ob_write_string(*context.get_allocator(), tmp, multipol_data))) {
+        if (OB_FAIL(ob_write_string(tmp_alloc, tmp, multipol_data))) {
           LOG_WARN("failed to copy multi_poly geo", K(ret));
         } else {
           ObWkbGeogMultiPolygon *multipoly_copy = reinterpret_cast<ObWkbGeogMultiPolygon*>(multipol_data.ptr());
@@ -1273,7 +1275,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
 OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObCartesianLineString, ObCartesianPolygon, bool)
 {
   UNUSED(context);
-  const ObCartesianPoint *geo1 = reinterpret_cast<const ObCartesianPoint *>(g1);
+  const ObCartesianLineString *geo1 = reinterpret_cast<const ObCartesianLineString *>(g1);
   const ObCartesianPolygon *geo2 = reinterpret_cast<const ObCartesianPolygon *>(g2);
   result = boost::geometry::covered_by(*geo1, *geo2);
   return OB_SUCCESS;

@@ -17,7 +17,7 @@
 
 #include "ob_log_trans_ctx.h"                       // TransCtx
 
-#include "ob_easy_hazard_map.h"                     // ObEasyHazardMap
+#include "lib/hash/ob_link_hashmap.h"               // ObLinkHashMap
 #include "ob_cdc_define.h"                          // TenantTransID
 
 namespace oceanbase
@@ -99,7 +99,7 @@ class ObLogTransCtxMgr : public IObLogTransCtxMgr
 
     ~Scanner() {}
 
-    void operator() (const TenantTransID &tenant_trans_id, TransCtx *trans_ctx);
+    bool operator() (const TenantTransID &tenant_trans_id, TransCtx *trans_ctx);
 
     char *buffer_;
     int64_t buffer_size_;
@@ -111,7 +111,7 @@ class ObLogTransCtxMgr : public IObLogTransCtxMgr
 public:
   static const int64_t BLOCK_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE; // 64KB - 128
   static const int64_t PRINT_STATE_INTERVAL = 10 * 1000 * 1000;
-  typedef ObEasyHazardMap<TenantTransID, TransCtx> TransCtxMap;
+  typedef ObLinkHashMap<TenantTransID, TransCtx> TransCtxMap;
 
 public:
   ObLogTransCtxMgr();
@@ -132,16 +132,16 @@ public:
   bool need_sort_participant() const override { return need_sort_participant_; };
 
 public:
-  int init(const int64_t max_cached_trans_ctx_count, const bool need_sort_participant);
+  int init(const bool need_sort_participant);
   void destroy();
   // Get the number of valid TransCtx, i.e. the number of TransCtx present in the map
-  inline int64_t get_valid_trans_ctx_count() const { return map_.get_valid_count(); }
+  inline int64_t get_valid_trans_ctx_count() const { return map_.count(); }
 
   // Get the number of allocated TransCtx objects
-  inline int64_t get_alloc_trans_ctx_count() const { return map_.get_alloc_count(); }
+  inline int64_t get_alloc_trans_ctx_count() const { return map_.size(); }
 
   // Get the number of free TransCtx objects
-  inline int64_t get_free_trans_ctx_count() const { return map_.get_free_count(); }
+  inline int64_t get_free_trans_ctx_count() const { return map_.size() - map_.count(); }
 
 private:
   bool        inited_;

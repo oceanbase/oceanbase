@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "ob_ps_sql_utils.h"
-#include "lib/string/ob_string.h"
-#include "lib/json/ob_json_print_utils.h"
-#include "sql/plan_cache/ob_sql_parameterization.h"
 namespace oceanbase
 {
 using namespace common;

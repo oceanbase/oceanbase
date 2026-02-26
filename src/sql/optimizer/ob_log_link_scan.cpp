@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_link_scan.h"
-#include "sql/resolver/expr/ob_expr_info_flag.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

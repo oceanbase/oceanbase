@@ -14,18 +14,8 @@
 
 #include "observer/mysql/ob_sync_plan_driver.h"
 #include "rpc/obmysql/packet/ompk_eof.h"
-#include "rpc/obmysql/packet/ompk_resheader.h"
-#include "rpc/obmysql/packet/ompk_field.h"
-#include "rpc/obmysql/packet/ompk_row.h"
-#include "rpc/obmysql/ob_mysql_field.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "lib/profile/ob_perf_event.h"
-#include "obsm_row.h"
 #include "observer/mysql/obmp_query.h"
-#include "sql/engine/px/ob_px_admission.h"
-#include "sql/ob_spi.h"
-#include "share/object/ob_obj_cast.h"
-#include "observer/mysql/obmp_stmt_prexecute.h"
+#include "observer/mysql/obmp_utils.h"
 
 namespace oceanbase
 {
@@ -85,6 +75,10 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
     if (retry_ctrl_.need_retry()) {
       result.set_will_retry();
     }
+    int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+    if (tmp_ret != OB_SUCCESS) {
+      LOG_WARN("failed to add changed package info", K(tmp_ret));
+    }
     cret = result.close(cli_ret);
     if (cret != OB_SUCCESS &&
         cret != OB_TRANSACTION_SET_VIOLATION &&
@@ -121,6 +115,10 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       if (retry_ctrl_.need_retry()) {
         result.set_will_retry();
       }
+      int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_WARN("failed to add changed package info", K(tmp_ret));
+      }
       int cret = result.close(ret);
       if (cret != OB_SUCCESS) {
         LOG_WARN("close result set fail", K(cret));
@@ -154,6 +152,10 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       }
 
       eofp.set_server_status(flags);
+      int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_WARN("failed to add changed package info", K(tmp_ret));
+      }
 
       // for proxy
       // in multi-stmt, send extra ok packet in the last stmt(has no more result)
@@ -195,6 +197,10 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       }
     }
   } else {
+    int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+    if (tmp_ret != OB_SUCCESS) {
+      LOG_WARN("failed to add changed package info", K(tmp_ret));
+    }
     if (is_prexecute_ && OB_FAIL(response_query_header(result, false, false, true))) {
       // need close result set
       int close_ret = OB_SUCCESS;
@@ -235,6 +241,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
           ok_param.affected_rows_ = curr_affected_row;
           ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
           ok_param.has_more_result_ = !result.is_cursor_end();
+          ok_param.lii_ = result.get_last_insert_id_to_client();
           process_ok = true;
           if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
             LOG_WARN("send ok packet failed", K(ret), K(ok_param));
@@ -249,6 +256,8 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       }
     }
   }
+  OX (session_.reset_top_query_string());
+  session_.set_top_trace_id(nullptr);
   //if the error code is ob_timeout, we add more error info msg for dml query.
   if (OB_TIMEOUT == ret && session_.is_user_session()) {
     LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - session_.get_query_start_time());

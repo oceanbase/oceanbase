@@ -40,6 +40,8 @@ int ObValuesTableAccessOp::inner_open()
   int ret = OB_SUCCESS;
   row_idx_ = 0;
   const int32_t result_flag = 0;
+  uint64_t compat_version = 0;
+  bool implicit_first_century_year = false;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   if (OB_ISNULL(plan_ctx) || OB_ISNULL(ctx_.get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -51,7 +53,16 @@ int ObValuesTableAccessOp::inner_open()
     LOG_WARN("fail to init datum_caster", K(ret));
   } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, GET_MY_SESSION(ctx_), cm_))) {
     LOG_WARN("fail to get_default_cast_mode", K(ret));
+  } else if (OB_FAIL((ctx_.get_my_session()->get_compatibility_version(compat_version)))) {
+    LOG_WARN("failed to get compatibility version", K(ret));
+  } else if (OB_FAIL(ObCompatControl::check_feature_enable(
+               compat_version, ObCompatFeatureType::IMPLICIT_FIRST_CENTURY_YEAR,
+               implicit_first_century_year))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else {
+    if (implicit_first_century_year) {
+      cm_ = cm_ | CM_IMPLICIT_FIRST_CENTURY_YEAR;
+    }
     cm_ = cm_ | CM_COLUMN_CONVERT;
     if (OB_SUCC(ret)) {
       if (ObValuesTableDef::FOLD_ACCESS_EXPR == MY_SPEC.access_type_) {
@@ -165,7 +176,8 @@ int ObValuesTableAccessOp::get_real_src_obj_type(const int64_t row_idx,
         update_src_meta(src_obj_meta, src_obj_acc, src_meta);
       }
     } else if (src_expr.frame_idx_ < spec_.plan_->get_expr_frame_info().const_frame_.count() +
-                                     spec_.plan_->get_expr_frame_info().param_frame_.count()) {
+                                     spec_.plan_->get_expr_frame_info().param_frame_.count() +
+                                     spec_.plan_->get_expr_frame_info().dynamic_frame_.count()) {
       src_obj_meta = plan_ctx->get_param_store().at(param_idx).meta_;
       const ObAccuracy &src_obj_acc = plan_ctx->get_param_store().at(param_idx).get_accuracy();
       update_src_meta(src_obj_meta, src_obj_acc, src_meta);
@@ -245,10 +257,22 @@ int ObValuesTableAccessOp::calc_datum_from_param(const ObObj &src_obj, ObExpr *d
   ObDatum &dst_datum = dst_expr->locate_datum_for_write(eval_ctx_);
   const ObObjType &src_type = src_obj.get_type();
   const ObObjType &dst_type =  dst_expr->obj_meta_.get_type();
-  if (ob_is_decimal_int_tc(src_type) && ob_is_number_tc(dst_type)) {
+  const ObObjParam src_obj_param = static_cast<const ObObjParam>(src_obj);
+  bool need_adjust_decimal_int = ob_is_decimal_int_tc(src_type)
+                                 && ob_is_decimal_int_tc(dst_expr->datum_meta_.type_)
+                                 && ObDatumCast::need_scale_decimalint(src_obj_param.get_scale(),
+                                                                       src_obj_param.get_precision(),
+                                                                       dst_expr->datum_meta_.scale_,
+                                                                       dst_expr->datum_meta_.precision_);
+  if (ob_is_decimal_int_tc(src_type) && (ob_is_number_tc(dst_type) || need_adjust_decimal_int)) {
     ObObj dst_obj;
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(GET_MY_SESSION(ctx_));
-    ObCastCtx cast_ctx(&eval_ctx_.exec_ctx_.get_allocator(), &dtc_params, cm_, dst_expr->obj_meta_.get_collation_type());
+    ObAccuracy dst_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[is_oracle_mode()][dst_type];
+    if (ob_is_decimal_int_tc(dst_type)) {
+      dst_accuracy.set_scale(dst_expr->datum_meta_.scale_);
+      dst_accuracy.set_precision(dst_expr->datum_meta_.precision_);
+    }
+    ObCastCtx cast_ctx(&eval_ctx_.exec_ctx_.get_allocator(), &dtc_params, cm_, dst_expr->obj_meta_.get_collation_type(), &dst_accuracy);
     cast_ctx.exec_ctx_ = &eval_ctx_.exec_ctx_;
     if (OB_FAIL(ObObjCaster::to_type(dst_type, dst_expr->obj_meta_.get_collation_type(), cast_ctx,
                                      src_obj, dst_obj))) {

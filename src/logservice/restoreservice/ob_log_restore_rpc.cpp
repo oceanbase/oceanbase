@@ -11,7 +11,6 @@
  */
 
 #include "ob_log_restore_rpc.h"
-#include "lib/ob_errno.h"
 
 namespace oceanbase
 {

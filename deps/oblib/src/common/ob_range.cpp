@@ -10,9 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_range.h"
+#include "ob_range.h"
 #include "common/ob_store_range.h"
-#include "lib/utility/utility.h"
 
 
 namespace oceanbase
@@ -96,6 +95,7 @@ int64_t ObNewRange::to_simple_string(char *buffer, const int64_t length) const
       databuff_printf(buffer, length, pos, "table_id:null,");
     }
     databuff_printf(buffer, length, pos, "group_idx:%d,", group_idx_);
+    databuff_printf(buffer, length, pos, "index_ordered_idx:%d,", index_ordered_idx_);
     if (border_flag_.inclusive_start()) {
       databuff_printf(buffer, length, pos, "[");
     } else {

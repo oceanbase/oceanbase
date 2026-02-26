@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_schema2ddl_sql.h"
 
-#include "lib/string/ob_sql_string.h"
 #include "share/schema/ob_schema_service.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/ob_get_compat_mode.h"
-#include "common/ob_smart_var.h"
 
 namespace oceanbase
 {

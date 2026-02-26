@@ -16,10 +16,7 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
-#include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 
 namespace oceanbase
 {

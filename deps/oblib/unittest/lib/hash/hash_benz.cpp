@@ -11,14 +11,6 @@
  */
 
 #include "lib/hash/ob_hashtable.h"
-#include "lib/hash/ob_serialization.h"
-#include "lib/allocator/ob_malloc.h"
-#include <pthread.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
 #include <ext/hash_map>
 
 using namespace oceanbase;

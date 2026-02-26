@@ -15,9 +15,6 @@
 #include "observer/virtual_table/ob_all_virtual_dtl_channel.h"
 #include "sql/dtl/ob_dtl.h"
 #include "sql/dtl/ob_dtl_basic_channel.h"
-#include "sql/dtl/ob_dtl_tenant_mem_manager.h"
-#include "sql/dtl/ob_op_metric.h"
-#include "lib/allocator/ob_mod_define.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

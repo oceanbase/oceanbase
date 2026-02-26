@@ -58,6 +58,7 @@ public:
   DEFINE_GETTER_AND_SETTER(int64_t, last_purge_time);
   DEFINE_GETTER_AND_SETTER(int64_t, last_purge_rows);
   DEFINE_STRING_GETTER_AND_SETTER(last_purge_trace_id);
+  DEFINE_GETTER_AND_SETTER(ObMLogPurgeMethod, last_purge_method);
   DEFINE_GETTER_AND_SETTER(int64_t, schema_version);
 
 #undef DEFINE_GETTER_AND_SETTER
@@ -79,6 +80,10 @@ public:
   static int batch_fetch_mlog_ids(ObISQLClient &sql_client, uint64_t tenant_id,
                                   uint64_t last_mlog_id, ObIArray<uint64_t> &mlog_ids,
                                   int64_t limit = -1);
+  static int insert_mlog_info_for_rebuild_mlog(ObISQLClient &sql_client,
+                                               const uint64_t tenant_id,
+                                               const uint64_t orig_mlog_id,
+                                               const ObTableSchema &new_mlog_schema);
 
   TO_STRING_KV(K_(tenant_id),
                K_(mlog_id),
@@ -91,6 +96,7 @@ public:
                K_(last_purge_time),
                K_(last_purge_rows),
                K_(last_purge_trace_id),
+               K_(last_purge_method),
                K_(schema_version));
 
 public:
@@ -108,6 +114,7 @@ private:
   int64_t last_purge_time_;
   int64_t last_purge_rows_;
   ObString last_purge_trace_id_;
+  ObMLogPurgeMethod last_purge_method_;
   int64_t schema_version_;
 };
 

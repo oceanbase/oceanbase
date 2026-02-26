@@ -13,23 +13,9 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_log_restore_proxy.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/net/ob_addr.h"
-#include "observer/ob_sql_client_decorator.h"  //ObSQLClientRetryWeak
-#include "common/ob_smart_var.h"
-#include "lib/mysqlclient/ob_mysql_connection_pool.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/string/ob_string.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/backup/ob_backup_struct.h"     // COMPATIBILITY_MODE
-#include "share/ob_thread_mgr.h"
-#include "logservice/palf/palf_options.h"
+#include "observer/ob_server_struct.h"
 #include "share/oracle_errno.h"
-#include <mysql.h>
+#include "share/backup/ob_log_restore_struct.h"
 
 namespace oceanbase
 {
@@ -263,6 +249,32 @@ int ObLogRestoreProxyUtil::init(const uint64_t tenant_id,
   }
   return ret;
 }
+int ObLogRestoreProxyUtil::init_with_service_attr(
+    const uint64_t tenant_id,
+    const ObRestoreSourceServiceAttr *service_attr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(service_attr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("service_attr is null", KR(ret), KP(service_attr));
+  } else if (OB_UNLIKELY(!service_attr->is_valid() || !is_valid_tenant_id(tenant_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("service attr or tenant id is invalid", KR(ret), KPC(service_attr), K(tenant_id));
+  } else {
+    const char *db_name = service_attr->user_.mode_ == common::ObCompatibilityMode::MYSQL_MODE ? OB_SYS_DATABASE_NAME : OB_ORA_SYS_SCHEMA_NAME;
+    ObSqlString user;
+    char passwd[OB_MAX_PASSWORD_LENGTH + 1] = {0};
+    if (OB_FAIL(service_attr->get_password(passwd, sizeof(passwd)))) {
+      LOG_WARN("fail to get password", KR(ret), K(service_attr));
+    } else if (OB_FAIL(service_attr->get_user_str_(user))) {
+      LOG_WARN("fail to get user str", KR(ret), K(service_attr));
+    } else if (OB_FAIL(init(tenant_id, service_attr->addr_,
+        user.ptr(), passwd, db_name))) {
+      LOG_WARN("fail to init proxy_util", KR(ret), KPC(service_attr));
+    }
+  }
+  return ret;
+}
 
 int ObLogRestoreProxyUtil::get_sql_proxy(common::ObMySQLProxy *&proxy)
 {
@@ -411,6 +423,56 @@ int ObLogRestoreProxyUtil::get_cluster_id(uint64_t tenant_id, int64_t &cluster_i
   return ret;
 }
 
+int ObLogRestoreProxyUtil::check_different_cluster_with_same_cluster_id(
+    const int64_t source_cluster_id, bool &res)
+{
+  int ret = OB_SUCCESS;
+  res = false;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+  } else if (GCONF.cluster_id == source_cluster_id) {
+    // get one machine ip from the source cluster, then check if that machine is in current
+    // cluster's __all_server table
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      ObSqlString sql;
+      char svr_ip_buf[common::OB_IP_STR_BUFF] = {0};
+      common::ObAddr primary_server;
+      if (OB_FAIL(server_prover_.get_server(0, primary_server))) {
+        LOG_WARN("fail to get primary server", K(ret));
+      } else if (!primary_server.ip_to_string(svr_ip_buf, common::OB_IP_STR_BUFF)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to convert ip to string", K(ret));
+      } else if (OB_FAIL(sql.assign_fmt(
+                     "SELECT COUNT(*) AS cnt FROM %s WHERE svr_ip='%s' AND inner_port=%d",
+                     OB_ALL_SERVER_TNAME, svr_ip_buf, primary_server.get_port()))) {
+        LOG_WARN("fail to generate sql", K(ret));
+      } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sql proxy is null", K(ret));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(result, sql.ptr()))) {
+        LOG_WARN("fail to get __all_server", K(ret), K(sql));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query result is null", K(sql));
+      } else if (OB_FAIL(result.get_result()->next())) {
+        LOG_WARN("get result next failed", K(sql));
+      } else {
+        int64_t cnt = 0;
+        EXTRACT_INT_FIELD_MYSQL(*result.get_result(), "cnt", cnt, int64_t);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("fail to get sql result", K(ret), K(sql));
+        } else if (0 == cnt) {
+          res = true;
+        }
+        LOG_INFO("check if cluster_id duplicated", K(res), K(cnt), K(sql));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObLogRestoreProxyUtil::get_compatibility_mode(const uint64_t tenant_id, ObCompatibilityMode &compat_mode)
 {
   int ret = OB_SUCCESS;
@@ -537,7 +599,7 @@ int ObLogRestoreProxyUtil::construct_server_ip_list(const common::ObSqlString &s
     LOG_WARN("sql is empty", KR(ret), K(sql));
   } else {
     RESTORE_RETRY(SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-      ObMySQLResult *res = NULL;
+      common::sqlclient::ObMySQLResult *res = NULL;
       if (OB_FAIL(sql_proxy_.read(result, OB_INVALID_TENANT_ID, sql.ptr()))) {
         LOG_WARN("read value from DBA_OB_ACCESS_POINT failed", K(tenant_id_), K(sql));
       } else if (OB_ISNULL(res = result.get_result())) {
@@ -588,11 +650,12 @@ bool ObLogRestoreProxyUtil::is_user_changed_(const char *user_name, const char *
   return changed;
 }
 
-int ObLogRestoreProxyUtil::get_tenant_info(ObTenantRole &role, schema::ObTenantStatus &status)
+int ObLogRestoreProxyUtil::get_tenant_info(ObTenantRole &role, schema::ObTenantStatus &status, ObTenantSwitchoverStatus &switchover_status)
 {
   int ret = OB_SUCCESS;
   const char *TENANT_ROLE = "TENANT_ROLE";
   const char *TENANT_STATUS = "STATUS";
+  const char *SWITCHOVER_STATUS = "SWITCHOVER_STATUS";
   common::ObMySQLProxy *proxy = &sql_proxy_;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -601,8 +664,8 @@ int ObLogRestoreProxyUtil::get_tenant_info(ObTenantRole &role, schema::ObTenantS
       SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = NULL;
         common::ObSqlString sql;
-        const char *GET_TENANT_INFO_SQL = "SELECT %s, %s FROM %s";
-        if (OB_FAIL(sql.append_fmt(GET_TENANT_INFO_SQL, TENANT_ROLE, TENANT_STATUS, OB_DBA_OB_TENANTS_TNAME))) {
+        const char *GET_TENANT_INFO_SQL = "SELECT %s, %s, %s FROM %s";
+        if (OB_FAIL(sql.append_fmt(GET_TENANT_INFO_SQL, TENANT_ROLE, TENANT_STATUS, SWITCHOVER_STATUS, OB_DBA_OB_TENANTS_TNAME))) {
           LOG_WARN("append_fmt failed");
         } else if (OB_FAIL(proxy->read(res, sql.ptr()))) {
           LOG_WARN("excute sql failed", K(sql));
@@ -612,13 +675,20 @@ int ObLogRestoreProxyUtil::get_tenant_info(ObTenantRole &role, schema::ObTenantS
         } else if (OB_FAIL(result->next())) {
           LOG_WARN("next failed");
         } else {
+          ObString switchover_status_str;
           ObString status_str;
           ObString role_str;
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, TENANT_ROLE, role_str);
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, TENANT_STATUS, status_str);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, SWITCHOVER_STATUS, switchover_status_str);
+          ObTenantSwitchoverStatus so_status(switchover_status_str);
+          switchover_status = so_status;
           if (OB_SUCC(ret)) {
             if (OB_FAIL(schema::get_tenant_status(status_str, status))) {
               LOG_WARN("get tenant status failed");
+            } else if (OB_UNLIKELY(!switchover_status.is_valid())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid switchover status", KR(ret), K(switchover_status_str), K(so_status), K(switchover_status));
             } else {
               role = ObTenantRole(role_str.ptr());
             }
@@ -754,12 +824,11 @@ int ObLogRestoreProxyUtil::detect_tenant_mode_(common::sqlclient::ObMySQLServerP
         if (OB_FAIL(server_provider->get_server(idx, server))) {
           LOG_WARN("[RESTORE PROXY] failed to get server", KR(ret), K(idx), K(svr_cnt));
         } else {
-          const static int MAX_IP_BUFFER_LEN = 32;
-          char host[MAX_IP_BUFFER_LEN] = { 0 };
+          char host[MAX_IP_ADDR_LENGTH] = { 0 };
           const char *default_db_name = "";
           int32_t port = server.get_port();
 
-          if (!server.ip_to_string(host, MAX_IP_BUFFER_LEN)) {
+          if (!server.ip_to_string(host, MAX_IP_ADDR_LENGTH)) {
             ret = OB_BUF_NOT_ENOUGH;
             LOG_WARN("fail to get host.", K(server), K(ret));
           } else if (NULL == (mysql = mysql_init(NULL))) {

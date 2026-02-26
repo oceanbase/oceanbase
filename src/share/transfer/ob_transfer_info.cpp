@@ -11,13 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/transfer/ob_transfer_info.h"
-#include "share/schema/ob_schema_struct.h"  // ObBasePartition
-#include "lib/profile/ob_trace_id.h"        // TraceId
-#include "storage/tablelock/ob_table_lock_rpc_struct.h" // ObLockObjRequest
-#include "lib/mysqlclient/ob_mysql_transaction.h" // ObMysqlTransaction
+#include "ob_transfer_info.h"
 #include "observer/ob_inner_sql_connection.h" // ObInnerSQLConnection
-#include "share/ob_share_util.h" // ObShareUtil
 #include "storage/tablelock/ob_lock_inner_connection_util.h" // ObInnerConnectionLockUtil
 
 using namespace oceanbase;
@@ -381,6 +376,14 @@ int ObTransferPartInfo::to_display_str(char *buf, const int64_t len, int64_t &po
   return ret;
 }
 
+int ObTransferPartInfo::hash(uint64_t &hash_val) const
+{
+  hash_val = 0;
+  hash_val = murmurhash(&table_id_, sizeof(table_id_), hash_val);
+  hash_val = murmurhash(&part_object_id_, sizeof(part_object_id_), hash_val);
+  return OB_SUCCESS;
+}
+
 bool ObTransferPartInfo::operator==(const ObTransferPartInfo &other) const
 {
   return other.table_id_ == table_id_
@@ -424,6 +427,10 @@ static const char* TRANSFER_TASK_COMMENT_ARRAY[] =
   "Unable to process task due to transaction timeout",
   "Unable to process task due to inactive server in member list",
   "Wait to retry due to the last failure",
+  "Wait for tenant major compaction to end",
+  "Wait for learner list to be same",
+  "Unable to process task due to all partitions being locked",
+  "Unable to process task due to partitions being locked or non-existent",
   "Unknow"/*MAX_COMMENT*/
 };
 
@@ -492,7 +499,8 @@ ObTransferTask::ObTransferTask()
       result_(-1),
       comment_(ObTransferTaskComment::EMPTY_COMMENT),
       balance_task_id_(),
-      table_lock_owner_id_()
+      table_lock_owner_id_(),
+      data_version_(0)
 {
 }
 
@@ -515,6 +523,7 @@ void ObTransferTask::reset()
   comment_ = ObTransferTaskComment::EMPTY_COMMENT;
   balance_task_id_.reset();
   table_lock_owner_id_.reset();
+  data_version_ = 0;
 }
 
 // init by necessary info, other members take default values
@@ -525,7 +534,8 @@ int ObTransferTask::init(
     const ObTransferPartList &part_list,
     const ObTransferStatus &status,
     const common::ObCurTraceId::TraceId &trace_id,
-    const ObBalanceTaskID balance_task_id)
+    const ObBalanceTaskID balance_task_id,
+    const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!task_id.is_valid()
@@ -551,6 +561,7 @@ int ObTransferTask::init(
       balance_task_id_ = balance_task_id;
       start_scn_.set_min();
       finish_scn_.set_min();
+      data_version_ = data_version;
     }
   }
   return ret;
@@ -573,7 +584,8 @@ int ObTransferTask::init(
     const int result,
     const ObTransferTaskComment &comment,
     const ObBalanceTaskID balance_task_id,
-    const transaction::tablelock::ObTableLockOwnerID &lock_owner_id)
+    const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
+    const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!task_id.is_valid()
@@ -609,6 +621,7 @@ int ObTransferTask::init(
     comment_ = comment;
     balance_task_id_ = balance_task_id;
     table_lock_owner_id_ = lock_owner_id;
+    data_version_ = data_version;
   }
   return ret;
 }
@@ -640,6 +653,7 @@ int ObTransferTask::assign(const ObTransferTask &other)
     comment_ = other.comment_;
     balance_task_id_ = other.balance_task_id_;
     table_lock_owner_id_ = other.table_lock_owner_id_;
+    data_version_ = other.data_version_;
   }
   return ret;
 }
@@ -670,7 +684,8 @@ ObTransferTaskInfo::ObTransferTaskInfo()
     tablet_list_(),
     start_scn_(),
     finish_scn_(),
-    result_(OB_SUCCESS)
+    result_(OB_SUCCESS),
+    data_version_(0)
 {
 }
 
@@ -688,6 +703,7 @@ void ObTransferTaskInfo::reset()
   start_scn_.reset();
   finish_scn_.reset();
   result_ = OB_SUCCESS;
+  data_version_ = 0;
 }
 
 // table_lock_tablet_list_ may be empty
@@ -700,7 +716,8 @@ bool ObTransferTaskInfo::is_valid() const
       && !trace_id_.is_invalid()
       && status_.is_valid()
       && table_lock_owner_id_.is_valid()
-      && !tablet_list_.empty();
+      && !tablet_list_.empty()
+      && data_version_ >= 0;
 }
 
 int ObTransferTaskInfo::convert_from(const uint64_t tenant_id, const ObTransferTask &task)
@@ -724,6 +741,7 @@ int ObTransferTaskInfo::convert_from(const uint64_t tenant_id, const ObTransferT
     start_scn_ = task.get_start_scn();
     finish_scn_ = task.get_finish_scn();
     result_ = task.get_result();
+    data_version_ = task.get_data_version();
   }
   return ret;
 }
@@ -749,6 +767,7 @@ int ObTransferTaskInfo::assign(const ObTransferTaskInfo &task_info)
     start_scn_ = task_info.start_scn_;
     finish_scn_ = task_info.finish_scn_;
     result_ = task_info.result_;
+    data_version_ = task_info.data_version_;
   }
   return ret;
 }

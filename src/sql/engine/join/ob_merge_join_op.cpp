@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/join/ob_merge_join_op.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -875,6 +874,36 @@ int ObMergeJoinOp::set_is_match(const int64_t idx, const bool is_match)
   return ret;
 }
 
+int ObMergeJoinOp::update_store_mem_bound(ObRADatumStore *left, ObRADatumStore *right)
+{
+  int ret = OB_SUCCESS;
+  bool updated = false;
+  ObMergeJoinMemChecker checker(get_total_rows_in_datum_store());
+  if (OB_FAIL(sql_mem_processor_.update_max_available_mem_size_periodically(
+              &mem_context_->get_malloc_allocator(),
+              checker,
+              updated))) {
+    LOG_WARN("failed to update max available memory size periodically", K(ret));
+  } else {
+    int64_t t_mem_bound = sql_mem_processor_.get_mem_bound();
+    int64_t l_mem_bound = static_cast<int64_t>(left_mem_bound_ratio_ * t_mem_bound);
+    int64_t r_mem_bound = t_mem_bound - l_mem_bound;
+    if (OB_UNLIKELY(t_mem_bound < 0) || OB_UNLIKELY(l_mem_bound < 0) || OB_UNLIKELY(r_mem_bound < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected negative mem bound", K(ret), K(t_mem_bound), K(l_mem_bound),
+        K(r_mem_bound), K(left_mem_bound_ratio_));
+    } else {
+      if (OB_NOT_NULL(left)) {
+        left->set_mem_limit(l_mem_bound);
+      }
+      if (OB_NOT_NULL(right)) {
+        right->set_mem_limit(r_mem_bound);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMergeJoinOp::process_dump()
 {
   int ret = OB_SUCCESS;
@@ -933,6 +962,13 @@ int ObMergeJoinOp::ChildBatchFetcher::init(
     datum_store_.set_mem_stat(&(merge_join_op_.sql_mem_processor_));
     datum_store_.set_io_observer(&(merge_join_op_.io_event_observer_));
     datum_store_.set_dir_id(merge_join_op_.sql_mem_processor_.get_dir_id());
+    const int64_t mem_size = ObBitVector::memory_size(batch_size_);
+    if (OB_ISNULL(backup_rows_bit_vec_ = to_bit_vector(merge_join_op_.mem_context_->get_malloc_allocator().alloc(mem_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate ChildBatchFetcher's backup_rows_bit_vec failed", K(ret), K(mem_size));
+    } else {
+      backup_rows_bit_vec_->reset(batch_size_);
+    }
     for (int64_t i = 0; i < equal_cond_infos.count() && OB_SUCC(ret); i++) {
       const ObMergeJoinSpec::EqualConditionInfo &equal_cond = equal_cond_infos.at(i);
       ObExpr *param_expr = NULL;
@@ -984,7 +1020,7 @@ int ObMergeJoinOp::ChildBatchFetcher::get_next_batch(const int64_t max_row_cnt)
       }
       brs_.size_ = restore_cnt;
       brs_.end_ = false;
-      brs_.skip_ = NULL;
+      brs_.skip_ = backup_rows_bit_vec_;
       backup_rows_used_ += restore_cnt;
     }
   } else {
@@ -1107,6 +1143,11 @@ int ObMergeJoinOp::ChildBatchFetcher::get_next_small_group(int64_t &cmp_res)
   bool enough_datums = merge_join_op_.has_enough_datums();
   JoinRowList row_list(datum_store_.get_row_cnt());
   ObEvalCtx::BatchInfoScopeGuard guard(merge_join_op_.eval_ctx_);
+  if (need_store_unmatch && OB_FAIL(merge_join_op_.update_store_mem_bound(
+                                is_left ? &datum_store_ : nullptr,
+                                is_left ? nullptr : &datum_store_))) {
+    LOG_WARN("failed to update max available memory size periodically", K(ret));
+  }
   while (OB_SUCC(ret) && !all_batch_finished && !greater_found && !enough_datums) {
     if (need_store_unmatch && OB_LIKELY(cur_idx_ < brs_.size_)) {
       ObRADatumStore::StoredRow *stored_row = NULL;
@@ -1316,7 +1357,7 @@ int ObMergeJoinOp::batch_join_begin()
     if (need_store_left_unmatch_rows()) {
       if (OB_FAIL(left_brs_fetcher_.backup_remain_rows())) {
         LOG_WARN("backup remain rows failed", K(ret));
-      } else if (OB_FAIL(left_brs_fetcher_.brs_holder_.save(MY_SPEC.max_batch_size_))) {
+      } else if (OB_FAIL(left_brs_fetcher_.save(MY_SPEC.max_batch_size_))) {
         LOG_WARN("failed to backup left expr datum", K(ret));
       } else {
         batch_join_state_ = BJS_OUTPUT_LEFT;
@@ -1366,18 +1407,8 @@ int ObMergeJoinOp::iterate_both_chidren(ObEvalCtx::BatchInfoScopeGuard &guard)
   JoinRowList r_row_list(r_store->get_row_cnt());
   ObRADatumStore::StoredRow *l_row = NULL;
   ObRADatumStore::StoredRow *r_row = NULL;
-  bool updated = false;
-  if (OB_FAIL(sql_mem_processor_.update_max_available_mem_size_periodically(
-              &mem_context_->get_malloc_allocator(),
-              [&](int64_t cur_cnt) { return get_total_rows_in_datum_store() > cur_cnt; },
-              updated))) {
+  if (OB_FAIL(update_store_mem_bound(l_store, r_store))) {
     LOG_WARN("failed to update max available memory size periodically", K(ret));
-  }
-  int64_t t_mem_bound = sql_mem_processor_.get_mem_bound();
-  int64_t l_mem_bound = static_cast<int64_t>(left_mem_bound_ratio_ * t_mem_bound);
-  int64_t r_mem_bound = 0; // will be set to the remaining memory size later.
-  l_store->set_mem_limit(l_mem_bound);
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(store_group_first_row(left_brs_fetcher_, l_row_list, l_row, guard))) {
     LOG_WARN("store left group first row failed", K(ret));
   } else if (OB_FAIL(store_group_first_row(right_brs_fetcher_, r_row_list, r_row, guard))) {
@@ -1386,11 +1417,7 @@ int ObMergeJoinOp::iterate_both_chidren(ObEvalCtx::BatchInfoScopeGuard &guard)
                                                                    MY_SPEC.is_left_unique_,
                                                                    l_row)))) {
     LOG_WARN("get left next group failed", K(ret));
-  } else if (OB_UNLIKELY((r_mem_bound = t_mem_bound - l_store->get_mem_hold()) < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected negative mem bound", K(ret), K(t_mem_bound), K(l_mem_bound),
-                                              K(r_mem_bound), K(l_store->get_mem_hold()));
-  } else if (FALSE_IT(r_store->set_mem_limit(r_mem_bound))) {
+
   } else if (OB_FAIL((right_brs_fetcher_.get_next_equal_group<false>(r_row_list, l_row, false,
                                                                      r_row)))) {
     LOG_WARN("get right next group failed", K(ret));
@@ -1411,9 +1438,9 @@ int ObMergeJoinOp::batch_join_both()
   left_brs_fetcher_.datum_store_.reuse();
   right_brs_fetcher_.datum_store_.reuse();
   LOG_DEBUG("start batch join both, restore both holders");
-  if (OB_FAIL(left_brs_fetcher_.brs_holder_.restore())) {
+  if (OB_FAIL(left_brs_fetcher_.restore())) {
     LOG_WARN("restore left holder failed", K(ret));
-  } else if (OB_FAIL(right_brs_fetcher_.brs_holder_.restore())) {
+  } else if (OB_FAIL(right_brs_fetcher_.restore())) {
     LOG_WARN("restore right holder failed", K(ret));
   } else {
     LOG_DEBUG("before iterate both sides", K(cmp_res_),
@@ -1470,8 +1497,8 @@ int ObMergeJoinOp::batch_join_both()
         LOG_WARN("fail to get next match group", K(ret));
       } else if (has_next) {
         batch_join_state_ = BJS_MATCH_GROUP;
-        left_brs_fetcher_.brs_holder_.save(MY_SPEC.max_batch_size_);
-        right_brs_fetcher_.brs_holder_.save(MY_SPEC.max_batch_size_);
+        left_brs_fetcher_.save(MY_SPEC.max_batch_size_);
+        right_brs_fetcher_.save(MY_SPEC.max_batch_size_);
       } else {
         switch_state_if_reach_end(true);
       }
@@ -1739,7 +1766,7 @@ int ObMergeJoinOp::output_side_rows(ChildBatchFetcher &batch_fetcher,
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(batch_fetcher.iter_end())) {
     batch_join_state_ = BJS_JOIN_END;
-  } else if (OB_FAIL(batch_fetcher.brs_holder_.restore())) {
+  } else if (OB_FAIL(batch_fetcher.restore())) {
     LOG_WARN("fetcher restore failed", K(ret));
   } else if (FALSE_IT(clear_evaluated_flag())) {
   } else if (OB_FAIL(batch_fetcher.get_next_batch(max_row_cnt))) {
@@ -1841,7 +1868,7 @@ void ObMergeJoinOp::switch_state_if_reach_end(const bool need_save_datum)
     } else {
       batch_join_state_ = BJS_OUTPUT_RIGHT;
       if (need_save_datum) {
-        right_brs_fetcher_.brs_holder_.save(MY_SPEC.max_batch_size_);
+        right_brs_fetcher_.save(MY_SPEC.max_batch_size_);
       }
     }
   } else if (OB_UNLIKELY(right_brs_fetcher_.iter_end())) {
@@ -1850,7 +1877,7 @@ void ObMergeJoinOp::switch_state_if_reach_end(const bool need_save_datum)
     } else {
       batch_join_state_ = BJS_OUTPUT_LEFT;
       if (need_save_datum) {
-        left_brs_fetcher_.brs_holder_.save(MY_SPEC.max_batch_size_);
+        left_brs_fetcher_.save(MY_SPEC.max_batch_size_);
       }
     }
   }
@@ -1894,8 +1921,14 @@ int ObMergeJoinOp::inner_get_next_batch(const int64_t max_row_cnt)
             OB_FAIL(match_group_rows(max_row_cnt))) {
         LOG_WARN("fail to match group rows", K(ret));
       } else if (OB_UNLIKELY(BJS_MATCH_GROUP == batch_join_state_)) {
-        // join result for the match_groups is empty and both fetcher still have data to join,
-        // should do join both again to produce new match groups.
+        // Zero-output in MATCH_GROUP:
+        // If current groups are fully consumed (no pending rows and no more groups),
+        // reset them and then switch to JOIN_BOTH to build subsequent groups.
+        if (!left_group_.has_next() && !right_group_.has_next() &&
+            group_idx_ >= match_groups_.count()) {
+          match_groups_.reset();
+          group_idx_ = 0;
+        }
         batch_join_state_ = BJS_JOIN_BOTH;
       }
     }

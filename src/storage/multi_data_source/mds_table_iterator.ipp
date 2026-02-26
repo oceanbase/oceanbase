@@ -122,15 +122,11 @@ int ObMdsNodeScanIterator<UnitKey, UnitValue>::get_next_kv_node(UnitKey &key,
     need_filter = false;
     if (node_iter_ == p_mds_kv_row_->v_.end()) {
       ret = OB_ITER_END;
-    } else if (OB_FAIL(filter_function_(*node_iter_, need_filter))) {
-      MDS_LOG_NONE(WARN, "scan node failed", K(*p_node));
-    } else if (need_filter) {
-      node_iter_++;
     } else {
       key = p_mds_kv_row_->k_;
       p_node = &(*node_iter_++);
       break;
-      MDS_LOG_NONE(TRACE, "scan node", K(*p_node));
+      MDS_LOG_NONE(TRACE, "scan node", K(key), K(*p_node));
     }
   }
   return ret;
@@ -154,13 +150,19 @@ is_first_scan_(true),
 mds_table_handle_(),
 filter_function_(),
 row_scan_iter_(),
-node_scan_iter_(filter_function_) {}
+node_scan_iter_(filter_function_),
+row_key_(),
+row_scan_cache_(),
+row_output_idx_(0),
+retry_param_() {}
 
 template <typename UnitKey, typename UnitValue>
 int ObMdsUnitRowNodeScanIterator<UnitKey, UnitValue>::init(mds::MdsTableHandle &mds_table_handle,
-                                                           const FilterFunction<UnitKey, UnitValue> &filter) {
+                                                           const FilterFunction<UnitKey, UnitValue> &filter,
+                                                           const int64_t timeout_ts) {
   #define PRINT_WRAPPER KR(ret), K(*this), K(mds_table_handle)
   int ret = OB_SUCCESS;
+  share::ObLSID ls_id;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     MDS_LOG_NONE(WARN, "ObMdsUnitRowNodeScanIterator init twice");
@@ -169,10 +171,15 @@ int ObMdsUnitRowNodeScanIterator<UnitKey, UnitValue>::init(mds::MdsTableHandle &
     MDS_LOG_NONE(WARN, "mds_table_handle invalid");
   } else if (OB_FAIL(filter_function_.assign(filter))) {
     MDS_LOG_NONE(WARN, "failed to init filter function");
+  } else if (OB_FAIL(mds_table_handle.get_ls_id(ls_id))) {
+    MDS_LOG_NONE(WARN, "failed to get ls_id from mds_table");
   } else {
+    int64_t current_ts = ObClockGenerator::getClock();
+    int64_t timeout_us = timeout_ts - current_ts > 0 ? timeout_ts - current_ts : 0;
     mds_table_handle_ = mds_table_handle;
     is_inited_ = true;
     is_first_scan_ = true;
+    new (&retry_param_) RetryParam(ls_id, timeout_us);
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -183,30 +190,83 @@ int ObMdsUnitRowNodeScanIterator<UnitKey, UnitValue>::get_next(UnitKey &key,
                                                                mds::UserMdsNode<UnitKey, UnitValue> *&p_node) {
   #define PRINT_WRAPPER KR(ret), K(*this)
   int ret = OB_SUCCESS;
-  bool node_meet_end = false;
-  bool row_mmet_end = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     MDS_LOG_NONE(WARN, "ObMdsUnitRowNodeScanIterator not init");
   } else if (is_first_scan_) {
     is_first_scan_ = false;
-    if (OB_FAIL(row_scan_iter_.init(mds_table_handle_))) {
+    if (OB_FAIL(row_scan_iter_.init(mds_table_handle_))) {// add UNIT lock
       MDS_LOG_NONE(WARN, "fail to init row_scan_iter_");
     }
   }
-  while (OB_SUCC(ret) &&
-         (!node_scan_iter_.is_valid() || // first time to scan
-         OB_ITER_END == (ret = node_scan_iter_.get_next_kv_node(key, p_node)))) {// every time scan row end
-    node_scan_iter_.reset();
-    KvRow *p_kv_row = nullptr;
-    if (OB_FAIL(row_scan_iter_.get_next_kv_row(p_kv_row))) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        MDS_LOG_NONE(WARN, "fail to get kv row");
+  if (OB_SUCC(ret)) {
+    do {
+      KvRow *p_kv_row = nullptr;
+      if (row_output_idx_ != row_scan_cache_.count()) {// some nodes in row_scan_cache_ has not been outputed
+        key = row_key_;
+        p_node = &row_scan_cache_[row_output_idx_++];
+        break;// output this node
+      } else if (OB_FAIL(row_scan_iter_.get_next_kv_row(p_kv_row))) {// cache new row
+        if (OB_ITER_END != ret) {
+          MDS_LOG_NONE(WARN, "row_scan_iter_.get_next_kv_row failed");
+        } else {
+          MDS_LOG_NONE(DEBUG, "row_scan_iter_.get_next_kv_row end");
+        }
+      } else if (OB_FAIL(cache_all_nodes_in_row_(p_kv_row))) {// maybe EMPTY!
+        MDS_LOG_NONE(WARN, "failed to cache all nodes in row");
       }
-    } else if (OB_FAIL(node_scan_iter_.init(p_kv_row))) {
-      MDS_LOG_NONE(WARN, "fail to init node_scan_iter_");
-    }
+    } while (OB_SUCC(ret));
   }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template <typename UnitKey, typename UnitValue>
+int ObMdsUnitRowNodeScanIterator<UnitKey, UnitValue>::cache_all_nodes_in_row_(KvRow *p_kv_row) {
+  #define PRINT_WRAPPER KR(ret), K(*this), K_(row_key), KPC(p_node)
+  int ret = OB_SUCCESS;
+  mds::UserMdsNode<UnitKey, UnitValue> *p_node = nullptr;
+  bool need_skip = false;
+  row_scan_cache_.reset();
+  row_output_idx_ = 0;
+  node_scan_iter_.reset();
+  do {
+    if (OB_EAGAIN == ret) {
+      row_scan_cache_.reset();
+      row_output_idx_ = 0;
+      node_scan_iter_.reset();// release row latch
+      ++retry_param_;
+      ob_usleep(10_ms);// give time span to commit thread acquire lock
+    }
+    if (OB_FAIL(node_scan_iter_.init(p_kv_row))) {// add row lock
+      MDS_LOG_NONE(WARN, "init node_scan_iter_ failed");
+    } else {
+      while (OB_SUCC(ret) && OB_SUCCESS == (ret = node_scan_iter_.get_next_kv_node(row_key_, p_node))) {
+        if (OB_FAIL(filter_function_(*p_node, need_skip))) {
+          if (retry_param_.check_reach_print_interval_and_update()) {// print log first time and every 500ms interval
+            MDS_LOG_NONE(WARN, "filter logic return fail");
+          }
+        } else if (need_skip) {
+          MDS_LOG_NONE(DEBUG, "skip node");
+        } else if (OB_FAIL(row_scan_cache_.push_back(*p_node))) {
+          MDS_LOG_NONE(WARN, "failed to extend row_scan_cache_");
+        } else {
+          MDS_LOG_NONE(DEBUG, "cache node");
+        }
+      }
+      if (OB_ITER_END == ret) {
+        MDS_LOG_NONE(DEBUG, "iter row done");
+        ret = OB_SUCCESS;
+      } else if (retry_param_.check_timeout()) {
+        ret = OB_TIMEOUT;
+      } else if ((retry_param_.retry_cnt_ % 50) == 0) {// every 500ms
+        if (retry_param_.check_ls_in_gc_state()) {
+          ret = OB_REPLICA_NOT_READABLE;
+          MDS_LOG_NONE(INFO, "iter scan mds node meet ls gc");
+        }
+      }
+    }
+  } while (OB_EAGAIN == ret);
   return ret;
   #undef PRINT_WRAPPER
 }

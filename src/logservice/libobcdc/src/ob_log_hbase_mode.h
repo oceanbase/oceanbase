@@ -17,6 +17,7 @@
 
 #include "lib/hash/ob_hashset.h"                // ObHashSet
 #include "lib/hash/ob_linear_hash_map.h"        // ObLinearHashMap
+#include "logservice/data_dictionary/ob_data_dict_struct.h"
 
 namespace oceanbase
 {
@@ -95,6 +96,7 @@ private:
   static const int64_t DEFAULT_TABLE_SET_SIZE = 1024;
   typedef common::hash::ObHashSet<uint64_t> HbaseTableIDSet;
 
+public:
   struct TableID
   {
     uint64_t table_id_;

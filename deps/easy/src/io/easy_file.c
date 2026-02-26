@@ -1,17 +1,8 @@
 #undef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 600
-#include <unistd.h>
-#include <sys/sendfile.h>
-#include "io/easy_io.h"
 #include "io/easy_file.h"
-#include "io/easy_connection.h"
-#include "io/easy_message.h"
-#include "io/easy_request.h"
 #include "io/easy_file.h"
-#include "io/easy_client.h"
-#include "io/easy_socket.h"
 #include "io/easy_log.h"
-#include <fcntl.h>
 
 easy_file_task_t *easy_file_task_create(easy_request_t *r, int fd, int bufsize)
 {

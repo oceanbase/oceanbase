@@ -99,7 +99,7 @@ public:
     } else if (callback->get_scn().is_min()) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback scn is min_scn", KPC(callback));
 #ifdef ENABLE_DEBUG_LOG
-      usleep(5000);
+      ob_usleep(5000);
       ob_abort();
 #endif
       is_iter_end = true;
@@ -399,13 +399,9 @@ public:
     if (NULL == callback) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected callback", KP(callback));
-    /* } else if (is_commit_ && */
-    /*            (callback->need_submit_log() */
-    /*   ret = OB_ERR_UNEXPECTED; */
-    /*   TRANS_LOG(ERROR, "unexpected callback", KP(callback)); */
     } else if (is_commit_ && callback->get_scn().is_max()) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "callback has not submitted log yet when commit callback", K(ret), KP(callback));
+      TRANS_LOG(ERROR, "callback has not submitted log yet when commit callback", KP(callback));
 #ifdef ENABLE_DEBUG_LOG
       ob_abort();
 #endif

@@ -12,10 +12,8 @@
 
 #include <gtest/gtest.h>
 #include <thread>
-#include <vector>
 
 #include "lib/lock/ob_qsync_lock.h"
-#include "lib/time/ob_time_utility.h"
 
 namespace oceanbase
 {

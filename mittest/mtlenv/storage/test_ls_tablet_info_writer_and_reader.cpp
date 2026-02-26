@@ -1,3 +1,6 @@
+// owner: wangxiaohui.wxh
+// owner group: physical_backup
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -12,25 +15,14 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define protected public
 #define private public
 
 #include "storage/schema_utils.h"
-#include "storage/ob_storage_schema.h"
-#include "storage/blocksstable/ob_sstable_meta.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/tablet/ob_tablet_meta.h"
-#include "storage/tablet/ob_tablet_table_store.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
 #include "storage/backup/ob_backup_extern_info_mgr.h"
-#include "share/backup/ob_backup_io_adapter.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -38,6 +30,11 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase
 {
+int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
+{
+  data_version = DATA_VERSION_4_3_2_0;
+  return OB_SUCCESS;
+}
 namespace storage
 {
 class TestLSTabletInfoWR : public ::testing::Test
@@ -93,7 +90,7 @@ void TestLSTabletInfoWR::SetUpTestCase()
   int ret = OB_SUCCESS;
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 
   // create ls
   ObLSHandle ls_handle;
@@ -158,15 +155,32 @@ void TestLSTabletInfoWR::fill_tablet_meta()
   ObCreateTabletSchema create_tablet_schema;
 
   ret = create_tablet_schema.init(schema_allocator, table_schema, lib::Worker::CompatMode::MYSQL,
-        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3);
+        false/*skip_column_info*/, DATA_VERSION_4_3_0_0);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletID empty_tablet_id;
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(arena_allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
-      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, ls_handle.get_ls()->get_freezer());
+      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, share::SCN::invalid_scn()/*clog_checkpoint_scn*/,
+      share::SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*is_split_dest_tablet*/, ObTabletID()/*split_src_tablet_id*/,
+      false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, DATA_VERSION_4_3_0_0, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
+
+  share::SCN create_commit_scn;
+  create_commit_scn = share::SCN::plus(share::SCN::min_scn(), 50);
+  // write data to mds table no.1 row
+  {
+    ObTabletCreateDeleteMdsUserData user_data;
+    user_data.tablet_status_ = ObTabletStatus::NORMAL;
+    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
+
+    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(123)));
+    ret = src_handle.get_obj()->set_tablet_status(user_data, ctx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ctx.single_log_commit(create_commit_scn, create_commit_scn);
+  }
 
   ObMigrationTabletParam tablet_param;
   ret = src_handle.get_obj()->build_migration_tablet_param(tablet_param);
@@ -182,10 +196,13 @@ void TestLSTabletInfoWR::fill_tablet_meta()
 TEST_F(TestLSTabletInfoWR, testTabletInfoWriterAndReader)
 {
   int ret = OB_SUCCESS;
+  ObInOutBandwidthThrottle bandwidth_throttle;
+  ASSERT_EQ(OB_SUCCESS, bandwidth_throttle.init(1024 * 1024 * 60));
   LOG_INFO("test tablet info", K(tablet_metas.count()), K(backup_set_dest_));
+  const bool is_final_fuse = false;
   backup::ObExternTabletMetaWriter writer;
   backup::ObExternTabletMetaReader reader;
-  ASSERT_EQ(OB_SUCCESS, writer.init(backup_set_dest_, ObLSID(TEST_LS_ID), 1, 0));
+  ASSERT_EQ(OB_SUCCESS, writer.init(backup_set_dest_, ObLSID(TEST_LS_ID), 1, 0, 1, is_final_fuse, bandwidth_throttle));
   for (int i = 0; i < tablet_metas.count(); i++) {
     blocksstable::ObSelfBufferWriter buffer_writer("TestBuff");
     blocksstable::ObBufferReader buffer_reader;
@@ -199,7 +216,10 @@ TEST_F(TestLSTabletInfoWR, testTabletInfoWriterAndReader)
     }
   }
   ASSERT_EQ(OB_SUCCESS, writer.close());
-  ASSERT_EQ(OB_SUCCESS, reader.init(backup_set_dest_, ObLSID(TEST_LS_ID)));
+  ObStorageIdMod mod;
+  mod.storage_id_ = 1;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
+  ASSERT_EQ(OB_SUCCESS, reader.init(backup_set_dest_, mod, ObLSID(TEST_LS_ID), false/*is_final_fuse*/));
   while (OB_SUCC(ret)) {
     storage::ObMigrationTabletParam tablet_meta;
     ret = reader.get_next(tablet_meta);

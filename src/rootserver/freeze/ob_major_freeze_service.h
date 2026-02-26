@@ -75,7 +75,7 @@ public:
   int switch_to_follower_gracefully();
   int resume_leader() { return switch_to_leader(); }
 
-  int launch_major_freeze();
+  int launch_major_freeze(const ObMajorFreezeReason freeze_reason);
   int suspend_merge();
   int resume_merge();
   int clear_merge_error();

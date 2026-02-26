@@ -16,7 +16,7 @@
 #include "lib/allocator/ob_allocator.h"
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/cache/ob_kv_storecache.h"
-#include "share/stat/ob_opt_column_stat_cache.h"
+
 namespace oceanbase
 {
 namespace common
@@ -54,15 +54,28 @@ class ObOptColumnStatHandle
 public:
   friend class ObOptColumnStatCache;
   ObOptColumnStatHandle() : stat_(nullptr), cache_(nullptr) {}
-  ObOptColumnStatHandle(const ObOptColumnStatHandle &other)
-    : stat_(nullptr), cache_(nullptr)
-  {
-    if (this != &other) {
-      *this = other;
-    }
-  }
   ~ObOptColumnStatHandle() { stat_ = nullptr; cache_ = nullptr; }
-  void reset() { ObOptColumnStatHandle tmp_handle; *this = tmp_handle; }
+  int assign(const ObOptColumnStatHandle& other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(handle_.assign(other.handle_))) {
+      COMMON_LOG(WARN, "fail to assign handle");
+      this->stat_ = nullptr;
+      this->cache_ = nullptr;
+    } else {
+      this->stat_ = other.stat_;
+      this->cache_ = other.cache_;
+    }
+    return ret;
+  }
+  void move_from(ObOptColumnStatHandle& other)
+  {
+    this->stat_ = other.stat_;
+    this->cache_ = other.cache_;
+    this->handle_.move_from(other.handle_);
+    other.reset();
+  }
+  void reset() { stat_ = nullptr; cache_ = nullptr; handle_.reset(); }
   const ObOptColumnStat *stat_;
   TO_STRING_KV(K(stat_));
 private:

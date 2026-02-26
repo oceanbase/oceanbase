@@ -1,0 +1,2 @@
+ob_unittest(test_device_config)
+ob_unittest(test_device_connectivity)

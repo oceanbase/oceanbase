@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/expr/ob_expr_relation_analyzer.h"
-#include "lib/oblog/ob_log_module.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
+#include "src/sql/resolver/expr/ob_raw_expr.h"
 #include "common/ob_smart_call.h"
 namespace oceanbase
 {
@@ -52,7 +51,8 @@ int ObExprRelationAnalyzer::visit_expr(ObRawExpr &expr)
       T_PSEUDO_EXTERNAL_FILE_COL != expr.get_expr_type() &&
       T_PSEUDO_EXTERNAL_FILE_URL != expr.get_expr_type() &&
       T_PSEUDO_PARTITION_LIST_COL != expr.get_expr_type() &&
-      T_ORA_ROWSCN != expr.get_expr_type()) {
+      T_ORA_ROWSCN != expr.get_expr_type() &&
+      T_PSEUDO_OLD_NEW_COL != expr.get_expr_type()) {
     expr.get_relation_ids().reuse();
   }
   // not sure whether we should visit onetime exec param
@@ -67,6 +67,23 @@ int ObExprRelationAnalyzer::visit_expr(ObRawExpr &expr)
       LOG_WARN("failed to visit param", K(ret));
     } else if (OB_FAIL(expr.get_relation_ids().add_members(param->get_relation_ids()))) {
       LOG_WARN("failed to add relation ids", K(ret));
+    }
+  }
+  // IS_JOIN_COND flag relies on relation ids.
+  // To break the cyclic dependency issue (extract_info -> deduce_type -> pull_relation_id -> extract_info),
+  // add a redundant extraction of IS_JOIN_COND flag here.
+  // This flag is not inheritable, just set it at current level. It doesn't rely on the flag inheritance framework.
+  if ((expr.get_expr_type() == T_OP_EQ) || (expr.get_expr_type() == T_OP_NSEQ)) {
+    ObRawExpr *param_expr1 = expr.get_param_expr(0);
+    ObRawExpr *param_expr2 = expr.get_param_expr(1);
+    if (OB_ISNULL(param_expr1) || OB_ISNULL(param_expr2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param expr is null", K(ret), K(param_expr1), K(param_expr2));
+    } else if (param_expr1->has_flag(CNT_COLUMN) && param_expr2->has_flag(CNT_COLUMN) &&
+        !param_expr1->get_relation_ids().overlap(param_expr2->get_relation_ids())) {
+      if (OB_FAIL(expr.add_flag(IS_JOIN_COND))) {
+        LOG_WARN("failed to add flag IS_JOIN_COND", K(ret));
+      }
     }
   }
   return ret;

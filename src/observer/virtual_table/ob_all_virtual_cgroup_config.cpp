@@ -81,7 +81,7 @@ int ObAllVirtualCgroupConfig::check_cgroup_dir_exist_(const char *cgroup_path)
   } else if (!exist_cgroup) {
     ret = OB_FILE_NOT_EXIST;
     SERVER_LOG(WARN, "no cgroup directory found. disable cgroup support", K(cgroup_path), K(ret));
-  } else if (-1 == (link_len = readlink(cgroup_path, cgroup_origin_path_, PATH_BUFSIZE))) {
+  } else if (-1 == (link_len = readlink(cgroup_path, cgroup_origin_path_, sizeof(cgroup_origin_path_)-1))) {
     SERVER_LOG(WARN, "The named file is not a symbolic link", K(cgroup_path), K(ret));
     snprintf(cgroup_origin_path_, PATH_BUFSIZE, "%s", cgroup_path);
   } else if (link_len > 0 && cgroup_origin_path_[link_len - 1] == '/') {

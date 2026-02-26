@@ -12,12 +12,7 @@
 
 #include "sql/parser/ob_parser.h"
 #include <gtest/gtest.h>
-#include "lib/allocator/page_arena.h"
 #include <fstream>
-#include <iterator>
-#include <vector>
-#include <string>
-#include <iostream>
 
 using namespace oceanbase;
 using namespace oceanbase::common;

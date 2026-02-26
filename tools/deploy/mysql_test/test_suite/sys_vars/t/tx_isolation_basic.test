@@ -28,11 +28,10 @@ SET @@session.tx_isolation='';
 --Error ER_WRONG_VALUE_FOR_VAR
 SET @@session.transaction_isolation='';
 
---Error ER_NOT_SUPPORTED_YET
 SET @@global.tx_isolation='READ-UNCOMMITTED';
-
---Error ER_NOT_SUPPORTED_YET
+SELECT @@global.tx_isolation;
 SET @@global.transaction_isolation='READ-UNCOMMITTED';
+SELECT @@global.transaction_isolation;
 
 SET @@global.tx_isolation='read-COMMITTED';
 SELECT @@global.tx_isolation;
@@ -52,11 +51,12 @@ SELECT @@global.transaction_isolation;
 SET @@global.transaction_isolation='SERIALizable';
 SELECT @@global.transaction_isolation;
 
---Error ER_NOT_SUPPORTED_YET
 SET @@session.tx_isolation='READ-UNCOMMITTED';
+SELECT @@session.tx_isolation;
 
---Error ER_NOT_SUPPORTED_YET
 SET @@session.transaction_isolation='READ-UNCOMMITTED';
+SELECT @@session.transaction_isolation;
+
 
 SET @@session.tx_isolation='READ-COMMITTED';
 SELECT @@session.tx_isolation;

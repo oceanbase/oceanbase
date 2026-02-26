@@ -65,6 +65,10 @@ namespace transaction
       TX_FREE_ROUTE_PUSH_STATE       = 80,
       TX_FREE_ROUTE_CHECK_ALIVE      = 81,
       TX_FREE_ROUTE_CHECK_ALIVE_RESP = 82,
+
+      /* for hotspot tx */
+      TX_HOTSPOT_DISPATCH_REDO = 90,
+      TX_HOTSPOT_SUBMIT_OTHER_REDO = 91,
     };
 
     struct ObTxMsg : public obrpc::ObIFill
@@ -222,12 +226,14 @@ namespace transaction
     };
     struct ObTxCommitRespMsg : public ObTxMsg {
       ObTxCommitRespMsg() :
-          ObTxMsg(TX_COMMIT_RESP)
+          ObTxMsg(TX_COMMIT_RESP),
+          need_wait_interval_us_(0)
       {}
       share::SCN commit_version_;
       int ret_;
+      int64_t need_wait_interval_us_;
       bool is_valid() const;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(commit_version));
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(commit_version), K_(need_wait_interval_us));
       OB_UNIS_VERSION(1);
     };
 
@@ -249,7 +255,8 @@ namespace transaction
           tx_seq_base_(0),
           tx_ptr_(NULL),
           flag_(USE_ASYNC_RESP),
-          specified_from_scn_()
+          specified_from_scn_(),
+          input_transfer_epoch_(-1)
       {}
       ~ObTxRollbackSPMsg() {
         if (OB_NOT_NULL(tx_ptr_)) {
@@ -258,6 +265,7 @@ namespace transaction
           tx_ptr_ = NULL;
         }
         specified_from_scn_.reset();
+        input_transfer_epoch_ = -1;
       }
       ObTxSEQ savepoint_;
       int64_t op_sn_;
@@ -265,6 +273,7 @@ namespace transaction
       const ObTxDesc *tx_ptr_;
       uint8_t flag_;
       ObTxSEQ specified_from_scn_;
+      int64_t input_transfer_epoch_;
       bool use_async_resp() const { return (flag_ & USE_ASYNC_RESP) !=0; }
       void set_for_transfer() { flag_ |= ROLLBACK_FOR_TRANSFER; }
       bool for_transfer() const { return (flag_ & ROLLBACK_FOR_TRANSFER) !=0; }
@@ -273,24 +282,30 @@ namespace transaction
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg,
                            K_(savepoint), K_(op_sn), K_(tx_seq_base), K_(flag),
-                           K_(specified_from_scn), KP_(tx_ptr));
+                           K_(specified_from_scn), KP_(tx_ptr), K_(input_transfer_epoch));
       OB_UNIS_VERSION(1);
     };
 
     struct ObTxRollbackSPRespMsg : public ObTxMsg {
       ObTxRollbackSPRespMsg() :
-      ObTxMsg(ROLLBACK_SAVEPOINT_RESP),
-      ret_(-1),
-      orig_epoch_(0)
+          ObTxMsg(ROLLBACK_SAVEPOINT_RESP),
+          ret_(-1),
+          orig_epoch_(0),
+          downstream_parts_(),
+          output_transfer_epoch_(-1)
       {}
       ~ObTxRollbackSPRespMsg() {
         ret_ = -1;
         orig_epoch_ = 0;
+        output_transfer_epoch_ = -1;
       }
       int ret_;
       int64_t orig_epoch_;
       ObSEArray<ObTxLSEpochPair, 1> downstream_parts_;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(orig_epoch), K_(downstream_parts));
+      int64_t output_transfer_epoch_;
+
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(orig_epoch),
+                           K_(output_transfer_epoch), K_(downstream_parts));
       OB_UNIS_VERSION(1);
     };
 

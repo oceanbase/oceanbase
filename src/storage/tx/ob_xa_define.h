@@ -34,7 +34,9 @@ extern const int64_t XA_INNER_TABLE_TIMEOUT;
 extern const bool ENABLE_NEW_XA;
 
 static const ObString PL_XA_IMPLICIT_SAVEPOINT = "__PL_XA_IMPLICIT_SAVEPOINT";
-
+static const ObString DBLINK_DEFAULT_SAVEPOINT = "OB_DBLINK_DEFAULT_SAVEPOINT";
+static const ObString PL_DBLINK_DEFAULT_SAVEPOINT = "OB_PL_DBLINK_DEFAULT_SAVEPOINT";
+const int64_t MAX_DBLINK_SAVEPOINT_NAME_LENGTH = 128;
 class ObXATransState
 {
 public:
@@ -129,6 +131,7 @@ public:
   static bool contain_tmreadonly(const int64_t flag) { return flag & OBTMREADONLY; }
   static bool contain_tmserializable(const int64_t flag) { return flag & OBTMSERIALIZABLE; }
   static bool is_tmnoflags(const int64_t flag, const int64_t xa_req_type);
+  static bool is_tmnoflags_for_mysql(const int64_t flag) { return OBTMNOFLAGS == flag; }
   static bool contain_loosely(const int64_t flag) { return flag & OBLOOSELY; }
   static bool contain_tmjoin(const int64_t flag) { return flag & OBTMJOIN; }
   static bool is_tmjoin(const int64_t flag) { return flag == OBTMJOIN; }

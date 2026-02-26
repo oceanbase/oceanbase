@@ -22,7 +22,6 @@ show global variables like '%stale_time%';
 connection conn1;
 alter system set weak_read_version_refresh_interval="6s";
 alter system set weak_read_version_refresh_interval="3s";
---sleep 2
 
 # 0. 禁用ob_max_read_stale_time
 set global ob_max_read_stale_time = -1;

@@ -12,7 +12,6 @@
 
 #include <gtest/gtest.h>
 #include "lib/net/ob_addr.h"
-#include "lib/hash_func/murmur_hash.h"
 
 namespace oceanbase
 {

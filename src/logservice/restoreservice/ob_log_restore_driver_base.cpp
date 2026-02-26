@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_log_restore_driver_base.h"
-#include "lib/ob_errno.h"
-#include "lib/ob_define.h"
-#include "storage/tx_storage/ob_ls_map.h"       // ObLSIterator
-#include "storage/tx_storage/ob_ls_service.h"   // ObLSService
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "logservice/ob_log_service.h"
 
 namespace oceanbase
@@ -122,15 +119,44 @@ int ObLogRestoreDriverBase::check_replica_status_(storage::ObLS &ls, bool &can_f
 
 // Restore log need be under control, otherwise log disk may be full as single ls restore log too fast
 // NB: Logs can be replayed only if its scn not bigger than replayable_point
+ERRSIM_POINT_DEF(ERRSIM_CANCEL_FETCH_LOG_LIMIT);
 int ObLogRestoreDriverBase::get_upper_resotore_scn(share::SCN &scn)
 {
   int ret = OB_SUCCESS;
   SCN replayable_point;
-  if (OB_FAIL(log_service_->get_replayable_point(replayable_point))) {
-    ARCHIVE_LOG(WARN, "get replayable point failed", K(ret));
+  bool restore_log_limit = true;
+  if (OB_FAIL(check_fetch_log_unlimited_(restore_log_limit))) {
+    LOG_WARN("check_fetch_log_unlimited_ failed");
+  } else if (! restore_log_limit) {
+    scn = share::SCN::max_scn();
+  } else if (OB_FAIL(log_service_->get_replayable_point(replayable_point))) {
+    LOG_WARN("get replayable point failed", K(ret));
   } else {
     share::SCN advance_scn = share::SCN::plus(replayable_point, FETCH_LOG_AHEAD_THRESHOLD_NS);
     scn = global_recovery_scn_ <= advance_scn ? global_recovery_scn_ : advance_scn;
+    if (OB_UNLIKELY(ERRSIM_CANCEL_FETCH_LOG_LIMIT)) {
+      scn = global_recovery_scn_;
+      LOG_WARN("ERRSIM_CANCEL_FETCH_LOG_LIMIT opened", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogRestoreDriverBase::check_fetch_log_unlimited_(bool &limit)
+{
+  int ret = OB_SUCCESS;
+  share::ObAllTenantInfo tenant_info;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+  limit = true;
+  bool is_prepare = false;
+
+  if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant_info_loader is NULL", K(tenant_info_loader));
+  } else if(OB_FAIL(tenant_info_loader->check_is_prepare_flashback_for_switch_to_primary_status(is_prepare))) {
+    LOG_WARN("fail to check tenant status", KR(ret), KPC(tenant_info_loader));
+  } else if (is_prepare) {
+    limit = false;
   }
   return ret;
 }

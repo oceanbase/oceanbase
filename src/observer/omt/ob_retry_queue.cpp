@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER_OMT
 #include "share/ob_define.h"
-#include "lib/time/ob_time_utility.h"
 #include "ob_retry_queue.h"
 
 

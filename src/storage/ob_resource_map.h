@@ -104,10 +104,10 @@ public:
     : ptr_(NULL)
   {}
   virtual ~ObResourceHandle() {}
-  Value *get_resource_ptr() const { return NULL == ptr_ ? NULL : ptr_->get_value_ptr(); }
   int64_t get_ref_cnt() const { return NULL == ptr_ ? 0 : ptr_->get_ref_cnt(); }
   virtual void reset() = 0;
 protected:
+  Value *get_resource_ptr() const { return NULL == ptr_ ? NULL : ptr_->get_value_ptr(); }
   DISALLOW_COPY_AND_ASSIGN(ObResourceHandle);
   ObResourceValueStore<Value> *ptr_;
 };

@@ -128,7 +128,8 @@ void test_func (ObSmallAllocator &alloc, int64_t obj_size, int64_t blk_size,
     {
       last_log_time = sw.tspan_usec();
       now = time(0);
-      fprintf(stderr, "%s%s\n", ctime(&now), to_cstring(alloc));
+      ObCStringHelper helper;
+      fprintf(stderr, "%s%s\n", ctime(&now), helper.convert(alloc));
     }
   }
   run = false;
@@ -202,7 +203,8 @@ void* run_cross_threads_alloc (int index)
     if (i % (10000 * 100) == 0)
     {
       time_t now = time(0);
-      fprintf(stderr, "%s%s\n", ctime(&now), to_cstring(m2));
+      ObCStringHelper helper;
+      fprintf(stderr, "%s%s\n", ctime(&now), helper.convert(m2));
     }
   }
   return NULL;

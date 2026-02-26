@@ -17,9 +17,13 @@ ERROR 42000: Variable 'tx_isolation' can't be set to the value of ''
 SET @@session.transaction_isolation='';
 ERROR 42000: Variable 'transaction_isolation' can't be set to the value of ''
 SET @@global.tx_isolation='READ-UNCOMMITTED';
-ERROR 0A000: Isolation level READ-UNCOMMITTED not supported
+SELECT @@global.tx_isolation;
+@@global.tx_isolation
+READ-UNCOMMITTED
 SET @@global.transaction_isolation='READ-UNCOMMITTED';
-ERROR 0A000: Isolation level READ-UNCOMMITTED not supported
+SELECT @@global.transaction_isolation;
+@@global.transaction_isolation
+READ-UNCOMMITTED
 SET @@global.tx_isolation='read-COMMITTED';
 SELECT @@global.tx_isolation;
 @@global.tx_isolation
@@ -45,9 +49,13 @@ SELECT @@global.transaction_isolation;
 @@global.transaction_isolation
 SERIALIZABLE
 SET @@session.tx_isolation='READ-UNCOMMITTED';
-ERROR 0A000: Isolation level READ-UNCOMMITTED not supported
+SELECT @@session.tx_isolation;
+@@session.tx_isolation
+READ-UNCOMMITTED
 SET @@session.transaction_isolation='READ-UNCOMMITTED';
-ERROR 0A000: Isolation level READ-UNCOMMITTED not supported
+SELECT @@session.transaction_isolation;
+@@session.transaction_isolation
+READ-UNCOMMITTED
 SET @@session.tx_isolation='READ-COMMITTED';
 SELECT @@session.tx_isolation;
 @@session.tx_isolation

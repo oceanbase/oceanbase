@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/hash/ob_hashutils.h"
 #include "common/ob_balance_filter.h"
-#include "lib/utility/utility.h"
 
 namespace oceanbase
 {
@@ -144,7 +142,7 @@ void ObBalanceFilter::run1()
     for (int64_t i = 0; i < bucket_node_num_; i++) {
       bucket_nodes_[i].cnt = 0;
     }
-    ::usleep(REBALANCE_INTERVAL);
+    ob_usleep(REBALANCE_INTERVAL, true);
   }
 }
 

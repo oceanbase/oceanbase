@@ -35,7 +35,10 @@ public:
   void set_outline_sql(const common::ObString &outline_sql)
   { alter_outline_arg_.alter_outline_info_.set_sql_text(outline_sql);}
   void set_outline_stmt(ObStmt *stmt) { outline_stmt_ = stmt; }
+  void set_format_outline(bool is_format) { alter_outline_arg_.alter_outline_info_.set_format_outline(is_format); }
 
+  const common::ObString &get_format_outline_sql() const { return alter_outline_arg_.alter_outline_info_.get_format_sql_text_str(); }
+  common::ObString &get_format_outline_sql() { return alter_outline_arg_.alter_outline_info_.get_format_sql_text_str(); }
   const common::ObString &get_outline_sql() const { return alter_outline_arg_.alter_outline_info_.get_sql_text_str(); }
   common::ObString &get_outline_sql() { return alter_outline_arg_.alter_outline_info_.get_sql_text_str(); }
   const common::ObString &get_target_sql() const { return alter_outline_arg_.alter_outline_info_.get_outline_target_str(); }

@@ -52,10 +52,8 @@ private:
                 const bool guard_page);
 };
 
-class ObMemoryCutter;
 class StackMgr
 {
-  friend class ObMemoryCutter;
 public:
   class Guard
   {

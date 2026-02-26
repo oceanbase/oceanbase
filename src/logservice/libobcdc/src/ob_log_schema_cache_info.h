@@ -20,6 +20,8 @@
 #include "common/object/ob_object.h"                      // ObObjMeta
 #include "common/ob_accuracy.h"                           // ObAccuracy
 #include "lib/container/ob_array_helper.h"
+#include "lib/udt/ob_collection_type.h"
+#include "sql/engine/expr/ob_expr_frame_info.h"           //ObTempExpr
 
 namespace oceanbase
 {
@@ -110,19 +112,29 @@ public:
   }
   void get_extended_type_info(common::ObArrayHelper<common::ObString> &str_array) const;
 
+  inline const common::ObSqlCollectionInfo *get_collection_info() const { return collection_info_; }
+
   inline void set_udt_set_id(const uint64_t id) { udt_set_id_ = id; }
   inline uint64_t get_udt_set_id() const { return udt_set_id_; }
   inline bool is_udt_column() const { return udt_set_id_ > 0 && OB_INVALID_ID != udt_set_id_; }
 
   inline void set_sub_data_type(const uint64_t sub_data_type) { sub_type_ = sub_data_type; }
   inline uint64_t get_sub_data_type() const { return sub_type_; }
-  inline bool is_udt_hidden_column() const { return is_udt_column() && is_hidden(); }
-  inline bool is_udt_main_column() const { return is_udt_column() && ! is_hidden(); }
+
+  // When fast column deletion occurs, the xml is marked as a hidden column instead of a true many deletion,
+  // and it is not possible to determine whether it is a udt main column based on is_hidden
+  // and currently, only xmltype is a udt type
+  // so it must be the udt main column when it is xmltype, whether it's a hidden column or not
+  // and there is no other udt type, so only need to determine whether it is a main column based on xmltype
+  inline bool is_udt_main_column() const { return is_xmltype(); }
   inline bool is_xmltype() const {
     return is_udt_column()
         && (((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
            || meta_type_.is_xml_sql_type());
   }
+
+  void set_column_temp_expr(sql::ObTempExpr *column_temp_expr) { column_temp_expr_ =  column_temp_expr; }
+  inline sql::ObTempExpr *get_column_temp_expr() const { return column_temp_expr_; }
 
 public:
   TO_STRING_KV(
@@ -139,7 +151,8 @@ public:
       K_(extended_type_info),
       K_(is_rowkey),
       K_(udt_set_id),
-      K_(sub_type));
+      K_(sub_type),
+      K_(column_temp_expr));
 
 private:
   template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
@@ -173,12 +186,14 @@ private:
   // used for enum and set
   int64_t            extended_type_info_size_;
   common::ObString   *extended_type_info_;
+  common::ObSqlCollectionInfo *collection_info_;
   // The rowkey_info in TableSchema is not accurate because the new no primary key table will change the partition key to the primary key.
   // need to mark if this column was the primary key when the user created it
   bool               is_rowkey_;
 
   uint64_t           udt_set_id_;
   uint64_t           sub_type_;
+  sql::ObTempExpr    *column_temp_expr_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ColumnSchemaInfo);
@@ -249,8 +264,46 @@ struct GetColumnKey<share::schema::ObColumnIdKey, ColumnSchemaInfo *>
   }
 };
 
+struct VirtualColDepInfo
+{
+  uint64_t col_id_;
+  int16_t usr_column_idx_;
+
+  VirtualColDepInfo() { reset(); }
+  VirtualColDepInfo(const uint64_t col_id) :
+    col_id_(col_id),
+    usr_column_idx_(common::OB_INVALID_INDEX) {}
+  ~VirtualColDepInfo() { reset(); }
+
+  void reset()
+  {
+    col_id_ = common::OB_INVALID_ID;
+    usr_column_idx_ = common::OB_INVALID_INDEX;
+  }
+
+  TO_STRING_KV(K_(col_id), K_(usr_column_idx));
+};
+
+struct VirtualColInfo
+{
+  uint64_t col_id_;
+  ObArray<VirtualColDepInfo> dep_col_infos_;
+
+  VirtualColInfo() { reset(); };
+  ~VirtualColInfo() { reset(); };
+
+  void reset()
+  {
+    col_id_ = common::OB_INVALID_ID;
+    dep_col_infos_.reset();
+  }
+
+  TO_STRING_KV(K(col_id_), K(dep_col_infos_));
+};
+
 typedef common::hash::ObPointerHashArray<share::schema::ObColumnIdKey, ColumnSchemaInfo *, GetColumnKey> ColumnIdxHashArray;
 typedef common::hash::ObHashMap<uint64_t, ObCDCUdtSchemaInfo*> ObCDCUdtSchemaInfoMap;
+typedef common::ObSEArray<VirtualColInfo, 2> VirtualColInfoArray;
 class TableSchemaInfo
 {
 public:
@@ -264,7 +317,7 @@ public:
 
   common::ObIAllocator &get_allocator() { return allocator_; }
 
-  inline bool is_heap_table() const { return is_heap_table_; }
+  inline bool is_table_with_hidden_pk_column() const { return is_table_with_hidden_pk_column_; }
 
   inline uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
 
@@ -282,8 +335,7 @@ public:
     user_column_idx_array_cnt_ = non_hidden_column_cnt;
   }
 
-  inline ColumnSchemaInfo *get_column_schema_array() { return column_schema_array_; }
-  inline const ColumnSchemaInfo *get_column_schema_array() const { return column_schema_array_; }
+  const VirtualColInfoArray &get_vir_col_info_arrry() const { return virtual_col_array_; }
 
   // init column schema info
   template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
@@ -294,7 +346,10 @@ public:
       const bool is_usr_column,
       const int16_t usr_column_idx,
       const ObTimeZoneInfoWrap *tz_info_wrap,
+      const bool is_last_column,
       ObObj2strHelper &obj2str_helper);
+
+  int handle_after_adding_all_columns();
 
   int get_column_schema_info_of_column_id(
       const uint64_t column_id,
@@ -328,7 +383,7 @@ public:
 
 public:
   TO_STRING_KV(K_(rowkey_info),
-      K_(is_heap_table),
+      K_(is_table_with_hidden_pk_column),
       K_(user_column_idx_array),
       K_(user_column_idx_array_cnt),
       K_(column_schema_array),
@@ -337,8 +392,13 @@ public:
 private:
   template<class TABLE_SCHEMA>
   int init_rowkey_info_(const TABLE_SCHEMA *table_schema);
+  // user_column_idx_array_
   int init_user_column_idx_array_(const int64_t cnt);
   void destroy_user_column_idx_array_();
+  // stored_column_idx_array_
+  int init_stored_column_idx_array_(const int64_t cnt);
+  void destroy_stored_column_idx_array_();
+  // column_schema_array_
   int init_column_schema_array_(const int64_t cnt);
   void destroy_column_schema_array_();
   int init_column_id_hash_array_(const int64_t column_cnt);
@@ -346,27 +406,54 @@ private:
   {
     return OB_INVALID_ID != column_id
         && (OB_APP_MIN_COLUMN_ID <= column_id
-            || (is_heap_table_ && OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id));
+            || (is_table_with_hidden_pk_column_ && OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id));
   }
+
+  int alloc_column_schema_(ColumnSchemaInfo *&column_schema_info);
+
   int set_column_schema_info_for_column_id_(
       const uint64_t column_id,
       ColumnSchemaInfo *column_schema_info);
 
-  /// set column_stored_idx - user_column_index mapping
+  /// set user_column_index - column_id mapping
   ///
   /// @param user_column_index   [in]     user column index
   /// @param column_stored_idx   [in]     ob column idx
   ///
   /// @retval OB_SUCCESS          success
   /// @retval other error code    fail
-  int set_user_column_idx_(
+  int set_column_id_of_user_column_idx_(
       const int16_t user_column_index,
-      const int16_t column_stored_index);
+      const uint64_t column_id);
+
+  /// set column_stored_idx - column_id mapping
+  ///
+  /// @param column_stored_idx   [in]
+  /// @param column_id           [in]
+  ///
+  /// @retval OB_SUCCESS          success
+  /// @retval other error code    fail
+  int set_column_id_of_stored_column_idx_(
+      const int16_t column_stored_index,
+      const uint64_t column_id);
+
   inline int64_t get_id_hash_array_mem_size_(const int64_t column_cnt) const
   {
     return common::max(ColumnIdxHashArray::MIN_HASH_ARRAY_ITEM_COUNT,
         column_cnt * 2) * sizeof(void*) + sizeof(ColumnIdxHashArray);
   }
+
+  template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
+  int push_virtual_col_info_(
+      const uint64_t virtual_col_id,
+      const TABLE_SCHEMA &table_schema,
+      const COLUMN_SCHEMA &column_schema);
+  // When adding the last column, the function is responsible for constructing the reverse mapping relationship
+  // between user_column_index and column_id.
+  // column_id -> user_column_index(The dependent column of the virtual generated column)
+  int build_reverse_mapping_when_add_last_col_();
+  int find_the_user_column_index_based_on_col_id_(
+      VirtualColDepInfo &vir_col_dep_info);
 
   int add_udt_column_(ColumnSchemaInfo *column_info);
   int init_udt_schema_info_map_();
@@ -376,23 +463,37 @@ private:
   bool                 is_inited_;
   common::ObIAllocator &allocator_;
 
-  bool               is_heap_table_;
+  bool               is_table_with_hidden_pk_column_;
   uint64_t           aux_lob_meta_tid_;
   ObLogRowkeyInfo    rowkey_info_;
 
-  // column array stores the OBColumnIdx(by memtable datum column order) corresponding to the
-  // UserColumnID(may not contain hidden_pk_column and invisible_column by
-  // according to user config)
-  // NOTE: only column need output to user will be recorded in this array.
-  int16_t           *user_column_idx_array_;
+  // From the user's perspective, it includes the following aspects:
+  // 1. Default output in the storage order(by memtable datum column order)
+  // 2. Configuring output in declared order according to the table structure.
+  // 3. Configuring whether to output the hidden primary keys, whether to output invisible columns,
+  //    and whether to support output of virtual generated columns, etc.
+  // user_column_idx_array_ stores the mapping of user_column_index to column_id
+  uint64_t           *user_column_idx_array_;
   // total count of column that need output to user.
   // will reset after user_column_idx_array_ data setted.
   int64_t            user_column_idx_array_cnt_;
+  // stored_column_idx_array_ stores the mapping of column_stored_idx to column_id
+  uint64_t           *stored_column_idx_array_;
 
+  // virtual column info array
+  VirtualColInfoArray virtual_col_array_;
+
+  // column_schema_array_ is an in-memory container for ColumnSchemaInfo.
+  // It is used by init_column_schema_info() to directly access and complete the construction.
   ColumnSchemaInfo   *column_schema_array_;
   int64_t            column_schema_array_cnt_;
-  ColumnIdxHashArray *column_id_hash_arr_; // column_id -> column_stored_idx
+  int64_t            column_schema_consumed_index_;
 
+  // ColumnIdxHashArray array stores the ColumnSchemaInfo corresponding to the
+  // UserColumnID(may not contain hidden_pk_column and invisible_column by
+  // according to user config)
+  // NOTE: only column need output to user will be recorded.
+  ColumnIdxHashArray *column_id_hash_arr_;    // column_id -> ColumnSchemaInfo
   ObCDCUdtSchemaInfoMap *udt_schema_info_map_;
 
 private:

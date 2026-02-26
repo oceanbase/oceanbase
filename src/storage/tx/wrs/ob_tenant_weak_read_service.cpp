@@ -14,17 +14,12 @@
 
 #include "ob_tenant_weak_read_service.h"
 
-#include "lib/allocator/ob_mod_define.h"                        // ObModIds
-#include "lib/rc/ob_rc.h"
-#include "share/ob_thread_mgr.h"                                // TG
-#include "observer/ob_server_struct.h"                          // GCTX
 
 #include "ob_weak_read_service_rpc.h"                           // ObIWrsRpc
 #include "ob_weak_read_util.h"                                  // ObWeakReadUtil
-#include "storage/ob_super_block_struct.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
-#include "share/location_cache/ob_location_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 #define MOD_STR "[WRS] [TENANT_WEAK_READ_SERVICE] "
 
@@ -560,11 +555,13 @@ void ObTenantWeakReadService::do_thread_task_(const int64_t begin_tstamp,
   }
 
   if (need_cluster_heartbeat_(begin_tstamp)) {
+    ObDIActionGuard ag("do_cluster_heartbeat");
     do_cluster_heartbeat_();
     time_guard.click("do_cluster_heartbeat");
   }
 
   if (need_generate_cluster_version_(begin_tstamp)) {
+    ObDIActionGuard ag("gen_cluster_version");
     generate_cluster_version_();
     time_guard.click("generate_cluster_version");
   }
@@ -634,6 +631,8 @@ int ObTenantWeakReadService::scan_all_ls_(storage::ObLSService *ls_svr)
       } else if (OB_ISNULL(ls)) {
         ret = OB_PARTITION_NOT_EXIST;
         LOG_WARN("iterate ls fail", KP(ls));
+      } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+        LOG_TRACE("skip logonly replica", KPC(ls));
       } else if (OB_FAIL(handle_ls_(*ls))) {
         LOG_WARN("handle ls fail", "ls_id", ls->get_ls_id(), K(ret));
         ret = OB_SUCCESS;
@@ -708,6 +707,7 @@ void ObTenantWeakReadService::run1()
     int64_t wait_interval = std::min(ObWeakReadUtil::replica_keepalive_interval(),
                                      weak_read_refresh_interval - (end_tstamp - begin_tstamp));
     if (wait_interval > 0) {
+      common::ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.timedwait(wait_interval);
     }
   }
@@ -721,7 +721,9 @@ bool ObTenantWeakReadService::check_can_skip_ls(ObLS *ls)
   share::SCN offline_scn;
 
   if (OB_NOT_NULL(ls)) {
-    if (ls->get_ls_wrs_handler()->can_skip_ls()) {
+    if (is_tenant_sslog_ls(ls->get_tenant_id(), ls->get_ls_id())) {
+      bool_ret = true;
+    } else if (ls->get_ls_wrs_handler()->can_skip_ls()) {
       bool_ret = true;
     } else if (OB_SUCC(ls->get_offline_scn(offline_scn)) && offline_scn.is_valid()) {
       bool_ret = true;

@@ -15,11 +15,7 @@
 #include "observer/ob_dump_task_generator.h"
 #include "lib/alloc/memory_dump.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
 #include "sql/parser/ob_parser.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -55,8 +51,7 @@ int ObDumpTaskGenerator::generate_task_from_file()
   int ret = OB_SUCCESS;
   auto &mem_dump = ObMemoryDump::get_instance();
   ObArenaAllocator allocator;
-  ObMemAttr attr(common::OB_SERVER_TENANT_ID, "dumpParser", ObCtxIds::DEFAULT_CTX_ID,
-                 lib::OB_HIGH_ALLOC);
+  ObMemAttr attr(common::OB_SERVER_TENANT_ID, "dumpParser", ObCtxIds::DEFAULT_CTX_ID);
   allocator.set_attr(attr);
   ObParser parser(allocator, SMO_DEFAULT);
   ParseResult parse_result;
@@ -155,8 +150,7 @@ void ObDumpTaskGenerator::dump_memory_leak()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("create new file failed", K(strerror(errno)));
   } else {
-    ObMemAttr attr(common::OB_SERVER_TENANT_ID, "dumpLeak", ObCtxIds::DEFAULT_CTX_ID,
-                   lib::OB_HIGH_ALLOC);
+    ObMemAttr attr(common::OB_SERVER_TENANT_ID, "dumpLeak", ObCtxIds::DEFAULT_CTX_ID);
     const int buf_len = 1L << 20;
     char *buf = (char*)ob_malloc(buf_len, attr);
     if (OB_ISNULL(buf)) {

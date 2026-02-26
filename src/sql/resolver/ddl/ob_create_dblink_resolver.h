@@ -53,6 +53,11 @@ private:
   int cut_host_string(const ObString &host_string, ObString &ip_port, ObString &conn_string);
   int resolve_conn_string(const ObString &conn_string, const ObString &ip_port_str,
                           sql::ObCreateDbLinkStmt &link_stmt);
+  int resolve_hostname_port_str(const ObString &ip_port_str,
+                                ObString &hostname,
+                                int32_t &port);
+private:
+  uint64_t compat_version_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateDbLinkResolver);
 };

@@ -11,11 +11,6 @@
  */
 
 #include "ob_tenant_mutil_allocator.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
-#include "lib/rc/context.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "logservice/palf/log_io_task.h"
-#include "logservice/palf/fetch_log_engine.h"
 #include "logservice/palf/log_shared_task.h"
 #include "logservice/replayservice/ob_replay_status.h"
 
@@ -341,6 +336,7 @@ LogFillCacheTask *ObTenantMutilAllocator::alloc_log_fill_cache_task(const int64_
   return ret_ptr;
 }
 
+
 void ObTenantMutilAllocator::free_log_fill_cache_task(palf::LogFillCacheTask *ptr)
 {
   if (OB_LIKELY(NULL != ptr)) {
@@ -348,7 +344,6 @@ void ObTenantMutilAllocator::free_log_fill_cache_task(palf::LogFillCacheTask *pt
     log_fill_cache_task_alloc_.free(ptr);
   }
 }
-
 
 void ObTenantMutilAllocator::set_nway(const int32_t nway)
 {
@@ -361,9 +356,14 @@ void ObTenantMutilAllocator::set_nway(const int32_t nway)
 void ObTenantMutilAllocator::set_limit(const int64_t total_limit)
 {
   if (total_limit > 0 && total_limit != ATOMIC_LOAD(&total_limit_)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    int64_t upper_limit = REPLAY_MEM_LIMIT_THRESHOLD;
+    if (tenant_config.is_valid()) {
+      upper_limit = tenant_config->_replay_memory_limit;
+    }
     ATOMIC_STORE(&total_limit_, total_limit);
     const int64_t clog_limit = total_limit / 100 * CLOG_MEM_LIMIT_PERCENT;
-    const int64_t replay_limit = std::min(total_limit / 100 * REPLAY_MEM_LIMIT_PERCENT, REPLAY_MEM_LIMIT_THRESHOLD);
+    const int64_t replay_limit = std::min(total_limit / 100 * REPLAY_MEM_LIMIT_PERCENT, upper_limit);
     const int64_t clog_compress_limit = std::min(total_limit / 100 * CLOG_COMPRESSION_MEM_LIMIT_PERCENT, CLOG_COMPRESSION_MEM_LIMIT_THRESHOLD);
     clog_blk_alloc_.set_limit(clog_limit);
     replay_log_task_alloc_.set_limit(replay_limit);

@@ -14,22 +14,6 @@
 
 #include "ob_dbms_job_utils.h"
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/string/ob_string.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
-#include "lib/worker.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/ob_server_struct.h"
 
 
@@ -218,10 +202,11 @@ int ObDBMSJobUtils::check_job_can_running(int64_t tenant_id, bool &can_running)
   OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard));
   OZ (guard.check_tenant_is_restore(tenant_id, is_restore));
 
-  // job can not run in standy cluster and restore.
-  if (OB_SUCC(ret) && job_queue_processor > 0
-      && !GCTX.is_standby_cluster()
-      && !is_restore) {
+  // job can not run in standy and restore tenant.
+  bool is_primary = false;
+  if (FAILEDx(ObShareUtil::table_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+    LOG_WARN("fail to execute table_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+  } else if (is_primary && job_queue_processor > 0) {
     SMART_VAR(ObMySQLProxy::MySQLResult, result) {
       if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id));

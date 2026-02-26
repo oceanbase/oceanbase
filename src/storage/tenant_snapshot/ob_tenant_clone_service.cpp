@@ -12,17 +12,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/lock/mutex.h"
-#include "logservice/restoreservice/ob_log_restore_handler.h"
-#include "share/restore/ob_ls_restore_status.h"
+#include "ob_tenant_clone_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
-#include "storage/tenant_snapshot/ob_tenant_snapshot_task.h"
-#include "storage/tenant_snapshot/ob_tenant_snapshot_meta_table.h"
-#include "storage/tenant_snapshot/ob_tenant_clone_service.h"
 
 namespace oceanbase
 {
@@ -71,7 +64,7 @@ void ObTenantCloneService::wait()
 {
   int ret = OB_SUCCESS;
   while(OB_FAIL(wait_())) {
-    usleep(100000);
+    ob_usleep(100000);
   }
 }
 

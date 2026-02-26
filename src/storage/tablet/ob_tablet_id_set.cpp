@@ -14,8 +14,6 @@
 
 #include "storage/tablet/ob_tablet_id_set.h"
 
-#include "lib/oblog/ob_log.h"
-#include "storage/tablet/ob_tablet_common.h"
 
 namespace oceanbase
 {
@@ -58,6 +56,12 @@ int ObTabletIDSet::set(const common::ObTabletID &tablet_id)
 {
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   return id_set_.set_refactored(tablet_id);
+}
+
+int ObTabletIDSet::exist(const common::ObTabletID &tablet_id)
+{
+  ObBucketHashRLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+  return id_set_.exist_refactored(tablet_id);
 }
 
 int ObTabletIDSet::erase(const common::ObTabletID &tablet_id)

@@ -13,7 +13,7 @@
 #ifndef _OB_TABLE_SERVICE_H
 #define _OB_TABLE_SERVICE_H 1
 #include "observer/ob_server_struct.h"
-#include "ob_table_session_pool.h"
+#include "object_pool/ob_table_object_pool.h"
 namespace oceanbase
 {
 namespace observer

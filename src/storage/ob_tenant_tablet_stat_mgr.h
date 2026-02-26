@@ -86,10 +86,10 @@ public:
                K_(scan_physical_row_cnt), K_(scan_micro_block_cnt), K_(pushdown_micro_block_cnt),
                K_(exist_row_total_table_cnt), K_(exist_row_read_table_cnt), K_(insert_row_cnt),
                K_(update_row_cnt), K_(delete_row_cnt));
-
 public:
-  static constexpr int64_t QUERY_REPORT_INEFFICIENT_THRESHOLD = 3;
-  static constexpr int64_t MERGE_REPORT_MIN_ROW_CNT = 1000;
+  static constexpr int64_t MERGE_MIN_ROW_CNT = 1000;
+  static constexpr int64_t QUERY_MIN_SCAN_ROW_CNT = 10000;
+  static constexpr int64_t QUERY_MIN_BLOCK_SCAN_CNT = 10;
 public:
   int64_t ls_id_;
   uint64_t tablet_id_;
@@ -141,17 +141,13 @@ public:
   bool is_hot_tablet() const;
   bool is_insert_mostly() const;
   bool is_update_or_delete_mostly() const;
-  bool has_slow_query() const;
+  bool has_frequent_slow_query() const;
   bool has_accumnulated_delete() const;
   TO_STRING_KV(K_(tablet_stat), K_(total_tablet_stat), K_(is_small_tenant), K_(boost_factor));
 public:
-  static constexpr int64_t ACCESS_FREQUENCY = 5;
   static constexpr int64_t BASE_FACTOR = 10;
   static constexpr int64_t LOAD_THRESHOLD = 7;
   static constexpr int64_t TOMBSTONE_THRESHOLD = 3;
-  static constexpr int64_t QUERY_BASIC_ROW_CNT = 1000;
-  static constexpr int64_t QUERY_BASIC_MICRO_BLOCK_CNT = 10;
-  static constexpr int64_t QUERY_BASIC_ITER_TABLE_CNT = 5;
   static constexpr int64_t MERGE_BASIC_ROW_CNT = 10000;
 public:
   ObTabletStat tablet_stat_;       // tablet statistics recently
@@ -169,7 +165,7 @@ public:
   ~ObTenantSysStat() = default;
   void reset();
   bool is_small_tenant() const;
-  int refresh(const uint64_t tenant_id);
+  int refresh(const uint64_t tenant_id, const bool force_refresh = false);
   TO_STRING_KV(K_(min_cpu_cnt), K_(max_cpu_cnt), K_(memory_hold), K_(memory_limit));
 
 public:
@@ -366,6 +362,7 @@ public:
   static const int64_t CPU_TIME_SAMPLING_INTERVAL = 20_s; //20 * 1000 * 1000 us
   static constexpr double CPU_TIME_THRESHOLD = 0.8; // 80%
   static const int64_t SHEDDER_EXPIRE_TIME = 2_min;
+  static const int64_t SHEDDER_CPU_CNT_THRESHOLD = 8; // 8c
 private:
   int64_t effect_time_;
   int64_t last_sample_time_;
@@ -427,6 +424,7 @@ public:
   bool is_high_tenant_cpu_load() const { return get_load_shedding_factor() >= ObTenantSysLoadShedder::DEFAULT_LOAD_SHEDDING_FACTOR; }
   int64_t get_load_shedding_factor() const { return load_shedder_.get_load_shedding_factor(); }
   void refresh_sys_stat();
+  bool contain_extreme_tablet() const { return extreme_tablet_cnt_ > 0; }
 private:
   class TabletStatUpdater : public common::ObTimerTask
   {
@@ -474,6 +472,7 @@ private:
   uint64_t report_cursor_;
   uint64_t pending_cursor_;
   int report_tg_id_;
+  int64_t extreme_tablet_cnt_;
   bool is_inited_;
 };
 

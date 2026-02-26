@@ -90,9 +90,10 @@ private:
   int set_temp_table_info(share::schema::ObTableSchema &table_schema, ParseNode *commit_option_node);
 
   int resolve_table_charset_info(const ParseNode *node);
+  int resolve_external_table_format_early(const ParseNode *node);
   //index
   int add_sort_column(const obrpc::ObColumnSortItem &sort_column);
-  int generate_index_arg();
+  int generate_index_arg(const bool process_heap_table_primary_key);
   int set_index_name();
   int set_index_option_to_arg();
   int set_storing_column();
@@ -117,7 +118,7 @@ private:
   int get_resolve_stats_from_table_schema(const share::schema::ObTableSchema &table_schema,
                                           ObArray<ObColumnResolveStat> &stats);
   static int check_same_substr_expr(ObRawExpr &left, ObRawExpr &right, bool &same);
-  virtual int get_table_schema_for_check(share::schema::ObTableSchema &table_schema) override;
+  virtual int get_table_schema_for_check(const share::schema::ObTableSchema *&table_schema) override;
   int add_new_column_for_oracle_temp_table(share::schema::ObTableSchema &table_schema, ObArray<ObColumnResolveStat> &stats);
   int add_new_indexkey_for_oracle_temp_table(const int32_t org_key_len);
   int add_pk_key_for_oracle_temp_table(ObArray<ObColumnResolveStat> &stats, int64_t &pk_data_length);
@@ -127,23 +128,29 @@ private:
   int generate_uk_idx_array(const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list, ObIArray<int64_t> &uk_idx_in_index_arg_list);
   bool is_pk_uk_duplicate(const ObIArray<ObString> &pk_columns_name, const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list, const ObIArray<int64_t> &uk_idx);
   bool is_uk_uk_duplicate(const ObIArray<int64_t> &uk_idx, const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
+
   int resolve_auto_partition(const ParseNode *partition_node);
   int check_external_table_generated_partition_column_sanity(ObTableSchema &table_schema, ObRawExpr *dependant_expr, ObIArray<int64_t> &external_part_idx);
   typedef common::hash::ObPlacementHashSet<uint64_t, common::OB_MAX_USER_DEFINED_COLUMNS_COUNT> VPColumnIdHashSet;
-
-  // check this type of table_schema should build column_group or not
   uint64_t gen_column_group_id();
-  int resolve_column_group(const ParseNode *cg_node);
-
   int add_inner_index_for_heap_gtt();
   int check_max_row_data_length(const ObTableSchema &table_schema);
-
   int create_default_partition_for_table(ObTableSchema &table_schema);
+  int set_default_micro_index_clustered_(share::schema::ObTableSchema &table_schema);
+  int resolve_primary_key_node_in_heap_table(const ParseNode *element, common::ObArray<ObColumnResolveStat> &stats,
+                                             ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols);
+  int resolve_single_column_primary_key_node(const ParseNode *column_list_node, ObTableSchema &tbl_schema, bool &process_heap_table_primary_key, ObString &first_column_name);
+  int uk_or_heap_table_pk_add_to_index_list(ObArray<int> &index_node_position_list, const int32_t node_index, const bool is_heap_table_pk);
+  int set_default_enable_macro_block_bloom_filter_(share::schema::ObTableSchema &table_schema);
+  int set_default_micro_block_format_version_(share::schema::ObTableSchema &table_schema);
+  int check_building_domain_index_legal();
+  int set_default_merge_engine_type_(share::schema::ObTableSchema &table_schema);
+  int resolve_clustering_key_option(const ParseNode *node, const int64_t clustering_key_index);
+  int check_stmt_is_empty_set(ObSelectStmt *select_stmt, bool &is_empty_set);
 
 private:
   // data members
   uint64_t cur_column_id_;
-  uint64_t cur_column_group_id_;
   common::ObSEArray<uint64_t, 16> primary_keys_;
   common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> column_name_set_;
   bool if_not_exist_;
@@ -151,11 +158,16 @@ private:
   bool is_temp_table_pk_added_;
   obrpc::ObCreateIndexArg index_arg_;
   IndexNameSet current_index_name_set_;
-
+  common::hash::ObHashSet<share::schema::ObIndexNameHashWrapper> index_aux_name_set_;
   common::ObSEArray<GenColExpr, 5> gen_col_exprs_;//store generated column and dependent exprs
   common::ObSEArray<ObRawExpr *, 5> constraint_exprs_;//store constraint exprs
+  common::ObSEArray<ObString, 16> cols_with_nullable_specified_;//store cols with explicitly specified defination for CTAS
 
   uint64_t cur_udt_set_id_;
+  common::ObSEArray<uint64_t, 4> vec_index_col_ids_;
+  bool has_vec_index_;
+  bool has_fts_index_;
+  bool has_multivalue_index_;
 };
 
 } // end namespace sql

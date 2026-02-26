@@ -12,28 +12,10 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_server_log_block_mgr.h"
-#include <fcntl.h>                              // IO operation
-#include <type_traits>                          // decltype
 #include <regex>                                // std::regex
-#include "lib/lock/ob_spin_lock.h"              // ObSpinLockGuard
-#include "lib/ob_define.h"                      // OB_MAX_FILE_NAME_LENGTH
-#include "lib/time/ob_time_utility.h"           // ObTimeUtility
-#include "lib/utility/ob_macro_utils.h"         // OB_UNLIKELY
-#include "lib/utility/ob_utility.h"             // lower_align
-#include "lib/utility/serialization.h"          // serialization
-#include "lib/file/file_directory_utils.h"      // FileDirectoryUtils
-#include "lib/checksum/ob_crc64.h"              // ob_crc64
-#include "lib/utility/utility.h"                // ObTimeGuard
-#include "lib/container/ob_se_array_iterator.h" // ObSEArrayIterator
-#include "lib/thread/ob_thread_name.h"          // set_thread_name
-#include "palf/log_block_pool_interface.h"      // ILogBlockPool
-#include "palf/log_define.h"                    // block_id_to_string
 #include "observer/ob_server.h"                 // OBSERVER
 #include "observer/ob_server_utils.h"           // get_log_disk_info_in_config
-#include "share/unit/ob_unit_resource.h"        // UNIT_MIN_LOG_DISK_SIZE
-#include "share/ob_errno.h"                     // errno
 #include "logservice/ob_log_service.h"          // ObLogService
-#include "logservice/palf/log_io_utils.h"       // renameat_with_retry
 
 #define BYTE_TO_MB(byte) (byte+1024*1024-1)/1024/1024
 
@@ -55,7 +37,9 @@ int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, boo
   struct dirent *entry = NULL;
   int64_t num = 0;
   result = false;
-  if (NULL == clog_dir) {
+  if (GCONF.enable_logservice) {
+    result = true;
+  } else if (NULL == clog_dir) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "directory path is NULL, ", K(ret));
   } else if (NULL == (dir = opendir(clog_dir))) {
@@ -103,6 +87,9 @@ int ObServerLogBlockMgr::init(const char *log_disk_base_path)
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(ERROR, "ObServerLogBlockMgr inited twice", K(ret), KPC(this));
+  } else if (GCONF.enable_logservice) {
+    is_inited_ = true;
+    CLOG_LOG(INFO, "in logservice mode, skip ObServerLogBlockMgr init", KPC(this));
   } else if (OB_ISNULL(log_disk_base_path)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "Invalid argument", K(ret), KPC(this), KP(log_disk_base_path));
@@ -161,6 +148,9 @@ int ObServerLogBlockMgr::start(const int64_t new_size_byte)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObServerLogBlockMGR is not inited", K(ret), KPC(this));
+  } else if (GCONF.enable_logservice) {
+    ATOMIC_STORE(&is_started_, true);
+    CLOG_LOG(INFO, "in logservice mode, skip ObServerLogBlockMgr start", KPC(this));
   } else if (!check_space_is_enough_(new_size_byte)) {
     ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
     CLOG_LOG(WARN, "server log disk is too small to hold all tenants or the count of tenants"
@@ -242,6 +232,11 @@ int ObServerLogBlockMgr::get_disk_usage(int64_t &in_use_size_byte, int64_t &tota
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObServerLogBlockMgr has not inited", K(ret), KPC(this));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (GCONF.enable_logservice) {
+    in_use_size_byte = 0;
+    total_size_byte = OB_SERVER_LOG_DISK_CAPACITY_IN_SHARED_LOG_SERVICE;
+#endif
   } else {
     total_size_byte = get_total_size_guarded_by_lock_();
     in_use_size_byte = get_in_use_size_guarded_by_lock_();
@@ -259,6 +254,9 @@ int ObServerLogBlockMgr::create_block_at(const FileDesc &dest_dir_fd,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObServerLogBlockMgr has not inited", K(ret), KPC(this));
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(ERROR, "not support in logservice mode", K(ret), KPC(this));
   } else if (false == is_valid_file_desc(dest_dir_fd)
              || NULL == dest_block_path || BLOCK_SIZE != block_size) {
     ret = OB_INVALID_ARGUMENT;
@@ -291,7 +289,10 @@ int ObServerLogBlockMgr::remove_block_at(const FileDesc &src_dir_fd,
   block_id_t dest_block_id = LOG_INVALID_BLOCK_ID;
   char dest_block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
   bool result = true;
-  if (OB_FAIL(is_block_used_for_palf(src_dir_fd, src_block_path, result))) {
+  if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(ERROR, "not support in logservice mode", K(ret), KPC(this));
+  } else if (OB_FAIL(is_block_used_for_palf(src_dir_fd, src_block_path, result))) {
     CLOG_LOG(ERROR, "block_is_used_for_palf failed", K(ret));
   } else if (false == result) {
     CLOG_LOG(ERROR, "this block is not used for palf", K(ret), K(src_block_path));
@@ -329,6 +330,8 @@ int ObServerLogBlockMgr::create_tenant(const int64_t log_disk_size)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObServerLogBlockMGR is not inited", K(log_disk_size), KPC(this));
+  } else if (GCONF.enable_logservice) {
+    CLOG_LOG(INFO, "in logservice mode, skip ObServerLogBlockMGR create_tenant", KPC(this));
   } else {
     ObSpinLockGuard guard(resize_lock_);
     int64_t tmp_log_disk_size = min_log_disk_size_for_all_tenants_;
@@ -348,6 +351,8 @@ void ObServerLogBlockMgr::abort_create_tenant(const int64_t log_disk_size)
 {
   if (IS_NOT_INIT) {
     CLOG_LOG_RET(WARN, OB_NOT_INIT, "ObServerLogBlockMGR is not inited", K(log_disk_size), KPC(this));
+  } else if (GCONF.enable_logservice) {
+    CLOG_LOG(INFO, "in logservice mode, skip ObServerLogBlockMGR abort_create_tenant", KPC(this));
   } else {
     ObSpinLockGuard guard(resize_lock_);
     min_log_disk_size_for_all_tenants_ -= log_disk_size;
@@ -412,7 +417,8 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
   } else if (can_update_log_disk_size_with_expected_log_disk && FALSE_IT(allowed_new_log_disk_size = new_log_disk_size)) {
     // For shrinking log disk, we still update log disk size of 'new_unit' to 'old_log_disk_size'.
   } else if (!can_update_log_disk_size_with_expected_log_disk && FALSE_IT(allowed_new_log_disk_size = old_log_disk_size)) {
-  } else if ((tmp_log_disk_size += allowed_new_log_disk_size) > get_total_size_guarded_by_lock_()) {
+  } else if (!GCONF.enable_logservice &&
+    ((tmp_log_disk_size += allowed_new_log_disk_size) > get_total_size_guarded_by_lock_())) {
     ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
     CLOG_LOG(WARN, "ObServerLogBlockMGR can not hold any new tenants", KPC(this),  K(old_log_disk_size),
              K(new_log_disk_size), K(allowed_new_log_disk_size), K(tmp_log_disk_size));
@@ -462,6 +468,9 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
   } else if (OB_FAIL(log_service->update_log_disk_usage_limit_size(new_log_disk_size))) {
     CLOG_LOG(WARN, "failed to update_log_disk_usage_limit_size", K(new_log_disk_size), K(old_log_disk_size),
              K(allowed_new_log_disk_size));
+  } else if (GCONF.enable_logservice) {
+    CLOG_LOG(INFO, "in logservice mode, skip set min_log_disk_size_for_all_tenants_", KPC(this),
+      K(new_log_disk_size), K(old_log_disk_size), K(allowed_new_log_disk_size));
   } else {
     min_log_disk_size_for_all_tenants_ = tmp_log_disk_size;
     CLOG_LOG(INFO, "update_tenant success", KPC(this), K(new_log_disk_size), K(old_log_disk_size),
@@ -477,6 +486,8 @@ int ObServerLogBlockMgr::remove_tenant(const int64_t log_disk_size)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObServerLogBlockMGR is not inited", K(log_disk_size), KPC(this));
+  } else if (GCONF.enable_logservice) {
+    CLOG_LOG(WARN, "in logservice mode, skip remove_tenant", KPC(this));
   } else {
     ObSpinLockGuard guard(resize_lock_);
     if (min_log_disk_size_for_all_tenants_ - log_disk_size < 0) {
@@ -787,6 +798,8 @@ int ObServerLogBlockMgr::try_resize()
   } else if (!ATOMIC_LOAD(&is_started_)) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(WARN, "ObServerLogBlockMgr not running, can not support resize", KPC(this));
+  } else if (GCONF.enable_logservice) {
+    CLOG_LOG(INFO, "in logservice mode, skip try_resize", K(ret), KPC(this));
   } else if (OB_FAIL(observer::ObServerUtils::get_log_disk_info_in_config(log_disk_size,
                                                                           unused_log_disk_percentage,
                                                                           total_log_disk_size))) {
@@ -807,7 +820,10 @@ bool ObServerLogBlockMgr::check_space_is_enough_(const int64_t log_disk_size) co
   bool bool_ret = false;
   int64_t all_tenants_log_disk_size = 0;
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenants_log_disk_size_func_(all_tenants_log_disk_size))) {
+  if (GCONF.enable_logservice) {
+    bool_ret = true;
+    CLOG_LOG(INFO, "logservice almost has infinite space");
+  } else if (OB_FAIL(get_tenants_log_disk_size_func_(all_tenants_log_disk_size))) {
     CLOG_LOG(WARN, "get_tenants_log_disk_size_func_ failed", K(ret), K(all_tenants_log_disk_size));
   } else {
     bool_ret = (all_tenants_log_disk_size <= log_disk_size ? true : false);
@@ -824,11 +840,12 @@ int ObServerLogBlockMgr::get_all_tenants_log_disk_size_(int64_t &all_tenants_log
   auto func = [&all_tenants_log_disk_size] () -> int{
     int ret = OB_SUCCESS;
     ObLogService *log_service = MTL(ObLogService*);
-    PalfOptions opts;
-    if (OB_FAIL(log_service->get_palf_options(opts))) {
+    PalfDiskOptions opts;
+    if (GCONF.enable_logservice) { // do nothing
+    } else if (OB_FAIL(log_service->get_palf_disk_options(opts))) {
       CLOG_LOG(WARN, "get_palf_options failed", K(ret), K(all_tenants_log_disk_size));
     } else {
-      all_tenants_log_disk_size += opts.disk_options_.log_disk_usage_limit_size_;
+      all_tenants_log_disk_size += opts.log_disk_usage_limit_size_;
     }
     return ret;
   };
@@ -1594,6 +1611,8 @@ int ObServerLogBlockMgr::force_update_tenant_log_disk(const uint64_t tenant_id,
     if (NULL == log_service) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "unexpected error, ObLogService is nullptr", KR(ret), KP(log_service));
+    } else if (GCONF.enable_logservice) {
+      CLOG_LOG(INFO, "log disk info is not meanful for logservice");
     } else if (OB_FAIL(log_service->get_palf_stable_disk_usage(unused_size, old_log_disk_size))) {
       CLOG_LOG(ERROR, "get_palf_stable_disk_usage failed", KR(ret), KP(log_service));
     } else if (OB_FAIL(update_tenant(old_log_disk_size, new_log_disk_size, allowed_new_log_disk_size, log_service))) {
@@ -1601,11 +1620,11 @@ int ObServerLogBlockMgr::force_update_tenant_log_disk(const uint64_t tenant_id,
     } else if (allowed_new_log_disk_size != new_log_disk_size) {
       ret = OB_STATE_NOT_MATCH;
       CLOG_LOG(WARN, "can not force update tenant log disk, force_update_tenant_log_disk failed", KR(ret), KP(log_service), K(new_log_disk_size),
-               K(allowed_new_log_disk_size), K(old_log_disk_size));
+              K(allowed_new_log_disk_size), K(old_log_disk_size));
     } else {
     }
     CLOG_LOG(INFO, "force_update_tenant_log_disk finished", KR(ret), KP(log_service), K(new_log_disk_size),
-             K(allowed_new_log_disk_size), K(old_log_disk_size));
+            K(allowed_new_log_disk_size), K(old_log_disk_size));
   } else {
     CLOG_LOG(WARN, "force_update_tenant_log_disk failed, no such tenant", KR(ret),  K(tenant_id), K(new_log_disk_size));
   }

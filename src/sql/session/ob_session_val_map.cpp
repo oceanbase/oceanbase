@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_SESSION
 #include "sql/session/ob_session_val_map.h"
 
-#include "lib/hash/ob_hashutils.h"
 #include "share/schema/ob_schema_struct.h"
 using namespace oceanbase;
 using namespace sql;

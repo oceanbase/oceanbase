@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_pi.h"
-#include "objit/common/ob_item_type.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -38,7 +36,7 @@ int ObExprPi::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) co
 {
   UNUSED(type_ctx);
   type.set_double();
-  type.set_precision(-1);
+  type.set_precision(8);
   type.set_scale(6);
   return OB_SUCCESS;
 }

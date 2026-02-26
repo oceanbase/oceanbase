@@ -12,13 +12,10 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "ob_tablet_location_broadcast.h"
 
-#include "lib/oblog/ob_log.h"                              // LOG_*
+#include "ob_tablet_location_broadcast.h"
 #include "share/ob_all_server_tracer.h"                    // SVR_TRACER
 #include "share/location_cache/ob_tablet_ls_service.h"     // ObTabletLSService
-#include "share/ob_cluster_version.h"                      // GET_MIN_CLUSTER_VERSION
-#include "observer/omt/ob_multi_tenant.h"                  // omt
 
 namespace oceanbase
 {
@@ -72,11 +69,12 @@ void TabletLocationStatistics::dump_statistics(
   // print statistics if reach interval
   int64_t tablet_total_cnt = get_total_cnt_();
   if (TC_REACH_TIME_INTERVAL(CHECK_INTERVAL_US) && tablet_total_cnt > 0) {
+    ObCStringHelper helper;
     FLOG_INFO("[LOCATION_STATISTIC] tablet location statistics",
               K_(task_cnt), K(tablet_total_cnt), K_(tablet_suc_cnt), K_(tablet_fail_cnt),
               K_(total_exec_us), K_(total_wait_us),
               "avg_rate", total_exec_us_ <= 0 ? -1 : (tablet_total_cnt * ONE_SECOND_US / total_exec_us_),
-              "rate_limit", rate_limit < 0 ? "no_limit" : to_cstring(rate_limit),
+              "rate_limit", rate_limit < 0 ? "no_limit" : helper.convert(rate_limit),
               "avg_exec_us", total_exec_us_ / tablet_total_cnt,
               "avg_wait_us", total_wait_us_ / tablet_total_cnt);
     (void) reset_();

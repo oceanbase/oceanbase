@@ -48,11 +48,13 @@ public:
   inline bool is_sfc() const { return ObLibCacheNameSpace::NS_SFC == ns_; }
   inline bool is_pkg() const { return ObLibCacheNameSpace::NS_PKG == ns_; }
   inline bool is_anon() const { return ObLibCacheNameSpace::NS_ANON == ns_; }
+  inline bool is_result() const { return ObLibCacheNameSpace::NS_UDF_RESULT_CACHE == ns_; }
   inline bool is_valid_cache_obj() const { return ns_ > NS_INVALID && ns_ < NS_MAX; }
   inline uint64_t get_object_id() const { return object_id_; }
   inline int64_t get_mem_size() const { return allocator_.total(); }
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count(const CacheRefHandleID ref_handle);
+  bool try_inc_ref_count(const CacheRefHandleID ref_handle);
   inline common::ObIAllocator &get_allocator() { return allocator_; }
   inline lib::MemoryContext &get_mem_context() { return mem_context_; }
   inline bool added_lc() const { return added_to_lc_; }

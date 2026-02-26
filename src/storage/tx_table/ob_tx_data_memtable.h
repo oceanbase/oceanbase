@@ -156,7 +156,6 @@ public:  // ObTxDataMemtable
       is_iterating_(false),
       construct_list_done_(false),
       pre_process_done_(false),
-      do_recycle_(false),
       max_tx_scn_(),
       inserted_cnt_(0),
       deleted_cnt_(0),
@@ -236,6 +235,7 @@ public:  // ObTxDataMemtable
                        K_(is_iterating),
                        K_(pre_process_done),
                        K_(construct_list_done),
+                       K(ls_id_),
                        "min_tx_scn", get_min_tx_scn(),
                        K_(max_tx_scn),
                        "min_start_scn", get_min_start_scn(),
@@ -308,7 +308,7 @@ public: /* derived from ObIMemtable */
   virtual ObTabletID get_tablet_id() const { return LS_TX_DATA_TABLET; }
 
 public:  // checkpoint
-  share::SCN get_rec_scn()
+  share::SCN get_rec_scn() override
   {
     return get_min_tx_scn();
   }
@@ -322,7 +322,6 @@ public:  // checkpoint
   bool ready_for_flush();
 
 public:  // getter && setter
-  bool do_recycled() { return do_recycle_; }
   int64_t get_tx_data_count() { return tx_data_map_->count(); }
   int64_t size() { return get_tx_data_count(); }
   int64_t get_inserted_count() { return inserted_cnt_; }
@@ -396,6 +395,7 @@ private:  // ObTxDataMemtable
                                           ObCommitVersionsArray::Node &node);
 
   int get_past_commit_versions_(ObCommitVersionsArray &past_commit_versions);
+  void clear_fake_node_if_exist_(ObCommitVersionsArray &past_commit_versions);
 
   int merge_cur_and_past_commit_verisons_(const share::SCN recycle_scn,
                                           ObCommitVersionsArray &cur_commit_versions,
@@ -440,7 +440,6 @@ private:  // ObTxDataMemtable
   bool is_iterating_;
   bool construct_list_done_;
   bool pre_process_done_;
-  bool do_recycle_;
 
   // the maximum scn in this tx data memtable
   share::SCN max_tx_scn_;
@@ -499,15 +498,16 @@ public:
 
   bool operator()(ObTxData *tx_data) {
     // printf basic info
+    ObCStringHelper helper;
     fprintf(fd_,
             "ObTxData : tx_id=%-19ld state=%-8s start_scn=%-19s "
             "end_scn=%-19s "
             "commit_version=%-19s ",
             tx_data->tx_id_.get_id(),
             ObTxData::get_state_string(tx_data->state_),
-            to_cstring(tx_data->start_scn_),
-            to_cstring(tx_data->end_scn_),
-            to_cstring(tx_data->commit_version_));
+            helper.convert(tx_data->start_scn_),
+            helper.convert(tx_data->end_scn_),
+            helper.convert(tx_data->commit_version_));
 
     // printf undo status list
     fprintf(fd_, "Undo Actions [from, to): {");

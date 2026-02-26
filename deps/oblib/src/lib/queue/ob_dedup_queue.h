@@ -63,6 +63,7 @@ enum ObDedupTaskType
   T_CHECK_PG_RECOVERY_FINISHED = 31,
   T_UPDATE_FILE_RECOVERY_STATUS = 32,
   T_UPDATE_FILE_RECOVERY_STATUS_V2 = 33,
+  T_DEDUP_TASK_TYPE_MAX
 };
 
 class ObDedupQueue;
@@ -88,6 +89,7 @@ public:
   virtual int64_t get_abs_expired_time() const = 0;
   virtual int process() = 0;
   inline int get_type() const {return type_;}
+  const char *get_task_name() const;
 private:
   static const int ST_WAITING = 0;
   static const int ST_DONE = 1;

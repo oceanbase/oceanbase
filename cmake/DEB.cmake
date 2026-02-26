@@ -43,7 +43,7 @@ set(CPACK_DEBIAN_PACKAGE_PRIORITY "Optional")
 # systemd define on deb
 if (OB_BUILD_OPENSOURCE)
   set(CPACK_DEBIAN_SERVER_PACKAGE_DEPENDS "oceanbase-ce-libs (= ${CPACK_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
-  set(CPACK_DEBIAN_SERVER_PACKAGE_DEPENDS "${CPACK_DEBIAN_SERVER_PACKAGE_DEPENDS}, jq, systemd")
+  set(CPACK_DEBIAN_SERVER_PACKAGE_DEPENDS "${CPACK_DEBIAN_SERVER_PACKAGE_DEPENDS}, systemd")
 
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/pre_install.sh.template
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/preinst

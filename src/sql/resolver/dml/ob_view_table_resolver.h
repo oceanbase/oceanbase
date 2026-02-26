@@ -17,6 +17,25 @@ namespace oceanbase
 {
 namespace sql
 {
+struct ObViewStateGuard
+{
+  ObViewStateGuard(ObResolverParams &param) : params_(param)
+  {
+    ori_is_in_view_ = params_.is_in_view_;
+    if (!params_.is_in_view_) {
+      params_.is_in_view_ = true;
+    }
+  }
+  ~ObViewStateGuard()
+  {
+    params_.is_in_view_ = ori_is_in_view_;
+  }
+  TO_STRING_KV(K_(ori_is_in_view));
+
+  bool ori_is_in_view_;
+  ObResolverParams &params_;
+};
+
 class ObViewTableResolver : public ObSelectResolver
 {
 public:

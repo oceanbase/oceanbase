@@ -10,10 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/lock/ob_thread_cond.h"
 #include <limits>
+#include "lib/lock/ob_thread_cond.h"
 #include "lib/stat/ob_diagnose_info.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {
@@ -71,7 +70,7 @@ void ObThreadCond::destroy()
   is_inited_ = false;
 }
 
-int ObThreadCond::wait_us(const uint64_t time_us)
+int ObThreadCond::wait_us(const uint64_t time_us, const int64_t p2, const int64_t p3)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
@@ -79,7 +78,7 @@ int ObThreadCond::wait_us(const uint64_t time_us)
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The thread cond has not been inited, ", K(ret), KCSTRING(lbt()));
   } else {
-    ObWaitEventGuard guard(event_no_, time_us / 1000, reinterpret_cast<int64_t>(this));
+    ObWaitEventGuard guard(event_no_, time_us / 1000, reinterpret_cast<int64_t>(this), p2, p3, true);
     if (0 == time_us) {
       if (OB_UNLIKELY(0 != (tmp_ret = ob_pthread_cond_wait(&cond_, &mutex_)))) {
         ret = OB_ERR_SYS;

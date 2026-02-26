@@ -1,3 +1,6 @@
+// owner: handora.qc
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -13,14 +16,9 @@
 #define USING_LOG_PREFIX SERVER
 #define protected public
 #define private public
-#include "env/ob_multi_replica_test_base.h"
 #include "env/ob_multi_replica_util.h"
 #include "mittest/env/ob_simple_server_helper.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/high_availability/ob_tablet_backfill_tx.h"
+#include "src/storage/multi_data_source/ob_tablet_mds_merge_ctx.h"
 
 #define CUR_TEST_CASE_NAME ObTestMultiTransferTx
 DEFINE_MULTI_ZONE_TEST_CASE_CLASS

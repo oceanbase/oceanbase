@@ -24,9 +24,13 @@ class ObTabletMergeCtx;
 
 namespace storage
 {
+class ObTabletHandle;
+class ObTablet;
+class ObTableHandleV2;
+
 namespace mds
 {
-class ObMdsTableMergeDag;
+class ObTabletMdsMiniMergeDag;
 
 class ObMdsTableMergeTask : public share::ObITask
 {
@@ -40,10 +44,15 @@ public:
 
   int init();
 private:
-  void set_merge_finish_time(compaction::ObTabletMergeCtx &ctx);
+  void try_schedule_compaction_after_mds_mini(compaction::ObTabletMergeCtx &ctx, ObTabletHandle &tablet_handle);
+  int check_tablet_status_for_empty_mds_table_(const ObTablet& tablet) const;
+  static int build_mds_sstable(
+      compaction::ObTabletMergeCtx &ctx,
+      const int64_t mds_construct_sequence,
+      ObTableHandleV2 &table_handle);
 private:
   bool is_inited_;
-  ObMdsTableMergeDag *mds_merge_dag_;
+  ObTabletMdsMiniMergeDag *mds_merge_dag_;
 };
 } // namespace mds
 } // namespace storage

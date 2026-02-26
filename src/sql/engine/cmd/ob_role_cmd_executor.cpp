@@ -14,10 +14,6 @@
 #include "sql/engine/cmd/ob_role_cmd_executor.h"
 
 #include "lib/encrypt/ob_encrypted_helper.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_common_rpc_proxy.h"
 #include "sql/resolver/dcl/ob_create_role_stmt.h"
 #include "sql/resolver/dcl/ob_drop_role_stmt.h"
 #include "sql/resolver/dcl/ob_alter_role_stmt.h"
@@ -67,15 +63,19 @@ int ObCreateRoleExecutor::execute(ObExecContext &ctx, ObCreateRoleStmt &stmt)
     ObString pwd_enc;
     if (pwd.length() > 0 && stmt.get_need_enc()) {
       char enc_buf[ENC_BUF_LEN] = {0};
-      // 采用OB统一的加密方式
-      if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(pwd, pwd_enc, enc_buf, ENC_BUF_LEN))) {
+      ObString plugin = stmt.get_plugin();
+      if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(pwd, plugin, pwd_enc, enc_buf, ENC_BUF_LEN, mysession))) {
         LOG_WARN("Encrypt password failed", K(ret));
       } else if (OB_FAIL(user_info.set_passwd(pwd_enc))) {
         LOG_WARN("set password failed", K(ret));
+      } else if (OB_FAIL(user_info.set_plugin(plugin))) {
+        LOG_WARN("set plugin failed", K(ret));
       }
     } else if (FALSE_IT(pwd_enc = pwd)) {
     } else if (OB_FAIL(user_info.set_passwd(pwd_enc))) {
       LOG_WARN("Failed to set password", K(ret));
+    } else if (OB_FAIL(user_info.set_plugin(stmt.get_plugin()))) {
+      LOG_WARN("set plugin failed", K(ret));
     }
 
     if (OB_FAIL(ret)) {
@@ -147,7 +147,7 @@ int ObDropRoleExecutor::execute(ObExecContext &ctx, ObDropRoleStmt &stmt)
       OZ (arg.users_.push_back(stmt.get_user_names().at(i)));
       OZ (arg.hosts_.push_back(stmt.get_host_names().at(i)));
     }
-    OZ (ObDropUserExecutor::drop_user(common_rpc_proxy, arg, false));
+    OZ (ObDropUserExecutor::drop_user(common_rpc_proxy, arg, stmt.get_if_exists()));
   }
 
   return ret;
@@ -173,8 +173,8 @@ int ObAlterRoleExecutor::execute(ObExecContext &ctx, ObAlterRoleStmt &stmt)
     const ObString &pwd = stmt.get_password();
     ObString pwd_enc;
     if (pwd.length() > 0 && stmt.get_need_enc()) {
-      // 采用OB统一的加密方式
-      if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(pwd, pwd_enc, enc_buf, ENC_BUF_LEN))) {
+      ObString plugin = stmt.get_plugin();
+      if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(pwd, plugin, pwd_enc, enc_buf, ENC_BUF_LEN, ctx.get_my_session()))) {
         LOG_WARN("Encrypt password failed", K(ret));
       }
     } else {

@@ -13,8 +13,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "ob_plan_info_manager.h"
-#include "lib/compress/ob_compressor.h"
-#include "lib/compress/ob_compressor_pool.h"
 #include "observer/ob_server.h"
 namespace oceanbase
 {

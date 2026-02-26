@@ -14,7 +14,7 @@
 #define OCEANBASE_ENCODING_OB_CS_ENCODING_UTIL_H_
 
 #include "ob_stream_encoding_struct.h"
-#include "storage/blocksstable/encoding/ob_encoding_hash_util.h"
+#include "ob_dict_encoding_hash_table.h"
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
 #include "ob_cs_micro_block_transformer.h"
 #include "ob_icolumn_cs_decoder.h"
@@ -42,7 +42,7 @@ public:
   {
     // ObOTimestampSC and ObIntervalSC are fixed len string
     return ObNumberSC == sc || ObStringSC == sc || ObTextSC == sc ||
-        ObLobSC == sc || ObJsonSC == sc || ObGeometrySC == sc;
+        ObLobSC == sc || ObJsonSC == sc || ObGeometrySC == sc || ObRoaringBitmapSC == sc;
   }
   static OB_INLINE bool is_integer_store_class(const ObObjTypeStoreClass sc)
   {
@@ -52,7 +52,7 @@ public:
   {
     return ObNumberSC == sc || ObStringSC == sc || ObTextSC == sc ||
         sc == ObLobSC || ObJsonSC == sc || ObGeometrySC == sc ||
-        ObOTimestampSC == sc ||  ObIntervalSC == sc;
+        ObOTimestampSC == sc ||  ObIntervalSC == sc || ObRoaringBitmapSC == sc;
   }
 
   // the sql layer does not allow to modify ptr of datums of these store class,
@@ -64,11 +64,29 @@ public:
   static OB_INLINE bool is_no_need_sort_lob(const ObObjTypeStoreClass sc)
   {
     // ObTextSC type sorting can speeds up filter, ObLobSC/ObJsonSC/ObGeometrySC sorting is meaningless
-    return sc == ObLobSC || sc == ObJsonSC || sc == ObGeometrySC;
+    return sc == ObLobSC || sc == ObJsonSC || sc == ObGeometrySC || ObRoaringBitmapSC == sc;
   }
 
-  static int build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
-    const ObObjTypeStoreClass store_class, const int64_t type_store_size, ObColumnCSEncodingCtx &ctx);
+  static int build_cs_column_encoding_ctx(const ObObjTypeStoreClass store_class,
+                                          const int64_t type_store_size,
+                                          ObColumnCSEncodingCtx &ctx);
+  static OB_INLINE bool is_int64_vec_value_tc(const VecValueTypeClass tc)
+  {
+    return tc == VEC_TC_INTEGER || tc == VEC_TC_DATETIME || tc == VEC_TC_TIME ||
+      tc == VEC_TC_UNKNOWN || tc == VEC_TC_INTERVAL_YM || tc == VEC_TC_DEC_INT64 ||
+      tc == VEC_TC_UINTEGER || tc == VEC_TC_BIT || tc == VEC_TC_ENUM_SET ||
+      tc == VEC_TC_DOUBLE || tc == VEC_TC_FIXED_DOUBLE;
+  }
+
+private:
+  static int build_column_encoding_ctx_with_hash_table_(
+      const ObObjTypeStoreClass store_class,
+      const int64_t precision_bytes,
+      ObColumnCSEncodingCtx &col_ctx);
+  static int build_column_encoding_ctx_with_col_datums_(
+      const ObObjTypeStoreClass store_class,
+      const int64_t precision_bytes,
+      ObColumnCSEncodingCtx &col_ctx);
 
 };
 

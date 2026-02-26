@@ -46,14 +46,17 @@ public:
   virtual int process() override;
   virtual int update_complete_sstable_job_status(
     const common::ObTabletID &tablet_id,
+    const ObAddr &addr,
     const int64_t snapshot_version,
     const int64_t execution_id,
     const int ret_code,
     const ObDDLTaskInfo &addition_info) override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual bool support_longops_monitoring() const { return true; }
-  virtual void flt_set_task_span_tag() const override;
-  virtual void flt_set_status_span_tag() const override;
+  virtual int serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos) override;
+  virtual int64_t get_serialize_param_size() const override;
+
   INHERIT_TO_STRING_KV("ObDDLRedefinitionTask", ObDDLRedefinitionTask,
       K(has_rebuild_index_), K(has_rebuild_constraint_), K(has_rebuild_foreign_key_), K(is_sstable_complete_task_submitted_));
 private:
@@ -62,9 +65,6 @@ private:
   int copy_table_indexes();
   int copy_table_constraints();
   int copy_table_foreign_keys();
-  virtual int serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const override;
-  virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos) override;
-  virtual int64_t get_serialize_param_size() const override;
 private:
   static const int64_t OB_COLUMN_REDEFINITION_TASK_VERSION = 1L; 
   bool has_rebuild_index_;

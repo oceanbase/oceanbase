@@ -135,7 +135,134 @@ int ObExprCeilFloor::calc_result_type1(ObExprResType &type,
     TYPE##_t tmp_num = *(res_val.get_decimal_int()->TYPE##_v_);      \
     res_val.from(--tmp_num);                                         \
     break;                                                           \
-  }                                                                  \
+  }
+
+template <typename T, typename ArgVec, typename ResVec, bool IsCheck,
+          bool IS_FLOOR>
+class CeilFloorFunctor {
+public:
+  using Func = std::function<T(T)>;
+
+  CeilFloorFunctor(Func ceil, Func floor, const ObBitVector &skip,
+                   ObBitVector &eval_flags, const EvalBound &bound)
+      : ceil_(ceil), floor_(floor), skip_(skip), eval_flags_(eval_flags),
+        bound_(bound) {}
+
+  OB_INLINE int64_t operator()(ArgVec *arg_vec, ResVec *res_vec) const {
+    int ret = OB_SUCCESS;
+    if (!IsCheck) {
+      for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+        ret = eval_scalar(arg_vec, i, res_vec);
+      }
+      eval_flags_.set_all(bound_.start(), bound_.end());
+    } else {
+      for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+        if (skip_.at(i) || eval_flags_.at(i)) {
+          continue;
+        } else if (OB_UNLIKELY(arg_vec->is_null(i))) {
+          res_vec->set_null(i);
+          eval_flags_.set(i);
+        } else {
+          ret = eval_scalar(arg_vec, i, res_vec);
+          eval_flags_.set(i);
+        }
+      }
+    }
+    return ret;
+  }
+
+private:
+  OB_INLINE int64_t eval_scalar(ArgVec *arg_vec, int idx,
+                                ResVec *res_vec) const {
+    int ret = OB_SUCCESS;
+    const char *in_ptr = arg_vec->get_payload(idx);
+    const T in = *reinterpret_cast<const T *>(in_ptr);
+    T out = IS_FLOOR ? floor_(in) : ceil_(in);
+    res_vec->set_payload(idx, &out, sizeof(T));
+    return ret;
+  }
+
+  Func ceil_;
+  Func floor_;
+  const ObBitVector &skip_;
+  ObBitVector &eval_flags_;
+  const EvalBound &bound_;
+};
+
+template <typename T, typename ArgVec, typename ResVec, int16_t INT_SIZE,
+          bool IsCheck, bool IS_FLOOR>
+class CeilFloorDecIntFunctor {
+public:
+  CeilFloorDecIntFunctor(const ObBitVector &skip, ObBitVector &eval_flags,
+                         const EvalBound &bound, const int16_t scale,
+                         const ObDatumMeta &out_meta)
+      : skip_(skip), eval_flags_(eval_flags), bound_(bound), scale_(scale) {
+    scale_factor_ = get_scale_factor<T>(scale);
+    integer_out_type = ob_is_integer_type(out_meta.type_);
+  }
+
+  OB_INLINE int64_t operator() (ArgVec *arg_vec, ResVec *res_vec) {
+    int ret = OB_SUCCESS;
+    if (!IsCheck) {
+      for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+        ret = eval_scalar(arg_vec, i, res_vec);
+      }
+      eval_flags_.set_all(bound_.start(), bound_.end());
+    } else {
+      for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+        if (OB_UNLIKELY(skip_.at(i) || eval_flags_.at(i))) {
+          continue;
+        } else if (OB_UNLIKELY(arg_vec->is_null(i))) {
+          res_vec->set_null(i);
+          eval_flags_.set(i);
+        } else {
+          ret = eval_scalar(arg_vec, i, res_vec);
+          eval_flags_.set(i);
+        }
+      }
+    }
+    return ret;
+  }
+
+private:
+  OB_INLINE int64_t eval_scalar(ArgVec *arg_vec, int idx, ResVec *res_vec) {
+    int64_t ret = OB_SUCCESS;
+    const ObDecimalInt *in_decint = arg_vec->get_decimal_int(idx);
+    T x = *reinterpret_cast<const T *>(in_decint);
+    const bool is_neg = wide::is_negative(in_decint, INT_SIZE);
+    if (IS_FLOOR && is_neg) {
+      x -= scale_factor_ - 1;
+    } else if (!IS_FLOOR && !is_neg) {
+      x += scale_factor_ - 1;
+    }
+    x = x / scale_factor_;
+    if (integer_out_type) {
+      bool is_valid_int64 = true;
+      int64_t res_int = 0L;
+      if (OB_FAIL(wide::check_range_valid_int64(
+              reinterpret_cast<const ObDecimalInt *>(&x), INT_SIZE,
+              is_valid_int64, res_int))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("check_range_valid_int64 failed", K(ret), K(INT_SIZE));
+      } else if (is_valid_int64) {
+        res_vec->set_int(idx, res_int);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+      }
+    } else {
+      res_vec->set_decimal_int(idx, reinterpret_cast<ObDecimalInt *>(&x),
+                               INT_SIZE);
+    }
+    return ret;
+  }
+
+  const ObBitVector &skip_;
+  ObBitVector &eval_flags_;
+  const EvalBound &bound_;
+  const int16_t scale_;
+  T scale_factor_;     // 10^scale
+  bool integer_out_type;
+};
 
 int ObExprCeilFloor::ceil_floor_decint(
     const bool is_floor, const ObDatum *arg_datum,
@@ -155,7 +282,7 @@ int ObExprCeilFloor::ceil_floor_decint(
   } else if (OB_FAIL(ObExprTruncate::do_trunc_decimalint(in_meta.precision_, in_meta.scale_,
               out_meta.precision_, out_meta.scale_, out_meta.scale_, *arg_datum, res_val))) {
     LOG_WARN("calc_trunc_decimalint failed", K(ret), K(in_meta.precision_), K(in_meta.scale_),
-             K(out_meta.precision_), K(out_meta.scale_));
+            K(out_meta.precision_), K(out_meta.scale_));
   } else if ((is_floor && !is_neg) || (!is_floor && is_neg)) {
     // truncate to scale 0 directly when we floor a pos or ceil a neg, do nothing
   } else {
@@ -427,6 +554,262 @@ int eval_batch_ceil_floor(const ObExpr &expr,
   return ret;
 }
 
+int ObExprCeilFloor::calc_ceil_floor_vector(const ObExpr &expr,
+                           ObEvalCtx &ctx,
+                           const ObBitVector &skip,
+                           const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("eval arg failed", K(ret), K(expr));
+  } else {
+    VectorFormat res_format = expr.get_format(ctx);
+    VectorFormat left_format = expr.args_[0]->get_format(ctx);
+    const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
+    const ObObjType res_type = expr.datum_meta_.type_;
+    int input_type = 0;
+    if (ObNumberTC == ob_obj_type_class(arg_type)) {
+      input_type = NUMBER_TYPE;
+    } else if (ob_is_integer_type(arg_type)) {
+      input_type = INTEGER_TYPE;
+    } else if (ObFloatType == arg_type) {
+      input_type = FLOAT_TYPE;
+    } else if (ObDoubleType == arg_type) {
+      input_type = DOUBLE_TYPE;
+    } else if (ObDecimalIntType == arg_type) {
+      input_type = DECIMAL_INT_TYPE;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected arg type", K(ret), K(arg_type));
+    }
+    VecValueTypeClass arg_tc = get_vec_value_tc(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.scale_,
+              expr.args_[0]->datum_meta_.precision_);
+    if (OB_SUCC(ret)) {
+      if (res_format == VEC_FIXED && left_format == VEC_FIXED) {
+        if (arg_tc == VEC_TC_INTEGER || arg_tc == VEC_TC_UINTEGER) {
+          ret = inner_calc_ceil_floor_vector<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>, ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>
+                                (expr, input_type, ctx, skip, bound);
+        } else if (arg_tc == VEC_TC_DOUBLE || arg_tc == VEC_TC_FIXED_DOUBLE) {
+          ret = inner_calc_ceil_floor_vector<ObFixedLengthFormat<RTCType<VEC_TC_DOUBLE>>, ObFixedLengthFormat<RTCType<VEC_TC_DOUBLE>>>
+                      (expr, input_type, ctx, skip, bound);
+        } else if (ObDecimalIntType == arg_type) {
+          // if use ObFixedLengthFormat, don't know length of decimal_int
+          // use ObFixedLengthBase, don't need length
+          ret = inner_calc_ceil_floor_vector<ObFixedLengthBase, ObFixedLengthBase>(expr, input_type, ctx, skip, bound);
+        } else {
+          ret = inner_calc_ceil_floor_vector<ObVectorBase, ObVectorBase>(expr, input_type, ctx, skip, bound);
+        }
+      } else {
+        // float type input is uniform....., output is fixed format...
+        ret = inner_calc_ceil_floor_vector<ObVectorBase, ObVectorBase>(expr, input_type, ctx, skip, bound);
+      }
+    }
+  }
+  return ret;
+}
+
+#define CHECK_CEIL_VECTOR()               \
+if (IsCheck) {                             \
+  if (skip.at(j) || eval_flags.at(j)) {    \
+    continue;                              \
+  } else if (left_vec->is_null(j)) {       \
+    res_vec->set_null(j);                  \
+    eval_flags.set(j);                     \
+    continue;                              \
+  }                                        \
+}
+
+OB_INLINE int64_t ceil_floor_integer(int64_t i) {
+  return i;
+}
+
+template <bool IS_FLOOR>
+OB_INLINE float ceil_floor_float(float f) {
+  return IS_FLOOR ? floorf(f) : ceilf(f);
+}
+
+template <bool IS_FLOOR>
+OB_INLINE double ceil_floor_double(double d) {
+  return IS_FLOOR ? floor(d) : ceil(d);
+}
+
+template <typename LeftVec, typename ResVec, bool IS_FLOOR, bool IsCheck>
+static int do_eval_ceil_floor_vector(const ObExpr &expr,ObEvalCtx &ctx,
+                                     int input_type,
+                                     const ObBitVector &skip,
+                                     const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  LeftVec *left_vec = static_cast<LeftVec *>(expr.args_[0]->get_vector(ctx));
+
+  switch (input_type) {
+    case NUMBER_TYPE: {
+      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
+        CHECK_CEIL_VECTOR();
+        const number::ObNumber arg_nmb(left_vec->get_number(j));
+        number::ObNumber res_nmb;
+        ObNumStackOnceAlloc tmp_alloc;
+        if (OB_FAIL(res_nmb.from(arg_nmb, tmp_alloc))) {
+          LOG_WARN("get number from arg failed", K(ret), K(arg_nmb));
+        } else {
+          if (IS_FLOOR) {
+            if (OB_FAIL(res_nmb.floor(0))) {
+              LOG_WARN("calc floor for number failed", K(ret), K(res_nmb));
+            }
+          } else {
+            if (OB_FAIL(res_nmb.ceil(0))) {
+              LOG_WARN("calc ceil for number failed", K(ret), K(res_nmb));
+            }
+          }
+          const ObObjType res_type = expr.datum_meta_.type_;
+          if (OB_FAIL(ret)) {
+          } else if (ObNumberTC == ob_obj_type_class(res_type)) {
+            res_vec->set_number(j, res_nmb);
+            eval_flags.set(j);
+          } else if (ob_is_integer_type(res_type)) {
+            int64_t res_int = 0;
+            if (res_nmb.is_valid_int64(res_int)) {
+              res_vec->set_int(j, res_int);
+              eval_flags.set(j);
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected res type", K(ret), K(res_type));
+            }
+          }
+        }
+      }
+      break;
+    }
+    case INTEGER_TYPE: {
+      CeilFloorFunctor<int64_t, LeftVec, ResVec, IsCheck, IS_FLOOR>
+          ceil_floor_func(ceil_floor_integer, ceil_floor_integer, skip,
+                          eval_flags, bound);
+      ret = ceil_floor_func(left_vec, res_vec);
+      break;
+    }
+    case FLOAT_TYPE: {
+      CeilFloorFunctor<float, LeftVec, ResVec, IsCheck, IS_FLOOR>
+          ceil_floor_func(ceil_floor_float<false>, ceil_floor_float<true>, skip,
+                          eval_flags, bound);
+      ret = ceil_floor_func(left_vec, res_vec);
+      break;
+    }
+    case DOUBLE_TYPE: {
+      CeilFloorFunctor<double, LeftVec, ResVec, IsCheck, IS_FLOOR>
+          ceil_floor_func(ceil_floor_double<false>, ceil_floor_double<true>,
+                          skip, eval_flags, bound);
+      ret = ceil_floor_func(left_vec, res_vec);
+      break;
+    }
+    case DECIMAL_INT_TYPE: {
+      const ObDatumMeta &in_meta = expr.args_[0]->datum_meta_;
+      const ObDatumMeta &out_meta = expr.datum_meta_;
+      const int16_t int_bytes =
+          wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+              in_meta.precision_);
+      const int16_t in_scale = in_meta.scale_;
+      const int16_t out_scale = out_meta.scale_;
+      const bool int_res_type = ob_is_integer_type(out_meta.get_type());
+      if (OB_UNLIKELY(out_scale != 0)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        switch (int_bytes) {
+          case sizeof(int32_t): {
+            CeilFloorDecIntFunctor<int32_t, LeftVec, ResVec, sizeof(int32_t),
+                                   IsCheck, IS_FLOOR>
+                ceil_floor_func(skip, eval_flags, bound, in_scale, out_meta);
+            ret = ceil_floor_func(left_vec, res_vec);
+            break;
+          }
+          case sizeof(int64_t): {
+            CeilFloorDecIntFunctor<int64_t, LeftVec, ResVec, sizeof(int64_t),
+                                   IsCheck, IS_FLOOR>
+                ceil_floor_func(skip, eval_flags, bound, in_scale, out_meta);
+            ret = ceil_floor_func(left_vec, res_vec);
+            break;
+          }
+          case sizeof(int128_t): {
+            CeilFloorDecIntFunctor<int128_t, LeftVec, ResVec, sizeof(int128_t),
+                                   IsCheck, IS_FLOOR>
+                ceil_floor_func(skip, eval_flags, bound, in_scale, out_meta);
+            ret = ceil_floor_func(left_vec, res_vec);
+            break;
+          }
+          case sizeof(int256_t): {
+            CeilFloorDecIntFunctor<int256_t, LeftVec, ResVec, sizeof(int256_t),
+                                   IsCheck, IS_FLOOR>
+                ceil_floor_func(skip, eval_flags, bound, in_scale, out_meta);
+            ret = ceil_floor_func(left_vec, res_vec);
+            break;
+          }
+          case sizeof(int512_t): {
+            CeilFloorDecIntFunctor<int512_t, LeftVec, ResVec, sizeof(int512_t),
+                                   IsCheck, IS_FLOOR>
+                ceil_floor_func(skip, eval_flags, bound, in_scale, out_meta);
+            ret = ceil_floor_func(left_vec, res_vec);
+            break;
+          }
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected decimal int bytes", K(ret), K(int_bytes));
+            break;
+        }
+      }
+      break;
+    }
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected arg type", K(ret), K(input_type));
+      break;
+  }
+  return ret;
+}
+
+uint64_t bitwise_or(uint64_t l, uint64_t r) {
+    return l | r;
+}
+
+template <typename LeftVec>
+static bool if_vector_need_cal_all(LeftVec *left_vec,
+                            const ObBitVector &skip,
+                            const ObBitVector &eval_flags,
+                            const EvalBound &bound)
+{
+  bool is_need = ObBitVector::bit_op_zero(skip, eval_flags, bound, bitwise_or);
+  for (int64_t j = bound.start(); is_need && j < bound.end(); ++j) {
+    is_need = !(left_vec->is_null(j));
+  }
+  return is_need;
+}
+
+template <typename LeftVec, typename ResVec>
+int ObExprCeilFloor::inner_calc_ceil_floor_vector(const ObExpr &expr,
+                                                 int input_type,
+                                                 ObEvalCtx &ctx,
+                                                 const ObBitVector &skip,
+                                                 const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  LeftVec *left_vec = static_cast<LeftVec *>(expr.args_[0]->get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx); // to do for skip
+  const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
+  const bool is_floor = (T_FUN_SYS_FLOOR == expr.type_) ? true : false;
+  const bool is_check = if_vector_need_cal_all<LeftVec>(left_vec, skip, eval_flags, bound) ? false : true;
+
+  if (is_check && is_floor) {
+    ret = do_eval_ceil_floor_vector<LeftVec, ResVec, true, true>(expr, ctx, input_type, skip, bound);
+  } else if (!is_check && is_floor) {
+    ret = do_eval_ceil_floor_vector<LeftVec, ResVec, true, false>(expr, ctx, input_type, skip, bound);
+  } else if (is_check && !is_floor) {
+    ret = do_eval_ceil_floor_vector<LeftVec, ResVec, false, true>(expr, ctx, input_type, skip, bound);
+  } else if (!is_check && !is_floor) {
+    ret = do_eval_ceil_floor_vector<LeftVec, ResVec, false, false>(expr, ctx, input_type, skip, bound);
+  }
+  return ret;
+}
+
 int ObExprCeilFloor::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const
 {
@@ -435,6 +818,7 @@ int ObExprCeilFloor::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_ceil_floor;
   rt_expr.eval_batch_func_ = eval_batch_ceil_floor;
+  rt_expr.eval_vector_func_ = calc_ceil_floor_vector;
   return ret;
 }
 

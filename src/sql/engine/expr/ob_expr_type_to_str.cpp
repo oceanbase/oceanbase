@@ -12,11 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_type_to_str.h"
-#include "lib/string/ob_string.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/container/ob_array_serialization.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/ob_exec_context.h"
+#include "src/sql/resolver/expr/ob_raw_expr.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -58,11 +56,11 @@ int ObExprTypeToStr::calc_result_type2(ObExprResType &type,
   UNUSED(type_ctx);
   UNUSED(type2);
   int ret = OB_SUCCESS;
-  if (get_raw_expr()->get_extra() == 0) {
+  if (get_raw_expr()->get_dst_type() == 0) {
     type.set_type(ObVarcharType);
   } else {
-    ObObjType dst_type = static_cast<ObObjType>(get_raw_expr()->get_extra());
-    if (!ob_is_large_text(dst_type)) {
+    ObObjType dst_type = static_cast<ObObjType>(get_raw_expr()->get_dst_type());
+    if (!ob_is_large_text(dst_type) && dst_type != ObCharType) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid dst type", K(ret), K(dst_type));
     } else {
@@ -72,6 +70,8 @@ int ObExprTypeToStr::calc_result_type2(ObExprResType &type,
   type.set_collation_type(type1.get_collation_type());
   type.set_collation_level(CS_LEVEL_IMPLICIT);
   type.set_length(type1.get_length());
+  type1.set_calc_collation_type(type.get_collation_type());
+  type1.set_calc_collation_level(type.get_collation_level());
   return ret;
 }
 
@@ -253,7 +253,6 @@ int ObExprSetToStr::calc_to_str_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
 {
   int ret = OB_SUCCESS;
   ObDatum *set_datum = NULL;
-  const ObString &sep = ObCharsetUtils::get_const_str(expr.datum_meta_.cs_type_, ',');
   if (OB_UNLIKELY(expr.arg_cnt_ != 2)
       || OB_ISNULL(expr.args_)
       || OB_ISNULL(expr.args_[1])
@@ -267,54 +266,67 @@ int ObExprSetToStr::calc_to_str_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   } else {
     ObIArray<ObString> &str_values = static_cast<ObEnumSetInfo *>(expr.extra_info_)->str_values_;
     uint64_t set_val = set_datum->get_set();
-
-    //在value存在重复的情况时，element_num会大于64，忽略64以后的值
-    int64_t element_num = str_values.count();
-    if (OB_UNLIKELY(element_num < 1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid element num", K(element_num), K(ret));
-    } else if (OB_UNLIKELY(element_num < EFFECTIVE_COUNT && set_val >= (1ULL << element_num))) {
-      ret = OB_ERR_DATA_TRUNCATED;
-      LOG_WARN("set value out of range", K(set_val), K(element_num));
+    ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+    if (OB_FAIL(ObExprSetToStr::inner_to_str(expr.datum_meta_.cs_type_, set_val, str_values,
+                                             text_result))) {
+      LOG_WARN("enum to str failed", K(ret), K(set_val));
+    } else {
+      text_result.set_result();
     }
+  }
+  return ret;
+}
 
-    int64_t need_size = 0;
-    uint64_t index = 1ULL;
-    for (int64_t i = 0;
-         OB_SUCC(ret) && i < element_num && i < EFFECTIVE_COUNT && set_val >= index;
-         ++i, index = index << 1) {
-      if (set_val & (index)) {
-        need_size += str_values.at(i).length();
-        need_size += ((set_val >= (index << 1)) ? sep.length() : 0);
-      }
+int ObExprSetToStr::inner_to_str(const ObCollationType cs_type,
+                                 const uint64_t set_val,
+                                 const ObIArray<common::ObString> &str_values,
+                                 common::ObTextStringResult &text_result)
+{
+  int ret = OB_SUCCESS;
+  const ObString &sep = ObCharsetUtils::get_const_str(cs_type, ',');
+  // When there are duplicate values, element_num will be greater than 64,
+  // and values after 64 will be ignored.
+  int64_t element_num = str_values.count();
+  if (OB_UNLIKELY(element_num < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid element num", K(element_num), K(ret));
+  } else if (OB_UNLIKELY(element_num < EFFECTIVE_COUNT && set_val >= (1ULL << element_num))) {
+    ret = OB_ERR_DATA_TRUNCATED;
+    LOG_WARN("set value out of range", K(set_val), K(element_num));
+  }
+
+  int64_t need_size = 0;
+  uint64_t index = 1ULL;
+  for (int64_t i = 0;
+        OB_SUCC(ret) && i < element_num && i < EFFECTIVE_COUNT && set_val >= index;
+        ++i, index = index << 1) {
+    if (set_val & (index)) {
+      need_size += str_values.at(i).length();
+      need_size += ((set_val >= (index << 1)) ? sep.length() : 0);
     }
+  }
 
-    if (OB_SUCC(ret)) {
-      int64_t pos = 0;
-      char *buf = NULL;
-      ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
-      if (OB_FAIL(text_result.init(need_size))) {
-        LOG_WARN("init lob result failed", K(ret), K(need_size));
-      } else {
-        uint64_t index = 1ULL;
-        for (int64_t i = 0;
-             OB_SUCC(ret) && i < element_num && i < EFFECTIVE_COUNT && set_val >= index;
-             ++i, index = index << 1) {
-          if (set_val & (index)) {
-            const ObString &element_val = str_values.at(i);
-            if (OB_FAIL(text_result.append(element_val))) {
-              LOG_WARN("fail to append str to lob result", K(ret), K(element_val));
-            } else if ((i + 1) < element_num && (i + 1) < EFFECTIVE_COUNT &&
-                ((index << 1) <= set_val)) {
-              // skip setting last seperator
-              if (OB_FAIL(text_result.append(sep))) {
-                LOG_WARN("fail to append str to lob result", K(ret), K(sep));
-              }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(text_result.init(need_size))) {
+      LOG_WARN("init lob result failed", K(ret), K(need_size));
+    } else {
+      uint64_t index = 1ULL;
+      for (int64_t i = 0;
+            OB_SUCC(ret) && i < element_num && i < EFFECTIVE_COUNT && set_val >= index;
+            ++i, index = index << 1) {
+        if (set_val & (index)) {
+          const ObString &element_val = str_values.at(i);
+          if (OB_UNLIKELY(element_val.empty())) {
+            // skip empty string and its separator
+          } else if (OB_FAIL(text_result.append(element_val))) {
+            LOG_WARN("fail to append str to lob result", K(ret), K(element_val));
+          } else if ((i + 1) < element_num && (i + 1) < EFFECTIVE_COUNT &&
+              ((index << 1) <= set_val)) {
+            // skip setting last seperator
+            if (OB_FAIL(text_result.append(sep))) {
+              LOG_WARN("fail to append str to lob result", K(ret), K(sep));
             }
           }
-        }
-        if (OB_SUCC(ret)) {
-          text_result.set_result();
         }
       }
     }
@@ -363,32 +375,41 @@ int ObExprEnumToStr::calc_to_str_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
     res_datum.set_null();
   } else {
     ObIArray<ObString> &str_values = static_cast<ObEnumSetInfo *>(expr.extra_info_)->str_values_;
-    char *buf = NULL;
     uint64_t enum_val = enum_datum->get_enum();
-    int64_t element_num = str_values.count();
-    uint64_t element_idx = enum_val - 1;
-    ObString element_str;
-    if (OB_UNLIKELY(element_num < 1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid element num", K(element_num), K(element_num));
-    } else if (0 == enum_val) {
-      // ObString empty_string;
-      // res_datum.set_enumset_inner(empty_string.make_empty_string());
-    } else if (OB_UNLIKELY(element_idx > element_num - 1)) {
-      ret = OB_ERR_DATA_TRUNCATED;
-      LOG_WARN("enum value out of range", K(element_idx), K(element_num), K(ret));
+    ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+    if (OB_FAIL(ObExprEnumToStr::inner_to_str(enum_val, str_values, text_result))) {
+      LOG_WARN("enum to str failed", K(ret), K(enum_val));
     } else {
-      element_str = str_values.at(element_idx);
+      text_result.set_result();
     }
-    if (OB_SUCC(ret)) {
-      ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
-      if (OB_FAIL(text_result.init(element_str.length()))) {
-        LOG_WARN("init lob result failed");
-      } else if (OB_FAIL(text_result.append(element_str.ptr(), element_str.length()))) {
-        LOG_WARN("failed to append realdata", K(ret), K(text_result));
-      } else {
-        text_result.set_result();
-      }
+  }
+  return ret;
+}
+
+int ObExprEnumToStr::inner_to_str(const uint64_t enum_val,
+                                  const ObIArray<ObString> &str_values,
+                                  common::ObTextStringResult &text_result)
+{
+  int ret = OB_SUCCESS;
+  const int64_t element_num = str_values.count();
+  const uint64_t element_idx = enum_val - 1;
+  ObString element_str;
+  if (OB_UNLIKELY(element_num < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid element num", K(element_num), K(element_num));
+  } else if (0 == enum_val) {
+    // ObString empty_string;
+  } else if (OB_UNLIKELY(element_idx > element_num - 1)) {
+    ret = OB_ERR_DATA_TRUNCATED;
+    LOG_WARN("enum value out of range", K(element_idx), K(element_num), K(ret));
+  } else {
+    element_str = str_values.at(element_idx);
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(text_result.init(element_str.length()))) {
+      LOG_WARN("init lob result failed");
+    } else if (OB_FAIL(text_result.append(element_str.ptr(), element_str.length()))) {
+      LOG_WARN("failed to append real data", K(ret), K(text_result));
     }
   }
   return ret;
@@ -417,7 +438,10 @@ int ObExprSetToInnerType::calc_result_type2(ObExprResType &type,
   int ret = OB_SUCCESS;
   type.set_type(ObSetInnerType);
   type.set_collation_type(type1.get_collation_type());
+  type.set_collation_level(type1.get_collation_level());
   type.set_length(type1.get_length());
+  type1.set_calc_collation_type(type.get_collation_type());
+  type1.set_calc_collation_level(type.get_collation_level());
   return ret;
 }
 
@@ -522,6 +546,8 @@ int ObExprEnumToInnerType::calc_result_type2(ObExprResType &type,
   type.set_type(ObEnumInnerType);
   type.set_collation_type(type1.get_collation_type());
   type.set_length(type1.get_length());
+  type1.set_calc_collation_type(type.get_collation_type());
+  type1.set_calc_collation_level(type.get_collation_level());
   return ret;
 }
 
@@ -586,6 +612,68 @@ int ObExprEnumToInnerType::calc_to_inner_expr(const ObExpr &expr, ObEvalCtx &ctx
         LOG_WARN("failed to serialize inner_value", K(BUF_LEN), K(ret));
       } else {
         res_datum.set_enumset_inner(buf, static_cast<ObString::obstr_size_t>(pos));
+      }
+    }
+  }
+  return ret;
+}
+
+//////////////////////////// ObExprInnerTypeToEnumSet ////////////////////////////
+ObExprInnerTypeToEnumSet::ObExprInnerTypeToEnumSet(ObIAllocator &alloc)
+  : ObExprOperator(alloc, T_FUN_INNER_TYPE_TO_ENUMSET, N_INNER_TYPE_TO_ENUMSET, 2, NOT_VALID_FOR_GENERATED_COL, INTERNAL_IN_MYSQL_MODE)
+{
+}
+
+ObExprInnerTypeToEnumSet::~ObExprInnerTypeToEnumSet()
+{
+}
+
+int ObExprInnerTypeToEnumSet::calc_result_type2(ObExprResType &type,
+                                                ObExprResType &type1,
+                                                ObExprResType &type2,
+                                                ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo* session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+  const ObEnumSetMeta *enum_set_meta = NULL;
+  int32_t subschema_id = type1.get_param().get_int();
+  CK (OB_NOT_NULL(session));
+  CK (OB_NOT_NULL(session->get_cur_exec_ctx()));
+  OZ (session->get_cur_exec_ctx()->get_enumset_meta_by_subschema_id(subschema_id, true, enum_set_meta));
+  CK (OB_NOT_NULL(enum_set_meta));
+  OX (type.set_meta(enum_set_meta->get_obj_meta()));
+  OX (type.set_subschema_id(subschema_id));
+  OX (type.mark_pl_enum_set_with_subschema());
+  return ret;
+}
+
+int ObExprInnerTypeToEnumSet::cg_expr(ObExprCGCtx &op_cg_ctx,
+                                 const ObRawExpr &raw_expr,
+                                 ObExpr &rt_expr) const
+{
+  UNUSED(raw_expr);
+  UNUSED(op_cg_ctx);
+  rt_expr.eval_func_ = ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset;
+  return OB_SUCCESS;
+}
+
+int ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *inner_datum = NULL;
+  if (OB_FAIL(expr.args_[1]->eval(ctx, inner_datum))) {
+    LOG_WARN("eval inner datum failed", K(ret));
+  } else if (inner_datum->is_null()) {
+    res_datum.set_null();
+  } else {
+    ObEnumSetInnerValue inner_value;
+    if (OB_FAIL(inner_datum->get_enumset_inner(inner_value))) {
+      LOG_WARN("failed to get enumset inner value", K(ret), K(inner_datum));
+    } else {
+      if (ObEnumInnerType == expr.args_[1]->obj_meta_.get_type()) {
+        res_datum.set_enum(inner_value.numberic_value_);
+      } else {
+        res_datum.set_set(inner_value.numberic_value_);
       }
     }
   }

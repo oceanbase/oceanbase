@@ -11,8 +11,6 @@
  */
 #define USING_LOG_PREFIX LIB
 #include "rpc/obrpc/ob_rpc_packet.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_print_utils.h"
 
 using namespace oceanbase::obrpc;
 

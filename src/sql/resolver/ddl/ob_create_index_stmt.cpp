@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
-#include "share/schema/ob_table_schema.h"
 
 namespace oceanbase
 {
@@ -69,6 +68,11 @@ void ObCreateIndexStmt::set_compress_method(const ObString &compress_method)
 void ObCreateIndexStmt::set_comment(const ObString &comment)
 {
   create_index_arg_.index_option_.comment_ = comment;
+}
+
+void ObCreateIndexStmt::set_storage_cache_policy(const ObString &storage_cache_policy)
+{
+  create_index_arg_.index_option_.storage_cache_policy_ = storage_cache_policy;
 }
 
 void ObCreateIndexStmt::set_index_name(const ObString &index_name)

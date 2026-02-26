@@ -126,7 +126,6 @@ TEST_F(TestPlanCacheValue, basic)
     sql_ctx[i].schema_guard_ = &(test_sql->get_schema_guard());
     sql_ctx[i].session_info_ = &(session[i]);
     sql_ctx[i].all_plan_const_param_constraints_ = &plan_const_param_constraints;
-    sql_ctx[i].all_possible_const_param_constraints_ = &all_const_param_constraints;
   }
   for (int i = 0; i < TEST_PLAN_NUM; i++) {
     ASSERT_EQ(OB_SUCCESS, session[i].init_tenant(ObString(OB_SYS_TENANT_NAME), OB_SYS_TENANT_ID));
@@ -166,8 +165,6 @@ TEST_F(TestPlanCacheValue, basic)
     ASSERT_EQ(OB_SUCCESS, exec_ctx[i].get_sql_ctx()->set_partition_infos(
               table_partition_info,
               allocator));
-    ASSERT_EQ(OB_SUCCESS, exec_ctx[i].get_task_executor_ctx()->set_table_locations(
-              table_partition_info));
   }
 
   ObString sql_0 = ObString::make_string("select /*no_use_px*/ * from t1 where c1 = 1");

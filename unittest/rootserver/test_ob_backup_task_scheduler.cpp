@@ -60,7 +60,7 @@ public:
     can_remove = true; 
     return OB_SUCCESS;
   }
-  virtual int get_need_reload_task(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) { return OB_SUCCESS; }
+  virtual int get_need_reload_task(common::ObIAllocator &allocator, ObBackupTaskSchedulerQueue &queue) { return OB_SUCCESS; }
 };
 
 fakeBackupJob job;

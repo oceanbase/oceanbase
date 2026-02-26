@@ -90,7 +90,7 @@ TEST(TestLfFIFOAllocator, single_thread2)
 
 ObLfFIFOAllocator allocator1;
 pthread_barrier_t barrier1;
-//typedef common::ObConcurrentHashMap<int64_t, int64_t> PointerContainer;
+//typedef common::ObConcurrentHashMapDoNotUse<int64_t, int64_t> PointerContainer;
 typedef common::hash::ObHashMap<int64_t, int64_t> PointerContainer;
 PointerContainer pc;
 

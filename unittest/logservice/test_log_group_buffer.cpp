@@ -11,9 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <random>
-#include <string>
-#include <pthread.h>
 
 #define private public
 #include "logservice/palf/log_group_buffer.h"

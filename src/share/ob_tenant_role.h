@@ -55,12 +55,13 @@ public:
   bool operator != (const ObTenantRole &other) const { return value_ != other.value_; }
 
   // ObTenantRole attribute interface
+  bool is_invalid() const { return INVALID_TENANT == value_; }
   bool is_primary() const { return PRIMARY_TENANT == value_; }
   bool is_standby() const { return STANDBY_TENANT == value_; }
   bool is_restore() const { return RESTORE_TENANT == value_; }
   bool is_clone() const { return CLONE_TENANT == value_; }
 
-  TO_STRING_KV(K_(value));
+  TO_STRING_KV("tenant_role", to_str(), K_(value));
   DECLARE_TO_YSON_KV;
 private:
   Role value_;

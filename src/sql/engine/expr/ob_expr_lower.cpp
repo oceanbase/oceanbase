@@ -16,14 +16,9 @@
 #include <immintrin.h>
 #endif
 
-#include <string.h>
 #include "sql/engine/expr/ob_expr_lower.h"
-#include "share/object/ob_obj_cast.h"
-#include "objit/common/ob_item_type.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 
 namespace oceanbase {
 using namespace common;
@@ -77,8 +72,9 @@ int ObExprLowerUpper::calc_result_type1(ObExprResType &type, ObExprResType &text
       const common::ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session())
           ? type_ctx.get_session()->get_actual_nls_length_semantics()
           : common::LS_BYTE);
-      ret = aggregate_charsets_for_string_result(type, &text, 1, type_ctx.get_coll_type());
+      ret = aggregate_charsets_for_string_result(type, &text, 1, type_ctx);
       OX(text.set_calc_collation_type(type.get_collation_type()));
+      OX(text.set_calc_collation_level(type.get_collation_level()));
       OX(type.set_length(text.get_length()));
     }
   }
@@ -432,7 +428,7 @@ int ObExprLowerUpper::calc_common(const ObExpr &expr, ObEvalCtx &ctx,
                && buf_size > 0
                && (state = src_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
           int32_t out_len = calc_common_inner(buf,
-                                              buf_size,
+                                              multiply == 1 ? src_block_data.length() : buf_size,
                                               src_block_data,
                                               cs_type,
                                               lower);
@@ -629,7 +625,7 @@ int ObExprLowerUpper::vector_lower_upper(VECTOR_EVAL_FUNC_ARG_DECL, common::ObCo
                 out_len = src_block_data.length();
               } else {
                 out_len = calc_common_inner(buf,
-                                            buf_size,
+                                            multiply == 1 ? src_block_data.length() : buf_size,
                                             src_block_data,
                                             cs_type,
                                             IsLower);
@@ -683,17 +679,17 @@ int ObExprLowerUpper::calc_common_vector(
     VectorFormat arg_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_lower_upper<TextDiscVec, TextDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrDiscVec, StrDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_lower_upper<TextUniVec, TextDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrUniVec, StrDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_lower_upper<TextContVec, TextDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrContVec, StrDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_lower_upper<TextDiscVec, TextUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrDiscVec, StrUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_lower_upper<TextUniVec, TextUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrUniVec, StrUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_lower_upper<TextContVec, TextUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrContVec, StrUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else {
       ret = vector_lower_upper<ObVectorBase, ObVectorBase, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     }

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX  SQL_ENG
 
 #include "sql/engine/expr/ob_expr_assign.h"
-#include "lib/ob_name_def.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -57,9 +54,13 @@ int ObExprAssign::calc_result_type2(ObExprResType &type,
     type.set_varchar();
     type.set_collation_level(value.get_collation_level());
     type.set_collation_type(value.get_collation_type());
+  } else if (ob_is_collection_sql_type(value.get_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Variable value set to collection type is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable value set to collection type");
   } else {
     type.set_type(val_type);
-    type.set_collation_level(common::CS_LEVEL_IMPLICIT);
+    type.set_collation_level(value.get_collation_level());
     type.set_collation_type(value.get_collation_type());
   }
   type.set_precision(value.get_precision());

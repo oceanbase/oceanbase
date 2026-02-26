@@ -22,6 +22,7 @@
 #include "sql/engine/ob_operator.h"
 #include "sql/resolver/dml/ob_hint.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
+#include "storage/blocksstable/ob_datum_row_iterator.h"
 namespace oceanbase
 {
 namespace storage
@@ -33,9 +34,11 @@ namespace sql
 typedef common::ObFixedArray<common::ObObjMeta, common::ObIAllocator> ObjMetaFixedArray;
 typedef common::ObFixedArray<common::ObAccuracy, common::ObIAllocator> AccuracyFixedArray;
 static const int64_t SAPTIAL_INDEX_DEFAULT_ROW_COUNT = 32; // 一个wkb生成的cellid数量（设定值）
-typedef common::ObSEArray<common::ObNewRow, SAPTIAL_INDEX_DEFAULT_ROW_COUNT> ObDomainIndexRow;
+static const int64_t SAPTIAL_INDEX_DEFAULT_COL_COUNT = 2;
+typedef common::ObSEArray<blocksstable::ObDatumRow*, SAPTIAL_INDEX_DEFAULT_ROW_COUNT> ObDomainIndexRow;
 
 class ObDomainDMLIterator;
+class ObFTDocWordInfo;
 struct ObDASDMLBaseRtDef;
 //das dml base compile info definition
 struct ObDASDMLBaseCtDef : ObDASBaseCtDef
@@ -58,6 +61,7 @@ public:
                        K_(is_batch_stmt),
                        K_(is_insert_up),
                        K_(is_table_api),
+                       K_(is_main_table_in_fts_ddl),
                        K_(tz_info),
                        K_(table_param),
                        K_(encrypt_meta));
@@ -83,7 +87,16 @@ public:
       uint64_t is_insert_up_                    : 1;
       uint64_t is_table_api_                    : 1;
       uint64_t is_access_mlog_as_master_table_  : 1;
-      uint64_t reserved_                        : 58;
+      uint64_t is_access_vidx_as_master_table_  : 1; // FARM COMPAT WHITELIST for 4_2_1_release compatibility
+      uint64_t is_update_partition_key_         : 1; // FARM COMPAT WHITELIST for 4_2_1_release compatibility
+      uint64_t is_update_uk_                    : 1;
+      uint64_t is_update_pk_with_dop_           : 1; // update primary_table PK
+      uint64_t is_main_table_in_fts_ddl_        : 1; // main table is in fts ddl for mode of unstable ftparser.
+      uint64_t is_update_pk_                    : 1;
+      uint64_t is_vec_hnsw_index_vid_opt_       : 1;  // hnsw index vid opt for tables without pk
+      uint64_t is_embedded_vec_ref_column_      : 1;  // semantic embeding table column change flags
+      uint64_t reserved_                        : 46; //add new flag before reserved_
+      uint64_t compat_version_                  : 4; //prohibited to insert new flags between compat_version_ and reserved_
     };
   };
 protected:
@@ -103,7 +116,9 @@ protected:
       table_param_(alloc),
       encrypt_meta_(alloc),
       flags_(0)
-  { }
+  {
+    compat_version_ = 1; //notify observer to use new flags after 4.2.5.2
+  }
 };
 
 typedef common::ObFixedArray<ObDASDMLBaseCtDef*, common::ObIAllocator> DASDMLCtDefArray;
@@ -118,7 +133,8 @@ public:
                        K_(prelock),
                        K_(tenant_schema_version),
                        K_(is_for_foreign_key_check),
-                       K_(affected_rows));
+                       K_(affected_rows),
+                       K_(is_immediate_row_conflict_check));
   int64_t timeout_ts_;
   ObSQLMode sql_mode_;
   bool prelock_;
@@ -127,6 +143,7 @@ public:
   int64_t affected_rows_;
   const DASDMLCtDefArray *related_ctdefs_;
   DASDMLRtDefArray *related_rtdefs_;
+  bool is_immediate_row_conflict_check_;
 protected:
   ObDASDMLBaseRtDef(ObDASOpType op_type)
     : ObDASBaseRtDef(op_type),
@@ -137,8 +154,9 @@ protected:
       is_for_foreign_key_check_(false),
       affected_rows_(0),
       related_ctdefs_(nullptr),
-      related_rtdefs_(nullptr)
-  { }
+      related_rtdefs_(nullptr),
+      is_immediate_row_conflict_check_(true)
+  {}
 };
 
 struct ObDASInsCtDef : ObDASDMLBaseCtDef
@@ -284,7 +302,7 @@ public:
              const common::ObIArray<common::ObObjMeta> &col_types,
              bool strip_lob_locator);
     virtual int shadow_copy(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx) override;
-    int shadow_copy(const common::ObNewRow &row);
+    int shadow_copy(const blocksstable::ObDatumRow &row);
     // reset && release referenced memory
     virtual void reset()
     {
@@ -353,13 +371,13 @@ public:
     { }
     ~NewRowIterator() { }
 
-    int get_next_row(ObNewRow *&row);
+    int get_next_row(blocksstable::ObDatumRow *&row);
     inline bool is_inited() { return nullptr != col_types_; }
   private:
     DmlRow *cur_row_;
     ObChunkDatumStore::Iterator *datum_iter_;
     const common::ObIArray<ObObjMeta> *col_types_;
-    ObNewRow *cur_new_row_;
+    blocksstable::ObDatumRow *cur_new_row_;
   };
 
   OB_UNIS_VERSION(1);
@@ -402,6 +420,12 @@ public:
     return buffer_list_.header_.next_ != nullptr ? buffer_list_.header_.next_->cnt_ : 0;
   }
   inline uint64_t get_tenant_id() const { return mem_attr_.tenant_id_; }
+  int add_row(const common::ObIArray<ObExpr*> &exprs,
+              ObEvalCtx *ctx,
+              DmlRow *&stored_row,
+              bool strip_lob_locator);
+  int add_row(const DmlShadowRow &sr, DmlRow **stored_row = nullptr);
+
   int try_add_row(const common::ObIArray<ObExpr*> &exprs,
                   ObEvalCtx *ctx,
                   const int64_t memory_limit,
@@ -435,6 +459,8 @@ private:
                        const int64_t memory_limit,
                        bool &row_added,
                        ObChunkDatumStore::StoredRow **stored_sr);
+  int add_row_to_store(const ObChunkDatumStore::ShadowStoredRow &sr,
+                       ObChunkDatumStore::StoredRow **stored_sr);
   static DmlRow *get_next_dml_row(DmlRow *cur_row);
   int serialize_buffer_list(char *buf, const int64_t buf_len, int64_t &pos) const;
   int64_t get_buffer_list_serialize_size() const;
@@ -457,7 +483,7 @@ private:
   uint32_t row_extend_size_;
 };
 
-class ObDASDMLIterator : public common::ObNewRowIterator
+class ObDASDMLIterator : public blocksstable::ObDatumRowIterator
 {
 public:
   static const int64_t DEFAULT_BATCH_SIZE = 256;
@@ -469,48 +495,52 @@ public:
       das_ctdef_(das_ctdef),
       row_projector_(nullptr),
       allocator_(alloc),
-      cur_row_(nullptr),
-      cur_rows_(nullptr),
+      cur_datum_row_(nullptr),
+      cur_datum_rows_(nullptr),
       main_ctdef_(das_ctdef),
-      domain_iter_(nullptr)
+      domain_iter_(nullptr),
+      ft_doc_word_info_(nullptr)
   {
     set_ctdef(das_ctdef);
     batch_size_ = MIN(write_buffer_.get_row_cnt(), DEFAULT_BATCH_SIZE);
   }
   virtual ~ObDASDMLIterator();
-  virtual int get_next_row(common::ObNewRow *&row) override;
-  virtual int get_next_row() override;
-  virtual int get_next_rows(ObNewRow *&rows, int64_t &row_count);
+  virtual int get_next_row(blocksstable::ObDatumRow *&datum_row) override;
+  virtual int get_next_rows(blocksstable::ObDatumRow *&rows, int64_t &row_count);
   ObDASWriteBuffer &get_write_buffer() { return write_buffer_; }
   virtual void reset() override { }
-  int rewind(const ObDASDMLBaseCtDef *das_ctdef);
+  int rewind(const ObDASDMLBaseCtDef *das_ctdef, const ObFTDocWordInfo *ft_doc_word_info);
 
 private:
   void set_ctdef(const ObDASDMLBaseCtDef *das_ctdef);
-  int get_next_domain_index_row(ObNewRow *&row);
-  int get_next_domain_index_rows(ObNewRow *&rows, int64_t &row_count);
+  int get_next_domain_index_row(blocksstable::ObDatumRow *&row);
+  int get_next_domain_index_rows(blocksstable::ObDatumRow *&rows, int64_t &row_count);
 private:
   ObDASWriteBuffer &write_buffer_;
   const ObDASDMLBaseCtDef *das_ctdef_;
   const IntFixedArray *row_projector_;
   ObDASWriteBuffer::Iterator write_iter_;
   common::ObIAllocator &allocator_;
-  common::ObNewRow *cur_row_;
-  common::ObNewRow *cur_rows_;
+  blocksstable::ObDatumRow *cur_datum_row_;
+  blocksstable::ObDatumRow *cur_datum_rows_;
   const ObDASDMLBaseCtDef *main_ctdef_;
   ObDomainDMLIterator *domain_iter_;
+  const ObFTDocWordInfo *ft_doc_word_info_;
   int64_t batch_size_;
 };
 
-class ObDASMLogDMLIterator : public ObNewRowIterator
+class ObDASMLogDMLIterator : public blocksstable::ObDatumRowIterator
 {
 public:
+  // support get next datum row
   ObDASMLogDMLIterator(
+      const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       const storage::ObDMLBaseParam &dml_param,
-      ObNewRowIterator *iter,
+      ObDatumRowIterator *iter,
       ObDASOpType op_type)
-    : tablet_id_(tablet_id),
+    : ls_id_(ls_id),
+      tablet_id_(tablet_id),
       dml_param_(dml_param),
       row_iter_(iter),
       op_type_(op_type),
@@ -522,14 +552,13 @@ public:
     }
   }
   virtual ~ObDASMLogDMLIterator() {}
-  virtual int get_next_row(ObNewRow *&row) override;
-  virtual int get_next_row() override { return OB_NOT_IMPLEMENT; }
-  virtual void reset() override {}
+  virtual int get_next_row(blocksstable::ObDatumRow *&datum_row) override;
 
 private:
+  const share::ObLSID &ls_id_;
   const ObTabletID &tablet_id_;
   const storage::ObDMLBaseParam &dml_param_;
-  ObNewRowIterator *row_iter_;
+  ObDatumRowIterator *row_iter_;
   ObDASOpType op_type_;
   bool is_old_row_;
 };

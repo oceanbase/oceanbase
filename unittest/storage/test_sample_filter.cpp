@@ -27,11 +27,11 @@ public:
     sql::ObPushdownOperator *op = nullptr;
     ObPushdownSampleFilterNode *filter_node = nullptr;
     void *buf = nullptr;
-    ASSERT_NE(nullptr, buf = allocator_.alloc(sizeof(ObSampleFilterExecutor)));
-    sample_executor_ = new (buf) ObSampleFilterExecutor(allocator_, *filter_node, *op);
+    ASSERT_NE(nullptr, buf = allocator_.alloc(sizeof(ObHybridSampleFilterExecutor)));
+    sample_executor_ = new (buf) ObHybridSampleFilterExecutor(allocator_, *filter_node, *op);
 
     SampleInfo sample_info;
-    sample_info.method_ = SampleInfo::ROW_SAMPLE;
+    sample_info.method_ = SampleInfo::HYBRID_SAMPLE;
     sample_info.percent_ = 40.0;
     sample_info.seed_ = 0;
     ASSERT_EQ(OB_SUCCESS, sample_executor_->init(sample_info, false, &allocator_));
@@ -62,7 +62,7 @@ public:
 
 public:
   ObArenaAllocator allocator_;
-  ObSampleFilterExecutor *sample_executor_;
+  ObHybridSampleFilterExecutor *sample_executor_;
 };
 
 TEST_F(ObRowSampleFilterTest, test_filter_single_row)

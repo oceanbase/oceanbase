@@ -65,6 +65,22 @@ public:
   int64_t get_num_distinct() { return num_distinct_; }
   int64_t get_pop_count() { return pop_count_; }
   int64_t get_pop_freq() { return pop_freq_; }
+  void set_total_count(int64_t total_count)
+  {
+    total_count_ = total_count;
+  }
+  void set_num_distinct(int64_t num_distinct)
+  {
+    num_distinct_ = num_distinct;
+  }
+  void set_pop_count(int64_t pop_count)
+  {
+    pop_count_ = pop_count;
+  }
+  void set_pop_freq(int64_t pop_freq)
+  {
+    pop_freq_ = pop_freq;
+  }
   int build_hybrid_hist(ObIArray<BucketNode> &bucket_pairs,
                         int64_t bucket_num,
                         int64_t total_count,
@@ -101,6 +117,12 @@ public:
 
   int estimate(const ObOptStatGatherParam &param,
                ObOptStat &opt_stat);
+
+  int estimate(const ObOptStatGatherParam &param,
+               int64_t total_row_count,
+               int64_t micro_block_num,
+               bool sstable_rows_more,
+               ObOptStat &opt_stat);
 private:
 
   int try_build_hybrid_hist(const ObColumnStatParam &param,
@@ -109,6 +131,8 @@ private:
                             bool &is_done);
 
   int compute_estimate_percent(int64_t total_row_count,
+                               int64_t micro_block_num,
+                               bool sstable_rows_more,
                                int64_t max_num_buckets,
                                const ObAnalyzeSampleInfo &sample_info,
                                bool &need_sample,

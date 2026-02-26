@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_sys_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "share/schema/ob_schema_struct.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/ob_global_context_operator.h"
 
@@ -405,7 +400,7 @@ int ObExprSysContext::eval_sessionid(const ObExpr &expr, ObDatum &res, const ObD
   const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   CK(OB_NOT_NULL(session));
   if (OB_SUCC(ret)) {
-    const uint64_t sid = session->get_compatibility_sessid();
+    const uint64_t sid = session->get_sid();
     char out_id[256];
     sprintf(out_id, "%lu", sid);
     ObString out_id_str(strlen(out_id), out_id);
@@ -460,7 +455,7 @@ int ObExprSysContext::eval_instance(const ObExpr &expr, common::ObDatum &res,
   int ret = OB_SUCCESS;
   UNUSED(arg1);
   UNUSED(arg2);
-  uint64_t instance_id = GCTX.server_id_;
+  uint64_t instance_id = GCTX.get_server_id();
   //OZ(uint_string(expr, ctx, instance_id, res));
   char out_id[256];
   sprintf(out_id, "%lu", instance_id);
@@ -731,7 +726,8 @@ int ObExprSysContext::eval_application_context(const ObExpr &expr, ObDatum &res,
       if (OB_FAIL(schema_guard.get_context_schema_with_name(session->get_effective_tenant_id(),
                                                       arg1, ctx_schema))) {
         LOG_WARN("failed to get context schema", K(ret));
-      } else if (OB_ISNULL(ctx_schema)) {
+      } else if (OB_ISNULL(ctx_schema)
+                 || ObContextType::ACCESSED_GLOBALLY != ctx_schema->get_context_type()) {
         // not exist, do nothing and return null
       } else if (OB_ISNULL(sql_client = ctx.exec_ctx_.get_sql_proxy())) {
         ret = OB_ERR_UNEXPECTED;
@@ -767,7 +763,11 @@ int ObExprSysContext::eval_application_context(const ObExpr &expr, ObDatum &res,
   }
   if (OB_SUCC(ret)) {
     if (exist) {
-      OX(res.set_string(out_value));
+      if (out_value.empty()) {
+        res.set_null();
+      } else {
+        res.set_string(out_value);
+      }
     } else {
       res.set_null();
     }
@@ -779,6 +779,7 @@ int ObExprSysContext::eval_sys_context(const ObExpr &expr, ObEvalCtx &ctx,
                                        ObDatum &res)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObDatum *ns = NULL;
   ObDatum *para = NULL;
   eval_fun fun = NULL;

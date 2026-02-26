@@ -11,23 +11,12 @@
  */
 
 #include <fstream>
-#include <iterator>
-#include "lib/stat/ob_session_stat.h"
 #define private public
-#include "lib/utility/ob_test_util.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/ob_resolver.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/json/ob_json_print_utils.h"  // for SJ
-#include "sql/resolver/ob_schema_checker.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
-#include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/system_variable/ob_system_variable.h"
 #include "ob_restore_schema.h"
-#include "../../share/schema/mock_schema_service.h"
-//#include <iostream>
-//#include <string>
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -244,9 +233,11 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
           OB_ASSERT(INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_
               || INDEX_TYPE_NORMAL_LOCAL == index_arg.index_type_
               || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_
-              || INDEX_TYPE_NORMAL_GLOBAL == index_arg.index_type_);
+              || INDEX_TYPE_NORMAL_GLOBAL == index_arg.index_type_
+              || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_arg.index_type_);
           if (INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_
-              || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) {
+              || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_
+              || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_arg.index_type_) {
             index_column.set_column_id(OB_MIN_SHADOW_COLUMN_ID + col->get_column_id());
             int32_t shadow_name_len = col->get_column_name_str().length() + 8;
             char shadow_name[shadow_name_len];

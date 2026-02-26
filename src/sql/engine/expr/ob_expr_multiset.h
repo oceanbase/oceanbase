@@ -83,6 +83,12 @@ public:
                                    int64_t count,
                                    ObObj *&data_arr,
                                    int64_t &elem_count);
+
+  static int eval_composite_relative_anonymous_block(ObExecContext &exec_ctx,
+                                                     const char *pl,
+                                                     ParamStore &params,
+                                                     ObBitSet<> &out_args);
+
 private:
   static int calc_ms_union(common::ObIAllocator *coll_allocator,
                     pl::ObPLCollection *c1,
@@ -130,6 +136,18 @@ private:
                                    int64_t &elem_count,
                                    ObMultiSetType ms_type,
                                    ObMultiSetModifier ms_modifier);
+
+  static int eval_multiset_composite(ObExecContext &exec_ctx,
+                                     const common::ObObj &obj1,
+                                     const common::ObObj &obj2,
+                                     common::ObObj &result,
+                                     ObMultiSetType ms_type,
+                                     ObMultiSetModifier ms_modifier);
+
+  static int append_collection(ObObj *buffer, int64_t buffer_size, int64_t &pos,
+                               pl::ObPLCollection *c,
+                               ObIAllocator &coll_alloc,
+                               bool keep_deleted_elem);
 
   DISALLOW_COPY_AND_ASSIGN(ObExprMultiSet);
 private:

@@ -25,6 +25,7 @@ namespace storage
 
 ObTabletTableStoreFlag::ObTabletTableStoreFlag()
   : with_major_sstable_(ObTabletTableStoreWithMajorFlag::WITH_MAJOR_SSTABLE),
+    is_user_data_table_(false),
     reserved_()
 {
 }
@@ -36,6 +37,7 @@ ObTabletTableStoreFlag::~ObTabletTableStoreFlag()
 void ObTabletTableStoreFlag::reset()
 {
   with_major_sstable_ = ObTabletTableStoreWithMajorFlag::WITH_MAJOR_SSTABLE;
+  is_user_data_table_ = false;
 }
 
 int ObTabletTableStoreFlag::serialize(char *buf, const int64_t len, int64_t &pos) const

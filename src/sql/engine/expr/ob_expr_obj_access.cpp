@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_obj_access.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/ob_spi.h"
-#include "pl/ob_pl.h"
 #include "pl/ob_pl_resolver.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "src/sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -159,7 +155,7 @@ int ObExprObjAccess::assign(const ObExprOperator &other)
       } else if (obj.is_null()) { \
         if (!skip_check_error) {  \
           ret = OB_ERR_NUMERIC_OR_VALUE_ERROR; \
-          LOG_WARN("ORA-06502: PL/SQL: numeric or value error: NULL index table key value",\
+          LOG_WARN("OBE-06502: PL/SQL: numeric or value error: NULL index table key value",\
                  K(ret), K(obj), K(i)); \
         } else {  \
           param_value = OB_INVALID_INDEX; \
@@ -189,7 +185,11 @@ int ObExprObjAccess::ExtraInfo::init_param_array(const ParamStore &param_store,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
     const ObObj &obj = objs_stack[i];
-    GET_VALID_INT64_PARAM(obj, (i == param_num - 1 && pl::ObCollectionType::NEXT_PROPERTY == property_type_));
+    GET_VALID_INT64_PARAM(obj,
+      (i == param_num - 1
+        && (pl::ObCollectionType::NEXT_PROPERTY == property_type_
+            || pl::ObCollectionType::EXISTS_PROPERTY == property_type_
+            || pl::ObCollectionType::PRIOR_PROPERTY == property_type_)));
   }
   return ret;
 }
@@ -233,7 +233,7 @@ int ObExprObjAccess::calc_result(ObObj &result,
   return info_.calc(result,
                     alloc,
                     get_result_type(),
-                    get_result_type().get_extend_size(),
+                    info_.extend_size_,
                     param_store,
                     objs_stack,
                     param_num,
@@ -243,7 +243,10 @@ int ObExprObjAccess::calc_result(ObObj &result,
 int ObExprObjAccess::ExtraInfo::get_collection_attr(int64_t* params,
                                                     const pl::ObObjAccessIdx &current_access,
                                                     bool for_write,
-                                                    void *&current_value) const
+                                                    bool is_assoc_array,
+                                                    void *&current_value,
+                                                    void *&current_allocator,
+                                                    ObSQLSessionInfo *session_info) const
 {
   int ret = OB_SUCCESS;
   pl::ObPLCollection *current_coll = reinterpret_cast<pl::ObPLCollection*>(current_value);
@@ -260,19 +263,42 @@ int ObExprObjAccess::ExtraInfo::get_collection_attr(int64_t* params,
       element_idx = params[current_access.var_index_] - 1;
     }
     if (element_idx < 0 || element_idx >= current_coll->get_count()) {
-      ret = OB_READ_NOTHING;
+      ret = is_assoc_array ? OB_READ_NOTHING : OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT;
       LOG_WARN("", K(ret), K(element_idx));
     }
   }
   if (OB_SUCC(ret) && !current_access.is_property()) {
     ObObj &element_obj = current_coll->get_data()[element_idx];
+    if (for_write_) {
+      current_allocator = current_coll->get_allocator();
+    }
     if (ObMaxType == element_obj.get_type()) {
       if (!for_write) {
         ret = OB_READ_NOTHING;
         LOG_WARN("", K(ret), KPC(current_coll));
       } else {
         if (current_access.var_type_.is_composite_type()) {
-          element_obj.set_type(ObExtendType);
+          const pl::ObUserDefinedType *type = nullptr;
+          int64_t ptr = 0;
+          int64_t init_size = OB_INVALID_SIZE;
+          const pl::ObPLINS *ns = session_info->get_pl_context()->get_current_ctx();
+          CK (OB_NOT_NULL(ns));
+          OZ (ns->get_user_type(current_access.var_type_.get_user_type_id(), type));
+          CK (OB_NOT_NULL(type));
+          CK (type->is_composite_type());
+          OZ (type->newx(*current_coll->get_allocator(), ns, ptr));
+          if (OB_FAIL(ret)) {
+          } else if (type->is_collection_type()) {
+            pl::ObPLCollection *collection = NULL;
+            CK (OB_NOT_NULL(collection = reinterpret_cast<pl::ObPLCollection*>(ptr)));
+            OX (collection->set_count(0));
+          } else if (type->is_record_type()) {
+            pl::ObPLRecord *record = NULL;
+            CK (OB_NOT_NULL(record = reinterpret_cast<pl::ObPLRecord*>(ptr)));
+            OX (record->set_null());
+          }
+          OZ (type->get_size(pl::PL_TYPE_INIT_SIZE, init_size));
+          OX (element_obj.set_extend(ptr, type->get_type(), init_size));
         }
       }
     }
@@ -285,7 +311,8 @@ int ObExprObjAccess::ExtraInfo::get_record_attr(const pl::ObObjAccessIdx &curren
                                                 uint64_t udt_id,
                                                 bool for_write,
                                                 void *&current_value,
-                                                ObEvalCtx &ctx) const
+                                                ObEvalCtx &ctx,
+                                                void *&current_allocator) const
 {
   int ret = OB_SUCCESS;
 
@@ -325,6 +352,9 @@ int ObExprObjAccess::ExtraInfo::get_record_attr(const pl::ObObjAccessIdx &curren
   CK (user_type->is_record_type());
   CK (OB_NOT_NULL(record_type = static_cast<const pl::ObRecordType*>(user_type)));
   CK (current_access.is_const());
+  if (for_write_) {
+    OX (current_allocator = current_record->get_allocator());
+  }
   if (OB_SUCC(ret) && user_type->is_object_type() && for_write_ && current_composite->is_null()) {
     ret = OB_ERR_ACCESS_INTO_NULL;
     LOG_WARN("", K(ret), KPC(current_composite));
@@ -338,11 +368,15 @@ int ObExprObjAccess::ExtraInfo::get_record_attr(const pl::ObObjAccessIdx &curren
 int ObExprObjAccess::ExtraInfo::get_attr_func(int64_t param_cnt,
                                               int64_t *params,
                                               int64_t *element_val,
-                                              ObEvalCtx &ctx) const
+                                              ObEvalCtx &ctx,
+                                              int64_t *allocator_addr,
+                                              ObSQLSessionInfo *session_info) const
 {
   int ret = OB_SUCCESS;
   void *current_value = NULL;
+  void *current_allocator = NULL;
   CK (OB_NOT_NULL(element_val));
+  CK (OB_NOT_NULL(allocator_addr));
   CK (access_idxs_.count() > 0);
   if (OB_SUCC(ret)) {
     pl::ObPLComposite *composite_addr
@@ -356,13 +390,17 @@ int ObExprObjAccess::ExtraInfo::get_attr_func(int64_t param_cnt,
         OZ (get_collection_attr(params,
                                 current_access,
                                 for_write_,
-                                current_value));
+                                parent_type.is_associative_array_type(),
+                                current_value,
+                                current_allocator,
+                                session_info));
       } else {
         OZ (get_record_attr(current_access,
                             parent_type.get_user_type_id(),
                             for_write_,
                             current_value,
-                            ctx));;
+                            ctx,
+                            current_allocator));
       }
       if (OB_FAIL(ret)) {
       } else if (current_access.var_type_.is_composite_type()) {
@@ -379,6 +417,21 @@ int ObExprObjAccess::ExtraInfo::get_attr_func(int64_t param_cnt,
     } else {
       *element_val = reinterpret_cast<int64_t>(composite_addr);
     }
+    if (OB_SUCC(ret) &&
+        for_write_ &&
+        (access_idxs_.at(0).var_type_.is_record_type() ||
+         access_idxs_.at(0).var_type_.is_collection_type())) {
+      if (1 == access_idxs_.count()) {
+        pl::ObPLAllocator1 *alloc = nullptr;
+        CK (OB_NOT_NULL(composite_addr->get_allocator()));
+        OX (alloc = dynamic_cast<pl::ObPLAllocator1 *>(composite_addr->get_allocator()));
+        CK (OB_NOT_NULL(alloc));
+        CK (OB_NOT_NULL(alloc->get_parent_allocator()));
+        OX (*allocator_addr = reinterpret_cast<int64_t>(alloc->get_parent_allocator()));
+      } else {
+        *allocator_addr = reinterpret_cast<int64_t>(current_allocator);
+      }
+    }
   }
   return ret;
 }
@@ -393,19 +446,20 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
                                      ObEvalCtx *ctx) const
 {
   int ret = OB_SUCCESS;
-  typedef int32_t (*GetAttr)(int64_t, int64_t [], int64_t *);
+  typedef int32_t (*GetAttr)(int64_t, int64_t [], int64_t *, int64_t *);
   GetAttr get_attr = reinterpret_cast<GetAttr>(get_attr_func_);
   ParamArray param_array;
+  CK (OB_NOT_NULL(ctx));
   OZ (init_param_array(param_store, params, param_num, param_array));
 
   if (OB_SUCC(ret)) {
     int64_t *param_ptr = const_cast<int64_t *>(param_array.head());
     int64_t attr_addr = 0;
-    if (OB_NOT_NULL(get_attr)) {
-      OZ (get_attr(param_array.count(), param_ptr, &attr_addr));
+    int64_t allocator_addr = 0;
+    if (!for_write_ && OB_NOT_NULL(get_attr)) {
+      OZ (get_attr(param_array.count(), param_ptr, &attr_addr, &allocator_addr));
     } else {
-      CK (OB_NOT_NULL(ctx));
-      OZ (get_attr_func(param_array.count(), param_ptr, &attr_addr, *ctx));
+      OZ (get_attr_func(param_array.count(), param_ptr, &attr_addr, *ctx, &allocator_addr, ctx->exec_ctx_.get_my_session()));
     }
     if (OB_FAIL(ret)) {
       if (OB_ERR_COLLECION_NULL == ret && pl::ObCollectionType::EXISTS_PROPERTY == property_type_) {
@@ -432,7 +486,21 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
           }
         }
       }
-      OX(result.set_extend(attr_addr, res_type.get_extend_type(), extend_size));
+      if (OB_FAIL(ret)) {
+      } else if (for_write_) {
+        pl::ObPlCompiteWrite *composite_write = nullptr;
+        if (OB_ISNULL(composite_write =
+            static_cast<pl::ObPlCompiteWrite *>(ctx->get_expr_res_alloc().alloc(sizeof(pl::ObPlCompiteWrite))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloca memory", K(ret));
+        } else {
+          composite_write->allocator_ = allocator_addr;
+          composite_write->value_addr_ = attr_addr;
+          result.set_extend(reinterpret_cast<int64_t>(composite_write), res_type.get_extend_type(), extend_size);
+        }
+      } else {
+        OX(result.set_extend(attr_addr, res_type.get_extend_type(), extend_size));
+      }
 #ifdef OB_BUILD_ORACLE_PL
     } else if (pl::ObCollectionType::INVALID_PROPERTY != property_type_) {
       pl::ObPLCollection *coll = reinterpret_cast<pl::ObPLCollection*>(attr_addr);
@@ -529,7 +597,7 @@ int ObExprObjAccess::ExtraInfo::from_raw_expr(const ObObjAccessRawExpr &raw_acce
 {
   int ret = 0;
   if (OB_SUCC(ret)) {
-    extend_size_ = raw_access.get_result_type().get_extend_size();
+    extend_size_ = raw_access.get_extend_size();
     get_attr_func_ = raw_access.get_get_attr_func_addr();
     for_write_ = raw_access.for_write();
     property_type_ = raw_access.get_property();
@@ -558,7 +626,7 @@ int ObExprObjAccess::cg_expr(ObExprCGCtx &op_cg_ctx,
   } else {
     const ObObjAccessRawExpr &raw_access = static_cast<const ObObjAccessRawExpr &>(raw_expr);
     if (OB_SUCC(ret)) {
-      info->extend_size_ = raw_expr.get_result_type().get_extend_size();
+      info->extend_size_ = raw_access.get_extend_size();
       info->get_attr_func_ = raw_access.get_get_attr_func_addr();
       info->for_write_ = raw_access.for_write();
       info->property_type_ = raw_access.get_property();
@@ -587,7 +655,8 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   const ExtraInfo *info = static_cast<const ExtraInfo *>(expr.extra_info_);
-  const ParamStore &param_store = ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();
+  ObPhysicalPlanCtx *plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
+
   OZ(expr.eval_param_value(ctx));
   ObObj params[expr.arg_cnt_];
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
@@ -598,17 +667,78 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
 
   ObObj result;
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-  OZ(info->calc(result,
-                alloc_guard.get_allocator(),
-                expr.obj_meta_,
-                info->extend_size_,
-                param_store,
-                params,
-                expr.arg_cnt_,
-                &ctx));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan ctx is null", K(ret));
+  } else {
+    ParamStore *tmp_param_store = nullptr;
+    void *tmp_param_store_buf = nullptr;
+    const ParamStore *effective_param_store_ptr = nullptr;
+    const ObPhysicalPlan *phy_plan = plan_ctx->get_phy_plan();
+    // if the param datum frame is inited and is batched multi stmt, construct param_store from param_frame.
+    if (plan_ctx->is_param_datum_frame_inited() && OB_NOT_NULL(phy_plan) && phy_plan->get_is_batched_multi_stmt()) {
+      DatumParamStore &datum_param_store = plan_ctx->get_datum_param_store();
+      if (OB_ISNULL(tmp_param_store_buf = alloc_guard.get_allocator().alloc(sizeof(ParamStore)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for tmp param store", K(ret));
+      } else {
+        tmp_param_store = new(tmp_param_store_buf) ParamStore(ObWrapperAllocator(alloc_guard.get_allocator()));
+        OZ (tmp_param_store->reserve(datum_param_store.count()));
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < datum_param_store.count(); i++) {
+        // get the latest datum from param_frame, combine it with the meta from datum_param_store, and construct param_store.
+        ObDatum *datum = nullptr;
+        ObEvalInfo *eval_info = nullptr;
+        VectorHeader *vec_header = nullptr;
+        plan_ctx->get_param_frame_info(i, datum, eval_info, vec_header);
+
+        ObDatumObjParam &datum_param = datum_param_store.at(i);
+        ObObjParam obj_param;
+        ObObjMeta meta;
+
+        if (datum_param.meta_.is_ext_sql_array()) {
+          const ObSqlDatumArray *datum_array = datum_param.get_sql_datum_array();
+          meta = datum_array->element_.get_meta_type();
+          obj_param.set_accuracy(datum_array->element_.get_accuracy());
+        } else {
+          meta.set_type(datum_param.meta_.type_);
+          meta.set_collation_type(datum_param.meta_.cs_type_);
+          meta.set_scale(datum_param.meta_.scale_);
+          obj_param.set_accuracy(datum_param.get_accuracy());
+        }
+
+        if (OB_FAIL(datum->to_obj(obj_param, meta, ObDatum::get_obj_datum_map_type(meta.get_type())))) {
+          LOG_WARN("failed to convert datum to obj", K(ret), K(i), K(*datum), K(meta));
+        } else {
+          if (OB_FAIL(tmp_param_store->push_back(obj_param))) {
+            LOG_WARN("failed to push back param", K(ret), K(i));
+          }
+        }
+      }
+      effective_param_store_ptr = tmp_param_store;
+    } else {
+      effective_param_store_ptr = &plan_ctx->get_param_store();
+    }
+
+    CK (OB_NOT_NULL(effective_param_store_ptr));
+    if (OB_SUCC(ret)) {
+      OZ(info->calc(result,
+                    alloc_guard.get_allocator(),
+                    expr.obj_meta_,
+                    info->extend_size_,
+                    *effective_param_store_ptr,
+                    params,
+                    expr.arg_cnt_,
+                    &ctx));
+    }
+  }
 
   OZ(expr_datum.from_obj(result, expr.obj_datum_map_));
-  if (is_lob_storage(result.get_type())) {
+  if (OB_SUCC(ret) && is_lob_storage(result.get_type())) {
     OZ (ob_adjust_lob_datum(result, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), expr_datum));
   }
   return ret;

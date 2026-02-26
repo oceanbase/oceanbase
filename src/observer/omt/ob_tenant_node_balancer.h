@@ -39,18 +39,20 @@ public:
   {
   public:
     ServerResource() : max_cpu_(0), min_cpu_(0), memory_size_(0),
-                       log_disk_size_(0) {}
+                       log_disk_size_(0), data_disk_size_(0) {}
     ~ServerResource() {}
     void reset() {
       max_cpu_ = 0;
       min_cpu_ = 0;
       memory_size_ = 0;
       log_disk_size_ = 0;
+      data_disk_size_ = 0;
     }
     double max_cpu_;
     double min_cpu_;
     int64_t memory_size_;
     int64_t log_disk_size_;
+    int64_t data_disk_size_;
   };
 
 public:
@@ -87,6 +89,7 @@ private:
   int refresh_hidden_sys_memory();
   void periodically_check_tenant();
   int fetch_effective_tenants(const share::TenantUnits &old_tenants, share::TenantUnits &new_tenants);
+  int check_tenant_resource_released(const uint64_t tenant_id, bool &is_released) const;
   int refresh_tenant(share::TenantUnits &units);
   DISALLOW_COPY_AND_ASSIGN(ObTenantNodeBalancer);
 

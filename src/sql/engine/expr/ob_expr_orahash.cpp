@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_orahash.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "objit/common/ob_item_type.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "ob_expr_func_part_hash.h"
 #include "sql/engine/ob_exec_context.h"
-#include "share/schema/ob_schema_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

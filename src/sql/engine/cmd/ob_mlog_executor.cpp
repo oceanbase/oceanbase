@@ -14,7 +14,6 @@
 #include "sql/engine/cmd/ob_mlog_executor.h"
 #include "sql/resolver/ddl/ob_create_mlog_stmt.h"
 #include "sql/resolver/ddl/ob_drop_mlog_stmt.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "sql/engine/cmd/ob_index_executor.h"

@@ -19,12 +19,22 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+  class ObNopPos;
+}
+
 namespace blocksstable
 {
 
 class ObRowQueue
 {
 public:
+  enum RowQueueIndex {
+    QI_FIRST_ROW = 0,
+    QI_LAST_ROW = 1,
+    QI_MAX,
+  };
   ObRowQueue() : col_cnt_(0), cur_pos_(0), is_inited_(false) {}
   int init(const int64_t col_cnt);
   int add_empty_row(common::ObIAllocator &allocator);
@@ -49,6 +59,11 @@ public:
     return row;
   }
   OB_INLINE int64_t count() const { return rows_.count(); }
+  int compact_border_row(const ObDatumRow *row,
+                         const bool last_row,
+                         storage::ObNopPos *&nop_pos,
+                         common::ObIAllocator &allocator);
+  int add_shadow_row(const int64_t trans_seq_idx, common::ObIAllocator &allocator);
   void reset()
   {
     col_cnt_ = 0;

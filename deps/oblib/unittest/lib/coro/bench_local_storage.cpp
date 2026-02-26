@@ -11,10 +11,7 @@
  */
 
 #include <iostream>
-#include <string>
-#include "lib/time/ob_time_utility.h"
 #include "lib/thread_local/ob_tsi_factory.h"
-#include "lib/coro/co_var.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;

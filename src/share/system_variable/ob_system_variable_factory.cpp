@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_SESSION
-#include "share/ob_define.h"
 #include "share/system_variable/ob_system_variable_factory.h"
-#include "share/ob_errno.h"
-#include <algorithm>
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -62,6 +59,8 @@ const char *ObSysVarObRoutePolicy::OB_ROUTE_POLICY_NAMES[] = {
   "ONLY_READONLY_ZONE",
   "UNMERGE_ZONE_FIRST",
   "UNMERGE_FOLLOWER_FIRST",
+  "COLUMN_STORE_ONLY",
+  "FORCE_READONLY_ZONE",
   0
 };
 const char *ObSysVarObEnableJit::OB_ENABLE_JIT_NAMES[] = {
@@ -89,6 +88,10 @@ const char *ObSysVarBlockEncryptionMode::BLOCK_ENCRYPTION_MODE_NAMES[] = {
   "aes-128-ofb",
   "aes-192-ofb",
   "aes-256-ofb",
+  "sm4-ecb",
+  "sm4-cbc",
+  "sm4-cfb",
+  "sm4-ofb",
   0
 };
 const char *ObSysVarValidatePasswordCheckUserName::VALIDATE_PASSWORD_CHECK_USER_NAME_NAMES[] = {
@@ -401,11 +404,172 @@ const char *ObSysVarSlaveParallelType::SLAVE_PARALLEL_TYPE_NAMES[] = {
   "LOGICAL_CLOCK",
   0
 };
+const char *ObSysVarBinlogErrorAction::BINLOG_ERROR_ACTION_NAMES[] = {
+  "IGNORE_ERROR",
+  "ABORT_SERVER",
+  0
+};
+const char *ObSysVarBinlogTransactionDependencyTracking::BINLOG_TRANSACTION_DEPENDENCY_TRACKING_NAMES[] = {
+  "COMMIT_ORDER",
+  "WRITESET",
+  "WRITESET_SESSION",
+  0
+};
+const char *ObSysVarDefaultTmpStorageEngine::DEFAULT_TMP_STORAGE_ENGINE_NAMES[] = {
+  "InnoDB",
+  0
+};
+const char *ObSysVarSlaveRowsSearchAlgorithms::SLAVE_ROWS_SEARCH_ALGORITHMS_NAMES[] = {
+  "TABLE_SCAN,INDEX_SCAN",
+  "INDEX_SCAN,HASH_SCAN",
+  "TABLE_SCAN,HASH_SCAN",
+  "TABLE_SCAN,INDEX_SCAN,HASH_SCAN",
+  0
+};
+const char *ObSysVarSlaveTypeConversions::SLAVE_TYPE_CONVERSIONS_NAMES[] = {
+  "ALL_LOSSY",
+  "ALL_NON_LOSSY",
+  "ALL_SIGNED",
+  "ALL_UNSIGNED",
+  0
+};
+const char *ObSysVarNdbDefaultColumnFormat::NDB_DEFAULT_COLUMN_FORMAT_NAMES[] = {
+  "FIXED",
+  "DYNAMIC",
+  0
+};
+const char *ObSysVarNdbDistribution::NDB_DISTRIBUTION_NAMES[] = {
+  "LINHASH",
+  "KEYHASH",
+  0
+};
+const char *ObSysVarNdbSlaveConflictRole::NDB_SLAVE_CONFLICT_ROLE_NAMES[] = {
+  "NONE",
+  "PRIMARY",
+  "SECONDARY",
+  "PASS",
+  0
+};
+const char *ObSysVarMyisamStatsMethod::MYISAM_STATS_METHOD_NAMES[] = {
+  "nulls_unequal",
+  "nulls_equal",
+  "nulls_ignored",
+  0
+};
+const char *ObSysVarInternalTmpDiskStorageEngine::INTERNAL_TMP_DISK_STORAGE_ENGINE_NAMES[] = {
+  "MYISAM",
+  "INNODB",
+  0
+};
+const char *ObSysVarLogTimestamps::LOG_TIMESTAMPS_NAMES[] = {
+  "UTC",
+  "SYSTEM",
+  0
+};
+const char *ObSysVarThreadHandling::THREAD_HANDLING_NAMES[] = {
+  "no-threads",
+  "one-thread-per-connection",
+  "loaded-dynamically",
+  0
+};
+const char *ObSysVarDelayKeyWrite::DELAY_KEY_WRITE_NAMES[] = {
+  "ON",
+  "OFF",
+  "ALL",
+  0
+};
+const char *ObSysVarInnodbLargePrefix::INNODB_LARGE_PREFIX_NAMES[] = {
+  "ON",
+  "OFF",
+  0
+};
+const char *ObSysVarOldAlterTable::OLD_ALTER_TABLE_NAMES[] = {
+  "OFF",
+  "ON",
+  0
+};
+const char *ObSysVarObKvMode::OB_KV_MODE_NAMES[] = {
+  "ALL",
+  "TABLEAPI",
+  "HBASE",
+  "REDIS",
+  "NONE",
+  0
+};
+const char *ObSysVarInnodbStatsMethod::INNODB_STATS_METHOD_NAMES[] = {
+  "nulls_equal",
+  "nulls_unequal",
+  "nulls_ignored",
+  0
+};
+const char *ObSysVarKeyringAwsRegion::KEYRING_AWS_REGION_NAMES[] = {
+  "af-south-1",
+  "ap-east-1",
+  "ap-northeast-1",
+  "ap-northeast-2",
+  "ap-northeast-3",
+  "ap-south-1",
+  "ap-southeast-1",
+  "ap-southeast-2",
+  "ca-central-1",
+  "cn-north-1",
+  "cn-northwest-1",
+  "eu-central-1",
+  "eu-north-1",
+  "eu-south-1",
+  "eu-west-1",
+  "eu-west-2",
+  "eu-west-3",
+  "me-south-1",
+  "sa-east-1",
+  "us-east-1",
+  "us-east-2",
+  "us-gov-east-1",
+  "us-iso-east-1",
+  "us-iso-west-1",
+  "us-isob-east-1",
+  "us-west-1",
+  "us-west-2",
+  0
+};
+const char *ObSysVarOldPasswords::OLD_PASSWORDS_NAMES[] = {
+  "0",
+  "1",
+  "2",
+  0
+};
+const char *ObSysVarUpdatableViewsWithLimit::UPDATABLE_VIEWS_WITH_LIMIT_NAMES[] = {
+  "OFF",
+  "ON",
+  "NO",
+  "YES",
+  0
+};
+const char *ObSysVarObTableAccessPolicy::OB_TABLE_ACCESS_POLICY_NAMES[] = {
+  "ROW_STORE",
+  "COLUMN_STORE",
+  "AUTO",
+  0
+};
+const char *ObSysVarEnableOptimizerRowgoal::ENABLE_OPTIMIZER_ROWGOAL_NAMES[] = {
+  "OFF",
+  "AUTO",
+  "ON",
+  0
+};
+const char *ObSysVarSqlTranspiler::SQL_TRANSPILER_NAMES[] = {
+  "OFF",
+  "ON",
+  "BASIC",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
+  "__ob_client_capability_flag",
   "_aggregation_optimization_settings",
   "_clear_last_archive_timestamp",
   "_create_audit_purge_job",
+  "_current_default_catalog",
   "_drop_audit_purge_job",
   "_enable_mysql_pl_priv_check",
   "_enable_old_charset_aggregation",
@@ -426,10 +590,12 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_ob_proxy_weakread_feedback",
   "_ob_px_bcast_optimization",
   "_ob_px_slave_mapping_threshold",
+  "_optimizer_cost_based_transformation",
   "_optimizer_gather_stats_on_load",
   "_optimizer_null_aware_antijoin",
   "_oracle_sql_select_limit",
   "_priv_control",
+  "_push_join_predicate",
   "_px_broadcast_fudge_factor",
   "_px_dist_agg_partial_rollup_pushdown",
   "_px_min_granules_per_slave",
@@ -443,16 +609,35 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_show_ddl_in_compat_mode",
   "_windowfunc_optimization_settings",
   "activate_all_roles_on_login",
+  "auto_generate_certs",
   "auto_increment_cache_size",
   "auto_increment_increment",
   "auto_increment_offset",
   "autocommit",
   "automatic_sp_privileges",
+  "avoid_temporal_upgrade",
+  "back_log",
+  "basedir",
+  "big_tables",
+  "bind_address",
+  "binlog_cache_size",
   "binlog_checksum",
+  "binlog_direct_non_transactional_updates",
+  "binlog_error_action",
   "binlog_format",
+  "binlog_group_commit_sync_delay",
+  "binlog_group_commit_sync_no_delay_count",
+  "binlog_gtid_simple_recovery",
+  "binlog_max_flush_queue_time",
+  "binlog_order_commits",
   "binlog_row_image",
   "binlog_rows_query_log_events",
+  "binlog_stmt_cache_size",
+  "binlog_transaction_dependency_history_size",
+  "binlog_transaction_dependency_tracking",
   "block_encryption_mode",
+  "bulk_insert_buffer_size",
+  "caching_sha2_password_digest_rounds",
   "cardinality_estimation_model",
   "character_set_client",
   "character_set_connection",
@@ -461,30 +646,52 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "character_set_results",
   "character_set_server",
   "character_set_system",
+  "character_sets_dir",
+  "check_proxy_users",
   "collation_connection",
   "collation_database",
   "collation_server",
   "completion_type",
   "concurrent_insert",
   "connect_timeout",
+  "connection_control_failed_connections_threshold",
+  "connection_control_max_connection_delay",
+  "connection_control_min_connection_delay",
+  "core_file",
   "cte_max_recursion_depth",
   "cursor_sharing",
   "datadir",
+  "date_format",
+  "datetime_format",
   "debug",
   "debug_sync",
   "default_authentication_plugin",
   "default_collation_for_utf8mb4",
   "default_password_lifetime",
   "default_storage_engine",
+  "default_tmp_storage_engine",
+  "default_week_format",
+  "delay_key_write",
+  "delayed_insert_limit",
+  "delayed_insert_timeout",
+  "delayed_queue_size",
   "disabled_storage_engines",
+  "disconnect_on_expired_password",
   "div_precision_increment",
+  "enable_optimizer_rowgoal",
+  "enable_sql_plan_monitor",
   "enforce_gtid_consistency",
+  "eq_range_index_dive_limit",
   "error_count",
   "error_on_overlap_time",
+  "event_scheduler",
+  "expire_logs_days",
   "explicit_defaults_for_timestamp",
+  "external_user",
   "flush",
   "flush_time",
   "foreign_key_checks",
+  "ft_stopword_file",
   "general_log",
   "group_concat_max_len",
   "group_replication_allow_local_disjoint_gtids_join",
@@ -500,6 +707,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "group_replication_flow_control_mode",
   "group_replication_force_members",
   "group_replication_group_name",
+  "group_replication_group_seeds",
   "group_replication_gtid_assignment_block_size",
   "group_replication_ip_whitelist",
   "group_replication_local_address",
@@ -528,16 +736,24 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "gtid_next",
   "gtid_owned",
   "gtid_purged",
+  "have_compress",
+  "have_crypt",
+  "have_dynamic_loading",
   "have_openssl",
   "have_profiling",
   "have_query_cache",
   "have_ssl",
+  "have_statement_timeout",
   "have_symlink",
+  "host_cache_size",
   "hostname",
   "identity",
   "ignore_builtin_innodb",
+  "ignore_db_dirs",
   "information_schema_stats_expiry",
   "init_connect",
+  "init_file",
+  "init_slave",
   "innodb_adaptive_flushing",
   "innodb_adaptive_flushing_lwm",
   "innodb_adaptive_hash_index",
@@ -545,6 +761,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "innodb_adaptive_max_sleep_delay",
   "innodb_api_bk_commit_interval",
   "innodb_api_disable_rowlock",
+  "innodb_api_enable_binlog",
   "innodb_api_trx_level",
   "innodb_autoextend_increment",
   "innodb_autoinc_lock_mode",
@@ -571,65 +788,292 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "innodb_compression_level",
   "innodb_compression_pad_pct_max",
   "innodb_concurrency_tickets",
+  "innodb_data_file_path",
+  "innodb_data_home_dir",
+  "innodb_deadlock_detect",
   "innodb_default_row_format",
   "innodb_disable_resize_buffer_pool_debug",
   "innodb_disable_sort_file_cache",
   "innodb_doublewrite",
+  "innodb_fast_shutdown",
   "innodb_fil_make_page_dirty_debug",
   "innodb_file_format",
   "innodb_file_format_check",
   "innodb_file_format_max",
   "innodb_file_per_table",
   "innodb_fill_factor",
+  "innodb_flush_log_at_timeout",
+  "innodb_flush_log_at_trx_commit",
   "innodb_flush_method",
   "innodb_flush_neighbors",
   "innodb_flush_sync",
   "innodb_flushing_avg_loops",
   "innodb_force_load_corrupted",
   "innodb_force_recovery",
+  "innodb_ft_cache_size",
+  "innodb_ft_enable_diag_print",
+  "innodb_ft_num_word_optimize",
+  "innodb_ft_result_cache_limit",
+  "innodb_ft_server_stopword_table",
+  "innodb_ft_sort_pll_degree",
+  "innodb_ft_total_cache_size",
+  "innodb_io_capacity",
+  "innodb_io_capacity_max",
+  "innodb_large_prefix",
   "innodb_limit_optimistic_insert_debug",
+  "innodb_lock_wait_timeout",
+  "innodb_locks_unsafe_for_binlog",
+  "innodb_log_buffer_size",
+  "innodb_log_checkpoint_now",
+  "innodb_log_checksums",
+  "innodb_log_compressed_pages",
+  "innodb_log_file_size",
+  "innodb_log_files_in_group",
+  "innodb_log_group_home_dir",
+  "innodb_log_write_ahead_size",
   "innodb_lru_scan_depth",
   "innodb_max_dirty_pages_pct",
   "innodb_max_dirty_pages_pct_lwm",
   "innodb_max_purge_lag",
   "innodb_max_purge_lag_delay",
+  "innodb_max_undo_log_size",
   "innodb_merge_threshold_set_all_debug",
+  "innodb_monitor_disable",
+  "innodb_monitor_enable",
+  "innodb_monitor_reset",
+  "innodb_monitor_reset_all",
+  "innodb_numa_interleave",
+  "innodb_old_blocks_pct",
+  "innodb_old_blocks_time",
+  "innodb_online_alter_log_max_size",
+  "innodb_open_files",
+  "innodb_optimize_fulltext_only",
+  "innodb_page_cleaners",
   "innodb_page_size",
+  "innodb_print_all_deadlocks",
+  "innodb_purge_batch_size",
+  "innodb_purge_rseg_truncate_frequency",
+  "innodb_purge_threads",
+  "innodb_random_read_ahead",
+  "innodb_read_ahead_threshold",
+  "innodb_read_io_threads",
   "innodb_read_only",
   "innodb_replication_delay",
   "innodb_rollback_on_timeout",
+  "innodb_rollback_segments",
   "innodb_saved_page_number_debug",
+  "innodb_sort_buffer_size",
+  "innodb_spin_wait_delay",
+  "innodb_stats_auto_recalc",
+  "innodb_stats_include_delete_marked",
+  "innodb_stats_method",
+  "innodb_stats_on_metadata",
   "innodb_stats_persistent",
+  "innodb_stats_persistent_sample_pages",
+  "innodb_stats_sample_pages",
+  "innodb_stats_transient_sample_pages",
+  "innodb_status_output",
+  "innodb_status_output_locks",
   "innodb_strict_mode",
   "innodb_support_xa",
+  "innodb_sync_array_size",
   "innodb_sync_debug",
+  "innodb_sync_spin_loops",
+  "innodb_table_locks",
+  "innodb_temp_data_file_path",
+  "innodb_thread_concurrency",
+  "innodb_thread_sleep_delay",
+  "innodb_tmpdir",
   "innodb_trx_purge_view_update_only_debug",
   "innodb_trx_rseg_n_slots_debug",
+  "innodb_undo_directory",
+  "innodb_undo_log_truncate",
+  "innodb_undo_logs",
+  "innodb_undo_tablespaces",
+  "innodb_use_native_aio",
   "innodb_version",
+  "innodb_write_io_threads",
+  "insert_id",
   "interactive_timeout",
+  "internal_tmp_disk_storage_engine",
   "is_result_accurate",
+  "join_buffer_size",
+  "keep_files_on_create",
+  "key_buffer_size",
+  "key_cache_age_threshold",
+  "key_cache_block_size",
+  "key_cache_division_limit",
+  "keyring_aws_cmk_id",
+  "keyring_aws_conf_file",
+  "keyring_aws_data_file",
+  "keyring_aws_region",
+  "keyring_encrypted_file_data",
+  "keyring_encrypted_file_password",
+  "keyring_file_data",
+  "keyring_okv_conf_dir",
+  "keyring_operations",
+  "language",
+  "large_files_support",
+  "large_page_size",
+  "large_pages",
   "last_insert_id",
   "lc_messages",
+  "lc_messages_dir",
   "lc_time_names",
   "license",
   "local_infile",
   "lock_wait_timeout",
+  "locked_in_memory",
   "log_bin",
+  "log_bin_basename",
+  "log_bin_index",
+  "log_bin_trust_function_creators",
+  "log_bin_use_v1_row_events",
+  "log_builtin_as_identified_by_password",
+  "log_error",
+  "log_error_verbosity",
+  "log_output",
+  "log_queries_not_using_indexes",
   "log_row_value_options",
+  "log_slave_updates",
+  "log_slow_admin_statements",
+  "log_slow_slave_statements",
+  "log_statements_unsafe_for_binlog",
+  "log_syslog",
+  "log_syslog_facility",
+  "log_syslog_include_pid",
+  "log_syslog_tag",
+  "log_throttle_queries_not_using_indexes",
+  "log_timestamps",
+  "log_warnings",
   "long_query_time",
+  "low_priority_updates",
+  "lower_case_file_system",
   "lower_case_table_names",
   "master_info_repository",
   "master_verify_checksum",
   "max_allowed_packet",
+  "max_binlog_cache_size",
+  "max_binlog_size",
+  "max_binlog_stmt_cache_size",
+  "max_connect_errors",
   "max_connections",
+  "max_delayed_threads",
+  "max_digest_length",
+  "max_error_count",
   "max_execution_time",
+  "max_heap_table_size",
+  "max_insert_delayed_threads",
+  "max_join_size",
+  "max_length_for_sort_data",
+  "max_prepared_stmt_count",
+  "max_relay_log_size",
+  "max_seeks_for_key",
+  "max_sort_length",
   "max_sp_recursion_depth",
+  "max_tmp_tables",
   "max_user_connections",
+  "max_write_lock_count",
+  "mecab_rc_file",
+  "metadata_locks_cache_size",
+  "metadata_locks_hash_instances",
+  "min_examined_row_limit",
+  "multi_range_count",
+  "mview_refresh_dop",
+  "myisam_data_pointer_size",
+  "myisam_max_sort_file_size",
   "myisam_mmap_size",
+  "myisam_repair_threads",
+  "myisam_sort_buffer_size",
+  "myisam_stats_method",
+  "myisam_use_mmap",
+  "mysql_firewall_mode",
+  "mysql_firewall_trace",
+  "mysql_native_password_proxy_users",
+  "mysqlx_bind_address",
+  "mysqlx_connect_timeout",
+  "mysqlx_idle_worker_thread_timeout",
+  "mysqlx_max_allowed_packet",
+  "mysqlx_max_connections",
+  "mysqlx_min_worker_threads",
+  "mysqlx_port",
+  "mysqlx_port_open_timeout",
+  "mysqlx_socket",
+  "mysqlx_ssl_ca",
+  "mysqlx_ssl_capath",
+  "mysqlx_ssl_cert",
+  "mysqlx_ssl_cipher",
+  "mysqlx_ssl_crl",
+  "mysqlx_ssl_crlpath",
+  "mysqlx_ssl_key",
+  "named_pipe",
+  "named_pipe_full_access_group",
   "ncharacter_set_connection",
+  "ndb_allow_copying_alter_table",
+  "ndb_autoincrement_prefetch_sz",
+  "ndb_batch_size",
+  "ndb_blob_read_batch_bytes",
+  "ndb_blob_write_batch_bytes",
+  "ndb_cache_check_time",
+  "ndb_clear_apply_status",
+  "ndb_cluster_connection_pool",
+  "ndb_cluster_connection_pool_nodeids",
+  "ndb_data_node_neighbour",
+  "ndb_default_column_format",
+  "ndb_deferred_constraints",
+  "ndb_distribution",
+  "ndb_eventbuffer_free_percent",
+  "ndb_eventbuffer_max_alloc",
+  "ndb_extra_logging",
+  "ndb_force_send",
+  "ndb_fully_replicated",
+  "ndb_index_stat_enable",
+  "ndb_index_stat_option",
+  "ndb_join_pushdown",
+  "ndb_log_apply_status",
+  "ndb_log_bin",
+  "ndb_log_binlog_index",
+  "ndb_log_empty_epochs",
+  "ndb_log_empty_update",
+  "ndb_log_exclusive_reads",
+  "ndb_log_fail_terminate",
+  "ndb_log_orig",
+  "ndb_log_transaction_id",
+  "ndb_log_update_as_write",
+  "ndb_log_update_minimal",
+  "ndb_log_updated_only",
+  "ndb_optimization_delay",
+  "ndb_optimized_node_selection",
+  "ndb_read_backup",
+  "ndb_recv_thread_activation_threshold",
+  "ndb_recv_thread_cpu_mask",
+  "ndb_report_thresh_binlog_epoch_slip",
+  "ndb_report_thresh_binlog_mem_usage",
+  "ndb_row_checksum",
+  "ndb_show_foreign_key_mock_tables",
+  "ndb_slave_conflict_role",
+  "Ndb_system_name",
+  "ndb_table_no_logging",
+  "ndb_table_temporary",
+  "ndb_use_copying_alter_table",
+  "ndb_use_exact_count",
+  "ndb_use_transactions",
+  "ndb_version",
+  "ndb_version_string",
+  "ndb_wait_connected",
+  "ndb_wait_setup",
+  "ndbinfo_database",
+  "ndbinfo_max_bytes",
+  "ndbinfo_max_rows",
+  "ndbinfo_offline",
+  "ndbinfo_show_hidden",
+  "ndbinfo_table_prefix",
+  "ndbinfo_version",
   "net_buffer_length",
   "net_read_timeout",
+  "net_retry_count",
   "net_write_timeout",
+  "new",
   "nls_calendar",
   "nls_characterset",
   "nls_comp",
@@ -658,8 +1102,11 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_enable_aggregation_pushdown",
   "ob_enable_index_direct_select",
   "ob_enable_jit",
+  "ob_enable_parameter_anonymous_block",
+  "ob_enable_pl_async_commit",
   "ob_enable_pl_cache",
   "ob_enable_plan_cache",
+  "ob_enable_ps_parameter_anonymous_block",
   "ob_enable_rich_error_msg",
   "ob_enable_show_trace",
   "ob_enable_sql_audit",
@@ -667,7 +1114,11 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_enable_transmission_checksum",
   "ob_enable_truncate_flashback",
   "ob_global_debug_sync",
+  "ob_hnsw_ef_search",
+  "ob_hnsw_extra_info_max_size",
   "ob_interm_result_mem_limit",
+  "ob_ivf_nprobes",
+  "ob_kv_mode",
   "ob_last_schema_version",
   "ob_log_level",
   "ob_max_read_stale_time",
@@ -686,49 +1137,139 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_route_policy",
   "ob_safe_weak_read_snapshot",
   "ob_security_version",
+  "ob_sparse_drop_ratio_search",
   "ob_sql_audit_percentage",
   "ob_sql_work_area_percentage",
   "ob_statement_trace_id",
+  "ob_table_access_policy",
   "ob_tcp_invited_nodes",
   "ob_temp_tablespace_size_percentage",
   "ob_trace_info",
   "ob_trx_idle_timeout",
   "ob_trx_lock_timeout",
   "ob_trx_timeout",
+  "offline_mode",
+  "old",
+  "old_alter_table",
+  "old_passwords",
+  "open_files_limit",
   "optimizer_capture_sql_plan_baselines",
   "optimizer_dynamic_sampling",
   "optimizer_features_enable",
+  "optimizer_prune_level",
+  "optimizer_search_depth",
+  "optimizer_switch",
+  "optimizer_trace",
+  "optimizer_trace_features",
+  "optimizer_trace_limit",
+  "optimizer_trace_max_mem_size",
+  "optimizer_trace_offset",
   "optimizer_use_sql_plan_baselines",
   "parallel_degree_limit",
   "parallel_degree_policy",
   "parallel_min_scan_time_threshold",
   "parallel_servers_target",
+  "parser_max_mem_size",
+  "partition_index_dive_limit",
   "performance_schema",
+  "performance_schema_accounts_size",
+  "performance_schema_digests_size",
+  "performance_schema_events_stages_history_long_size",
+  "performance_schema_events_stages_history_size",
+  "performance_schema_events_statements_history_long_size",
+  "performance_schema_events_statements_history_size",
+  "performance_schema_events_transactions_history_long_size",
+  "performance_schema_events_transactions_history_size",
+  "performance_schema_events_waits_history_long_size",
+  "performance_schema_events_waits_history_size",
+  "performance_schema_hosts_size",
+  "performance_schema_max_cond_classes",
+  "performance_schema_max_cond_instances",
+  "performance_schema_max_digest_length",
+  "performance_schema_max_file_classes",
+  "performance_schema_max_file_handles",
+  "performance_schema_max_file_instances",
+  "performance_schema_max_index_stat",
+  "performance_schema_max_memory_classes",
+  "performance_schema_max_metadata_locks",
+  "performance_schema_max_mutex_classes",
+  "performance_schema_max_mutex_instances",
+  "performance_schema_max_prepared_statements_instances",
+  "performance_schema_max_program_instances",
+  "performance_schema_max_rwlock_classes",
+  "performance_schema_max_rwlock_instances",
+  "performance_schema_max_socket_classes",
+  "performance_schema_max_socket_instances",
+  "performance_schema_max_sql_text_length",
+  "performance_schema_max_stage_classes",
+  "performance_schema_max_statement_classes",
+  "performance_schema_max_statement_stack",
+  "performance_schema_max_table_handles",
+  "performance_schema_max_table_instances",
+  "performance_schema_max_table_lock_stat",
+  "performance_schema_max_thread_classes",
+  "performance_schema_max_thread_instances",
+  "performance_schema_session_connect_attrs_size",
+  "performance_schema_setup_actors_size",
+  "performance_schema_setup_objects_size",
+  "performance_schema_show_processlist",
+  "performance_schema_users_size",
+  "pid_file",
+  "plsql_can_transform_sql_to_assign",
   "plsql_ccflags",
   "plsql_optimize_level",
   "plsql_warnings",
   "plugin_dir",
+  "plugin_load",
+  "plugin_load_add",
+  "port",
+  "preload_buffer_size",
   "privilege_features_enable",
   "profiling",
   "profiling_history_size",
   "protocol_version",
+  "proxy_user",
   "pseudo_slave_mode",
   "pseudo_thread_id",
+  "query_alloc_block_size",
   "query_cache_limit",
   "query_cache_min_res_unit",
   "query_cache_size",
   "query_cache_type",
   "query_cache_wlock_invalidate",
+  "query_prealloc_size",
   "query_rewrite_enabled",
   "query_rewrite_integrity",
+  "rand_seed1",
+  "rand_seed2",
+  "range_alloc_block_size",
+  "range_index_dive_limit",
+  "range_optimizer_max_mem_size",
   "rbr_exec_mode",
+  "read_buffer_size",
   "read_only",
+  "read_rnd_buffer_size",
   "recyclebin",
   "regexp_stack_limit",
   "regexp_time_limit",
+  "relay_log",
+  "relay_log_basename",
+  "relay_log_index",
+  "relay_log_info_file",
+  "relay_log_info_repository",
+  "relay_log_purge",
+  "relay_log_recovery",
+  "relay_log_space_limit",
   "replication_optimize_for_static_plugin_config",
   "replication_sender_observe_commit_only",
+  "report_host",
+  "report_password",
+  "report_port",
+  "report_user",
+  "require_secure_transport",
   "resource_manager_plan",
+  "rewriter_enabled",
+  "rewriter_verbose",
   "rpl_semi_sync_master_enabled",
   "rpl_semi_sync_master_timeout",
   "rpl_semi_sync_master_trace_level",
@@ -742,15 +1283,29 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "runtime_filter_max_in_num",
   "runtime_filter_type",
   "runtime_filter_wait_time_ms",
+  "secure_auth",
   "secure_file_priv",
   "server_id",
+  "server_id_bits",
   "server_uuid",
   "session_track_gtids",
   "session_track_schema",
   "session_track_state_change",
   "session_track_system_variables",
   "session_track_transaction_info",
+  "sha256_password_auto_generate_rsa_keys",
+  "sha256_password_private_key_path",
+  "sha256_password_proxy_users",
+  "sha256_password_public_key_path",
+  "shared_memory",
+  "shared_memory_base_name",
+  "show_compatibility_56",
+  "show_create_table_verbosity",
+  "show_old_temporals",
   "skip_external_locking",
+  "skip_name_resolve",
+  "skip_networking",
+  "skip_show_database",
   "skip_slave_start",
   "slave_allow_batching",
   "slave_checkpoint_group",
@@ -764,10 +1319,20 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "slave_parallel_workers",
   "slave_pending_jobs_size_max",
   "slave_preserve_commit_order",
+  "slave_rows_search_algorithms",
   "slave_skip_errors",
   "slave_sql_verify_checksum",
   "slave_transaction_retries",
+  "slave_type_conversions",
+  "slow_launch_time",
+  "slow_query_log",
+  "slow_query_log_file",
+  "socket",
+  "sort_buffer_size",
   "sql_auto_is_null",
+  "sql_big_selects",
+  "sql_buffer_result",
+  "sql_log_off",
   "sql_mode",
   "sql_notes",
   "sql_quote_show_create",
@@ -781,6 +1346,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "sql_throttle_network",
   "sql_throttle_priority",
   "sql_throttle_rt",
+  "sql_transpiler",
   "sql_warnings",
   "ssl_ca",
   "ssl_capath",
@@ -791,8 +1357,24 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ssl_key",
   "stored_program_cache",
   "super_read_only",
+  "sync_binlog",
+  "sync_frm",
+  "sync_master_info",
+  "sync_relay_log",
+  "sync_relay_log_info",
   "system_time_zone",
+  "table_definition_cache",
+  "table_open_cache",
   "table_open_cache_instances",
+  "thread_cache_size",
+  "thread_handling",
+  "thread_pool_algorithm",
+  "thread_pool_high_priority_connection",
+  "thread_pool_max_unused_threads",
+  "thread_pool_prio_kickup_timer",
+  "thread_pool_size",
+  "thread_pool_stall_limit",
+  "thread_stack",
   "time_format",
   "time_zone",
   "timestamp",
@@ -809,7 +1391,9 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "tx_isolation",
   "tx_read_only",
   "unique_checks",
+  "updatable_views_with_limit",
   "validate_password_check_user_name",
+  "validate_password_dictionary_file",
   "validate_password_length",
   "validate_password_mixed_case_count",
   "validate_password_number_count",
@@ -819,14 +1403,18 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "version_comment",
   "version_compile_machine",
   "version_compile_os",
+  "version_tokens_session",
+  "version_tokens_session_number",
   "wait_timeout",
   "warning_count"
 };
 
 const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
+  SYS_VAR___OB_CLIENT_CAPABILITY_FLAG,
   SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS,
   SYS_VAR__CLEAR_LAST_ARCHIVE_TIMESTAMP,
   SYS_VAR__CREATE_AUDIT_PURGE_JOB,
+  SYS_VAR__CURRENT_DEFAULT_CATALOG,
   SYS_VAR__DROP_AUDIT_PURGE_JOB,
   SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK,
   SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION,
@@ -847,10 +1435,12 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK,
   SYS_VAR__OB_PX_BCAST_OPTIMIZATION,
   SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD,
+  SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION,
   SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD,
   SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN,
   SYS_VAR__ORACLE_SQL_SELECT_LIMIT,
   SYS_VAR__PRIV_CONTROL,
+  SYS_VAR__PUSH_JOIN_PREDICATE,
   SYS_VAR__PX_BROADCAST_FUDGE_FACTOR,
   SYS_VAR__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN,
   SYS_VAR__PX_MIN_GRANULES_PER_SLAVE,
@@ -864,16 +1454,35 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__SHOW_DDL_IN_COMPAT_MODE,
   SYS_VAR__WINDOWFUNC_OPTIMIZATION_SETTINGS,
   SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN,
+  SYS_VAR_AUTO_GENERATE_CERTS,
   SYS_VAR_AUTO_INCREMENT_CACHE_SIZE,
   SYS_VAR_AUTO_INCREMENT_INCREMENT,
   SYS_VAR_AUTO_INCREMENT_OFFSET,
   SYS_VAR_AUTOCOMMIT,
   SYS_VAR_AUTOMATIC_SP_PRIVILEGES,
+  SYS_VAR_AVOID_TEMPORAL_UPGRADE,
+  SYS_VAR_BACK_LOG,
+  SYS_VAR_BASEDIR,
+  SYS_VAR_BIG_TABLES,
+  SYS_VAR_BIND_ADDRESS,
+  SYS_VAR_BINLOG_CACHE_SIZE,
   SYS_VAR_BINLOG_CHECKSUM,
+  SYS_VAR_BINLOG_DIRECT_NON_TRANSACTIONAL_UPDATES,
+  SYS_VAR_BINLOG_ERROR_ACTION,
   SYS_VAR_BINLOG_FORMAT,
+  SYS_VAR_BINLOG_GROUP_COMMIT_SYNC_DELAY,
+  SYS_VAR_BINLOG_GROUP_COMMIT_SYNC_NO_DELAY_COUNT,
+  SYS_VAR_BINLOG_GTID_SIMPLE_RECOVERY,
+  SYS_VAR_BINLOG_MAX_FLUSH_QUEUE_TIME,
+  SYS_VAR_BINLOG_ORDER_COMMITS,
   SYS_VAR_BINLOG_ROW_IMAGE,
   SYS_VAR_BINLOG_ROWS_QUERY_LOG_EVENTS,
+  SYS_VAR_BINLOG_STMT_CACHE_SIZE,
+  SYS_VAR_BINLOG_TRANSACTION_DEPENDENCY_HISTORY_SIZE,
+  SYS_VAR_BINLOG_TRANSACTION_DEPENDENCY_TRACKING,
   SYS_VAR_BLOCK_ENCRYPTION_MODE,
+  SYS_VAR_BULK_INSERT_BUFFER_SIZE,
+  SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS,
   SYS_VAR_CARDINALITY_ESTIMATION_MODEL,
   SYS_VAR_CHARACTER_SET_CLIENT,
   SYS_VAR_CHARACTER_SET_CONNECTION,
@@ -882,30 +1491,52 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_CHARACTER_SET_RESULTS,
   SYS_VAR_CHARACTER_SET_SERVER,
   SYS_VAR_CHARACTER_SET_SYSTEM,
+  SYS_VAR_CHARACTER_SETS_DIR,
+  SYS_VAR_CHECK_PROXY_USERS,
   SYS_VAR_COLLATION_CONNECTION,
   SYS_VAR_COLLATION_DATABASE,
   SYS_VAR_COLLATION_SERVER,
   SYS_VAR_COMPLETION_TYPE,
   SYS_VAR_CONCURRENT_INSERT,
   SYS_VAR_CONNECT_TIMEOUT,
+  SYS_VAR_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD,
+  SYS_VAR_CONNECTION_CONTROL_MAX_CONNECTION_DELAY,
+  SYS_VAR_CONNECTION_CONTROL_MIN_CONNECTION_DELAY,
+  SYS_VAR_CORE_FILE,
   SYS_VAR_CTE_MAX_RECURSION_DEPTH,
   SYS_VAR_CURSOR_SHARING,
   SYS_VAR_DATADIR,
+  SYS_VAR_DATE_FORMAT,
+  SYS_VAR_DATETIME_FORMAT,
   SYS_VAR_DEBUG,
   SYS_VAR_DEBUG_SYNC,
   SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
   SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4,
   SYS_VAR_DEFAULT_PASSWORD_LIFETIME,
   SYS_VAR_DEFAULT_STORAGE_ENGINE,
+  SYS_VAR_DEFAULT_TMP_STORAGE_ENGINE,
+  SYS_VAR_DEFAULT_WEEK_FORMAT,
+  SYS_VAR_DELAY_KEY_WRITE,
+  SYS_VAR_DELAYED_INSERT_LIMIT,
+  SYS_VAR_DELAYED_INSERT_TIMEOUT,
+  SYS_VAR_DELAYED_QUEUE_SIZE,
   SYS_VAR_DISABLED_STORAGE_ENGINES,
+  SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD,
   SYS_VAR_DIV_PRECISION_INCREMENT,
+  SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL,
+  SYS_VAR_ENABLE_SQL_PLAN_MONITOR,
   SYS_VAR_ENFORCE_GTID_CONSISTENCY,
+  SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT,
   SYS_VAR_ERROR_COUNT,
   SYS_VAR_ERROR_ON_OVERLAP_TIME,
+  SYS_VAR_EVENT_SCHEDULER,
+  SYS_VAR_EXPIRE_LOGS_DAYS,
   SYS_VAR_EXPLICIT_DEFAULTS_FOR_TIMESTAMP,
+  SYS_VAR_EXTERNAL_USER,
   SYS_VAR_FLUSH,
   SYS_VAR_FLUSH_TIME,
   SYS_VAR_FOREIGN_KEY_CHECKS,
+  SYS_VAR_FT_STOPWORD_FILE,
   SYS_VAR_GENERAL_LOG,
   SYS_VAR_GROUP_CONCAT_MAX_LEN,
   SYS_VAR_GROUP_REPLICATION_ALLOW_LOCAL_DISJOINT_GTIDS_JOIN,
@@ -921,6 +1552,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_MODE,
   SYS_VAR_GROUP_REPLICATION_FORCE_MEMBERS,
   SYS_VAR_GROUP_REPLICATION_GROUP_NAME,
+  SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS,
   SYS_VAR_GROUP_REPLICATION_GTID_ASSIGNMENT_BLOCK_SIZE,
   SYS_VAR_GROUP_REPLICATION_IP_WHITELIST,
   SYS_VAR_GROUP_REPLICATION_LOCAL_ADDRESS,
@@ -949,16 +1581,24 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_GTID_NEXT,
   SYS_VAR_GTID_OWNED,
   SYS_VAR_GTID_PURGED,
+  SYS_VAR_HAVE_COMPRESS,
+  SYS_VAR_HAVE_CRYPT,
+  SYS_VAR_HAVE_DYNAMIC_LOADING,
   SYS_VAR_HAVE_OPENSSL,
   SYS_VAR_HAVE_PROFILING,
   SYS_VAR_HAVE_QUERY_CACHE,
   SYS_VAR_HAVE_SSL,
+  SYS_VAR_HAVE_STATEMENT_TIMEOUT,
   SYS_VAR_HAVE_SYMLINK,
+  SYS_VAR_HOST_CACHE_SIZE,
   SYS_VAR_HOSTNAME,
   SYS_VAR_IDENTITY,
   SYS_VAR_IGNORE_BUILTIN_INNODB,
+  SYS_VAR_IGNORE_DB_DIRS,
   SYS_VAR_INFORMATION_SCHEMA_STATS_EXPIRY,
   SYS_VAR_INIT_CONNECT,
+  SYS_VAR_INIT_FILE,
+  SYS_VAR_INIT_SLAVE,
   SYS_VAR_INNODB_ADAPTIVE_FLUSHING,
   SYS_VAR_INNODB_ADAPTIVE_FLUSHING_LWM,
   SYS_VAR_INNODB_ADAPTIVE_HASH_INDEX,
@@ -966,6 +1606,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_INNODB_ADAPTIVE_MAX_SLEEP_DELAY,
   SYS_VAR_INNODB_API_BK_COMMIT_INTERVAL,
   SYS_VAR_INNODB_API_DISABLE_ROWLOCK,
+  SYS_VAR_INNODB_API_ENABLE_BINLOG,
   SYS_VAR_INNODB_API_TRX_LEVEL,
   SYS_VAR_INNODB_AUTOEXTEND_INCREMENT,
   SYS_VAR_INNODB_AUTOINC_LOCK_MODE,
@@ -992,65 +1633,292 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_INNODB_COMPRESSION_LEVEL,
   SYS_VAR_INNODB_COMPRESSION_PAD_PCT_MAX,
   SYS_VAR_INNODB_CONCURRENCY_TICKETS,
+  SYS_VAR_INNODB_DATA_FILE_PATH,
+  SYS_VAR_INNODB_DATA_HOME_DIR,
+  SYS_VAR_INNODB_DEADLOCK_DETECT,
   SYS_VAR_INNODB_DEFAULT_ROW_FORMAT,
   SYS_VAR_INNODB_DISABLE_RESIZE_BUFFER_POOL_DEBUG,
   SYS_VAR_INNODB_DISABLE_SORT_FILE_CACHE,
   SYS_VAR_INNODB_DOUBLEWRITE,
+  SYS_VAR_INNODB_FAST_SHUTDOWN,
   SYS_VAR_INNODB_FIL_MAKE_PAGE_DIRTY_DEBUG,
   SYS_VAR_INNODB_FILE_FORMAT,
   SYS_VAR_INNODB_FILE_FORMAT_CHECK,
   SYS_VAR_INNODB_FILE_FORMAT_MAX,
   SYS_VAR_INNODB_FILE_PER_TABLE,
   SYS_VAR_INNODB_FILL_FACTOR,
+  SYS_VAR_INNODB_FLUSH_LOG_AT_TIMEOUT,
+  SYS_VAR_INNODB_FLUSH_LOG_AT_TRX_COMMIT,
   SYS_VAR_INNODB_FLUSH_METHOD,
   SYS_VAR_INNODB_FLUSH_NEIGHBORS,
   SYS_VAR_INNODB_FLUSH_SYNC,
   SYS_VAR_INNODB_FLUSHING_AVG_LOOPS,
   SYS_VAR_INNODB_FORCE_LOAD_CORRUPTED,
   SYS_VAR_INNODB_FORCE_RECOVERY,
+  SYS_VAR_INNODB_FT_CACHE_SIZE,
+  SYS_VAR_INNODB_FT_ENABLE_DIAG_PRINT,
+  SYS_VAR_INNODB_FT_NUM_WORD_OPTIMIZE,
+  SYS_VAR_INNODB_FT_RESULT_CACHE_LIMIT,
+  SYS_VAR_INNODB_FT_SERVER_STOPWORD_TABLE,
+  SYS_VAR_INNODB_FT_SORT_PLL_DEGREE,
+  SYS_VAR_INNODB_FT_TOTAL_CACHE_SIZE,
+  SYS_VAR_INNODB_IO_CAPACITY,
+  SYS_VAR_INNODB_IO_CAPACITY_MAX,
+  SYS_VAR_INNODB_LARGE_PREFIX,
   SYS_VAR_INNODB_LIMIT_OPTIMISTIC_INSERT_DEBUG,
+  SYS_VAR_INNODB_LOCK_WAIT_TIMEOUT,
+  SYS_VAR_INNODB_LOCKS_UNSAFE_FOR_BINLOG,
+  SYS_VAR_INNODB_LOG_BUFFER_SIZE,
+  SYS_VAR_INNODB_LOG_CHECKPOINT_NOW,
+  SYS_VAR_INNODB_LOG_CHECKSUMS,
+  SYS_VAR_INNODB_LOG_COMPRESSED_PAGES,
+  SYS_VAR_INNODB_LOG_FILE_SIZE,
+  SYS_VAR_INNODB_LOG_FILES_IN_GROUP,
+  SYS_VAR_INNODB_LOG_GROUP_HOME_DIR,
+  SYS_VAR_INNODB_LOG_WRITE_AHEAD_SIZE,
   SYS_VAR_INNODB_LRU_SCAN_DEPTH,
   SYS_VAR_INNODB_MAX_DIRTY_PAGES_PCT,
   SYS_VAR_INNODB_MAX_DIRTY_PAGES_PCT_LWM,
   SYS_VAR_INNODB_MAX_PURGE_LAG,
   SYS_VAR_INNODB_MAX_PURGE_LAG_DELAY,
+  SYS_VAR_INNODB_MAX_UNDO_LOG_SIZE,
   SYS_VAR_INNODB_MERGE_THRESHOLD_SET_ALL_DEBUG,
+  SYS_VAR_INNODB_MONITOR_DISABLE,
+  SYS_VAR_INNODB_MONITOR_ENABLE,
+  SYS_VAR_INNODB_MONITOR_RESET,
+  SYS_VAR_INNODB_MONITOR_RESET_ALL,
+  SYS_VAR_INNODB_NUMA_INTERLEAVE,
+  SYS_VAR_INNODB_OLD_BLOCKS_PCT,
+  SYS_VAR_INNODB_OLD_BLOCKS_TIME,
+  SYS_VAR_INNODB_ONLINE_ALTER_LOG_MAX_SIZE,
+  SYS_VAR_INNODB_OPEN_FILES,
+  SYS_VAR_INNODB_OPTIMIZE_FULLTEXT_ONLY,
+  SYS_VAR_INNODB_PAGE_CLEANERS,
   SYS_VAR_INNODB_PAGE_SIZE,
+  SYS_VAR_INNODB_PRINT_ALL_DEADLOCKS,
+  SYS_VAR_INNODB_PURGE_BATCH_SIZE,
+  SYS_VAR_INNODB_PURGE_RSEG_TRUNCATE_FREQUENCY,
+  SYS_VAR_INNODB_PURGE_THREADS,
+  SYS_VAR_INNODB_RANDOM_READ_AHEAD,
+  SYS_VAR_INNODB_READ_AHEAD_THRESHOLD,
+  SYS_VAR_INNODB_READ_IO_THREADS,
   SYS_VAR_INNODB_READ_ONLY,
   SYS_VAR_INNODB_REPLICATION_DELAY,
   SYS_VAR_INNODB_ROLLBACK_ON_TIMEOUT,
+  SYS_VAR_INNODB_ROLLBACK_SEGMENTS,
   SYS_VAR_INNODB_SAVED_PAGE_NUMBER_DEBUG,
+  SYS_VAR_INNODB_SORT_BUFFER_SIZE,
+  SYS_VAR_INNODB_SPIN_WAIT_DELAY,
+  SYS_VAR_INNODB_STATS_AUTO_RECALC,
+  SYS_VAR_INNODB_STATS_INCLUDE_DELETE_MARKED,
+  SYS_VAR_INNODB_STATS_METHOD,
+  SYS_VAR_INNODB_STATS_ON_METADATA,
   SYS_VAR_INNODB_STATS_PERSISTENT,
+  SYS_VAR_INNODB_STATS_PERSISTENT_SAMPLE_PAGES,
+  SYS_VAR_INNODB_STATS_SAMPLE_PAGES,
+  SYS_VAR_INNODB_STATS_TRANSIENT_SAMPLE_PAGES,
+  SYS_VAR_INNODB_STATUS_OUTPUT,
+  SYS_VAR_INNODB_STATUS_OUTPUT_LOCKS,
   SYS_VAR_INNODB_STRICT_MODE,
   SYS_VAR_INNODB_SUPPORT_XA,
+  SYS_VAR_INNODB_SYNC_ARRAY_SIZE,
   SYS_VAR_INNODB_SYNC_DEBUG,
+  SYS_VAR_INNODB_SYNC_SPIN_LOOPS,
+  SYS_VAR_INNODB_TABLE_LOCKS,
+  SYS_VAR_INNODB_TEMP_DATA_FILE_PATH,
+  SYS_VAR_INNODB_THREAD_CONCURRENCY,
+  SYS_VAR_INNODB_THREAD_SLEEP_DELAY,
+  SYS_VAR_INNODB_TMPDIR,
   SYS_VAR_INNODB_TRX_PURGE_VIEW_UPDATE_ONLY_DEBUG,
   SYS_VAR_INNODB_TRX_RSEG_N_SLOTS_DEBUG,
+  SYS_VAR_INNODB_UNDO_DIRECTORY,
+  SYS_VAR_INNODB_UNDO_LOG_TRUNCATE,
+  SYS_VAR_INNODB_UNDO_LOGS,
+  SYS_VAR_INNODB_UNDO_TABLESPACES,
+  SYS_VAR_INNODB_USE_NATIVE_AIO,
   SYS_VAR_INNODB_VERSION,
+  SYS_VAR_INNODB_WRITE_IO_THREADS,
+  SYS_VAR_INSERT_ID,
   SYS_VAR_INTERACTIVE_TIMEOUT,
+  SYS_VAR_INTERNAL_TMP_DISK_STORAGE_ENGINE,
   SYS_VAR_IS_RESULT_ACCURATE,
+  SYS_VAR_JOIN_BUFFER_SIZE,
+  SYS_VAR_KEEP_FILES_ON_CREATE,
+  SYS_VAR_KEY_BUFFER_SIZE,
+  SYS_VAR_KEY_CACHE_AGE_THRESHOLD,
+  SYS_VAR_KEY_CACHE_BLOCK_SIZE,
+  SYS_VAR_KEY_CACHE_DIVISION_LIMIT,
+  SYS_VAR_KEYRING_AWS_CMK_ID,
+  SYS_VAR_KEYRING_AWS_CONF_FILE,
+  SYS_VAR_KEYRING_AWS_DATA_FILE,
+  SYS_VAR_KEYRING_AWS_REGION,
+  SYS_VAR_KEYRING_ENCRYPTED_FILE_DATA,
+  SYS_VAR_KEYRING_ENCRYPTED_FILE_PASSWORD,
+  SYS_VAR_KEYRING_FILE_DATA,
+  SYS_VAR_KEYRING_OKV_CONF_DIR,
+  SYS_VAR_KEYRING_OPERATIONS,
+  SYS_VAR_LANGUAGE,
+  SYS_VAR_LARGE_FILES_SUPPORT,
+  SYS_VAR_LARGE_PAGE_SIZE,
+  SYS_VAR_LARGE_PAGES,
   SYS_VAR_LAST_INSERT_ID,
   SYS_VAR_LC_MESSAGES,
+  SYS_VAR_LC_MESSAGES_DIR,
   SYS_VAR_LC_TIME_NAMES,
   SYS_VAR_LICENSE,
   SYS_VAR_LOCAL_INFILE,
   SYS_VAR_LOCK_WAIT_TIMEOUT,
+  SYS_VAR_LOCKED_IN_MEMORY,
   SYS_VAR_LOG_BIN,
+  SYS_VAR_LOG_BIN_BASENAME,
+  SYS_VAR_LOG_BIN_INDEX,
+  SYS_VAR_LOG_BIN_TRUST_FUNCTION_CREATORS,
+  SYS_VAR_LOG_BIN_USE_V1_ROW_EVENTS,
+  SYS_VAR_LOG_BUILTIN_AS_IDENTIFIED_BY_PASSWORD,
+  SYS_VAR_LOG_ERROR,
+  SYS_VAR_LOG_ERROR_VERBOSITY,
+  SYS_VAR_LOG_OUTPUT,
+  SYS_VAR_LOG_QUERIES_NOT_USING_INDEXES,
   SYS_VAR_LOG_ROW_VALUE_OPTIONS,
+  SYS_VAR_LOG_SLAVE_UPDATES,
+  SYS_VAR_LOG_SLOW_ADMIN_STATEMENTS,
+  SYS_VAR_LOG_SLOW_SLAVE_STATEMENTS,
+  SYS_VAR_LOG_STATEMENTS_UNSAFE_FOR_BINLOG,
+  SYS_VAR_LOG_SYSLOG,
+  SYS_VAR_LOG_SYSLOG_FACILITY,
+  SYS_VAR_LOG_SYSLOG_INCLUDE_PID,
+  SYS_VAR_LOG_SYSLOG_TAG,
+  SYS_VAR_LOG_THROTTLE_QUERIES_NOT_USING_INDEXES,
+  SYS_VAR_LOG_TIMESTAMPS,
+  SYS_VAR_LOG_WARNINGS,
   SYS_VAR_LONG_QUERY_TIME,
+  SYS_VAR_LOW_PRIORITY_UPDATES,
+  SYS_VAR_LOWER_CASE_FILE_SYSTEM,
   SYS_VAR_LOWER_CASE_TABLE_NAMES,
   SYS_VAR_MASTER_INFO_REPOSITORY,
   SYS_VAR_MASTER_VERIFY_CHECKSUM,
   SYS_VAR_MAX_ALLOWED_PACKET,
+  SYS_VAR_MAX_BINLOG_CACHE_SIZE,
+  SYS_VAR_MAX_BINLOG_SIZE,
+  SYS_VAR_MAX_BINLOG_STMT_CACHE_SIZE,
+  SYS_VAR_MAX_CONNECT_ERRORS,
   SYS_VAR_MAX_CONNECTIONS,
+  SYS_VAR_MAX_DELAYED_THREADS,
+  SYS_VAR_MAX_DIGEST_LENGTH,
+  SYS_VAR_MAX_ERROR_COUNT,
   SYS_VAR_MAX_EXECUTION_TIME,
+  SYS_VAR_MAX_HEAP_TABLE_SIZE,
+  SYS_VAR_MAX_INSERT_DELAYED_THREADS,
+  SYS_VAR_MAX_JOIN_SIZE,
+  SYS_VAR_MAX_LENGTH_FOR_SORT_DATA,
+  SYS_VAR_MAX_PREPARED_STMT_COUNT,
+  SYS_VAR_MAX_RELAY_LOG_SIZE,
+  SYS_VAR_MAX_SEEKS_FOR_KEY,
+  SYS_VAR_MAX_SORT_LENGTH,
   SYS_VAR_MAX_SP_RECURSION_DEPTH,
+  SYS_VAR_MAX_TMP_TABLES,
   SYS_VAR_MAX_USER_CONNECTIONS,
+  SYS_VAR_MAX_WRITE_LOCK_COUNT,
+  SYS_VAR_MECAB_RC_FILE,
+  SYS_VAR_METADATA_LOCKS_CACHE_SIZE,
+  SYS_VAR_METADATA_LOCKS_HASH_INSTANCES,
+  SYS_VAR_MIN_EXAMINED_ROW_LIMIT,
+  SYS_VAR_MULTI_RANGE_COUNT,
+  SYS_VAR_MVIEW_REFRESH_DOP,
+  SYS_VAR_MYISAM_DATA_POINTER_SIZE,
+  SYS_VAR_MYISAM_MAX_SORT_FILE_SIZE,
   SYS_VAR_MYISAM_MMAP_SIZE,
+  SYS_VAR_MYISAM_REPAIR_THREADS,
+  SYS_VAR_MYISAM_SORT_BUFFER_SIZE,
+  SYS_VAR_MYISAM_STATS_METHOD,
+  SYS_VAR_MYISAM_USE_MMAP,
+  SYS_VAR_MYSQL_FIREWALL_MODE,
+  SYS_VAR_MYSQL_FIREWALL_TRACE,
+  SYS_VAR_MYSQL_NATIVE_PASSWORD_PROXY_USERS,
+  SYS_VAR_MYSQLX_BIND_ADDRESS,
+  SYS_VAR_MYSQLX_CONNECT_TIMEOUT,
+  SYS_VAR_MYSQLX_IDLE_WORKER_THREAD_TIMEOUT,
+  SYS_VAR_MYSQLX_MAX_ALLOWED_PACKET,
+  SYS_VAR_MYSQLX_MAX_CONNECTIONS,
+  SYS_VAR_MYSQLX_MIN_WORKER_THREADS,
+  SYS_VAR_MYSQLX_PORT,
+  SYS_VAR_MYSQLX_PORT_OPEN_TIMEOUT,
+  SYS_VAR_MYSQLX_SOCKET,
+  SYS_VAR_MYSQLX_SSL_CA,
+  SYS_VAR_MYSQLX_SSL_CAPATH,
+  SYS_VAR_MYSQLX_SSL_CERT,
+  SYS_VAR_MYSQLX_SSL_CIPHER,
+  SYS_VAR_MYSQLX_SSL_CRL,
+  SYS_VAR_MYSQLX_SSL_CRLPATH,
+  SYS_VAR_MYSQLX_SSL_KEY,
+  SYS_VAR_NAMED_PIPE,
+  SYS_VAR_NAMED_PIPE_FULL_ACCESS_GROUP,
   SYS_VAR_NCHARACTER_SET_CONNECTION,
+  SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE,
+  SYS_VAR_NDB_AUTOINCREMENT_PREFETCH_SZ,
+  SYS_VAR_NDB_BATCH_SIZE,
+  SYS_VAR_NDB_BLOB_READ_BATCH_BYTES,
+  SYS_VAR_NDB_BLOB_WRITE_BATCH_BYTES,
+  SYS_VAR_NDB_CACHE_CHECK_TIME,
+  SYS_VAR_NDB_CLEAR_APPLY_STATUS,
+  SYS_VAR_NDB_CLUSTER_CONNECTION_POOL,
+  SYS_VAR_NDB_CLUSTER_CONNECTION_POOL_NODEIDS,
+  SYS_VAR_NDB_DATA_NODE_NEIGHBOUR,
+  SYS_VAR_NDB_DEFAULT_COLUMN_FORMAT,
+  SYS_VAR_NDB_DEFERRED_CONSTRAINTS,
+  SYS_VAR_NDB_DISTRIBUTION,
+  SYS_VAR_NDB_EVENTBUFFER_FREE_PERCENT,
+  SYS_VAR_NDB_EVENTBUFFER_MAX_ALLOC,
+  SYS_VAR_NDB_EXTRA_LOGGING,
+  SYS_VAR_NDB_FORCE_SEND,
+  SYS_VAR_NDB_FULLY_REPLICATED,
+  SYS_VAR_NDB_INDEX_STAT_ENABLE,
+  SYS_VAR_NDB_INDEX_STAT_OPTION,
+  SYS_VAR_NDB_JOIN_PUSHDOWN,
+  SYS_VAR_NDB_LOG_APPLY_STATUS,
+  SYS_VAR_NDB_LOG_BIN,
+  SYS_VAR_NDB_LOG_BINLOG_INDEX,
+  SYS_VAR_NDB_LOG_EMPTY_EPOCHS,
+  SYS_VAR_NDB_LOG_EMPTY_UPDATE,
+  SYS_VAR_NDB_LOG_EXCLUSIVE_READS,
+  SYS_VAR_NDB_LOG_FAIL_TERMINATE,
+  SYS_VAR_NDB_LOG_ORIG,
+  SYS_VAR_NDB_LOG_TRANSACTION_ID,
+  SYS_VAR_NDB_LOG_UPDATE_AS_WRITE,
+  SYS_VAR_NDB_LOG_UPDATE_MINIMAL,
+  SYS_VAR_NDB_LOG_UPDATED_ONLY,
+  SYS_VAR_NDB_OPTIMIZATION_DELAY,
+  SYS_VAR_NDB_OPTIMIZED_NODE_SELECTION,
+  SYS_VAR_NDB_READ_BACKUP,
+  SYS_VAR_NDB_RECV_THREAD_ACTIVATION_THRESHOLD,
+  SYS_VAR_NDB_RECV_THREAD_CPU_MASK,
+  SYS_VAR_NDB_REPORT_THRESH_BINLOG_EPOCH_SLIP,
+  SYS_VAR_NDB_REPORT_THRESH_BINLOG_MEM_USAGE,
+  SYS_VAR_NDB_ROW_CHECKSUM,
+  SYS_VAR_NDB_SHOW_FOREIGN_KEY_MOCK_TABLES,
+  SYS_VAR_NDB_SLAVE_CONFLICT_ROLE,
+  SYS_VAR_NDB_SYSTEM_NAME,
+  SYS_VAR_NDB_TABLE_NO_LOGGING,
+  SYS_VAR_NDB_TABLE_TEMPORARY,
+  SYS_VAR_NDB_USE_COPYING_ALTER_TABLE,
+  SYS_VAR_NDB_USE_EXACT_COUNT,
+  SYS_VAR_NDB_USE_TRANSACTIONS,
+  SYS_VAR_NDB_VERSION,
+  SYS_VAR_NDB_VERSION_STRING,
+  SYS_VAR_NDB_WAIT_CONNECTED,
+  SYS_VAR_NDB_WAIT_SETUP,
+  SYS_VAR_NDBINFO_DATABASE,
+  SYS_VAR_NDBINFO_MAX_BYTES,
+  SYS_VAR_NDBINFO_MAX_ROWS,
+  SYS_VAR_NDBINFO_OFFLINE,
+  SYS_VAR_NDBINFO_SHOW_HIDDEN,
+  SYS_VAR_NDBINFO_TABLE_PREFIX,
+  SYS_VAR_NDBINFO_VERSION,
   SYS_VAR_NET_BUFFER_LENGTH,
   SYS_VAR_NET_READ_TIMEOUT,
+  SYS_VAR_NET_RETRY_COUNT,
   SYS_VAR_NET_WRITE_TIMEOUT,
+  SYS_VAR_NEW,
   SYS_VAR_NLS_CALENDAR,
   SYS_VAR_NLS_CHARACTERSET,
   SYS_VAR_NLS_COMP,
@@ -1079,8 +1947,11 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN,
   SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT,
   SYS_VAR_OB_ENABLE_JIT,
+  SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK,
+  SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT,
   SYS_VAR_OB_ENABLE_PL_CACHE,
   SYS_VAR_OB_ENABLE_PLAN_CACHE,
+  SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK,
   SYS_VAR_OB_ENABLE_RICH_ERROR_MSG,
   SYS_VAR_OB_ENABLE_SHOW_TRACE,
   SYS_VAR_OB_ENABLE_SQL_AUDIT,
@@ -1088,7 +1959,11 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM,
   SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK,
   SYS_VAR_OB_GLOBAL_DEBUG_SYNC,
+  SYS_VAR_OB_HNSW_EF_SEARCH,
+  SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE,
   SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT,
+  SYS_VAR_OB_IVF_NPROBES,
+  SYS_VAR_OB_KV_MODE,
   SYS_VAR_OB_LAST_SCHEMA_VERSION,
   SYS_VAR_OB_LOG_LEVEL,
   SYS_VAR_OB_MAX_READ_STALE_TIME,
@@ -1107,49 +1982,139 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ROUTE_POLICY,
   SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT,
   SYS_VAR_OB_SECURITY_VERSION,
+  SYS_VAR_OB_SPARSE_DROP_RATIO_SEARCH,
   SYS_VAR_OB_SQL_AUDIT_PERCENTAGE,
   SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE,
   SYS_VAR_OB_STATEMENT_TRACE_ID,
+  SYS_VAR_OB_TABLE_ACCESS_POLICY,
   SYS_VAR_OB_TCP_INVITED_NODES,
   SYS_VAR_OB_TEMP_TABLESPACE_SIZE_PERCENTAGE,
   SYS_VAR_OB_TRACE_INFO,
   SYS_VAR_OB_TRX_IDLE_TIMEOUT,
   SYS_VAR_OB_TRX_LOCK_TIMEOUT,
   SYS_VAR_OB_TRX_TIMEOUT,
+  SYS_VAR_OFFLINE_MODE,
+  SYS_VAR_OLD,
+  SYS_VAR_OLD_ALTER_TABLE,
+  SYS_VAR_OLD_PASSWORDS,
+  SYS_VAR_OPEN_FILES_LIMIT,
   SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES,
   SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING,
   SYS_VAR_OPTIMIZER_FEATURES_ENABLE,
+  SYS_VAR_OPTIMIZER_PRUNE_LEVEL,
+  SYS_VAR_OPTIMIZER_SEARCH_DEPTH,
+  SYS_VAR_OPTIMIZER_SWITCH,
+  SYS_VAR_OPTIMIZER_TRACE,
+  SYS_VAR_OPTIMIZER_TRACE_FEATURES,
+  SYS_VAR_OPTIMIZER_TRACE_LIMIT,
+  SYS_VAR_OPTIMIZER_TRACE_MAX_MEM_SIZE,
+  SYS_VAR_OPTIMIZER_TRACE_OFFSET,
   SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES,
   SYS_VAR_PARALLEL_DEGREE_LIMIT,
   SYS_VAR_PARALLEL_DEGREE_POLICY,
   SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD,
   SYS_VAR_PARALLEL_SERVERS_TARGET,
+  SYS_VAR_PARSER_MAX_MEM_SIZE,
+  SYS_VAR_PARTITION_INDEX_DIVE_LIMIT,
   SYS_VAR_PERFORMANCE_SCHEMA,
+  SYS_VAR_PERFORMANCE_SCHEMA_ACCOUNTS_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_DIGESTS_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_LONG_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_LONG_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_LONG_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_LONG_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_HOSTS_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_CLASSES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_INSTANCES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_DIGEST_LENGTH,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_CLASSES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_HANDLES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_INSTANCES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_INDEX_STAT,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_MEMORY_CLASSES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_METADATA_LOCKS,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_CLASSES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_INSTANCES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_PREPARED_STATEMENTS_INSTANCES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_PROGRAM_INSTANCES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_CLASSES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_INSTANCES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_CLASSES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_INSTANCES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_SQL_TEXT_LENGTH,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_STAGE_CLASSES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_CLASSES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_STACK,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_HANDLES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_INSTANCES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_LOCK_STAT,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_CLASSES,
+  SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_INSTANCES,
+  SYS_VAR_PERFORMANCE_SCHEMA_SESSION_CONNECT_ATTRS_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_SETUP_ACTORS_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_SETUP_OBJECTS_SIZE,
+  SYS_VAR_PERFORMANCE_SCHEMA_SHOW_PROCESSLIST,
+  SYS_VAR_PERFORMANCE_SCHEMA_USERS_SIZE,
+  SYS_VAR_PID_FILE,
+  SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
   SYS_VAR_PLSQL_CCFLAGS,
   SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
   SYS_VAR_PLSQL_WARNINGS,
   SYS_VAR_PLUGIN_DIR,
+  SYS_VAR_PLUGIN_LOAD,
+  SYS_VAR_PLUGIN_LOAD_ADD,
+  SYS_VAR_PORT,
+  SYS_VAR_PRELOAD_BUFFER_SIZE,
   SYS_VAR_PRIVILEGE_FEATURES_ENABLE,
   SYS_VAR_PROFILING,
   SYS_VAR_PROFILING_HISTORY_SIZE,
   SYS_VAR_PROTOCOL_VERSION,
+  SYS_VAR_PROXY_USER,
   SYS_VAR_PSEUDO_SLAVE_MODE,
   SYS_VAR_PSEUDO_THREAD_ID,
+  SYS_VAR_QUERY_ALLOC_BLOCK_SIZE,
   SYS_VAR_QUERY_CACHE_LIMIT,
   SYS_VAR_QUERY_CACHE_MIN_RES_UNIT,
   SYS_VAR_QUERY_CACHE_SIZE,
   SYS_VAR_QUERY_CACHE_TYPE,
   SYS_VAR_QUERY_CACHE_WLOCK_INVALIDATE,
+  SYS_VAR_QUERY_PREALLOC_SIZE,
   SYS_VAR_QUERY_REWRITE_ENABLED,
   SYS_VAR_QUERY_REWRITE_INTEGRITY,
+  SYS_VAR_RAND_SEED1,
+  SYS_VAR_RAND_SEED2,
+  SYS_VAR_RANGE_ALLOC_BLOCK_SIZE,
+  SYS_VAR_RANGE_INDEX_DIVE_LIMIT,
+  SYS_VAR_RANGE_OPTIMIZER_MAX_MEM_SIZE,
   SYS_VAR_RBR_EXEC_MODE,
+  SYS_VAR_READ_BUFFER_SIZE,
   SYS_VAR_READ_ONLY,
+  SYS_VAR_READ_RND_BUFFER_SIZE,
   SYS_VAR_RECYCLEBIN,
   SYS_VAR_REGEXP_STACK_LIMIT,
   SYS_VAR_REGEXP_TIME_LIMIT,
+  SYS_VAR_RELAY_LOG,
+  SYS_VAR_RELAY_LOG_BASENAME,
+  SYS_VAR_RELAY_LOG_INDEX,
+  SYS_VAR_RELAY_LOG_INFO_FILE,
+  SYS_VAR_RELAY_LOG_INFO_REPOSITORY,
+  SYS_VAR_RELAY_LOG_PURGE,
+  SYS_VAR_RELAY_LOG_RECOVERY,
+  SYS_VAR_RELAY_LOG_SPACE_LIMIT,
   SYS_VAR_REPLICATION_OPTIMIZE_FOR_STATIC_PLUGIN_CONFIG,
   SYS_VAR_REPLICATION_SENDER_OBSERVE_COMMIT_ONLY,
+  SYS_VAR_REPORT_HOST,
+  SYS_VAR_REPORT_PASSWORD,
+  SYS_VAR_REPORT_PORT,
+  SYS_VAR_REPORT_USER,
+  SYS_VAR_REQUIRE_SECURE_TRANSPORT,
   SYS_VAR_RESOURCE_MANAGER_PLAN,
+  SYS_VAR_REWRITER_ENABLED,
+  SYS_VAR_REWRITER_VERBOSE,
   SYS_VAR_RPL_SEMI_SYNC_MASTER_ENABLED,
   SYS_VAR_RPL_SEMI_SYNC_MASTER_TIMEOUT,
   SYS_VAR_RPL_SEMI_SYNC_MASTER_TRACE_LEVEL,
@@ -1163,15 +2128,29 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM,
   SYS_VAR_RUNTIME_FILTER_TYPE,
   SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS,
+  SYS_VAR_SECURE_AUTH,
   SYS_VAR_SECURE_FILE_PRIV,
   SYS_VAR_SERVER_ID,
+  SYS_VAR_SERVER_ID_BITS,
   SYS_VAR_SERVER_UUID,
   SYS_VAR_SESSION_TRACK_GTIDS,
   SYS_VAR_SESSION_TRACK_SCHEMA,
   SYS_VAR_SESSION_TRACK_STATE_CHANGE,
   SYS_VAR_SESSION_TRACK_SYSTEM_VARIABLES,
   SYS_VAR_SESSION_TRACK_TRANSACTION_INFO,
+  SYS_VAR_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS,
+  SYS_VAR_SHA256_PASSWORD_PRIVATE_KEY_PATH,
+  SYS_VAR_SHA256_PASSWORD_PROXY_USERS,
+  SYS_VAR_SHA256_PASSWORD_PUBLIC_KEY_PATH,
+  SYS_VAR_SHARED_MEMORY,
+  SYS_VAR_SHARED_MEMORY_BASE_NAME,
+  SYS_VAR_SHOW_COMPATIBILITY_56,
+  SYS_VAR_SHOW_CREATE_TABLE_VERBOSITY,
+  SYS_VAR_SHOW_OLD_TEMPORALS,
   SYS_VAR_SKIP_EXTERNAL_LOCKING,
+  SYS_VAR_SKIP_NAME_RESOLVE,
+  SYS_VAR_SKIP_NETWORKING,
+  SYS_VAR_SKIP_SHOW_DATABASE,
   SYS_VAR_SKIP_SLAVE_START,
   SYS_VAR_SLAVE_ALLOW_BATCHING,
   SYS_VAR_SLAVE_CHECKPOINT_GROUP,
@@ -1185,10 +2164,20 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_SLAVE_PARALLEL_WORKERS,
   SYS_VAR_SLAVE_PENDING_JOBS_SIZE_MAX,
   SYS_VAR_SLAVE_PRESERVE_COMMIT_ORDER,
+  SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS,
   SYS_VAR_SLAVE_SKIP_ERRORS,
   SYS_VAR_SLAVE_SQL_VERIFY_CHECKSUM,
   SYS_VAR_SLAVE_TRANSACTION_RETRIES,
+  SYS_VAR_SLAVE_TYPE_CONVERSIONS,
+  SYS_VAR_SLOW_LAUNCH_TIME,
+  SYS_VAR_SLOW_QUERY_LOG,
+  SYS_VAR_SLOW_QUERY_LOG_FILE,
+  SYS_VAR_SOCKET,
+  SYS_VAR_SORT_BUFFER_SIZE,
   SYS_VAR_SQL_AUTO_IS_NULL,
+  SYS_VAR_SQL_BIG_SELECTS,
+  SYS_VAR_SQL_BUFFER_RESULT,
+  SYS_VAR_SQL_LOG_OFF,
   SYS_VAR_SQL_MODE,
   SYS_VAR_SQL_NOTES,
   SYS_VAR_SQL_QUOTE_SHOW_CREATE,
@@ -1202,6 +2191,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_SQL_THROTTLE_NETWORK,
   SYS_VAR_SQL_THROTTLE_PRIORITY,
   SYS_VAR_SQL_THROTTLE_RT,
+  SYS_VAR_SQL_TRANSPILER,
   SYS_VAR_SQL_WARNINGS,
   SYS_VAR_SSL_CA,
   SYS_VAR_SSL_CAPATH,
@@ -1212,8 +2202,24 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_SSL_KEY,
   SYS_VAR_STORED_PROGRAM_CACHE,
   SYS_VAR_SUPER_READ_ONLY,
+  SYS_VAR_SYNC_BINLOG,
+  SYS_VAR_SYNC_FRM,
+  SYS_VAR_SYNC_MASTER_INFO,
+  SYS_VAR_SYNC_RELAY_LOG,
+  SYS_VAR_SYNC_RELAY_LOG_INFO,
   SYS_VAR_SYSTEM_TIME_ZONE,
+  SYS_VAR_TABLE_DEFINITION_CACHE,
+  SYS_VAR_TABLE_OPEN_CACHE,
   SYS_VAR_TABLE_OPEN_CACHE_INSTANCES,
+  SYS_VAR_THREAD_CACHE_SIZE,
+  SYS_VAR_THREAD_HANDLING,
+  SYS_VAR_THREAD_POOL_ALGORITHM,
+  SYS_VAR_THREAD_POOL_HIGH_PRIORITY_CONNECTION,
+  SYS_VAR_THREAD_POOL_MAX_UNUSED_THREADS,
+  SYS_VAR_THREAD_POOL_PRIO_KICKUP_TIMER,
+  SYS_VAR_THREAD_POOL_SIZE,
+  SYS_VAR_THREAD_POOL_STALL_LIMIT,
+  SYS_VAR_THREAD_STACK,
   SYS_VAR_TIME_FORMAT,
   SYS_VAR_TIME_ZONE,
   SYS_VAR_TIMESTAMP,
@@ -1230,7 +2236,9 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_TX_ISOLATION,
   SYS_VAR_TX_READ_ONLY,
   SYS_VAR_UNIQUE_CHECKS,
+  SYS_VAR_UPDATABLE_VIEWS_WITH_LIMIT,
   SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME,
+  SYS_VAR_VALIDATE_PASSWORD_DICTIONARY_FILE,
   SYS_VAR_VALIDATE_PASSWORD_LENGTH,
   SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT,
   SYS_VAR_VALIDATE_PASSWORD_NUMBER_COUNT,
@@ -1240,6 +2248,8 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_VERSION_COMMENT,
   SYS_VAR_VERSION_COMPILE_MACHINE,
   SYS_VAR_VERSION_COMPILE_OS,
+  SYS_VAR_VERSION_TOKENS_SESSION,
+  SYS_VAR_VERSION_TOKENS_SESSION_NUMBER,
   SYS_VAR_WAIT_TIMEOUT,
   SYS_VAR_WARNING_COUNT
 };
@@ -1656,13 +2666,437 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "innodb_sync_debug",
   "default_collation_for_utf8mb4",
   "_enable_old_charset_aggregation",
+  "enable_sql_plan_monitor",
+  "insert_id",
+  "join_buffer_size",
+  "max_join_size",
+  "max_length_for_sort_data",
+  "max_prepared_stmt_count",
+  "max_sort_length",
+  "min_examined_row_limit",
+  "multi_range_count",
+  "mysqlx_connect_timeout",
+  "mysqlx_idle_worker_thread_timeout",
+  "mysqlx_max_allowed_packet",
+  "mysqlx_max_connections",
+  "mysqlx_min_worker_threads",
+  "performance_schema_show_processlist",
+  "query_alloc_block_size",
+  "query_prealloc_size",
+  "slow_query_log",
+  "slow_query_log_file",
+  "sort_buffer_size",
+  "sql_buffer_result",
+  "binlog_cache_size",
+  "binlog_direct_non_transactional_updates",
+  "binlog_error_action",
+  "binlog_group_commit_sync_delay",
+  "binlog_group_commit_sync_no_delay_count",
+  "binlog_max_flush_queue_time",
+  "binlog_order_commits",
+  "binlog_stmt_cache_size",
+  "binlog_transaction_dependency_history_size",
+  "binlog_transaction_dependency_tracking",
+  "expire_logs_days",
+  "innodb_flush_log_at_timeout",
+  "innodb_flush_log_at_trx_commit",
+  "innodb_log_checkpoint_now",
+  "innodb_log_checksums",
+  "innodb_log_compressed_pages",
+  "innodb_log_write_ahead_size",
+  "innodb_max_undo_log_size",
+  "innodb_online_alter_log_max_size",
+  "innodb_undo_log_truncate",
+  "innodb_undo_logs",
+  "log_bin_trust_function_creators",
+  "log_bin_use_v1_row_events",
+  "log_builtin_as_identified_by_password",
+  "max_binlog_cache_size",
+  "max_binlog_size",
+  "max_binlog_stmt_cache_size",
+  "max_relay_log_size",
+  "relay_log_info_repository",
+  "relay_log_purge",
+  "sync_binlog",
+  "sync_relay_log",
+  "sync_relay_log_info",
+  "innodb_deadlock_detect",
+  "innodb_lock_wait_timeout",
+  "innodb_print_all_deadlocks",
+  "innodb_table_locks",
+  "max_write_lock_count",
   "_ob_enable_role_ids",
   "innodb_read_only",
   "innodb_api_disable_rowlock",
   "innodb_autoinc_lock_mode",
   "skip_external_locking",
   "super_read_only",
-  "plsql_optimize_level"
+  "event_scheduler",
+  "plsql_optimize_level",
+  "low_priority_updates",
+  "max_error_count",
+  "max_insert_delayed_threads",
+  "ft_stopword_file",
+  "innodb_ft_cache_size",
+  "innodb_ft_sort_pll_degree",
+  "innodb_ft_total_cache_size",
+  "mecab_rc_file",
+  "metadata_locks_cache_size",
+  "metadata_locks_hash_instances",
+  "innodb_temp_data_file_path",
+  "innodb_data_file_path",
+  "innodb_data_home_dir",
+  "avoid_temporal_upgrade",
+  "default_tmp_storage_engine",
+  "innodb_ft_enable_diag_print",
+  "innodb_ft_num_word_optimize",
+  "innodb_ft_result_cache_limit",
+  "innodb_ft_server_stopword_table",
+  "innodb_optimize_fulltext_only",
+  "max_tmp_tables",
+  "innodb_tmpdir",
+  "group_replication_group_seeds",
+  "slave_rows_search_algorithms",
+  "slave_type_conversions",
+  "ob_hnsw_ef_search",
+  "ndb_allow_copying_alter_table",
+  "ndb_autoincrement_prefetch_sz",
+  "ndb_blob_read_batch_bytes",
+  "ndb_blob_write_batch_bytes",
+  "ndb_cache_check_time",
+  "ndb_clear_apply_status",
+  "ndb_data_node_neighbour",
+  "ndb_default_column_format",
+  "ndb_deferred_constraints",
+  "ndb_distribution",
+  "ndb_eventbuffer_free_percent",
+  "ndb_eventbuffer_max_alloc",
+  "ndb_extra_logging",
+  "ndb_force_send",
+  "ndb_fully_replicated",
+  "ndb_index_stat_enable",
+  "ndb_index_stat_option",
+  "ndb_join_pushdown",
+  "ndb_log_binlog_index",
+  "ndb_log_empty_epochs",
+  "ndb_log_empty_update",
+  "ndb_log_exclusive_reads",
+  "ndb_log_update_as_write",
+  "ndb_log_update_minimal",
+  "ndb_log_updated_only",
+  "ndb_optimization_delay",
+  "ndb_read_backup",
+  "ndb_recv_thread_activation_threshold",
+  "ndb_recv_thread_cpu_mask",
+  "ndb_report_thresh_binlog_epoch_slip",
+  "ndb_report_thresh_binlog_mem_usage",
+  "ndb_row_checksum",
+  "ndb_show_foreign_key_mock_tables",
+  "ndb_slave_conflict_role",
+  "ndb_table_no_logging",
+  "ndb_table_temporary",
+  "ndb_use_exact_count",
+  "ndb_use_transactions",
+  "ndbinfo_max_bytes",
+  "ndbinfo_max_rows",
+  "ndbinfo_offline",
+  "ndbinfo_show_hidden",
+  "myisam_data_pointer_size",
+  "myisam_max_sort_file_size",
+  "myisam_repair_threads",
+  "myisam_sort_buffer_size",
+  "myisam_stats_method",
+  "myisam_use_mmap",
+  "preload_buffer_size",
+  "read_buffer_size",
+  "read_rnd_buffer_size",
+  "sync_frm",
+  "sync_master_info",
+  "table_open_cache",
+  "innodb_monitor_disable",
+  "innodb_monitor_enable",
+  "innodb_monitor_reset",
+  "innodb_monitor_reset_all",
+  "innodb_old_blocks_pct",
+  "innodb_old_blocks_time",
+  "innodb_purge_batch_size",
+  "innodb_purge_rseg_truncate_frequency",
+  "innodb_random_read_ahead",
+  "innodb_read_ahead_threshold",
+  "innodb_rollback_segments",
+  "innodb_spin_wait_delay",
+  "innodb_status_output",
+  "innodb_status_output_locks",
+  "innodb_sync_spin_loops",
+  "internal_tmp_disk_storage_engine",
+  "keep_files_on_create",
+  "max_heap_table_size",
+  "bulk_insert_buffer_size",
+  "host_cache_size",
+  "init_slave",
+  "innodb_fast_shutdown",
+  "innodb_io_capacity",
+  "innodb_io_capacity_max",
+  "innodb_thread_concurrency",
+  "innodb_thread_sleep_delay",
+  "log_error_verbosity",
+  "log_output",
+  "log_queries_not_using_indexes",
+  "log_slow_admin_statements",
+  "log_slow_slave_statements",
+  "log_statements_unsafe_for_binlog",
+  "log_syslog",
+  "log_syslog_facility",
+  "log_syslog_include_pid",
+  "log_syslog_tag",
+  "log_throttle_queries_not_using_indexes",
+  "log_timestamps",
+  "log_warnings",
+  "max_delayed_threads",
+  "offline_mode",
+  "require_secure_transport",
+  "slow_launch_time",
+  "sql_log_off",
+  "thread_cache_size",
+  "thread_pool_high_priority_connection",
+  "thread_pool_max_unused_threads",
+  "thread_pool_prio_kickup_timer",
+  "thread_pool_stall_limit",
+  "have_statement_timeout",
+  "mysqlx_bind_address",
+  "mysqlx_port",
+  "mysqlx_port_open_timeout",
+  "mysqlx_socket",
+  "mysqlx_ssl_ca",
+  "mysqlx_ssl_capath",
+  "mysqlx_ssl_cert",
+  "mysqlx_ssl_cipher",
+  "mysqlx_ssl_crl",
+  "mysqlx_ssl_crlpath",
+  "mysqlx_ssl_key",
+  "old",
+  "performance_schema_accounts_size",
+  "performance_schema_digests_size",
+  "performance_schema_events_stages_history_long_size",
+  "performance_schema_events_stages_history_size",
+  "performance_schema_events_statements_history_long_size",
+  "performance_schema_events_statements_history_size",
+  "performance_schema_events_transactions_history_long_size",
+  "performance_schema_events_transactions_history_size",
+  "performance_schema_events_waits_history_long_size",
+  "performance_schema_events_waits_history_size",
+  "performance_schema_hosts_size",
+  "performance_schema_max_cond_classes",
+  "performance_schema_max_cond_instances",
+  "performance_schema_max_digest_length",
+  "performance_schema_max_file_classes",
+  "performance_schema_max_file_handles",
+  "performance_schema_max_file_instances",
+  "performance_schema_max_index_stat",
+  "performance_schema_max_memory_classes",
+  "performance_schema_max_metadata_locks",
+  "performance_schema_max_mutex_classes",
+  "performance_schema_max_mutex_instances",
+  "performance_schema_max_prepared_statements_instances",
+  "performance_schema_max_program_instances",
+  "performance_schema_max_rwlock_classes",
+  "performance_schema_max_rwlock_instances",
+  "performance_schema_max_socket_classes",
+  "performance_schema_max_socket_instances",
+  "performance_schema_max_sql_text_length",
+  "performance_schema_max_stage_classes",
+  "performance_schema_max_statement_classes",
+  "performance_schema_max_statement_stack",
+  "performance_schema_max_table_handles",
+  "performance_schema_max_table_instances",
+  "performance_schema_max_table_lock_stat",
+  "performance_schema_max_thread_classes",
+  "performance_schema_max_thread_instances",
+  "performance_schema_session_connect_attrs_size",
+  "performance_schema_setup_actors_size",
+  "performance_schema_setup_objects_size",
+  "performance_schema_users_size",
+  "version_tokens_session_number",
+  "back_log",
+  "basedir",
+  "bind_address",
+  "core_file",
+  "have_compress",
+  "ignore_db_dirs",
+  "init_file",
+  "innodb_numa_interleave",
+  "innodb_open_files",
+  "innodb_page_cleaners",
+  "innodb_purge_threads",
+  "innodb_read_io_threads",
+  "innodb_sync_array_size",
+  "innodb_use_native_aio",
+  "innodb_write_io_threads",
+  "large_files_support",
+  "large_pages",
+  "large_page_size",
+  "locked_in_memory",
+  "log_error",
+  "named_pipe",
+  "named_pipe_full_access_group",
+  "open_files_limit",
+  "report_host",
+  "report_password",
+  "report_port",
+  "report_user",
+  "server_id_bits",
+  "shared_memory",
+  "shared_memory_base_name",
+  "skip_name_resolve",
+  "skip_networking",
+  "thread_handling",
+  "thread_pool_algorithm",
+  "thread_pool_size",
+  "thread_stack",
+  "binlog_gtid_simple_recovery",
+  "innodb_api_enable_binlog",
+  "innodb_locks_unsafe_for_binlog",
+  "innodb_log_buffer_size",
+  "innodb_log_files_in_group",
+  "innodb_log_file_size",
+  "innodb_log_group_home_dir",
+  "innodb_undo_directory",
+  "innodb_undo_tablespaces",
+  "log_bin_basename",
+  "log_bin_index",
+  "log_slave_updates",
+  "relay_log",
+  "relay_log_basename",
+  "relay_log_index",
+  "relay_log_info_file",
+  "relay_log_recovery",
+  "relay_log_space_limit",
+  "delay_key_write",
+  "innodb_large_prefix",
+  "key_buffer_size",
+  "key_cache_age_threshold",
+  "key_cache_division_limit",
+  "max_seeks_for_key",
+  "old_alter_table",
+  "table_definition_cache",
+  "innodb_sort_buffer_size",
+  "key_cache_block_size",
+  "ob_kv_mode",
+  "__ob_client_capability_flag",
+  "ob_enable_parameter_anonymous_block",
+  "character_sets_dir",
+  "date_format",
+  "datetime_format",
+  "disconnect_on_expired_password",
+  "external_user",
+  "have_crypt",
+  "have_dynamic_loading",
+  "keyring_aws_conf_file",
+  "keyring_aws_data_file",
+  "language",
+  "lc_messages_dir",
+  "lower_case_file_system",
+  "max_digest_length",
+  "ndbinfo_database",
+  "ndbinfo_table_prefix",
+  "ndbinfo_version",
+  "ndb_batch_size",
+  "ndb_cluster_connection_pool",
+  "ndb_cluster_connection_pool_nodeids",
+  "ndb_log_apply_status",
+  "ndb_log_bin",
+  "ndb_log_fail_terminate",
+  "ndb_log_orig",
+  "ndb_log_transaction_id",
+  "ndb_optimized_node_selection",
+  "Ndb_system_name",
+  "ndb_use_copying_alter_table",
+  "ndb_version_string",
+  "ndb_wait_connected",
+  "ndb_wait_setup",
+  "proxy_user",
+  "sha256_password_auto_generate_rsa_keys",
+  "sha256_password_private_key_path",
+  "sha256_password_public_key_path",
+  "skip_show_database",
+  "plugin_load",
+  "plugin_load_add",
+  "big_tables",
+  "check_proxy_users",
+  "connection_control_failed_connections_threshold",
+  "connection_control_max_connection_delay",
+  "connection_control_min_connection_delay",
+  "default_week_format",
+  "delayed_insert_timeout",
+  "delayed_queue_size",
+  "eq_range_index_dive_limit",
+  "innodb_stats_auto_recalc",
+  "innodb_stats_include_delete_marked",
+  "innodb_stats_method",
+  "innodb_stats_on_metadata",
+  "version_tokens_session",
+  "innodb_stats_persistent_sample_pages",
+  "innodb_stats_sample_pages",
+  "innodb_stats_transient_sample_pages",
+  "keyring_aws_cmk_id",
+  "keyring_aws_region",
+  "keyring_encrypted_file_data",
+  "keyring_encrypted_file_password",
+  "keyring_file_data",
+  "keyring_okv_conf_dir",
+  "keyring_operations",
+  "optimizer_switch",
+  "max_connect_errors",
+  "mysql_firewall_mode",
+  "mysql_firewall_trace",
+  "mysql_native_password_proxy_users",
+  "net_retry_count",
+  "new",
+  "old_passwords",
+  "optimizer_prune_level",
+  "optimizer_search_depth",
+  "optimizer_trace",
+  "optimizer_trace_features",
+  "optimizer_trace_limit",
+  "optimizer_trace_max_mem_size",
+  "optimizer_trace_offset",
+  "parser_max_mem_size",
+  "rand_seed1",
+  "rand_seed2",
+  "range_alloc_block_size",
+  "range_optimizer_max_mem_size",
+  "rewriter_enabled",
+  "rewriter_verbose",
+  "secure_auth",
+  "sha256_password_proxy_users",
+  "show_compatibility_56",
+  "show_create_table_verbosity",
+  "show_old_temporals",
+  "sql_big_selects",
+  "updatable_views_with_limit",
+  "validate_password_dictionary_file",
+  "delayed_insert_limit",
+  "ndb_version",
+  "auto_generate_certs",
+  "_optimizer_cost_based_transformation",
+  "range_index_dive_limit",
+  "partition_index_dive_limit",
+  "ob_table_access_policy",
+  "pid_file",
+  "port",
+  "socket",
+  "mview_refresh_dop",
+  "enable_optimizer_rowgoal",
+  "ob_ivf_nprobes",
+  "_current_default_catalog",
+  "ob_enable_ps_parameter_anonymous_block",
+  "ob_hnsw_extra_info_max_size",
+  "_push_join_predicate",
+  "ob_sparse_drop_ratio_search",
+  "sql_transpiler",
+  "plsql_can_transform_sql_to_assign",
+  "ob_enable_pl_async_commit",
+  "caching_sha2_password_digest_rounds"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1779,10 +3213,34 @@ const ObString ObSysVarFactory::get_sys_var_name_by_id(ObSysVarClassType sys_var
 
 ObSysVarFactory::ObSysVarFactory(const int64_t tenant_id)
   : allocator_(ObMemAttr(tenant_id, ObModIds::OB_COMMON_SYS_VAR_FAC)),
-    all_sys_vars_created_(false)
+    store_(nullptr), store_buf_(nullptr), all_sys_vars_created_(false)
 {
-  MEMSET(store_, 0, sizeof(store_));
-  MEMSET(store_buf_, 0, sizeof(store_buf_));
+}
+
+int ObSysVarFactory::try_init_store_mem()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(store_)) {
+    void *store_ptr = NULL;
+    if (OB_ISNULL(store_ptr = allocator_.alloc(sizeof(ObBasicSysVar *) * ALL_SYS_VARS_COUNT))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc store_.", K(ret));
+    } else {
+      store_ = static_cast<ObBasicSysVar **>(store_ptr);
+      MEMSET(store_, 0, sizeof(ObBasicSysVar *) * ALL_SYS_VARS_COUNT);
+    }
+  }
+  if (OB_ISNULL(store_buf_)) {
+    void *store_buf_ptr = NULL;
+    if (OB_ISNULL(store_buf_ptr = allocator_.alloc(sizeof(ObBasicSysVar *) * ALL_SYS_VARS_COUNT))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc store_buf_.", K(ret));
+    } else {
+      store_buf_ = static_cast<ObBasicSysVar **>(store_buf_ptr);
+      MEMSET(store_buf_, 0, sizeof(ObBasicSysVar *) * ALL_SYS_VARS_COUNT);
+    }
+  }
+  return ret;
 }
 
 ObSysVarFactory::~ObSysVarFactory()
@@ -1793,15 +3251,23 @@ ObSysVarFactory::~ObSysVarFactory()
 void ObSysVarFactory::destroy()
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < ALL_SYS_VARS_COUNT; ++i) {
-    if (OB_NOT_NULL(store_[i])) {
-      store_[i]->~ObBasicSysVar();
-      store_[i] = nullptr;
+  if (OB_NOT_NULL(store_)) {
+    for (int64_t i = 0; i < ALL_SYS_VARS_COUNT; ++i) {
+      if (OB_NOT_NULL(store_[i])) {
+        store_[i]->~ObBasicSysVar();
+        store_[i] = nullptr;
+      }
     }
-    if (OB_NOT_NULL(store_buf_[i])) {
-      store_buf_[i]->~ObBasicSysVar();
-      store_buf_[i] = nullptr;
+    store_ = nullptr;
+  }
+  if (OB_NOT_NULL(store_buf_)) {
+    for (int64_t i = 0; i < ALL_SYS_VARS_COUNT; ++i) {
+      if (OB_NOT_NULL(store_buf_[i])) {
+        store_buf_[i]->~ObBasicSysVar();
+        store_buf_[i] = nullptr;
+      }
     }
+    store_buf_ = nullptr;
   }
   allocator_.reset();
   all_sys_vars_created_ = false;
@@ -1810,24 +3276,28 @@ void ObSysVarFactory::destroy()
 int ObSysVarFactory::free_sys_var(ObBasicSysVar *sys_var, int64_t sys_var_idx)
 {
   int ret = OB_SUCCESS;
-  OV (OB_NOT_NULL(sys_var));
-  OV (is_valid_sys_var_store_idx(sys_var_idx));
-  OV (sys_var == store_[sys_var_idx], OB_ERR_UNEXPECTED, sys_var, sys_var_idx);
-  if (OB_NOT_NULL(store_buf_[sys_var_idx])) {
-    OX (store_buf_[sys_var_idx]->~ObBasicSysVar());
-    OX (allocator_.free(store_buf_[sys_var_idx]));
-    OX (store_buf_[sys_var_idx] = nullptr);
+  if (OB_NOT_NULL(store_) && OB_NOT_NULL(store_buf_)) {
+    OV (OB_NOT_NULL(sys_var));
+    OV (is_valid_sys_var_store_idx(sys_var_idx));
+    OV (sys_var == store_[sys_var_idx], OB_ERR_UNEXPECTED, sys_var, sys_var_idx);
+    if (OB_NOT_NULL(store_buf_[sys_var_idx])) {
+      OX (store_buf_[sys_var_idx]->~ObBasicSysVar());
+      OX (allocator_.free(store_buf_[sys_var_idx]));
+      OX (store_buf_[sys_var_idx] = nullptr);
+    }
+    OX (store_buf_[sys_var_idx] = store_[sys_var_idx]);
+    OX (store_buf_[sys_var_idx]->clean_value());
+    OX (store_[sys_var_idx] = nullptr);
   }
-  OX (store_buf_[sys_var_idx] = store_[sys_var_idx]);
-  OX (store_buf_[sys_var_idx]->clean_value());
-  OX (store_[sys_var_idx] = nullptr);
   return ret;
 }
 
 int ObSysVarFactory::create_all_sys_vars()
 {
   int ret = OB_SUCCESS;
-  if (!all_sys_vars_created_) {
+  if (OB_FAIL(try_init_store_mem())) {
+    LOG_WARN("Fail to init", K(ret));
+  } else if (!all_sys_vars_created_) {
     int64_t store_idx = -1;
     ObBasicSysVar *sys_var_ptr = NULL;
     int64_t total_mem_size = 0
@@ -2242,13 +3712,437 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarInnodbSyncDebug)
         + sizeof(ObSysVarDefaultCollationForUtf8mb4)
         + sizeof(ObSysVarEnableOldCharsetAggregation)
+        + sizeof(ObSysVarEnableSqlPlanMonitor)
+        + sizeof(ObSysVarInsertId)
+        + sizeof(ObSysVarJoinBufferSize)
+        + sizeof(ObSysVarMaxJoinSize)
+        + sizeof(ObSysVarMaxLengthForSortData)
+        + sizeof(ObSysVarMaxPreparedStmtCount)
+        + sizeof(ObSysVarMaxSortLength)
+        + sizeof(ObSysVarMinExaminedRowLimit)
+        + sizeof(ObSysVarMultiRangeCount)
+        + sizeof(ObSysVarMysqlxConnectTimeout)
+        + sizeof(ObSysVarMysqlxIdleWorkerThreadTimeout)
+        + sizeof(ObSysVarMysqlxMaxAllowedPacket)
+        + sizeof(ObSysVarMysqlxMaxConnections)
+        + sizeof(ObSysVarMysqlxMinWorkerThreads)
+        + sizeof(ObSysVarPerformanceSchemaShowProcesslist)
+        + sizeof(ObSysVarQueryAllocBlockSize)
+        + sizeof(ObSysVarQueryPreallocSize)
+        + sizeof(ObSysVarSlowQueryLog)
+        + sizeof(ObSysVarSlowQueryLogFile)
+        + sizeof(ObSysVarSortBufferSize)
+        + sizeof(ObSysVarSqlBufferResult)
+        + sizeof(ObSysVarBinlogCacheSize)
+        + sizeof(ObSysVarBinlogDirectNonTransactionalUpdates)
+        + sizeof(ObSysVarBinlogErrorAction)
+        + sizeof(ObSysVarBinlogGroupCommitSyncDelay)
+        + sizeof(ObSysVarBinlogGroupCommitSyncNoDelayCount)
+        + sizeof(ObSysVarBinlogMaxFlushQueueTime)
+        + sizeof(ObSysVarBinlogOrderCommits)
+        + sizeof(ObSysVarBinlogStmtCacheSize)
+        + sizeof(ObSysVarBinlogTransactionDependencyHistorySize)
+        + sizeof(ObSysVarBinlogTransactionDependencyTracking)
+        + sizeof(ObSysVarExpireLogsDays)
+        + sizeof(ObSysVarInnodbFlushLogAtTimeout)
+        + sizeof(ObSysVarInnodbFlushLogAtTrxCommit)
+        + sizeof(ObSysVarInnodbLogCheckpointNow)
+        + sizeof(ObSysVarInnodbLogChecksums)
+        + sizeof(ObSysVarInnodbLogCompressedPages)
+        + sizeof(ObSysVarInnodbLogWriteAheadSize)
+        + sizeof(ObSysVarInnodbMaxUndoLogSize)
+        + sizeof(ObSysVarInnodbOnlineAlterLogMaxSize)
+        + sizeof(ObSysVarInnodbUndoLogTruncate)
+        + sizeof(ObSysVarInnodbUndoLogs)
+        + sizeof(ObSysVarLogBinTrustFunctionCreators)
+        + sizeof(ObSysVarLogBinUseV1RowEvents)
+        + sizeof(ObSysVarLogBuiltinAsIdentifiedByPassword)
+        + sizeof(ObSysVarMaxBinlogCacheSize)
+        + sizeof(ObSysVarMaxBinlogSize)
+        + sizeof(ObSysVarMaxBinlogStmtCacheSize)
+        + sizeof(ObSysVarMaxRelayLogSize)
+        + sizeof(ObSysVarRelayLogInfoRepository)
+        + sizeof(ObSysVarRelayLogPurge)
+        + sizeof(ObSysVarSyncBinlog)
+        + sizeof(ObSysVarSyncRelayLog)
+        + sizeof(ObSysVarSyncRelayLogInfo)
+        + sizeof(ObSysVarInnodbDeadlockDetect)
+        + sizeof(ObSysVarInnodbLockWaitTimeout)
+        + sizeof(ObSysVarInnodbPrintAllDeadlocks)
+        + sizeof(ObSysVarInnodbTableLocks)
+        + sizeof(ObSysVarMaxWriteLockCount)
         + sizeof(ObSysVarObEnableRoleIds)
         + sizeof(ObSysVarInnodbReadOnly)
         + sizeof(ObSysVarInnodbApiDisableRowlock)
         + sizeof(ObSysVarInnodbAutoincLockMode)
         + sizeof(ObSysVarSkipExternalLocking)
         + sizeof(ObSysVarSuperReadOnly)
+        + sizeof(ObSysVarEventScheduler)
         + sizeof(ObSysVarPlsqlOptimizeLevel)
+        + sizeof(ObSysVarLowPriorityUpdates)
+        + sizeof(ObSysVarMaxErrorCount)
+        + sizeof(ObSysVarMaxInsertDelayedThreads)
+        + sizeof(ObSysVarFtStopwordFile)
+        + sizeof(ObSysVarInnodbFtCacheSize)
+        + sizeof(ObSysVarInnodbFtSortPllDegree)
+        + sizeof(ObSysVarInnodbFtTotalCacheSize)
+        + sizeof(ObSysVarMecabRcFile)
+        + sizeof(ObSysVarMetadataLocksCacheSize)
+        + sizeof(ObSysVarMetadataLocksHashInstances)
+        + sizeof(ObSysVarInnodbTempDataFilePath)
+        + sizeof(ObSysVarInnodbDataFilePath)
+        + sizeof(ObSysVarInnodbDataHomeDir)
+        + sizeof(ObSysVarAvoidTemporalUpgrade)
+        + sizeof(ObSysVarDefaultTmpStorageEngine)
+        + sizeof(ObSysVarInnodbFtEnableDiagPrint)
+        + sizeof(ObSysVarInnodbFtNumWordOptimize)
+        + sizeof(ObSysVarInnodbFtResultCacheLimit)
+        + sizeof(ObSysVarInnodbFtServerStopwordTable)
+        + sizeof(ObSysVarInnodbOptimizeFulltextOnly)
+        + sizeof(ObSysVarMaxTmpTables)
+        + sizeof(ObSysVarInnodbTmpdir)
+        + sizeof(ObSysVarGroupReplicationGroupSeeds)
+        + sizeof(ObSysVarSlaveRowsSearchAlgorithms)
+        + sizeof(ObSysVarSlaveTypeConversions)
+        + sizeof(ObSysVarObHnswEfSearch)
+        + sizeof(ObSysVarNdbAllowCopyingAlterTable)
+        + sizeof(ObSysVarNdbAutoincrementPrefetchSz)
+        + sizeof(ObSysVarNdbBlobReadBatchBytes)
+        + sizeof(ObSysVarNdbBlobWriteBatchBytes)
+        + sizeof(ObSysVarNdbCacheCheckTime)
+        + sizeof(ObSysVarNdbClearApplyStatus)
+        + sizeof(ObSysVarNdbDataNodeNeighbour)
+        + sizeof(ObSysVarNdbDefaultColumnFormat)
+        + sizeof(ObSysVarNdbDeferredConstraints)
+        + sizeof(ObSysVarNdbDistribution)
+        + sizeof(ObSysVarNdbEventbufferFreePercent)
+        + sizeof(ObSysVarNdbEventbufferMaxAlloc)
+        + sizeof(ObSysVarNdbExtraLogging)
+        + sizeof(ObSysVarNdbForceSend)
+        + sizeof(ObSysVarNdbFullyReplicated)
+        + sizeof(ObSysVarNdbIndexStatEnable)
+        + sizeof(ObSysVarNdbIndexStatOption)
+        + sizeof(ObSysVarNdbJoinPushdown)
+        + sizeof(ObSysVarNdbLogBinlogIndex)
+        + sizeof(ObSysVarNdbLogEmptyEpochs)
+        + sizeof(ObSysVarNdbLogEmptyUpdate)
+        + sizeof(ObSysVarNdbLogExclusiveReads)
+        + sizeof(ObSysVarNdbLogUpdateAsWrite)
+        + sizeof(ObSysVarNdbLogUpdateMinimal)
+        + sizeof(ObSysVarNdbLogUpdatedOnly)
+        + sizeof(ObSysVarNdbOptimizationDelay)
+        + sizeof(ObSysVarNdbReadBackup)
+        + sizeof(ObSysVarNdbRecvThreadActivationThreshold)
+        + sizeof(ObSysVarNdbRecvThreadCpuMask)
+        + sizeof(ObSysVarNdbReportThreshBinlogEpochSlip)
+        + sizeof(ObSysVarNdbReportThreshBinlogMemUsage)
+        + sizeof(ObSysVarNdbRowChecksum)
+        + sizeof(ObSysVarNdbShowForeignKeyMockTables)
+        + sizeof(ObSysVarNdbSlaveConflictRole)
+        + sizeof(ObSysVarNdbTableNoLogging)
+        + sizeof(ObSysVarNdbTableTemporary)
+        + sizeof(ObSysVarNdbUseExactCount)
+        + sizeof(ObSysVarNdbUseTransactions)
+        + sizeof(ObSysVarNdbinfoMaxBytes)
+        + sizeof(ObSysVarNdbinfoMaxRows)
+        + sizeof(ObSysVarNdbinfoOffline)
+        + sizeof(ObSysVarNdbinfoShowHidden)
+        + sizeof(ObSysVarMyisamDataPointerSize)
+        + sizeof(ObSysVarMyisamMaxSortFileSize)
+        + sizeof(ObSysVarMyisamRepairThreads)
+        + sizeof(ObSysVarMyisamSortBufferSize)
+        + sizeof(ObSysVarMyisamStatsMethod)
+        + sizeof(ObSysVarMyisamUseMmap)
+        + sizeof(ObSysVarPreloadBufferSize)
+        + sizeof(ObSysVarReadBufferSize)
+        + sizeof(ObSysVarReadRndBufferSize)
+        + sizeof(ObSysVarSyncFrm)
+        + sizeof(ObSysVarSyncMasterInfo)
+        + sizeof(ObSysVarTableOpenCache)
+        + sizeof(ObSysVarInnodbMonitorDisable)
+        + sizeof(ObSysVarInnodbMonitorEnable)
+        + sizeof(ObSysVarInnodbMonitorReset)
+        + sizeof(ObSysVarInnodbMonitorResetAll)
+        + sizeof(ObSysVarInnodbOldBlocksPct)
+        + sizeof(ObSysVarInnodbOldBlocksTime)
+        + sizeof(ObSysVarInnodbPurgeBatchSize)
+        + sizeof(ObSysVarInnodbPurgeRsegTruncateFrequency)
+        + sizeof(ObSysVarInnodbRandomReadAhead)
+        + sizeof(ObSysVarInnodbReadAheadThreshold)
+        + sizeof(ObSysVarInnodbRollbackSegments)
+        + sizeof(ObSysVarInnodbSpinWaitDelay)
+        + sizeof(ObSysVarInnodbStatusOutput)
+        + sizeof(ObSysVarInnodbStatusOutputLocks)
+        + sizeof(ObSysVarInnodbSyncSpinLoops)
+        + sizeof(ObSysVarInternalTmpDiskStorageEngine)
+        + sizeof(ObSysVarKeepFilesOnCreate)
+        + sizeof(ObSysVarMaxHeapTableSize)
+        + sizeof(ObSysVarBulkInsertBufferSize)
+        + sizeof(ObSysVarHostCacheSize)
+        + sizeof(ObSysVarInitSlave)
+        + sizeof(ObSysVarInnodbFastShutdown)
+        + sizeof(ObSysVarInnodbIoCapacity)
+        + sizeof(ObSysVarInnodbIoCapacityMax)
+        + sizeof(ObSysVarInnodbThreadConcurrency)
+        + sizeof(ObSysVarInnodbThreadSleepDelay)
+        + sizeof(ObSysVarLogErrorVerbosity)
+        + sizeof(ObSysVarLogOutput)
+        + sizeof(ObSysVarLogQueriesNotUsingIndexes)
+        + sizeof(ObSysVarLogSlowAdminStatements)
+        + sizeof(ObSysVarLogSlowSlaveStatements)
+        + sizeof(ObSysVarLogStatementsUnsafeForBinlog)
+        + sizeof(ObSysVarLogSyslog)
+        + sizeof(ObSysVarLogSyslogFacility)
+        + sizeof(ObSysVarLogSyslogIncludePid)
+        + sizeof(ObSysVarLogSyslogTag)
+        + sizeof(ObSysVarLogThrottleQueriesNotUsingIndexes)
+        + sizeof(ObSysVarLogTimestamps)
+        + sizeof(ObSysVarLogWarnings)
+        + sizeof(ObSysVarMaxDelayedThreads)
+        + sizeof(ObSysVarOfflineMode)
+        + sizeof(ObSysVarRequireSecureTransport)
+        + sizeof(ObSysVarSlowLaunchTime)
+        + sizeof(ObSysVarSqlLogOff)
+        + sizeof(ObSysVarThreadCacheSize)
+        + sizeof(ObSysVarThreadPoolHighPriorityConnection)
+        + sizeof(ObSysVarThreadPoolMaxUnusedThreads)
+        + sizeof(ObSysVarThreadPoolPrioKickupTimer)
+        + sizeof(ObSysVarThreadPoolStallLimit)
+        + sizeof(ObSysVarHaveStatementTimeout)
+        + sizeof(ObSysVarMysqlxBindAddress)
+        + sizeof(ObSysVarMysqlxPort)
+        + sizeof(ObSysVarMysqlxPortOpenTimeout)
+        + sizeof(ObSysVarMysqlxSocket)
+        + sizeof(ObSysVarMysqlxSslCa)
+        + sizeof(ObSysVarMysqlxSslCapath)
+        + sizeof(ObSysVarMysqlxSslCert)
+        + sizeof(ObSysVarMysqlxSslCipher)
+        + sizeof(ObSysVarMysqlxSslCrl)
+        + sizeof(ObSysVarMysqlxSslCrlpath)
+        + sizeof(ObSysVarMysqlxSslKey)
+        + sizeof(ObSysVarOld)
+        + sizeof(ObSysVarPerformanceSchemaAccountsSize)
+        + sizeof(ObSysVarPerformanceSchemaDigestsSize)
+        + sizeof(ObSysVarPerformanceSchemaEventsStagesHistoryLongSize)
+        + sizeof(ObSysVarPerformanceSchemaEventsStagesHistorySize)
+        + sizeof(ObSysVarPerformanceSchemaEventsStatementsHistoryLongSize)
+        + sizeof(ObSysVarPerformanceSchemaEventsStatementsHistorySize)
+        + sizeof(ObSysVarPerformanceSchemaEventsTransactionsHistoryLongSize)
+        + sizeof(ObSysVarPerformanceSchemaEventsTransactionsHistorySize)
+        + sizeof(ObSysVarPerformanceSchemaEventsWaitsHistoryLongSize)
+        + sizeof(ObSysVarPerformanceSchemaEventsWaitsHistorySize)
+        + sizeof(ObSysVarPerformanceSchemaHostsSize)
+        + sizeof(ObSysVarPerformanceSchemaMaxCondClasses)
+        + sizeof(ObSysVarPerformanceSchemaMaxCondInstances)
+        + sizeof(ObSysVarPerformanceSchemaMaxDigestLength)
+        + sizeof(ObSysVarPerformanceSchemaMaxFileClasses)
+        + sizeof(ObSysVarPerformanceSchemaMaxFileHandles)
+        + sizeof(ObSysVarPerformanceSchemaMaxFileInstances)
+        + sizeof(ObSysVarPerformanceSchemaMaxIndexStat)
+        + sizeof(ObSysVarPerformanceSchemaMaxMemoryClasses)
+        + sizeof(ObSysVarPerformanceSchemaMaxMetadataLocks)
+        + sizeof(ObSysVarPerformanceSchemaMaxMutexClasses)
+        + sizeof(ObSysVarPerformanceSchemaMaxMutexInstances)
+        + sizeof(ObSysVarPerformanceSchemaMaxPreparedStatementsInstances)
+        + sizeof(ObSysVarPerformanceSchemaMaxProgramInstances)
+        + sizeof(ObSysVarPerformanceSchemaMaxRwlockClasses)
+        + sizeof(ObSysVarPerformanceSchemaMaxRwlockInstances)
+        + sizeof(ObSysVarPerformanceSchemaMaxSocketClasses)
+        + sizeof(ObSysVarPerformanceSchemaMaxSocketInstances)
+        + sizeof(ObSysVarPerformanceSchemaMaxSqlTextLength)
+        + sizeof(ObSysVarPerformanceSchemaMaxStageClasses)
+        + sizeof(ObSysVarPerformanceSchemaMaxStatementClasses)
+        + sizeof(ObSysVarPerformanceSchemaMaxStatementStack)
+        + sizeof(ObSysVarPerformanceSchemaMaxTableHandles)
+        + sizeof(ObSysVarPerformanceSchemaMaxTableInstances)
+        + sizeof(ObSysVarPerformanceSchemaMaxTableLockStat)
+        + sizeof(ObSysVarPerformanceSchemaMaxThreadClasses)
+        + sizeof(ObSysVarPerformanceSchemaMaxThreadInstances)
+        + sizeof(ObSysVarPerformanceSchemaSessionConnectAttrsSize)
+        + sizeof(ObSysVarPerformanceSchemaSetupActorsSize)
+        + sizeof(ObSysVarPerformanceSchemaSetupObjectsSize)
+        + sizeof(ObSysVarPerformanceSchemaUsersSize)
+        + sizeof(ObSysVarVersionTokensSessionNumber)
+        + sizeof(ObSysVarBackLog)
+        + sizeof(ObSysVarBasedir)
+        + sizeof(ObSysVarBindAddress)
+        + sizeof(ObSysVarCoreFile)
+        + sizeof(ObSysVarHaveCompress)
+        + sizeof(ObSysVarIgnoreDbDirs)
+        + sizeof(ObSysVarInitFile)
+        + sizeof(ObSysVarInnodbNumaInterleave)
+        + sizeof(ObSysVarInnodbOpenFiles)
+        + sizeof(ObSysVarInnodbPageCleaners)
+        + sizeof(ObSysVarInnodbPurgeThreads)
+        + sizeof(ObSysVarInnodbReadIoThreads)
+        + sizeof(ObSysVarInnodbSyncArraySize)
+        + sizeof(ObSysVarInnodbUseNativeAio)
+        + sizeof(ObSysVarInnodbWriteIoThreads)
+        + sizeof(ObSysVarLargeFilesSupport)
+        + sizeof(ObSysVarLargePages)
+        + sizeof(ObSysVarLargePageSize)
+        + sizeof(ObSysVarLockedInMemory)
+        + sizeof(ObSysVarLogError)
+        + sizeof(ObSysVarNamedPipe)
+        + sizeof(ObSysVarNamedPipeFullAccessGroup)
+        + sizeof(ObSysVarOpenFilesLimit)
+        + sizeof(ObSysVarReportHost)
+        + sizeof(ObSysVarReportPassword)
+        + sizeof(ObSysVarReportPort)
+        + sizeof(ObSysVarReportUser)
+        + sizeof(ObSysVarServerIdBits)
+        + sizeof(ObSysVarSharedMemory)
+        + sizeof(ObSysVarSharedMemoryBaseName)
+        + sizeof(ObSysVarSkipNameResolve)
+        + sizeof(ObSysVarSkipNetworking)
+        + sizeof(ObSysVarThreadHandling)
+        + sizeof(ObSysVarThreadPoolAlgorithm)
+        + sizeof(ObSysVarThreadPoolSize)
+        + sizeof(ObSysVarThreadStack)
+        + sizeof(ObSysVarBinlogGtidSimpleRecovery)
+        + sizeof(ObSysVarInnodbApiEnableBinlog)
+        + sizeof(ObSysVarInnodbLocksUnsafeForBinlog)
+        + sizeof(ObSysVarInnodbLogBufferSize)
+        + sizeof(ObSysVarInnodbLogFilesInGroup)
+        + sizeof(ObSysVarInnodbLogFileSize)
+        + sizeof(ObSysVarInnodbLogGroupHomeDir)
+        + sizeof(ObSysVarInnodbUndoDirectory)
+        + sizeof(ObSysVarInnodbUndoTablespaces)
+        + sizeof(ObSysVarLogBinBasename)
+        + sizeof(ObSysVarLogBinIndex)
+        + sizeof(ObSysVarLogSlaveUpdates)
+        + sizeof(ObSysVarRelayLog)
+        + sizeof(ObSysVarRelayLogBasename)
+        + sizeof(ObSysVarRelayLogIndex)
+        + sizeof(ObSysVarRelayLogInfoFile)
+        + sizeof(ObSysVarRelayLogRecovery)
+        + sizeof(ObSysVarRelayLogSpaceLimit)
+        + sizeof(ObSysVarDelayKeyWrite)
+        + sizeof(ObSysVarInnodbLargePrefix)
+        + sizeof(ObSysVarKeyBufferSize)
+        + sizeof(ObSysVarKeyCacheAgeThreshold)
+        + sizeof(ObSysVarKeyCacheDivisionLimit)
+        + sizeof(ObSysVarMaxSeeksForKey)
+        + sizeof(ObSysVarOldAlterTable)
+        + sizeof(ObSysVarTableDefinitionCache)
+        + sizeof(ObSysVarInnodbSortBufferSize)
+        + sizeof(ObSysVarKeyCacheBlockSize)
+        + sizeof(ObSysVarObKvMode)
+        + sizeof(ObSysVarObClientCapabilityFlag)
+        + sizeof(ObSysVarObEnableParameterAnonymousBlock)
+        + sizeof(ObSysVarCharacterSetsDir)
+        + sizeof(ObSysVarDateFormat)
+        + sizeof(ObSysVarDatetimeFormat)
+        + sizeof(ObSysVarDisconnectOnExpiredPassword)
+        + sizeof(ObSysVarExternalUser)
+        + sizeof(ObSysVarHaveCrypt)
+        + sizeof(ObSysVarHaveDynamicLoading)
+        + sizeof(ObSysVarKeyringAwsConfFile)
+        + sizeof(ObSysVarKeyringAwsDataFile)
+        + sizeof(ObSysVarLanguage)
+        + sizeof(ObSysVarLcMessagesDir)
+        + sizeof(ObSysVarLowerCaseFileSystem)
+        + sizeof(ObSysVarMaxDigestLength)
+        + sizeof(ObSysVarNdbinfoDatabase)
+        + sizeof(ObSysVarNdbinfoTablePrefix)
+        + sizeof(ObSysVarNdbinfoVersion)
+        + sizeof(ObSysVarNdbBatchSize)
+        + sizeof(ObSysVarNdbClusterConnectionPool)
+        + sizeof(ObSysVarNdbClusterConnectionPoolNodeids)
+        + sizeof(ObSysVarNdbLogApplyStatus)
+        + sizeof(ObSysVarNdbLogBin)
+        + sizeof(ObSysVarNdbLogFailTerminate)
+        + sizeof(ObSysVarNdbLogOrig)
+        + sizeof(ObSysVarNdbLogTransactionId)
+        + sizeof(ObSysVarNdbOptimizedNodeSelection)
+        + sizeof(ObSysVarNdbSystemName)
+        + sizeof(ObSysVarNdbUseCopyingAlterTable)
+        + sizeof(ObSysVarNdbVersionString)
+        + sizeof(ObSysVarNdbWaitConnected)
+        + sizeof(ObSysVarNdbWaitSetup)
+        + sizeof(ObSysVarProxyUser)
+        + sizeof(ObSysVarSha256PasswordAutoGenerateRsaKeys)
+        + sizeof(ObSysVarSha256PasswordPrivateKeyPath)
+        + sizeof(ObSysVarSha256PasswordPublicKeyPath)
+        + sizeof(ObSysVarSkipShowDatabase)
+        + sizeof(ObSysVarPluginLoad)
+        + sizeof(ObSysVarPluginLoadAdd)
+        + sizeof(ObSysVarBigTables)
+        + sizeof(ObSysVarCheckProxyUsers)
+        + sizeof(ObSysVarConnectionControlFailedConnectionsThreshold)
+        + sizeof(ObSysVarConnectionControlMaxConnectionDelay)
+        + sizeof(ObSysVarConnectionControlMinConnectionDelay)
+        + sizeof(ObSysVarDefaultWeekFormat)
+        + sizeof(ObSysVarDelayedInsertTimeout)
+        + sizeof(ObSysVarDelayedQueueSize)
+        + sizeof(ObSysVarEqRangeIndexDiveLimit)
+        + sizeof(ObSysVarInnodbStatsAutoRecalc)
+        + sizeof(ObSysVarInnodbStatsIncludeDeleteMarked)
+        + sizeof(ObSysVarInnodbStatsMethod)
+        + sizeof(ObSysVarInnodbStatsOnMetadata)
+        + sizeof(ObSysVarVersionTokensSession)
+        + sizeof(ObSysVarInnodbStatsPersistentSamplePages)
+        + sizeof(ObSysVarInnodbStatsSamplePages)
+        + sizeof(ObSysVarInnodbStatsTransientSamplePages)
+        + sizeof(ObSysVarKeyringAwsCmkId)
+        + sizeof(ObSysVarKeyringAwsRegion)
+        + sizeof(ObSysVarKeyringEncryptedFileData)
+        + sizeof(ObSysVarKeyringEncryptedFilePassword)
+        + sizeof(ObSysVarKeyringFileData)
+        + sizeof(ObSysVarKeyringOkvConfDir)
+        + sizeof(ObSysVarKeyringOperations)
+        + sizeof(ObSysVarOptimizerSwitch)
+        + sizeof(ObSysVarMaxConnectErrors)
+        + sizeof(ObSysVarMysqlFirewallMode)
+        + sizeof(ObSysVarMysqlFirewallTrace)
+        + sizeof(ObSysVarMysqlNativePasswordProxyUsers)
+        + sizeof(ObSysVarNetRetryCount)
+        + sizeof(ObSysVarNew)
+        + sizeof(ObSysVarOldPasswords)
+        + sizeof(ObSysVarOptimizerPruneLevel)
+        + sizeof(ObSysVarOptimizerSearchDepth)
+        + sizeof(ObSysVarOptimizerTrace)
+        + sizeof(ObSysVarOptimizerTraceFeatures)
+        + sizeof(ObSysVarOptimizerTraceLimit)
+        + sizeof(ObSysVarOptimizerTraceMaxMemSize)
+        + sizeof(ObSysVarOptimizerTraceOffset)
+        + sizeof(ObSysVarParserMaxMemSize)
+        + sizeof(ObSysVarRandSeed1)
+        + sizeof(ObSysVarRandSeed2)
+        + sizeof(ObSysVarRangeAllocBlockSize)
+        + sizeof(ObSysVarRangeOptimizerMaxMemSize)
+        + sizeof(ObSysVarRewriterEnabled)
+        + sizeof(ObSysVarRewriterVerbose)
+        + sizeof(ObSysVarSecureAuth)
+        + sizeof(ObSysVarSha256PasswordProxyUsers)
+        + sizeof(ObSysVarShowCompatibility56)
+        + sizeof(ObSysVarShowCreateTableVerbosity)
+        + sizeof(ObSysVarShowOldTemporals)
+        + sizeof(ObSysVarSqlBigSelects)
+        + sizeof(ObSysVarUpdatableViewsWithLimit)
+        + sizeof(ObSysVarValidatePasswordDictionaryFile)
+        + sizeof(ObSysVarDelayedInsertLimit)
+        + sizeof(ObSysVarNdbVersion)
+        + sizeof(ObSysVarAutoGenerateCerts)
+        + sizeof(ObSysVarOptimizerCostBasedTransformation)
+        + sizeof(ObSysVarRangeIndexDiveLimit)
+        + sizeof(ObSysVarPartitionIndexDiveLimit)
+        + sizeof(ObSysVarObTableAccessPolicy)
+        + sizeof(ObSysVarPidFile)
+        + sizeof(ObSysVarPort)
+        + sizeof(ObSysVarSocket)
+        + sizeof(ObSysVarMviewRefreshDop)
+        + sizeof(ObSysVarEnableOptimizerRowgoal)
+        + sizeof(ObSysVarObIvfNprobes)
+        + sizeof(ObSysVarCurrentDefaultCatalog)
+        + sizeof(ObSysVarObEnablePsParameterAnonymousBlock)
+        + sizeof(ObSysVarObHnswExtraInfoMaxSize)
+        + sizeof(ObSysVarPushJoinPredicate)
+        + sizeof(ObSysVarObSparseDropRatioSearch)
+        + sizeof(ObSysVarSqlTranspiler)
+        + sizeof(ObSysVarPlsqlCanTransformSqlToAssign)
+        + sizeof(ObSysVarObEnablePlAsyncCommit)
+        + sizeof(ObSysVarCachingSha2PasswordDigestRounds)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -5957,6 +7851,537 @@ int ObSysVarFactory::create_all_sys_vars()
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableSqlPlanMonitor())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableSqlPlanMonitor", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_ENABLE_SQL_PLAN_MONITOR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableSqlPlanMonitor));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInsertId())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInsertId", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INSERT_ID))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInsertId));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarJoinBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarJoinBufferSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_JOIN_BUFFER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarJoinBufferSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxJoinSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxJoinSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_JOIN_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxJoinSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxLengthForSortData())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxLengthForSortData", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_LENGTH_FOR_SORT_DATA))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxLengthForSortData));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxPreparedStmtCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxPreparedStmtCount", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_PREPARED_STMT_COUNT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxPreparedStmtCount));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxSortLength())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxSortLength", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_SORT_LENGTH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxSortLength));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMinExaminedRowLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMinExaminedRowLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MIN_EXAMINED_ROW_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMinExaminedRowLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMultiRangeCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMultiRangeCount", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MULTI_RANGE_COUNT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMultiRangeCount));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxConnectTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxConnectTimeout", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_CONNECT_TIMEOUT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxConnectTimeout));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxIdleWorkerThreadTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxIdleWorkerThreadTimeout", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_IDLE_WORKER_THREAD_TIMEOUT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxIdleWorkerThreadTimeout));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxMaxAllowedPacket())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxMaxAllowedPacket", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_MAX_ALLOWED_PACKET))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxMaxAllowedPacket));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxMaxConnections())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxMaxConnections", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_MAX_CONNECTIONS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxMaxConnections));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxMinWorkerThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxMinWorkerThreads", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_MIN_WORKER_THREADS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxMinWorkerThreads));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaShowProcesslist())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaShowProcesslist", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_SHOW_PROCESSLIST))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaShowProcesslist));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarQueryAllocBlockSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarQueryAllocBlockSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_QUERY_ALLOC_BLOCK_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarQueryAllocBlockSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarQueryPreallocSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarQueryPreallocSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_QUERY_PREALLOC_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarQueryPreallocSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlowQueryLog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlowQueryLog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SLOW_QUERY_LOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSlowQueryLog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlowQueryLogFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlowQueryLogFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SLOW_QUERY_LOG_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSlowQueryLogFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSortBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSortBufferSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SORT_BUFFER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSortBufferSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSqlBufferResult())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSqlBufferResult", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SQL_BUFFER_RESULT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSqlBufferResult));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogDirectNonTransactionalUpdates())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogDirectNonTransactionalUpdates", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_DIRECT_NON_TRANSACTIONAL_UPDATES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogDirectNonTransactionalUpdates));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogErrorAction())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogErrorAction", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_ERROR_ACTION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogErrorAction));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogGroupCommitSyncDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogGroupCommitSyncDelay", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_GROUP_COMMIT_SYNC_DELAY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogGroupCommitSyncDelay));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogGroupCommitSyncNoDelayCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogGroupCommitSyncNoDelayCount", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_GROUP_COMMIT_SYNC_NO_DELAY_COUNT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogGroupCommitSyncNoDelayCount));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogMaxFlushQueueTime())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogMaxFlushQueueTime", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_MAX_FLUSH_QUEUE_TIME))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogMaxFlushQueueTime));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogOrderCommits())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogOrderCommits", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_ORDER_COMMITS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogOrderCommits));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogStmtCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogStmtCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_STMT_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogStmtCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogTransactionDependencyHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogTransactionDependencyHistorySize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_TRANSACTION_DEPENDENCY_HISTORY_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogTransactionDependencyHistorySize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogTransactionDependencyTracking())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogTransactionDependencyTracking", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_TRANSACTION_DEPENDENCY_TRACKING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogTransactionDependencyTracking));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarExpireLogsDays())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarExpireLogsDays", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_EXPIRE_LOGS_DAYS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarExpireLogsDays));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFlushLogAtTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFlushLogAtTimeout", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FLUSH_LOG_AT_TIMEOUT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFlushLogAtTimeout));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFlushLogAtTrxCommit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFlushLogAtTrxCommit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FLUSH_LOG_AT_TRX_COMMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFlushLogAtTrxCommit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogCheckpointNow())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogCheckpointNow", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LOG_CHECKPOINT_NOW))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLogCheckpointNow));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogChecksums())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogChecksums", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LOG_CHECKSUMS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLogChecksums));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogCompressedPages())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogCompressedPages", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LOG_COMPRESSED_PAGES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLogCompressedPages));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogWriteAheadSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogWriteAheadSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LOG_WRITE_AHEAD_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLogWriteAheadSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbMaxUndoLogSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbMaxUndoLogSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_MAX_UNDO_LOG_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbMaxUndoLogSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOnlineAlterLogMaxSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOnlineAlterLogMaxSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_ONLINE_ALTER_LOG_MAX_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbOnlineAlterLogMaxSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbUndoLogTruncate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbUndoLogTruncate", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_UNDO_LOG_TRUNCATE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbUndoLogTruncate));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbUndoLogs())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbUndoLogs", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_UNDO_LOGS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbUndoLogs));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogBinTrustFunctionCreators())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogBinTrustFunctionCreators", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_BIN_TRUST_FUNCTION_CREATORS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogBinTrustFunctionCreators));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogBinUseV1RowEvents())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogBinUseV1RowEvents", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_BIN_USE_V1_ROW_EVENTS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogBinUseV1RowEvents));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogBuiltinAsIdentifiedByPassword())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogBuiltinAsIdentifiedByPassword", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_BUILTIN_AS_IDENTIFIED_BY_PASSWORD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogBuiltinAsIdentifiedByPassword));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxBinlogCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxBinlogCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_BINLOG_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxBinlogCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxBinlogSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxBinlogSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_BINLOG_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxBinlogSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxBinlogStmtCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxBinlogStmtCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_BINLOG_STMT_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxBinlogStmtCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxRelayLogSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxRelayLogSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_RELAY_LOG_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxRelayLogSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogInfoRepository())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogInfoRepository", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RELAY_LOG_INFO_REPOSITORY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRelayLogInfoRepository));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogPurge())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogPurge", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RELAY_LOG_PURGE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRelayLogPurge));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSyncBinlog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSyncBinlog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SYNC_BINLOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSyncBinlog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSyncRelayLog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSyncRelayLog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SYNC_RELAY_LOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSyncRelayLog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSyncRelayLogInfo())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSyncRelayLogInfo", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SYNC_RELAY_LOG_INFO))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSyncRelayLogInfo));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbDeadlockDetect())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbDeadlockDetect", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_DEADLOCK_DETECT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbDeadlockDetect));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLockWaitTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLockWaitTimeout", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LOCK_WAIT_TIMEOUT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLockWaitTimeout));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbPrintAllDeadlocks())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbPrintAllDeadlocks", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_PRINT_ALL_DEADLOCKS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbPrintAllDeadlocks));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbTableLocks())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbTableLocks", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_TABLE_LOCKS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbTableLocks));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxWriteLockCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxWriteLockCount", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_WRITE_LOCK_COUNT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxWriteLockCount));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableRoleIds())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObEnableRoleIds", K(ret));
@@ -6011,12 +8436,3297 @@ int ObSysVarFactory::create_all_sys_vars()
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEventScheduler())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEventScheduler", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_EVENT_SCHEDULER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEventScheduler));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlOptimizeLevel())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarPlsqlOptimizeLevel", K(ret));
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLSQL_OPTIMIZE_LEVEL))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarPlsqlOptimizeLevel));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLowPriorityUpdates())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLowPriorityUpdates", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOW_PRIORITY_UPDATES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLowPriorityUpdates));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxErrorCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxErrorCount", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_ERROR_COUNT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxErrorCount));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxInsertDelayedThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxInsertDelayedThreads", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_INSERT_DELAYED_THREADS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxInsertDelayedThreads));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarFtStopwordFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarFtStopwordFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_FT_STOPWORD_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarFtStopwordFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtSortPllDegree())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtSortPllDegree", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_SORT_PLL_DEGREE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtSortPllDegree));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtTotalCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtTotalCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_TOTAL_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtTotalCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMecabRcFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMecabRcFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MECAB_RC_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMecabRcFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMetadataLocksCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMetadataLocksCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_METADATA_LOCKS_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMetadataLocksCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMetadataLocksHashInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMetadataLocksHashInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_METADATA_LOCKS_HASH_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMetadataLocksHashInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbTempDataFilePath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbTempDataFilePath", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_TEMP_DATA_FILE_PATH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbTempDataFilePath));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbDataFilePath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbDataFilePath", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_DATA_FILE_PATH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbDataFilePath));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbDataHomeDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbDataHomeDir", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_DATA_HOME_DIR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbDataHomeDir));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAvoidTemporalUpgrade())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarAvoidTemporalUpgrade", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_AVOID_TEMPORAL_UPGRADE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarAvoidTemporalUpgrade));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultTmpStorageEngine())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDefaultTmpStorageEngine", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DEFAULT_TMP_STORAGE_ENGINE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDefaultTmpStorageEngine));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtEnableDiagPrint())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtEnableDiagPrint", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_ENABLE_DIAG_PRINT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtEnableDiagPrint));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtNumWordOptimize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtNumWordOptimize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_NUM_WORD_OPTIMIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtNumWordOptimize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtResultCacheLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtResultCacheLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_RESULT_CACHE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtResultCacheLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtServerStopwordTable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtServerStopwordTable", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_SERVER_STOPWORD_TABLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtServerStopwordTable));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOptimizeFulltextOnly())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOptimizeFulltextOnly", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_OPTIMIZE_FULLTEXT_ONLY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbOptimizeFulltextOnly));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxTmpTables())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxTmpTables", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_TMP_TABLES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxTmpTables));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbTmpdir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbTmpdir", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_TMPDIR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbTmpdir));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarGroupReplicationGroupSeeds())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarGroupReplicationGroupSeeds", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarGroupReplicationGroupSeeds));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlaveRowsSearchAlgorithms())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlaveRowsSearchAlgorithms", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSlaveRowsSearchAlgorithms));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlaveTypeConversions())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlaveTypeConversions", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SLAVE_TYPE_CONVERSIONS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSlaveTypeConversions));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObHnswEfSearch())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObHnswEfSearch", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_HNSW_EF_SEARCH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObHnswEfSearch));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbAllowCopyingAlterTable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbAllowCopyingAlterTable", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbAllowCopyingAlterTable));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbAutoincrementPrefetchSz())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbAutoincrementPrefetchSz", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_AUTOINCREMENT_PREFETCH_SZ))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbAutoincrementPrefetchSz));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbBlobReadBatchBytes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbBlobReadBatchBytes", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_BLOB_READ_BATCH_BYTES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbBlobReadBatchBytes));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbBlobWriteBatchBytes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbBlobWriteBatchBytes", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_BLOB_WRITE_BATCH_BYTES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbBlobWriteBatchBytes));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbCacheCheckTime())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbCacheCheckTime", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_CACHE_CHECK_TIME))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbCacheCheckTime));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbClearApplyStatus())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbClearApplyStatus", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_CLEAR_APPLY_STATUS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbClearApplyStatus));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbDataNodeNeighbour())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbDataNodeNeighbour", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_DATA_NODE_NEIGHBOUR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbDataNodeNeighbour));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbDefaultColumnFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbDefaultColumnFormat", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_DEFAULT_COLUMN_FORMAT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbDefaultColumnFormat));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbDeferredConstraints())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbDeferredConstraints", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_DEFERRED_CONSTRAINTS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbDeferredConstraints));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbDistribution())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbDistribution", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_DISTRIBUTION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbDistribution));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbEventbufferFreePercent())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbEventbufferFreePercent", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_EVENTBUFFER_FREE_PERCENT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbEventbufferFreePercent));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbEventbufferMaxAlloc())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbEventbufferMaxAlloc", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_EVENTBUFFER_MAX_ALLOC))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbEventbufferMaxAlloc));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbExtraLogging())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbExtraLogging", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_EXTRA_LOGGING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbExtraLogging));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbForceSend())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbForceSend", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_FORCE_SEND))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbForceSend));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbFullyReplicated())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbFullyReplicated", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_FULLY_REPLICATED))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbFullyReplicated));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbIndexStatEnable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbIndexStatEnable", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_INDEX_STAT_ENABLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbIndexStatEnable));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbIndexStatOption())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbIndexStatOption", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_INDEX_STAT_OPTION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbIndexStatOption));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbJoinPushdown())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbJoinPushdown", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_JOIN_PUSHDOWN))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbJoinPushdown));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogBinlogIndex())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogBinlogIndex", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_BINLOG_INDEX))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogBinlogIndex));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogEmptyEpochs())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogEmptyEpochs", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_EMPTY_EPOCHS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogEmptyEpochs));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogEmptyUpdate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogEmptyUpdate", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_EMPTY_UPDATE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogEmptyUpdate));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogExclusiveReads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogExclusiveReads", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_EXCLUSIVE_READS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogExclusiveReads));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogUpdateAsWrite())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogUpdateAsWrite", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_UPDATE_AS_WRITE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogUpdateAsWrite));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogUpdateMinimal())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogUpdateMinimal", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_UPDATE_MINIMAL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogUpdateMinimal));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogUpdatedOnly())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogUpdatedOnly", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_UPDATED_ONLY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogUpdatedOnly));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbOptimizationDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbOptimizationDelay", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_OPTIMIZATION_DELAY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbOptimizationDelay));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbReadBackup())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbReadBackup", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_READ_BACKUP))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbReadBackup));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbRecvThreadActivationThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbRecvThreadActivationThreshold", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_RECV_THREAD_ACTIVATION_THRESHOLD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbRecvThreadActivationThreshold));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbRecvThreadCpuMask())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbRecvThreadCpuMask", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_RECV_THREAD_CPU_MASK))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbRecvThreadCpuMask));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbReportThreshBinlogEpochSlip())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbReportThreshBinlogEpochSlip", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_REPORT_THRESH_BINLOG_EPOCH_SLIP))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbReportThreshBinlogEpochSlip));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbReportThreshBinlogMemUsage())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbReportThreshBinlogMemUsage", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_REPORT_THRESH_BINLOG_MEM_USAGE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbReportThreshBinlogMemUsage));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbRowChecksum())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbRowChecksum", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_ROW_CHECKSUM))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbRowChecksum));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbShowForeignKeyMockTables())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbShowForeignKeyMockTables", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_SHOW_FOREIGN_KEY_MOCK_TABLES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbShowForeignKeyMockTables));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbSlaveConflictRole())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbSlaveConflictRole", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_SLAVE_CONFLICT_ROLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbSlaveConflictRole));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbTableNoLogging())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbTableNoLogging", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_TABLE_NO_LOGGING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbTableNoLogging));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbTableTemporary())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbTableTemporary", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_TABLE_TEMPORARY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbTableTemporary));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbUseExactCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbUseExactCount", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_USE_EXACT_COUNT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbUseExactCount));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbUseTransactions())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbUseTransactions", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_USE_TRANSACTIONS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbUseTransactions));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoMaxBytes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoMaxBytes", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDBINFO_MAX_BYTES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbinfoMaxBytes));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoMaxRows())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoMaxRows", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDBINFO_MAX_ROWS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbinfoMaxRows));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoOffline())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoOffline", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDBINFO_OFFLINE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbinfoOffline));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoShowHidden())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoShowHidden", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDBINFO_SHOW_HIDDEN))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbinfoShowHidden));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamDataPointerSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamDataPointerSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYISAM_DATA_POINTER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMyisamDataPointerSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamMaxSortFileSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamMaxSortFileSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYISAM_MAX_SORT_FILE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMyisamMaxSortFileSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamRepairThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamRepairThreads", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYISAM_REPAIR_THREADS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMyisamRepairThreads));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamSortBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamSortBufferSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYISAM_SORT_BUFFER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMyisamSortBufferSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamStatsMethod())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamStatsMethod", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYISAM_STATS_METHOD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMyisamStatsMethod));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamUseMmap())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamUseMmap", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYISAM_USE_MMAP))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMyisamUseMmap));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPreloadBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPreloadBufferSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PRELOAD_BUFFER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPreloadBufferSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReadBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReadBufferSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_READ_BUFFER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarReadBufferSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReadRndBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReadRndBufferSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_READ_RND_BUFFER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarReadRndBufferSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSyncFrm())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSyncFrm", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SYNC_FRM))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSyncFrm));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSyncMasterInfo())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSyncMasterInfo", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SYNC_MASTER_INFO))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSyncMasterInfo));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarTableOpenCache())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarTableOpenCache", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_TABLE_OPEN_CACHE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarTableOpenCache));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbMonitorDisable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbMonitorDisable", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_MONITOR_DISABLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbMonitorDisable));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbMonitorEnable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbMonitorEnable", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_MONITOR_ENABLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbMonitorEnable));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbMonitorReset())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbMonitorReset", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_MONITOR_RESET))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbMonitorReset));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbMonitorResetAll())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbMonitorResetAll", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_MONITOR_RESET_ALL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbMonitorResetAll));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOldBlocksPct())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOldBlocksPct", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_OLD_BLOCKS_PCT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbOldBlocksPct));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOldBlocksTime())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOldBlocksTime", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_OLD_BLOCKS_TIME))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbOldBlocksTime));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbPurgeBatchSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbPurgeBatchSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_PURGE_BATCH_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbPurgeBatchSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbPurgeRsegTruncateFrequency())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbPurgeRsegTruncateFrequency", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_PURGE_RSEG_TRUNCATE_FREQUENCY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbPurgeRsegTruncateFrequency));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbRandomReadAhead())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbRandomReadAhead", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_RANDOM_READ_AHEAD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbRandomReadAhead));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbReadAheadThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbReadAheadThreshold", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_READ_AHEAD_THRESHOLD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbReadAheadThreshold));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbRollbackSegments())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbRollbackSegments", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_ROLLBACK_SEGMENTS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbRollbackSegments));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSpinWaitDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbSpinWaitDelay", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_SPIN_WAIT_DELAY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbSpinWaitDelay));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatusOutput())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatusOutput", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_STATUS_OUTPUT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbStatusOutput));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatusOutputLocks())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatusOutputLocks", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_STATUS_OUTPUT_LOCKS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbStatusOutputLocks));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSyncSpinLoops())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbSyncSpinLoops", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_SYNC_SPIN_LOOPS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbSyncSpinLoops));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInternalTmpDiskStorageEngine())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInternalTmpDiskStorageEngine", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INTERNAL_TMP_DISK_STORAGE_ENGINE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInternalTmpDiskStorageEngine));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeepFilesOnCreate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeepFilesOnCreate", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEEP_FILES_ON_CREATE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeepFilesOnCreate));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxHeapTableSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxHeapTableSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_HEAP_TABLE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxHeapTableSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBulkInsertBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBulkInsertBufferSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BULK_INSERT_BUFFER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBulkInsertBufferSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarHostCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarHostCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_HOST_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarHostCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInitSlave())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInitSlave", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INIT_SLAVE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInitSlave));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFastShutdown())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFastShutdown", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FAST_SHUTDOWN))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFastShutdown));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbIoCapacity())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbIoCapacity", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_IO_CAPACITY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbIoCapacity));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbIoCapacityMax())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbIoCapacityMax", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_IO_CAPACITY_MAX))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbIoCapacityMax));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbThreadConcurrency())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbThreadConcurrency", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_THREAD_CONCURRENCY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbThreadConcurrency));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbThreadSleepDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbThreadSleepDelay", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_THREAD_SLEEP_DELAY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbThreadSleepDelay));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogErrorVerbosity())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogErrorVerbosity", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_ERROR_VERBOSITY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogErrorVerbosity));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogOutput())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogOutput", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_OUTPUT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogOutput));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogQueriesNotUsingIndexes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogQueriesNotUsingIndexes", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_QUERIES_NOT_USING_INDEXES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogQueriesNotUsingIndexes));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSlowAdminStatements())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSlowAdminStatements", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_SLOW_ADMIN_STATEMENTS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogSlowAdminStatements));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSlowSlaveStatements())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSlowSlaveStatements", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_SLOW_SLAVE_STATEMENTS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogSlowSlaveStatements));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogStatementsUnsafeForBinlog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogStatementsUnsafeForBinlog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_STATEMENTS_UNSAFE_FOR_BINLOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogStatementsUnsafeForBinlog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSyslog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSyslog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_SYSLOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogSyslog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSyslogFacility())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSyslogFacility", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_SYSLOG_FACILITY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogSyslogFacility));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSyslogIncludePid())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSyslogIncludePid", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_SYSLOG_INCLUDE_PID))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogSyslogIncludePid));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSyslogTag())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSyslogTag", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_SYSLOG_TAG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogSyslogTag));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogThrottleQueriesNotUsingIndexes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogThrottleQueriesNotUsingIndexes", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_THROTTLE_QUERIES_NOT_USING_INDEXES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogThrottleQueriesNotUsingIndexes));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogTimestamps())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogTimestamps", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_TIMESTAMPS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogTimestamps));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogWarnings())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogWarnings", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_WARNINGS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogWarnings));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxDelayedThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxDelayedThreads", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_DELAYED_THREADS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxDelayedThreads));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOfflineMode())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOfflineMode", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OFFLINE_MODE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOfflineMode));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRequireSecureTransport())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRequireSecureTransport", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_REQUIRE_SECURE_TRANSPORT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRequireSecureTransport));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlowLaunchTime())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlowLaunchTime", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SLOW_LAUNCH_TIME))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSlowLaunchTime));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSqlLogOff())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSqlLogOff", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SQL_LOG_OFF))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSqlLogOff));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_THREAD_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarThreadCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolHighPriorityConnection())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolHighPriorityConnection", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_THREAD_POOL_HIGH_PRIORITY_CONNECTION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarThreadPoolHighPriorityConnection));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolMaxUnusedThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolMaxUnusedThreads", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_THREAD_POOL_MAX_UNUSED_THREADS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarThreadPoolMaxUnusedThreads));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolPrioKickupTimer())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolPrioKickupTimer", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_THREAD_POOL_PRIO_KICKUP_TIMER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarThreadPoolPrioKickupTimer));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolStallLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolStallLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_THREAD_POOL_STALL_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarThreadPoolStallLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarHaveStatementTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarHaveStatementTimeout", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_HAVE_STATEMENT_TIMEOUT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarHaveStatementTimeout));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxBindAddress())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxBindAddress", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_BIND_ADDRESS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxBindAddress));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxPort())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxPort", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_PORT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxPort));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxPortOpenTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxPortOpenTimeout", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_PORT_OPEN_TIMEOUT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxPortOpenTimeout));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSocket())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSocket", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_SOCKET))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxSocket));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCa())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCa", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CA))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxSslCa));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCapath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCapath", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CAPATH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxSslCapath));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCert())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCert", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CERT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxSslCert));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCipher())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCipher", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CIPHER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxSslCipher));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCrl())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCrl", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CRL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxSslCrl));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCrlpath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCrlpath", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CRLPATH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxSslCrlpath));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslKey())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslKey", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_KEY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlxSslKey));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOld())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOld", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OLD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOld));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaAccountsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaAccountsSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_ACCOUNTS_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaAccountsSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaDigestsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaDigestsSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_DIGESTS_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaDigestsSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsStagesHistoryLongSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsStagesHistoryLongSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_LONG_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaEventsStagesHistoryLongSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsStagesHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsStagesHistorySize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaEventsStagesHistorySize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsStatementsHistoryLongSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsStatementsHistoryLongSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_LONG_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaEventsStatementsHistoryLongSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsStatementsHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsStatementsHistorySize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaEventsStatementsHistorySize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsTransactionsHistoryLongSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsTransactionsHistoryLongSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_LONG_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaEventsTransactionsHistoryLongSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsTransactionsHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsTransactionsHistorySize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaEventsTransactionsHistorySize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsWaitsHistoryLongSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsWaitsHistoryLongSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_LONG_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaEventsWaitsHistoryLongSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsWaitsHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsWaitsHistorySize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaEventsWaitsHistorySize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaHostsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaHostsSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_HOSTS_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaHostsSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxCondClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxCondClasses", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_CLASSES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxCondClasses));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxCondInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxCondInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxCondInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxDigestLength())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxDigestLength", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_DIGEST_LENGTH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxDigestLength));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxFileClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxFileClasses", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_CLASSES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxFileClasses));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxFileHandles())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxFileHandles", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_HANDLES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxFileHandles));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxFileInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxFileInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxFileInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxIndexStat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxIndexStat", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_INDEX_STAT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxIndexStat));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxMemoryClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxMemoryClasses", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_MEMORY_CLASSES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxMemoryClasses));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxMetadataLocks())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxMetadataLocks", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_METADATA_LOCKS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxMetadataLocks));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxMutexClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxMutexClasses", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_CLASSES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxMutexClasses));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxMutexInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxMutexInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxMutexInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxPreparedStatementsInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxPreparedStatementsInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_PREPARED_STATEMENTS_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxPreparedStatementsInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxProgramInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxProgramInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_PROGRAM_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxProgramInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxRwlockClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxRwlockClasses", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_CLASSES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxRwlockClasses));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxRwlockInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxRwlockInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxRwlockInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxSocketClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxSocketClasses", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_CLASSES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxSocketClasses));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxSocketInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxSocketInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxSocketInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxSqlTextLength())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxSqlTextLength", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_SQL_TEXT_LENGTH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxSqlTextLength));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxStageClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxStageClasses", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_STAGE_CLASSES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxStageClasses));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxStatementClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxStatementClasses", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_CLASSES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxStatementClasses));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxStatementStack())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxStatementStack", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_STACK))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxStatementStack));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxTableHandles())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxTableHandles", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_HANDLES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxTableHandles));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxTableInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxTableInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxTableInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxTableLockStat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxTableLockStat", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_LOCK_STAT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxTableLockStat));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxThreadClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxThreadClasses", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_CLASSES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxThreadClasses));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxThreadInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxThreadInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaMaxThreadInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaSessionConnectAttrsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaSessionConnectAttrsSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_SESSION_CONNECT_ATTRS_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaSessionConnectAttrsSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaSetupActorsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaSetupActorsSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_SETUP_ACTORS_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaSetupActorsSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaSetupObjectsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaSetupObjectsSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_SETUP_OBJECTS_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaSetupObjectsSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaUsersSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaUsersSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_USERS_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPerformanceSchemaUsersSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarVersionTokensSessionNumber())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarVersionTokensSessionNumber", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_VERSION_TOKENS_SESSION_NUMBER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarVersionTokensSessionNumber));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBackLog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBackLog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BACK_LOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBackLog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBasedir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBasedir", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BASEDIR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBasedir));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBindAddress())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBindAddress", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BIND_ADDRESS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBindAddress));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCoreFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCoreFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CORE_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarCoreFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarHaveCompress())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarHaveCompress", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_HAVE_COMPRESS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarHaveCompress));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarIgnoreDbDirs())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarIgnoreDbDirs", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_IGNORE_DB_DIRS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarIgnoreDbDirs));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInitFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInitFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INIT_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInitFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbNumaInterleave())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbNumaInterleave", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_NUMA_INTERLEAVE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbNumaInterleave));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOpenFiles())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOpenFiles", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_OPEN_FILES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbOpenFiles));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbPageCleaners())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbPageCleaners", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_PAGE_CLEANERS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbPageCleaners));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbPurgeThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbPurgeThreads", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_PURGE_THREADS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbPurgeThreads));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbReadIoThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbReadIoThreads", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_READ_IO_THREADS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbReadIoThreads));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSyncArraySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbSyncArraySize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_SYNC_ARRAY_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbSyncArraySize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbUseNativeAio())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbUseNativeAio", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_USE_NATIVE_AIO))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbUseNativeAio));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbWriteIoThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbWriteIoThreads", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_WRITE_IO_THREADS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbWriteIoThreads));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLargeFilesSupport())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLargeFilesSupport", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LARGE_FILES_SUPPORT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLargeFilesSupport));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLargePages())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLargePages", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LARGE_PAGES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLargePages));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLargePageSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLargePageSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LARGE_PAGE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLargePageSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLockedInMemory())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLockedInMemory", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOCKED_IN_MEMORY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLockedInMemory));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogError())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogError", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_ERROR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogError));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNamedPipe())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNamedPipe", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NAMED_PIPE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNamedPipe));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNamedPipeFullAccessGroup())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNamedPipeFullAccessGroup", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NAMED_PIPE_FULL_ACCESS_GROUP))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNamedPipeFullAccessGroup));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOpenFilesLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOpenFilesLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPEN_FILES_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOpenFilesLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReportHost())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReportHost", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_REPORT_HOST))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarReportHost));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReportPassword())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReportPassword", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_REPORT_PASSWORD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarReportPassword));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReportPort())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReportPort", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_REPORT_PORT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarReportPort));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReportUser())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReportUser", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_REPORT_USER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarReportUser));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarServerIdBits())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarServerIdBits", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SERVER_ID_BITS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarServerIdBits));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSharedMemory())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSharedMemory", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SHARED_MEMORY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSharedMemory));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSharedMemoryBaseName())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSharedMemoryBaseName", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SHARED_MEMORY_BASE_NAME))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSharedMemoryBaseName));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSkipNameResolve())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSkipNameResolve", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SKIP_NAME_RESOLVE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSkipNameResolve));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSkipNetworking())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSkipNetworking", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SKIP_NETWORKING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSkipNetworking));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadHandling())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadHandling", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_THREAD_HANDLING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarThreadHandling));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolAlgorithm())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolAlgorithm", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_THREAD_POOL_ALGORITHM))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarThreadPoolAlgorithm));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_THREAD_POOL_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarThreadPoolSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadStack())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadStack", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_THREAD_STACK))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarThreadStack));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogGtidSimpleRecovery())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogGtidSimpleRecovery", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BINLOG_GTID_SIMPLE_RECOVERY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBinlogGtidSimpleRecovery));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbApiEnableBinlog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbApiEnableBinlog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_API_ENABLE_BINLOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbApiEnableBinlog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLocksUnsafeForBinlog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLocksUnsafeForBinlog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LOCKS_UNSAFE_FOR_BINLOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLocksUnsafeForBinlog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogBufferSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LOG_BUFFER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLogBufferSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogFilesInGroup())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogFilesInGroup", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LOG_FILES_IN_GROUP))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLogFilesInGroup));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogFileSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogFileSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LOG_FILE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLogFileSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogGroupHomeDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogGroupHomeDir", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LOG_GROUP_HOME_DIR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLogGroupHomeDir));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbUndoDirectory())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbUndoDirectory", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_UNDO_DIRECTORY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbUndoDirectory));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbUndoTablespaces())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbUndoTablespaces", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_UNDO_TABLESPACES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbUndoTablespaces));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogBinBasename())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogBinBasename", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_BIN_BASENAME))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogBinBasename));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogBinIndex())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogBinIndex", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_BIN_INDEX))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogBinIndex));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSlaveUpdates())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSlaveUpdates", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_SLAVE_UPDATES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogSlaveUpdates));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RELAY_LOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRelayLog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogBasename())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogBasename", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RELAY_LOG_BASENAME))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRelayLogBasename));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogIndex())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogIndex", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RELAY_LOG_INDEX))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRelayLogIndex));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogInfoFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogInfoFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RELAY_LOG_INFO_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRelayLogInfoFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogRecovery())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogRecovery", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RELAY_LOG_RECOVERY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRelayLogRecovery));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogSpaceLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogSpaceLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RELAY_LOG_SPACE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRelayLogSpaceLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDelayKeyWrite())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDelayKeyWrite", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DELAY_KEY_WRITE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDelayKeyWrite));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLargePrefix())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLargePrefix", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_LARGE_PREFIX))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbLargePrefix));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyBufferSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEY_BUFFER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyBufferSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyCacheAgeThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyCacheAgeThreshold", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEY_CACHE_AGE_THRESHOLD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyCacheAgeThreshold));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyCacheDivisionLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyCacheDivisionLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEY_CACHE_DIVISION_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyCacheDivisionLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxSeeksForKey())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxSeeksForKey", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_SEEKS_FOR_KEY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxSeeksForKey));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOldAlterTable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOldAlterTable", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OLD_ALTER_TABLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOldAlterTable));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarTableDefinitionCache())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarTableDefinitionCache", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_TABLE_DEFINITION_CACHE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarTableDefinitionCache));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSortBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbSortBufferSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_SORT_BUFFER_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbSortBufferSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyCacheBlockSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyCacheBlockSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEY_CACHE_BLOCK_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyCacheBlockSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObKvMode())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObKvMode", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_KV_MODE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObKvMode));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObClientCapabilityFlag())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObClientCapabilityFlag", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR___OB_CLIENT_CAPABILITY_FLAG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObClientCapabilityFlag));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableParameterAnonymousBlock())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnableParameterAnonymousBlock", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnableParameterAnonymousBlock));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCharacterSetsDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCharacterSetsDir", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CHARACTER_SETS_DIR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarCharacterSetsDir));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDateFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDateFormat", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DATE_FORMAT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDateFormat));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDatetimeFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDatetimeFormat", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DATETIME_FORMAT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDatetimeFormat));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDisconnectOnExpiredPassword())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDisconnectOnExpiredPassword", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDisconnectOnExpiredPassword));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarExternalUser())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarExternalUser", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_EXTERNAL_USER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarExternalUser));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarHaveCrypt())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarHaveCrypt", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_HAVE_CRYPT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarHaveCrypt));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarHaveDynamicLoading())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarHaveDynamicLoading", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_HAVE_DYNAMIC_LOADING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarHaveDynamicLoading));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringAwsConfFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringAwsConfFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEYRING_AWS_CONF_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyringAwsConfFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringAwsDataFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringAwsDataFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEYRING_AWS_DATA_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyringAwsDataFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLanguage())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLanguage", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LANGUAGE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLanguage));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLcMessagesDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLcMessagesDir", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LC_MESSAGES_DIR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLcMessagesDir));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLowerCaseFileSystem())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLowerCaseFileSystem", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOWER_CASE_FILE_SYSTEM))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLowerCaseFileSystem));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxDigestLength())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxDigestLength", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_DIGEST_LENGTH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxDigestLength));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoDatabase())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoDatabase", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDBINFO_DATABASE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbinfoDatabase));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoTablePrefix())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoTablePrefix", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDBINFO_TABLE_PREFIX))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbinfoTablePrefix));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoVersion())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoVersion", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDBINFO_VERSION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbinfoVersion));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbBatchSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbBatchSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_BATCH_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbBatchSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbClusterConnectionPool())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbClusterConnectionPool", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_CLUSTER_CONNECTION_POOL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbClusterConnectionPool));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbClusterConnectionPoolNodeids())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbClusterConnectionPoolNodeids", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_CLUSTER_CONNECTION_POOL_NODEIDS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbClusterConnectionPoolNodeids));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogApplyStatus())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogApplyStatus", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_APPLY_STATUS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogApplyStatus));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogBin())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogBin", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_BIN))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogBin));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogFailTerminate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogFailTerminate", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_FAIL_TERMINATE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogFailTerminate));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogOrig())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogOrig", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_ORIG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogOrig));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogTransactionId())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogTransactionId", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_LOG_TRANSACTION_ID))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbLogTransactionId));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbOptimizedNodeSelection())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbOptimizedNodeSelection", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_OPTIMIZED_NODE_SELECTION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbOptimizedNodeSelection));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbSystemName())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbSystemName", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_SYSTEM_NAME))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbSystemName));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbUseCopyingAlterTable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbUseCopyingAlterTable", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_USE_COPYING_ALTER_TABLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbUseCopyingAlterTable));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbVersionString())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbVersionString", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_VERSION_STRING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbVersionString));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbWaitConnected())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbWaitConnected", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_WAIT_CONNECTED))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbWaitConnected));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbWaitSetup())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbWaitSetup", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_WAIT_SETUP))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbWaitSetup));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarProxyUser())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarProxyUser", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PROXY_USER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarProxyUser));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSha256PasswordAutoGenerateRsaKeys())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSha256PasswordAutoGenerateRsaKeys", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSha256PasswordAutoGenerateRsaKeys));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSha256PasswordPrivateKeyPath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSha256PasswordPrivateKeyPath", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_PRIVATE_KEY_PATH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSha256PasswordPrivateKeyPath));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSha256PasswordPublicKeyPath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSha256PasswordPublicKeyPath", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_PUBLIC_KEY_PATH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSha256PasswordPublicKeyPath));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSkipShowDatabase())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSkipShowDatabase", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SKIP_SHOW_DATABASE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSkipShowDatabase));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPluginLoad())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPluginLoad", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLUGIN_LOAD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPluginLoad));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPluginLoadAdd())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPluginLoadAdd", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLUGIN_LOAD_ADD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPluginLoadAdd));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBigTables())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBigTables", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_BIG_TABLES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarBigTables));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCheckProxyUsers())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCheckProxyUsers", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CHECK_PROXY_USERS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarCheckProxyUsers));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarConnectionControlFailedConnectionsThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarConnectionControlFailedConnectionsThreshold", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarConnectionControlFailedConnectionsThreshold));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarConnectionControlMaxConnectionDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarConnectionControlMaxConnectionDelay", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CONNECTION_CONTROL_MAX_CONNECTION_DELAY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarConnectionControlMaxConnectionDelay));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarConnectionControlMinConnectionDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarConnectionControlMinConnectionDelay", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CONNECTION_CONTROL_MIN_CONNECTION_DELAY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarConnectionControlMinConnectionDelay));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultWeekFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDefaultWeekFormat", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DEFAULT_WEEK_FORMAT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDefaultWeekFormat));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDelayedInsertTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDelayedInsertTimeout", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DELAYED_INSERT_TIMEOUT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDelayedInsertTimeout));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDelayedQueueSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDelayedQueueSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DELAYED_QUEUE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDelayedQueueSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEqRangeIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEqRangeIndexDiveLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEqRangeIndexDiveLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsAutoRecalc())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsAutoRecalc", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_STATS_AUTO_RECALC))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbStatsAutoRecalc));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsIncludeDeleteMarked())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsIncludeDeleteMarked", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_STATS_INCLUDE_DELETE_MARKED))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbStatsIncludeDeleteMarked));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsMethod())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsMethod", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_STATS_METHOD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbStatsMethod));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsOnMetadata())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsOnMetadata", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_STATS_ON_METADATA))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbStatsOnMetadata));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarVersionTokensSession())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarVersionTokensSession", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_VERSION_TOKENS_SESSION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarVersionTokensSession));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsPersistentSamplePages())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsPersistentSamplePages", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_STATS_PERSISTENT_SAMPLE_PAGES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbStatsPersistentSamplePages));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsSamplePages())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsSamplePages", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_STATS_SAMPLE_PAGES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbStatsSamplePages));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsTransientSamplePages())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsTransientSamplePages", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_STATS_TRANSIENT_SAMPLE_PAGES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbStatsTransientSamplePages));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringAwsCmkId())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringAwsCmkId", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEYRING_AWS_CMK_ID))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyringAwsCmkId));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringAwsRegion())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringAwsRegion", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEYRING_AWS_REGION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyringAwsRegion));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringEncryptedFileData())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringEncryptedFileData", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEYRING_ENCRYPTED_FILE_DATA))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyringEncryptedFileData));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringEncryptedFilePassword())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringEncryptedFilePassword", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEYRING_ENCRYPTED_FILE_PASSWORD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyringEncryptedFilePassword));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringFileData())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringFileData", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEYRING_FILE_DATA))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyringFileData));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringOkvConfDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringOkvConfDir", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEYRING_OKV_CONF_DIR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyringOkvConfDir));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringOperations())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringOperations", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEYRING_OPERATIONS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyringOperations));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerSwitch())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerSwitch", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_SWITCH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerSwitch));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxConnectErrors())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxConnectErrors", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_CONNECT_ERRORS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxConnectErrors));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlFirewallMode())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlFirewallMode", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQL_FIREWALL_MODE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlFirewallMode));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlFirewallTrace())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlFirewallTrace", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQL_FIREWALL_TRACE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlFirewallTrace));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlNativePasswordProxyUsers())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlNativePasswordProxyUsers", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MYSQL_NATIVE_PASSWORD_PROXY_USERS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMysqlNativePasswordProxyUsers));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNetRetryCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNetRetryCount", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NET_RETRY_COUNT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNetRetryCount));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNew())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNew", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NEW))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNew));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOldPasswords())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOldPasswords", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OLD_PASSWORDS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOldPasswords));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerPruneLevel())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerPruneLevel", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_PRUNE_LEVEL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerPruneLevel));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerSearchDepth())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerSearchDepth", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_SEARCH_DEPTH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerSearchDepth));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerTrace())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerTrace", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerTrace));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerTraceFeatures())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerTraceFeatures", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_FEATURES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerTraceFeatures));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerTraceLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerTraceLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerTraceLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerTraceMaxMemSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerTraceMaxMemSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_MAX_MEM_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerTraceMaxMemSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerTraceOffset())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerTraceOffset", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_OFFSET))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerTraceOffset));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParserMaxMemSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarParserMaxMemSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PARSER_MAX_MEM_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarParserMaxMemSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRandSeed1())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRandSeed1", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RAND_SEED1))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRandSeed1));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRandSeed2())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRandSeed2", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RAND_SEED2))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRandSeed2));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRangeAllocBlockSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRangeAllocBlockSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RANGE_ALLOC_BLOCK_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRangeAllocBlockSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRangeOptimizerMaxMemSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRangeOptimizerMaxMemSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RANGE_OPTIMIZER_MAX_MEM_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRangeOptimizerMaxMemSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRewriterEnabled())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRewriterEnabled", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_REWRITER_ENABLED))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRewriterEnabled));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRewriterVerbose())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRewriterVerbose", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_REWRITER_VERBOSE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRewriterVerbose));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSecureAuth())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSecureAuth", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SECURE_AUTH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSecureAuth));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSha256PasswordProxyUsers())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSha256PasswordProxyUsers", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_PROXY_USERS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSha256PasswordProxyUsers));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarShowCompatibility56())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarShowCompatibility56", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SHOW_COMPATIBILITY_56))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarShowCompatibility56));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarShowCreateTableVerbosity())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarShowCreateTableVerbosity", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SHOW_CREATE_TABLE_VERBOSITY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarShowCreateTableVerbosity));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarShowOldTemporals())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarShowOldTemporals", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SHOW_OLD_TEMPORALS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarShowOldTemporals));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSqlBigSelects())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSqlBigSelects", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SQL_BIG_SELECTS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSqlBigSelects));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarUpdatableViewsWithLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarUpdatableViewsWithLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_UPDATABLE_VIEWS_WITH_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarUpdatableViewsWithLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarValidatePasswordDictionaryFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarValidatePasswordDictionaryFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_DICTIONARY_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarValidatePasswordDictionaryFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDelayedInsertLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDelayedInsertLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DELAYED_INSERT_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDelayedInsertLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbVersion())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbVersion", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NDB_VERSION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNdbVersion));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAutoGenerateCerts())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarAutoGenerateCerts", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_AUTO_GENERATE_CERTS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarAutoGenerateCerts));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerCostBasedTransformation())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerCostBasedTransformation", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerCostBasedTransformation));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRangeIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRangeIndexDiveLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RANGE_INDEX_DIVE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRangeIndexDiveLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPartitionIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPartitionIndexDiveLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PARTITION_INDEX_DIVE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPartitionIndexDiveLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObTableAccessPolicy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObTableAccessPolicy", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_TABLE_ACCESS_POLICY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObTableAccessPolicy));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPidFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPidFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PID_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPidFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPort())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPort", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PORT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPort));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSocket())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSocket", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SOCKET))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSocket));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMviewRefreshDop())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMviewRefreshDop", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MVIEW_REFRESH_DOP))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMviewRefreshDop));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableOptimizerRowgoal())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableOptimizerRowgoal", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableOptimizerRowgoal));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObIvfNprobes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObIvfNprobes", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_IVF_NPROBES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObIvfNprobes));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCurrentDefaultCatalog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCurrentDefaultCatalog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__CURRENT_DEFAULT_CATALOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarCurrentDefaultCatalog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePsParameterAnonymousBlock())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePsParameterAnonymousBlock", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnablePsParameterAnonymousBlock));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObHnswExtraInfoMaxSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObHnswExtraInfoMaxSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObHnswExtraInfoMaxSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPushJoinPredicate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPushJoinPredicate", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__PUSH_JOIN_PREDICATE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPushJoinPredicate));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSparseDropRatioSearch())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObSparseDropRatioSearch", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_SPARSE_DROP_RATIO_SEARCH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObSparseDropRatioSearch));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSqlTranspiler())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSqlTranspiler", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SQL_TRANSPILER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSqlTranspiler));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlCanTransformSqlToAssign())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPlsqlCanTransformSqlToAssign", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPlsqlCanTransformSqlToAssign));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePlAsyncCommit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePlAsyncCommit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnablePlAsyncCommit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCachingSha2PasswordDigestRounds())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCachingSha2PasswordDigestRounds", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarCachingSha2PasswordDigestRounds));
       }
     }
 
@@ -10550,6 +16260,655 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       }
       break;
     }
+    case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEnableSqlPlanMonitor)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEnableSqlPlanMonitor)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableSqlPlanMonitor())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableSqlPlanMonitor", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INSERT_ID: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInsertId)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInsertId)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInsertId())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInsertId", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_JOIN_BUFFER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarJoinBufferSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarJoinBufferSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarJoinBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarJoinBufferSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_JOIN_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxJoinSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxJoinSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxJoinSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxJoinSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_LENGTH_FOR_SORT_DATA: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxLengthForSortData)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxLengthForSortData)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxLengthForSortData())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxLengthForSortData", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_PREPARED_STMT_COUNT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxPreparedStmtCount)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxPreparedStmtCount)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxPreparedStmtCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxPreparedStmtCount", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_SORT_LENGTH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxSortLength)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxSortLength)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxSortLength())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxSortLength", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MIN_EXAMINED_ROW_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMinExaminedRowLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMinExaminedRowLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMinExaminedRowLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMinExaminedRowLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MULTI_RANGE_COUNT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMultiRangeCount)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMultiRangeCount)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMultiRangeCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMultiRangeCount", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_CONNECT_TIMEOUT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxConnectTimeout)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxConnectTimeout)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxConnectTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxConnectTimeout", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_IDLE_WORKER_THREAD_TIMEOUT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxIdleWorkerThreadTimeout)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxIdleWorkerThreadTimeout)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxIdleWorkerThreadTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxIdleWorkerThreadTimeout", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_MAX_ALLOWED_PACKET: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxMaxAllowedPacket)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxMaxAllowedPacket)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxMaxAllowedPacket())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxMaxAllowedPacket", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_MAX_CONNECTIONS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxMaxConnections)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxMaxConnections)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxMaxConnections())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxMaxConnections", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_MIN_WORKER_THREADS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxMinWorkerThreads)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxMinWorkerThreads)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxMinWorkerThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxMinWorkerThreads", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_SHOW_PROCESSLIST: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaShowProcesslist)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaShowProcesslist)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaShowProcesslist())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaShowProcesslist", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_QUERY_ALLOC_BLOCK_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarQueryAllocBlockSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarQueryAllocBlockSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarQueryAllocBlockSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarQueryAllocBlockSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_QUERY_PREALLOC_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarQueryPreallocSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarQueryPreallocSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarQueryPreallocSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarQueryPreallocSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SLOW_QUERY_LOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSlowQueryLog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSlowQueryLog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlowQueryLog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlowQueryLog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SLOW_QUERY_LOG_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSlowQueryLogFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSlowQueryLogFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlowQueryLogFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlowQueryLogFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SORT_BUFFER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSortBufferSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSortBufferSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSortBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSortBufferSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SQL_BUFFER_RESULT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSqlBufferResult)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSqlBufferResult)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSqlBufferResult())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSqlBufferResult", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_DIRECT_NON_TRANSACTIONAL_UPDATES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogDirectNonTransactionalUpdates)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogDirectNonTransactionalUpdates)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogDirectNonTransactionalUpdates())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogDirectNonTransactionalUpdates", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_ERROR_ACTION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogErrorAction)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogErrorAction)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogErrorAction())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogErrorAction", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_GROUP_COMMIT_SYNC_DELAY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogGroupCommitSyncDelay)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogGroupCommitSyncDelay)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogGroupCommitSyncDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogGroupCommitSyncDelay", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_GROUP_COMMIT_SYNC_NO_DELAY_COUNT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogGroupCommitSyncNoDelayCount)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogGroupCommitSyncNoDelayCount)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogGroupCommitSyncNoDelayCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogGroupCommitSyncNoDelayCount", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_MAX_FLUSH_QUEUE_TIME: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogMaxFlushQueueTime)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogMaxFlushQueueTime)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogMaxFlushQueueTime())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogMaxFlushQueueTime", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_ORDER_COMMITS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogOrderCommits)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogOrderCommits)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogOrderCommits())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogOrderCommits", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_STMT_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogStmtCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogStmtCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogStmtCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogStmtCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_TRANSACTION_DEPENDENCY_HISTORY_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogTransactionDependencyHistorySize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogTransactionDependencyHistorySize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogTransactionDependencyHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogTransactionDependencyHistorySize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_TRANSACTION_DEPENDENCY_TRACKING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogTransactionDependencyTracking)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogTransactionDependencyTracking)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogTransactionDependencyTracking())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogTransactionDependencyTracking", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_EXPIRE_LOGS_DAYS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarExpireLogsDays)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarExpireLogsDays)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarExpireLogsDays())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarExpireLogsDays", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FLUSH_LOG_AT_TIMEOUT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFlushLogAtTimeout)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFlushLogAtTimeout)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFlushLogAtTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFlushLogAtTimeout", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FLUSH_LOG_AT_TRX_COMMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFlushLogAtTrxCommit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFlushLogAtTrxCommit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFlushLogAtTrxCommit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFlushLogAtTrxCommit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LOG_CHECKPOINT_NOW: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLogCheckpointNow)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLogCheckpointNow)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogCheckpointNow())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogCheckpointNow", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LOG_CHECKSUMS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLogChecksums)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLogChecksums)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogChecksums())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogChecksums", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LOG_COMPRESSED_PAGES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLogCompressedPages)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLogCompressedPages)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogCompressedPages())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogCompressedPages", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LOG_WRITE_AHEAD_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLogWriteAheadSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLogWriteAheadSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogWriteAheadSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogWriteAheadSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_MAX_UNDO_LOG_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbMaxUndoLogSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbMaxUndoLogSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbMaxUndoLogSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbMaxUndoLogSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_ONLINE_ALTER_LOG_MAX_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbOnlineAlterLogMaxSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbOnlineAlterLogMaxSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOnlineAlterLogMaxSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOnlineAlterLogMaxSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_UNDO_LOG_TRUNCATE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbUndoLogTruncate)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbUndoLogTruncate)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbUndoLogTruncate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbUndoLogTruncate", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_UNDO_LOGS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbUndoLogs)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbUndoLogs)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbUndoLogs())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbUndoLogs", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_BIN_TRUST_FUNCTION_CREATORS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogBinTrustFunctionCreators)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogBinTrustFunctionCreators)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogBinTrustFunctionCreators())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogBinTrustFunctionCreators", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_BIN_USE_V1_ROW_EVENTS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogBinUseV1RowEvents)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogBinUseV1RowEvents)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogBinUseV1RowEvents())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogBinUseV1RowEvents", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_BUILTIN_AS_IDENTIFIED_BY_PASSWORD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogBuiltinAsIdentifiedByPassword)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogBuiltinAsIdentifiedByPassword)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogBuiltinAsIdentifiedByPassword())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogBuiltinAsIdentifiedByPassword", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_BINLOG_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxBinlogCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxBinlogCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxBinlogCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxBinlogCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_BINLOG_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxBinlogSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxBinlogSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxBinlogSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxBinlogSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_BINLOG_STMT_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxBinlogStmtCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxBinlogStmtCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxBinlogStmtCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxBinlogStmtCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_RELAY_LOG_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxRelayLogSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxRelayLogSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxRelayLogSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxRelayLogSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RELAY_LOG_INFO_REPOSITORY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRelayLogInfoRepository)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRelayLogInfoRepository)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogInfoRepository())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogInfoRepository", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RELAY_LOG_PURGE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRelayLogPurge)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRelayLogPurge)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogPurge())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogPurge", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SYNC_BINLOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSyncBinlog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSyncBinlog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSyncBinlog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSyncBinlog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SYNC_RELAY_LOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSyncRelayLog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSyncRelayLog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSyncRelayLog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSyncRelayLog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SYNC_RELAY_LOG_INFO: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSyncRelayLogInfo)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSyncRelayLogInfo)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSyncRelayLogInfo())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSyncRelayLogInfo", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_DEADLOCK_DETECT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbDeadlockDetect)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbDeadlockDetect)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbDeadlockDetect())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbDeadlockDetect", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LOCK_WAIT_TIMEOUT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLockWaitTimeout)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLockWaitTimeout)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLockWaitTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLockWaitTimeout", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_PRINT_ALL_DEADLOCKS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbPrintAllDeadlocks)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbPrintAllDeadlocks)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbPrintAllDeadlocks())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbPrintAllDeadlocks", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_TABLE_LOCKS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbTableLocks)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbTableLocks)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbTableLocks())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbTableLocks", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_WRITE_LOCK_COUNT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxWriteLockCount)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxWriteLockCount)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxWriteLockCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxWriteLockCount", K(ret));
+      }
+      break;
+    }
     case SYS_VAR__OB_ENABLE_ROLE_IDS: {
       void *ptr = NULL;
       if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnableRoleIds)))) {
@@ -10616,6 +16975,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       }
       break;
     }
+    case SYS_VAR_EVENT_SCHEDULER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEventScheduler)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEventScheduler)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEventScheduler())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEventScheduler", K(ret));
+      }
+      break;
+    }
     case SYS_VAR_PLSQL_OPTIMIZE_LEVEL: {
       void *ptr = NULL;
       if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPlsqlOptimizeLevel)))) {
@@ -10624,6 +16994,4010 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlOptimizeLevel())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarPlsqlOptimizeLevel", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOW_PRIORITY_UPDATES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLowPriorityUpdates)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLowPriorityUpdates)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLowPriorityUpdates())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLowPriorityUpdates", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_ERROR_COUNT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxErrorCount)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxErrorCount)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxErrorCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxErrorCount", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_INSERT_DELAYED_THREADS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxInsertDelayedThreads)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxInsertDelayedThreads)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxInsertDelayedThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxInsertDelayedThreads", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_FT_STOPWORD_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarFtStopwordFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarFtStopwordFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarFtStopwordFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarFtStopwordFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_SORT_PLL_DEGREE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtSortPllDegree)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtSortPllDegree)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtSortPllDegree())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtSortPllDegree", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_TOTAL_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtTotalCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtTotalCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtTotalCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtTotalCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MECAB_RC_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMecabRcFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMecabRcFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMecabRcFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMecabRcFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_METADATA_LOCKS_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMetadataLocksCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMetadataLocksCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMetadataLocksCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMetadataLocksCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_METADATA_LOCKS_HASH_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMetadataLocksHashInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMetadataLocksHashInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMetadataLocksHashInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMetadataLocksHashInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_TEMP_DATA_FILE_PATH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbTempDataFilePath)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbTempDataFilePath)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbTempDataFilePath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbTempDataFilePath", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_DATA_FILE_PATH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbDataFilePath)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbDataFilePath)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbDataFilePath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbDataFilePath", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_DATA_HOME_DIR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbDataHomeDir)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbDataHomeDir)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbDataHomeDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbDataHomeDir", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_AVOID_TEMPORAL_UPGRADE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarAvoidTemporalUpgrade)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarAvoidTemporalUpgrade)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAvoidTemporalUpgrade())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarAvoidTemporalUpgrade", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DEFAULT_TMP_STORAGE_ENGINE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDefaultTmpStorageEngine)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDefaultTmpStorageEngine)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultTmpStorageEngine())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDefaultTmpStorageEngine", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_ENABLE_DIAG_PRINT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtEnableDiagPrint)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtEnableDiagPrint)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtEnableDiagPrint())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtEnableDiagPrint", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_NUM_WORD_OPTIMIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtNumWordOptimize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtNumWordOptimize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtNumWordOptimize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtNumWordOptimize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_RESULT_CACHE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtResultCacheLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtResultCacheLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtResultCacheLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtResultCacheLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_SERVER_STOPWORD_TABLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtServerStopwordTable)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtServerStopwordTable)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtServerStopwordTable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtServerStopwordTable", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_OPTIMIZE_FULLTEXT_ONLY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbOptimizeFulltextOnly)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbOptimizeFulltextOnly)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOptimizeFulltextOnly())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOptimizeFulltextOnly", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_TMP_TABLES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxTmpTables)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxTmpTables)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxTmpTables())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxTmpTables", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_TMPDIR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbTmpdir)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbTmpdir)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbTmpdir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbTmpdir", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarGroupReplicationGroupSeeds)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarGroupReplicationGroupSeeds)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarGroupReplicationGroupSeeds())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarGroupReplicationGroupSeeds", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSlaveRowsSearchAlgorithms)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSlaveRowsSearchAlgorithms)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlaveRowsSearchAlgorithms())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlaveRowsSearchAlgorithms", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SLAVE_TYPE_CONVERSIONS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSlaveTypeConversions)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSlaveTypeConversions)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlaveTypeConversions())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlaveTypeConversions", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_HNSW_EF_SEARCH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObHnswEfSearch)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObHnswEfSearch)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObHnswEfSearch())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObHnswEfSearch", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbAllowCopyingAlterTable)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbAllowCopyingAlterTable)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbAllowCopyingAlterTable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbAllowCopyingAlterTable", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_AUTOINCREMENT_PREFETCH_SZ: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbAutoincrementPrefetchSz)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbAutoincrementPrefetchSz)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbAutoincrementPrefetchSz())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbAutoincrementPrefetchSz", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_BLOB_READ_BATCH_BYTES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbBlobReadBatchBytes)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbBlobReadBatchBytes)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbBlobReadBatchBytes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbBlobReadBatchBytes", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_BLOB_WRITE_BATCH_BYTES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbBlobWriteBatchBytes)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbBlobWriteBatchBytes)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbBlobWriteBatchBytes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbBlobWriteBatchBytes", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_CACHE_CHECK_TIME: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbCacheCheckTime)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbCacheCheckTime)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbCacheCheckTime())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbCacheCheckTime", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_CLEAR_APPLY_STATUS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbClearApplyStatus)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbClearApplyStatus)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbClearApplyStatus())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbClearApplyStatus", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_DATA_NODE_NEIGHBOUR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbDataNodeNeighbour)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbDataNodeNeighbour)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbDataNodeNeighbour())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbDataNodeNeighbour", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_DEFAULT_COLUMN_FORMAT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbDefaultColumnFormat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbDefaultColumnFormat)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbDefaultColumnFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbDefaultColumnFormat", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_DEFERRED_CONSTRAINTS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbDeferredConstraints)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbDeferredConstraints)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbDeferredConstraints())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbDeferredConstraints", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_DISTRIBUTION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbDistribution)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbDistribution)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbDistribution())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbDistribution", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_EVENTBUFFER_FREE_PERCENT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbEventbufferFreePercent)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbEventbufferFreePercent)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbEventbufferFreePercent())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbEventbufferFreePercent", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_EVENTBUFFER_MAX_ALLOC: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbEventbufferMaxAlloc)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbEventbufferMaxAlloc)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbEventbufferMaxAlloc())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbEventbufferMaxAlloc", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_EXTRA_LOGGING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbExtraLogging)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbExtraLogging)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbExtraLogging())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbExtraLogging", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_FORCE_SEND: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbForceSend)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbForceSend)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbForceSend())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbForceSend", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_FULLY_REPLICATED: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbFullyReplicated)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbFullyReplicated)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbFullyReplicated())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbFullyReplicated", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_INDEX_STAT_ENABLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbIndexStatEnable)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbIndexStatEnable)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbIndexStatEnable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbIndexStatEnable", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_INDEX_STAT_OPTION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbIndexStatOption)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbIndexStatOption)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbIndexStatOption())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbIndexStatOption", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_JOIN_PUSHDOWN: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbJoinPushdown)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbJoinPushdown)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbJoinPushdown())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbJoinPushdown", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_BINLOG_INDEX: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogBinlogIndex)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogBinlogIndex)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogBinlogIndex())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogBinlogIndex", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_EMPTY_EPOCHS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogEmptyEpochs)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogEmptyEpochs)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogEmptyEpochs())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogEmptyEpochs", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_EMPTY_UPDATE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogEmptyUpdate)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogEmptyUpdate)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogEmptyUpdate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogEmptyUpdate", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_EXCLUSIVE_READS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogExclusiveReads)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogExclusiveReads)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogExclusiveReads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogExclusiveReads", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_UPDATE_AS_WRITE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogUpdateAsWrite)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogUpdateAsWrite)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogUpdateAsWrite())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogUpdateAsWrite", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_UPDATE_MINIMAL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogUpdateMinimal)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogUpdateMinimal)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogUpdateMinimal())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogUpdateMinimal", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_UPDATED_ONLY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogUpdatedOnly)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogUpdatedOnly)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogUpdatedOnly())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogUpdatedOnly", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_OPTIMIZATION_DELAY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbOptimizationDelay)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbOptimizationDelay)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbOptimizationDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbOptimizationDelay", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_READ_BACKUP: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbReadBackup)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbReadBackup)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbReadBackup())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbReadBackup", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_RECV_THREAD_ACTIVATION_THRESHOLD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbRecvThreadActivationThreshold)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbRecvThreadActivationThreshold)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbRecvThreadActivationThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbRecvThreadActivationThreshold", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_RECV_THREAD_CPU_MASK: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbRecvThreadCpuMask)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbRecvThreadCpuMask)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbRecvThreadCpuMask())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbRecvThreadCpuMask", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_REPORT_THRESH_BINLOG_EPOCH_SLIP: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbReportThreshBinlogEpochSlip)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbReportThreshBinlogEpochSlip)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbReportThreshBinlogEpochSlip())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbReportThreshBinlogEpochSlip", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_REPORT_THRESH_BINLOG_MEM_USAGE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbReportThreshBinlogMemUsage)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbReportThreshBinlogMemUsage)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbReportThreshBinlogMemUsage())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbReportThreshBinlogMemUsage", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_ROW_CHECKSUM: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbRowChecksum)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbRowChecksum)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbRowChecksum())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbRowChecksum", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_SHOW_FOREIGN_KEY_MOCK_TABLES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbShowForeignKeyMockTables)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbShowForeignKeyMockTables)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbShowForeignKeyMockTables())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbShowForeignKeyMockTables", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_SLAVE_CONFLICT_ROLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbSlaveConflictRole)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbSlaveConflictRole)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbSlaveConflictRole())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbSlaveConflictRole", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_TABLE_NO_LOGGING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbTableNoLogging)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbTableNoLogging)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbTableNoLogging())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbTableNoLogging", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_TABLE_TEMPORARY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbTableTemporary)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbTableTemporary)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbTableTemporary())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbTableTemporary", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_USE_EXACT_COUNT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbUseExactCount)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbUseExactCount)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbUseExactCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbUseExactCount", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_USE_TRANSACTIONS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbUseTransactions)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbUseTransactions)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbUseTransactions())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbUseTransactions", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDBINFO_MAX_BYTES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbinfoMaxBytes)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbinfoMaxBytes)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoMaxBytes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoMaxBytes", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDBINFO_MAX_ROWS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbinfoMaxRows)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbinfoMaxRows)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoMaxRows())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoMaxRows", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDBINFO_OFFLINE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbinfoOffline)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbinfoOffline)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoOffline())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoOffline", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDBINFO_SHOW_HIDDEN: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbinfoShowHidden)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbinfoShowHidden)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoShowHidden())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoShowHidden", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYISAM_DATA_POINTER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMyisamDataPointerSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMyisamDataPointerSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamDataPointerSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamDataPointerSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYISAM_MAX_SORT_FILE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMyisamMaxSortFileSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMyisamMaxSortFileSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamMaxSortFileSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamMaxSortFileSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYISAM_REPAIR_THREADS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMyisamRepairThreads)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMyisamRepairThreads)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamRepairThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamRepairThreads", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYISAM_SORT_BUFFER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMyisamSortBufferSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMyisamSortBufferSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamSortBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamSortBufferSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYISAM_STATS_METHOD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMyisamStatsMethod)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMyisamStatsMethod)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamStatsMethod())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamStatsMethod", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYISAM_USE_MMAP: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMyisamUseMmap)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMyisamUseMmap)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMyisamUseMmap())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMyisamUseMmap", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PRELOAD_BUFFER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPreloadBufferSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPreloadBufferSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPreloadBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPreloadBufferSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_READ_BUFFER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarReadBufferSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarReadBufferSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReadBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReadBufferSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_READ_RND_BUFFER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarReadRndBufferSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarReadRndBufferSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReadRndBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReadRndBufferSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SYNC_FRM: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSyncFrm)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSyncFrm)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSyncFrm())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSyncFrm", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SYNC_MASTER_INFO: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSyncMasterInfo)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSyncMasterInfo)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSyncMasterInfo())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSyncMasterInfo", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_TABLE_OPEN_CACHE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarTableOpenCache)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarTableOpenCache)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarTableOpenCache())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarTableOpenCache", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_MONITOR_DISABLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbMonitorDisable)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbMonitorDisable)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbMonitorDisable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbMonitorDisable", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_MONITOR_ENABLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbMonitorEnable)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbMonitorEnable)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbMonitorEnable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbMonitorEnable", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_MONITOR_RESET: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbMonitorReset)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbMonitorReset)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbMonitorReset())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbMonitorReset", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_MONITOR_RESET_ALL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbMonitorResetAll)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbMonitorResetAll)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbMonitorResetAll())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbMonitorResetAll", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_OLD_BLOCKS_PCT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbOldBlocksPct)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbOldBlocksPct)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOldBlocksPct())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOldBlocksPct", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_OLD_BLOCKS_TIME: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbOldBlocksTime)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbOldBlocksTime)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOldBlocksTime())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOldBlocksTime", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_PURGE_BATCH_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbPurgeBatchSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbPurgeBatchSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbPurgeBatchSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbPurgeBatchSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_PURGE_RSEG_TRUNCATE_FREQUENCY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbPurgeRsegTruncateFrequency)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbPurgeRsegTruncateFrequency)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbPurgeRsegTruncateFrequency())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbPurgeRsegTruncateFrequency", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_RANDOM_READ_AHEAD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbRandomReadAhead)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbRandomReadAhead)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbRandomReadAhead())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbRandomReadAhead", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_READ_AHEAD_THRESHOLD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbReadAheadThreshold)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbReadAheadThreshold)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbReadAheadThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbReadAheadThreshold", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_ROLLBACK_SEGMENTS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbRollbackSegments)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbRollbackSegments)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbRollbackSegments())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbRollbackSegments", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_SPIN_WAIT_DELAY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbSpinWaitDelay)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbSpinWaitDelay)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSpinWaitDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbSpinWaitDelay", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_STATUS_OUTPUT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbStatusOutput)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbStatusOutput)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatusOutput())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatusOutput", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_STATUS_OUTPUT_LOCKS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbStatusOutputLocks)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbStatusOutputLocks)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatusOutputLocks())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatusOutputLocks", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_SYNC_SPIN_LOOPS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbSyncSpinLoops)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbSyncSpinLoops)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSyncSpinLoops())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbSyncSpinLoops", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INTERNAL_TMP_DISK_STORAGE_ENGINE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInternalTmpDiskStorageEngine)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInternalTmpDiskStorageEngine)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInternalTmpDiskStorageEngine())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInternalTmpDiskStorageEngine", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEEP_FILES_ON_CREATE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeepFilesOnCreate)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeepFilesOnCreate)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeepFilesOnCreate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeepFilesOnCreate", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_HEAP_TABLE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxHeapTableSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxHeapTableSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxHeapTableSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxHeapTableSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BULK_INSERT_BUFFER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBulkInsertBufferSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBulkInsertBufferSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBulkInsertBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBulkInsertBufferSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_HOST_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarHostCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarHostCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarHostCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarHostCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INIT_SLAVE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInitSlave)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInitSlave)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInitSlave())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInitSlave", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FAST_SHUTDOWN: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFastShutdown)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFastShutdown)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFastShutdown())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFastShutdown", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_IO_CAPACITY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbIoCapacity)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbIoCapacity)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbIoCapacity())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbIoCapacity", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_IO_CAPACITY_MAX: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbIoCapacityMax)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbIoCapacityMax)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbIoCapacityMax())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbIoCapacityMax", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_THREAD_CONCURRENCY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbThreadConcurrency)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbThreadConcurrency)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbThreadConcurrency())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbThreadConcurrency", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_THREAD_SLEEP_DELAY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbThreadSleepDelay)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbThreadSleepDelay)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbThreadSleepDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbThreadSleepDelay", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_ERROR_VERBOSITY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogErrorVerbosity)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogErrorVerbosity)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogErrorVerbosity())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogErrorVerbosity", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_OUTPUT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogOutput)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogOutput)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogOutput())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogOutput", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_QUERIES_NOT_USING_INDEXES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogQueriesNotUsingIndexes)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogQueriesNotUsingIndexes)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogQueriesNotUsingIndexes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogQueriesNotUsingIndexes", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_SLOW_ADMIN_STATEMENTS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogSlowAdminStatements)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogSlowAdminStatements)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSlowAdminStatements())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSlowAdminStatements", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_SLOW_SLAVE_STATEMENTS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogSlowSlaveStatements)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogSlowSlaveStatements)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSlowSlaveStatements())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSlowSlaveStatements", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_STATEMENTS_UNSAFE_FOR_BINLOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogStatementsUnsafeForBinlog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogStatementsUnsafeForBinlog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogStatementsUnsafeForBinlog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogStatementsUnsafeForBinlog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_SYSLOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogSyslog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogSyslog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSyslog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSyslog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_SYSLOG_FACILITY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogSyslogFacility)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogSyslogFacility)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSyslogFacility())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSyslogFacility", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_SYSLOG_INCLUDE_PID: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogSyslogIncludePid)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogSyslogIncludePid)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSyslogIncludePid())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSyslogIncludePid", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_SYSLOG_TAG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogSyslogTag)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogSyslogTag)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSyslogTag())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSyslogTag", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_THROTTLE_QUERIES_NOT_USING_INDEXES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogThrottleQueriesNotUsingIndexes)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogThrottleQueriesNotUsingIndexes)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogThrottleQueriesNotUsingIndexes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogThrottleQueriesNotUsingIndexes", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_TIMESTAMPS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogTimestamps)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogTimestamps)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogTimestamps())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogTimestamps", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_WARNINGS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogWarnings)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogWarnings)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogWarnings())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogWarnings", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_DELAYED_THREADS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxDelayedThreads)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxDelayedThreads)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxDelayedThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxDelayedThreads", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OFFLINE_MODE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOfflineMode)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOfflineMode)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOfflineMode())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOfflineMode", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_REQUIRE_SECURE_TRANSPORT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRequireSecureTransport)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRequireSecureTransport)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRequireSecureTransport())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRequireSecureTransport", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SLOW_LAUNCH_TIME: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSlowLaunchTime)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSlowLaunchTime)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlowLaunchTime())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlowLaunchTime", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SQL_LOG_OFF: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSqlLogOff)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSqlLogOff)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSqlLogOff())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSqlLogOff", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_THREAD_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarThreadCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarThreadCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_THREAD_POOL_HIGH_PRIORITY_CONNECTION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarThreadPoolHighPriorityConnection)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarThreadPoolHighPriorityConnection)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolHighPriorityConnection())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolHighPriorityConnection", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_THREAD_POOL_MAX_UNUSED_THREADS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarThreadPoolMaxUnusedThreads)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarThreadPoolMaxUnusedThreads)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolMaxUnusedThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolMaxUnusedThreads", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_THREAD_POOL_PRIO_KICKUP_TIMER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarThreadPoolPrioKickupTimer)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarThreadPoolPrioKickupTimer)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolPrioKickupTimer())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolPrioKickupTimer", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_THREAD_POOL_STALL_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarThreadPoolStallLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarThreadPoolStallLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolStallLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolStallLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_HAVE_STATEMENT_TIMEOUT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarHaveStatementTimeout)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarHaveStatementTimeout)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarHaveStatementTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarHaveStatementTimeout", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_BIND_ADDRESS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxBindAddress)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxBindAddress)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxBindAddress())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxBindAddress", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_PORT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxPort)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxPort)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxPort())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxPort", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_PORT_OPEN_TIMEOUT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxPortOpenTimeout)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxPortOpenTimeout)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxPortOpenTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxPortOpenTimeout", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_SOCKET: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxSocket)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxSocket)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSocket())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSocket", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_SSL_CA: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxSslCa)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxSslCa)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCa())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCa", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_SSL_CAPATH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxSslCapath)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxSslCapath)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCapath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCapath", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_SSL_CERT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxSslCert)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxSslCert)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCert())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCert", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_SSL_CIPHER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxSslCipher)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxSslCipher)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCipher())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCipher", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_SSL_CRL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxSslCrl)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxSslCrl)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCrl())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCrl", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_SSL_CRLPATH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxSslCrlpath)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxSslCrlpath)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslCrlpath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslCrlpath", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQLX_SSL_KEY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlxSslKey)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlxSslKey)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlxSslKey())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlxSslKey", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OLD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOld)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOld)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOld())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOld", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_ACCOUNTS_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaAccountsSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaAccountsSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaAccountsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaAccountsSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_DIGESTS_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaDigestsSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaDigestsSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaDigestsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaDigestsSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_LONG_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaEventsStagesHistoryLongSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaEventsStagesHistoryLongSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsStagesHistoryLongSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsStagesHistoryLongSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaEventsStagesHistorySize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaEventsStagesHistorySize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsStagesHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsStagesHistorySize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_LONG_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaEventsStatementsHistoryLongSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaEventsStatementsHistoryLongSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsStatementsHistoryLongSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsStatementsHistoryLongSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaEventsStatementsHistorySize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaEventsStatementsHistorySize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsStatementsHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsStatementsHistorySize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_LONG_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaEventsTransactionsHistoryLongSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaEventsTransactionsHistoryLongSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsTransactionsHistoryLongSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsTransactionsHistoryLongSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaEventsTransactionsHistorySize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaEventsTransactionsHistorySize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsTransactionsHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsTransactionsHistorySize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_LONG_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaEventsWaitsHistoryLongSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaEventsWaitsHistoryLongSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsWaitsHistoryLongSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsWaitsHistoryLongSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaEventsWaitsHistorySize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaEventsWaitsHistorySize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaEventsWaitsHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaEventsWaitsHistorySize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_HOSTS_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaHostsSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaHostsSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaHostsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaHostsSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_CLASSES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxCondClasses)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxCondClasses)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxCondClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxCondClasses", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxCondInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxCondInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxCondInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxCondInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_DIGEST_LENGTH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxDigestLength)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxDigestLength)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxDigestLength())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxDigestLength", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_CLASSES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxFileClasses)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxFileClasses)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxFileClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxFileClasses", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_HANDLES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxFileHandles)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxFileHandles)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxFileHandles())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxFileHandles", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxFileInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxFileInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxFileInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxFileInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_INDEX_STAT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxIndexStat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxIndexStat)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxIndexStat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxIndexStat", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_MEMORY_CLASSES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxMemoryClasses)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxMemoryClasses)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxMemoryClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxMemoryClasses", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_METADATA_LOCKS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxMetadataLocks)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxMetadataLocks)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxMetadataLocks())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxMetadataLocks", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_CLASSES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxMutexClasses)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxMutexClasses)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxMutexClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxMutexClasses", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxMutexInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxMutexInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxMutexInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxMutexInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_PREPARED_STATEMENTS_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxPreparedStatementsInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxPreparedStatementsInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxPreparedStatementsInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxPreparedStatementsInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_PROGRAM_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxProgramInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxProgramInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxProgramInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxProgramInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_CLASSES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxRwlockClasses)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxRwlockClasses)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxRwlockClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxRwlockClasses", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxRwlockInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxRwlockInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxRwlockInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxRwlockInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_CLASSES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxSocketClasses)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxSocketClasses)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxSocketClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxSocketClasses", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxSocketInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxSocketInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxSocketInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxSocketInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_SQL_TEXT_LENGTH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxSqlTextLength)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxSqlTextLength)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxSqlTextLength())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxSqlTextLength", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_STAGE_CLASSES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxStageClasses)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxStageClasses)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxStageClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxStageClasses", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_CLASSES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxStatementClasses)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxStatementClasses)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxStatementClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxStatementClasses", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_STACK: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxStatementStack)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxStatementStack)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxStatementStack())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxStatementStack", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_HANDLES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxTableHandles)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxTableHandles)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxTableHandles())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxTableHandles", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxTableInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxTableInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxTableInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxTableInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_LOCK_STAT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxTableLockStat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxTableLockStat)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxTableLockStat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxTableLockStat", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_CLASSES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxThreadClasses)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxThreadClasses)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxThreadClasses())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxThreadClasses", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaMaxThreadInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaMaxThreadInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaMaxThreadInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaMaxThreadInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_SESSION_CONNECT_ATTRS_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaSessionConnectAttrsSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaSessionConnectAttrsSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaSessionConnectAttrsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaSessionConnectAttrsSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_SETUP_ACTORS_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaSetupActorsSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaSetupActorsSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaSetupActorsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaSetupActorsSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_SETUP_OBJECTS_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaSetupObjectsSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaSetupObjectsSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaSetupObjectsSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaSetupObjectsSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PERFORMANCE_SCHEMA_USERS_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPerformanceSchemaUsersSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPerformanceSchemaUsersSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPerformanceSchemaUsersSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPerformanceSchemaUsersSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_VERSION_TOKENS_SESSION_NUMBER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarVersionTokensSessionNumber)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarVersionTokensSessionNumber)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarVersionTokensSessionNumber())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarVersionTokensSessionNumber", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BACK_LOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBackLog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBackLog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBackLog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBackLog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BASEDIR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBasedir)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBasedir)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBasedir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBasedir", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BIND_ADDRESS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBindAddress)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBindAddress)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBindAddress())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBindAddress", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_CORE_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarCoreFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarCoreFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCoreFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCoreFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_HAVE_COMPRESS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarHaveCompress)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarHaveCompress)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarHaveCompress())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarHaveCompress", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_IGNORE_DB_DIRS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarIgnoreDbDirs)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarIgnoreDbDirs)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarIgnoreDbDirs())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarIgnoreDbDirs", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INIT_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInitFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInitFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInitFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInitFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_NUMA_INTERLEAVE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbNumaInterleave)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbNumaInterleave)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbNumaInterleave())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbNumaInterleave", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_OPEN_FILES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbOpenFiles)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbOpenFiles)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOpenFiles())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOpenFiles", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_PAGE_CLEANERS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbPageCleaners)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbPageCleaners)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbPageCleaners())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbPageCleaners", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_PURGE_THREADS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbPurgeThreads)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbPurgeThreads)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbPurgeThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbPurgeThreads", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_READ_IO_THREADS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbReadIoThreads)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbReadIoThreads)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbReadIoThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbReadIoThreads", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_SYNC_ARRAY_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbSyncArraySize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbSyncArraySize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSyncArraySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbSyncArraySize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_USE_NATIVE_AIO: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbUseNativeAio)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbUseNativeAio)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbUseNativeAio())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbUseNativeAio", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_WRITE_IO_THREADS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbWriteIoThreads)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbWriteIoThreads)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbWriteIoThreads())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbWriteIoThreads", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LARGE_FILES_SUPPORT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLargeFilesSupport)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLargeFilesSupport)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLargeFilesSupport())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLargeFilesSupport", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LARGE_PAGES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLargePages)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLargePages)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLargePages())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLargePages", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LARGE_PAGE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLargePageSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLargePageSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLargePageSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLargePageSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOCKED_IN_MEMORY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLockedInMemory)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLockedInMemory)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLockedInMemory())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLockedInMemory", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_ERROR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogError)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogError)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogError())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogError", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NAMED_PIPE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNamedPipe)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNamedPipe)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNamedPipe())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNamedPipe", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NAMED_PIPE_FULL_ACCESS_GROUP: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNamedPipeFullAccessGroup)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNamedPipeFullAccessGroup)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNamedPipeFullAccessGroup())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNamedPipeFullAccessGroup", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPEN_FILES_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOpenFilesLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOpenFilesLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOpenFilesLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOpenFilesLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_REPORT_HOST: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarReportHost)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarReportHost)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReportHost())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReportHost", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_REPORT_PASSWORD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarReportPassword)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarReportPassword)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReportPassword())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReportPassword", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_REPORT_PORT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarReportPort)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarReportPort)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReportPort())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReportPort", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_REPORT_USER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarReportUser)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarReportUser)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarReportUser())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarReportUser", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SERVER_ID_BITS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarServerIdBits)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarServerIdBits)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarServerIdBits())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarServerIdBits", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SHARED_MEMORY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSharedMemory)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSharedMemory)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSharedMemory())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSharedMemory", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SHARED_MEMORY_BASE_NAME: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSharedMemoryBaseName)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSharedMemoryBaseName)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSharedMemoryBaseName())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSharedMemoryBaseName", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SKIP_NAME_RESOLVE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSkipNameResolve)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSkipNameResolve)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSkipNameResolve())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSkipNameResolve", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SKIP_NETWORKING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSkipNetworking)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSkipNetworking)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSkipNetworking())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSkipNetworking", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_THREAD_HANDLING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarThreadHandling)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarThreadHandling)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadHandling())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadHandling", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_THREAD_POOL_ALGORITHM: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarThreadPoolAlgorithm)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarThreadPoolAlgorithm)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolAlgorithm())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolAlgorithm", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_THREAD_POOL_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarThreadPoolSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarThreadPoolSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadPoolSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadPoolSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_THREAD_STACK: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarThreadStack)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarThreadStack)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarThreadStack())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarThreadStack", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BINLOG_GTID_SIMPLE_RECOVERY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBinlogGtidSimpleRecovery)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBinlogGtidSimpleRecovery)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBinlogGtidSimpleRecovery())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBinlogGtidSimpleRecovery", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_API_ENABLE_BINLOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbApiEnableBinlog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbApiEnableBinlog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbApiEnableBinlog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbApiEnableBinlog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LOCKS_UNSAFE_FOR_BINLOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLocksUnsafeForBinlog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLocksUnsafeForBinlog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLocksUnsafeForBinlog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLocksUnsafeForBinlog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LOG_BUFFER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLogBufferSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLogBufferSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogBufferSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LOG_FILES_IN_GROUP: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLogFilesInGroup)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLogFilesInGroup)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogFilesInGroup())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogFilesInGroup", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LOG_FILE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLogFileSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLogFileSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogFileSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogFileSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LOG_GROUP_HOME_DIR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLogGroupHomeDir)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLogGroupHomeDir)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLogGroupHomeDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLogGroupHomeDir", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_UNDO_DIRECTORY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbUndoDirectory)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbUndoDirectory)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbUndoDirectory())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbUndoDirectory", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_UNDO_TABLESPACES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbUndoTablespaces)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbUndoTablespaces)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbUndoTablespaces())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbUndoTablespaces", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_BIN_BASENAME: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogBinBasename)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogBinBasename)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogBinBasename())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogBinBasename", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_BIN_INDEX: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogBinIndex)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogBinIndex)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogBinIndex())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogBinIndex", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_SLAVE_UPDATES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogSlaveUpdates)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogSlaveUpdates)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogSlaveUpdates())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogSlaveUpdates", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RELAY_LOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRelayLog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRelayLog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RELAY_LOG_BASENAME: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRelayLogBasename)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRelayLogBasename)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogBasename())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogBasename", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RELAY_LOG_INDEX: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRelayLogIndex)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRelayLogIndex)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogIndex())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogIndex", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RELAY_LOG_INFO_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRelayLogInfoFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRelayLogInfoFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogInfoFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogInfoFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RELAY_LOG_RECOVERY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRelayLogRecovery)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRelayLogRecovery)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogRecovery())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogRecovery", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RELAY_LOG_SPACE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRelayLogSpaceLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRelayLogSpaceLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRelayLogSpaceLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRelayLogSpaceLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DELAY_KEY_WRITE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDelayKeyWrite)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDelayKeyWrite)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDelayKeyWrite())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDelayKeyWrite", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_LARGE_PREFIX: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbLargePrefix)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbLargePrefix)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbLargePrefix())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbLargePrefix", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEY_BUFFER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyBufferSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyBufferSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyBufferSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEY_CACHE_AGE_THRESHOLD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyCacheAgeThreshold)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyCacheAgeThreshold)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyCacheAgeThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyCacheAgeThreshold", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEY_CACHE_DIVISION_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyCacheDivisionLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyCacheDivisionLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyCacheDivisionLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyCacheDivisionLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_SEEKS_FOR_KEY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxSeeksForKey)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxSeeksForKey)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxSeeksForKey())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxSeeksForKey", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OLD_ALTER_TABLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOldAlterTable)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOldAlterTable)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOldAlterTable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOldAlterTable", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_TABLE_DEFINITION_CACHE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarTableDefinitionCache)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarTableDefinitionCache)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarTableDefinitionCache())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarTableDefinitionCache", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_SORT_BUFFER_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbSortBufferSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbSortBufferSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSortBufferSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbSortBufferSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEY_CACHE_BLOCK_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyCacheBlockSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyCacheBlockSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyCacheBlockSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyCacheBlockSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_KV_MODE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObKvMode)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObKvMode)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObKvMode())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObKvMode", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR___OB_CLIENT_CAPABILITY_FLAG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObClientCapabilityFlag)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObClientCapabilityFlag)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObClientCapabilityFlag())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObClientCapabilityFlag", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnableParameterAnonymousBlock)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnableParameterAnonymousBlock)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableParameterAnonymousBlock())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnableParameterAnonymousBlock", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_CHARACTER_SETS_DIR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarCharacterSetsDir)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarCharacterSetsDir)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCharacterSetsDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCharacterSetsDir", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DATE_FORMAT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDateFormat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDateFormat)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDateFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDateFormat", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DATETIME_FORMAT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDatetimeFormat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDatetimeFormat)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDatetimeFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDatetimeFormat", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDisconnectOnExpiredPassword)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDisconnectOnExpiredPassword)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDisconnectOnExpiredPassword())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDisconnectOnExpiredPassword", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_EXTERNAL_USER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarExternalUser)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarExternalUser)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarExternalUser())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarExternalUser", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_HAVE_CRYPT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarHaveCrypt)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarHaveCrypt)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarHaveCrypt())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarHaveCrypt", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_HAVE_DYNAMIC_LOADING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarHaveDynamicLoading)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarHaveDynamicLoading)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarHaveDynamicLoading())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarHaveDynamicLoading", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEYRING_AWS_CONF_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyringAwsConfFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyringAwsConfFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringAwsConfFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringAwsConfFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEYRING_AWS_DATA_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyringAwsDataFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyringAwsDataFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringAwsDataFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringAwsDataFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LANGUAGE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLanguage)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLanguage)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLanguage())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLanguage", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LC_MESSAGES_DIR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLcMessagesDir)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLcMessagesDir)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLcMessagesDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLcMessagesDir", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOWER_CASE_FILE_SYSTEM: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLowerCaseFileSystem)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLowerCaseFileSystem)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLowerCaseFileSystem())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLowerCaseFileSystem", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_DIGEST_LENGTH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxDigestLength)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxDigestLength)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxDigestLength())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxDigestLength", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDBINFO_DATABASE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbinfoDatabase)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbinfoDatabase)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoDatabase())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoDatabase", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDBINFO_TABLE_PREFIX: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbinfoTablePrefix)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbinfoTablePrefix)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoTablePrefix())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoTablePrefix", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDBINFO_VERSION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbinfoVersion)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbinfoVersion)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbinfoVersion())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbinfoVersion", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_BATCH_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbBatchSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbBatchSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbBatchSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbBatchSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_CLUSTER_CONNECTION_POOL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbClusterConnectionPool)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbClusterConnectionPool)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbClusterConnectionPool())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbClusterConnectionPool", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_CLUSTER_CONNECTION_POOL_NODEIDS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbClusterConnectionPoolNodeids)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbClusterConnectionPoolNodeids)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbClusterConnectionPoolNodeids())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbClusterConnectionPoolNodeids", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_APPLY_STATUS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogApplyStatus)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogApplyStatus)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogApplyStatus())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogApplyStatus", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_BIN: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogBin)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogBin)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogBin())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogBin", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_FAIL_TERMINATE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogFailTerminate)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogFailTerminate)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogFailTerminate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogFailTerminate", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_ORIG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogOrig)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogOrig)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogOrig())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogOrig", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_LOG_TRANSACTION_ID: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbLogTransactionId)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbLogTransactionId)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbLogTransactionId())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbLogTransactionId", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_OPTIMIZED_NODE_SELECTION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbOptimizedNodeSelection)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbOptimizedNodeSelection)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbOptimizedNodeSelection())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbOptimizedNodeSelection", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_SYSTEM_NAME: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbSystemName)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbSystemName)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbSystemName())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbSystemName", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_USE_COPYING_ALTER_TABLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbUseCopyingAlterTable)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbUseCopyingAlterTable)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbUseCopyingAlterTable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbUseCopyingAlterTable", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_VERSION_STRING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbVersionString)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbVersionString)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbVersionString())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbVersionString", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_WAIT_CONNECTED: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbWaitConnected)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbWaitConnected)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbWaitConnected())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbWaitConnected", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_WAIT_SETUP: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbWaitSetup)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbWaitSetup)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbWaitSetup())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbWaitSetup", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PROXY_USER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarProxyUser)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarProxyUser)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarProxyUser())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarProxyUser", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSha256PasswordAutoGenerateRsaKeys)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSha256PasswordAutoGenerateRsaKeys)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSha256PasswordAutoGenerateRsaKeys())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSha256PasswordAutoGenerateRsaKeys", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SHA256_PASSWORD_PRIVATE_KEY_PATH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSha256PasswordPrivateKeyPath)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSha256PasswordPrivateKeyPath)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSha256PasswordPrivateKeyPath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSha256PasswordPrivateKeyPath", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SHA256_PASSWORD_PUBLIC_KEY_PATH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSha256PasswordPublicKeyPath)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSha256PasswordPublicKeyPath)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSha256PasswordPublicKeyPath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSha256PasswordPublicKeyPath", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SKIP_SHOW_DATABASE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSkipShowDatabase)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSkipShowDatabase)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSkipShowDatabase())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSkipShowDatabase", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PLUGIN_LOAD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPluginLoad)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPluginLoad)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPluginLoad())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPluginLoad", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PLUGIN_LOAD_ADD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPluginLoadAdd)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPluginLoadAdd)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPluginLoadAdd())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPluginLoadAdd", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_BIG_TABLES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarBigTables)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarBigTables)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarBigTables())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarBigTables", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_CHECK_PROXY_USERS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarCheckProxyUsers)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarCheckProxyUsers)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCheckProxyUsers())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCheckProxyUsers", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarConnectionControlFailedConnectionsThreshold)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarConnectionControlFailedConnectionsThreshold)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarConnectionControlFailedConnectionsThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarConnectionControlFailedConnectionsThreshold", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_CONNECTION_CONTROL_MAX_CONNECTION_DELAY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarConnectionControlMaxConnectionDelay)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarConnectionControlMaxConnectionDelay)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarConnectionControlMaxConnectionDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarConnectionControlMaxConnectionDelay", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_CONNECTION_CONTROL_MIN_CONNECTION_DELAY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarConnectionControlMinConnectionDelay)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarConnectionControlMinConnectionDelay)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarConnectionControlMinConnectionDelay())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarConnectionControlMinConnectionDelay", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DEFAULT_WEEK_FORMAT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDefaultWeekFormat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDefaultWeekFormat)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultWeekFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDefaultWeekFormat", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DELAYED_INSERT_TIMEOUT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDelayedInsertTimeout)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDelayedInsertTimeout)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDelayedInsertTimeout())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDelayedInsertTimeout", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DELAYED_QUEUE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDelayedQueueSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDelayedQueueSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDelayedQueueSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDelayedQueueSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEqRangeIndexDiveLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEqRangeIndexDiveLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEqRangeIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEqRangeIndexDiveLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_STATS_AUTO_RECALC: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbStatsAutoRecalc)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbStatsAutoRecalc)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsAutoRecalc())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsAutoRecalc", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_STATS_INCLUDE_DELETE_MARKED: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbStatsIncludeDeleteMarked)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbStatsIncludeDeleteMarked)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsIncludeDeleteMarked())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsIncludeDeleteMarked", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_STATS_METHOD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbStatsMethod)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbStatsMethod)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsMethod())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsMethod", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_STATS_ON_METADATA: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbStatsOnMetadata)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbStatsOnMetadata)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsOnMetadata())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsOnMetadata", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_VERSION_TOKENS_SESSION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarVersionTokensSession)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarVersionTokensSession)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarVersionTokensSession())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarVersionTokensSession", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_STATS_PERSISTENT_SAMPLE_PAGES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbStatsPersistentSamplePages)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbStatsPersistentSamplePages)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsPersistentSamplePages())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsPersistentSamplePages", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_STATS_SAMPLE_PAGES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbStatsSamplePages)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbStatsSamplePages)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsSamplePages())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsSamplePages", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_STATS_TRANSIENT_SAMPLE_PAGES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbStatsTransientSamplePages)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbStatsTransientSamplePages)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsTransientSamplePages())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsTransientSamplePages", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEYRING_AWS_CMK_ID: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyringAwsCmkId)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyringAwsCmkId)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringAwsCmkId())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringAwsCmkId", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEYRING_AWS_REGION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyringAwsRegion)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyringAwsRegion)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringAwsRegion())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringAwsRegion", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEYRING_ENCRYPTED_FILE_DATA: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyringEncryptedFileData)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyringEncryptedFileData)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringEncryptedFileData())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringEncryptedFileData", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEYRING_ENCRYPTED_FILE_PASSWORD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyringEncryptedFilePassword)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyringEncryptedFilePassword)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringEncryptedFilePassword())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringEncryptedFilePassword", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEYRING_FILE_DATA: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyringFileData)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyringFileData)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringFileData())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringFileData", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEYRING_OKV_CONF_DIR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyringOkvConfDir)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyringOkvConfDir)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringOkvConfDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringOkvConfDir", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_KEYRING_OPERATIONS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarKeyringOperations)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarKeyringOperations)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyringOperations())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarKeyringOperations", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPTIMIZER_SWITCH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerSwitch)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerSwitch)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerSwitch())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerSwitch", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_CONNECT_ERRORS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxConnectErrors)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxConnectErrors)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxConnectErrors())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxConnectErrors", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQL_FIREWALL_MODE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlFirewallMode)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlFirewallMode)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlFirewallMode())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlFirewallMode", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQL_FIREWALL_TRACE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlFirewallTrace)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlFirewallTrace)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlFirewallTrace())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlFirewallTrace", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MYSQL_NATIVE_PASSWORD_PROXY_USERS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMysqlNativePasswordProxyUsers)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMysqlNativePasswordProxyUsers)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMysqlNativePasswordProxyUsers())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMysqlNativePasswordProxyUsers", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NET_RETRY_COUNT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNetRetryCount)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNetRetryCount)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNetRetryCount())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNetRetryCount", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NEW: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNew)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNew)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNew())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNew", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OLD_PASSWORDS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOldPasswords)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOldPasswords)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOldPasswords())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOldPasswords", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPTIMIZER_PRUNE_LEVEL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerPruneLevel)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerPruneLevel)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerPruneLevel())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerPruneLevel", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPTIMIZER_SEARCH_DEPTH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerSearchDepth)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerSearchDepth)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerSearchDepth())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerSearchDepth", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPTIMIZER_TRACE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerTrace)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerTrace)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerTrace())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerTrace", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPTIMIZER_TRACE_FEATURES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerTraceFeatures)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerTraceFeatures)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerTraceFeatures())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerTraceFeatures", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPTIMIZER_TRACE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerTraceLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerTraceLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerTraceLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerTraceLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPTIMIZER_TRACE_MAX_MEM_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerTraceMaxMemSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerTraceMaxMemSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerTraceMaxMemSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerTraceMaxMemSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPTIMIZER_TRACE_OFFSET: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerTraceOffset)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerTraceOffset)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerTraceOffset())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerTraceOffset", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PARSER_MAX_MEM_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarParserMaxMemSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarParserMaxMemSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParserMaxMemSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarParserMaxMemSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RAND_SEED1: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRandSeed1)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRandSeed1)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRandSeed1())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRandSeed1", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RAND_SEED2: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRandSeed2)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRandSeed2)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRandSeed2())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRandSeed2", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RANGE_ALLOC_BLOCK_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRangeAllocBlockSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRangeAllocBlockSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRangeAllocBlockSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRangeAllocBlockSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RANGE_OPTIMIZER_MAX_MEM_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRangeOptimizerMaxMemSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRangeOptimizerMaxMemSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRangeOptimizerMaxMemSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRangeOptimizerMaxMemSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_REWRITER_ENABLED: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRewriterEnabled)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRewriterEnabled)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRewriterEnabled())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRewriterEnabled", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_REWRITER_VERBOSE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRewriterVerbose)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRewriterVerbose)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRewriterVerbose())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRewriterVerbose", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SECURE_AUTH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSecureAuth)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSecureAuth)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSecureAuth())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSecureAuth", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SHA256_PASSWORD_PROXY_USERS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSha256PasswordProxyUsers)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSha256PasswordProxyUsers)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSha256PasswordProxyUsers())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSha256PasswordProxyUsers", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SHOW_COMPATIBILITY_56: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarShowCompatibility56)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarShowCompatibility56)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarShowCompatibility56())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarShowCompatibility56", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SHOW_CREATE_TABLE_VERBOSITY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarShowCreateTableVerbosity)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarShowCreateTableVerbosity)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarShowCreateTableVerbosity())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarShowCreateTableVerbosity", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SHOW_OLD_TEMPORALS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarShowOldTemporals)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarShowOldTemporals)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarShowOldTemporals())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarShowOldTemporals", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SQL_BIG_SELECTS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSqlBigSelects)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSqlBigSelects)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSqlBigSelects())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSqlBigSelects", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_UPDATABLE_VIEWS_WITH_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarUpdatableViewsWithLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarUpdatableViewsWithLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarUpdatableViewsWithLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarUpdatableViewsWithLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_VALIDATE_PASSWORD_DICTIONARY_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarValidatePasswordDictionaryFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarValidatePasswordDictionaryFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarValidatePasswordDictionaryFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarValidatePasswordDictionaryFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DELAYED_INSERT_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDelayedInsertLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDelayedInsertLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDelayedInsertLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDelayedInsertLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NDB_VERSION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNdbVersion)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNdbVersion)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNdbVersion())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNdbVersion", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_AUTO_GENERATE_CERTS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarAutoGenerateCerts)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarAutoGenerateCerts)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAutoGenerateCerts())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarAutoGenerateCerts", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerCostBasedTransformation)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerCostBasedTransformation)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerCostBasedTransformation())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerCostBasedTransformation", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RANGE_INDEX_DIVE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRangeIndexDiveLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRangeIndexDiveLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRangeIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRangeIndexDiveLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PARTITION_INDEX_DIVE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPartitionIndexDiveLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPartitionIndexDiveLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPartitionIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPartitionIndexDiveLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_TABLE_ACCESS_POLICY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObTableAccessPolicy)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObTableAccessPolicy)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObTableAccessPolicy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObTableAccessPolicy", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PID_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPidFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPidFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPidFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPidFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PORT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPort)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPort)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPort())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPort", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SOCKET: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSocket)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSocket)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSocket())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSocket", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MVIEW_REFRESH_DOP: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMviewRefreshDop)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMviewRefreshDop)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMviewRefreshDop())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMviewRefreshDop", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEnableOptimizerRowgoal)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEnableOptimizerRowgoal)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableOptimizerRowgoal())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableOptimizerRowgoal", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_IVF_NPROBES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObIvfNprobes)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObIvfNprobes)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObIvfNprobes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObIvfNprobes", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__CURRENT_DEFAULT_CATALOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarCurrentDefaultCatalog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarCurrentDefaultCatalog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCurrentDefaultCatalog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCurrentDefaultCatalog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnablePsParameterAnonymousBlock)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnablePsParameterAnonymousBlock)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePsParameterAnonymousBlock())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePsParameterAnonymousBlock", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObHnswExtraInfoMaxSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObHnswExtraInfoMaxSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObHnswExtraInfoMaxSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObHnswExtraInfoMaxSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__PUSH_JOIN_PREDICATE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPushJoinPredicate)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPushJoinPredicate)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPushJoinPredicate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPushJoinPredicate", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_SPARSE_DROP_RATIO_SEARCH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObSparseDropRatioSearch)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObSparseDropRatioSearch)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSparseDropRatioSearch())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObSparseDropRatioSearch", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SQL_TRANSPILER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSqlTranspiler)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSqlTranspiler)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSqlTranspiler())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSqlTranspiler", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPlsqlCanTransformSqlToAssign)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPlsqlCanTransformSqlToAssign)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlCanTransformSqlToAssign())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPlsqlCanTransformSqlToAssign", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnablePlAsyncCommit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnablePlAsyncCommit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePlAsyncCommit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePlAsyncCommit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarCachingSha2PasswordDigestRounds)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarCachingSha2PasswordDigestRounds)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCachingSha2PasswordDigestRounds())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCachingSha2PasswordDigestRounds", K(ret));
       }
       break;
     }
@@ -10637,12 +21011,13 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
   return ret;
 }
 
-int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var)
+int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var, int64_t store_idx)
 {
   int ret = OB_SUCCESS;
-  int64_t store_idx = -1;
   ObBasicSysVar *sys_var_ptr = NULL;
-  if (OB_FAIL(calc_sys_var_store_idx(sys_var_id, store_idx))) {
+  if (OB_FAIL(try_init_store_mem())) {
+    LOG_WARN("fail to init", K(ret));
+  } else if (-1 == store_idx && OB_FAIL(calc_sys_var_store_idx(sys_var_id, store_idx))) {
     LOG_WARN("fail to calc sys var store idx", K(ret), K(sys_var_id));
   } else if (store_idx < 0 || store_idx >= ALL_SYS_VARS_COUNT) {
     ret = OB_ERR_UNEXPECTED;

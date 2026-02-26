@@ -10,10 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdlib>
 
 #include "gtest/gtest.h"
-#include "lib/allocator/ob_malloc.h"
 
 #include "ob_log_part_mgr.h"
 

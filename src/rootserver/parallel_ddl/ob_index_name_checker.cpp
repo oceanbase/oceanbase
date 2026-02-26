@@ -14,7 +14,6 @@
 
 #include "rootserver/parallel_ddl/ob_index_name_checker.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -77,7 +76,7 @@ int ObIndexNameCache::check_index_name_exist(
       data_table_id = OB_INVALID_ID;
     } else {
       uint64_t data_table_id = ObSimpleTableSchemaV2::extract_data_table_id_from_index_name(index_name);
-      if (OB_INVALID_ID == database_id) {
+      if (OB_INVALID_ID == data_table_id) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid index name", KR(ret), K(index_name));
       } else if (OB_FAIL(ObSimpleTableSchemaV2::get_index_name(index_name, idx_name))) {
@@ -233,11 +232,10 @@ int ObIndexNameCache::try_load_cache_()
     } else if (!ObSchemaService::is_formal_version(schema_version)) {
       ret = OB_EAGAIN;
       LOG_WARN("schema version is informal, need retry", KR(ret), K(schema_status), K(schema_version));
-    } else if (OB_FAIL(ObShareUtil::get_ctx_timeout(GCONF.internal_sql_execute_timeout, timeout_ts))) {
+    } else if (OB_FAIL(ObShareUtil::get_abs_timeout(GCONF.internal_sql_execute_timeout, timeout_ts))) {
       LOG_WARN("fail to get timeout", KR(ret));
     } else {
       int64_t original_timeout_ts = THIS_WORKER.get_timeout_ts();
-      int64_t schema_version = OB_INVALID_VERSION;
       THIS_WORKER.set_timeout_ts(timeout_ts);
 
       ObSchemaGetterGuard guard;

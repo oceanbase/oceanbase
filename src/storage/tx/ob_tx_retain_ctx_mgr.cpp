@@ -10,12 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/container/ob_se_array.h"
-#include "storage/ls/ob_ls.h"
+#include "ob_tx_retain_ctx_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_tx_retain_ctx_mgr.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
@@ -52,7 +49,11 @@ int ObAdvanceLSCkptTask::try_advance_ls_ckpt_ts()
       ret = OB_INVALID_ARGUMENT;
     }
     TRANS_LOG(WARN, "get ls faild", K(ret), K(MTL(ObLSService *)));
-  } else if (OB_FAIL(ls_handle.get_ls()->advance_checkpoint_by_flush(target_ckpt_ts_))) {
+  } else if (OB_FAIL(ls_handle.get_ls()->advance_checkpoint_by_flush(
+                       target_ckpt_ts_,
+                       INT64_MAX, /*timeout*/
+                       false,     /*is_tenant_freeze*/
+                       ObFreezeSourceFlag::GC_RETAIN_CTX))) {
     TRANS_LOG(WARN, "advance checkpoint ts failed", K(ret), K(ls_id_), K(target_ckpt_ts_));
   }
 

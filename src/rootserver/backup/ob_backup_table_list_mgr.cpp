@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_backup_table_list_mgr.h"
-#include "storage/backup/ob_backup_data_store.h"
-#include "share/backup/ob_backup_io_adapter.h"
 
 namespace oceanbase
 {
@@ -105,12 +103,13 @@ int ObGetTableListPartialMetasOp::func(const dirent *entry)
       } else if (OB_FAIL(store.read_table_list_file(entry->d_name, desc))) {
         LOG_WARN("fail to read table list file", K(ret), K(entry->d_name));
       } else if (desc.count() > 0) {
-        ObBackupPartialTableListMeta partial_meta;
-        if (OB_FAIL(partial_meta.start_key_.assign(desc.items_.at(0)))
-            || OB_FAIL(partial_meta.end_key_.assign(desc.items_.at(desc.count() - 1)))) {
-          LOG_WARN("fail to assign partial meta", K(ret));
-        } else if (OB_FAIL(partial_metas_.push_back(partial_meta))) {
-          LOG_WARN("fail to push back", K(ret), K(partial_meta));
+        SMART_VAR(ObBackupPartialTableListMeta, partial_meta) {
+          if (OB_FAIL(partial_meta.start_key_.assign(desc.items_.at(0)))
+              || OB_FAIL(partial_meta.end_key_.assign(desc.items_.at(desc.count() - 1)))) {
+            LOG_WARN("fail to assign partial meta", K(ret));
+          } else if (OB_FAIL(partial_metas_.push_back(partial_meta))) {
+            LOG_WARN("fail to push back", K(ret), K(partial_meta));
+          }
         }
       }
     }
@@ -224,32 +223,35 @@ int ObBackupTableListMgr::backup_table_list_to_tmp_file_(int64_t &count, ObIArra
       } else {
         partial_metas_.reset();
         common::sqlclient::ObMySQLResult &res = *result.get_result();
-        while (OB_SUCC(ret) && OB_SUCC(res.next())) {
-          ObBackupTableListItem item;
-          ObString database_name;
-          ObString table_name;
-          EXTRACT_VARCHAR_FIELD_MYSQL(res, "database_name", database_name);
-          EXTRACT_VARCHAR_FIELD_MYSQL(res, "table_name",  table_name);
-          if (FAILEDx(item.database_name_.assign(database_name))) {
-            LOG_WARN("fail to assign database name", K(ret), K(database_name));
-          } else if (OB_FAIL(item.table_name_.assign(table_name))) {
-            LOG_WARN("fail to assign table name", K(ret), K(table_name));
-          } else if (OB_FAIL(table_list.items_.push_back(item))) {
-            LOG_WARN("fail to push back", K(ret), K(item));
-          }
+        SMART_VAR(ObBackupTableListItem, item) {
+          while (OB_SUCC(ret) && OB_SUCC(res.next())) {
+            item.reset();
+            ObString database_name;
+            ObString table_name;
+            EXTRACT_VARCHAR_FIELD_MYSQL(res, "database_name", database_name);
+            EXTRACT_VARCHAR_FIELD_MYSQL(res, "table_name",  table_name);
+            if (FAILEDx(item.database_name_.assign(database_name))) {
+              LOG_WARN("fail to assign database name", K(ret), K(database_name));
+            } else if (OB_FAIL(item.table_name_.assign(table_name))) {
+              LOG_WARN("fail to assign table name", K(ret), K(table_name));
+            } else if (OB_FAIL(table_list.items_.push_back(item))) {
+              LOG_WARN("fail to push back", K(ret), K(item));
+            }
 
-          if (OB_SUCC(ret) && BATCH_SIZE == table_list.count()) {
-            int64_t serialize_size = 0;
-            ObBackupPartialTableListMeta partial_meta;
-            if (OB_FAIL(write_to_tmp_file_(table_list, serialize_size))) {
-              LOG_WARN("fail to write table list to tmp file", K(ret), K_(snapshot_point), K_(tmp_file));
-            } else if (OB_FAIL(serialize_size_array.push_back(serialize_size))) {
-              LOG_WARN("fail to push back", K(ret), K(serialize_size));
-            } else if (OB_FAIL(partial_metas_.push_back(partial_meta))) {
-              LOG_WARN("fail to push back", K(ret), K(partial_meta));
-            } else {
-              count += table_list.count();
-              table_list.reset();
+            if (OB_SUCC(ret) && BATCH_SIZE == table_list.count()) {
+              int64_t serialize_size = 0;
+              SMART_VAR(ObBackupPartialTableListMeta, partial_meta) {
+                if (OB_FAIL(write_to_tmp_file_(table_list, serialize_size))) {
+                  LOG_WARN("fail to write table list to tmp file", K(ret), K_(snapshot_point), K_(tmp_file));
+                } else if (OB_FAIL(serialize_size_array.push_back(serialize_size))) {
+                  LOG_WARN("fail to push back", K(ret), K(serialize_size));
+                } else if (OB_FAIL(partial_metas_.push_back(partial_meta))) {
+                  LOG_WARN("fail to push back", K(ret), K(partial_meta));
+                } else {
+                  count += table_list.count();
+                  table_list.reset();
+                }
+              }
             }
           }
         }
@@ -257,16 +259,17 @@ int ObBackupTableListMgr::backup_table_list_to_tmp_file_(int64_t &count, ObIArra
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           int64_t serialize_size = 0;
-          ObBackupPartialTableListMeta partial_meta;
-          if (0 == table_list.count()) { //skip
-          } else if (OB_FAIL(write_to_tmp_file_(table_list, serialize_size))) {
-            LOG_WARN("fail to write table list to tmp file", K(ret), K_(snapshot_point), K_(tmp_file));
-          } else if (OB_FAIL(serialize_size_array.push_back(serialize_size))) {
-            LOG_WARN("fail to push back", K(ret), K(serialize_size));
-          } else if (OB_FAIL(partial_metas_.push_back(partial_meta))) {
-            LOG_WARN("fail to push back", K(ret), K(partial_meta));
-          } else {
-            count += table_list.count();
+          SMART_VAR(ObBackupPartialTableListMeta, partial_meta) {
+            if (0 == table_list.count()) { //skip
+            } else if (OB_FAIL(write_to_tmp_file_(table_list, serialize_size))) {
+              LOG_WARN("fail to write table list to tmp file", K(ret), K_(snapshot_point), K_(tmp_file));
+            } else if (OB_FAIL(serialize_size_array.push_back(serialize_size))) {
+              LOG_WARN("fail to push back", K(ret), K(serialize_size));
+            } else if (OB_FAIL(partial_metas_.push_back(partial_meta))) {
+              LOG_WARN("fail to push back", K(ret), K(partial_meta));
+            } else {
+              count += table_list.count();
+            }
           }
         } else {
           if (OB_SUCC(ret)) {
@@ -354,11 +357,9 @@ int ObBackupTableListMgr::read_from_tmp_file_(const int64_t read_size, const int
 {
   int ret = OB_SUCCESS;
   table_list.reset();
-  blocksstable::ObTmpFileIOInfo io_info;
-  blocksstable::ObTmpFileIOHandle handle;
+  tmp_file::ObTmpFileIOInfo io_info;
+  tmp_file::ObTmpFileIOHandle handle;
   io_info.fd_ = tmp_file_.get_fd();
-  io_info.tenant_id_ = tmp_file_.get_tenant_id();
-  io_info.dir_id_ = tmp_file_.get_dir();
   io_info.io_desc_.set_wait_event(2);
   io_info.size_ = read_size;
   common::ObArenaAllocator allocator;
@@ -370,7 +371,7 @@ int ObBackupTableListMgr::read_from_tmp_file_(const int64_t read_size, const int
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), K(read_size));
   } else if (FALSE_IT(io_info.buf_ = buf)) {
-  } else if (OB_FAIL(blocksstable::ObTmpFileManager::get_instance().pread(io_info, offset, handle))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.pread(MTL_ID(), io_info, offset, handle))) {
     LOG_WARN("failed to pread from tmp file", K(ret), K(io_info), K(offset), K(read_size));
   } else {
     blocksstable::ObBufferReader buffer_reader(buf, read_size);

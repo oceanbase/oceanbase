@@ -132,9 +132,11 @@ public:
   inline bool is_valid() const;
   inline bool is_strong_leader() const { return common::is_strong_leader(role_); }
   inline bool is_in_service() const { return replica_status_ == share::REPLICA_STATUS_NORMAL; }
+  inline bool is_logonly_replica() const { return common::REPLICA_TYPE_LOGONLY == replica_type_; }
   inline bool is_paxos_replica() const { return common::REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type_
                                                 || common::REPLICA_TYPE_FULL == replica_type_
                                                 || common::REPLICA_TYPE_LOGONLY == replica_type_; }
+  inline bool is_column_replica() const { return common::REPLICA_TYPE_COLUMNSTORE == replica_type_; }
   int64_t to_string(char *buf, const int64_t buf_len) const;
   // operator-related functions
   int assign(const ObLSReplica &other);
@@ -166,6 +168,7 @@ public:
   inline int64_t get_required_size() const { return required_size_; }
   inline bool get_rebuild() const { return rebuild_; }
   inline const common::GlobalLearnerList &get_learner_list() const { return learner_list_; }
+  inline void reset_learner_list() { learner_list_.reset(); }
 
   // functions to set values
   // ATTENTION:we use set_x() in cases for special needs below
@@ -188,12 +191,12 @@ public:
 private:
   // construct learner addr from a string in IPV$ or IPV6 format
   // @params[in]  input_string: the input
-  // @params[out] the_count_of_colon_already_parsed: how many colon is parsed in this function
   // @params[out] learner_addr: the parsing result(ip:port)
+  // @params[out] remained_string: string without addr part
   static int parse_addr_from_learner_string_(
              const ObString &input_string,
-             int64_t &the_count_of_colon_already_parsed,
-             ObAddr &learner_addr);
+             ObAddr &learner_addr,
+             ObString &remained_string);
 
   // construct negative or positive integer from string
   // @params[in]  input_text: the input
@@ -201,6 +204,7 @@ private:
   static int parsing_int_from_string_(
              const ObString &input_text,
              int64_t &output_value);
+
 private:
   int64_t create_time_us_;               // store utc time
   int64_t modify_time_us_;               // store utc time
@@ -260,7 +264,7 @@ public:
   int composite_with(const ObLSInfo &other);
   // other functions
   virtual int add_replica(const ObLSReplica &replica);
-  int update_replica_status();   // TODO: have to make sure actions in this function
+  int update_replica_status();
   // return OB_ENTRY_NOT_EXIST for not found (set %replica to NULL too).
   // TODO: replace OB_ENTRY_NOT_EXIST with a more clear one like OB_LS_ENTRY_NOT_EXIST
   int find(const common::ObAddr &server, const ObLSReplica *&replica) const;
@@ -288,6 +292,15 @@ public:
 private:
   int find_idx_(const common::ObAddr &server, int64_t &idx) const;
   int find_idx_(const ObLSReplica &replica, int64_t &idx) const;
+  int filter_sslog_replica_();
+  // rectify replica_type and replica_status
+  // @params[out] replica, which replica to recitfy
+  // @params[in]  member_list, leader's member_list
+  // @params[in]  learner_list, leader's learner_list
+  int rectify_replica_type_and_status_(
+      ObLSReplica *&replica,
+      const ObLSReplica::MemberList *member_list,
+      const common::GlobalLearnerList *learner_list);
 
 private:
   uint64_t tenant_id_;                      //which tenant's log stream

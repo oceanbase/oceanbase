@@ -26,15 +26,7 @@ int ObPxBloomFilter::might_contain_simd(uint64_t hash, bool &is_match)
 {
   int ret = OB_SUCCESS;
 #if defined(__x86_64__)
-  static const __m256i HASH_VALUES_MASK = _mm256_set_epi64x(24, 16, 8, 0);
-  uint32_t hash_high = (uint32_t)(hash >> 32);
-  uint64_t block_begin = (hash & ((bits_count_ >> (LOG_HASH_COUNT + 6)) - 1)) << LOG_HASH_COUNT;
-  __m256i bit_ones = _mm256_set1_epi64x(1);
-  __m256i hash_values = _mm256_set1_epi64x(hash_high);
-  hash_values = _mm256_srlv_epi64(hash_values, HASH_VALUES_MASK);
-  hash_values = _mm256_rolv_epi64(bit_ones, hash_values);
-  __m256i bf_values = _mm256_load_si256(reinterpret_cast<__m256i *>(&bits_array_[block_begin]));
-  is_match = 1 == _mm256_testz_si256(~bf_values, hash_values);
+  specific::avx512::inline_might_contain_simd(bits_array_, block_mask_, hash, is_match);
 #else
   ret = might_contain_nonsimd(hash, is_match);
 #endif

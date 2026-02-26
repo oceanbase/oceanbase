@@ -58,6 +58,7 @@ public:
     if (OB_FAIL(ret)) {
     } else {
       try {
+        rtree_index_.~RStarTree();
         new (&rtree_index_) RStarTree(rtree_nodes.begin(), rtree_nodes.end());
         is_built_ = true;
       } catch (...) {

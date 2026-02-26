@@ -36,7 +36,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
+  static int calc_weekofyear_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
@@ -73,7 +73,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_weekday(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
@@ -113,7 +112,6 @@ public:
                       ObExpr &rt_expr) const override;
   static int calc_yearweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 
-  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprYearWeek);
@@ -136,11 +134,16 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_week(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
+  static int calc_week_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprWeek);
+
+private:
+  template <typename ArgVec, typename ModeVec, typename ResVec, typename IN_TYPE>
+  static int vector_week(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
+  static int get_week_mode_value(int64_t mode_value, ObDTMode &mode);
 };
 
 }

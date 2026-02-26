@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_REWRITE
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_transform_join_limit_pushdown.h"
 
 namespace oceanbase
@@ -167,7 +164,7 @@ int ObTransformJoinLimitPushDown::sort_pushdown_helpers(ObSEArray<LimitPushDownH
       return l_helper->get_max_table_id() > r_helper->get_max_table_id();
     }
   };
-  std::sort(helpers.begin(), helpers.end(), cmp_func);
+  lib::ob_sort(helpers.begin(), helpers.end(), cmp_func);
   return ret;
 }
 
@@ -196,6 +193,7 @@ int ObTransformJoinLimitPushDown::check_stmt_validity(ObDMLStmt *stmt,
              select_stmt->has_group_by() ||
              select_stmt->has_having() ||
              select_stmt->has_rollup() ||
+             select_stmt->has_grouping_sets() ||
              select_stmt->has_window_function() ||
              select_stmt->has_sequence() ||
              select_stmt->has_distinct()) {
@@ -335,21 +333,10 @@ int ObTransformJoinLimitPushDown::split_cartesian_tables(ObSelectStmt *select_st
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_function_table(select_stmt,
-                                                                               is_contain))) {
-    LOG_WARN("failed to check contain correlated function table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_table(select_stmt, is_contain))) {
+    LOG_WARN("failed to check contain correlated table", K(ret));
   } else if (is_contain) {
-    OPT_TRACE("contain correlated function table, do not push down limit");
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_json_table(select_stmt,
-                                                                           is_contain))) {
-    LOG_WARN("failed to check contain correlated json table", K(ret));
-  } else if (is_contain) {
-    OPT_TRACE("contain correlated json table, do not push down limit");
-  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_lateral_table(select_stmt,
-                                                                              is_contain))) {
-    LOG_WARN("failed to check contain correlated lateral table", K(ret));
-  } else if (is_contain) {
-    OPT_TRACE("contain correlated lateral derived table, do not push down limit");
+    OPT_TRACE("contain correlated derived table, do not push down limit");
   } else {
     int64_t N = select_stmt->get_from_item_size();
     UnionFind uf(N);
@@ -400,8 +387,7 @@ int ObTransformJoinLimitPushDown::check_cartesian(ObSelectStmt *stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (cond->has_flag(CNT_SUB_QUERY) ||
-                 cond->has_flag(CNT_RAND_FUNC) ||
-                 cond->has_flag(CNT_STATE_FUNC)) {
+                 !cond->is_deterministic()) {
         is_cond_valid = false;
         OPT_TRACE("condition has subquery/rand func/state func");
       } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(cond,
@@ -431,9 +417,8 @@ int ObTransformJoinLimitPushDown::check_cartesian(ObSelectStmt *stmt,
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid orderby expr", K(ret));
-      } else if (expr->has_flag(CNT_RAND_FUNC) ||
-                 expr->has_flag(CNT_STATE_FUNC) ||
-                 expr->has_flag(CNT_SUB_QUERY)) {
+      } else if (expr->has_flag(CNT_SUB_QUERY) ||
+                 !expr->is_deterministic()) {
         // avoid pushing down non-deterministic func and subquery
         is_orderby_valid = false;
         OPT_TRACE("order by has subquery or special expr");

@@ -41,6 +41,7 @@ static int global_send_negotiation_arr[USSL_MAX_FD_NUM];
 int is_ussl_bg_thread_started = 0;
 static int ussl_is_stopped = 0;
 
+int http_conn_pipe[2] = {-1, -1};
 extern int sockaddr_compare_c(struct sockaddr_storage *left, struct sockaddr_storage *right);
 extern char *sockaddr_to_str_c(struct sockaddr_storage *sock_addr, char *buf, int len);
 
@@ -287,6 +288,21 @@ int ussl_close(int fd)
 ssize_t ussl_writev(int fildes, const struct iovec *iov, int iovcnt)
 {
   return writev_regard_ssl(fildes, iov, iovcnt);
+}
+
+int ussl_loop_add_http_listen()
+{
+  int http_conn_pipe_recv = -1;
+  int pfd[2] = {-1, -1};
+  if (0 != pipe2(pfd, O_NONBLOCK|O_CLOEXEC)) {
+    ussl_log_error("pipe failed, errno=%d", errno);
+  } else {
+    ATOMIC_STORE(&http_conn_pipe[1], pfd[1]); // write end
+    ATOMIC_STORE(&http_conn_pipe[0], pfd[0]); // read end
+    http_conn_pipe_recv = pfd[0];
+    ussl_log_info("success to init http_conn_pipe, pipe_fd={%d,%d}", pfd[0], pfd[1]);
+  }
+  return http_conn_pipe_recv;
 }
 
 #include "ussl-deps.c"

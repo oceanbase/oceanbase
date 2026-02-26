@@ -12,32 +12,7 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "lib/allocator/ob_allocator.h"
-#include "storage/multi_data_source/runtime_utility/mds_factory.h"
-#include "share/ob_ls_id.h"
-#include "storage/multi_data_source/mds_writer.h"
-#include <thread>
-#include <iostream>
-#include <vector>
-#include <chrono>
-#include <exception>
-#include "lib/ob_errno.h"
-#include "share/ob_errno.h"
-#include "storage/multi_data_source/adapter_define/mds_dump_node.h"
-#include "lib/allocator/ob_malloc.h"
-#include "storage/multi_data_source/mds_node.h"
-#include "common/ob_clock_generator.h"
-#include "storage/multi_data_source/mds_row.h"
-#include "storage/multi_data_source/mds_unit.h"
-#include "storage/multi_data_source/mds_table_handle.h"
-#include "storage/multi_data_source/mds_table_handler.h"
-#include "storage/tx/ob_trans_define.h"
-#include <algorithm>
-#include <numeric>
-#include "storage/multi_data_source/runtime_utility/mds_lock.h"
 #include "storage/tablet/ob_tablet_meta.h"
-#include "share/cache/ob_vtable_event_recycle_buffer.h"
-#include "observer/virtual_table/ob_mds_event_buffer.h"
 
 namespace oceanbase {
 namespace unittest {

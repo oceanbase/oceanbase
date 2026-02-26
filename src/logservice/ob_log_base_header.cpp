@@ -11,8 +11,6 @@
  */
 
 #include "ob_log_base_header.h"
-#include "lib/utility/ob_print_utils.h"         // Print*
-#include "lib/time/ob_time_utility.h"
 
 namespace oceanbase
 {

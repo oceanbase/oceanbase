@@ -12,31 +12,12 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "share/ob_i_sql_expression.h"
-#include "share/ob_schema_status_proxy.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/code_generator/ob_column_index_provider.h"
-#include "sql/ob_sql_trans_control.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/printer/ob_select_stmt_printer.h"
-#include "lib/timezone/ob_oracle_format_models.h"
 #include "observer/ob_server.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/engine/cmd/ob_set_names_executor.h"
-#include "sql/privilege_check/ob_privilege_check.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -158,7 +139,23 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
           }
           if (OB_FAIL(ret)) {
           } else if (false == node.is_system_variable_) {
-            if (OB_FAIL(set_user_variable(value_obj, node.variable_name_, expr_ctx))) {
+            if (ob_is_enum_or_set_type(value_obj.get_type())) {
+              ObObjParam obj_param = value_obj;
+              const ObEnumSetMeta *meta = NULL;
+              if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(node.value_expr_->get_result_type(), session, meta))) {
+                LOG_WARN("failed to extrac enum set meta", K(ret));
+              } else if (OB_ISNULL(meta) || OB_ISNULL(meta->get_str_values())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get enum set meta", K(ret));
+              } else if (OB_FAIL(ObSPIService::cast_enum_set_to_string(ctx,
+                                                                       *meta->get_str_values(),
+                                                                       obj_param,
+                                                                       value_obj))) {
+                LOG_WARN("cast enum set to string failed", K(ret));
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(set_user_variable(value_obj, node.variable_name_, expr_ctx))) {
               LOG_WARN("set user variable failed", K(ret));
             }
           } else {
@@ -215,7 +212,14 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
             } else if (!lib::is_oracle_mode() && sys_var->is_oracle_only()) {
               //ignore set oracle only variables in mysql mode
             } else {
-              if (OB_FAIL(check_and_convert_sys_var(
+              // Check protected system variables BEFORE value validation
+              // This ensures permission check happens before any business logic processing
+              if (OB_FAIL(check_protected_sys_variable(session, set_var, ret))) {
+                LOG_WARN("fail to check protected system variable", K(ret), K(set_var.var_name_));
+              }
+              // Proceed with value validation only if permission check passes
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(check_and_convert_sys_var(
                           ctx, set_var, *sys_var, value_obj, out_obj, is_set_stmt))) {
                 LOG_WARN("fail to check", K(ret), K(node), K(*sys_var), K(value_obj));
               } else if (FALSE_IT(value_obj = out_obj)) {
@@ -327,25 +331,32 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
                 }
               }
 
-              if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_GLOBAL) {
-                if(set_var.var_name_ == OB_SV_TIME_ZONE) {
-                  if(OB_FAIL(global_variable_timezone_formalize(ctx, value_obj))) {
-                    LOG_WARN("failed to formalize global variables", K(ret));
+              if(OB_SUCC(ret) && OB_FAIL(is_support(set_var))) {
+                if(ret == OB_NOT_SUPPORTED) {
+                  ret = OB_SUCCESS;
+                  LOG_USER_WARN(OB_NOT_SUPPORTED, "This system variable now is mock");
+                }
+              } else {
+                if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_GLOBAL) {
+                  if(set_var.var_name_ == OB_SV_TIME_ZONE) {
+                    if(OB_FAIL(global_variable_timezone_formalize(ctx, value_obj))) {
+                      LOG_WARN("failed to formalize global variables", K(ret));
+                    }
+                  }
+                  if (OB_SUCC(ret) && OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
+                    LOG_WARN("failed to update global variables", K(ret));
+                  } else { }
+                }
+                if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_SESSION) {
+                  if (OB_FAIL(sys_var->session_update(ctx, set_var, value_obj))) {
+                    LOG_WARN("fail to update", K(ret), K(*sys_var), K(set_var), K(value_obj));
                   }
                 }
-                if (OB_SUCC(ret) && OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
-                  LOG_WARN("failed to update global variables", K(ret));
-                } else { }
-              }
-              if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_SESSION) {
-                if (OB_FAIL(sys_var->session_update(ctx, set_var, value_obj))) {
-                  LOG_WARN("fail to update", K(ret), K(*sys_var), K(set_var), K(value_obj));
-                }
-              }
-              //某些变量需要立即更新状态
-              if (OB_SUCC(ret)) {
-                if (OB_FAIL(sys_var->update(ctx, set_var, value_obj))) {
-                  LOG_WARN("update sys var state failed", K(ret), K(set_var));
+                //某些变量需要立即更新状态
+                if (OB_SUCC(ret)) {
+                  if (OB_FAIL(sys_var->update(ctx, set_var, value_obj))) {
+                    LOG_WARN("update sys var state failed", K(ret), K(set_var));
+                  }
                 }
               }
             }
@@ -390,6 +401,9 @@ int ObVariableSetExecutor::calc_var_value_static_engine(
                                 param_store,
                                 &exec_ctx))) {
     LOG_WARN("calc const expr failed", K(ret));
+  } else if (value_obj.is_pl_extend()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("pl extend type is not supported in set stmt", K(ret), K(value_obj));
   }
   return ret;
 }
@@ -723,6 +737,15 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
       if (OB_FAIL(ObBasicSessionInfo::check_optimizer_features_enable_valid(val))) {
         LOG_WARN("fail check privilege_features_enable valid", K(val), K(ret));
       }
+#ifdef OB_BUILD_CLOSE_MODULES
+    } else if (set_var.var_name_ == OB_SV_EARLY_LOCK_RELEASE) {
+      int64_t early_lock_release = 0;
+      if (OB_FAIL(val.get_int(early_lock_release))) {
+        LOG_WARN("fail get int", K(ret), K(val));
+      } else if (OB_FAIL(do_early_lock_release(ctx, *session, early_lock_release > 0))) {
+        LOG_WARN("fail do early lock release ", K(ret), K(early_lock_release), K(val));
+      }
+#endif
     }
 
     if (OB_SUCC(ret) && should_update_extra_var) {
@@ -837,22 +860,6 @@ int ObVariableSetExecutor::check_and_convert_sys_var(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   //OB_ASSERT(true == var_node.is_system_variable_);
 
-  // collation_connection的取值有限制，不能设置成utf16
-  if (OB_SUCC(ret)) {
-    if ((0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_CLIENT)
-        || 0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_CONNECTION)
-        || 0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_RESULTS)
-        || 0 == set_var.var_name_.case_compare(OB_SV_COLLATION_CONNECTION))
-        && (in_val.get_string().prefix_match_ci("utf16"))) {
-      ret = OB_ERR_WRONG_VALUE_FOR_VAR;
-      LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
-                     set_var.var_name_.length(),
-                     set_var.var_name_.ptr(),
-                     in_val.get_string().length(),
-                     in_val.get_string().ptr());
-    }
-  }
-
   //check readonly
   if (is_set_stmt && sys_var.is_readonly()) {
     if (sys_var.is_with_upgrade() && GCONF.in_upgrade_mode()) {
@@ -928,8 +935,10 @@ int ObVariableSetExecutor::check_and_convert_sys_var(ObExecContext &ctx,
   if (OB_FAIL(ret)) {
   } else if (set_var.var_name_ == OB_SV_DEFAULT_STORAGE_ENGINE) {
     static const common::ObString DEFAULT_VALUE_STORAGE_ENGINE("OceanBase");
+    static const common::ObString INNODB_STORAGE_ENGINE("InnoDB");
     const ObString new_value = out_val.get_string();
-    if (new_value.case_compare(DEFAULT_VALUE_STORAGE_ENGINE) != 0) {
+    if (new_value.case_compare(DEFAULT_VALUE_STORAGE_ENGINE) != 0
+        && new_value.case_compare(INNODB_STORAGE_ENGINE) != 0) {
       ret = OB_ERR_PARAM_VALUE_INVALID;
       LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
     }
@@ -1014,7 +1023,9 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
     } else if (OB_FAIL(val.get_int(autocommit))) {
       LOG_WARN("fail get commit val", K(val), K(ret));
     } else if (0 != autocommit && 1 != autocommit) {
-      const char *autocommit_str = to_cstring(autocommit);
+      char autocommit_str[32] = {'\0'};
+      int64_t pos = 0;
+      (void)databuff_printf(autocommit_str, sizeof(autocommit_str), pos, "%ld", autocommit);
       ret = OB_ERR_WRONG_VALUE_FOR_VAR;
       LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, (int)strlen(OB_SV_AUTOCOMMIT), OB_SV_AUTOCOMMIT,
                      (int)strlen(autocommit_str), autocommit_str);
@@ -1227,7 +1238,7 @@ int ObVariableSetExecutor::switch_to_session_variable(const ObExprCtx &expr_ctx,
     sess_var.value_ = value;
     sess_var.meta_.set_type(value.get_type());
     sess_var.meta_.set_scale(value.get_scale());
-    sess_var.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+    sess_var.meta_.set_collation_level(value.get_collation_level());
     sess_var.meta_.set_collation_type(value.get_collation_type());
   }
   return ret;
@@ -1248,7 +1259,7 @@ int ObVariableSetExecutor::switch_to_session_variable(const ObObj &value,
     sess_var.value_ = value;
     sess_var.meta_.set_type(value.get_type());
     sess_var.meta_.set_scale(value.get_scale());
-    sess_var.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+    sess_var.meta_.set_collation_level(value.get_collation_level());
     sess_var.meta_.set_collation_type(value.get_collation_type());
   }
   return ret;
@@ -1364,6 +1375,89 @@ int ObVariableSetExecutor::cascade_set_validate_password(ObExecContext &ctx,
   return ret;
 }
 
+int ObVariableSetExecutor::check_protected_sys_variable(ObSQLSessionInfo *session,
+                                                          const share::ObSetVar &set_var,
+                                                          int &ret)
+{
+  // Check protected system variables BEFORE value validation
+  // This ensures permission check happens before any business logic processing
+  // Only check GLOBAL scope variables, SESSION scope variables are not restricted
+  if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_GLOBAL) {
+    // System tenant is not affected by protected variable restrictions
+    const uint64_t tenant_id = session->get_effective_tenant_id();
+    if (is_sys_tenant(tenant_id)) {
+      // System tenant can set any variable, skip protection check
+    } else {
+      ObString system_protected_sys_variables = GCONF.system_protected_sys_variables.get_value_string();
+      if (!system_protected_sys_variables.empty()) {
+        // Only MySQL root user and Oracle sys user are allowed to modify protected variables
+        bool is_sys_admin = (!session->is_oracle_compatible() && session->is_mysql_root_user())
+                            || (session->is_oracle_compatible() && session->is_oracle_sys_user());
+        if (!is_sys_admin) {
+          // Check if variable name exactly matches any variable in the comma-separated list
+          bool is_protected = false;
+          const int64_t MAX_LEN = 4096;
+          int64_t config_len = system_protected_sys_variables.length();
+          if (config_len > 0 && config_len <= MAX_LEN) {
+            HEAP_VAR(char[MAX_LEN + 1], tmp_str) {
+              MEMCPY(tmp_str, system_protected_sys_variables.ptr(), config_len);
+              tmp_str[config_len] = '\0';
+              char *save_ptr = NULL;
+              char *token = STRTOK_R(tmp_str, ",", &save_ptr);
+              while (!is_protected && OB_NOT_NULL(token)) {
+                // Trim leading spaces
+                while (*token == ' ') {
+                  token++;
+                }
+                // Trim trailing spaces
+                size_t token_len = STRLEN(token);
+                while (token_len > 0 && token[token_len - 1] == ' ') {
+                  token[--token_len] = '\0';
+                }
+                if (token_len > 0 && 0 == set_var.var_name_.case_compare(token)) {
+                  is_protected = true;
+                }
+                token = STRTOK_R(NULL, ",", &save_ptr);
+              }
+            }
+          }
+          if (is_protected) {
+            ret = OB_ERR_NO_PRIVILEGE;
+            LOG_WARN("no privilege to set protected tenant variable", KR(ret), K(set_var.var_name_));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
+{
+  int ret = OB_SUCCESS;
+  ObSysVarClassType var_id = SYS_VAR_INVALID;
+ if(SYS_VAR_INVALID == (var_id = ObSysVarFactory::find_sys_var_id_by_name(set_var.var_name_))) {
+    ret = OB_ERR_SYS_VARIABLE_UNKNOWN;
+    LOG_WARN("unknown variable", K(set_var.var_name_), K(ret));
+  } else if (((SYS_VAR_DEBUG <= var_id && SYS_VAR_STORED_PROGRAM_CACHE >= var_id) ||
+              (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
+              (SYS_VAR_BIG_TABLES <= var_id && SYS_VAR_DELAYED_INSERT_LIMIT >= var_id) ||
+              (SYS_VAR_GTID_EXECUTED <= var_id && SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION >= var_id) ||
+              (SYS_VAR_INNODB_READ_ONLY <= var_id && SYS_VAR_SUPER_READ_ONLY >= var_id) ||
+              (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
+              (SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE <= var_id
+               && SYS_VAR_RELAY_LOG_SPACE_LIMIT >= var_id)) &&
+              SYS_VAR_LOG_SLAVE_UPDATES != var_id &&
+              SYS_VAR_EXPIRE_LOGS_DAYS != var_id &&
+              SYS_VAR_LOG_BIN_TRUST_FUNCTION_CREATORS != var_id) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
+  } else if (SYS_VAR_LOW_PRIORITY_UPDATES <= var_id && SYS_VAR_MAX_INSERT_DELAYED_THREADS >= var_id) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
+  }
+  return ret;
+}
 #undef DEFINE_CAST_CTX
 
 }/* ns sql*/

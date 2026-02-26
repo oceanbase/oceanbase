@@ -10,13 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_errno.h"
-#include <gtest/gtest.h>
 #include "storage/test_tablet_helper.h"
-#include <lib/oblog/ob_log.h>
-#include "storage/tx_storage/ob_ls_service.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "init_basic_struct.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -37,7 +32,7 @@ public:
   static void SetUpTestCase()
   {
     EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-    ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+    SERVER_STORAGE_META_SERVICE.is_started_ = true;
   }
 
   static void TearDownTestCase()
@@ -78,11 +73,17 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
   ASSERT_EQ(0, pool->count_);
 
   // create memtable
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(1, scn1, false, false));
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(2, scn2, false, false));
+  CreateMemtableArg mt_arg;
+  mt_arg.schema_version_ = 1;
+  mt_arg.clog_checkpoint_scn_ = scn1;
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(mt_arg));
+
+  mt_arg.schema_version_ = 2;
+  mt_arg.clog_checkpoint_scn_ = scn2;
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(mt_arg));
 
   ObSEArray<ObTableHandleV2, 64> handles;
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_all_memtables(handles));
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_all_memtables_from_memtable_mgr(handles));
 
   // memtable_mgr exist
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_active_memtable(handle));

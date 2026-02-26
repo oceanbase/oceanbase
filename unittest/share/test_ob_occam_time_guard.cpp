@@ -14,11 +14,6 @@
 #include "share/ob_occam_time_guard.h"
 #include <gtest/gtest.h>
 #include <thread>
-#include <iostream>
-#include <vector>
-#include <chrono>
-#include "common/ob_clock_generator.h"
-#include "lib/lock/ob_spin_lock.h"
 
 namespace oceanbase {
 namespace unittest {

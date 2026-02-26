@@ -54,6 +54,8 @@ class ObPhyOperatorMonnitorInfo;
 struct ObAuditRecordData;
 class ObOpSpec;
 class ObEvolutionPlan;
+class ObSqlSchemaGuard;
+class EnableOpRichFormat;
 
 //class ObPhysicalPlan: public common::ObDLinkBase<ObPhysicalPlan>
 typedef common::ObFixedArray<common::ObFixedArray<int64_t, common::ObIAllocator>, common::ObIAllocator> PhyRowParamMap;
@@ -113,7 +115,6 @@ public:
   bool with_rows() const
   { return ObStmt::is_select_stmt(stmt_type_) || is_returning() || need_drive_dml_query_; }
   int copy_common_info(ObPhysicalPlan &src);
-  int extract_query_range(ObExecContext &ctx) const;
   //user var
   bool is_contains_assignment() const {return is_contains_assignment_;}
   void set_contains_assignment(bool v) {is_contains_assignment_ = v;}
@@ -126,15 +127,16 @@ public:
    */
   void update_plan_stat(const ObAuditRecordData &record,
                         const bool is_first,
-                        const ObIArray<ObTableRowCount> *table_row_count_list);
+                        const ObIArray<ObTableRowCount> *table_row_count_list,
+                        const AdaptivePCConf *adpt_pc_conf = nullptr);
   void update_cache_access_stat(const ObTableScanStat &scan_stat)
   {
     stat_.update_cache_stat(scan_stat);
   }
   void reset_evolution_stat()
   {
-    stat_.is_evolution_ = false;
-    stat_.evolution_stat_.reset();
+    ATOMIC_STORE(&(stat_.is_evolution_), false);
+    ATOMIC_STORE(&(stat_.evolution_stat_.records_), NULL);
   }
   int64_t get_evo_perf() const;
   int64_t get_cpu_time() const { return stat_.evolution_stat_.cpu_time_; }
@@ -142,14 +144,27 @@ public:
   int64_t get_executions() const { return stat_.evolution_stat_.executions_; }
   void set_evolution(bool v) { stat_.is_evolution_ = v; }
   bool get_evolution() const { return stat_.is_evolution_; }
-  inline bool check_if_is_expired(const int64_t first_exec_row_count,
-                                  const int64_t current_row_count) const;
+  inline bool inner_check_if_is_expired(const int64_t first_exec_row_count,
+                                        const int64_t current_row_count) const;
+  void update_evolution_stat(const ObAuditRecordData &record);
+  bool check_if_is_expired_by_error(const int error_code) const;
+  void update_plan_expired_info(const ObAuditRecordData &record,
+                                const bool is_first,
+                                const ObIArray<ObTableRowCount> *table_row_count_list);
+  void fill_row_count_info(const bool is_first,
+                           const int64_t access_table_num,
+                           ObTableRowCount *table_row_count_first_exec,
+                           const ObIArray<ObTableRowCount> &table_row_count_list);
+  bool check_if_is_expired(const int64_t elapsed_time,
+                           const int64_t access_table_num,
+                           const ObTableRowCount *table_row_count_first_exec,
+                           const ObIArray<ObTableRowCount> &table_row_count_list);
 
   bool is_plan_unstable(const int64_t sample_count,
                         const int64_t sample_exec_row_count,
-                        const int64_t sample_exec_usec);
-  bool is_expired() const { return stat_.is_expired_; }
-  void set_is_expired(bool expired) { stat_.is_expired_ = expired; }
+                        const int64_t sample_exec_usec) const;
+  bool is_expired() const { return NOT_EXPIRED != stat_.is_expired_; }
+  void set_is_expired(ObPlanExpiredStat expired_stat) { stat_.is_expired_ = expired_stat; }
   void inc_large_querys();
   void inc_delayed_large_querys();
   void inc_delayed_px_querys();
@@ -163,6 +178,9 @@ public:
 
   int alloc_op_spec(
     const ObPhyOperatorType type, const int64_t child_cnt, ObOpSpec *&op, const uint64_t op_id);
+  int alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard, const bool plan_use_rich_format,
+                           const ObPhyOperatorType type, const int64_t child_cnt, ObOpSpec *&spec,
+                           const uint64_t op_id, const EnableOpRichFormat &enable_rich_format);
 
   void set_location_type(ObPhyPlanType type) { location_type_ = type; }
   bool has_uncertain_local_operator() const { return OB_PHY_PLAN_UNCERTAIN == location_type_; }
@@ -175,6 +193,8 @@ public:
   bool is_use_px() const { return use_px_; }
   void set_px_dop(int64_t px_dop) { px_dop_ = px_dop; }
   int64_t get_px_dop() const { return px_dop_; }
+  inline void set_px_parallel_rule(PXParallelRule parallel_rule) { px_parallel_rule_ = parallel_rule; }
+  inline PXParallelRule get_px_parallel_rule() const { return px_parallel_rule_; }
   void set_expected_worker_count(int64_t c) { stat_.expected_worker_count_ = c; }
   int64_t get_expected_worker_count() const { return stat_.expected_worker_count_; }
   void set_minimal_worker_count(int64_t c) { stat_.minimal_worker_count_ = c; }
@@ -215,7 +235,6 @@ public:
   uint64_t get_signature() const { return signature_; }
   void set_plan_hash_value(uint64_t v) { stat_.plan_hash_value_ = v; }
   int32_t *alloc_projector(int64_t projector_size);
-  int add_table_location(const ObPhyTableLocation &table_location);
   ObExprOperatorFactory &get_expr_op_factory() { return expr_op_factory_; }
   const ObExprOperatorFactory &get_expr_op_factory() const { return expr_op_factory_; }
 
@@ -356,6 +375,7 @@ public:
   inline uint64_t get_append_table_id() const { return append_table_id_; }
   void set_record_plan_info(bool v) { need_record_plan_info_ = v; }
   bool need_record_plan_info() const { return need_record_plan_info_; }
+  bool try_record_plan_info();
   const common::ObString &get_rule_name() const { return stat_.rule_name_; }
   inline void set_is_rewrite_sql(bool v) { stat_.is_rewrite_sql_ = v; }
   inline bool is_rewrite_sql() const { return stat_.is_rewrite_sql_; }
@@ -374,11 +394,23 @@ public:
   {
     enable_inc_direct_load_ = enable_inc_direct_load;
   }
+  inline void set_enable_inc_major(const bool enable_inc_major)
+  {
+    enable_inc_major_ = enable_inc_major;
+  }
+  inline bool get_enable_inc_major() const { return enable_inc_major_; }
   inline bool get_enable_replace() const { return enable_replace_; }
   inline void set_enable_replace(const bool enable_replace)
   {
     enable_replace_ = enable_replace;
   }
+  inline double get_online_sample_percent() const { return online_sample_percent_; }
+  inline void set_online_sample_percent(double v) { online_sample_percent_ = v; }
+  inline void set_is_online_gather_statistics(const bool is_online_gather_statistics) { is_online_gather_statistics_ = is_online_gather_statistics; }
+  inline bool get_is_online_gather_statistics() const { return is_online_gather_statistics_; }
+  int64_t get_das_dop() { return das_dop_; }
+  void set_das_dop(int64_t v) { das_dop_ = v; }
+  void set_gen_plan_usec(uint64_t v) { stat_.gen_plan_usec_  = v; }
 
 public:
   int inc_concurrent_num();
@@ -397,6 +429,10 @@ public:
   virtual PreCalcExprHandler* get_pre_calc_expr_handler() override;
 
   void set_enable_plan_expiration(bool enable) { stat_.enable_plan_expiration_ = enable; }
+  void set_optimizer_features_enable_version(uint64_t opt_version)
+  { optimizer_features_enable_version_ = opt_version; }
+  uint64_t get_optimizer_features_enable_version() const
+  { return optimizer_features_enable_version_;  }
   int64_t &get_access_table_num() { return stat_.access_table_num_; }
   int64_t get_access_table_num() const { return stat_.access_table_num_; }
   ObTableRowCount *&get_table_row_count_first_exec() { return stat_.table_row_count_first_exec_; }
@@ -448,11 +484,31 @@ public:
   inline bool is_insert_select() const { return is_insert_select_; }
   inline void set_is_plain_insert(bool v) { is_plain_insert_ = v; }
   inline bool is_plain_insert() const { return is_plain_insert_; }
+  inline void set_is_inner_sql(bool v) { is_inner_sql_ = v; }
+  inline void set_is_batch_params_execute(bool v) { is_batch_params_execute_ = v; }
+  inline bool is_dml_write_stmt() const { return ObStmt::is_dml_write_stmt(stmt_type_); }
+#ifdef OB_BUILD_SPM
+  static bool enable_spm_improve(const uint64_t opt_version) {
+    return  (COMPAT_VERSION_4_2_5_BP4 <= opt_version && COMPAT_VERSION_4_3_0 > opt_version)
+             || (COMPAT_VERSION_4_3_5_BP4 <= opt_version && COMPAT_VERSION_4_4_0 >opt_version)
+             || COMPAT_VERSION_4_4_1 <= opt_version;
+  }
+  bool enable_spm_improve() const { return enable_spm_improve(optimizer_features_enable_version_);  }
   inline bool should_add_baseline() const {
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
-            && (stmt::T_REPLACE != stmt_type_ || is_insert_select_));
+            && (stmt::T_REPLACE != stmt_type_ || is_insert_select_)
+            // TODO:@yibo inner sql 先不用SPM? pl里面的执行的SQL也是inner sql,
+            && !is_inner_sql_
+            && !is_batch_params_execute_
+            // TODO:@yibo batch multi stmt relay get_plan to init some structure. But spm may not enter
+            // get_plan. Now we disable spm when batch multi stmt exists.
+            && !is_remote_plan()
+            && is_dep_base_table()
+            && (DEPENDENCY_OUTLINE != get_outline_state().outline_version_.object_type_
+                || (enable_spm_improve() && get_outline_state().is_prue_concurrent_limit_)));
   }
+#endif
   inline bool is_plain_select() const
   {
     bool is_plain = true;
@@ -508,7 +564,9 @@ public:
   inline ObLogicalPlanRawData& get_logical_plan() { return logical_plan_; }
   inline const ObLogicalPlanRawData& get_logical_plan()const { return logical_plan_; }
   int set_feedback_info(ObExecContext &ctx);
-
+  int check_pdml_affected_rows(ObExecContext &ctx);
+  int print_this_plan_info(ObExecContext &ctx);
+  int get_all_spec_op(ObIArray<const ObOpSpec *> &simple_op_infos, const ObOpSpec &root_op_spec);
   void set_enable_px_fast_reclaim(bool value) { is_enable_px_fast_reclaim_ = value; }
   bool is_enable_px_fast_reclaim() const { return is_enable_px_fast_reclaim_; }
   ObSubSchemaCtx &get_subschema_ctx_for_update() { return subschema_ctx_; }
@@ -517,6 +575,42 @@ public:
   ObIArray<ObLocalSessionVar> & get_all_local_session_vars() { return all_local_session_vars_; }
   inline const ObIArray<uint64_t> &get_mview_ids() const { return mview_ids_; }
   int set_mview_ids(const ObIArray<uint64_t> &mview_ids) { return mview_ids_.assign(mview_ids); }
+  ObFixedArray<uint64_t, common::ObIAllocator> &get_dml_table_ids() { return dml_table_ids_; }
+  const ObIArray<uint64_t> &get_dml_table_ids() const { return dml_table_ids_; }
+  void set_direct_load_need_sort(const bool direct_load_need_sort)
+  {
+    direct_load_need_sort_ = direct_load_need_sort;
+  }
+  bool get_direct_load_need_sort() const { return direct_load_need_sort_; }
+  inline bool get_insertup_can_do_gts_opt() const {return insertup_can_do_gts_opt_; }
+  inline void set_insertup_can_do_gts_opt(bool v) { insertup_can_do_gts_opt_ = v; }
+  void set_is_use_auto_dop(bool use_auto_dop)  { stat_.is_use_auto_dop_ = use_auto_dop; }
+  bool get_is_use_auto_dop() const { return stat_.is_use_auto_dop_; }
+  void set_px_node_policy(ObPxNodePolicy px_node_policy)
+  {
+    px_node_policy_ = px_node_policy;
+  }
+  void set_px_node_count(int64_t px_node_count)
+  {
+    px_node_count_ = px_node_count;
+  }
+  int set_px_node_addrs(const common::ObIArray<ObAddr> &px_node_addrs);
+  ObPxNodePolicy get_px_node_policy() const { return px_node_policy_; }
+  int64_t get_px_node_count() const { return px_node_count_; }
+  const ObFixedArray<ObAddr, common::ObIAllocator> &get_px_node_addrs() const
+  {
+    return px_node_addrs_;
+  }
+  bool is_active_status() const { return ObPlanStat::ACTIVE == ATOMIC_LOAD(&stat_.adaptive_pc_info_.status_); }
+  void set_active_status() { ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::ACTIVE);; }
+  void set_inactive_status() { ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::INACTIVE);; }
+  int64_t get_adaptive_feedback_times() const;
+  void update_adaptive_pc_info(const ObAuditRecordData &record, const AdaptivePCConf *adpt_pc_conf);
+  void set_extend_sql_plan_monitor_metrics() { extend_sql_plan_monitor_metrics_ = true; }
+  bool extend_sql_plan_monitor_metrics() const { return extend_sql_plan_monitor_metrics_; }
+  bool px_worker_share_plan_enabled() const { return px_worker_share_plan_enabled_; }
+  void set_px_worker_share_plan_enabled(bool v) { px_worker_share_plan_enabled_ = v; }
+
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -575,6 +669,7 @@ private:
   bool require_local_execution_; // not need serialize
   bool use_px_;
   int64_t px_dop_;
+  PXParallelRule px_parallel_rule_;
   uint32_t next_phy_operator_id_; //share val
   uint32_t next_expr_operator_id_; //share val
   // for regexp expression's compilation
@@ -602,8 +697,6 @@ private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_trans_scope_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> immediate_refresh_external_table_ids_;
 
-  //for outline use
-  ObOutlineState outline_state_;
   int64_t concurrent_num_;           //plan当前的并发执行个数
   int64_t max_concurrent_num_;       //plan最大并发可执行个数, -1表示没有限制
   //for plan cache, not need serialize
@@ -641,6 +734,7 @@ public:
   //the DML statement needs to be executed through get_next_row
   bool need_drive_dml_query_;
   ExprFixedArray var_init_exprs_;
+  sql::ObExecutedSqlStatRecord sql_stat_record_value_;
 private:
   bool is_returning_; //是否设置了returning
 
@@ -695,7 +789,10 @@ public:
   bool is_enable_px_fast_reclaim_;
   bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
+  int64_t das_dop_;
   bool disable_auto_memory_mgr_;
+  bool is_inner_sql_;
+  bool is_batch_params_execute_;
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
 public:
@@ -703,8 +800,28 @@ public:
 private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
   bool enable_inc_direct_load_; // for incremental direct load
+  bool enable_inc_major_; // for incremental direct load
   bool enable_replace_; // for incremental direct load
   bool insert_overwrite_; // for insert overwrite
+  double online_sample_percent_; // for incremental direct load
+  bool is_online_gather_statistics_; // for incremental direct load
+  std::atomic<bool> can_set_feedback_info_;
+  bool need_switch_to_table_lock_worker_; // for table lock switch worker thread
+  bool data_complement_gen_doc_id_;
+private:
+  // used to record transaction modified tables and
+  // further cursor stmt will check agains
+  // to decide whether it read uncommitted data
+  common::ObFixedArray<uint64_t, common::ObIAllocator> dml_table_ids_;
+  bool direct_load_need_sort_;
+  bool insertup_can_do_gts_opt_;
+  ObPxNodePolicy px_node_policy_;
+  common::ObFixedArray<common::ObAddr, common::ObIAllocator> px_node_addrs_;
+  int64_t px_node_count_;
+  int64_t px_worker_share_plan_enabled_;
+  bool extend_sql_plan_monitor_metrics_;
+  uint64_t optimizer_features_enable_version_;
+  bool route_to_column_replica_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

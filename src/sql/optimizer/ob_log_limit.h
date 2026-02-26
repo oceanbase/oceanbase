@@ -28,7 +28,8 @@ namespace sql
           is_fetch_with_ties_(false),
           limit_expr_(NULL),
           offset_expr_(NULL),
-          percent_expr_(NULL)
+          percent_expr_(NULL),
+          is_partial_(false)
     {}
     virtual ~ObLogLimit() {}
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
@@ -55,6 +56,14 @@ namespace sql
     {
       is_top_limit_ = is_top_limit;
     }
+    void set_partial(bool is_partial)
+    {
+      is_partial_ = is_partial;
+    }
+    inline bool is_partial()
+    {
+      return is_partial_;
+    }
     inline bool is_top_limit()
     {
       return is_top_limit_;
@@ -80,8 +89,8 @@ namespace sql
     ObRawExpr *limit_expr_;
     ObRawExpr *offset_expr_;
     ObRawExpr *percent_expr_;
+    bool is_partial_;
     ObSEArray<OrderItem, 4, common::ModulePageAllocator, true> order_items_;
-
   };
 }
 }

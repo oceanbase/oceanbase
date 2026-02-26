@@ -29,7 +29,6 @@ namespace observer
 {
 
 class ObIMPPacketSender;
-struct ObGlobalContext;
 class ObMySQLResultSet;
 class ObQueryRetryCtrl;
 class ObAsyncCmdDriver : public ObQueryDriver
@@ -44,6 +43,7 @@ public:
   virtual ~ObAsyncCmdDriver();
 
   virtual int response_result(ObMySQLResultSet &result);
+  int flush_buffer(bool is_last);
 
 private:
   /* disallow copy & assign */

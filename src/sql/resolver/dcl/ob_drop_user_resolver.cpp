@@ -14,7 +14,6 @@
 #include "sql/resolver/dcl/ob_drop_user_resolver.h"
 
 #include "sql/session/ob_sql_session_info.h"
-#include "share/schema/ob_schema_struct.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using oceanbase::share::schema::ObUserInfo;

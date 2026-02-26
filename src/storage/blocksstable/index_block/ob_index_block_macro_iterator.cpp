@@ -17,6 +17,24 @@
 namespace oceanbase {
 using namespace storage;
 namespace blocksstable {
+
+ObMacroBlockDesc::ObMacroBlockDesc() :
+      macro_block_id_(),
+      macro_meta_(nullptr),
+      range_(),
+      start_row_offset_(0),
+      row_store_type_(FLAT_ROW_STORE),
+      schema_version_(0),
+      snapshot_version_(0),
+      max_merged_trans_version_(0),
+      row_count_(0),
+      row_count_delta_(0),
+      contain_uncommitted_row_(true),
+      is_deleted_(false),
+      is_clustered_index_tree_(false)
+{
+}
+
 void ObMacroBlockDesc::reuse()
 {
   macro_block_id_.reset();
@@ -33,6 +51,12 @@ void ObMacroBlockDesc::reuse()
   row_count_delta_ = 0;
   contain_uncommitted_row_ = false;
   is_deleted_ = false;
+  is_clustered_index_tree_ = false;
+}
+
+void ObMacroBlockDesc::reset()
+{
+  new (this) ObMacroBlockDesc();
 }
 
 int ObMicroIndexRowItem::init(ObIAllocator &allocator,
@@ -132,13 +156,34 @@ void ObMicroIndexRowItem::reuse()
 }
 
 ObIndexBlockMacroIterator::ObIndexBlockMacroIterator()
-  : sstable_(nullptr), iter_range_(nullptr),
-    tree_cursor_(), allocator_(nullptr),
-    cur_idx_(-1), begin_(),end_(), curr_key_(), prev_key_(),
-    curr_key_buf_(nullptr), prev_key_buf_(nullptr),
-    begin_block_start_row_offset_(0), end_block_start_row_offset_(0), micro_index_infos_(),
-    micro_endkeys_(), micro_endkey_allocator_(), hold_item_(), need_record_micro_info_(false),
-    is_iter_end_(false), is_reverse_scan_(false), is_inited_(false) {}
+    : sstable_(nullptr),
+      iter_range_(nullptr),
+      tree_cursor_(),
+      allocator_(nullptr),
+      cur_idx_(-1),
+      begin_(),
+      end_(),
+      curr_key_(),
+      prev_key_(),
+      curr_key_buf_(nullptr),
+      prev_key_buf_(nullptr),
+      begin_block_start_row_offset_(0),
+      end_block_start_row_offset_(0),
+      micro_index_infos_(),
+      micro_endkeys_(),
+      micro_endkey_allocator_(),
+      hold_item_(),
+      index_tree_type_(IndexTreeType::Unknown),
+      need_record_micro_info_(false),
+      is_iter_end_(false),
+      is_reverse_scan_(false),
+      is_inited_(false)
+{
+  ObMemAttr attr(MTL_ID(), "IdxBlkMacroIter");
+  micro_index_infos_.set_attr(attr);
+  micro_endkeys_.set_attr(attr);
+  micro_endkey_allocator_.set_attr(attr);
+}
 
 ObIndexBlockMacroIterator::~ObIndexBlockMacroIterator()
 {
@@ -177,6 +222,7 @@ void ObIndexBlockMacroIterator::reset() {
   is_iter_end_ = false;
   is_reverse_scan_ = false;
   is_inited_ = false;
+  index_tree_type_ = IndexTreeType::Unknown;
 }
 
 int ObIndexBlockMacroIterator::open(
@@ -189,6 +235,7 @@ int ObIndexBlockMacroIterator::open(
   int ret = OB_SUCCESS;
   bool start_beyond_range = false;
   bool end_beyond_range = false;
+  ObArenaAllocator tmp_arena("MacroIterTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
   ObDatumRowkey sstable_endkey;
   int cmp_ret = 0;
 
@@ -200,7 +247,7 @@ int ObIndexBlockMacroIterator::open(
     LOG_WARN("SSTable is not valid", K(ret), K(sstable), K(range));
   } else if (sstable.no_data_to_read()) {
     is_iter_end_ = true;
-  } else if (OB_FAIL(sstable.get_last_rowkey(allocator, sstable_endkey))) {
+  } else if (OB_FAIL(sstable.get_last_rowkey(tmp_arena, sstable_endkey))) {
     LOG_WARN("Fail to get last rowkey of sstable", K(ret));
   } else if (OB_FAIL(sstable_endkey.compare(
       range.get_start_key(), rowkey_read_info.get_datum_utils(), cmp_ret))) {
@@ -232,8 +279,9 @@ int ObIndexBlockMacroIterator::open(
           end_block_start_row_offset_,
           end_beyond_range))) {
         LOG_WARN("Fail to locate end macro block", K(ret), K(range));
+      } else if (OB_FAIL(tree_cursor_.get_current_endkey(curr_key_))){
+        LOG_WARN("Fail to get current endkey", K(ret), K_(tree_cursor));
       } else {
-        curr_key_ = range.get_end_key();
         if (start_beyond_range) {
           is_iter_end_ = true;
         } else if (end_beyond_range) {
@@ -271,18 +319,21 @@ int ObIndexBlockMacroIterator::open(
     }
   }
 
-
   if (OB_SUCC(ret) && !is_iter_end_) {
     sstable_ = &sstable;
     iter_range_ = &range;
     allocator_ = &allocator;
     is_reverse_scan_ = is_reverse;
+    // TODO(baichangmin): should always be true with clustered index tree
     need_record_micro_info_ = need_record_micro_info;
     is_iter_end_ = false;
   }
   if (OB_SUCC(ret)) {
     is_inited_ = true;
   }
+
+  LOG_DEBUG("succeed to open index block macro iterator", K(ret),
+            K(index_tree_type_), K(need_record_micro_info_));
 
   return ret;
 }
@@ -353,17 +404,9 @@ int ObIndexBlockMacroIterator::get_next_idx_row(ObIAllocator &item_allocator, Ob
     // traverse all node of this macro block and collect index info
     ObDatumRowkey rowkey;
     row_offset = idx_row_parser->get_row_offset();
-    if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
-      if (OB_FAIL(idx_row_parser->get_minor_meta(minor_meta_info))) {
-        LOG_WARN("Fail to get minor meta info", K(ret));
-      }
-    } else if (!idx_row_header->is_major_node() || !idx_row_header->is_pre_aggregated()) {
-      // Do not have aggregate data
-    } else if (OB_FAIL(idx_row_parser->get_agg_row(agg_row_buf, agg_buf_size))) {
-      LOG_WARN("Fail to get aggregate", K(ret));
-    }
-
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(idx_row_parser->parse_minor_meta_and_agg_row(minor_meta_info, agg_row_buf, agg_buf_size))) {
+      LOG_WARN("Fail to parse minor meta and agg row", K(ret));
+    } else {
       if (need_record_micro_info_) {
         micro_endkey_allocator_.reuse();
         reuse_micro_info_array();
@@ -403,6 +446,64 @@ int ObIndexBlockMacroIterator::get_next_idx_row(ObIAllocator &item_allocator, Ob
   return ret;
 }
 
+int ObIndexBlockMacroIterator::move_to_next_macro() {
+  bool is_first_macro_block = false;
+  int ret = OB_SUCCESS;
+
+  // traverse all node of this macro block and collect index info
+  ObDatumRowkey rowkey;
+  if (need_record_micro_info_) {
+    micro_endkey_allocator_.reuse();
+    reuse_micro_info_array();
+    if (OB_FAIL(tree_cursor_.get_child_micro_infos(
+                *iter_range_,
+                micro_endkey_allocator_,
+                micro_endkeys_,
+                micro_index_infos_,
+                hold_item_))) {
+      LOG_WARN("Fail to record child micro block info", K(ret), KPC(iter_range_));
+    }
+  }
+
+  if (!is_reverse_scan_) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(deep_copy_rowkey(curr_key_, prev_key_, prev_key_buf_))) {
+      STORAGE_LOG(WARN, "Failed to save prev key", K(ret), K_(curr_key));
+    } else if (OB_FAIL(tree_cursor_.get_current_endkey(rowkey))) {
+      LOG_WARN("Fail to get current endkey", K(ret), K_(tree_cursor));
+    } else if (OB_FAIL(deep_copy_rowkey(rowkey, curr_key_, curr_key_buf_))) {
+      STORAGE_LOG(WARN, "Failed to save curr key", K(ret), K(rowkey));
+    } else if (OB_FAIL(tree_cursor_.move_forward(is_reverse_scan_))) {
+      if (OB_LIKELY(OB_ITER_END == ret)) {
+        is_iter_end_ = true;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("Fail to move cursor to next macro node", K(ret), K_(tree_cursor));
+      }
+    }
+  } else {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(deep_copy_rowkey(curr_key_, prev_key_, prev_key_buf_))) {
+      STORAGE_LOG(WARN, "Failed to save prev key", K(ret), K_(curr_key));
+    } else if (OB_FAIL(tree_cursor_.move_forward(is_reverse_scan_))) {
+      if (OB_LIKELY(OB_ITER_END == ret)) {
+        is_iter_end_ = true;
+        ret = OB_SUCCESS;
+        is_first_macro_block = is_reverse_scan_;
+      } else {
+        LOG_WARN("Fail to move cursor to next macro node", K(ret), K_(tree_cursor));
+      }
+    } else if (is_first_macro_block){
+      curr_key_.set_min_rowkey();
+    } else if (OB_FAIL(tree_cursor_.get_current_endkey(rowkey))) {
+      LOG_WARN("Fail to get current endkey", K(ret), K_(tree_cursor));
+    } else if (OB_FAIL(deep_copy_rowkey(rowkey, curr_key_, curr_key_buf_))) {
+      STORAGE_LOG(WARN, "Failed to save curr key", K(ret), K(rowkey));
+    }
+  }
+  return ret;
+}
+
 int ObIndexBlockMacroIterator::get_next_macro_block(
     MacroBlockId &macro_id, int64_t &start_row_offset)
 {
@@ -414,8 +515,23 @@ int ObIndexBlockMacroIterator::get_next_macro_block(
     LOG_WARN("Not init", K(ret));
   } else if (is_iter_end_) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(tree_cursor_.get_macro_block_id(macro_id))) {
-    LOG_WARN("Fail to get macro row block id", K(ret), K(macro_id));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (IndexTreeType::IndexTree == index_tree_type_) {
+    if (OB_FAIL(get_data_macro_block_id_in_index_tree(macro_id))) {
+      LOG_WARN("Fail to get data macro block id in index tree", K(ret));
+    }
+  } else if (IndexTreeType::ClusteredIndexTree == index_tree_type_) {
+    if (OB_FAIL(get_data_macro_block_id_in_clustered_index_tree(macro_id))) {
+      LOG_WARN("Fail to get data macro block id in clustered index tree", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected index tree type", K(ret), K(index_tree_type_));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(tree_cursor_.get_idx_parser(idx_row_parser))) {
     LOG_WARN("Fail to get idx row parser", K(ret), K_(tree_cursor));
   } else if (OB_ISNULL(idx_row_parser)) {
@@ -431,38 +547,8 @@ int ObIndexBlockMacroIterator::get_next_macro_block(
       is_iter_end_ = true;
     }
     start_row_offset = idx_row_parser->get_row_offset() - idx_row_header->get_row_count() + 1;
-  }
-
-  if (OB_SUCC(ret)) {
-    // traverse all node of this macro block and collect index info
-    ObDatumRowkey rowkey;
-    if (need_record_micro_info_) {
-      micro_endkey_allocator_.reuse();
-      reuse_micro_info_array();
-      if (OB_FAIL(tree_cursor_.get_child_micro_infos(
-                  *iter_range_,
-                  micro_endkey_allocator_,
-                  micro_endkeys_,
-                  micro_index_infos_,
-                  hold_item_))) {
-        LOG_WARN("Fail to record child micro block info", K(ret), KPC(iter_range_));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(deep_copy_rowkey(curr_key_, prev_key_, prev_key_buf_))) {
-      STORAGE_LOG(WARN, "Failed to save prev key", K(ret), K_(curr_key));
-    } else if (OB_FAIL(tree_cursor_.get_current_endkey(rowkey))) {
-      LOG_WARN("Fail to get current endkey", K(ret), K_(tree_cursor));
-    } else if (OB_FAIL(deep_copy_rowkey(rowkey, curr_key_, curr_key_buf_))) {
-      STORAGE_LOG(WARN, "Failed to save curr key", K(ret), K(rowkey));
-    } else if (OB_FAIL(tree_cursor_.move_forward(is_reverse_scan_))) {
-      if (OB_LIKELY(OB_ITER_END == ret)) {
-        is_iter_end_ = true;
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("Fail to move cursor to next macro node", K(ret), K_(tree_cursor));
-      }
+    if (OB_FAIL(move_to_next_macro())) {
+      LOG_WARN("Fail to move to next macro or deep copy rowkey", K(ret), K_(tree_cursor));
     }
   }
   return ret;
@@ -502,6 +588,7 @@ int ObIndexBlockMacroIterator::get_next_macro_block(ObMacroBlockDesc &block_desc
     block_desc.row_count_delta_ = idx_row_parser->get_row_count_delta();
     block_desc.contain_uncommitted_row_ = idx_row_header->contain_uncommitted_row();
     block_desc.is_deleted_ = idx_row_header->is_deleted();
+    block_desc.is_clustered_index_tree_ = (index_tree_type_ == IndexTreeType::ClusteredIndexTree);
 
     if (OB_FAIL(get_next_macro_block(block_desc.macro_block_id_,
                                      block_desc.start_row_offset_))) {
@@ -525,6 +612,65 @@ int ObIndexBlockMacroIterator::get_next_macro_block(ObMacroBlockDesc &block_desc
   return ret;
 }
 
+int ObIndexBlockMacroIterator::get_current_clustered_index_info(
+    const blocksstable::ObMicroBlockData *&clustered_micro_block_data)
+{
+  int ret = OB_SUCCESS;
+  clustered_micro_block_data = nullptr;
+  if (OB_UNLIKELY(IndexTreeType::ClusteredIndexTree != index_tree_type_ || !need_record_micro_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get clustered index info, unexpected index tree type",
+             K(ret), K(index_tree_type_), K(need_record_micro_info_));
+  } else {
+    hold_item_.block_data_.type_ = ObMicroBlockData::Type::INDEX_BLOCK;
+    clustered_micro_block_data = &(hold_item_.block_data_);
+    LOG_DEBUG("succeed to get clustered index info", K(ret),
+              K(need_record_micro_info_), K(index_tree_type_),
+              KPC(clustered_micro_block_data));
+  }
+  return ret;
+}
+
+int ObIndexBlockMacroIterator::get_data_macro_block_id_in_index_tree(MacroBlockId &macro_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(IndexTreeType::IndexTree != index_tree_type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("incorrect index tree type, should be index tree", K(ret), K(index_tree_type_));
+  } else if (OB_FAIL(tree_cursor_.get_current_node_macro_id(macro_id))) {
+    LOG_WARN("fail to get current node macro id", K(ret));
+  }
+  return ret;
+}
+
+int ObIndexBlockMacroIterator::get_data_macro_block_id_in_clustered_index_tree(MacroBlockId &macro_id)
+{
+  int ret = OB_SUCCESS;
+  bool equal = false;
+  bool is_beyond_range = false;
+  const ObIndexBlockRowHeader *idx_header = nullptr;
+  ObDatumRowkey last_rowkey;
+  if (OB_UNLIKELY(IndexTreeType::ClusteredIndexTree != index_tree_type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("incorrect index tree type, should be clustered index tree", K(ret), K(index_tree_type_));
+  } else if (OB_FAIL(tree_cursor_.get_idx_row_header(idx_header))) {
+    LOG_WARN("fail to get index row header", K(ret));
+  } else if (OB_FAIL(tree_cursor_.get_current_endkey(last_rowkey))) {
+    LOG_WARN("fail to get current endkey", K(ret));
+  } else if (OB_FAIL(tree_cursor_.drill_down(
+                 last_rowkey, ObIndexBlockTreeCursor::ONE_LEVEL, is_beyond_range))) {
+    LOG_WARN("fail to drill down to leaf", K(ret));
+  // TODO(baichangmin): denfensive check here, should drilled down to leaf level.
+  } else if (OB_FAIL(tree_cursor_.get_current_node_macro_id(macro_id))) {
+    LOG_WARN("fail to get current node macro id", K(ret));
+  } else if (OB_FAIL(tree_cursor_.pull_up(false /* cascade */, false /* is_reverse_scan */))) {
+    LOG_WARN("fail to pull up cursor back", K(ret));
+  } else {
+    LOG_DEBUG("succeed to get data macro block id in clustered index tree", K(ret), K(macro_id));
+  }
+  return ret;
+}
+
 int ObIndexBlockMacroIterator::locate_macro_block(
     const bool need_move_to_bound,
     const bool cursor_at_begin_bound,
@@ -537,13 +683,53 @@ int ObIndexBlockMacroIterator::locate_macro_block(
   int ret = OB_SUCCESS;
   bool equal = false;
   const ObIndexBlockRowParser *parser = nullptr;
-  if (OB_FAIL(tree_cursor_.pull_up_to_root())) {
+
+  // Check if this index tree is clustered.
+  // TODO(baichangmin): encapsulate belows into a function called `check_index_tree_type()`?
+  ObIndexBlockTreeCursor::MoveDepth depth;
+  MacroBlockId leaf_level_macro_id;
+  if (IndexTreeType::Unknown == index_tree_type_) {
+    if (OB_FAIL(tree_cursor_.pull_up_to_root())) {
+      LOG_WARN("Fail to pull up sstable index tree cursror to root", K(ret));
+    } else if (OB_FAIL(tree_cursor_.drill_down(
+                   rowkey, ObIndexBlockTreeCursor::LEAF, lower_bound, equal,
+                   is_beyond_the_range))) {
+      LOG_WARN("Fail to drill down to leaf level", K(ret));
+    } else if (OB_FAIL(tree_cursor_.get_current_node_macro_id(leaf_level_macro_id))) {
+      LOG_WARN("Fail to get current node macro id", K(ret));
+    } else if (ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID == leaf_level_macro_id) {
+      index_tree_type_ = IndexTreeType::IndexTree;
+    } else {
+      index_tree_type_ = IndexTreeType::ClusteredIndexTree;
+    }
+  }
+
+  // Drill down to MACRO level.
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tree_cursor_.pull_up_to_root())) {
     LOG_WARN("Fail to pull up sstable index tree cursor to root", K(ret));
   } else if (OB_FAIL(tree_cursor_.drill_down(
-      rowkey, ObIndexBlockTreeCursor::MACRO, lower_bound, equal, is_beyond_the_range))) {
+      rowkey, ObIndexBlockTreeCursor::MoveDepth::MACRO, lower_bound, equal, is_beyond_the_range))) {
     LOG_WARN("Fail to drill down to macro level", K(ret));
-  } else if (OB_FAIL(tree_cursor_.get_macro_block_id(macro_id))) {
-    LOG_WARN("Fail to get macro block logic id", K(ret));
+  }
+
+  // Get begin or end macro id.
+  if (OB_FAIL(ret)) {
+  } else if (IndexTreeType::IndexTree == index_tree_type_) {
+    if (OB_FAIL(get_data_macro_block_id_in_index_tree(macro_id))) {
+      LOG_WARN("Fail to get data macro block id in index tree", K(ret));
+    }
+  } else if (IndexTreeType::ClusteredIndexTree == index_tree_type_) {
+    if (OB_FAIL(get_data_macro_block_id_in_clustered_index_tree(macro_id))) {
+      LOG_WARN("Fail to get data macro block id in clustered index tree",
+               K(ret), K(rowkey), K(lower_bound), K(is_beyond_the_range));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected index tree type", K(ret), K(index_tree_type_));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(tree_cursor_.get_idx_parser(parser))) {
     LOG_WARN("Fail to get macro block idx parser", K(ret));
   } else if (OB_ISNULL(parser)) {
@@ -572,14 +758,22 @@ int ObIndexBlockMacroIterator::get_cs_range(
   int64_t data_begin = 0;
   int64_t data_end = 0;
   int64_t micro_start_row_offset = 0;
-  ObMacroBlockHandle macro_handle;
-  blocksstable::ObMacroBlockReadInfo read_info;
+
+  // Need to pay attention!!!
+  // The allocator is used to allocate io data buffer, and its memory life cycle needs to be longer than the object handle.
   common::ObArenaAllocator io_allocator("cs_range");
-  read_info.macro_block_id_ = block_id;
+  ObStorageObjectHandle macro_handle;
+  ObStorageObjectReadInfo read_info;
+
   read_info.offset_ = sstable_->get_macro_offset();
   read_info.size_ = sstable_->get_macro_read_size();
-  read_info.io_desc_.set_wait_event(common::ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_timeout_ms_ = std::max(DEFAULT_IO_WAIT_TIME_MS, GCONF._data_storage_io_timeout / 1000);
+  read_info.io_desc_.set_mode(ObIOMode::READ);
+  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+  read_info.io_desc_.set_sys_module_id(ObIOModule::INDEX_BLOCK_MICRO_ITER_IO);
+  read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
+  read_info.macro_block_id_ = block_id;
+  read_info.mtl_tenant_id_ = MTL_ID();
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Macro iter not init", K(ret));
@@ -590,7 +784,7 @@ int ObIndexBlockMacroIterator::get_cs_range(
       reinterpret_cast<char*>(io_allocator.alloc(read_info.size_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc macro read info buffer", K(ret), K(read_info.size_));
-  } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle))) {
+  } else if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
     LOG_WARN("Fail to read macro block, ", K(ret), K(read_info));
   } else if (OB_FAIL(macro_handle.wait())) {
     LOG_WARN("Fail to wait io finish", K(ret), K(macro_handle), K(read_info));

@@ -75,7 +75,7 @@ void TestTextAnalyzer::analyze_test(
   doc_datum.set_string(raw_doc, raw_doc_len);
   LOG_DEBUG("start test one tokenization", K(analyzer), K(doc_datum), K(doc_datum.get_string()));
 
-  ObITokenStream *token_stream;
+  ObIFTTokenStream *token_stream;
   ASSERT_EQ(OB_SUCCESS, analyzer.analyze(doc_datum, token_stream));
   ASSERT_NE(nullptr, token_stream);
 

@@ -10,25 +10,19 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include "sql/test_sql_utils.h"
-#include "lib/utility/ob_test_util.h"
-#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_print_visitor.h"
 #include "sql/ob_sql_init.h"
-#include "lib/json/ob_json_print_utils.h"
-#include "share/ob_cluster_version.h"
-#include <fstream>
+#include "observer/omt/ob_tenant_config_mgr.h"
 #define private public
 #include "observer/ob_server.h"
 #undef private
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::lib;
+using namespace oceanbase::omt;
 using namespace oceanbase;
 
-class TestRawExprResolver: public ::testing::Test
+class TestRawExprResolver: public test::TestSqlUtils, public ::testing::Test
 {
 public:
   TestRawExprResolver();
@@ -81,6 +75,12 @@ void TestRawExprResolver::resolve(const char* expr, const char *&json_expr)
   ctx.is_extract_param_type_ = false;
   ObSQLSessionInfo session;
   ctx.session_info_ = &session;
+  LinkExecCtxGuard link_guard(session, exec_ctx_);
+  ObTenantConfigGuard tenant_config(TENANT_CONF(sys_tenant_id_));
+  EXPECT_TRUE(tenant_config.is_valid());
+  // disable decimal_int to make json parser happy
+  tenant_config->_enable_decimal_int_type = false;
+  session.cached_tenant_config_info_.enable_decimal_int_type_ = false;
 
   EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
   EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));

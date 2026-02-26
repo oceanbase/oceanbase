@@ -14,10 +14,5 @@
 
 #include "rpc/frame/ob_req_processor.h"
 
-#include "lib/time/ob_time_utility.h"
-#include "rpc/ob_request.h"
-#include "lib/oblog/ob_trace_log.h"
-#include "lib/rc/context.h"
-#include "rpc/obmysql/ob_mysql_request_utils.h"
 using namespace oceanbase::common;
 using namespace oceanbase::rpc::frame;

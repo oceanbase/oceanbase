@@ -11,25 +11,12 @@
  */
 
 #include <gtest/gtest.h>
-#include <boost/geometry.hpp>
-#include <boost/geometry/geometries/point_xy.hpp>
-#include <boost/geometry/geometries/polygon.hpp>
 #include <boost/foreach.hpp>
 #define private public
-#include "lib/geo/ob_geo_bin.h"
-#include "lib/geo/ob_geo_tree.h"
-#include "lib/geo/ob_geo_tree_traits.h"
-#include "lib/geo/ob_geo_bin_traits.h"
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_func_difference.h"
 #include "lib/json_type/ob_json_common.h"
-#include "lib/random/ob_random.h"
 #undef private
 
-#include <sys/time.h>
-#include <stdexcept>
-#include <exception>
-#include <typeinfo>
 
 namespace bg = boost::geometry;
 using namespace oceanbase::common;
@@ -180,7 +167,10 @@ TEST_F(TestGeoFuncDifference, point_point)
     ObIWkbGeomPoint q;
     q.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &q);
@@ -216,7 +206,10 @@ TEST_F(TestGeoFuncDifference, point_line)
     ObIWkbGeomLineString line;
     line.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &line);
@@ -255,7 +248,10 @@ TEST_F(TestGeoFuncDifference, point_polygon)
     ObIWkbGeomPolygon poly;
     poly.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &poly);
@@ -294,7 +290,10 @@ TEST_F(TestGeoFuncDifference, point_multipoint)
     ObIWkbGeomMultiPoint multi_point;
     multi_point.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &multi_point);
@@ -334,7 +333,10 @@ TEST_F(TestGeoFuncDifference, point_multiline)
     ObIWkbGeomMultiLineString multi_line;
     multi_line.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &multi_line);
@@ -379,7 +381,10 @@ TEST_F(TestGeoFuncDifference, point_multipolygon)
     ObIWkbGeomMultiPolygon multi_polygon;
     multi_polygon.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &multi_polygon);
@@ -416,7 +421,10 @@ TEST_F(TestGeoFuncDifference, line_point)
     ObIWkbGeomPoint q;
     q.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &line);
     gis_context.ut_set_geo_arg(1, &q);
@@ -457,7 +465,10 @@ TEST_F(TestGeoFuncDifference, line_line)
     ObIWkbGeomLineString line1;
     line1.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &line);
     gis_context.ut_set_geo_arg(1, &line1);
@@ -565,7 +576,10 @@ TEST_F(TestGeoFuncDifference, line_polygon)
 */
 
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
 
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &line);
@@ -654,7 +668,10 @@ TEST_F(TestGeoFuncDifference, line_multiline)
 
     ObIWkbGeomMultiLineString multi_line;
     multi_line.set_data(data1.string());
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
 
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &line);
@@ -730,7 +747,10 @@ TEST_F(TestGeoFuncDifference, line_multipolygon)
 
     ObIWkbGeomMultiPolygon multi_poly;
     multi_poly.set_data(data1.string());
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
 
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &line);
@@ -835,7 +855,10 @@ TEST_F(TestGeoFuncDifference, polygon_polygon)
     }
     ObIWkbGeomPolygon poly2;
     poly2.set_data(data1.string());
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
 
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &poly1);
@@ -940,7 +963,10 @@ TEST_F(TestGeoFuncDifference, polygon_multipolygon)
 
     ObIWkbGeomMultiPolygon multi_poly;
     multi_poly.set_data(data1.string());
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
 
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &poly);
@@ -991,7 +1017,10 @@ TEST_F(TestGeoFuncDifference, multipoint_point)
     ObIWkbGeomMultiPoint multi_point;
     multi_point.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &multi_point);
     gis_context.ut_set_geo_arg(1, &p);
@@ -1037,7 +1066,10 @@ TEST_F(TestGeoFuncDifference, multipoint_linestring)
     ObIWkbGeomMultiPoint multi_point;
     multi_point.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &multi_point);
     gis_context.ut_set_geo_arg(1, &line);
@@ -1087,7 +1119,10 @@ TEST_F(TestGeoFuncDifference, multipoint_polygon)
     ObIWkbGeomMultiPoint multi_point;
     multi_point.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &multi_point);
     gis_context.ut_set_geo_arg(1, &pol);
@@ -1136,7 +1171,10 @@ TEST_F(TestGeoFuncDifference, multipoint_multipoint)
     ObIWkbGeomMultiPoint multi_point;
     multi_point.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &multi_point);
     gis_context.ut_set_geo_arg(1, &multi_point1);
@@ -1189,7 +1227,10 @@ TEST_F(TestGeoFuncDifference, multipoint_multilinestring)
     ObIWkbGeomMultiPoint multi_point;
     multi_point.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &multi_point);
     gis_context.ut_set_geo_arg(1, &multi_line);
@@ -1282,7 +1323,10 @@ TEST_F(TestGeoFuncDifference, point_point_geog)
     ObIWkbGeogPoint q;
     q.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context, srs);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &q);
@@ -1320,7 +1364,10 @@ TEST_F(TestGeoFuncDifference, point_line_geog)
     ObIWkbGeogLineString line;
     line.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context, srs);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &line);
@@ -1357,7 +1404,10 @@ TEST_F(TestGeoFuncDifference, point_polygon_geog)
     ObIWkbGeogPolygon poly;
     poly.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context, srs);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &poly);
@@ -1398,7 +1448,10 @@ TEST_F(TestGeoFuncDifference, point_multipoint_geog)
     ObIWkbGeogMultiPoint multi_point;
     multi_point.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context, srs);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &multi_point);
@@ -1436,7 +1489,10 @@ TEST_F(TestGeoFuncDifference, point_multiline_geog)
     ObIWkbGeogMultiLineString multi_line;
     multi_line.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context, srs);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &multi_line);
@@ -1483,7 +1539,10 @@ TEST_F(TestGeoFuncDifference, point_multipolygon_geog)
     ObIWkbGeogMultiPolygon multi_polygon;
     multi_polygon.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context, srs);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &p);
     gis_context.ut_set_geo_arg(1, &multi_polygon);
@@ -1522,7 +1581,10 @@ TEST_F(TestGeoFuncDifference, line_point_geog)
     ObIWkbGeogPoint q;
     q.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context, srs);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &line);
     gis_context.ut_set_geo_arg(1, &q);
@@ -1587,7 +1649,10 @@ TEST_F(TestGeoFuncDifference, line_line_geog)
     ObIWkbGeogLineString line1;
     line1.set_data(data1.string());
 
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context, srs);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &line);
     gis_context.ut_set_geo_arg(1, &line1);
@@ -1694,7 +1759,10 @@ TEST_F(TestGeoFuncDifference, line_polygon_geog)
 
     ObIWkbGeogPolygon poly;
     poly.set_data(data1.string());
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context, srs);
 
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &line);
@@ -1759,7 +1827,10 @@ TEST_F(TestGeoFuncDifference, line_multiline_geog)
 
     ObIWkbGeogMultiLineString multi_line;
     multi_line.set_data(data1.string());
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context, srs);
 
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &line);
@@ -1836,7 +1907,10 @@ TEST_F(TestGeoFuncDifference, line_multipolygon_geog)
 
     ObIWkbGeogMultiPolygon multi_poly;
     multi_poly.set_data(data1.string());
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context, srs);
 
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &line);
@@ -1933,7 +2007,10 @@ TEST_F(TestGeoFuncDifference, polygon_polygon_geog)
     }
     ObIWkbGeogPolygon poly2;
     poly2.set_data(data1.string());
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context, srs);
 
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &poly1);
@@ -2023,7 +2100,10 @@ TEST_F(TestGeoFuncDifference, polygon_multipolygon_geog)
     ASSERT_EQ(multi_p->size(), 2);
     std::cout << "ob::mpoly1" << boost::geometry::dsv(*multi_p) << std::endl;
 
-    ObGeoEvalCtx gis_context(&allocator, srs);
+    lib::MemoryContext mem_context;
+    ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+        lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+    ObGeoEvalCtx gis_context(mem_context, srs);
     gis_context.ut_set_geo_count(2);
     gis_context.ut_set_geo_arg(0, &poly);
     gis_context.ut_set_geo_arg(1, &multi_poly);

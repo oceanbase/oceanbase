@@ -12,21 +12,10 @@
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
 
-#include <math.h>
 #include "rpc/obmysql/ob_mysql_util.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/charset/ob_dtoa.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/rowid/ob_urowid.h"
-#include "common/object/ob_object.h"
 #include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_base.h"
 #include "lib/geo/ob_geo_bin.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/xml/ob_xml_bin.h"
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -117,7 +106,30 @@ int ObMySQLUtil::get_length(const char *&pos, uint64_t &length)
       get_uint3(pos, s4);
       length = s4;
     } else if (sentinel == 254) {
-      get_uint8(pos, length);
+      if (lib::is_oracle_mode()) {
+        get_uint8(pos, length);
+      } else {
+        /*
+          In our client-server protocol all numbers bigger than 2^24
+          stored as 8 bytes with uint8korr. Here we always know that
+          parameter length is less than 2^4 so we don't look at the second
+          4 bytes. But still we need to obey the protocol hence 9 in the
+          assignment below.
+          if (packet_left_len < 9) {
+            *header_len = 0;
+            return 0;
+          }
+          *header_len = 9;
+          return static_cast<ulong>(uint4korr(packet + 1));
+
+          OceanBase length parsing compatible with mysql, so we don't look at the second
+          4 bytes. But still we need to obey the protocol hence 9 in the
+          assignment below.
+        */
+        get_uint4(pos, s4);
+        length = s4;
+        pos += 4;
+      }
     } else {
       // 255??? won't get here.
       pos--;                  // roll back
@@ -472,50 +484,11 @@ int ObMySQLUtil::datetime_cell_str(
     LOG_WARN("invalid input args", K(ret), KP(buf));
   } else {
     if (type == BINARY) {
-      ObTime ob_time;
-      uint8_t timelen = 0;
+      ObTime ob_time(DT_TYPE_DATETIME);
       if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(val, tz_info, ob_time))) {
         LOG_WARN("convert usec ", K(ret));
-      } else {
-        if (ob_time.parts_[DT_USEC]) {
-          timelen = 11;
-        } else if (ob_time.parts_[DT_HOUR] || ob_time.parts_[DT_MIN] || ob_time.parts_[DT_SEC]) {
-          timelen = 7;
-        } else if (ob_time.parts_[DT_YEAR] || ob_time.parts_[DT_MON] || ob_time.parts_[DT_MDAY]) {
-          timelen = 4;
-        } else {
-          timelen = 0;
-        }
-
-        if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        }
-
-        if(timelen > 0 && OB_SUCC(ret)) {
-          if (OB_FAIL(ObMySQLUtil::store_int2(buf, len, static_cast<int16_t>(ob_time.parts_[DT_YEAR]), pos))) {
-            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-          } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MON]), pos))) {
-            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-          } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MDAY]), pos))) {
-            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-          }
-        }
-
-        if(timelen > 4 && OB_SUCC(ret)) {
-          if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_HOUR]), pos))) {
-            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-          } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {
-            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-          } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_SEC]), pos))) {
-            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-          }
-        }
-
-        if(timelen > 7 && OB_SUCC(ret)) {
-          if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time.parts_[DT_USEC]), pos))) {
-            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-          }
-        }
+      } else if (OB_FAIL(ob_time_cell_str(ob_time, buf, len, pos))) {
+        LOG_WARN("fail to store ob time using datetime", K(ret));
       }
     } else {
       /* skip 1 byte to store length */
@@ -525,6 +498,43 @@ int ObMySQLUtil::datetime_cell_str(
       } else {
         const ObString nls_format;
         if (OB_FAIL(ObTimeConverter::datetime_to_str(val, tz_info, nls_format, scale, buf, len, pos))) {
+          pos = pos_begin + 1;
+        } else {
+          // store length as beginning
+          int64_t timelen = pos - pos_begin - 1;
+          ret = ObMySQLUtil::store_length(buf, len, timelen, pos_begin);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMySQLUtil::mdatetime_cell_str(
+    char *buf, const int64_t len,
+    const ObMySQLDateTime &val, MYSQL_PROTOCOL_TYPE type, int64_t &pos,
+    const ObTimeZoneInfo *tz_info, int16_t scale)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input args", K(ret), KP(buf));
+  } else {
+    if (type == BINARY) {
+      ObTime ob_time(DT_TYPE_MYSQL_DATETIME);
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_ob_time(val, ob_time))) {
+        LOG_WARN("convert usec ", K(ret));
+      } else if (OB_FAIL(ob_time_cell_str(ob_time, buf, len, pos))) {
+        LOG_WARN("fail to store ob time using mysql datetime", K(ret));
+      }
+    } else {
+      /* skip 1 byte to store length */
+      int64_t pos_begin = pos++;
+      if (len - pos <= 1) {
+        ret = OB_SIZE_OVERFLOW;
+      } else {
+        const ObString nls_format;
+        if (OB_FAIL(ObTimeConverter::mdatetime_to_str(val, tz_info, nls_format, scale, buf, len, pos))) {
           pos = pos_begin + 1;
         } else {
           // store length as beginning
@@ -624,8 +634,7 @@ int ObMySQLUtil::otimestamp_cell_str2(
 }
 
 int ObMySQLUtil::date_cell_str(
-    char *buf, const int64_t len,
-    int32_t val, MYSQL_PROTOCOL_TYPE type, int64_t &pos)
+    char *buf, const int64_t len, int32_t val, MYSQL_PROTOCOL_TYPE type, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -633,27 +642,11 @@ int ObMySQLUtil::date_cell_str(
     LOG_WARN("invalid input args", K(ret), KP(buf));
   } else {
     if (type == BINARY) {
-      ObTime ob_time;
-      uint8_t timelen = 0;
+      ObTime ob_time(DT_TYPE_DATE);
       if (OB_FAIL(ObTimeConverter::date_to_ob_time(val, ob_time))) {
         LOG_WARN("convert day to date failed", K(ret));
-      } else if (0 == ob_time.parts_[DT_YEAR] && 0 == ob_time.parts_[DT_MON] && 0 == ob_time.parts_[DT_MDAY]) {
-        timelen = 0;
-        ret = ObMySQLUtil::store_int1(buf, len, timelen, pos);
-      } else {
-        timelen = 4;
-        if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {//length(1)
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(
-                       ObMySQLUtil::store_int2(buf, len, static_cast<int16_t>(ob_time.parts_[DT_YEAR]), pos))) {//year(2)
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(
-                       ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MON]), pos))) {//mouth(1)
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(
-                       ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MDAY]), pos))) {//day(1)
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        }
+      } else if (OB_FAIL(ob_time_cell_str(ob_time, buf, len, pos))) {
+        LOG_WARN("fail to store ob time using date", K(ret));
       }
     } else {
       /* skip 1 byte to store length */
@@ -662,6 +655,40 @@ int ObMySQLUtil::date_cell_str(
         ret = OB_SIZE_OVERFLOW;
       } else {
         if (OB_FAIL(ObTimeConverter::date_to_str(val, buf, len, pos))) {
+          pos = pos_begin + 1;
+        } else {
+          // store length as beginning
+          int64_t timelen = pos - pos_begin - 1;
+          ret = ObMySQLUtil::store_length(buf, len, timelen, pos_begin);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMySQLUtil::mdate_cell_str(
+    char *buf, const int64_t len, ObMySQLDate val, MYSQL_PROTOCOL_TYPE type, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input args", K(ret), KP(buf));
+  } else {
+    if (type == BINARY) {
+      ObTime ob_time(DT_TYPE_MYSQL_DATE);
+      if (OB_FAIL(ObTimeConverter::mdate_to_ob_time(val, ob_time))) {
+        LOG_WARN("convert day to date failed", K(ret));
+      } else if (OB_FAIL(ob_time_cell_str(ob_time, buf, len, pos))) {
+        LOG_WARN("fail to store ob time using date", K(ret));
+      }
+    } else {
+      /* skip 1 byte to store length */
+      int64_t pos_begin = pos++;
+      if (len - pos <= 1) {
+        ret = OB_SIZE_OVERFLOW;
+      } else {
+        if (OB_FAIL(ObTimeConverter::mdate_to_str(val, buf, len, pos))) {
           pos = pos_begin + 1;
         } else {
           // store length as beginning
@@ -684,7 +711,7 @@ int ObMySQLUtil::time_cell_str(
     LOG_WARN("invalid input args", K(ret), KP(buf));
   } else {
     if (type == BINARY) {
-      ObTime ob_time;
+      ObTime ob_time(DT_TYPE_TIME);
       uint8_t timelen = 0;
       if (OB_FAIL(ObTimeConverter::time_to_ob_time(val, ob_time))) {
         LOG_WARN("convert usec to timestamp failed", K(ret));
@@ -1138,7 +1165,7 @@ int ObMySQLUtil::json_cell_str(uint64_t tenant_id, char *buf, const int64_t len,
     }
   } else if (OB_FAIL(j_bin.reset_iter())) {
     OB_LOG(WARN, "fail to reset json bin iter", K(ret), K(val));
-  } else if (OB_FAIL(j_base->print(jbuf, true))) {
+  } else if (OB_FAIL(j_base->print(jbuf, true, val.length()))) {
     OB_LOG(WARN, "json binary to string failed in mysql mode", K(ret), K(val), K(*j_base));
   } else {
     int64_t new_length = jbuf.length();
@@ -1247,6 +1274,58 @@ int ObMySQLUtil::geometry_cell_str(char *buf, const int64_t len, const ObString 
   }
   return ret;
 }
+
+int ObMySQLUtil::ob_time_cell_str(const ObTime &ob_time, char *buf, const int64_t len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  uint8_t timelen = 0;
+  if (OB_UNLIKELY(!HAS_TYPE_DATE(ob_time.mode_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only supports ob_time converted from (mysql)date/datetime", K(ret), K_(ob_time.mode));
+  } else {
+    if (ob_time.parts_[DT_USEC]) {
+      timelen = 11;
+    } else if (ob_time.parts_[DT_HOUR] || ob_time.parts_[DT_MIN] || ob_time.parts_[DT_SEC]) {
+      timelen = 7;
+    } else if (ob_time.parts_[DT_YEAR] || ob_time.parts_[DT_MON] || ob_time.parts_[DT_MDAY]) {
+      timelen = 4;
+    } else {
+      timelen = 0;
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {
+    LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+  }
+
+  if(timelen > 0 && OB_SUCC(ret)) {
+    if (OB_FAIL(ObMySQLUtil::store_int2(buf, len, static_cast<int16_t>(ob_time.parts_[DT_YEAR]), pos))) {
+      LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+    } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MON]), pos))) {
+      LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+    } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MDAY]), pos))) {
+      LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+    }
+  }
+
+  if(timelen > 4 && OB_SUCC(ret)) {
+    if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_HOUR]), pos))) {
+      LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+    } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {
+      LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+    } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_SEC]), pos))) {
+      LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+    }
+  }
+
+  if(timelen > 7 && OB_SUCC(ret)) {
+    if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time.parts_[DT_USEC]), pos))) {
+      LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+    }
+  }
+  return ret;
+}
+
 
 } // namespace obmysql
 } // namespace oceanbase

@@ -1,9 +1,9 @@
-set SESSION ob_query_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
-set SESSION ob_query_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
 drop table if exists test_uncommitted_trx_minor_merge;
 create table test_uncommitted_trx_minor_merge(c1 int primary key, c2 int);
 insert into test_uncommitted_trx_minor_merge values (1,1);

@@ -83,6 +83,10 @@ public:
       const ObExtSRangeArray &ranges,
       ObPartitionEst &part_est);
 
+  static void fix_invalid_logic_row(
+      const ObPartitionEst &part_estimate,
+      ObPartitionEst &table_est);
+
     TO_STRING_KV("name", "ObTableEstimator");
 };
 

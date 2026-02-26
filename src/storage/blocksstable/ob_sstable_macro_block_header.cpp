@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_sstable_macro_block_header.h"
-#include "ob_macro_block.h"
+#include "storage/blocksstable/ob_data_store_desc.h"
 
 using namespace oceanbase::share;
 
@@ -64,6 +64,17 @@ int64_t ObSSTableMacroBlockHeader::to_string(char* buf, const int64_t buf_len) c
         J_COMMA();
       }
       BUF_PRINTO(column_checksum_[i]);
+    }
+    J_ARRAY_END();
+    J_COMMA();
+    J_NAME("column_types");
+    J_COLON();
+    J_ARRAY_START();
+    for (int64_t i = 0; i < fixed_header_.column_count_; ++i) {
+      if (0 != i) {
+        J_COMMA();
+      }
+      BUF_PRINTO(column_types_[i]);
     }
     J_ARRAY_END();
     J_OBJ_END();

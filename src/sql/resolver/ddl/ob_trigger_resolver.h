@@ -14,7 +14,7 @@
 #define OCEANBASE_SQL_RESOLVER_DDL_OB_TRIGGER_RESOLVER_
 
 #include "sql/resolver/ob_stmt_resolver.h"
-
+#include "sql/resolver/ddl/ob_trigger_stmt.h"
 namespace oceanbase
 {
 namespace obrpc
@@ -48,6 +48,8 @@ public:
                              const ObString &db_name,
                              ObIArray<ObDependencyInfo> &dep_infos,
                              bool is_alter_compile);
+  static int resolve_has_auto_trans(const ParseNode &declare_node,
+                                    share::schema::ObTriggerInfo &trigger_info);
 private:
   int resolve_create_trigger_stmt(const ParseNode &parse_node,
                                   obrpc::ObCreateTriggerArg &trigger_arg);
@@ -90,16 +92,25 @@ private:
                            share::schema::ObTriggerInfo &tg_info,
                            const ObString &db_name,
                            bool &is_set_status,
-                            bool &is_alter_compile);
+                           bool &is_alter_compile);
   int fill_package_info(share::schema::ObTriggerInfo &trigger_info);
 
   int resolve_base_object(obrpc::ObCreateTriggerArg &trigger_arg, bool search_public_schema);
   int resolve_order_clause(const ParseNode *parse_node, obrpc::ObCreateTriggerArg &trigger_arg);
+  int get_drop_trigger_stmt_table_name(ObDropTriggerStmt *stmt);
 #ifdef OB_BUILD_ORACLE_PL
   int resolve_rename_trigger(const ParseNode &rename_clause,
                              ObSchemaGetterGuard &schema_guard,
                              share::schema::ObTriggerInfo &trigger_info,
                              common::ObIAllocator &alloc);
+  int resolve_system_trigger(const ParseNode &parse_node,
+                             obrpc::ObCreateTriggerArg &trigger_arg);
+  int resolve_sys_event_option(const ParseNode &parse_node,
+                               obrpc::ObCreateTriggerArg &trigger_arg);
+  int resolve_sys_event_list(const ParseNode &parse_node,
+                             obrpc::ObCreateTriggerArg &trigger_arg);
+  int resolve_sys_base_object(const ParseNode &parse_node,
+                              obrpc::ObCreateTriggerArg &trigger_arg);
 #endif
 
 private:

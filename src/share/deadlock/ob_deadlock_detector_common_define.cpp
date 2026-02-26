@@ -358,9 +358,9 @@ int ObDetectorUserReportInfo::set_columns_(const int64_t idx,
     ret = OB_INVALID_ARGUMENT;
     DETECT_LOG(WARN, "string length reach limit", PRINT_WRAPPER, K(STR_LEN_LIMIT));
   } else if (ValueType::COLUMN_NAME == type) {
-    extra_columns_names_.push_back(ObString(str_len, column_info));
+    ret = extra_columns_names_.push_back(ObString(str_len, column_info));
   } else if (ValueType::COLUMN_VALUE == type) {
-    extra_columns_values_.push_back(ObString(str_len, column_info));
+    ret = extra_columns_values_.push_back(ObString(str_len, column_info));
   } else {
     ret = OB_ERR_UNEXPECTED;
     int type_ = static_cast<int>(type);
@@ -379,13 +379,15 @@ int ObDetectorUserReportInfo::set_columns_(const int64_t idx,
   int ret = OB_SUCCESS;
 
   if (ValueType::COLUMN_NAME == type) {
-    extra_columns_names_guard_.push_back(column_info);
-    extra_columns_names_.push_back(ObString(strlen(column_info.get_ptr()),
-                                            column_info.get_ptr()));
+    if (OB_FAIL(extra_columns_names_guard_.push_back(column_info))) {
+    } else if (OB_FAIL(extra_columns_names_.push_back(ObString(strlen(column_info.get_ptr()), column_info.get_ptr())))) {
+      extra_columns_names_guard_.pop_back();
+    }
   } else if (ValueType::COLUMN_VALUE == type) {
-    extra_columns_values_guard_.push_back(column_info);
-    extra_columns_values_.push_back(ObString(strlen(column_info.get_ptr()),
-                                    column_info.get_ptr()));
+    if (OB_FAIL(extra_columns_values_guard_.push_back(column_info))) {
+    } else if (extra_columns_values_.push_back(ObString(strlen(column_info.get_ptr()), column_info.get_ptr()))) {
+      extra_columns_values_guard_.pop_back();
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     int type_ = static_cast<int>(type);

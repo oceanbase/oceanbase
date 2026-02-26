@@ -30,6 +30,12 @@ namespace sql
 
 namespace pl
 {
+  #define HANDLE_PL_CACHE_RET_VALUE(ret) \
+  do { \
+    if ((ret) != OB_ERR_UNEXPECTED && (ret) != OB_REACH_MAX_CONCURRENT_NUM) { \
+      (ret) = OB_SUCCESS; \
+    } \
+  } while (0)
 
 struct ObGetPLKVEntryOp : public sql::ObKVEntryTraverseOp
 {
@@ -85,6 +91,32 @@ struct ObGetPLKVEntryBySchemaIdOp : public ObKVEntryTraverseOp
 
   uint64_t db_id_;
   uint64_t schema_id_;
+};
+
+struct ObGetPLKVEntryByDbIdOp : public ObKVEntryTraverseOp
+{
+  explicit ObGetPLKVEntryByDbIdOp(uint64_t db_id,
+                                 uint64_t schema_id,
+                                 LCKeyValueArray *key_val_list,
+                                 const CacheRefHandleID ref_handle)
+    : ObKVEntryTraverseOp(key_val_list, ref_handle),
+      db_id_(db_id)
+  {
+  }
+  virtual int check_entry_match(LibCacheKVEntry &entry, bool &is_match)
+  {
+    int ret = OB_SUCCESS;
+    is_match = false;
+    ObPLObjectKey *key = static_cast<ObPLObjectKey*>(entry.first);
+    if (db_id_ != common::OB_INVALID_ID && db_id_ != key->db_id_) {
+      // skip entry that has non-matched db_id
+    } else {
+      is_match = true;
+    }
+    return ret;
+  }
+
+  uint64_t db_id_;
 };
 
 struct ObGetPLKVEntryBySQLIDOp : public ObKVEntryTraverseOp
@@ -145,6 +177,14 @@ public:
   static int cache_evict_all_pl(ObPlanCache *lib_cache);
   template<typename GETPLKVEntryOp, typename EvictAttr>
   static int cache_evict_pl_cache_single(ObPlanCache *lib_cache, uint64_t db_id, EvictAttr &attr);
+  static int flush_pl_cache_by_sql(
+                                  uint64_t key_id,
+                                  uint64_t db_id,
+                                  uint64_t tenant_id,
+                                  share::schema::ObMultiVersionSchemaService & schema_service);
+  static int get_sys_var_in_pl_cache_str(ObBasicSessionInfo &session,
+                                          ObIAllocator &allocator,
+                                          ObString &sys_var_str);
 
 private:
   static int add_pl_object(ObPlanCache *lib_cache,

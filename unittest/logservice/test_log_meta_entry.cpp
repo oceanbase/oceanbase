@@ -12,9 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "logservice/palf/log_meta_entry.h"              // LogMetaEntry
-#include "logservice/palf/log_meta_info.h"               // LogPrepareMeta...
 #include "logservice/palf/log_meta.h"                    // LogMeta
-#include "logservice/palf/palf_options.h"
 
 #include <gtest/gtest.h>
 
@@ -79,7 +77,8 @@ TEST(TestLogMetaEntry, test_log_meta_entry)
   // Snapshot meta
   LogSnapshotMeta log_snapshot_meta1;
   LSN lsn; lsn.val_ = 1;
-  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta1.generate(lsn));
+  LogInfo prev_log_info; prev_log_info.generate_by_default();
+  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta1.generate(lsn, prev_log_info, lsn));
 
   LogReplicaPropertyMeta replica_meta1;
   replica_meta1.generate(true, LogReplicaType::NORMAL_REPLICA);
@@ -128,5 +127,6 @@ int main(int argc, char **argv)
   PALF_LOG(INFO, "begin unittest::test_log_meta_entry");
   ::testing::InitGoogleTest(&argc, argv);
   oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+  oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }

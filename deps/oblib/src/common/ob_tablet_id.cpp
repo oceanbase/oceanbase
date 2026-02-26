@@ -14,9 +14,6 @@
 
 #include "ob_tablet_id.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/utility/serialization.h"
 
 namespace oceanbase
 {

@@ -13,12 +13,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_priv_st_geogfromtext.h"
-#include "lib/geo/ob_geo_common.h"
-#include "lib/geo/ob_wkt_parser.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
-#include "lib/geo/ob_geo_func_common.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -74,11 +69,12 @@ int ObExprPrivSTGeogFromText::eval_priv_st_geogfromtext_common(const ObExpr &exp
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, func_name);
   ObDatum *datum = NULL;
 
   // get wkt
-  if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
+  if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[0], ctx, datum))) {
     LOG_WARN("eval wkt arg failed", K(ret));
   } else if(datum->is_null()){
     res.set_null();
@@ -93,6 +89,7 @@ int ObExprPrivSTGeogFromText::eval_priv_st_geogfromtext_common(const ObExpr &exp
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
                 expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkt))) {
       LOG_WARN("fail to get real data.", K(ret), K(wkt));
+    } else if (FALSE_IT(tmp_allocator.set_baseline_size(wkt.length()))) {
     } else if (OB_NOT_NULL(wkt.find(';'))) {
       ObString srid_str = wkt.split_on(';');
       if (OB_FAIL(ObGeoExprUtils::parse_srid(srid_str, srid))) {

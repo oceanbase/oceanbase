@@ -183,14 +183,14 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSpLinkQueue);
 };
 
-class ObLinkQueue
+template <uint64_t QUEUE_COUNT = 512>
+class ObMultiSpLinkQueue
 {
 public:
   typedef QLink Link;
-  enum { QUEUE_COUNT = 512 };
-  ObLinkQueue() : queue_(), push_(0), pop_(0)
+  ObMultiSpLinkQueue() : queue_(), push_(0), pop_(0)
   {}
-  ~ObLinkQueue() {}
+  ~ObMultiSpLinkQueue() {}
   int push(Link *p)
   {
     int ret = OB_SUCCESS;
@@ -241,7 +241,7 @@ public:
     uint64_t push = ATOMIC_LOAD(&push_);
     return (int64_t)(push - pop);
   }
-  int merge(ObLinkQueue &other)
+  int merge(ObMultiSpLinkQueue &other)
   {
     int ret = OB_SUCCESS;
     while(other.size() > 0) {
@@ -260,8 +260,10 @@ private:
   uint64_t push_ CACHE_ALIGNED;
   uint64_t pop_ CACHE_ALIGNED;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObLinkQueue);
+  DISALLOW_COPY_AND_ASSIGN(ObMultiSpLinkQueue);
 };
+
+using ObLinkQueue = ObMultiSpLinkQueue<>;
 
 class ObSimpleLinkQueue
 {

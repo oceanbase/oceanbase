@@ -10,15 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_occam_time_guard.h"
 #include "election_priority_impl.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/serialization.h"
 #include "logservice/leader_coordinator/common_define.h"
-#include "share/ob_cluster_version.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -285,7 +278,9 @@ int64_t ElectionPriorityImpl::to_string(char *buf, const int64_t buf_len) const
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG(ERROR, "can't get closest priority from tuple", KR(ret), K(MTL_ID()), K(*this), K(GET_MIN_CLUSTER_VERSION()));
   } else {
-    databuff_printf(buf, buf_len, pos, "{priority:%s}", common::to_cstring(*functor.get_closest_priority()));
+    databuff_printf(buf, buf_len, pos, "{priority:");
+    databuff_printf(buf, buf_len, pos, *functor.get_closest_priority());
+    databuff_printf(buf, buf_len, pos, "}");
   }
   return pos;
 }
@@ -303,7 +298,37 @@ bool ElectionPriorityImpl::has_fatal_failure() const
   }
   return ret;
 }
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+struct FillPriorityFunctor
+{
+  FillPriorityFunctor(int &ret, libpalf::LibPalfElectionPriority *lib_priority) : ret_(ret), lib_priority_(lib_priority) {}
+  template <typename T>
+  int operator()(T &element)
+  {
+    LC_TIME_GUARD(1_s);
+    int ret = OB_SUCCESS;
+    if (CLICK_FAIL(element.fill_libpalf_priority(lib_priority_))) {
+      ret_ = ret;
+      COORDINATOR_LOG(WARN, "fill libpalf priority failed", K(ret), K(MTL_ID()), K(element));
+    }
+    return ret;
+  }
+private:
+  int &ret_;
+  libpalf::LibPalfElectionPriority *lib_priority_;
+};
 
+int ElectionPriorityImpl::fill_libpalf_priority(libpalf::LibPalfElectionPriority *lib_priority)
+{
+  LC_TIME_GUARD(1_s);
+  int ret = OB_SUCCESS;
+  FillPriorityFunctor functor(ret, lib_priority);
+  if (CLICK_FAIL(priority_tuple_.for_each(functor))) {
+    COORDINATOR_LOG(WARN, "fill libpalf_priority failed", KR(ret), K(MTL_ID()), K_(ls_id), K(*this));
+  }
+  return ret;
+}
+#endif
 }
 }
 }

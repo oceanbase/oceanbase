@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_PARSER
 
-#include "parser_proxy_func.h"
 
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
+#include "parser_proxy_func.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/allocator/ob_allocator.h"
 

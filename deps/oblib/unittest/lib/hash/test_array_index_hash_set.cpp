@@ -12,7 +12,6 @@
 
 #include "gtest/gtest.h"
 #include "lib/hash/ob_array_index_hash_set.h"
-#include "lib/container/ob_array.h"
 
 using namespace oceanbase;
 using namespace common;

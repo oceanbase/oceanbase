@@ -12,12 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE_REDO
 #include "ob_storage_log_nop_log.h"
-#include <string.h>
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/allocator/ob_malloc.h"
-#include "common/log/ob_log_constants.h"
 #include "storage/slog/ob_storage_log_entry.h"
 #include "storage/slog/ob_storage_log_item.h"
 #include "storage/slog/ob_storage_log_batch_header.h"

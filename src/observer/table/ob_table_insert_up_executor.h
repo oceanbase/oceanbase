@@ -22,19 +22,22 @@ namespace table
 class ObTableApiInsertUpSpec : public ObTableApiModifySpec
 {
 public:
+  typedef common::ObArrayWrap<ObTableInsUpdCtDef*> ObTableInsUpdCtDefArray;
   ObTableApiInsertUpSpec(common::ObIAllocator &alloc, const ObTableExecutorType type)
       : ObTableApiModifySpec(alloc, type),
-        insert_up_ctdef_(alloc),
+        insert_up_ctdefs_(),
         conflict_checker_ctdef_(alloc)
   {
   }
+  int init_ctdefs_array(int64_t size);
+  virtual ~ObTableApiInsertUpSpec();
 public:
-  OB_INLINE const ObTableInsUpdCtDef& get_ctdef() const { return insert_up_ctdef_; }
-  OB_INLINE ObTableInsUpdCtDef& get_ctdef() { return insert_up_ctdef_; }
+  OB_INLINE const ObTableInsUpdCtDefArray& get_ctdefs() const { return insert_up_ctdefs_; }
+  OB_INLINE ObTableInsUpdCtDefArray& get_ctdefs() { return insert_up_ctdefs_; }
   OB_INLINE const sql::ObConflictCheckerCtdef& get_conflict_checker_ctdef() const { return conflict_checker_ctdef_; }
   OB_INLINE sql::ObConflictCheckerCtdef& get_conflict_checker_ctdef() { return conflict_checker_ctdef_; }
 private:
-  ObTableInsUpdCtDef insert_up_ctdef_;
+  ObTableInsUpdCtDefArray insert_up_ctdefs_;
   sql::ObConflictCheckerCtdef conflict_checker_ctdef_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiInsertUpSpec);
@@ -43,19 +46,21 @@ private:
 class ObTableApiInsertUpExecutor : public ObTableApiModifyExecutor
 {
 public:
+  typedef common::ObArrayWrap<ObTableInsUpdRtDef> ObTableInsUpdRtDefArray;
   ObTableApiInsertUpExecutor(ObTableCtx &ctx, const ObTableApiInsertUpSpec &spec)
       : ObTableApiModifyExecutor(ctx),
-        allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         insert_up_spec_(spec),
-        insert_up_rtdef_(),
+        insert_up_rtdefs_(),
         insert_row_(nullptr),
+        old_row_(nullptr),
         insert_rows_(0),
         upd_changed_rows_(0),
         upd_rtctx_(eval_ctx_, exec_ctx_, get_fake_modify_op()),
         conflict_checker_(allocator_, eval_ctx_, spec.get_conflict_checker_ctdef()),
         is_duplicated_(false),
         cur_idx_(0),
-        is_row_changed_(false)
+        is_row_changed_(false),
+        use_put_(false)
   {
   }
   virtual ~ObTableApiInsertUpExecutor()
@@ -69,6 +74,7 @@ public:
   virtual void destroy()
   {
     // destroy
+    insert_up_rtdefs_.release_array();
     conflict_checker_.destroy();
     upd_rtctx_.cleanup();
     ObTableApiModifyExecutor::destroy();
@@ -78,46 +84,56 @@ public:
   {
     return is_duplicated_;
   }
-private:
-  OB_INLINE bool is_duplicated()
+  OB_INLINE bool is_use_put()
   {
-    is_duplicated_ = insert_up_rtdef_.ins_rtdef_.das_rtdef_.is_duplicated_;
-    return is_duplicated_;
+    return use_put_;
   }
+
+  // WARIING: This interface is used to return the old row to determine whether it has expired when there
+  // is a conflict between the data written in the redis ttl table.
+  // When using it, you need to pay attention to the life cycle of the old row.
+  // All in all: the row is assigned by the allocator of tb_ctx, which is consistent with its life cycle.
+  int get_old_row(const ObNewRow *&row);
+
+private:
+  bool is_duplicated();
   OB_INLINE const common::ObIArray<sql::ObExpr *>& get_primary_table_new_row()
   {
-    return insert_up_spec_.get_ctdef().ins_ctdef_.new_row_;
+    return insert_up_spec_.get_ctdefs().at(0)->ins_ctdef_.new_row_;
   }
   OB_INLINE const common::ObIArray<sql::ObExpr *> &get_primary_table_upd_new_row()
   {
-    return insert_up_spec_.get_ctdef().upd_ctdef_.new_row_;
+    return insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_.new_row_;
   }
   OB_INLINE const common::ObIArray<sql::ObExpr *> &get_primary_table_upd_old_row()
   {
-    return insert_up_spec_.get_ctdef().upd_ctdef_.old_row_;
+    return insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_.old_row_;
   }
   OB_INLINE const common::ObIArray<sql::ObExpr *> &get_primary_table_insert_row()
   {
-    return insert_up_spec_.get_ctdef().ins_ctdef_.new_row_;
+    return insert_up_spec_.get_ctdefs().at(0)->ins_ctdef_.new_row_;
   }
-  int generate_insert_up_rtdef(const ObTableInsUpdCtDef &ctdef,
-                               ObTableInsUpdRtDef &rtdef);
-  int refresh_exprs_frame(const ObTableEntity *entity);
+  int generate_insert_up_rtdefs();
+  int refresh_exprs_frame(const ObITableEntity *entity);
   int get_next_row_from_child();
   int try_insert_row();
+  int insert_row_to_das();
+  void set_need_fetch_conflict();
   int try_update_row();
   int do_insert_up_cache();
   int cache_insert_row();
   int prepare_final_insert_up_task();
-  int do_update(const ObRowkey &constraint_rowkey,
-                const sql::ObConflictValue &constraint_value);
-  int do_insert(const ObRowkey &constraint_rowkey,
-                const sql::ObConflictValue &constraint_value);
+  int do_update(const sql::ObConflictValue &constraint_value);
+  int do_insert(const sql::ObConflictValue &constraint_value);
+  int delete_upd_old_row_to_das();
+  int insert_upd_new_row_to_das();
+  int reset_das_env();
+
 private:
-  common::ObArenaAllocator allocator_;
   const ObTableApiInsertUpSpec &insert_up_spec_;
-  ObTableInsUpdRtDef insert_up_rtdef_;
+  ObTableInsUpdRtDefArray insert_up_rtdefs_;
   ObChunkDatumStore::StoredRow *insert_row_;
+  const ObChunkDatumStore::StoredRow *old_row_;
   int64_t insert_rows_;
   int64_t upd_changed_rows_;
   sql::ObDMLRtCtx upd_rtctx_;
@@ -125,6 +141,7 @@ private:
   bool is_duplicated_;
   int64_t cur_idx_;
   bool is_row_changed_;
+  bool use_put_;
 };
 
 } // end namespace table

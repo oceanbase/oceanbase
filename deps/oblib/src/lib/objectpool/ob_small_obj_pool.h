@@ -14,7 +14,7 @@
 #define OCEANBASE_LIB_OBJPOOL_OB_SMALL_OBJ_POOL_H__
 
 #include "lib/allocator/ob_small_allocator.h"   // ObSmallAllocator
-#include "lib/queue/ob_fixed_queue.h"           // ObFixedQueue
+#include "lib/queue/ob_link_queue.h"            // ObLinkQueue
 
 namespace oceanbase
 {
@@ -24,7 +24,7 @@ template <class T>
 class ObSmallObjPool
 {
 public:
-  struct ObjItem
+  struct ObjItem : public ObLink
   {
     enum
     {
@@ -35,6 +35,7 @@ public:
 
     int8_t src_type_;
     T obj_;
+
 
     ObjItem() : src_type_(SRC_UNKNOWN), obj_()
     {}
@@ -53,11 +54,12 @@ public:
 public:
   int alloc(T *&obj);
   int free(T* obj);
+  void set_fixed_count(int64_t fixed_count) { fixed_count_ = fixed_count; }
   int64_t get_free_count() const { return free_count_; }
   int64_t get_alloc_count() const { return alloc_count_; }
   int64_t get_fixed_count() const { return fixed_count_; }
-  int64_t get_cached_total_count() const { return free_list_.get_total(); }
-  int64_t get_cached_free_count() const { return free_list_.get_free(); }
+  int64_t get_cached_total_count() const { return free_count_; }
+  int64_t get_cached_free_count() const { return max(0, fixed_count_ - free_count_); }
 
 public:
   int init(const int64_t fixed_count = DEFAULT_FIXED_COUNT,
@@ -74,7 +76,7 @@ private:
   int64_t fixed_count_;
   int64_t free_count_;
   int64_t alloc_count_;
-  ObFixedQueue<ObjItem> free_list_;
+  ObMultiSpLinkQueue<16> free_list_;
   ObSmallAllocator allocator_;  // Obj allocator
 
 private:
@@ -114,8 +116,6 @@ int ObSmallObjPool<T>::init(const int64_t fixed_count,
   } else if (OB_FAIL(allocator_.init(obj_size, label, tenant_id, block_size))) {
     LIB_LOG(ERROR, "init small allocator fail", K(ret), K(obj_size), K(label),
         K(tenant_id), K(block_size));
-  } else if (OB_FAIL(free_list_.init(fixed_count, global_default_allocator, attr))) {
-    LIB_LOG(ERROR, "init free list fail", K(fixed_count));
   } else {
     fixed_count_ = fixed_count;
     free_count_ = 0;
@@ -136,20 +136,19 @@ void ObSmallObjPool<T>::destroy()
 
     inited_ = false;
     ObjItem *obj = NULL;
+    ObLink *node = NULL;
 
-    while (OB_SUCCESS == free_list_.pop(obj)) {
-      if (NULL != obj) {
-        obj->~ObjItem();
-        allocator_.free(obj);
-        obj = NULL;
-      }
+    while (OB_SUCCESS == free_list_.pop(node)) {
+      obj = static_cast<ObjItem *>(node);
+      obj->~ObjItem();
+      allocator_.free(obj);
+      obj = NULL;
     }
 
     fixed_count_ = 0;
     free_count_ = 0;
     alloc_count_ = 0;
 
-    free_list_.destroy();
     (void)allocator_.destroy();
   }
 }
@@ -159,26 +158,19 @@ int ObSmallObjPool<T>::alloc(T *&obj)
 {
   int ret = OB_SUCCESS;
   ObjItem *obj_item = NULL;
+  ObLink *node = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
     LIB_LOG(ERROR, "small obj pool has not been initialized");
     ret = OB_NOT_INIT;
-  } else if (OB_SUCC(free_list_.pop(obj_item))) {
-    if (OB_ISNULL(obj_item)) {
-      LIB_LOG(ERROR, "pop obj item from free_list fail", K(ret), K(obj_item));
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      obj = &obj_item->obj_;
-      (void)ATOMIC_AAF(&free_count_, -1);
-    }
-  } else if (OB_ENTRY_NOT_EXIST == ret) {
-    if (OB_FAIL(alloc_obj_(obj))) {
-      LIB_LOG(ERROR, "alloc_obj fail", K(ret));
-    } else {
-      // succ
-    }
-  } else { // OB_SUCCESS != ret && OB_ENTRY_NOT_EXIST != ret
-    LIB_LOG(ERROR, "pop object from free list fail", K(ret), K_(free_count), K_(alloc_count));
+  } else if (OB_SUCC(free_list_.pop(node))) {
+    obj_item = static_cast<ObjItem *>(node);
+    obj = &obj_item->obj_;
+    (void)ATOMIC_AAF(&free_count_, -1);
+  } else if (OB_FAIL(alloc_obj_(obj))) {
+    LIB_LOG(ERROR, "alloc_obj fail", K(ret));
+  } else {
+    // succ
   }
 
   return ret;
@@ -198,11 +190,8 @@ int ObSmallObjPool<T>::free(T* obj)
     ObjItem *obj_item = CONTAINER_OF(obj, ObjItem, obj_);
 
     if (ObjItem::SRC_FIXED == obj_item->src_type_) {
-      if (OB_FAIL(free_list_.push(obj_item))) {
-        LIB_LOG(ERROR, "push obj into free list fail", K(ret), KP(obj_item));
-      } else {
-        (void)ATOMIC_AAF(&free_count_, 1);
-      }
+      free_list_.push(obj_item);
+      (void)ATOMIC_AAF(&free_count_, 1);
     } else if (ObjItem::SRC_ALLOC == obj_item->src_type_) {
       obj_item->~ObjItem();
       allocator_.free(obj_item);

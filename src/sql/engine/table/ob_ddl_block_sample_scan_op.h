@@ -1,0 +1,71 @@
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+#ifndef _OB_TABLE_DDL_BLOCK_SAMPLE_SCAN_OP_H
+#define _OB_TABLE_DDL_BLOCK_SAMPLE_SCAN_OP_H
+
+#include "sql/engine/table/ob_table_scan_op.h"
+
+namespace oceanbase {
+namespace sql {
+
+class ObDDLBlockSampleScanOpInput : public ObTableScanOpInput
+{
+public:
+  ObDDLBlockSampleScanOpInput(ObExecContext &ctx, const ObOpSpec &spec)
+    : ObTableScanOpInput(ctx, spec)
+  {}
+};
+
+class ObDDLBlockSampleScanSpec: public ObTableScanSpec
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  explicit ObDDLBlockSampleScanSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObTableScanSpec(alloc, type)
+  {}
+  virtual ~ObDDLBlockSampleScanSpec() {}
+
+  inline void set_sample_info(const common::SampleInfo &sample_info) {
+    sample_info_ = sample_info;
+  }
+  inline common::SampleInfo &get_sample_info() {
+    return sample_info_;
+  }
+  inline const common::SampleInfo &get_sample_info() const {
+    return sample_info_;
+  }
+private:
+  common::SampleInfo sample_info_;
+};
+
+class ObDDLBlockSampleScanOp : public ObTableScanOp
+{
+public:
+  ObDDLBlockSampleScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
+    : ObTableScanOp(exec_ctx, spec, input), need_sample_(false) {}
+  virtual int inner_open() override;
+  virtual int inner_get_next_row() override;
+  virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
+  virtual void set_need_sample(bool flag) override
+  {
+    need_sample_ = flag;
+    tsc_rtdef_.scan_rtdef_.sample_info_ = need_sample_ ? &(MY_SPEC.get_sample_info()) : nullptr;
+  }
+private:
+  bool need_sample_;
+};
+
+}
+}
+
+#endif /* _OB_TABLE_DDL_BLOCK_SAMPLE_SCAN_OP_H */

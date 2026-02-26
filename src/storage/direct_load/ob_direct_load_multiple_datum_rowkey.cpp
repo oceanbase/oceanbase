@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_multiple_datum_rowkey.h"
-#include "observer/table_load/ob_table_load_stat.h"
 
 namespace oceanbase
 {
@@ -222,6 +221,22 @@ int ObDirectLoadMultipleDatumRowkeyCompare::init(const ObStorageDatumUtils &datu
 {
   int ret = OB_SUCCESS;
   datum_utils_ = &datum_utils;
+  return ret;
+}
+
+int ObDirectLoadMultipleDatumRowkeyCompare::compare(const ObDirectLoadMultipleDatumRowkey &lhs,
+                                                    const ObDirectLoadMultipleDatumRowkey &rhs,
+                                                    int &cmp_ret)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(datum_utils_) || OB_UNLIKELY(!lhs.is_valid() || !rhs.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(datum_utils_), K(lhs), K(rhs));
+  } else {
+    if (OB_FAIL(lhs.compare(rhs, *datum_utils_, cmp_ret))) {
+      LOG_WARN("fail to compare rowkey", KR(ret), K(lhs), K(rhs), K(datum_utils_));
+    }
+  }
   return ret;
 }
 

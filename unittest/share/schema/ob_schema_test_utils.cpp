@@ -210,7 +210,7 @@ using namespace oceanbase::sql;
   } \
   sys_variable_schema.set_tenant_id(tenant_schema.get_tenant_id()); \
   sys_variable_schema.set_schema_version(tenant_schema.get_schema_version()); \
-  ObSysParam sys_params[OB_MAX_SYS_PARAM_NUM]; \
+  ObSysParam sys_params[ObSysVarFactory::ALL_SYS_VARS_COUNT]; \
   int64_t var_amount = ObSysVariables::get_amount(); \
   int64_t sys_param_num = 0; \
   ObSysVarSchema sysvar_schema; \

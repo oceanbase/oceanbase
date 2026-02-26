@@ -12,15 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_drop_primary_key_task.h"
-#include "lib/rc/context.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/ob_ddl_error_message_table_operator.h"
-#include "share/ob_autoincrement_service.h"
-#include "share/ob_ddl_checksum.h" 
-#include "rootserver/ddl_task/ob_ddl_scheduler.h"
-#include "rootserver/ob_root_service.h"
-#include "rootserver/ddl_task/ob_ddl_redefinition_task.h"
-#include "storage/tablelock/ob_table_lock_service.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -126,55 +117,4 @@ int ObDropPrimaryKeyTask::process()
     }
   }
   return ret;
-}
-void ObDropPrimaryKeyTask::flt_set_task_span_tag() const
-{
-  FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_,
-              ddl_data_table_id, object_id_, ddl_schema_version, schema_version_);
-}
-
-void ObDropPrimaryKeyTask::flt_set_status_span_tag() const
-{
-  switch (task_status_) {
-  case ObDDLTaskStatus::PREPARE: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::OBTAIN_SNAPSHOT: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::WAIT_TRANS_END: {
-    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_schema_version, schema_version_,
-                ddl_snapshot_version, snapshot_version_, ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::REDEFINITION: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::COPY_TABLE_DEPENDENT_OBJECTS: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::MODIFY_AUTOINC: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::TAKE_EFFECT: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::FAIL: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::SUCCESS: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  default: {
-    break;
-  }
-  }
 }

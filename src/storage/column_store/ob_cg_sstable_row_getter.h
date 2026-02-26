@@ -39,12 +39,30 @@ public:
   virtual ~ObCGGetter();
   void reset();
   void reuse();
+  bool is_valid() const { return is_inited_; }
   int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper,
-      const blocksstable::ObDatumRowkey &idx_key);
+      ObSSTableWrapper &wrapper);
+  int open(const blocksstable::ObDatumRowkey &idx_key);
   int get_next_row(ObMacroBlockReader &block_reader, const blocksstable::ObDatumRow *&store_row);
+  int assign(const ObCGGetter &other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->read_handle_.assign(other.read_handle_))) {
+      COMMON_LOG(WARN, "failed to assign read handle", K(ret));
+      this->reset();
+    } else {
+      this->is_inited_ = other.is_inited_;
+      this->is_same_data_block_ = other.is_same_data_block_;
+      this->sstable_ = other.sstable_;
+      this->table_wrapper_ = other.table_wrapper_;
+      this->iter_param_ = other.iter_param_;
+      this->access_ctx_ = other.access_ctx_;
+      this->micro_getter_ = other.micro_getter_;
+    }
+    return ret;
+  }
   TO_STRING_KV(K_(is_inited), K_(is_same_data_block), K_(prefetcher), KPC_(sstable));
 
 protected:
@@ -72,9 +90,6 @@ public:
       access_ctx_(nullptr),
       iter_param_(nullptr),
       reader_(nullptr),
-      flat_reader_(nullptr),
-      encode_reader_(nullptr),
-      cs_encode_reader_(nullptr),
       micro_getter_(nullptr),
       row_idx_datum_(),
       row_idx_key_(),
@@ -84,6 +99,7 @@ public:
   virtual ~ObCGSSTableRowGetter();
   virtual void reset() override;
   virtual void reuse() override;
+  void reuse_row_getters();
   int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
@@ -100,7 +116,7 @@ private:
   int init_cg_param_pool(ObTableAccessContext &context);
   int prepare_reader(const ObRowStoreType store_type);
   int get_row_id(ObSSTableReadHandle &read_handle, ObCSRowId &row_id);
-  int prepare_cg_row_getter(const ObCSRowId row_id, const ObNopPos *nop_pos, ObIArray<int32_t> &project_idxs);
+  int prepare_cg_row_getter(const ObNopPos *nop_pos, ObIArray<int32_t> &project_idxs);
   int fetch_rowkey_row(ObSSTableReadHandle &read_handle, const ObDatumRow *&store_row);
   int get_not_exist_row(const ObDatumRowkey &rowkey, ObDatumRow &row);
 
@@ -114,9 +130,7 @@ private:
   ObTableAccessContext *access_ctx_;
   const ObTableIterParam *iter_param_;
   ObIMicroBlockGetReader *reader_;
-  ObMicroBlockGetReader *flat_reader_;
-  ObEncodeBlockGetReader *encode_reader_;
-  ObCSEncodeBlockGetReader *cs_encode_reader_;
+  ObMicroBlockGetReaderHelper reader_helper_;
   blocksstable::ObMicroBlockRowGetter *micro_getter_;
   ObStorageDatum row_idx_datum_;
   blocksstable::ObDatumRowkey row_idx_key_;

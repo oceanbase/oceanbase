@@ -11,9 +11,6 @@
  */
 
 #include "ob_all_virtual_sys_task_status.h"
-#include "lib/profile/ob_trace_id.h"
-#include "observer/ob_server.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/client_feedback/ob_client_feedback_manager.h"
-#include "share/partition_table/ob_partition_location.h"
 
 namespace oceanbase
 {

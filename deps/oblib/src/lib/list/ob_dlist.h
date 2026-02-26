@@ -106,6 +106,7 @@ public:
   DLinkNode *remove_first();
 
   void push_range(ObDList<DLinkNode> &range);
+  void push_back_range(ObDList<DLinkNode> &range);
   void pop_range(int32_t num, ObDList<DLinkNode> &range);
 
   //the list is empty or not
@@ -289,6 +290,24 @@ void ObDList<DLinkNode>::push_range(ObDList<DLinkNode> &range)
     this->header_.add_range_after(first, last);
     size_ += range.get_size();
     range.reset();
+  }
+}
+template <typename DLinkNode>
+void ObDList<DLinkNode>::push_back_range(ObDList<DLinkNode> &range)
+{
+  if (!range.is_empty()) {
+    if (is_empty()) {
+      push_range(range);
+    } else {
+      DLinkNode *tail = header_.prev_;
+      DLinkNode *first = range.header_.next_;
+      DLinkNode *last = range.header_.prev_;
+      first->prev_ = NULL;
+      last->next_ = NULL;
+      tail->add_range_after(first, last);
+      size_ += range.get_size();
+      range.reset();
+    }
   }
 }
 template <typename DLinkNode>

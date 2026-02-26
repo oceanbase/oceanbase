@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_macro_block_common_header.h"
-#include "lib/string/ob_string.h"
-#include "share/ob_errno.h"
-#include "share/ob_force_print_log.h"
 #include "ob_block_sstable_struct.h"
 
 namespace oceanbase
@@ -37,23 +34,16 @@ void ObMacroBlockCommonHeader::reset()
   payload_checksum_ = 0;
 }
 
-void ObMacroBlockCommonHeader::set_attr(const int64_t seq)
+int ObMacroBlockCommonHeader::set_attr(const MacroBlockType type)
 {
-  ObMacroDataSeq macro_seq(seq);
-  switch (macro_seq.block_type_) {
-    case ObMacroDataSeq::DATA_BLOCK:
-      attr_ = MacroBlockType::SSTableData;
-      break;
-    case ObMacroDataSeq::INDEX_BLOCK:
-      attr_ = MacroBlockType::SSTableIndex;
-      break;
-    case ObMacroDataSeq::META_BLOCK:
-      attr_ = MacroBlockType::SSTableMacroMeta;
-      break;
-    default:
-      attr_ = MacroBlockType::MaxMacroType;
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid data seq", K(seq));
+  int ret = OB_SUCCESS;
+  if (type >= MacroBlockType::MaxMacroType || type <= MacroBlockType::None) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid data store type", K(ret), K(type));
+  } else {
+    attr_ = type;
   }
+  return ret;
 }
 
 int ObMacroBlockCommonHeader::build_serialized_header(char *buf, const int64_t len) const

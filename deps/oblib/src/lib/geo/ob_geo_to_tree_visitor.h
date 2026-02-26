@@ -24,10 +24,7 @@ class ObGeoToTreeVisitor : public ObEmptyGeoVisitor
 public:
   ObGeoToTreeVisitor(ObIAllocator *allocator)
     : allocator_(allocator), root_(NULL),
-      page_allocator_(*allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
-      mode_arena_(DEFAULT_PAGE_SIZE_GEO, page_allocator_),
-      parent_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
-  virtual ~ObGeoToTreeVisitor() { parent_.clear(); }
+      parent_(GEOM_PAGE_SIZE_GEO, ModulePageAllocator(*allocator, "GISModule")) {}
   ObGeometry *get_geometry() const { return root_; }
   template<typename T>
   int alloc_geo_tree_obj(T *&obj);
@@ -71,21 +68,18 @@ public:
   bool is_end(ObIWkbGeogPolygon *geo) override { UNUSED(geo); return true; }
   bool is_end(ObIWkbGeomPolygon *geo) override { UNUSED(geo); return true; }
 
-  int finish(ObIWkbGeogMultiLineString *geo) override { UNUSED(geo); return parent_.remove(parent_.last()); }
-  int finish(ObIWkbGeomMultiLineString *geo) override { UNUSED(geo); return parent_.remove(parent_.last()); }
-  int finish(ObIWkbGeogMultiPolygon *geo) override { UNUSED(geo); return parent_.remove(parent_.last()); }
-  int finish(ObIWkbGeomMultiPolygon *geo) override { UNUSED(geo); return parent_.remove(parent_.last()); }
-  int finish(ObIWkbGeogCollection *geo) override { UNUSED(geo); return parent_.remove(parent_.last()); }
-  int finish(ObIWkbGeomCollection *geo) override { UNUSED(geo); return parent_.remove(parent_.last()); }
+  int finish(ObIWkbGeogMultiLineString *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }
+  int finish(ObIWkbGeomMultiLineString *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }
+  int finish(ObIWkbGeogMultiPolygon *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }
+  int finish(ObIWkbGeomMultiPolygon *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }
+  int finish(ObIWkbGeogCollection *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }
+  int finish(ObIWkbGeomCollection *geo) override { UNUSED(geo); parent_.pop_back(); return OB_SUCCESS; }
 
 
 private:
-  typedef PageArena<ObGeometrycollection *, ModulePageAllocator> ObCGeoModuleArena;
   ObIAllocator *allocator_;
   ObGeometry *root_;
-  ModulePageAllocator page_allocator_;
-  ObCGeoModuleArena mode_arena_;
-  ObVector<ObGeometrycollection *, ObCGeoModuleArena> parent_;
+  ObArray<ObGeometrycollection *> parent_;
   DISALLOW_COPY_AND_ASSIGN(ObGeoToTreeVisitor);
 };
 

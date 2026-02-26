@@ -10,13 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/ob_i_memtable_mgr.h"
-#include "share/ob_task_define.h"
-#include "storage/ls/ob_freezer.h"
-#include "storage/memtable/ob_memtable_interface.h"
-#include "storage/memtable/ob_multi_source_data.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "ob_i_memtable_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::share;
@@ -66,13 +60,13 @@ int ObIMemtableMgr::get_first_nonempty_memtable(ObTableHandleV2 &handle) const
 
   for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
     ObTableHandleV2 tmp_handle;
-    ObITabletMemtable *mt = NULL;
+    ObIMemtable *mt = NULL;
     if (OB_FAIL(get_ith_memtable(i, tmp_handle))) {
       STORAGE_LOG(WARN, "fail to get ith memtable", KR(ret), K(i));
     } else if (OB_UNLIKELY(!tmp_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "get invalid tmp table handle", KR(ret), K(i), K(tmp_handle));
-    } else if (OB_FAIL(tmp_handle.get_tablet_memtable(mt))) {
+    } else if (OB_FAIL(tmp_handle.get_memtable(mt))) {
       STORAGE_LOG(WARN, "failed to get_tablet_memtable", KR(ret), K(i), K(tmp_handle));
     } else if (OB_ISNULL(mt)) {
       ret = OB_ERR_UNEXPECTED;

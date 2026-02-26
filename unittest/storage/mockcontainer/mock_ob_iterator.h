@@ -19,10 +19,10 @@
 #include "lib/hash/ob_hashmap.h"
 #include "share/ob_time_utility2.h"
 #include "lib/string/ob_string.h"
-#include "storage/ob_i_store.h"
 #include "storage/access/ob_store_row_iterator.h"
 #include "storage/access/ob_table_read_info.h"
 #include "storage/access/ob_sstable_row_whole_scanner.h"
+#include "storage/blocksstable/ob_datum_row_iterator.h"
 
 namespace oceanbase
 {
@@ -39,9 +39,15 @@ public:
 
   int64_t count() const { return rows_.count(); }
   // get row at idx, do not move iter
+  int get_row(const int64_t idx, const blocksstable::ObDatumRow *&row) const;
+  int get_row(const int64_t idx, blocksstable::ObDatumRow *&row) const;
+    // get row at idx, do not move iter
   int get_row(const int64_t idx, const storage::ObStoreRow *&row) const;
   int get_row(const int64_t idx, storage::ObStoreRow *&row) const;
   int get_row(const int64_t idx, common::ObNewRow *&row) const;
+  // get row and move iter to the next
+  int get_next_row(const blocksstable::ObDatumRow *&row);
+  int get_next_row(blocksstable::ObDatumRow *&row);
   // get row and move iter to the next
   int get_next_row(const storage::ObStoreRow *&row);
   int get_next_row(storage::ObStoreRow *&row);
@@ -52,6 +58,7 @@ public:
   // rewind iter
   void reset_iter();
 
+  int add_row(blocksstable::ObDatumRow *row);
   int add_row(storage::ObStoreRow *row);
   int from(
       const char *cstr,
@@ -63,10 +70,28 @@ public:
       char escape = '\\',
       uint16_t* col_id_array = nullptr,
       int64_t *result_col_id_array = nullptr);
+  int from_for_datum(
+      const char *cstr,
+      char escape = '\\',
+      uint16_t* col_id_array = nullptr,
+      int64_t *result_col_id_array = nullptr);
+  int from_for_datum(
+      const common::ObString &str,
+      char escape = '\\',
+      uint16_t* col_id_array = nullptr,
+      int64_t *result_col_id_array = nullptr);
+
+  static bool inner_equals(const blocksstable::ObDatumRow &r1, const blocksstable::ObDatumRow &r2);
+  static bool equals(const blocksstable::ObDatumRow &r1, const blocksstable::ObDatumRow &r2,
+      const bool cmp_multi_version_row_flag = false, const bool cmp_is_get_and_scan_index = false);
+  bool equals(int64_t idx, blocksstable::ObDatumRow &row) const;
+  bool equals(int64_t idx, const blocksstable::ObDatumRow &row) const;
+  bool equals(blocksstable::ObDatumRow &other_row) const { return equals(0, other_row); }
+  bool equals(const blocksstable::ObDatumRow &other_row) const { return equals(0, other_row); }
 
   static bool equals(const common::ObNewRow &r1, const common::ObNewRow &r2);
   static bool equals(const storage::ObStoreRow &r1, const storage::ObStoreRow &r2,
-      const bool cmp_multi_version_row_flag = false, const bool cmp_is_get_and_scan_index = false);
+      const bool cmp_multi_version_row_flag = false, const bool cmp_row_flag = false, const bool cmp_is_get_and_scan_index = false);
   static bool equals(uint16_t *col_id1, uint16_t *col_id2, const int64_t col_cnt);
   bool equals(int64_t idx, common::ObNewRow &row) const;
   bool equals(int64_t idx, storage::ObStoreRow &row) const;
@@ -97,28 +122,33 @@ public:
     return ret;
   }
 
-  template<typename T>
+  template<typename T, typename T_ROW>
   bool equals(T &other_iter, const bool cmp_multi_version_row_flag = false,
-      const bool cmp_is_get_and_scan_index = false)
+      const bool cmp_row_flag = false,
+      const bool cmp_is_get_and_scan_index = false,
+      const bool skip_iter_end = false)
   {
     bool bool_ret = true;
     int ret1 = common::OB_SUCCESS;
     int ret2 = common::OB_SUCCESS;
-    const storage::ObStoreRow *other_row = NULL;
-    storage::ObStoreRow *this_row = NULL;
+    const T_ROW  *other_row = NULL;
+    T_ROW *this_row = NULL;
     int64_t idx = 0;
 
     while (bool_ret) {
-      ret1 = get_next_row(this_row);
       ret2 = other_iter.get_next_row(other_row);
-      STORAGE_LOG(DEBUG, "compare row", K(ret1), K(*this_row), K(ret2), K(*other_row));
+      if (skip_iter_end && OB_ITER_END == ret2) {
+        break;
+      }
+      ret1 = get_next_row(this_row);
+      STORAGE_LOG(DEBUG, "compare row", K(ret1), KPC(this_row), K(ret2), KPC(other_row));
       if (ret1 == ret2) {
         if (common::OB_SUCCESS == ret1 && this_row && other_row) {
           bool_ret = ObMockIterator::equals(*this_row, *other_row,
-              cmp_multi_version_row_flag, cmp_is_get_and_scan_index);
-          STORAGE_LOG(DEBUG, "compare row", K(bool_ret), K(ret1), K(*this_row), K(ret2), K(*other_row));
+              cmp_multi_version_row_flag, cmp_row_flag, cmp_is_get_and_scan_index);
+          STORAGE_LOG(DEBUG, "compare row", K(bool_ret), K(ret1), KPC(this_row), K(ret2), KPC(other_row));
           if (this_row->trans_id_ != other_row->trans_id_) {
-            STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "not equal trans_id", K(*this_row), K(this_row->trans_id_),
+            STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "not equal trans_id", KPC(this_row), K(this_row->trans_id_),
                 K(*other_row), K(other_row->trans_id_));
             bool_ret = false;
           }
@@ -134,15 +164,17 @@ public:
     }
 
     if (!bool_ret) {
+      ObCStringHelper helper;
       STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "iter is not equal",
                   K(idx), K(ret1), K(ret2),
-                  "this_row", this_row ? to_cstring(*this_row): "null",
-                  "other_row", other_row ? to_cstring(*other_row) : "null");
+                  "this_row", this_row ? helper.convert(*this_row): "null",
+                  "other_row", other_row ? helper.convert(*other_row) : "null");
     } else {
+      ObCStringHelper helper;
       STORAGE_LOG(INFO, "iter is equal",
           K(idx), K(ret1), K(ret2),
-          "this_row", this_row ? to_cstring(*this_row): "null",
-          "other_row", other_row ? to_cstring(*other_row) : "null");
+          "this_row", this_row ? helper.convert(*this_row): "null",
+          "other_row", other_row ? helper.convert(*other_row) : "null");
     }
 
     return bool_ret;
@@ -155,7 +187,7 @@ private:
   void setup_start_cursor();
   void advance();
   bool end_of_row() const;
-
+  common::ObSEArray<blocksstable::ObDatumRow *, DEF_ROW_NUM> datum_rows_;
   common::ObSEArray<storage::ObStoreRow *, DEF_ROW_NUM> rows_;
   int64_t column_cnt_;
   common::ObObjMeta metas_[common::OB_ROW_MAX_COLUMNS_COUNT];
@@ -177,6 +209,8 @@ public:
   void reset_iter() { return iter_.reset_iter(); }
   int from(const char *cstr, char escape = '\\') { return iter_.from(cstr, escape); }
   int from(const common::ObString &str, char escape = '\\') { return iter_.from(str, escape); }
+  int from_for_datum(const char *cstr, char escape = '\\') { return iter_.from_for_datum(cstr, escape); }
+  int from_for_datum(const common::ObString &str, char escape = '\\') { return iter_.from_for_datum(str, escape); }
   bool equals(ROW_TYPE &row) const { return iter_.equals(row); }
   bool equals(int64_t idx, ROW_TYPE &row) const { return iter_.equals(idx, row); }
   // compare to an iterator, rewind the iter before call this function
@@ -208,10 +242,11 @@ public:
     }
 
     if (!bool_ret) {
+      ObCStringHelper helper;
       STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "iter is not equal",
                   K(idx),
-                  "this_row", to_cstring(*this_row),
-                  "other_row", to_cstring(*other_row));
+                  "this_row", helper.convert(*this_row),
+                  "other_row", helper.convert(*other_row));
     }
 
     return bool_ret;
@@ -219,10 +254,10 @@ public:
 private:
   ObMockIterator iter_;
 };
-typedef ObMockRowIterator<storage::ObStoreRowIterator, const storage::ObStoreRow>
-ObMockStoreRowIterator;
+typedef ObMockRowIterator<storage::ObStoreRowIterator, const storage::ObStoreRow> ObMockStoreRowIterator;
 typedef ObMockRowIterator<storage::ObQueryRowIterator, storage::ObStoreRow> ObMockQueryRowIterator;
 typedef ObMockRowIterator<common::ObNewRowIterator, common::ObNewRow> ObMockNewRowIterator;
+typedef ObMockRowIterator<blocksstable::ObDatumRowIterator, blocksstable::ObDatumRow> ObMockDatumRowIterator;
 
 // init
 // parse -> parse->header
@@ -253,6 +288,8 @@ public:
   static const int64_t EXT_END = 5;
   static const int64_t EXT_MIN_2_TRANS = 6; // for second_uncommitted_trans
   static const int64_t EXT_GHOST = 7;
+  static const int64_t EXT_INT32_MIN = 8;
+  static const int64_t EXT_DELETE_INSERT_VERSION = 9;
 
   static const char CHAR_ROW_END = '\n';
   static const char CHAR_QUOTE = '\'';
@@ -260,8 +297,10 @@ public:
   static const char *STR_NULL;
   static const char *STR_MAX;
   static const char *STR_MIN;
+  static const char *STR_INT32_MIN;
   static const char *STR_MIN_2_TRANS; // for second_uncommitted_trans
   static const char *STR_MAGIC;
+  static const char *STR_DELETE_INSERT_VERSION;
 
   static common::ObObjMeta INT_TYPE;
   static common::ObObjMeta BIGINT_TYPE;
@@ -270,6 +309,10 @@ public:
   static common::ObObjMeta TS_TYPE;
   static common::ObObjMeta NU_TYPE;
 
+  typedef int (*ObParseDatumFunc)(common::ObIAllocator *,
+                             const common::ObString &,
+                             blocksstable::ObDatumRow &,
+                             int64_t &);
   typedef int (*ObParseFunc)(common::ObIAllocator *,
                              const common::ObString &,
                              storage::ObStoreRow &,
@@ -281,10 +324,19 @@ public:
   ~ObMockIteratorBuilder() {}
 
   int init(common::ObIAllocator *allocator = NULL, char escape = '\\');
+  int parse_for_datum(
+      const common::ObString &str,
+      ObMockIterator &iter,
+      uint16_t *col_id_array_list = nullptr);
   int parse(
       const common::ObString &str,
       ObMockIterator &iter,
       uint16_t *col_id_array_list = nullptr);
+  int parse_datum_with_specified_col_ids(
+      const ObString &str,
+      ObMockIterator &iter,
+      uint16_t *col_id_array_list = nullptr,
+      int64_t *result_col_id_array = nullptr);
   int parse_with_specified_col_ids(
       const ObString &str,
       ObMockIterator &iter,
@@ -292,72 +344,164 @@ public:
       int64_t *result_col_id_array = nullptr);
 private:
   static int static_init();
-  static int parse_varchar(common::ObIAllocator *allocator,
+  static int prepare_parse_varchar(common::ObIAllocator *allocator,
+                                   const common::ObString &word,
+                                   const uint16_t count,
+                                   int64_t &idx);
+  static int parse_datum_varchar(common::ObIAllocator *allocator,
+                                 const common::ObString &word,
+                                 blocksstable::ObDatumRow &row,
+                                 int64_t &idx);
+  static int parse_obj_varchar(common::ObIAllocator *allocator,
+                               const common::ObString &word,
+                               storage::ObStoreRow &row,
+                               int64_t &idx);
+  static int prepare_parse_lob(common::ObIAllocator *allocator,
+                               const common::ObString &word,
+                               const uint16_t count,
+                               int64_t &idx,
+                               ObLobCommon *&lob_data,
+                               int64_t &val);
+  static int parse_datum_lob(common::ObIAllocator *allocator,
+                             const common::ObString &word,
+                             blocksstable::ObDatumRow &row,
+                             int64_t &idx);
+  static int parse_obj_lob(common::ObIAllocator *allocator,
                            const common::ObString &word,
                            storage::ObStoreRow &row,
                            int64_t &idx);
-  static int parse_lob(common::ObIAllocator *allocator,
-                       const common::ObString &word,
-                       storage::ObStoreRow &row,
-                       int64_t &idx);
   /*
   static int parse_bool(common::ObIAllocator *allocator,
-                        const common::ObString &word, storage::ObStoreRow &row, int64_t &idx);
+                        const common::ObString &word, blocksstable::ObDatumRow &row, int64_t &idx);
                         */
-  static int parse_timestamp(common::ObIAllocator *allocator,
+  static int prepare_parse_timestamp(common::ObIAllocator *allocator,
+                                     const common::ObString &word,
+                                     const uint16_t count,
+                                     int64_t &idx,
+                                     int64_t &usec);
+  static int parse_datum_timestamp(common::ObIAllocator *allocator,
+                                   const common::ObString &word,
+                                   blocksstable::ObDatumRow &row,
+                                   int64_t &idx);
+  static int parse_obj_timestamp(common::ObIAllocator *allocator,
+                                 const common::ObString &word,
+                                 storage::ObStoreRow &row,
+                                 int64_t &idx);
+  static int prepare_parse_int(common::ObIAllocator *allocator,
+                               const common::ObString &word,
+                               const uint16_t count,
+                               int64_t &idx,
+                               int64_t &val);
+  static int parse_datum_int(common::ObIAllocator *allocator,
                              const common::ObString &word,
-                             storage::ObStoreRow &row,
+                             blocksstable::ObDatumRow &row,
                              int64_t &idx);
-  static int parse_int(common::ObIAllocator *allocator,
-                       const common::ObString &word,
-                       storage::ObStoreRow &row,
-                       int64_t &idx);
-  static int parse_bigint(common::ObIAllocator *allocator,
-                          const common::ObString &word,
-                          storage::ObStoreRow &row,
-                          int64_t &idx);
-  static int parse_number(common::ObIAllocator *allocator,
-                          const common::ObString &word,
-                          storage::ObStoreRow &row,
-                          int64_t &idx);
+  static int parse_obj_int(common::ObIAllocator *allocator,
+                           const common::ObString &word,
+                           storage::ObStoreRow &row,
+                           int64_t &idx);
+  static int prepare_parse_bigint(common::ObIAllocator *allocator,
+                                  const common::ObString &word,
+                                  const uint16_t count,
+                                  int64_t &idx,
+                                  int64_t &val);
+  static int parse_datum_bigint(common::ObIAllocator *allocator,
+                                const common::ObString &word,
+                                blocksstable::ObDatumRow &row,
+                                int64_t &idx);
+  static int parse_obj_bigint(common::ObIAllocator *allocator,
+                              const common::ObString &word,
+                              storage::ObStoreRow &row,
+                              int64_t &idx);
+  static int prepare_parse_number(common::ObIAllocator *allocator,
+                                  const common::ObString &word,
+                                  const uint16_t count,
+                                  int64_t &idx,
+                                  number::ObNumber &nmb);
+  static int parse_datum_number(common::ObIAllocator *allocator,
+                                const common::ObString &word,
+                                blocksstable::ObDatumRow &row,
+                                int64_t &idx);
+  static int parse_obj_number(common::ObIAllocator *allocator,
+                              const common::ObString &word,
+                              storage::ObStoreRow &row,
+                              int64_t &idx);
   static int parse_dml(common::ObIAllocator *allocator,
                        const common::ObString &word,
                        storage::ObStoreRow &row,
                        int64_t &idx);
-  static int parse_first_dml(common::ObIAllocator *allocator,
+  static int parse_datum_dml(common::ObIAllocator *allocator,
+                             const common::ObString &word,
+                             blocksstable::ObDatumRow &row,
+                             int64_t &idx);
+  static int parse_flag_type(common::ObIAllocator *allocator,
                              const common::ObString &word,
                              storage::ObStoreRow &row,
                              int64_t &idx);
-  static int parse_flag(common::ObIAllocator *allocator,
-                        const common::ObString &word,
-                        storage::ObStoreRow &row,
-                        int64_t &idx);
+  static int prepare_parse_flag(common::ObIAllocator *allocator,
+                               const common::ObString &word,
+                               int64_t &idx,
+                               int64_t &flag);
+  static int parse_datum_flag(common::ObIAllocator *allocator,
+                              const common::ObString &word,
+                              blocksstable::ObDatumRow &row,
+                              int64_t &idx);
+  static int parse_obj_flag(common::ObIAllocator *allocator,
+                            const common::ObString &word,
+                            storage::ObStoreRow &row,
+                            int64_t &idx);
   static int parse_base(common::ObIAllocator *allocator,
                         const common::ObString &word,
                         storage::ObStoreRow &row,
                         int64_t &idx);
-  static int parse_multi_version_row_flag(common::ObIAllocator *allocator,
-                                          const common::ObString &word,
-                                          storage::ObStoreRow &row,
-                                          int64_t &idx);
+  static int parse_datum_multi_version_row_flag(common::ObIAllocator *allocator,
+                                                const common::ObString &word,
+                                                blocksstable::ObDatumRow &row,
+                                                int64_t &idx);
+  static int parse_obj_multi_version_row_flag(common::ObIAllocator *allocator,
+                                              const common::ObString &word,
+                                              storage::ObStoreRow &row,
+                                              int64_t &idx);
   static int parse_is_get(common::ObIAllocator *allocator,
                           const common::ObString &word,
                           storage::ObStoreRow &row,
                           int64_t &idx);
-  static int parse_scan_index(common::ObIAllocator *allocator,
+  static int prepare_parse_scan_index(common::ObIAllocator *allocator,
+                                      const common::ObString &word,
+                                      int64_t &idx,
+                                      int64_t &val);
+  static int parse_datum_scan_index(common::ObIAllocator *allocator,
+                                    const common::ObString &word,
+                                    blocksstable::ObDatumRow &row,
+                                    int64_t &idx);
+  static int parse_obj_scan_index(common::ObIAllocator *allocator,
+                                  const common::ObString &word,
+                                  storage::ObStoreRow &row,
+                                  int64_t &idx);
+  static int parse_datum_trans_id(common::ObIAllocator *allocator,
                               const common::ObString &word,
-                              storage::ObStoreRow &row,
+                              blocksstable::ObDatumRow &row,
                               int64_t &idx);
-  static int parse_trans_id(common::ObIAllocator *allocator,
-                              const common::ObString &word,
-                              storage::ObStoreRow &row,
-                              int64_t &idx);
+  static int parse_obj_trans_id(common::ObIAllocator *allocator,
+                                const common::ObString &word,
+                                storage::ObStoreRow &row,
+                                int64_t &idx);
 
+  int parse_datum_header(const ObString &str,
+                         int64_t &pos,
+                         ObIArray<ObParseDatumFunc> &header,
+                         int64_t &obj_num,
+                         ObMockIterator &iter);
   int parse_header(const common::ObString &str,
                    int64_t &pos,
                    common::ObIArray<ObParseFunc> &header,
                    int64_t &obj_num,
                    ObMockIterator &iter);
+  int parse_datum_row(const common::ObString &str,
+                      int64_t &pos,
+                      const common::ObIArray<ObParseDatumFunc> &header,
+                      const uint16_t *col_id_array_list,
+                      blocksstable::ObDatumRow &row);
   int parse_row(const common::ObString &str,
                 int64_t &pos,
                 const common::ObIArray<ObParseFunc> &header,
@@ -388,8 +532,13 @@ private:
   static common::hash::ObHashMap<common::ObString, ObParseFunc> str_to_obj_parse_func_;
   // hash ObString to row info parse func , such as parse_dml ...
   static common::hash::ObHashMap<common::ObString, ObParseFunc> str_to_info_parse_func_;
+  // hash ObString to obj parse func , such as parse_int ...
+  static common::hash::ObHashMap<common::ObString, ObParseDatumFunc> str_to_datum_parse_func_;
+  // hash ObString to row info parse func , such as parse_dml ...
+  static common::hash::ObHashMap<common::ObString, ObParseDatumFunc> str_to_datum_info_parse_func_;
   static common::hash::ObHashMap<common::ObString, common::ObObjMeta*> str_to_obj_type_;
   static common::hash::ObHashMap<common::ObString, int64_t> str_to_flag_;
+  static common::hash::ObHashMap<common::ObString, int64_t> str_to_flag_type_;
   static common::hash::ObHashMap<common::ObString, blocksstable::ObDmlFlag> str_to_dml_;
   static common::hash::ObHashMap<common::ObString, bool> str_to_base_;
   static common::hash::ObHashMap<common::ObString, bool> str_to_is_get_;
@@ -402,25 +551,25 @@ private:
   char escape_;
 };
 
-class MockObNewRowIterator: public ObNewRowIterator
-{
-  OB_UNIS_VERSION(1);
-public:
-  MockObNewRowIterator();
-  ~MockObNewRowIterator();
-  static bool equals(const common::ObNewRow &r1, const common::ObNewRow &r2);
-  void reset();
-  int from(const char *cstr, char escape = '\\') { return iter_.from(cstr, escape); }
-  int from(const common::ObString &str, char escape = '\\') { return iter_.from(str, escape); }
-  int get_next_row(ObNewRow *&row) { return iter_.get_next_row(row); }
-  int get_row(const int64_t idex, storage::ObStoreRow *&row) const { return iter_.get_row(idex, row); }
-  int64_t count() const { return iter_.count(); }
-  int add_row(storage::ObStoreRow *row) { return iter_.add_row(row); }
+// class MockObNewRowIterator: public ObNewRowIterator
+// {
+//   OB_UNIS_VERSION(1);
+// public:
+//   MockObNewRowIterator();
+//   ~MockObNewRowIterator();
+//   static bool equals(const common::ObNewRow &r1, const common::ObNewRow &r2);
+//   void reset();
+//   int from(const char *cstr, char escape = '\\') { return iter_.from(cstr, escape); }
+//   int from(const common::ObString &str, char escape = '\\') { return iter_.from(str, escape); }
+//   int get_next_row(ObNewRow *&row) { return iter_.get_next_row(row); }
+//   int get_row(const int64_t idex, storage::ObStoreRow *&row) const { return iter_.get_row(idex, row); }
+//   int64_t count() const { return iter_.count(); }
+//   int add_row(storage::ObStoreRow *row) { return iter_.add_row(row); }
 
-private:
-  ObMockIterator iter_;
-  common::PageArena<char> allocator_;
-};
+// private:
+//   ObMockIterator iter_;
+//   common::PageArena<char> allocator_;
+// };
 
 class ObMockDirectReadIterator : public storage::ObStoreRowIterator
 {

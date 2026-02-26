@@ -252,8 +252,14 @@ struct EventItem
     cond_ = other.cond_;
   }
 
-  int call(const int64_t v) { return cond_ == v ? call() : 0; }
-  int call() { return static_cast<int>(get_event_code()); }
+  int call(const int64_t v) { return (cond_ && cond_ != v) ? 0 : call(); }
+  int call() {
+    if (OB_LIKELY(0 == trigger_freq_ && 0 == occur_)) {
+      return 0;
+    } else {
+      return static_cast<int>(get_event_code());
+    }
+  }
   int64_t get_event_code()
   {
     int64_t event_code = 0;
@@ -278,17 +284,19 @@ struct EventItem
     } else if (trigger_freq == 1) {
       event_code = error_code_;
 #ifdef NDEBUG
-      if (REACH_TIME_INTERVAL(1 * 1000 * 1000))
+      if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000))
 #endif
       {
         int ret = static_cast<int>(event_code);
-        COMMON_LOG(WARN, "[ERRSIM] sim error", K(event_code));
+        COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret), K_(no), "name", name_ ? name_ : "",
+            "describe", describe_ ? describe_ : "", K_(error_code), K(trigger_freq), KCSTRING(lbt()));
       }
     } else {
       if (rand() % trigger_freq == 0) {
         event_code = error_code_;
         int ret = static_cast<int>(event_code);
-        COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret), K_(error_code), K(trigger_freq), KCSTRING(lbt()));
+        COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret), K_(no), "name", name_ ? name_ : "",
+            "describe", describe_ ? describe_ : "", K_(error_code), K(trigger_freq), KCSTRING(lbt()));
       } else {
         event_code = 0;
       }
@@ -325,6 +333,7 @@ struct NamedEventItem : public ObDLinkBase<NamedEventItem>
     l.add_last(this);
   }
   operator int(void) { return item_.call(); }
+  int test(int64_t v) { return item_.call(v); }
   EventItem item_;
 };
 

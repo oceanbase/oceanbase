@@ -12,7 +12,8 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/utility/ob_print_utils.h"
-#include "lib/string/ob_string.h"
+#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
+#include "deps/oblib/src/lib/allocator/ob_malloc.h"
 namespace oceanbase
 {
 namespace common
@@ -230,6 +231,24 @@ int64_t ObHexStringWrap::to_string(char *buf, const int64_t len) const
 
 ////////////////////////////////////////////////////////////////
 template <>
+int64_t to_string<int32_t>(const int32_t &v, char *buffer, const int64_t buffer_size)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_FAIL(databuff_printf(buffer, buffer_size, pos, "%d", v))) {
+  } else {}
+  return pos;
+}
+template <>
+int64_t to_string<uint32_t>(const uint32_t &v, char *buffer, const int64_t buffer_size)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_FAIL(databuff_printf(buffer, buffer_size, pos, "%u", v))) {
+  } else {}
+  return pos;
+}
+template <>
 int64_t to_string<int64_t>(const int64_t &v, char *buffer, const int64_t buffer_size)
 {
   int ret = OB_SUCCESS;
@@ -278,20 +297,26 @@ int64_t to_string<bool>(const bool &v, char *buffer, const int64_t buffer_size)
   } else {}
   return pos;
 }
-
-template <>
-const char *to_cstring<const char *>(const char *const &str)
-{
-  return str;
-}
-
-template <>
-const char *to_cstring<int64_t>(const int64_t &v)
-{
-  return to_cstring<int64_t>(v, BoolType<false>());
-}
-
 ////////////////////////////////////////////////////////////////
+
+const int64_t ObCStringHelper::EXPAND_BUF_LEN;
+const int64_t ObCStringHelper::HELPER_MEMORY_LIMIT;
+
+ERRSIM_POINT_DEF(EN_CSTRING_HELPER_FORCE_MALLOC);
+bool ObCStringHelper::is_force_alloc()
+{
+  return EN_CSTRING_HELPER_FORCE_MALLOC;
+}
+
+void ObCStringHelper::force_alloc()
+{
+  buf_ = reinterpret_cast<char *>(allocator_.alloc(buf_len_));
+  if (nullptr == buf_) {
+    LIB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED,
+        "failed to allocate memory, will use reserve_buf");
+    buf_ = reserve_buf_;
+  }
+}
 
 int databuff_printf(char *buf, const int64_t buf_len, const char *fmt, ...)
 {
@@ -344,6 +369,11 @@ int databuff_printf(char *&buf, int64_t &buf_len, int64_t &pos,
   }
 
   return ret;
+}
+
+int databuff_print_one_obj(char* buf, const int64_t buf_len, int64_t &pos, const char *p_obj)
+{
+  return databuff_printf(buf, buf_len, pos, "%s", nullptr == p_obj ? "NULL" : p_obj);
 }
 
 int multiple_extend_buf(char *&buf, int64_t &buf_len, ObIAllocator &alloc)

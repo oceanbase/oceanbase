@@ -16,6 +16,7 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "lib/stat/ob_di_cache.h"
+#include "observer/omt/ob_multi_tenant_operator.h"
 
 
 namespace oceanbase
@@ -28,7 +29,8 @@ class ObObj;
 namespace observer
 {
 
-class ObInfoSchemaKvCacheTable : public common::ObVirtualTableScannerIterator
+class ObInfoSchemaKvCacheTable : public common::ObVirtualTableScannerIterator,
+                                 public omt::ObMultiTenantOperator
 {
 public:
   ObInfoSchemaKvCacheTable();
@@ -36,9 +38,17 @@ public:
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
   inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
-
+protected:
+  virtual bool is_need_process(uint64_t tenant_id) override {
+    if (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_) {
+      return true;
+    }
+    return false;
+  }
+  virtual void release_last_tenant() override;
 private:
   virtual int set_ip();
+  virtual int process_curr_tenant(common::ObNewRow *&row) override;
   virtual int inner_open() override;
   int get_tenant_info();
   int get_handles(ObKVCacheInst *&inst, ObDiagnoseTenantInfo *& tenant_info);
@@ -70,10 +80,8 @@ private:
   common::ObSEArray<common::ObKVCacheInstHandle, 100 > inst_handles_;
   int16_t cache_iter_;
   common::ObStringBuf str_buf_;
-  common::ObObj cells_[common::OB_ROW_MAX_COLUMNS_COUNT];
-  common::ObArenaAllocator arenallocator_;
   common::ObDiagnoseTenantInfo tenant_di_info_;
-  common::ObArray<std::pair<uint64_t, common::ObDiagnoseTenantInfo*> > tenant_dis_;
+  bool first_enter_;
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaKvCacheTable);
 };
 

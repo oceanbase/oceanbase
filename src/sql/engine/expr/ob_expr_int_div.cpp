@@ -11,9 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include <math.h>
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
 #include "sql/engine/expr/ob_expr_int_div.h"
 #include "sql/engine/expr/ob_expr_div.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
@@ -77,8 +74,17 @@ int ObExprIntDiv::calc_result_type2(ObExprResType &type, ObExprResType &type1, O
   if (OB_FAIL(ObArithExprOperator::calc_result_type2(type, type1, type2, type_ctx))) {
     LOG_WARN("fail to calc result type", K(ret), K(type), K(type1), K(type2));
   } else {
-    type.set_precision(static_cast<ObPrecision>(MAX(type1.get_precision(), 0)));
-    type.set_scale(0);
+    if (ob_is_int_uint_tc(type.get_type())) {
+      ObAccuracy type_max_accuracy = ObAccuracy::MAX_ACCURACY2[MYSQL_MODE][type.get_type()];
+      type.set_precision(type_max_accuracy.get_precision());
+      type.set_scale(type_max_accuracy.get_scale());
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("calc_result_type2", K(type.get_accuracy()), K(type1.get_accuracy()),
+            K(type2.get_accuracy()), K(type1.get_calc_accuracy()), K(type2.get_calc_accuracy()));
+    }
+    LOG_DEBUG("calc_result_type2", K(type.get_accuracy()), K(type1.get_accuracy()),
+            K(type2.get_accuracy()), K(type1.get_calc_accuracy()), K(type2.get_calc_accuracy()));
   }
   return ret;
 }
@@ -424,8 +430,6 @@ int ObExprIntDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
   const common::ObObjType right = rt_expr.args_[1]->datum_meta_.type_;
   const ObObjTypeClass left_tc = ob_obj_type_class(left);
   const ObObjTypeClass right_tc = ob_obj_type_class(right);
-  OB_ASSERT(left == input_types_[0].get_calc_type());
-  OB_ASSERT(right == input_types_[1].get_calc_type());
 
   rt_expr.inner_functions_ = NULL;
   LOG_DEBUG("arrive here cg_expr", K(ret), K(rt_expr), K(left), K(right));

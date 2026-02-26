@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_errno.h"
 #include <gtest/gtest.h>
 
 #define USING_LOG_PREFIX STORAGE

@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "parse_node_hash.h"
 #include "lib/hash_func/murmur_hash.h"
+#include "parse_node_hash.h"
 
 // this is a C wrapper to call murmurhash in C++ definition
 uint64_t murmurhash(const void *data, int32_t len, uint64_t hash)

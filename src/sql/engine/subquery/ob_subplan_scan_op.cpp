@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_subplan_scan_op.h"
-#include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -125,15 +124,15 @@ int ObSubPlanScanOp::next_batch(const int64_t max_row_cnt)
         } else if (from->is_batch_result()) {
           MEMCPY(to_datums, from_datums, brs_.size_ * sizeof(ObDatum));
           to_info = from_info;
-          to_info.projected_ = true;
-          to_info.point_to_frame_ = false;
+          to_info.set_projected(true);
+          to_info.set_point_to_frame(false);
         } else {
           for (int64_t j = 0; j < brs_.size_; j++) {
             to_datums[j] = *from_datums;
           }
           to_info = from_info;
-          to_info.projected_ = true;
-          to_info.point_to_frame_ = false;
+          to_info.set_projected(true);
+          to_info.set_point_to_frame(false);
           to_info.cnt_ = brs_.size_;
         }
       }
@@ -179,15 +178,15 @@ int ObSubPlanScanOp::next_vector(const int64_t max_row_cnt)
             MEMCPY(dst, src, brs_.size_ * sizeof(ObDatum));
           }
           OZ(to->init_vector(eval_ctx_, VEC_UNIFORM, brs_.size_));
-        } else {
-          to_vec_header = from_vec_header;
+        } else if (OB_FAIL(to_vec_header.assign(from_vec_header))) {
+          LOG_WARN("assign vector header failed", K(ret));
         }
         // init eval info
         if (OB_SUCC(ret)) {
           const ObEvalInfo &from_info = from->get_eval_info(eval_ctx_);
           ObEvalInfo &to_info = to->get_eval_info(eval_ctx_);
           to_info = from_info;
-          to_info.projected_ = true;
+          to_info.set_projected(true);
           to_info.cnt_ = brs_.size_;
         }
       }

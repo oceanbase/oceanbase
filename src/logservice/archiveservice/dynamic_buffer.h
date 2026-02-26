@@ -48,7 +48,7 @@ public:
   bool alloc_from(void *ptr);
   int assign(const DynamicBuffer &other);
 
-  TO_STRING_KV(K_(buf_size), K_(buf), K_(ref), K_(buf_limit), K_(buf_gen_timestamp), K_(buf_size_usage), K_(label));
+  TO_STRING_KV(K_(buf_size), KP(buf_), K_(ref), K_(buf_limit), K_(buf_gen_timestamp), K_(buf_size_usage), K_(label));
 
 private:
   void alloc_(const int64_t size);

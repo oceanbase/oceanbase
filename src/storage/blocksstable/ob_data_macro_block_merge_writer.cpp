@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "storage/blocksstable/ob_data_macro_block_merge_writer.h"
-#include "lib/utility/ob_macro_utils.h"
-
+#include "storage/blocksstable/ob_data_store_desc.h"
 
 namespace oceanbase
 {
@@ -20,7 +19,7 @@ namespace blocksstable
 
 
 ObDataMacroBlockMergeWriter::ObDataMacroBlockMergeWriter()
-    : ObMacroBlockWriter(true),
+    : ObMacroBlockWriter(true/*is_need_macro_buffer*/),
       curr_macro_logic_id_(),
       is_use_freespace_(false),
       next_block_use_freespace_(false)
@@ -41,15 +40,23 @@ void ObDataMacroBlockMergeWriter::reset()
 
 int ObDataMacroBlockMergeWriter::open(
     const ObDataStoreDesc &data_store_desc,
-    const ObMacroDataSeq &start_seq,
-    ObIMacroBlockFlushCallback *callback)
+    const int64_t parallel_idx,
+    const blocksstable::ObMacroSeqParam &macro_seq_param,
+    const share::ObPreWarmerParam &pre_warm_param,
+    ObSSTablePrivateObjectCleaner &object_cleaner,
+    ObIMacroBlockFlushCallback *callback,
+    ObIMacroBlockValidator *validator,
+    ObIODevice *device_handle)
 {
+  UNUSED(device_handle);
   int ret = OB_SUCCESS;
 
   curr_macro_logic_id_.reset();
   is_use_freespace_ = false;
   next_block_use_freespace_ = false;
-  if (OB_FAIL(ObMacroBlockWriter::open(data_store_desc, start_seq, callback))) {
+  if (OB_FAIL(ObMacroBlockWriter::open(
+          data_store_desc, parallel_idx, macro_seq_param, pre_warm_param,
+          object_cleaner, callback, validator))) {
     STORAGE_LOG(WARN, "Fail to open macro block writer", K(ret));
   }
 
@@ -101,10 +108,12 @@ int ObDataMacroBlockMergeWriter::append_micro_block(
 }
 
 
-int ObDataMacroBlockMergeWriter::append_macro_block(const ObMacroBlockDesc &macro_desc)
+int ObDataMacroBlockMergeWriter::append_macro_block(
+    const ObMacroBlockDesc &macro_desc,
+    const ObMicroBlockData *micro_block_data)
 {
   next_block_use_freespace_ = false;
-  return ObMacroBlockWriter::append_macro_block(macro_desc);
+  return ObMacroBlockWriter::append_macro_block(macro_desc, micro_block_data);
 }
 
 void ObDataMacroBlockMergeWriter::adjust_freespace(const ObMacroBlockDesc *curr_macro_desc)

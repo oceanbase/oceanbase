@@ -58,6 +58,14 @@ public:
       obrpc::ObCdcLSFetchMissLogReq &req,
       obrpc::ObCdcProxy::AsyncCB<obrpc::OB_LS_FETCH_MISSING_LOG> &cb,
       const int64_t timeout) = 0;
+
+  // Fetch raw log based on log stream
+  // Asynchronous RPC
+  virtual int async_stream_fetch_raw_log(const uint64_t tenant_id,
+      const common::ObAddr &svr,
+      obrpc::ObCdcFetchRawLogReq &req,
+      obrpc::ObCdcProxy::AsyncCB<obrpc::OB_CDC_FETCH_RAW_LOG> &cb,
+      const int64_t timeout) = 0;
 };
 
 //////////////////////////////////////////// ObLogRpc //////////////////////////////////////
@@ -70,6 +78,10 @@ public:
   const char *const OB_CLIENT_SSL_CA_FILE = "wallet/ca.pem";
   const char *const OB_CLIENT_SSL_CERT_FILE = "wallet/client-cert.pem";
   const char *const OB_CLIENT_SSL_KEY_FILE = "wallet/client-key.pem";
+  const char *const OB_CLIENT_SSL_SM_SIGN_CERT_FILE = "wallet/CS.cert.pem";
+  const char *const OB_CLIENT_SSL_SM_SIGN_KEY_FILE = "wallet/CS.key.pem";
+  const char *const OB_CLIENT_SSL_SM_ENC_CERT_FILE = "wallet/CE.cert.pem";
+  const char *const OB_CLIENT_SSL_SM_ENC_KEY_FILE = "wallet/CE.key.pem";
 
 public:
   ObLogRpc();
@@ -96,10 +108,17 @@ public:
       obrpc::ObCdcProxy::AsyncCB<obrpc::OB_LS_FETCH_MISSING_LOG> &cb,
       const int64_t timeout);
 
+  int async_stream_fetch_raw_log(const uint64_t tenant_id,
+      const common::ObAddr &svr,
+      obrpc::ObCdcFetchRawLogReq &req,
+      obrpc::ObCdcProxy::AsyncCB<obrpc::OB_CDC_FETCH_RAW_LOG> &cb,
+      const int64_t timeout);
+
 public:
   int init(
       const int64_t cluster_id,
       const uint64_t self_tenant_id,
+      const obrpc::ObCdcClientType client_type,
       const int64_t io_thread_num,
       const ObLogFetcherConfig &cfg);
   void destroy();
@@ -113,6 +132,7 @@ private:
   bool                is_inited_;
   int64_t             cluster_id_;
   uint64_t            self_tenant_id_;
+  obrpc::ObCdcClientType client_type_;
   obrpc::ObNetClient  net_client_;
   uint64_t            last_ssl_info_hash_;
   int64_t             ssl_key_expired_time_;

@@ -57,6 +57,8 @@ struct ObIndexBlockTreePathItem
   ~ObIndexBlockTreePathItem() { reset(); }
 
   void reset();
+  void move_from(ObIndexBlockTreePathItem& item_ptr);
+  int assign(const ObIndexBlockTreePathItem& other);
 
   MacroBlockId macro_block_id_;
   int64_t curr_row_idx_;
@@ -169,8 +171,11 @@ public:
       const bool is_lower_bound,
       bool &equal,
       bool &is_beyond_the_range);
+  /* `cascade` and `is_reverse_scan` can set to false by default */
+  int pull_up(const bool cascade, const bool is_reverse_scan);
   int pull_up_to_root();
   int move_forward(const bool is_reverse_scan);
+  int move_forward_micro(const uint64_t step);
 
   TO_STRING_KV(K_(cursor_path), K_(is_normal_cg_sstable), K_(curr_path_item));
 public:
@@ -178,6 +183,8 @@ public:
   int get_idx_parser(const ObIndexBlockRowParser *&parser);
   int get_idx_row_header(const ObIndexBlockRowHeader *&idx_header);
   int get_macro_block_id(MacroBlockId &macro_id);
+  int get_current_node_macro_id(MacroBlockId &macro_id);
+  int get_parent_node_macro_id(MacroBlockId &macro_id);
 
   // Need to release held item at the end of lifetime
   int get_child_micro_infos(
@@ -188,7 +195,15 @@ public:
       ObIndexBlockTreePathItem &hold_item);
   int release_held_path_item(ObIndexBlockTreePathItem &held_item);
   int get_current_endkey(ObDatumRowkey &endkey, const bool get_schema_rowkey = false);
-  int estimate_range_macro_count(const blocksstable::ObDatumRange &range, int64_t &macro_count, int64_t &ratio);
+  // the number of macro and micro is estimated at the cost of height I/O operations
+  // the height is index-tree height
+  int estimate_range_macro_count(const blocksstable::ObDatumRange &range, int64_t &macro_count, int64_t &micro_count);
+  // the number of macro and micro is estimated at the cost of 2 * height I/O operations
+  // the height is index-tree height
+  int calc_range_macro_and_micro_count(
+      const blocksstable::ObDatumRange &range,
+      int64_t &macro_count,
+      int64_t &micro_count);
 
 private:
   int set_reader(const ObRowStoreType store_type);
@@ -211,7 +226,6 @@ private:
   // Index blocks store endkeys, so locate with lower_bound() can make sure we find
   // the exact micro block by which the search key is included in range
   int drill_down();
-  int pull_up(const bool cascade = false, const bool is_reverse_scan = false);
   int locate_rowkey_in_curr_block(const ObDatumRowkey &rowkey, bool &is_beyond_the_range);
   int search_rowkey_in_transformed_block(
       const ObDatumRowkey &rowkey,
@@ -219,7 +233,10 @@ private:
       int64_t &row_idx,
       bool &equal,
       const bool lower_bound = true);
-  int locate_range_in_curr_block(const ObDatumRange &range, int64_t &begin_idx, int64_t &end_idx);
+  int locate_range_in_curr_block(
+      const ObDatumRange &range, int64_t &begin_idx, int64_t &end_idx,
+      const bool is_left_border,
+      const bool is_right_border);
   int move_to_upper_bound(const ObDatumRowkey &rowkey);
   // get micro block infos in current intermediate micro block
   int get_micro_block_infos(
@@ -232,10 +249,27 @@ private:
       ObIArray<ObMicroIndexInfo> &micro_index_infos,
       ObIArray<ObDatumRowkey> &end_keys);
   int check_reach_target_depth(const MoveDepth target_depth, bool &reach_target_depth);
+  int init_curr_endkey(ObDatumRow &row_buf, const int64_t datum_cnt);
+  int move_until_cannot_skip(int64_t &remain_step);
+  int drill_down_lowest_node_by_range(
+      const ObDatumRange &range,
+      int64_t &begin_idx,
+      int64_t &end_idx,
+      int64_t &macro_count,
+      int64_t &micro_count,
+      bool &is_reach_leaf);
+  int calc_non_boundary_macro_and_micro_count(
+      const int64_t begin_idx,
+      const int64_t end_idx,
+      int64_t &macro_count,
+      int64_t &micro_count);
+  int estimate_boundary_macro_and_micro_count(
+      const ObDatumRange &range,
+      const bool is_left,
+      int64_t &macro_count,
+      int64_t &micro_count);
 
 private:
-  static const int64_t OB_INDEX_BLOCK_MAX_COL_CNT =
-      common::OB_MAX_ROWKEY_COLUMN_NUMBER + OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER + 1;
   ObIndexBlockTreePath cursor_path_;
   ObIndexMicroBlockCache *index_block_cache_;
   ObIMicroBlockReader *reader_;
@@ -250,6 +284,7 @@ private:
   ObIndexBlockTreePathItem *curr_path_item_;
 
   ObDatumRow row_;
+  ObDatumRowkey vector_endkey_;
   ObIndexBlockRowParser idx_row_parser_;
   const ObITableReadInfo *read_info_;
   ObSSTableMetaHandle sstable_meta_handle_;

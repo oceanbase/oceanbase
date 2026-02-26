@@ -132,7 +132,7 @@ public:
   int disconnect_session(ObSQLSessionInfo &session);
 
   // kill all sessions from this tenant.
-  int kill_tenant(const uint64_t tenant_id);
+  int kill_tenant(const uint64_t tenant_id, bool force_kill);
 
   /**
    * @brief timing clean time out session
@@ -144,7 +144,7 @@ public:
   int get_min_active_snapshot_version(share::SCN &snapshot_version);
 
   //used for guarantee the unique sessid when observer generates sessid
-  static uint64_t extract_server_id(uint32_t sessid);
+  static uint64_t extract_server_index(uint32_t sessid);
   static bool is_server_sessid(uint32_t sessid) {return SERVER_SESSID_TAG & sessid;}
   static int is_need_clear_sessid(const observer::ObSMConnection *conn, bool &is_need);
   int fetch_first_sessid();
@@ -255,13 +255,20 @@ private:
   class KillTenant
   {
   public:
-    KillTenant(ObSQLSessionMgr *mgr, const uint64_t tenant_id)
-        : mgr_(mgr), tenant_id_(tenant_id)
+    KillTenant(ObSQLSessionMgr *mgr, const uint64_t tenant_id, bool force_kill) :
+      ret_(common::OB_SUCCESS), mgr_(mgr), tenant_id_(tenant_id), force_kill_(force_kill)
     {}
-    bool operator() (sql::ObSQLSessionMgr::Key key, ObSQLSessionInfo* sess_info);
+    bool operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessionInfo *sess_info);
+    int get_ret_code()
+    {
+      return ret_;
+    }
+
   private:
+    int ret_;
     ObSQLSessionMgr *mgr_;
     const uint64_t tenant_id_;
+    const bool force_kill_;
   };
 
   class ObClientSessMapErase
@@ -287,10 +294,11 @@ private:
   // |Mask|resvd|    Server Id     |    Local Seq = 16 + 2                |
   // +----+------------------------------+--------------------------------+
   static const uint16_t LOCAL_SEQ_LEN = 18;
-  static const uint16_t RESERVED_SERVER_ID_LEN = 1;
-  static const uint16_t SERVER_ID_LEN = 13 - RESERVED_SERVER_ID_LEN;
+  static const uint16_t RESERVED_SERVER_INDEX_LEN = 1;
+  static const uint16_t SERVER_INDEX_LEN = 13 - RESERVED_SERVER_INDEX_LEN;
   static const uint32_t MAX_LOCAL_SEQ = (1ULL << LOCAL_SEQ_LEN) - 1;
-  static const uint64_t MAX_SERVER_ID = (1ULL << SERVER_ID_LEN) - 1;
+  // MAX_SERVER_INDEX cannot be larger than MAX_SERVER_COUNT
+  static const uint64_t MAX_SERVER_INDEX = (1ULL << SERVER_INDEX_LEN) - 1;
   common::ObFixedQueue<void> sessid_sequence_;
   uint32_t first_seq_;
   uint32_t increment_sessid_;
@@ -388,7 +396,8 @@ private:
   class SessionPool
   {
   public:
-    static const int64_t POOL_CAPACIPY = 32;
+    static const int64_t MAX_POOL_CAPACIPY = 256;
+    static const int64_t MIN_POOL_CAPACIPY = 32;
   public:
     SessionPool();
     int init(const int64_t capacity);
@@ -399,7 +408,7 @@ private:
                  K(session_pool_.get_total()),
                  K(session_pool_.get_free()));
   private:
-    ObSQLSessionInfo *session_array_[POOL_CAPACIPY];
+    ObSQLSessionInfo *session_array_[MAX_POOL_CAPACIPY];
     common::ObFixedQueue<ObSQLSessionInfo> session_pool_;
   };
   bool is_valid_tenant_id(uint64_t tenant_id) const;

@@ -14,18 +14,8 @@
 #include "ob_common_ls_service.h"
 #include "ob_ls_service_helper.h"
 #include "ob_balance_ls_primary_zone.h"
-#include "lib/profile/ob_trace_id.h"
-#include "share/ob_errno.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/schema/ob_schema_struct.h"//ObTenantInfo
 #include "share/ls/ob_ls_creator.h" //ObLSCreator
-#include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
-#include "share/ob_primary_zone_util.h"//ObPrimaryZoneUtil
-#include "share/ob_share_util.h"//ObShareUtil
-#include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
-#include "share/ob_common_rpc_proxy.h"//common_rpc_proxy
-#include "observer/ob_server_struct.h"//GCTX
-#include "logservice/palf/palf_base_info.h"//PalfBaseInfo
+#include "src/share/ob_common_rpc_proxy.h"
 
 namespace oceanbase
 {
@@ -117,19 +107,17 @@ void ObCommonLSService::do_work()
           LOG_WARN("failed to create ls", KR(ret), KR(tmp_ret), K(user_tenant_schema));
         }
         if (OB_SUCC(ret) && !user_tenant_schema.is_dropping()) {
-          if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(user_tenant_schema))) {
-            LOG_WARN("failed to adjust user tenant primary zone", KR(ret), KR(tmp_ret), K(user_tenant_schema));
-          }
-          if (OB_TMP_FAIL(try_modify_ls_unit_group_(user_tenant_schema))) {
+          if (OB_TMP_FAIL(try_modify_ls_unit_group_or_unit_list_(user_tenant_schema))) {
             LOG_WARN("failed to modify ls unit group", KR(ret), KR(tmp_ret), K(user_tenant_schema));
           }
         }
         // update primary ip list in every 10s
-        if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) {
           (void)try_update_primary_ip_list();
         }
       }
-
+      //系统日志流primary_zone的调整不受配置项的控制
+      //系统日志流的个数不会发生变化，加上限制会导致升级case需要大量的修改
       if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(tenant_id_))) {
         LOG_WARN("failed to update sys ls primary zone", KR(ret), KR(tmp_ret), K(tenant_id_));
       }
@@ -185,11 +173,12 @@ int ObCommonLSService::try_create_ls_(const share::schema::ObTenantSchema &tenan
 }
 //不管是主库还是备库都有概率存在一个日志流组内的日志流记录的unit_group不一致的情况
 //所有的日志流都对齐日志流id最小的日志流,虽然不是最优，但是可以保证最终一致性
-int ObCommonLSService::try_modify_ls_unit_group_(
+int ObCommonLSService::try_modify_ls_unit_group_or_unit_list_(
     const share::schema::ObTenantSchema &tenant_schema)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
+  uint64_t meta_tenant_data_version = 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -200,6 +189,8 @@ int ObCommonLSService::try_modify_ls_unit_group_(
              || tenant_schema.is_dropping()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant is invalid", KR(ret), K(tenant_id), K(tenant_schema));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), meta_tenant_data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
   } else {
     ObTenantLSInfo tenant_info(GCTX.sql_proxy_, &tenant_schema, tenant_id);
     share::ObLSStatusOperator status_op;
@@ -217,13 +208,30 @@ int ObCommonLSService::try_modify_ls_unit_group_(
           const share::ObLSID ls_id = ls_ids.at(j);
           if (OB_FAIL(tenant_info.get_ls_status_info(ls_id, ls_status, index))) {
             LOG_WARN("failed to get ls status info", KR(ret), K(ls_id));
-          } else if (ls_status.unit_group_id_ != unit_group_id) {
-            FLOG_INFO("ls group has different unit group id, need process", K(ls_status), K(unit_group_id));
-            if (OB_FAIL(status_op.alter_unit_group_id(tenant_id, ls_id, ls_group_id,
-                    ls_status.unit_group_id_, unit_group_id, *GCTX.sql_proxy_))) {
-              LOG_WARN("failed to alter unit group", KR(ret), K(tenant_id), K(ls_id),
-                  K(ls_group_id), K(unit_group_id), K(ls_status));
-
+          } else if (!ObShareUtil::check_compat_version_for_hetero_zone(meta_tenant_data_version)) {
+            // dat version below 4.4.2.0
+            // check and update unit_group_id
+            if (ls_status.unit_group_id_ != unit_group_id) {
+              FLOG_INFO("ls group has different unit group id, need process", K(ls_status), K(unit_group_id));
+              if (OB_FAIL(status_op.alter_unit_group_id(tenant_id, ls_id, ls_group_id,
+                      ls_status.unit_group_id_, unit_group_id, *GCTX.sql_proxy_))) {
+                LOG_WARN("failed to alter unit group", KR(ret), K(tenant_id), K(ls_id),
+                    K(ls_group_id), K(unit_group_id), K(ls_status));
+              }
+            }
+          } else {
+            // data version up to 4.4.2.0
+            // check and update unit_list
+            if (ls_status.get_unit_list() != ls_group_array.at(i).unit_list_) {
+              FLOG_INFO("ls group has different unit id list, need process",
+                        K(ls_status), K(ls_group_array.at(i)));
+              // use this function to update unit_list, not ls group id
+              if (OB_FAIL(status_op.alter_ls_group_id(tenant_id, ls_id, ls_group_id/*old_one*/,
+                              ls_group_id/*new_one*/, ls_status.get_unit_list()/*old_one*/,
+                              ls_group_array.at(i).unit_list_/*new_one*/, *GCTX.sql_proxy_))) {
+                LOG_WARN("fail to alter unit list", KR(ret), K(tenant_id), K(ls_id), K(ls_group_id),
+                         K(ls_status), K(ls_group_array.at(i)));
+              }
             }
           }
         }//end for j
@@ -233,6 +241,7 @@ int ObCommonLSService::try_modify_ls_unit_group_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SKIP_CREATE_USER_LS)
 int ObCommonLSService::do_create_user_ls(
     const share::schema::ObTenantSchema &tenant_schema,
     const share::ObLSStatusInfo &info, const SCN &create_scn,
@@ -242,24 +251,26 @@ int ObCommonLSService::do_create_user_ls(
   int ret = OB_SUCCESS;
   LOG_INFO("[COMMON_LS_SERVICE] start to create ls", K(info), K(create_scn));
   const int64_t start_time = ObTimeUtility::fast_current_time();
-  if (OB_UNLIKELY(!info.is_valid() || !info.ls_is_creating())) {
+  if (OB_UNLIKELY(ERRSIM_SKIP_CREATE_USER_LS)) {
+    LOG_INFO("errsim skip create user ls");
+  } else if (OB_UNLIKELY(!info.is_valid() || !info.ls_is_creating())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("info not valid", KR(ret), K(info));
   } else {
     CK(OB_NOT_NULL(GCTX.sql_proxy_), OB_NOT_NULL(GCTX.srv_rpc_proxy_))
     common::ObArray<share::ObZoneReplicaAttrSet> locality_array;
-    int64_t paxos_replica_num = 0;
+    //由于日志流只能根据unit_list创建，所以paxos_replica_num设置为unit_list
+    //内的paxos_replica_num的个数
+    //unit_list可能不能和locality匹配，依赖后续的容灾操作把副本补完
+
     ObSchemaGetterGuard guard;//nothing
     if (FAILEDx(tenant_schema.get_zone_replica_attr_array(
                    locality_array))) {
       LOG_WARN("failed to get zone locality array", KR(ret));
-    } else if (OB_FAIL(tenant_schema.get_paxos_replica_num(
-                   guard, paxos_replica_num))) {
-      LOG_WARN("failed to get paxos replica num", KR(ret));
     } else {
       ObLSCreator creator(*GCTX.srv_rpc_proxy_, info.tenant_id_,
                           info.ls_id_, GCTX.sql_proxy_);
-      if (OB_FAIL(creator.create_user_ls(info, paxos_replica_num,
+      if (OB_FAIL(creator.create_user_ls(info,
                                          locality_array, create_scn,
                                          tenant_schema.get_compatibility_mode(),
                                          create_with_palf,
@@ -350,20 +361,21 @@ void ObCommonLSService::try_update_primary_ip_list()
     char passwd[OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; //unencrypted password
     uint64_t user_tenant_id = gen_user_tenant_id(tenant_id_);
     bool log_restore_source_exist = true;
+    bool cluster_id_dup = false;
 
     if (OB_FAIL(restore_source_mgr.init(user_tenant_id, proxy_))) {
       LOG_WARN("fail to init restore_source_mgr", K(user_tenant_id));
     } else if (OB_FAIL(restore_source_mgr.get_source(item))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         log_restore_source_exist = false;
-        if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("log restore source is empty, just skip", K(ret), K(user_tenant_id));
         }
       } else {
         LOG_WARN("get source failed", K(user_tenant_id), K(ret));
       }
     } else if (! need_update_ip_list_(item)) {
-      if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+      if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
         LOG_INFO("log restore source not exists or the log restore source type is not service" , K(item));
       }
     } else if (OB_FAIL(get_restore_source_value_(item, standby_source_value))) {
@@ -398,6 +410,14 @@ void ObCommonLSService::try_update_primary_ip_list()
     } else if ((primary_cluster_id != service_attr.user_.cluster_id_) || (primary_tenant_id != service_attr.user_.tenant_id_)) {
       LOG_WARN("primary cluster_id or tenant_id has been changed",
       K(primary_cluster_id), K_(service_attr.user_.cluster_id), K(primary_tenant_id), K_(service_attr.user_.tenant_id), K(user_tenant_id));
+    } else if (OB_FAIL(restore_proxy_.check_different_cluster_with_same_cluster_id(
+                   service_attr.user_.cluster_id_, cluster_id_dup))) {
+      LOG_WARN("fail to check different cluster with same cluster id", KR(ret),
+               K(service_attr.user_.cluster_id_));
+    } else if (cluster_id_dup) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_ERROR("different cluster with same cluster id is not allowed", KR(ret),
+                K(service_attr.user_.cluster_id_));
     } else {
       // update primary state
       bool cur_primary_state = true;

@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_REWRITE
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/rewrite/ob_key_part.h"
-#include "sql/rewrite/ob_query_range.h"
+#include "ob_key_part.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/engine/expr/ob_datum_cast.h"
@@ -559,7 +557,7 @@ int ObKeyPart::merge_two_in_keys(ObKeyPart *other, const SameValIdxMap &lr_idx)
     LOG_WARN("failed to append right offsets", K(ret));
   } else {
     int64_t offsets_cnt = in_keypart_->offsets_.count();
-    // std::sort(left_in->in_keypart_->offsets_.begin(), left_in->in_keypart_->offsets_.end());
+    // lib::ob_sort(left_in->in_keypart_->offsets_.begin(), left_in->in_keypart_->offsets_.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < offsets_cnt; ++i) {
       InParamMeta *cur_param = NULL;
       InParamMeta *new_param = NULL;
@@ -669,14 +667,15 @@ int ObKeyPart::deep_node_copy(const ObKeyPart &other)
 {
   int ret = OB_SUCCESS;
   id_ = other.id_;
-  pos_ = other.pos_;
   null_safe_ = other.null_safe_;
   rowid_column_idx_ = other.rowid_column_idx_;
   is_phy_rowid_key_part_ = other.is_phy_rowid_key_part_;
   item_next_ = NULL;
   or_next_ = NULL;
   and_next_ = NULL;
-  if (other.is_normal_key()) {
+  if (OB_FAIL(pos_.deep_copy(allocator_, other.pos_))) {
+    LOG_WARN("failed to deep copy pos", K(ret));
+  } else if (other.is_normal_key()) {
     if (OB_FAIL(create_normal_key())) {
       LOG_WARN("create normal key failed", K(ret));
     } else if (OB_FAIL(ob_write_obj(allocator_, other.normal_keypart_->start_, normal_keypart_->start_))) {
@@ -711,8 +710,8 @@ int ObKeyPart::deep_node_copy(const ObKeyPart &other)
         if (OB_ISNULL(new_param = in_keypart_->create_param_meta(allocator_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate param meta", K(ret));
-        } else if (OB_FAIL(new_param->assign(*param, allocator_))) {
-          LOG_WARN("failed to assign new param", K(ret));
+        } else if (OB_FAIL(new_param->deep_copy(allocator_, *param))) {
+          LOG_WARN("failed to deep copy param", K(ret));
         } else if (OB_FAIL(in_keypart_->in_params_.push_back(new_param))) {
           LOG_WARN("failed to push back new param", K(ret));
         }
@@ -768,6 +767,29 @@ int InParamMeta::assign(const InParamMeta &other, ObIAllocator &alloc)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid in keypart", K(ret));
   } else if (OB_FAIL(pos_.assign(other.pos_))) {
+    LOG_WARN("failed to assign other", K(ret));
+  } else if (OB_FAIL(vals_.reserve(other.vals_.count()))) {
+    LOG_WARN("failed to reserve vals count", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.vals_.count(); ++i) {
+      ObObj new_val;
+      if (OB_FAIL(ob_write_obj(alloc, other.vals_.at(i), new_val))) {
+        LOG_WARN("failed to copy obj", K(ret));
+      } else if (OB_FAIL(vals_.push_back(new_val))) {
+        LOG_WARN("failed to push back new val", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int InParamMeta::deep_copy( ObIAllocator &alloc, const InParamMeta &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(other.vals_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid in keypart", K(ret));
+  } else if (OB_FAIL(pos_.deep_copy(alloc, other.pos_))) {
     LOG_WARN("failed to assign other", K(ret));
   } else if (OB_FAIL(vals_.reserve(other.vals_.count()))) {
     LOG_WARN("failed to reserve vals count", K(ret));
@@ -1062,6 +1084,18 @@ int ObKeyPartPos::assign(const ObKeyPartPos &other)
   return ret;
 }
 
+int ObKeyPartPos::deep_copy(common::ObIAllocator &allocator, const ObKeyPartPos &other)
+{
+  int ret = OB_SUCCESS;
+  offset_ = other.offset_;
+  column_type_ = other.column_type_;
+  enum_set_values_.reuse();
+  if (OB_FAIL(set_enum_set_values(allocator, other.enum_set_values_))) {
+    LOG_WARN("failed to set enum set values", K(ret));
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObKeyPart)
 {
   int ret = OB_SUCCESS;
@@ -1272,11 +1306,11 @@ int ObKeyPart::formalize_keypart(bool contain_row)
       }
     }
   } else if (is_in_key()) {
-    std::sort(in_keypart_->offsets_.begin(), in_keypart_->offsets_.end());
-    std::sort(in_keypart_->in_params_.begin(),
+    lib::ob_sort(in_keypart_->offsets_.begin(), in_keypart_->offsets_.end());
+    lib::ob_sort(in_keypart_->in_params_.begin(),
               in_keypart_->in_params_.end(),
               [] (const InParamMeta *e1, const InParamMeta *e2) {
-                return e1->pos_.offset_ <= e2->pos_.offset_;
+                return e1->pos_.offset_ < e2->pos_.offset_;
               });
     int64_t off = -1;
     in_keypart_->is_strict_in_ = true;
@@ -1437,8 +1471,8 @@ int ObKeyPart::remove_in_params_vals(const ObIArray<int64_t> &val_idx)
   return ret;
 }
 
-int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
-                               bool contain_row, bool &is_bound_modified)
+int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, ObExecContext *exec_ctx,
+                             const int64_t cur_datetime, bool contain_row, bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   int64_t start_cmp = 0;
@@ -1446,10 +1480,10 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, const int
   if (OB_UNLIKELY(!is_normal_key())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("keypart isn't normal key", K_(key_type));
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, pos_,
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, exec_ctx, pos_,
                                                normal_keypart_->start_, start_cmp, common::CO_LE, true))) {
     LOG_WARN("failed to try cast value type", K(ret));
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, pos_,
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, exec_ctx, pos_,
                                                normal_keypart_->end_, end_cmp, common::CO_LE, false))) {
     LOG_WARN("failed to try cast value type", K(ret));
   } else {
@@ -1481,8 +1515,9 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, const int
 }
 
 int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
-                              ObIAllocator &alloc, const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
-                              common::ObCmpOp cmp_op /* CO_EQ */, bool left_border /*true*/)
+                              ObIAllocator &alloc, ObExecContext *exec_ctx, const ObKeyPartPos &pos,
+                              ObObj &value, int64_t &cmp, common::ObCmpOp cmp_op /* CO_EQ */,
+                              bool left_border /*true*/)
 {
   int ret = OB_SUCCESS;
   if (!value.is_min_value() && !value.is_max_value() && !value.is_unknown()
@@ -1509,8 +1544,29 @@ int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, const int6
     expect_type.set_type(pos.column_type_.get_type());
     expect_type.set_collation_type(collation_type);
     expect_type.set_type_infos(&pos.get_enum_set_values());
+    if (pos.column_type_.is_enum_set_with_subschema()) {
+      const ObEnumSetMeta *enum_set_meta = NULL;
+      if (OB_ISNULL(exec_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec_ctx is NULL", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(
+            pos.column_type_, exec_ctx->get_my_session(), enum_set_meta))) {
+        LOG_WARN("fail to extrac enum set meta", K(ret));
+      } else {
+        expect_type.set_type_infos(enum_set_meta->get_str_values());
+      }
+      cast_ctx.exec_ctx_ = exec_ctx;
+    }
     EXPR_CAST_OBJ_V2(expect_type, tmp_start, dest_val);
     // to check if EXPR CAST losses number precise
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(dest_val)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cast failed.", K(ret));
+    } else if (ob_is_enumset_tc(expect_type.get_type())) {
+      const_cast<ObObj *>(dest_val)->set_scale(pos.column_type_.get_accuracy().get_scale());
+      const_cast<ObObj *>(dest_val)->set_subschema_id(pos.column_type_.get_subschema_id());
+    }
     ObObjType cmp_type = ObMaxType;
     if (OB_FAIL(ret)) {
       SQL_REWRITE_LOG(WARN, "cast obj to dest type failed", K(ret), K(value), K_(pos.column_type));

@@ -26,10 +26,7 @@ int g_ZSTD_threading_useles_symbol;
 
 
 /* ===  Dependencies  === */
-#include <process.h>
-#include <errno.h>
 #include "threading.h"
-
 
 /* ===  Implementation  === */
 

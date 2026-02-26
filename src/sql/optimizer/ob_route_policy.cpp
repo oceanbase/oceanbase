@@ -11,9 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_route_policy.h"
+#include "ob_route_policy.h"
 #include "sql/optimizer/ob_replica_compare.h"
-#include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "storage/ob_locality_manager.h"
 using namespace oceanbase::common;
@@ -44,7 +43,7 @@ int ObRoutePolicy::weak_sort_replicas(ObIArray<CandidateReplica>& candi_replicas
     auto first = &candi_replicas.at(0);
     ObRoutePolicyType policy_type = get_calc_route_policy_type(ctx);
     ObReplicaCompare replica_cmp(policy_type);
-    std::sort(first, first + candi_replicas.count(), replica_cmp);
+    lib::ob_sort(first, first + candi_replicas.count(), replica_cmp);
     if (OB_FAIL(replica_cmp.get_sort_ret())) {
       LOG_WARN("fail sort", K(candi_replicas), K(ret));
     }
@@ -82,6 +81,9 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
     } else {
       LOG_TRACE("check ls readable", K(ctx), K(ls_id), K(cur_replica.get_server()), K(can_read));
       if ((policy_type == ONLY_READONLY_ZONE && cur_replica.attr_.zone_type_ == ZONE_TYPE_READWRITE)
+          || (policy_type == COLUMN_STORE_ONLY && !ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
+          || (policy_type != COLUMN_STORE_ONLY && ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
+          || (policy_type == FORCE_READONLY_ZONE && !ObReplicaTypeCheck::is_readonly_replica(cur_replica.get_replica_type()))
           || cur_replica.attr_.zone_status_ == ObZoneStatus::INACTIVE
           || cur_replica.attr_.server_status_ != ObServerStatus::OB_SERVER_ACTIVE
           || cur_replica.attr_.start_service_time_ == 0
@@ -102,19 +104,62 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    for (int64_t i = candi_replicas.count()-1; OB_SUCC(ret) && i >= 0; --i) {
+      CandidateReplica &cur_replica = candi_replicas.at(i);
+      if (cur_replica.is_filter_ &&
+          ((policy_type == COLUMN_STORE_ONLY && !ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
+          || (policy_type != COLUMN_STORE_ONLY && ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))) &&
+          OB_FAIL(candi_replicas.remove(i))) {
+        LOG_WARN("failed to remove filted replica", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && candi_replicas.count() == 0) {
+      ret = OB_NO_REPLICA_VALID;
+      LOG_USER_ERROR(OB_NO_REPLICA_VALID);
+    }
+  }
+  if (OB_SUCC(ret) && policy_type == FORCE_READONLY_ZONE) {
+    for (int64_t i = candi_replicas.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      CandidateReplica &cur_replica = candi_replicas.at(i);
+      if (cur_replica.is_filter_ && OB_FAIL(candi_replicas.remove(i))) {
+        LOG_WARN("failed to remove filtered replica", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && candi_replicas.count() == 0) {
+      ret = OB_NO_READABLE_REPLICA;
+      LOG_WARN("all replicas are filted", K(ret), K(policy_type));
+    }
+  }
   return ret;
 }
 
 int ObRoutePolicy::calculate_replica_priority(const ObAddr &local_server,
                                               const ObLSID &ls_id,
                                               ObIArray<CandidateReplica>& candi_replicas,
-                                              ObRoutePolicyCtx &ctx)
+                                              ObRoutePolicyCtx &ctx,
+                                              bool is_inner_table)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (candi_replicas.count() <= 1) {//do nothing
+  } else if (candi_replicas.count() <= 1) {
+    ObRoutePolicyType policy_type = get_calc_route_policy_type(ctx);
+    if (1 == candi_replicas.count() &&
+        policy_type == COLUMN_STORE_ONLY &&
+        !is_inner_table &&
+        !ObReplicaTypeCheck::is_columnstore_replica(candi_replicas.at(0).get_replica_type())) {
+      ret = OB_NO_REPLICA_VALID;
+      LOG_USER_ERROR(OB_NO_REPLICA_VALID);
+    }
+    if (1 == candi_replicas.count() &&
+        policy_type == FORCE_READONLY_ZONE &&
+        !is_inner_table &&
+        !ObReplicaTypeCheck::is_readonly_replica(candi_replicas.at(0).get_replica_type())) {
+      ret = OB_NO_REPLICA_VALID;
+      LOG_USER_ERROR(OB_NO_REPLICA_VALID);
+    }
   } else if (WEAK == ctx.consistency_level_) {
     if (OB_FAIL(filter_replica(local_server, ls_id, candi_replicas, ctx))) {
       LOG_WARN("fail to filter replicas", K(candi_replicas), K(ctx), K(ret));

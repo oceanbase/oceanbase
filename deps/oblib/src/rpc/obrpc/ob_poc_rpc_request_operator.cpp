@@ -12,6 +12,7 @@
 
 #include "rpc/obrpc/ob_poc_rpc_request_operator.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
+#include "rpc/obmysql/ob_mysql_request_utils.h"
 
 using namespace oceanbase::rpc;
 namespace oceanbase
@@ -39,6 +40,11 @@ void ObPocRpcRequestOperator::response_result(ObRequest* req, obrpc::ObRpcPacket
 ObAddr ObPocRpcRequestOperator::get_peer(const ObRequest* req)
 {
   return get_poc_handle_context(req)->get_peer();
+}
+
+void ObPocRpcRequestOperator::set_trace_point(const ObRequest* req, int32_t trace_point)
+{
+  get_poc_handle_context(req)->set_trace_point(trace_point);
 }
 
 }; // end namespace obrpc

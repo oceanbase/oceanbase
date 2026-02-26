@@ -54,6 +54,7 @@ public:
   virtual int execute() = 0;
 
 protected:
+  int priv_check();
   int pre_execution_check();
   int sync_rule_from_inner_table();
 

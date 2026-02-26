@@ -64,6 +64,7 @@ public:
   inline bool is_finished() const { return state_ != ObDDLClogState::STATE_INIT; }
   inline int get_ret_code() const { return ret_code_; }
   mds::MdsCtx &get_mds_ctx() { return mds_ctx_; }
+  const char *get_cb_name() const override { return "SyncTabletSeqMdsLogCb"; }
 private:
   ObDDLClogState state_;
   bool the_other_release_this_;

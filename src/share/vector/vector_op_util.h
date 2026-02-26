@@ -146,6 +146,195 @@ private:
   }
 };
 
+struct VectorRangeUtil
+{
+  template <typename OP>
+  static int lower_bound(sql::ObExpr *expr, sql::ObEvalCtx &ctx, const sql::EvalBound &bound,
+                         const sql::ObBitVector &skip, OP cmp_op, int64_t &iter)
+  {
+    return common_bound<OP, true>(expr, ctx, bound, skip, cmp_op, iter);
+  }
+
+  template <typename OP>
+  static int upper_bound(sql::ObExpr *expr, sql::ObEvalCtx &ctx, const sql::EvalBound &bound,
+                         const sql::ObBitVector &skip, OP cmp_op, int64_t &iter)
+  {
+    return common_bound<OP, false>(expr, ctx, bound, skip, cmp_op, iter);
+  }
+
+  struct NullSafeCmp
+  {
+    NullSafeCmp(ObObjMeta &obj_meta, const sql::NullSafeRowCmpFunc cmp, const char *value,
+                const int32_t len, bool is_null, bool is_ascending) :
+      obj_meta_(obj_meta),
+      cmp_(cmp), value_(value), len_(len), is_null_(is_null), is_ascending_(is_ascending)
+    {}
+
+    OB_INLINE int operator()(const ObObjMeta &other_meta, const char *other, int32_t other_len,
+                             const bool other_null, int &cmp_ret) const
+    {
+      int ret = OB_SUCCESS;
+      cmp_ret = 0;
+      if (OB_FAIL(cmp_(other_meta, obj_meta_,
+                       other, other_len, other_null,
+                       value_, len_, is_null_,
+                       cmp_ret))) {
+        COMMON_LOG(WARN, "compare failed", K(ret));
+      } else {
+        cmp_ret *= (is_ascending_ ? 1 : -1);
+      }
+      return ret;
+    }
+  private:
+    ObObjMeta &obj_meta_;
+    const sql::NullSafeRowCmpFunc cmp_;
+    const char *value_;
+    const int32_t len_;
+    const bool is_null_;
+    const bool is_ascending_;
+  };
+
+private:
+  template <typename OP, bool is_lower>
+  static int common_bound(sql::ObExpr *expr, sql::ObEvalCtx &ctx, const sql::EvalBound &bound,
+                          const sql::ObBitVector &skip, OP cmp_op, int64_t &iter);
+  template <typename OP, typename VecFmt, bool is_lower>
+  static int find_bound(const ObObjMeta &obj_meta, ObIVector *ivector, sql::ObEvalCtx &ctx,
+                        const sql::EvalBound &bound, const sql::ObBitVector &skip, OP cmp_op,
+                        int64_t &iter);
+};
+
+class ObDiscreteFormat;
+template<bool is_const>
+class ObUniformFormat;
+class ObContinuousFormat;
+template<typename ValType>
+class ObFixedLengthFormat;
+
+#define FIND_BOUND_USE_FMT(fmt)                                                                    \
+  ret = find_bound<OP, fmt, is_lower>(expr->obj_meta_, expr->get_vector(ctx), ctx, bound, skip,    \
+                                      cmp_op, iter)
+
+#define FIND_BOUND_USE_FIXED_FMT(vec_tc)                                                           \
+  case (vec_tc): {                                                                                 \
+    ret = FIND_BOUND_USE_FMT(ObFixedLengthFormat<RTCType<vec_tc>>);                                \
+  } break
+
+template <typename OP, bool is_lower>
+int VectorRangeUtil::common_bound(sql::ObExpr *expr, sql::ObEvalCtx &ctx,
+                                 const sql::EvalBound &bound, const sql::ObBitVector &skip,
+                                 OP cmp_op, int64_t &iter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr->eval_vector(ctx, skip, bound))) {
+    COMMON_LOG(WARN, "eval vector failed", K(ret));
+  } else {
+    iter = -1;
+    VectorFormat fmt = expr->get_format(ctx);
+    VecValueTypeClass vec_tc = expr->get_vec_value_tc();
+    switch (fmt) {
+    case VEC_DISCRETE: {
+      FIND_BOUND_USE_FMT(ObDiscreteFormat);
+      break;
+    }
+    case VEC_FIXED: {
+      switch(vec_tc) {
+        LST_DO_CODE(FIND_BOUND_USE_FIXED_FMT, FIXED_VEC_LIST);
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          COMMON_LOG(WARN, "unexpected type class", K(vec_tc));
+        }
+      }
+      break;
+    }
+    case VEC_CONTINUOUS: {
+      FIND_BOUND_USE_FMT(ObContinuousFormat);
+      break;
+    }
+    case VEC_UNIFORM: {
+      FIND_BOUND_USE_FMT(ObUniformFormat<false>);
+      break;
+    }
+    case VEC_UNIFORM_CONST: {
+      FIND_BOUND_USE_FMT(ObUniformFormat<true>);
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNDEFINED;
+      COMMON_LOG(WARN, "unexpected data format", K(ret), K(fmt));
+    }
+    }
+    if (OB_FAIL(ret)) {
+      COMMON_LOG(WARN, "find bound failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+#undef FIND_BOUND_USE_FMT
+#undef FIND_BOUND_USE_FIXED_FMT
+
+template <typename OP, typename VecFmt, bool is_lower>
+int VectorRangeUtil::find_bound(const ObObjMeta &obj_meta, ObIVector *ivector, sql::ObEvalCtx &ctx,
+                                const sql::EvalBound &bound, const sql::ObBitVector &skip,
+                                OP cmp_op, int64_t &iter)
+{
+  // TODO: use binary search
+  int ret = OB_SUCCESS;
+  int cmp_ret = 0;
+  const char *payload = nullptr;
+  int32_t len = 0;
+  bool is_null = false;
+  iter = -1;
+  VecFmt *data = static_cast<VecFmt *>(ivector);
+  if (std::is_same<VecFmt, ObUniformFormat<true>>::value) {
+    bool skip_all = (skip.accumulate_bit_cnt(bound) == bound.range_size());
+    if (skip_all) {
+    } else {
+      is_null = data->is_null(0);
+      data->get_payload(0, payload, len);
+      if(OB_FAIL(cmp_op(obj_meta, payload,len, is_null, cmp_ret))) {
+        COMMON_LOG(WARN, "compare failed", K(ret));
+      } else if (is_lower && cmp_ret >= 0) {
+        iter = 0;
+      } else if (!is_lower && cmp_ret > 0) {
+        iter = 0;
+      }
+    }
+  } else if (OB_LIKELY(bound.get_all_rows_active())) {
+    for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+      is_null = data->is_null(i);
+      data->get_payload(i, payload, len);
+      if (OB_FAIL(cmp_op(obj_meta, payload, len, is_null, cmp_ret))) {
+        COMMON_LOG(WARN, "compare failed", K(ret));
+      } else if (is_lower && cmp_ret >= 0) {
+        iter = i;
+        break;
+      } else if (!is_lower && cmp_ret > 0) {
+        iter = i;
+        break;
+      }
+    }
+  } else {
+    for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+      if (skip.at(i)) {
+      } else {
+        is_null = data->is_null(i);
+        data->get_payload(i, payload, len);
+        if (OB_FAIL(cmp_op(obj_meta, payload, len, is_null, cmp_ret))) {
+          COMMON_LOG(WARN, "compare failed", K(ret));
+        } else if (is_lower && cmp_ret >= 0) {
+          iter = i;
+          break;
+        } else if (!is_lower && cmp_ret > 0) {
+          iter = i;
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
 } // end namespace common
 } // end namespace oceanbase
 #endif // OCEANBASE_SHARE_VECTOR_VECTOR_OP_UTIL_H_

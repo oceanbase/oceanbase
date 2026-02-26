@@ -11,36 +11,22 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
+#include "ob_sql_plan_monitor_node_list.h"
 #include "lib/rc/ob_rc.h"
-#include "lib/thread/thread_mgr.h"
+#include "observer/ob_server.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::lib;
 
 const char *ObPlanMonitorNodeList::MOD_LABEL = "SqlPlanMon";
-
-int ObMonitorNode::add_rt_monitor_node(ObMonitorNode *node)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(node) ||
-      OB_NOT_NULL(node->prev_) ||
-      OB_NOT_NULL(node->next_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected node", K(node));
-  } else {
-    next_ = node;
-    node->prev_ = this;
-  }
-  return ret;
-}
-
 ObPlanMonitorNodeList::ObPlanMonitorNodeList() :
   inited_(false),
   destroyed_(false),
   recycle_threshold_(0),
-  batch_release_(0)
+  batch_release_(0),
+  profile_recycle_threshold_(0)
 {
 }
 
@@ -83,6 +69,7 @@ int ObPlanMonitorNodeList::init(uint64_t tenant_id, const int64_t tenant_mem_siz
       rt_node_id_ = -1;
       recycle_threshold_ = queue_size * 0.9; // when reach 90% usage, begin to recycle
       batch_release_ = queue_size * 0.05; // recycle 5% nodes per round
+      profile_recycle_threshold_ = int64_t(tenant_mem_size * 0.02 * 0.8);
       tenant_id_ = tenant_id;
       inited_ = true;
       destroyed_ = false;
@@ -135,8 +122,18 @@ int ObPlanMonitorNodeList::submit_node(ObMonitorNode &node)
     LOG_WARN("fail alloc mem", K(mem_size), K(ret));
   } else {
     deep_cp_node = new(buf) ObMonitorNode(node);
+    deep_cp_node->covert_to_static_node();
+    if (OB_NOT_NULL(node.profile_)) {
+      if (OB_FAIL(node.profile_->to_persist_profile(deep_cp_node->raw_profile_,
+                                                    deep_cp_node->raw_profile_len_, &allocator_))) {
+        LOG_WARN("failed to persist profile");
+        // overwrite ret by design
+        ret = OB_SUCCESS;
+      }
+      deep_cp_node->profile_ = nullptr;
+    }
     int64_t req_id = 0;
-    if(OB_FAIL(queue_.push(deep_cp_node, req_id))) {
+    if (OB_FAIL(queue_.push(deep_cp_node, req_id))) {
       //sql audit槽位已满时会push失败, 依赖后台线程进行淘汰获得可用槽位
       if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
         SERVER_LOG(WARN, "push into queue failed", K(get_size_used()), K(get_size()), K(ret));
@@ -174,11 +171,12 @@ int ObPlanMonitorNodeList::revert_monitor_node(ObMonitorNode &node)
   return ret;
 }
 
-
-int ObPlanMonitorNodeList::convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array)
+int ObPlanMonitorNodeList::convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array,
+                                                    common::ObIAllocator *alloc,
+                                                    bool fetch_profile)
 {
   int ret = OB_SUCCESS;
-  ObPlanMonitorNodeList::ObMonitorNodeTraverseCall call(array);
+  ObPlanMonitorNodeList::ObMonitorNodeTraverseCall call(array, alloc, fetch_profile);
   if (OB_FAIL(node_map_.foreach_refactored(call))) {
     LOG_WARN("fail to traverse node map", K(ret));
   }
@@ -190,12 +188,47 @@ int ObPlanMonitorNodeList::ObMonitorNodeTraverseCall::operator() (
     ObMonitorNode *> &entry)
 {
   int ret = OB_SUCCESS;
-  ObMonitorNode *head = entry.second;
-  while (OB_NOT_NULL(head) && OB_SUCC(ret)) {
-    if (OB_FAIL(node_array_.push_back(*head))) {
+  ObMonitorNode *node = entry.second;
+  if (OB_ISNULL(node)) {
+    // do nothing
+  } else if (OB_FAIL(recursive_add_node_to_array(*node))) {
+    LOG_WARN("fail to recursive add node to array", K(ret), KPC(node));
+  }
+  return ret;
+}
+
+int ObPlanMonitorNodeList::ObMonitorNodeTraverseCall::recursive_add_node_to_array(
+                                                        ObMonitorNode &node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node.op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node.op_ is null", K(ret));
+  }
+  for (int i = 0; OB_SUCC(ret) && i < node.op_->get_child_cnt(); ++i) {
+    ObOperator *child_op = node.op_->get_child(i);
+    if (OB_ISNULL(child_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator child is nullptr", K(ret), KPC(node.op_), K(i));
+    } else if (OB_FAIL(SMART_CALL(
+        recursive_add_node_to_array(child_op->get_monitor_info())))) {
+      LOG_WARN("fail to recursive add node to array", K(ret), K(node), K(i));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(node_array_.push_back(node))) {
       LOG_WARN("fail to push back mointor node", K(ret));
     } else {
-      head = head->next_;
+      ObMonitorNode &last_node = node_array_.at(node_array_.count() - 1);
+      last_node.covert_to_static_node();
+      if (fetch_profile_ && OB_NOT_NULL(last_node.profile_)
+          && OB_FAIL(last_node.profile_->to_persist_profile(last_node.raw_profile_,
+                                                            last_node.raw_profile_len_, alloc_))) {
+        LOG_WARN("failed to persist profile");
+        // overwrite ret by design
+        ret = OB_SUCCESS;
+      }
+      last_node.profile_ = nullptr;
     }
   }
   return ret;
@@ -213,6 +246,43 @@ void ObMonitorNode::update_tempseg(int64_t delta_size)
   workarea_max_tempseg_ = MAX(workarea_tempseg_, workarea_max_tempseg_);
 }
 
+uint64_t ObMonitorNode::calc_db_time()
+{
+  int64_t db_time = 0;
+  if (OB_NOT_NULL(op_)) {
+    db_time = op_->total_time_;
+    int64_t cur_time = rdtsc();
+    if (op_->cpu_begin_level_ > 0) {
+      db_time += cur_time - op_->cpu_begin_time_;
+    }
+    for (int32_t i = 0; i < op_->get_child_cnt(); ++i) {
+      ObOperator *child_op = op_->get_child(i);
+      if (OB_NOT_NULL(child_op)) {
+        db_time -= child_op->total_time_;
+        if (child_op->cpu_begin_level_ > 0) {
+          db_time -= (cur_time - child_op->cpu_begin_time_);
+        }
+      } else {
+        int ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("operator child is nullptr", K(ret), KPC(op_), K(i));
+      }
+    }
+    if (db_time < 0) {
+      db_time = 0;
+    }
+  }
+  return (uint64_t)db_time;
+}
+
+void ObMonitorNode::covert_to_static_node()
+{
+  db_time_ = calc_db_time();
+  static const uint64_t scale = (1000 << 20) / OBSERVER_FREQUENCE.get_cpu_frequency_khz();
+  db_time_ = (db_time_ * scale) >> 20;
+  block_time_ = (block_time_ * scale) >> 20;
+  op_ = nullptr;
+}
+
 void ObSqlPlanMonitorRecycleTask::runTimerTask()
 {
   if (node_list_) {
@@ -227,6 +297,21 @@ int ObSqlPlanMonitorRecycleTask::init(ObPlanMonitorNodeList *node_list)
     ret = OB_ERR_UNEXPECTED;
   } else {
     node_list_ = node_list;
+  }
+  return ret;
+}
+
+int ObMonitorNode::set_sql_id(const ObString &sql_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sql_id.ptr())) {
+    sql_id_[0] = '\0';
+  } else if (sql_id.length() > common::OB_MAX_SQL_ID_LENGTH) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql id length unexpected", K(ret), K(sql_id.length()));
+  } else {
+    MEMCPY(sql_id_, sql_id.ptr(), sql_id.length());
+    sql_id_[sql_id.length()] = '\0';
   }
   return ret;
 }

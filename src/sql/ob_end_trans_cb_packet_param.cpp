@@ -10,10 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "sql/ob_end_trans_cb_packet_param.h"
-#include "lib/alloc/alloc_assist.h"
+#include "ob_end_trans_cb_packet_param.h"
 #include "sql/ob_result_set.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -39,6 +37,10 @@ const ObEndTransCbPacketParam &ObEndTransCbPacketParam::fill(ObResultSet &rs,
   // oracle ANONYMOUS_BLOCK affect rows always return 1
   affected_rows_ = stmt::T_ANONYMOUS_BLOCK == rs.get_stmt_type() 
                     ? 1 : rs.get_affected_rows();
+  if (stmt::T_CALL_PROCEDURE == rs.get_stmt_type() && is_oracle_mode()) {
+    // oracle CALL_PROCEDURE affect rows always return 0
+    affected_rows_ = 0;
+  }
   // The commit asynchronous callback logic needs
   // to trigger the update logic of affected row first.
   if (session.is_session_sync_support()) {
@@ -52,6 +54,20 @@ const ObEndTransCbPacketParam &ObEndTransCbPacketParam::fill(ObResultSet &rs,
   return *this;
 }
 
+const ObEndTransCbPacketParam &ObEndTransCbPacketParam::fill(const char *message,
+                                                             int64_t affected_rows,
+                                                             uint64_t last_insert_id_to_client,
+                                                             bool is_partition_hit,
+                                                             const ObCurTraceId::TraceId &trace_id)
+{
+  MEMCPY(message_, message, strlen(message));
+  affected_rows_ = affected_rows;
+  last_insert_id_to_client_ = last_insert_id_to_client;
+  is_partition_hit_ = is_partition_hit;
+  trace_id_.set(trace_id);
+  is_valid_ = true;
+  return *this;
+}
 
 }/* ns sql*/
 }/* ns oceanbase */

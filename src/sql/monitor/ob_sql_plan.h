@@ -136,7 +136,7 @@ public:
                                  const ObExplainDisplayOpt& option,
                                  ObIArray<common::ObString> &plan_strs);
 
-  int print_sql_plan(ObLogPlan* plan,
+  int print_sql_plan(ObLogicalOperator* plan_top,
                      ExplainType type,
                      const ObExplainDisplayOpt& option,
                      ObIArray<common::ObString> &plan_strs);
@@ -171,7 +171,7 @@ private:
   int inner_escape_quotes(char* &ptr, int64_t &length);
 
   int get_sql_plan_infos(PlanText &plan_text,
-                         ObLogPlan* plan,
+                         ObLogicalOperator* plan_top,
                          ObIArray<ObSqlPlanItem*> &sql_plan_infos);
 
   int get_plan_tree_infos(PlanText &plan_text,
@@ -182,7 +182,7 @@ private:
                          bool is_last_child);
 
   int get_plan_used_hint_info(PlanText &plan_text,
-                              ObLogPlan* plan,
+                              ObLogicalOperator* plan_top,
                               ObSqlPlanItem* sql_plan_item);
 
   static int get_plan_tree_used_hint(PlanText &plan_text,
@@ -193,7 +193,7 @@ private:
                         ObSqlPlanItem* sql_plan_item);
 
   int get_plan_outline_info(PlanText &plan_text,
-                            ObLogPlan* plan,
+                            ObLogicalOperator* plan_top,
                             ObSqlPlanItem* sql_plan_item);
 
   static int reset_plan_tree_outline_flag(ObLogicalOperator* op);
@@ -244,6 +244,7 @@ private:
                               PlanText &plan_text);
 
   int format_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
+                        const bool is_explain_format_object_name_display,
                         const ObExplainDisplayOpt& option,
                         PlanText &plan_text);
 
@@ -280,7 +281,8 @@ private:
   int prepare_and_store_session(ObSQLSessionInfo *session,
                                 ObSQLSessionInfo::StmtSavedValue *&session_value,
                                 transaction::ObTxDesc *&tx_desc,
-                                int64_t &nested_count);
+                                int64_t &nested_count,
+                                bool &need_restore);
 
   int restore_session(ObSQLSessionInfo *session,
                       ObSQLSessionInfo::StmtSavedValue *&session_value,

@@ -68,7 +68,7 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
         ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
         TRANS_LOG(WARN, "pdml duplicate primary key found", K(ret),
                   K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
-                  K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
+                  K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no), K(reader_seq_no));
       // Case 2.1: For the case of the update in the storage layer, it may be
       // split into lock and update in a single statement and fail the check, so
       // we need bypass this case(Currently only the update of the lob will cause
@@ -107,17 +107,7 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
       // and so fail to pass the check. We must bypass the case.
       } else if (write_flag.is_table_api()) {
         // bypass the case
-      // Case 6: For the case of deleting rows during building the unique index
-      // concurrently, it may exist that two rows of the main table point to one
-      // row of the newly created index, which means the unique index will abort
-      // itself during consistency check. While because of the feature of the
-      // online ddl, the concurrent delete will start to operate on the newly
-      // created index, which causes these two delete operations and fail to pass
-      // the check. So we need bypass this case.
-      } else if (blocksstable::ObDmlFlag::DF_DELETE == writer_dml_flag
-                 && blocksstable::ObDmlFlag::DF_DELETE == locker_dml_flag) {
-        // bypass the case
-      // Case 7: For the case of batch dml operation, it may operate the same row
+      // Case 6: For the case of batch dml operation, it may operate the same row
       // concurrently if the first operation has no effects.(SQL layer will check
       // the modification of the row before the second operation, and report the
       // error if the row has been modified while the first row may have no effect
@@ -128,10 +118,20 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
         TRANS_LOG(WARN, "batch multi stmt rollback found", K(ret),
                   K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
                   K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
-        // Case 8: For the case of on duplicate key update, it may operate the
-        // same row more than once if the sql insert onto duplicate with the
-        // same row more than once. It may have no chance to batch the same row.
-        // So we need bypass this case.
+      // Case 7: For the case of deleting rows during building the unique index
+      // concurrently, it may exist that two rows of the main table point to one
+      // row of the newly created index, which means the unique index will abort
+      // itself during consistency check. While because of the feature of the
+      // online ddl, the concurrent delete will start to operate on the newly
+      // created index, which causes these two delete operations and fail to pass
+      // the check. So we need bypass this case.
+      } else if (blocksstable::ObDmlFlag::DF_DELETE == writer_dml_flag
+                 && blocksstable::ObDmlFlag::DF_DELETE == locker_dml_flag) {
+        // bypass the case
+      // Case 8: For the case of on duplicate key update, it may operate the
+      // same row more than once if the sql insert onto duplicate with the
+      // same row more than once. It may have no chance to batch the same row.
+      // So we need bypass this case.
       } else if (write_flag.is_insert_up()) {
         // bypass the case
       // Case 9: For the case of the write only index, it may operate the same
@@ -145,6 +145,14 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
         TRANS_LOG(WARN, "write only index insert/update on the same row", K(ret),
                   K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
                   K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
+      // Case 10: For the case of the double update, it should not operate the
+      // same row more than once, and it must be an error
+      } else if (blocksstable::ObDmlFlag::DF_UPDATE == writer_dml_flag
+                 && blocksstable::ObDmlFlag::DF_UPDATE == locker_dml_flag) {
+        ret = OB_ERR_DEFENSIVE_CHECK;
+        TRANS_LOG(ERROR, "multiple update on one row found", K(ret), K(reader_seq_no),
+                  K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
+                  K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
       } else {
         // Others: It will never happen that two operaions on the same row for the
         // same txn except the above cases. So we should report unexpected error.
@@ -152,6 +160,9 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
         TRANS_LOG(ERROR, "multiple modification on one row found", K(reader_seq_no),
                   K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
                   K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
+#ifdef ENABLE_DEBUG_LOG
+        ob_abort();
+#endif
       }
     }
 

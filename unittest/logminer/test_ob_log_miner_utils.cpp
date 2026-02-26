@@ -11,7 +11,6 @@
  */
 
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"     //ObConcurrentFIFOAllocator
-#include "lib/allocator/page_arena.h"
 #include "ob_log_miner_utils.h"
 #include "gtest/gtest.h"
 

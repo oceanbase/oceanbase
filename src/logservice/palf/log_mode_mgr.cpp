@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_mode_mgr.h"
-#include "lib/ob_errno.h"
-#include "log_state_mgr.h"
 #include "log_engine.h"
 #include "log_config_mgr.h"
 #include "log_io_task_cb_utils.h"

@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/geo/ob_geo_cache_point.h"
-#include "lib/geo/ob_geo_point_location_visitor.h"
-#include "ob_point_location_analyzer.h"
 
 namespace oceanbase
 {

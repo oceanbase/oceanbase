@@ -14,7 +14,6 @@
 
 #include "observer/table_load/ob_table_load_bucket.h"
 #include "observer/table_load/ob_table_load_stat.h"
-#include "observer/table_load/ob_table_load_utils.h"
 
 namespace oceanbase
 {
@@ -41,6 +40,7 @@ int ObTableLoadBucket::init(const ObAddr &leader_addr) {
 int ObTableLoadBucket::add_row(const ObTabletID &tablet_id,
                                const ObTableLoadObjRow &obj_row,
                                int64_t batch_size,
+                               int64_t row_size,
                                bool &flag)
 {
   OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, bucket_add_row_time_us);
@@ -51,9 +51,9 @@ int ObTableLoadBucket::add_row(const ObTabletID &tablet_id,
   flag = false;
   if (OB_FAIL(row_array_.push_back(tablet_obj_row))) {
     LOG_WARN("fail to add row", KR(ret));
-  }
-  if (OB_SUCC(ret)) {
-    flag = (row_array_.count() >= batch_size);
+  } else {
+    row_size_ += tablet_obj_row.get_serialize_size();
+    flag = (row_array_.count() >= batch_size || row_size_ >= row_size);
   }
   return ret;
 }

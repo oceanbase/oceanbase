@@ -129,7 +129,7 @@ public:
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
                             const SCN &create_ls_scn,
                             const common::ObString &zone_priority,
-                            const share::ObTenantSwitchoverStatus &working_sw_status,
+                            const int64_t switchover_epoch,
                             ObMySQLTransaction &trans) override;
   /*
    * description: override of ObLSLifeIAgent
@@ -232,6 +232,12 @@ public:
                                SCN &sync_scn,
                                SCN &min_wrs);
 
+  int get_meta_tenant_recovery_stat(const uint64_t tenant_id,
+      ObISQLClient &client,
+      SCN &sync_scn,
+      SCN &min_wrs,
+      int64_t &ora_rowscn);
+
   /**
    * @description:
    *    get tenant min user ls create scn
@@ -267,9 +273,13 @@ public:
   * description: update ls config_version and return current readable_scn
   * @param[in] tenant_id
   * @param[in] ls_id
-  * @param[in] config_version :will not fallback
+  * @param[in] config_version : If the new and old config_version are equal, no update is performed, and it directly returns success.
+  *                             If the new config_version is greater than the old config_version, update it to the internal table.
+  *                             If the new config_version is less than the old config_version, report an error.
   * @param[in] client
   * @param[out] readable scn
+  * return: OB_SUCCESS: new and current config version maybe equal, or new bigger than current
+  *         OB_NEED_RETRY: new config_version smaller than current
   */
   int update_ls_config_version(const uint64_t tenant_id,
   const ObLSID &ls_id, const palf::LogConfigVersion &config_version,
@@ -288,7 +298,7 @@ private:
                                ObISQLClient &client,
                                SCN &sync_scn,
                                SCN &min_wrs);
-
+ int construct_status_sql_(common::ObSqlString &sql);
 };
 }
 }

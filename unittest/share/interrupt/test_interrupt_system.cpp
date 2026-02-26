@@ -10,16 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define private public
 
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
 #include "sql/engine/px/ob_px_interruption.h"
 #include "rpc/testing.h"
-#include <thread>
 
 using namespace oceanbase::obrpc;
 

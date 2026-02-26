@@ -12,17 +12,6 @@
 
 #define USING_LOG_PREFIX PL
 #include "ob_dbms_limit_calculator_mysql.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_all_server_tracer.h"
-#include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
-#include "share/ob_unit_table_operator.h"
-#include "share/ob_all_server_tracer.h"
-#include "share/ob_rpc_struct.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"//ObGetTenantResProxy
-#include "share/ls/ob_ls_status_operator.h"//ObLSStatusOperator
 #include "share/balance/ob_balance_job_table_operator.h"//balance_job
 #include "rootserver/ob_tenant_balance_service.h"//gather_stat_primary_zone_num_and_units
 
@@ -48,7 +37,9 @@ int ObDBMSLimitCalculator::phy_res_calculate_by_logic_res(
   ObString str_arg;
   ObUserResourceCalculateArg arg;
   ObMinPhyResourceResult res;
+  ObCStringHelper helper;
   const int64_t curr_tenant_id = MTL_ID();
+  const char *str = NULL;
   if (!is_sys_tenant(curr_tenant_id)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("only sys tenant can do this", K(ret), K(curr_tenant_id));
@@ -64,7 +55,9 @@ int ObDBMSLimitCalculator::phy_res_calculate_by_logic_res(
   } else if (OB_ISNULL(ptr = static_cast<char *>(ctx.get_allocator().alloc(MAX_RES_LEN)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(MAX_RES_LEN));
-  } else if (OB_FAIL(parse_dict_like_args_(to_cstring(str_arg), arg))) {
+  } else if (OB_FAIL(helper.convert(str_arg, str))) {
+    LOG_WARN("convert cstring failed", K(ret));
+  } else if (OB_FAIL(parse_dict_like_args_(str, arg))) {
     LOG_WARN("parse argument failed", K(ret));
   } else if (OB_FAIL(MTL(ObResourceLimitCalculator *)->get_tenant_min_phy_resource_value(arg, res))) {
     LOG_WARN("get tenant min physical resource needed failed", K(ret));
@@ -281,7 +274,7 @@ int ObDBMSLimitCalculator::get_max_value_of_logical_res_(
       }
     }//end for j for get each logical resource of servers
     if (OB_SUCC(ret)) {
-      std::sort(tmp_logical_resource.begin(), tmp_logical_resource.end());
+      lib::ob_sort(tmp_logical_resource.begin(), tmp_logical_resource.end());
       int64_t index = 0;//下标
       while (OB_SUCC(ret) && index < server_cnt) {
         const int64_t logical_index = primary_server_cnt - 1 - index;
@@ -327,7 +320,7 @@ int ObDBMSLimitCalculator::get_tenant_resource_server_for_calc_(
       int64_t trace_time = 0;//no use
       for (int64_t i = 0; OB_SUCC(ret) && i < units.count(); ++i) {
         const ObUnit &unit = units.at(i);
-        if (!unit.is_active_status()) {
+        if (!unit.is_active_or_adding_status()) {
           ret = OB_OP_NOT_ALLOW;
           LOG_WARN("unit is deleting, can not calculate resource", KR(ret), K(unit));
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Tenant is shrinking units. Operation is");
@@ -489,17 +482,17 @@ int ObDBMSLimitCalculator::get_max_ls_count_of_server_(
     int64_t &ls_count)
 {
   int ret = OB_SUCCESS;
-  int64_t primary_zone_num = 0;
+  ObArray<share::ObUnit> unit_array;
+  ObBalanceJobDesc job_desc;
   int64_t unit_group_num = 0;
-  ObArray<share::ObSimpleUnitGroup> unit_group_array;
   if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(rootserver::ObTenantBalanceService::gather_stat_primary_zone_num_and_units(
-          tenant_id, primary_zone_num, unit_group_array))) {
+  } else if (OB_FAIL(rootserver::ObTenantBalanceService::gather_tenant_balance_desc(
+          tenant_id, job_desc, unit_array))) {
     LOG_WARN("failed to gather stat of primary zone and unit", KR(ret), K(tenant_id));
-  } else {
-    unit_group_num = unit_group_array.count();
+  } else if (OB_FAIL(job_desc.get_unit_lcm_count(unit_group_num))) {
+    LOG_WARN("failed to get unit lcm count", KR(ret), K(job_desc));
   }
   if (OB_SUCC(ret)) {
     //假如Unit个数为N，Primary Zone个数为P
@@ -518,6 +511,7 @@ int ObDBMSLimitCalculator::get_max_ls_count_of_server_(
     //U + 1 + 用户日志流膨胀个数 + 广播日志流膨胀个数 = U + 2 + U*U - U*P + U = U*U - U*(P-2) + 1
     //由于广播日志流实际上是在每台机器上都存在的资源，所以最终每台机器上日志流的个数为
     //NPP-PP+2P+1
+    int64_t primary_zone_num = job_desc.get_ls_cnt_in_group();
     ls_count = (unit_group_num - 1) * primary_zone_num * primary_zone_num + 2 * primary_zone_num + 1;
   }
   return ret;

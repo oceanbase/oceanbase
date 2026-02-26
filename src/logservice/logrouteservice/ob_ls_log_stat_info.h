@@ -88,6 +88,29 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLSLogInfo);
 };
 
+class ObLogserviceModelInfo
+{
+public:
+  ObLogserviceModelInfo(): enable_logservice_(false) {}
+  ~ObLogserviceModelInfo() {}
+
+  ObLogserviceModelInfo &operator=(const ObLogserviceModelInfo &other)
+  {
+    if (this != &other) {
+      enable_logservice_ = other.get_model();
+    }
+    return *this;
+  }
+  void reset(bool enable_logservice) {
+    enable_logservice_ = enable_logservice;
+  }
+  bool get_model() const {
+    return enable_logservice_;
+  }
+  TO_STRING_KV(K_(enable_logservice));
+private:
+  bool enable_logservice_;
+};
 } // namespace logservice
 } // namespace oceanbase
 

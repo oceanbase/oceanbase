@@ -19,7 +19,7 @@ using namespace common;
 namespace sql
 {
 
-OB_SERIALIZE_MEMBER(ObSortFieldCollation, field_idx_, cs_type_, is_ascending_, null_pos_);
+OB_SERIALIZE_MEMBER(ObSortFieldCollation, field_idx_, cs_type_, is_ascending_, null_pos_, is_not_null_);
 
 } // end namespace sql
 } // end namespace oceanbase

@@ -44,19 +44,6 @@ class ObUnitManager;
 
 class ObZoneManager;
 
-class ObDataSourceCandidateChecker
-{
-public:
-  ObDataSourceCandidateChecker(common::ObReplicaType type) : this_type_(type) {}
-  inline bool is_candidate(common::ObReplicaType other_type) const
-  {
-    // TODO: Use a more refined way, such as this_type_ = F, you can have other_type = R
-    return common::ObReplicaTypeCheck::can_as_data_source(this_type_, other_type);
-  }
-private:
-  common::ObReplicaType this_type_;
-};
-
 class ObStatisticsCalculator
 {
 public:

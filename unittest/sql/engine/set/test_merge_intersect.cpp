@@ -81,10 +81,12 @@ TEST_F(TestMergeIntersectTest, test_fake_table)
   ADD_ROW(fake_table, COL(1), COL(2), COL(1.0), COL("yuchen.wyc"), COL(null));
   ADD_ROW(fake_table, COL(2), COL(3), COL(null), COL(null), COL(null));
   ADD_ROW(fake_table, COL(3), COL(3), COL(2.0), COL("yuming"), COL("oceanbase"));
-  printf("fake_table: \n%s\n", to_cstring(fake_table));
+  ObCStringHelper helper;
+  printf("fake_table: \n%s\n", helper.convert(fake_table));
   ASSERT_EQ(OB_SUCCESS, fake_table.open(ctx));
   while (OB_SUCCESS == (ret = fake_table.get_next_row(ctx, row))) {
-    printf("row=%s\n", to_cstring(*row));
+    helper.reset();
+    printf("row=%s\n", helper.convert(*row));
   }
   ASSERT_EQ(OB_ITER_END, ret);
 }

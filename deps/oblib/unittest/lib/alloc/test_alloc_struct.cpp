@@ -12,7 +12,6 @@
 
 #include <gtest/gtest.h>
 #include "lib/alloc/alloc_struct.h"
-#include "lib/alloc/abit_set.h"
 
 using namespace oceanbase::lib;
 

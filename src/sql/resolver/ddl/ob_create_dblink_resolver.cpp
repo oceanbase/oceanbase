@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_dblink_resolver.h"
 
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_create_dblink_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -25,7 +22,8 @@ namespace sql
 {
 
 ObCreateDbLinkResolver::ObCreateDbLinkResolver(ObResolverParams &params)
-    : ObDDLResolver(params)
+    : ObDDLResolver(params),
+      compat_version_(0)
 {
 }
 
@@ -38,6 +36,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
   int ret = OB_SUCCESS;
   ParseNode *node = const_cast<ParseNode*>(&parse_tree);
   ObCreateDbLinkStmt *create_dblink_stmt = NULL;
+  uint64_t tenant_id = OB_INVALID_ID;
   if (OB_ISNULL(node)
       || OB_UNLIKELY(node->type_ != T_CREATE_DBLINK)
       || OB_UNLIKELY(node->num_child_ != DBLINK_NODE_COUNT)) {
@@ -49,12 +48,18 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info should not be null", K(ret));
+  } else if (OB_UNLIKELY(is_external_catalog_id(session_info_->get_current_default_catalog()))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create dblink in catalog is");
   } else if (OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid node children", K(ret), K(node), K(node->children_));
   } else if (OB_ISNULL(create_dblink_stmt = create_stmt<ObCreateDbLinkStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to create create_dblink_stmt", K(ret));
+  } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version_))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else {
     stmt_ = create_dblink_stmt;
     create_dblink_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
@@ -62,11 +67,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
     LOG_TRACE("debug dblink create", K(session_info_->get_database_id()));
   }
   if (!lib::is_oracle_mode() && OB_SUCC(ret)) {
-    uint64_t compat_version = 0;
-    uint64_t tenant_id = session_info_->get_effective_tenant_id();
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-    } else if (compat_version < DATA_VERSION_4_2_0_0) {
+    if (compat_version_ < DATA_VERSION_4_2_0_0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
     } else if (NULL != node->children_[IF_NOT_EXIST]) {
@@ -85,7 +86,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
     if (OB_ISNULL(name_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
-    } else if (name_node->str_len_ >= OB_MAX_DBLINK_NAME_LENGTH) {
+    } else if (name_node->str_len_ > OB_MAX_DBLINK_NAME_LENGTH) {
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(name_node->str_len_), name_node->str_value_);
     } else if (FALSE_IT(dblink_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_)))) {
@@ -136,6 +137,9 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(user_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_)))) {
       // do nothing
+    } else if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
+      ret = OB_WRONG_USER_NAME_LENGTH;
+      LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
     } else if (OB_FAIL(create_dblink_stmt->set_user_name(user_name))) {
       LOG_WARN("set user name failed", K(ret));
     }
@@ -148,15 +152,15 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(password.assign_ptr(pwd_node->str_value_, static_cast<int32_t>(pwd_node->str_len_)))) {
       // do nothing
-    } else if (password.empty()) {
+    } else if (password.empty() || password.length() > OB_MAX_PASSWORD_LENGTH) {
       if (lib::is_oracle_mode()) {
         ret = OB_ERR_MISSING_OR_INVALID_PASSWORD;
         LOG_USER_ERROR(OB_ERR_MISSING_OR_INVALID_PASSWORD);
       } else {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create dblink with empty password");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create a database link with an empty or excessively long password");
       }
-      LOG_WARN("create dblink with empty password", K(ret));
+      LOG_WARN("create a database link with an empty or excessively long password", K(ret));
     } else if (OB_FAIL(create_dblink_stmt->set_password(password))) {
       LOG_WARN("set password failed", K(ret));
     }
@@ -179,10 +183,15 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
     }
   }
   if (OB_SUCC(ret)) {
+    ObString hostname;
+    int32_t port = 0;
     ObAddr host;
     ObString host_str;
     ObString ip_port, conn_str;
     ParseNode *host_node = NULL;
+    const bool support_domin_name = compat_version_ >= DATA_VERSION_4_3_3_0 ||
+                                    (compat_version_ >= MOCK_DATA_VERSION_4_2_1_8 && compat_version_ < DATA_VERSION_4_2_2_0) ||
+                                    (compat_version_ >= MOCK_DATA_VERSION_4_2_5_0 && compat_version_ < DATA_VERSION_4_3_0_0);
     if (OB_ISNULL(node->children_[IP_PORT]) || OB_ISNULL(node->children_[IP_PORT]->children_)
         || OB_ISNULL(host_node = node->children_[IP_PORT]->children_[0])) {
       ret = OB_ERR_UNEXPECTED;
@@ -190,10 +199,17 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
     } else if (FALSE_IT(host_str.assign_ptr(host_node->str_value_, static_cast<int32_t>(host_node->str_len_)))) {
     } else if (OB_FAIL(cut_host_string(host_str, ip_port, conn_str))) {
       LOG_WARN("failed to cut host string", K(ret), K(host_str));
-    } else if (OB_FAIL(host.parse_from_string(ip_port))) {
+    } else if (support_domin_name &&
+               OB_FAIL(resolve_hostname_port_str(ip_port, hostname, port))) {
+      LOG_WARN("parse ip port failed", K(ret), K(host_str), K(ip_port));
+    } else if (!support_domin_name &&
+               OB_FAIL(host.parse_from_string(ip_port))) {
       LOG_WARN("parse ip port failed", K(ret), K(host_str), K(ip_port));
     } else if (OB_FAIL(resolve_conn_string(conn_str, ip_port, *create_dblink_stmt))) {
       LOG_WARN("failed to resolve conn string", K(ret), K(conn_str));
+    } else if (support_domin_name) {
+      create_dblink_stmt->set_host_name(hostname);
+      create_dblink_stmt->set_host_port(port);
     } else {
       create_dblink_stmt->set_host_addr(host);
     }
@@ -280,20 +296,32 @@ int ObCreateDbLinkResolver::resolve_opt_reverse_link(const ParseNode *node, sql:
     } else {
       link_stmt->set_reverse_cluster_name(reverse_link_cluster_name);
     }
-
+    ObString hostname;
+    int32_t port = 0;
     ObAddr host;
     ObString host_str;
     ObString ip_port, conn_str;
     ParseNode *host_node = NULL;
+    const bool support_domin_name = compat_version_ >= DATA_VERSION_4_3_3_0 ||
+                                    (compat_version_ >= MOCK_DATA_VERSION_4_2_1_8 && compat_version_ < DATA_VERSION_4_2_2_0) ||
+                                    (compat_version_ >= MOCK_DATA_VERSION_4_2_5_0 && compat_version_ < DATA_VERSION_4_3_0_0);
     if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_ISNULL(reverse_link_node->children_[REVERSE_LINK_IP_PORT]) || OB_ISNULL(reverse_link_node->children_[REVERSE_LINK_IP_PORT]->children_) || OB_ISNULL(host_node = reverse_link_node->children_[REVERSE_LINK_IP_PORT]->children_[0])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(host_str.assign_ptr(host_node->str_value_, static_cast<int32_t>(host_node->str_len_)))) {
     } else if (OB_FAIL(cut_host_string(host_str, ip_port, conn_str))) {
       LOG_WARN("failed to cut host string", K(ret), K(host_str));
-    } else if (OB_FAIL(host.parse_from_string(ip_port))) {
+    } else if (support_domin_name &&
+               OB_FAIL(resolve_hostname_port_str(ip_port, hostname, port))) {
       LOG_WARN("parse ip port failed", K(ret), K(host_str), K(ip_port));
+    } else if (!support_domin_name &&
+               OB_FAIL(host.parse_from_string(ip_port))) {
+      LOG_WARN("parse ip port failed", K(ret), K(host_str), K(ip_port));
+    } else if (support_domin_name) {
+      link_stmt->set_reverse_host_name(hostname);
+      link_stmt->set_reverse_host_port(port);
     } else {
       link_stmt->set_reverse_host_addr(host);
     }
@@ -316,6 +344,38 @@ int ObCreateDbLinkResolver::cut_host_string(const ObString &host_string,
       ip_port = tmp_str;
     } else {
       conn_string = tmp_str;
+    }
+  }
+  return ret;
+}
+
+int ObCreateDbLinkResolver::resolve_hostname_port_str(const ObString &ip_port_str, ObString &hostname, int32_t &port)
+{
+  // hostname maybe is ip or domin name
+  int ret = OB_SUCCESS;
+  char buf[OB_MAX_DOMIN_NAME_LENGTH + 1] = "";
+  if (ip_port_str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected empty ip_port_str", K(ret));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "host");
+  } else {
+    int64_t data_len = MIN(ip_port_str.length(), sizeof (buf) - 1);
+    MEMCPY(buf, ip_port_str.ptr(), data_len);
+    buf[data_len] = '\0';
+    char *pport = strrchr(buf, ':');
+    if (NULL != pport) {
+      int host_name_len = pport - buf;
+      hostname.assign_ptr(ip_port_str.ptr(), host_name_len);
+      *(pport++) = '\0';
+      char *end = NULL;
+      port = static_cast<int>(strtol(pport, &end, 10));
+      if (NULL == end || end - pport != static_cast<int64_t>(strlen(pport))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argment", K(ret), KP(end), KP(pport));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argment", K(ret), KP(pport));
     }
   }
   return ret;

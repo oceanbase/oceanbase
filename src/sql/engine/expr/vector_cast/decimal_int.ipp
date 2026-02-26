@@ -438,6 +438,7 @@ struct __decint_cast_impl
           } else {
             explicit_scale<in_type, out_type, false>(expr, ctx, skip, in_scale - out_scale, bound);
           }
+          logging_truncated_decint<Vector, ResFmt, in_type>(expr, ctx, skip, bound, in_scale, out_scale);
         } else {
           ObPrecision in_prec = expr.args_[0]->datum_meta_.precision_;
           ObPrecision out_prec = expr.datum_meta_.precision_;

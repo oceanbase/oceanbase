@@ -11,6 +11,7 @@
  */
 
 #include <algorithm>
+#include "lib/utility/ob_sort.h"
 
 namespace oceanbase
 {
@@ -587,7 +588,7 @@ template <typename T, typename Allocator>
 template <typename Compare>
 void ObSortedVector<T, Allocator>::sort(Compare compare)
 {
-  std::sort(begin(), end(), compare);
+  lib::ob_sort(begin(), end(), compare);
 }
 
 } // end namespace common

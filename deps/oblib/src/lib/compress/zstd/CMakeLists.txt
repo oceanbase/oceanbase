@@ -42,7 +42,7 @@ add_library(zstd_objs OBJECT
   ob_zstd_wrapper.h)
 
 target_compile_options(zstd_objs PRIVATE -fvisibility=hidden)
-target_link_libraries(zstd_objs PUBLIC oblib_base_base)
+target_link_libraries(zstd_objs PUBLIC oblib_base)
 
 add_custom_command(
   OUTPUT zstd_objs.o
