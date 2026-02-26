@@ -778,8 +778,8 @@ int ObGroupByPushDownPlanRewriter::can_pushdown_groupby(ObLogGroupBy *groupby, b
     can_push = false;
     OPT_TRACE("groupby is not distributed, can not push");
   } else if (groupby->is_three_stage_aggr()) {
+    can_push = false;
     OPT_TRACE("groupby is three stage aggr, skip");
-    // final agg, do nothing
   } else {
     // 2. 收集聚合函数
     for (int64_t i = 0; OB_SUCC(ret) && i < groupby->get_aggr_funcs().count(); ++i) {
@@ -815,12 +815,34 @@ int ObGroupByPushDownPlanRewriter::can_pushdown_groupby(ObLogGroupBy *groupby, b
     }
     // 4. 检查有没有lob
     bool has_lob = false;
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || !can_push) {
     } else if (OB_FAIL(ObOptimizerUtil::contains_lob_type(groupby->get_group_by_exprs(), has_lob))) {
       LOG_WARN("failed to check contains lob type", K(ret));
     } else if (has_lob) {
       can_push = false;
       OPT_TRACE("groupby exprs contains lob type, can not push");
+    }
+
+    // 5. 检查 filter / 聚合函数 里面有没有 onetime 表达式 （这是一个workaround）
+    for (int64_t i = 0; OB_SUCC(ret) && can_push && i < groupby->get_filter_exprs().count(); ++i) {
+      ObRawExpr *filter_expr = groupby->get_filter_exprs().at(i);
+      if (OB_ISNULL(filter_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null filter expr", K(ret));
+      } else if (filter_expr->has_flag(CNT_ONETIME)) {
+        can_push = false;
+        OPT_TRACE("filter expr contains onetime expr, can not push");
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && can_push && i < groupby->get_aggr_funcs().count(); ++i) {
+      ObRawExpr *aggr_expr = groupby->get_aggr_funcs().at(i);
+      if (OB_ISNULL(aggr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null aggr expr", K(ret));
+      } else if (aggr_expr->has_flag(CNT_ONETIME)) {
+        can_push = false;
+        OPT_TRACE("aggr expr contains onetime expr, can not push");
+      }
     }
   }
 
