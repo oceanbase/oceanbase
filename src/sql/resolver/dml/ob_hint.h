@@ -723,6 +723,7 @@ public:
   int64_t parallel_;
   bool monitor_;
   int64_t table_lock_mode_;
+  int64_t max_execution_time_;
 };
 
 struct ObLeadingTable {

@@ -44,7 +44,8 @@ OB_SERIALIZE_MEMBER(ObPhyPlanHint,
                     log_level_,
                     parallel_,
                     monitor_,
-                    table_lock_mode_);
+                    table_lock_mode_,
+		    max_execution_time_);
 
 int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator)
 {
