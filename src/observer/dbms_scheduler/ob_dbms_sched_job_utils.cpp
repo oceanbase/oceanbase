@@ -877,7 +877,7 @@ int ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &j
     }
   } else {
     ObDBMSSchedTimeUtil calendar;
-    OZ(calendar.calc_repeat_interval_next_date(job_info.repeat_interval_, job_info.start_date_, next_run_time, is_first_time ? now : job_info.next_date_, now, is_first_time));
+    OZ(calendar.calc_repeat_interval_next_date(job_info.repeat_interval_, job_info.start_date_, next_run_time, is_first_time ? job_info.start_date_ : job_info.next_date_, now, is_first_time));
   }
   return ret;
 }
