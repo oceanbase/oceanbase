@@ -148,6 +148,7 @@ high_priority_net_thread_count
 ignore_replay_checksum_error
 index_block_cache_priority
 internal_sql_execute_timeout
+io_scheduler_thread_count
 job_queue_processes
 json_document_max_depth
 kv_group_commit_batch_size
