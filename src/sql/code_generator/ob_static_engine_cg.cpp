@@ -4210,6 +4210,8 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
     // TODO: need judge distinct_exprs should to be implicit aggr expr
     if (OB_FAIL(fill_aggr_infos(op, spec, &spec.group_exprs_, &spec.rollup_exprs_, nullptr))) {
       OB_LOG(WARN, "fail to fill_aggr_infos", K(ret));
+    } else if ((PHY_MERGE_GROUP_BY == spec.type_) && OB_FAIL(generate_backup_exprs(spec))) {
+      OB_LOG(WARN, "failed to generate backup exprs", K(ret));
     }
   }
   LOG_DEBUG("succ to generate_spec", K(spec), K(ret));
@@ -8703,6 +8705,28 @@ int ObStaticEngineCG::set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> 
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::generate_backup_exprs(ObMergeGroupBySpec &spec)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObExpr *, 4> backup_exprs;
+  if (OB_FAIL(append(backup_exprs, spec.output_))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < spec.aggr_infos_.count(); ++i) {
+      const ObAggrInfo &aggr_info = spec.aggr_infos_.at(i);
+      if (aggr_info.param_exprs_.empty()) {
+      } else if (OB_FAIL(append_array_no_dup(backup_exprs, aggr_info.param_exprs_))) {
+        LOG_WARN("failed to append array no dup", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(spec.backup_exprs_.assign(backup_exprs))) {
+    LOG_WARN("failed to assign backup exprs", K(ret));
   }
   return ret;
 }
