@@ -8399,18 +8399,20 @@ int ObSelectLogPlan::sort_window_functions(const ObIArray<ObWinFunRawExpr *> &wi
   ordering_changed = false;
   ordered_win_func_exprs.reuse();
   ordered_pby_oby_prefixes.reuse();
-  ObSEArray<std::pair<int64_t, int64_t>, 8> expr_entries;
+  ObSEArray<std::pair<std::pair<int64_t, int64_t>, int64_t>, 8> expr_entries;
   if (OB_UNLIKELY(win_func_exprs.empty() || win_func_exprs.count() != pby_oby_prefixes.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected params", K(ret), K(win_func_exprs.count()), K(pby_oby_prefixes.count()));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < pby_oby_prefixes.count(); ++i) {
-    if (OB_FAIL(expr_entries.push_back(std::pair<int64_t, int64_t>(-pby_oby_prefixes.at(i).first, i)))) {
+    if (OB_FAIL(expr_entries.push_back(
+            std::make_pair(std::make_pair(-pby_oby_prefixes.at(i).first, -pby_oby_prefixes.at(i).second),
+                          i)))) {
       LOG_WARN("failed to push back expr entry", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
-    std::pair<int64_t, int64_t> *first = &expr_entries.at(0);
+    std::pair<std::pair<int64_t, int64_t>, int64_t> *first = &expr_entries.at(0);
     lib::ob_sort(first, first + expr_entries.count());
     for (int64_t i = 0; OB_SUCC(ret) && i < expr_entries.count(); ++i) {
       ordering_changed |= i != expr_entries.at(i).second;
