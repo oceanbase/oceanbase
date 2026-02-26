@@ -133,3 +133,7 @@
       - 4.5.1.0
 
 - version: 4.5.1.0
+  can_be_upgraded_to:
+      - 4.6.0.0
+
+- version: 4.6.0.0

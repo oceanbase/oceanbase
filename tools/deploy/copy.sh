@@ -22,7 +22,7 @@ for arg in "$@"; do
 done
 
 if [[ -z "$BUILD_DIR" ]]; then
-  BUILD_DIR=$(find $SOURCE_DIR -maxdepth 1 -name 'build_*' -type d | grep -v 'build_ccls'  | head -1)
+  BUILD_DIR=$(find $SOURCE_DIR -maxdepth 1 -name 'build_*' -type d | grep -Ev 'build_ccls|build_clangd'  | head -1)
   if [[ "$BUILD_DIR" == "" ]]; then
     echo "Usage ./copy.sh [oceanbase_dev_dir] [--with-java]"
   else
