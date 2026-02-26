@@ -266,7 +266,7 @@ int ObMajorMergeScheduler::check_or_update_major_merge_state(
     } else if (global_info.global_broadcast_scn() < global_info.frozen_scn()) {
       // should do next round merge with higher broadcast_scn, and clean window compaction resources before broadcast_scn
       const int64_t merge_start_time_us = global_info.merge_start_time(); // take merge start time of major compaction as a new round
-      if (is_user_tenant(tenant_id_) && OB_FAIL(ObWindowCompactionHelper::clean_before_major_merge(merge_start_time_us, window_resource_cache_))) {
+      if (OB_FAIL(ObWindowCompactionHelper::clean_before_major_merge(tenant_id_, merge_start_time_us, window_resource_cache_))) {
         LOG_WARN("fail to clean before major merge", KR(ret), K(merge_start_time_us), K_(window_resource_cache));
       } else if (OB_FAIL(generate_next_global_broadcast_scn(curr_round_epoch))) {
         LOG_WARN("fail to generate next broadcast scn", KR(ret), K(global_info), K(curr_round_epoch));

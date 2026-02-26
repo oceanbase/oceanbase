@@ -18,6 +18,7 @@
 #include "share/compaction/ob_compaction_resource_manager.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_global_merge_table_operator.h"
+#include "share/ob_tenant_info_proxy.h"
 #include "observer/ob_srv_network_frame.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_tenant_status_cache.h"
@@ -273,13 +274,24 @@ int ObWindowCompactionHelper::check_and_alter_window_status_for_leader(
 }
 
 int ObWindowCompactionHelper::clean_before_major_merge(
+    const uint64_t tenant_id,
     const int64_t merge_start_time_us,
     ObWindowResourceCache &resource_cache)
 {
   int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
   ObCompactionResourceManager rsrc_mgr;
-  if (OB_FAIL(rsrc_mgr.switch_to_normal_before_major_merge(merge_start_time_us, resource_cache))) {
-    LOG_WARN("failed to switch to normal before major merge", KR(ret), K(merge_start_time_us), K(resource_cache));
+  if (!is_user_tenant(tenant_id)) {
+    LOG_TRACE("skip clean before major merge for non user tenant", K(tenant_id), K(merge_start_time_us));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is nullptr", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_, false /*for_update*/, tenant_info))) {
+    LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
+  } else if (tenant_info.is_standby()) {
+    LOG_INFO("skip clean before major merge for standby tenant", K(tenant_id), K(merge_start_time_us));
+  } else if (OB_FAIL(rsrc_mgr.switch_to_normal_before_major_merge(merge_start_time_us, resource_cache))) {
+    LOG_WARN("failed to switch to normal before major merge", KR(ret), K(tenant_id), K(merge_start_time_us), K(resource_cache));
   }
   return ret;
 }

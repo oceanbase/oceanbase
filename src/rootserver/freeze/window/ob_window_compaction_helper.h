@@ -91,7 +91,8 @@ public:
                                                       const int64_t current_epoch,
                                                       const share::ObGlobalMergeInfo &global_info,
                                                       ObWindowResourceCache &resource_cache);
-  static int clean_before_major_merge(const int64_t merge_start_time_us,
+  static int clean_before_major_merge(const uint64_t tenant_id,
+                                      const int64_t merge_start_time_us,
                                       ObWindowResourceCache &resource_cache);
   static int trigger_window_compaction(const uint64_t tenant_id, const ObWindowCompactionParam &param);
   static int finish_window_compaction(const uint64_t tenant_id);
