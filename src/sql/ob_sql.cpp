@@ -2387,7 +2387,8 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
                                                       enable_decimal_int, compat_type,
                                                       enable_mysql_compatible_dates,
                                                       stmt::T_ANONYMOUS_BLOCK == stmt_type,
-                                                      session.get_min_const_integer_precision()))) {
+                                                      session.get_min_const_integer_precision(),
+                                                      session.get_exec_min_cluster_version()))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (OB_FAIL(add_param_to_param_store(value, fixed_param_store))) {
       LOG_WARN("failed to add param to param store", K(ret), K(value), K(fixed_param_store));

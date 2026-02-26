@@ -2652,6 +2652,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                    const ObCompatType compat_type,
                                    const bool enable_mysql_compatible_dates,
                                    int8_t min_const_integer_precision,
+                                   uint64_t exec_min_cluster_version,
                                    bool is_from_pl /* false */,
                                    bool fmt_int_or_ch_decint /* false */)
 {
@@ -3132,7 +3133,8 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       ObTimeConvertCtx cvrt_ctx(tz_info, false);
       if (FALSE_IT(date_sql_mode.init(sql_mode))) {
       } else if (FALSE_IT(date_sql_mode.allow_invalid_dates_ = false)) {
-      } else if (enable_mysql_compatible_dates) {
+      } else if (exec_min_cluster_version >= CLUSTER_VERSION_4_3_5_2
+                 && enable_mysql_compatible_dates) {
         ObMySQLDateTime mdt;
         if( OB_FAIL(ObTimeConverter::str_to_mdatetime(time_str, cvrt_ctx, mdt, &scale, date_sql_mode))) {
           ret = OB_ERR_WRONG_VALUE;
@@ -11206,6 +11208,7 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                        compat_type,
                        enable_mysql_compatible_dates,
                        session.get_min_const_integer_precision(),
+                       session.get_exec_min_cluster_version(),
                        false, /* is_from_pl */
                        fmt_int_or_ch_decint_idx.has_member(param_idx)))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
