@@ -518,9 +518,10 @@ int ObTableHRowKeyTTLDelTask::init(ObTabletTTLScheduler *ttl_tablet_scheduler,
   return ret;
 }
 
-int ObTableHRowKeyTTLDelTask::get_scan_range(ObIArray<ObNewRange> &ranges)
+int ObTableHRowKeyTTLDelTask::get_scan_ranges(ObIArray<ObNewRange> &ranges, const ObKVAttr &kv_attributes)
 {
   int ret = OB_SUCCESS;
+  UNUSED(kv_attributes); 
   if (rowkeys_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rowkeys is empty", K(ret));
@@ -539,21 +540,26 @@ int ObTableHRowKeyTTLDelTask::get_scan_range(ObIArray<ObNewRange> &ranges)
         // continue
       } else {
         ObString rowkey = rowkeys_[i];
-        // make range [rowkey, min, min], [rowkey, max, max]
-        // push range in ranges
         ObNewRange range;
-        ObObj start_key[3];
-        start_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
-        start_key[ObHTableConstants::COL_IDX_Q].set_min_value();
-        start_key[ObHTableConstants::COL_IDX_T].set_min_value();
-        ObObj end_key[3];
-        start_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
-        end_key[ObHTableConstants::COL_IDX_Q].set_max_value();
-        end_key[ObHTableConstants::COL_IDX_T].set_max_value();
-        range.start_key_.assign(start_key, 3);
-        range.end_key_.assign(end_key, 3);
-        if (OB_FAIL(ranges.push_back(range))) {
-          LOG_WARN("fail to add scan range", K(ret));
+        ObObj *start_key = static_cast<ObObj*>(hrowkey_alloc_.alloc(sizeof(ObObj) * ObHTableConstants::HTABLE_ROWKEY_SIZE));
+        ObObj *end_key = static_cast<ObObj*>(hrowkey_alloc_.alloc(sizeof(ObObj) * ObHTableConstants::HTABLE_ROWKEY_SIZE));
+        if (OB_ISNULL(start_key) || OB_ISNULL(end_key)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory for range keys", K(ret));
+        } else {
+          new (start_key) ObObj[ObHTableConstants::HTABLE_ROWKEY_SIZE]();
+          new (end_key) ObObj[ObHTableConstants::HTABLE_ROWKEY_SIZE]();
+          start_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
+          start_key[ObHTableConstants::COL_IDX_Q].set_min_value();
+          start_key[ObHTableConstants::COL_IDX_T].set_min_value();
+          end_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
+          end_key[ObHTableConstants::COL_IDX_Q].set_max_value();
+          end_key[ObHTableConstants::COL_IDX_T].set_max_value();
+          range.start_key_.assign(start_key, ObHTableConstants::HTABLE_ROWKEY_SIZE);
+          range.end_key_.assign(end_key, ObHTableConstants::HTABLE_ROWKEY_SIZE);
+          if (OB_FAIL(ranges.push_back(range))) {
+            LOG_WARN("fail to add scan range", K(ret), K(range));
+          }
         }
       }
     }

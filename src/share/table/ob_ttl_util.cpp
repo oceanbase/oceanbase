@@ -1535,6 +1535,15 @@ bool ObTTLUtil::is_enable_ttl(uint64_t tenant_id)
          ObKVFeatureModeUitl::is_ttl_enable();
 }
 
+bool ObTTLUtil::is_enable_hbase_rowkey_ttl(uint64_t tenant_id)
+{
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  return tenant_config.is_valid() &&
+         tenant_config->enable_kv_ttl &&
+         tenant_config->enable_hbase_rowkey_ttl &&
+         ObKVFeatureModeUitl::is_ttl_enable();
+}
+
 const char * ObTTLUtil::get_ttl_tenant_status_cstr(const ObTTLTaskStatus &status)
 {
   const char *status_cstr = NULL;

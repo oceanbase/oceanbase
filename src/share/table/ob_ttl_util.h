@@ -388,6 +388,7 @@ public:
     return status == ObTTLTaskStatus::OB_TTL_TASK_CANCEL || status == ObTTLTaskStatus::OB_TTL_TASK_FINISH;
   }
   static bool is_enable_ttl(uint64_t tenant_id);
+  static bool is_enable_hbase_rowkey_ttl(uint64_t tenant_id);
   static const char *get_ttl_tenant_status_cstr(const ObTTLTaskStatus &status);
 
   static int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);

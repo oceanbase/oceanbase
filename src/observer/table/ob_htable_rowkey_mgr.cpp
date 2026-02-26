@@ -54,7 +54,7 @@ void ObHTableRowkeyMgr::destroy()
 void ObHTableRowkeyMgr::record_htable_rowkey(const ObLSID &ls_id, int64_t table_id, 
                                              ObTabletID tablet_id, const ObString &rowkey)
 {
-  if (ObTTLUtil::is_enable_ttl(MTL_ID())) {
+  if (ObTTLUtil::is_enable_hbase_rowkey_ttl(MTL_ID())) {
     int ret = OB_SUCCESS;
     ObLSID real_ls_id = ls_id;
     uint64_t tenant_id = MTL_ID();
@@ -78,7 +78,7 @@ void ObHTableRowkeyMgr::record_htable_rowkey(const ObLSID &ls_id, int64_t table_
                                              const ObIArray<ObTabletID> &tablet_ids,
                                              const ObString &rowkey)
 {
-  if (ObTTLUtil::is_enable_ttl(MTL_ID())) {
+  if (ObTTLUtil::is_enable_hbase_rowkey_ttl(MTL_ID())) {
     for (int i = 0; i < tablet_ids.count(); i++) {
       record_htable_rowkey(ls_id, table_id, tablet_ids.at(i), rowkey);
     }
