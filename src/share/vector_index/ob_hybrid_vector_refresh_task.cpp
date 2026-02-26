@@ -602,7 +602,8 @@ int ObHybridVectorRefreshTask::prepare_for_embedding(ObPluginVectorIndexAdaptor 
           LOG_WARN("get invalid op length.", K(ret), K(op));
         } else {
           if (op.ptr()[0] == sql::ObVecIndexDMLIterator::VEC_DELTA_INSERT[0] && !copied_row->storage_datums_[2].is_null()) {
-            if (OB_FAIL(tmp_chunk_array.push_back(copied_row->storage_datums_[2].get_string()))) {
+            if (copied_row->storage_datums_[2].get_string().empty()) {
+            } else if (OB_FAIL(tmp_chunk_array.push_back(copied_row->storage_datums_[2].get_string()))) {
               LOG_WARN("failed to push back chunk str", K(ret), K(copied_row->storage_datums_[2].get_string()));
             } else if (OB_FAIL(tmp_embedding_vids.push_back(copied_row->storage_datums_[0].get_int()))) {
               LOG_WARN("failed to push back vid", K(ret), K(copied_row->storage_datums_[0].get_int()));
