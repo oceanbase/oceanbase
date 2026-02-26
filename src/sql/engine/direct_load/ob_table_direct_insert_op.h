@@ -71,6 +71,9 @@ public:
     return common::OB_SUCCESS;
   }
   virtual bool is_pdml_operator() const override { return true; }
+  static int find_direct_insert_specs(const ObOpSpec *spec,
+                                      common::ObIArray<const ObTableDirectInsertSpec *> &result);
+
 public:
   ObDMLOpRowDesc row_desc_;  // 记录partition id column所在row的第几个cell
   ObInsCtDef ins_ctdef_;

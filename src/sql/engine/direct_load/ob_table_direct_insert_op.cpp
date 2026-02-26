@@ -37,6 +37,32 @@ OB_SERIALIZE_MEMBER((ObTableDirectInsertSpec, ObTableModifySpec),
                     row_desc_,
                     ins_ctdef_);
 
+int ObTableDirectInsertSpec::find_direct_insert_specs(
+    const ObOpSpec *spec,
+    ObIArray<const ObTableDirectInsertSpec *> &result)
+{
+  int ret = common::check_stack_overflow();
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(spec)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("spec is null", KR(ret), KP(spec));
+  } else {
+    if (spec->get_type() == PHY_TABLE_DIRECT_INSERT) {
+      const ObTableDirectInsertSpec *direct_ins_spec = static_cast<const ObTableDirectInsertSpec *>(spec);
+      if (OB_FAIL(result.push_back(direct_ins_spec))) {
+        LOG_WARN("failed to push back direct insert spec", KR(ret), KPC(direct_ins_spec));
+      }
+    }
+
+    for (uint32_t i = 0; OB_SUCC(ret) && i < spec->get_child_cnt(); ++i) {
+      if (OB_FAIL(find_direct_insert_specs(spec->get_child(i), result))) {
+        LOG_WARN("failed to traverse child", KR(ret), K(i), KPC(spec->get_child(i)));
+      }
+    }
+  }
+  return ret;
+}
+
 //////////////////////ObTableDirectInsertOp///////////////////
 ObTableDirectInsertOp::ObTableDirectInsertOp(
     ObExecContext &exec_ctx,

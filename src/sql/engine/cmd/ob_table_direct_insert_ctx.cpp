@@ -16,6 +16,8 @@
 #include "observer/table_load/ob_table_load_instance.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "sql/engine/ob_physical_plan.h"
+#include "sql/engine/direct_load/ob_table_direct_insert_op.h"
+#include "sql/engine/ob_operator.h"
 
 namespace oceanbase
 {
@@ -186,21 +188,39 @@ int ObTableDirectInsertCtx::get_partition_level_tablet_ids(
     ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
+  uint64_t logical_table_id = OB_INVALID_ID;
+  const ObOpSpec *root_spec = phy_plan.get_root_op_spec();
+  tablet_ids.reset();
+
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null table schema", KR(ret), KP(table_schema));
+  } else if (OB_ISNULL(root_spec)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null root spec", KR(ret), KP(root_spec));
   } else {
-    const ObIArray<ObTableLocation> &table_locs = phy_plan.get_table_locations();
-    tablet_ids.reset();
-    for (int64_t i = 0; OB_SUCC(ret) && (i < table_locs.count()); ++i) {
-      const ObTableLocation &table_loc = table_locs.at(i);
-      if (table_loc.get_ref_table_id() == table_schema->get_table_id()) {
-        const ObIArray<ObObjectID> &part_ids = table_loc.get_part_hint_ids();
-        if (!part_ids.empty()
-            && OB_FAIL(ObTableLoadSchema::get_tablet_ids_by_part_ids(table_schema, part_ids, tablet_ids))) {
-          LOG_WARN("failed to get tablet ids by part ids", KR(ret), K(part_ids));
+    ObSEArray<const ObTableDirectInsertSpec *, 1> result;
+    if (OB_FAIL(ObTableDirectInsertSpec::find_direct_insert_specs(root_spec, result))) {
+      LOG_WARN("find direct insert specs failed", K(ret));
+    } else if (OB_UNLIKELY(result.count() != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected direct insert specs count", KR(ret), K(result.count()));
+    } else if (OB_FALSE_IT(logical_table_id = result.at(0)->ins_ctdef_.das_ctdef_.table_id_)) {
+    } else {
+      // since logical table is unique,
+      // we can find the logical table id of insert-table first,
+      // and then find its tablet ids
+      const ObIArray<ObTableLocation> &table_locs = phy_plan.get_table_locations();
+      for (int64_t i = 0; OB_SUCC(ret) && (i < table_locs.count()); ++i) {
+        const ObTableLocation &table_loc = table_locs.at(i);
+        if (table_loc.get_table_id() == logical_table_id) {
+          const ObIArray<ObObjectID> &part_ids = table_loc.get_part_hint_ids();
+          if (!part_ids.empty()
+              && OB_FAIL(ObTableLoadSchema::get_tablet_ids_by_part_ids(table_schema, part_ids, tablet_ids))) {
+            LOG_WARN("failed to get tablet ids by part ids", KR(ret), K(part_ids));
+          }
+          break;
         }
-        break;
       }
     }
   }

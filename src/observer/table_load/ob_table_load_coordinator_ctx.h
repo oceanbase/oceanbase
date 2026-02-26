@@ -46,6 +46,7 @@ public:
   ~ObTableLoadCoordinatorCtx();
   int init(const common::ObIArray<uint64_t> &column_ids,
            const common::ObIArray<ObTabletID> &tablet_ids,
+           const bool enable_hidden_table_partition_pruning,
            ObTableLoadExecCtx *exec_ctx);
   void stop();
   void destroy();
@@ -133,7 +134,8 @@ private:
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
   void add_to_all_server_event(int ret_code);
-  int init_partition_ids(const ObIArray<ObTabletID> &tablet_ids);
+  int init_partition_ids(const ObIArray<ObTabletID> &tablet_ids,
+                         const bool enable_hidden_table_partition_pruning);
   int init_empty_insert_tablet_ctx_manager();
 public:
   ObTableLoadTableCtx * const ctx_;

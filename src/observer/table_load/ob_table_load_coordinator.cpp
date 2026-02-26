@@ -77,13 +77,17 @@ bool ObTableLoadCoordinator::is_ctx_inited(ObTableLoadTableCtx *ctx)
 int ObTableLoadCoordinator::init_ctx(ObTableLoadTableCtx *ctx,
                                      const ObIArray<uint64_t> &column_ids,
                                      const ObIArray<ObTabletID> &tablet_ids,
+                                     const bool enable_hidden_table_partition_pruning,
                                      ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid agrs", KR(ret));
-  } else if (OB_FAIL(ctx->init_coordinator_ctx(column_ids, tablet_ids, exec_ctx))) {
+  } else if (OB_FAIL(ctx->init_coordinator_ctx(column_ids,
+                                               tablet_ids,
+                                               enable_hidden_table_partition_pruning,
+                                               exec_ctx))) {
     LOG_WARN("fail to init coordinator ctx", KR(ret));
   }
   return ret;

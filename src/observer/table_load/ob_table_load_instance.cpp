@@ -19,7 +19,7 @@
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-
+#include "storage/ddl/ob_ddl_hidden_table_partition_utils.h"
 namespace oceanbase
 {
 namespace observer
@@ -223,7 +223,9 @@ int ObTableLoadInstance::start_stmt(
       }
     }
   } else {
-    if (OB_FAIL(start_redef_table(param, tablet_ids))) {
+    if (OB_FAIL(check_enable_hidden_table_partition_pruning(param, tablet_ids, stmt_ctx_.enable_hidden_table_partition_pruning_))) {
+      LOG_WARN("fail to check enable hidden table partition pruning", KR(ret), K(param), K(tablet_ids));
+    } else if (OB_FAIL(start_redef_table(param, tablet_ids))) {
       LOG_WARN("fail to start redef table", KR(ret), K(param), K(tablet_ids));
     }
   }
@@ -528,6 +530,7 @@ int ObTableLoadInstance::start_redef_table(
   start_arg.parallelism_ = param.parallel_;
   start_arg.is_load_data_ = !param.px_mode_;
   start_arg.is_insert_overwrite_ = ObDirectLoadMode::is_insert_overwrite(param.load_mode_);
+  start_arg.enable_hidden_table_partition_pruning_ = stmt_ctx_.enable_hidden_table_partition_pruning_;
   if ((ObDirectLoadLevel::PARTITION == param.load_level_)
       && OB_FAIL(start_arg.tablet_ids_.assign(tablet_ids))) {
     LOG_WARN("failed to assign tablet ids", KR(ret), K(param.load_level_), K(tablet_ids));
@@ -595,7 +598,11 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
   } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info, ObString::make_string(""), execute_ctx_->exec_ctx_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
-  } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, column_ids, tablet_ids, execute_ctx_))) {
+  } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx,
+                                                      column_ids,
+                                                      tablet_ids,
+                                                      stmt_ctx_.enable_hidden_table_partition_pruning_,
+                                                      execute_ctx_))) {
     LOG_WARN("fail to coordinator init ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
     LOG_WARN("fail to add ctx", KR(ret));
@@ -898,5 +905,54 @@ bool ObTableLoadInstance::is_valid_tablet_ids(const ObIArray<ObTabletID> &tablet
   return is_valid;
 }
 
+int ObTableLoadInstance::check_enable_hidden_table_partition_pruning(
+    const ObTableLoadParam &param,
+    const ObIArray<ObTabletID> &tablet_ids,
+    bool &enable_hidden_table_partition_pruning)
+{
+  int ret = OB_SUCCESS;
+  enable_hidden_table_partition_pruning = false;
+
+  if (OB_UNLIKELY(param.method_ != ObDirectLoadMethod::FULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected direct load method, only support full direct load", KR(ret), K(param));
+  } else if (ObDirectLoadLevel::PARTITION == param.load_level_) {
+    ObSchemaGetterGuard *schema_guard = nullptr;
+    const ObTableSchema *table_schema = nullptr;
+    const uint64_t table_id = param.table_id_;
+    const uint64_t tenant_id = param.tenant_id_;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+
+    if (OB_UNLIKELY(tablet_ids.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected empty tablet_ids", KR(ret), K(tablet_ids), K(param));
+    } else if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      LOG_TRACE("tenant config is invalid, disable hidden table partition pruning");
+    } else if (!tenant_config->_enable_direct_load_hidden_table_partition_pruning) {
+      LOG_TRACE("hidden table partition pruning is disabled");
+    } else if (OB_ISNULL(schema_guard = execute_ctx_->exec_ctx_->get_sql_ctx()->schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null schema guard in exe ctx", KR(ret), KP(schema_guard));
+    } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("failed to get table schema", KR(ret), KP(table_schema), K(tenant_id), K(table_id));
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      int64_t data_part_base_idx = OB_INVALID_INDEX;
+      if (OB_TMP_FAIL(ObDDLHiddenTablePartitionUtils::check_support_partition_pruning(
+          *table_schema, tablet_ids, tenant_id, data_part_base_idx))) {
+        LOG_WARN("failed to check support hidden table partition pruning",
+            KR(tmp_ret), KPC(table_schema), K(tablet_ids), K(tenant_id));
+      } else {
+        enable_hidden_table_partition_pruning = true;
+      }
+      LOG_INFO("direct load check enable hidden table partition pruning", KR(tmp_ret),
+          K(enable_hidden_table_partition_pruning), K(data_part_base_idx), K(param), K(tablet_ids));
+    }
+  }
+  return ret;
+}
 } // namespace observer
 } // namespace oceanbase

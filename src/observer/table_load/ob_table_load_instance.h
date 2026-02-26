@@ -102,6 +102,10 @@ public:
 private:
   int check_trans_committed(TransCtx &trans_ctx);
   bool is_valid_tablet_ids(const common::ObIArray<common::ObTabletID> &tablet_ids);
+  int check_enable_hidden_table_partition_pruning(
+    const ObTableLoadParam &param,
+    const common::ObIArray<common::ObTabletID> &tablet_ids,
+    bool &enable_hidden_table_partition_pruning);
 
 private:
   struct StmtCtx
@@ -115,7 +119,8 @@ private:
         is_incremental_(false),
         use_insert_into_select_tx_(false),
         is_started_(false),
-        has_added_tx_result_(false)
+        has_added_tx_result_(false),
+        enable_hidden_table_partition_pruning_(false)
     {
     }
     void reset()
@@ -130,6 +135,7 @@ private:
       use_insert_into_select_tx_ = false;
       is_started_ = false;
       has_added_tx_result_ = false;
+      enable_hidden_table_partition_pruning_ = false;
     }
     bool is_started() const { return is_started_; }
     TO_STRING_KV(K_(tenant_id),
@@ -141,7 +147,8 @@ private:
                  K_(is_incremental),
                  K_(use_insert_into_select_tx),
                  K_(is_started),
-                 K_(has_added_tx_result));
+                 K_(has_added_tx_result),
+                 K_(enable_hidden_table_partition_pruning));
   public:
     uint64_t tenant_id_;
     uint64_t table_id_;
@@ -153,6 +160,7 @@ private:
     bool use_insert_into_select_tx_; // whether use the transaction of insert into select
     bool is_started_;
     bool has_added_tx_result_;
+    bool enable_hidden_table_partition_pruning_;
   };
 
 private:

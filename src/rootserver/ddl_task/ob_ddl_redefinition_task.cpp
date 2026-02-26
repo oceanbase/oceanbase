@@ -2544,10 +2544,42 @@ int ObDDLRedefinitionTask::sync_tablet_autoinc_seq()
   if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_TASK_SYNC_TABLET_AUTOINC_SEQ_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else if (!sync_tablet_autoinc_seq_ctx_.is_inited()
-      && OB_FAIL(sync_tablet_autoinc_seq_ctx_.init(tenant_id_/*src_tenant_id*/, dst_tenant_id_, object_id_, target_object_id_))) {
+      && OB_FAIL(init_sync_tablet_autoinc_seq_ctx())) {
     LOG_WARN("failed to init sync tablet autoinc seq ctx", K(ret));
   } else if (OB_FAIL(sync_tablet_autoinc_seq_ctx_.sync())) {
     LOG_WARN("failed to sync tablet autoinc seq", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLRedefinitionTask::init_sync_tablet_autoinc_seq_ctx()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObTabletID> src_tablet_ids;
+  ObArray<ObTabletID> dest_tablet_ids;
+  if (alter_table_arg_.enable_hidden_table_partition_pruning_) {
+    ObPartition** part_array = alter_table_arg_.alter_table_schema_.get_part_array();
+    if (OB_NOT_NULL(part_array)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_arg_.alter_table_schema_.get_partition_num(); ++i) {
+        ObPartition *part = part_array[i];
+        if (OB_NOT_NULL(part)) {
+          if (OB_FAIL(src_tablet_ids.push_back(part->get_tablet_id()))) {
+            LOG_WARN("failed to add tablet id", KR(ret));
+          }
+        }
+      }
+    }
+  } else {
+    if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, src_tablet_ids))) {
+      LOG_WARN("failed to get data table snapshot", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObDDLUtil::get_tablets(dst_tenant_id_, target_object_id_, dest_tablet_ids))) {
+    LOG_WARN("failed to get dest table snapshot", K(ret));
+  } else if (OB_FAIL(sync_tablet_autoinc_seq_ctx_.init(tenant_id_/*src_tenant_id*/, dst_tenant_id_, src_tablet_ids, dest_tablet_ids))) {
+    LOG_WARN("failed to init sync tablet autoinc seq ctx", K(ret));
   }
   return ret;
 }
@@ -2720,20 +2752,20 @@ ObSyncTabletAutoincSeqCtx::ObSyncTabletAutoincSeqCtx()
 int ObSyncTabletAutoincSeqCtx::init(
     const uint64_t src_tenant_id,
     const uint64_t dst_tenant_id,
-    int64_t src_table_id,
-    int64_t dest_table_id)
+    const ObIArray<ObTabletID> &src_tablet_ids,
+    const ObIArray<ObTabletID> &dest_tablet_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == src_tenant_id || OB_INVALID_ID == dst_tenant_id
-              || src_table_id == OB_INVALID_ID || dest_table_id == OB_INVALID_ID)) {
+              || src_tablet_ids.empty() || dest_tablet_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(src_tenant_id), K(dst_tenant_id), K(src_table_id), K(dest_table_id));
-  } else if (OB_FAIL(ObDDLUtil::get_tablets(src_tenant_id, src_table_id, orig_src_tablet_ids_))) {
-    LOG_WARN("failed to get data table snapshot", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(src_tenant_id), K(dst_tenant_id), K(src_tablet_ids), K(dest_tablet_ids));
+  } else if (OB_FAIL(orig_src_tablet_ids_.assign(src_tablet_ids))) {
+    LOG_WARN("failed to assign orig_src_tablet_ids", K(ret), K(src_tablet_ids));
   } else if (OB_FAIL(src_tablet_ids_.assign(orig_src_tablet_ids_))) {
-    LOG_WARN("failed to assign src_tablet_ids", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::get_tablets(dst_tenant_id, dest_table_id, dest_tablet_ids_))) {
-    LOG_WARN("failed to get dest table snapshot", K(ret));
+    LOG_WARN("failed to assign src_tablet_ids", K(ret), K(orig_src_tablet_ids_));
+  } else if (OB_FAIL(dest_tablet_ids_.assign(dest_tablet_ids))) {
+    LOG_WARN("failed to assign dest_tablet_ids", K(ret), K(dest_tablet_ids));
   } else {
     src_tenant_id_ = src_tenant_id;
     dst_tenant_id_ = dst_tenant_id;

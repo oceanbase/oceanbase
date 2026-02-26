@@ -27,7 +27,8 @@ bool ObCreateHiddenTableArgV2::is_valid() const
           && OB_INVALID_TENANT_ID != exec_tenant_id_
           && OB_INVALID_ID != table_id_
           && OB_INVALID_ID != dest_tenant_id_
-          && share::DDL_INVALID != ddl_type_);
+          && share::DDL_INVALID != ddl_type_
+          && !(enable_partition_pruning_ && tablet_ids_.empty()));
 }
 
 int ObCreateHiddenTableArgV2::assign(const ObCreateHiddenTableArgV2 &other)
