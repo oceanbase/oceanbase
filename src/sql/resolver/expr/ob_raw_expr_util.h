@@ -1464,6 +1464,11 @@ public:
                                        ObRawExpr *json_val,
                                        ObRawExpr *json_array,
                                        ObRawExpr *&expr);
+  static int build_json_contains_expr(ObRawExprFactory &expr_factory,
+                                     const ObSQLSessionInfo &session,
+                                     ObRawExpr *json_target,
+                                     ObRawExpr *json_candidate,
+                                     ObRawExpr *&expr);
   static int build_json_extract_expr(ObRawExprFactory &expr_factory,
                                      const ObSQLSessionInfo &session,
                                      ObRawExpr *json_val,

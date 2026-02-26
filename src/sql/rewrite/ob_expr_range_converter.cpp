@@ -3842,6 +3842,8 @@ int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
           LOG_WARN("failed to get calculable expr val", KPC(const_param));
         } else if (!is_valid) {
           ctx_.cur_is_precise_ = false;
+        } else if (expr->is_inner_split_contains_expr()) {
+          ctx_.cur_is_precise_ = true;
         } else if(json_value.is_null()) {
           ctx_.cur_is_precise_ = false;
         } else if (OB_FAIL(is_precise_json_contains(*ctx_.exec_ctx_,

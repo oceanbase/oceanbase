@@ -1965,7 +1965,7 @@ struct MergeKeyInfoHelper
                                        ObIArray<ObCandiIndexMergeNode> &candi_nodes,
                                        bool &merge_happened);
 
-    int build_member_of_expr_from_json_path(const ObRawExpr *const_param,
+    int build_json_contains_expr_from_json_path(const ObRawExpr *const_param,
                                             const ObColumnRefRawExpr *column_param,
                                             const char *json_path,
                                             ObRawExpr *&member_of_expr);

@@ -1939,6 +1939,8 @@ struct ObRawExprExtraInfo
        // T_FUN_SYS_TREAT
     bool add_implicit_cast_for_in_param_; // T_OP_IN
                                           // T_OP_NOT_IN
+    bool is_inner_split_contains_expr_;   // T_FUN_SYS_JSON_CONTAINS
+                                          // T_FUNC_SYS_ARRAY_CONTAINS_ALL
   };
 };
 static_assert(8 == sizeof(ObRawExprExtraInfo), "sizeof extra info must be 8 bytes");
@@ -2376,6 +2378,8 @@ public:
   void set_runtime_filter_type(RuntimeFilterType type) { extra_.runtime_filter_type_ = type; }
   inline bool with_null_equal_cond() const { return extra_.with_null_equal_cond_; }
   inline void set_with_null_equal_cond(bool val) { extra_.with_null_equal_cond_ = val; }
+  inline bool is_inner_split_contains_expr() const { return extra_.is_inner_split_contains_expr_; }
+  inline void set_is_inner_split_contains_expr(bool val) { extra_.is_inner_split_contains_expr_ = val; }
   VIRTUAL_TO_STRING_KVP(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,

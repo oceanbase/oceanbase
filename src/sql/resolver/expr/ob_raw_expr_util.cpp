@@ -10984,6 +10984,34 @@ int ObRawExprUtils::build_json_member_of_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::build_json_contains_expr(ObRawExprFactory &expr_factory,
+                                            const ObSQLSessionInfo &session,
+                                            ObRawExpr *json_target,
+                                            ObRawExpr *json_candidate,
+                                            ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+  expr = NULL;
+  if (OB_ISNULL(json_target) || OB_ISNULL(json_candidate)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arguments", K(ret), KP(json_target), KP(json_candidate));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_JSON_CONTAINS, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_ISNULL(func_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("func expr is null", K(ret));
+  } else if (OB_FALSE_IT(func_expr->set_func_name(ObString::make_string("json_contains")))) {
+  } else if (OB_FAIL(func_expr->set_param_exprs(json_target, json_candidate))) {
+    LOG_WARN("fail to set param exprs", K(ret));
+  } else if (OB_FAIL(func_expr->formalize(&session))) {
+    LOG_WARN("fail to formalize expr", K(ret));
+  } else {
+    expr = func_expr;
+  }
+  return ret;
+}
+
 int ObRawExprUtils::build_json_extract_expr(ObRawExprFactory &expr_factory,
                                              const ObSQLSessionInfo &session,
                                              ObRawExpr *json_val,

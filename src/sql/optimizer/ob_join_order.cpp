@@ -4354,14 +4354,14 @@ int ObJoinOrder::get_index_merge_threshold_for_multivalue(int64_t &threshold)
   return ret;
 }
 
-int ObJoinOrder::build_member_of_expr_from_json_path(const ObRawExpr *const_param,
+int ObJoinOrder::build_json_contains_expr_from_json_path(const ObRawExpr *const_param,
                                                      const ObColumnRefRawExpr *column_param,
                                                      const char *json_path,
-                                                     ObRawExpr *&member_of_expr)
+                                                     ObRawExpr *&new_expr)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *extract_expr = NULL;
-  member_of_expr = NULL;
+  new_expr = NULL;
   if (OB_ISNULL(const_param) || OB_ISNULL(column_param)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null param", K(ret), KP(const_param), KP(column_param));
@@ -4374,15 +4374,17 @@ int ObJoinOrder::build_member_of_expr_from_json_path(const ObRawExpr *const_para
   } else if (OB_ISNULL(extract_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("extract expr is null", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_json_member_of_expr(OPT_CTX.get_expr_factory(),
-                                                               *OPT_CTX.get_session_info(),
-                                                               extract_expr,
-                                                               const_cast<ObColumnRefRawExpr*>(column_param),
-                                                               member_of_expr))) {
-    LOG_WARN("failed to build json member of expr", K(ret));
-  } else if (OB_ISNULL(member_of_expr)) {
+  } else if (OB_FAIL(ObRawExprUtils::build_json_contains_expr(OPT_CTX.get_expr_factory(),
+                                                              *OPT_CTX.get_session_info(),
+                                                              const_cast<ObColumnRefRawExpr*>(column_param),
+                                                              extract_expr,
+                                                              new_expr))) {
+    LOG_WARN("failed to build json contains expr", K(ret));
+  } else if (OB_ISNULL(new_expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("member of expr is null", K(ret));
+    LOG_WARN("json contains expr is null", K(ret));
+  } else {
+    new_expr->set_is_inner_split_contains_expr(true);
   }
   return ret;
 }
@@ -4395,48 +4397,27 @@ int ObJoinOrder::process_json_scalar_type(ObIndexMergeNode *candi_node,
                                           int64_t &extra)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *cast_expr = NULL;
-  ObRawExpr *member_of_expr = NULL;
-  ObRawExprResType json_type;
+  ObRawExpr *json_contains_expr = NULL;
   if (OB_ISNULL(candi_node) || OB_ISNULL(const_param) || OB_ISNULL(column_param)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(candi_node), KP(const_param), KP(column_param));
+  } else if (OB_FAIL(ObRawExprUtils::build_json_contains_expr(OPT_CTX.get_expr_factory(),
+                                                             *OPT_CTX.get_session_info(),
+                                                             const_cast<ObColumnRefRawExpr*>(column_param),
+                                                             const_cast<ObRawExpr*>(const_param),
+                                                             json_contains_expr))) {
+    LOG_WARN("failed to build json contains expr", K(ret));
+  } else if (OB_ISNULL(json_contains_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("json contains expr is null", K(ret));
+  } else if (OB_FALSE_IT(json_contains_expr->set_is_inner_split_contains_expr(true))) {
+  } else if (OB_FALSE_IT(candi_node->filter_.reuse())) {
+  } else if (OB_FAIL(candi_node->filter_.push_back(json_contains_expr))) {
+    LOG_WARN("failed to push back filter", K(ret));
   } else {
-    json_type.set_type(ObJsonType);
-    if (ob_is_string_type(const_param->get_data_type())) {
-      json_type.set_collation_type(const_param->get_collation_type());
-      json_type.set_collation_level(const_param->get_collation_level());
-    } else {
-      json_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-      json_type.set_collation_level(CS_LEVEL_IMPLICIT);
-    }
-    json_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
-    if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&OPT_CTX.get_expr_factory(),
-                                                        OPT_CTX.get_session_info(),
-                                                        *const_cast<ObRawExpr*>(const_param),
-                                                        json_type,
-                                                        cast_expr))) {
-      LOG_WARN("failed to add cast expr above", K(ret));
-    } else if (OB_ISNULL(cast_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cast expr is null", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_json_member_of_expr(OPT_CTX.get_expr_factory(),
-                                                               *OPT_CTX.get_session_info(),
-                                                               cast_expr,
-                                                               const_cast<ObColumnRefRawExpr*>(column_param),
-                                                               member_of_expr))) {
-      LOG_WARN("failed to build json member of expr", K(ret));
-    } else if (OB_ISNULL(member_of_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("member of expr is null", K(ret));
-    } else if (OB_FALSE_IT(candi_node->filter_.reuse())) {
-    } else if (OB_FAIL(candi_node->filter_.push_back(member_of_expr))) {
-      LOG_WARN("failed to push back filter", K(ret));
-    } else {
-      need_add_constraint = true;
-      expect_result = PRE_CALC_JSON_TYPE;
-      extra = ObJsonTypeConstraint::make_extra(ObJsonTypeConstraint::JSON_TYPE_SCALAR, 0);
-    }
+    need_add_constraint = true;
+    expect_result = PRE_CALC_JSON_TYPE;
+    extra = ObJsonTypeConstraint::make_extra(ObJsonTypeConstraint::JSON_TYPE_SCALAR, 0);
   }
   return ret;
 }
@@ -4463,7 +4444,7 @@ int ObJoinOrder::process_json_array_type(ObIndexMergeNode *candi_node,
     is_valid_node = false;
   } else if (element_size == 1) {
     ObRawExpr *member_of_expr = NULL;
-    if (OB_FAIL(build_member_of_expr_from_json_path(const_param, column_param, "$[0]", member_of_expr))) {
+    if (OB_FAIL(build_json_contains_expr_from_json_path(const_param, column_param, "$[0]", member_of_expr))) {
       LOG_WARN("failed to build member of expr from json path", K(ret));
     } else if (OB_FALSE_IT(candi_node->filter_.reuse())) {
     } else if (OB_FAIL(candi_node->filter_.push_back(member_of_expr))) {
@@ -4486,7 +4467,7 @@ int ObJoinOrder::process_json_array_type(ObIndexMergeNode *candi_node,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate index merge node", K(ret));
       } else if (OB_FALSE_IT(snprintf(json_path, json_path_size, "$[%ld]", i))) {
-      } else if (OB_FAIL(build_member_of_expr_from_json_path(const_param, column_param, json_path, member_of_expr))) {
+      } else if (OB_FAIL(build_json_contains_expr_from_json_path(const_param, column_param, json_path, member_of_expr))) {
         LOG_WARN("failed to build member of expr from json path", K(ret));
       } else if (OB_FAIL(child_node->filter_.push_back(member_of_expr))) {
         LOG_WARN("failed to push back filter", K(ret));
