@@ -485,8 +485,13 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         if (OB_FAIL(databuff_printf(buf, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, pos, "%s", token))) {
           LOG_WARN("failed to databuff printf", K(ret));
         } else if (1 == sscanf(buf, "max_iops=%ld", &value)) {
-          max_iops_ = value;
-          LOG_INFO("set max iops", K(ret), K(value));
+          if (OB_UNLIKELY(value < 0)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("max iops is invalid", K(ret), K(value));
+          } else {
+            max_iops_ = value;
+            LOG_INFO("set max iops", K(ret), K(value));
+          }
         } else {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("failed to set max iops", K(ret), K(value));
@@ -838,6 +843,33 @@ int ObObjectStorageInfo::get_storage_info_str(char *storage_info, const int64_t 
   }
   if (OB_SUCC(ret) && OB_FAIL(append_extension_str_(storage_info, info_len))) {
     LOG_WARN("failed to append extension str", K(ret), K(info_len), KPC(this));
+  }
+
+  // Keep storage_info string round-trippable:
+  // max_iops/max_bandwidth are parsed into fields and not persisted in extension_.
+  // If we do not output them here, a "to string -> parse" path (e.g. ObObjectDevice::start)
+  // will lose these settings.
+  if (OB_SUCC(ret)
+      && OB_STORAGE_FILE != device_type_
+      && OB_STORAGE_HDFS != device_type_
+      && (max_iops_ > 0 || max_bandwidth_ > 0)) {
+    int64_t pos = STRLEN(storage_info);
+    const char *delimiter = (pos > 0 ? "&" : "");
+
+    if (OB_SUCC(ret) && max_iops_ > 0) {
+      if (OB_FAIL(databuff_printf(storage_info, info_len, pos, "%s%s%ld",
+          delimiter, MAX_IOPS, max_iops_))) {
+        LOG_WARN("failed to append max_iops", K(ret), K(info_len), K(pos), KPC(this));
+      }
+    }
+
+    if (OB_SUCC(ret) && max_bandwidth_ > 0) {
+      delimiter = (pos > 0 ? "&" : "");
+      if (OB_FAIL(databuff_printf(storage_info, info_len, pos, "%s%s%ldB",
+          delimiter, MAX_BANDWIDTH, max_bandwidth_))) {
+        LOG_WARN("failed to append max_bandwidth", K(ret), K(info_len), K(pos), KPC(this));
+      }
+    }
   }
   return ret;
 }

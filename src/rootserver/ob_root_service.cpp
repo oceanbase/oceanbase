@@ -7821,12 +7821,25 @@ int ObRootService::alter_storage(const obrpc::ObAdminStorageArg &arg)
               arg.attribute_.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (!zone_storage_manager_.is_reload() && OB_FAIL(zone_storage_manager_.reload())) {
-    LOG_WARN("failed to reload zone storage manager", K(ret));
-  } else if (OB_FAIL(zone_storage_manager_.alter_storage(arg.path_.str(), arg.access_info_.str(),
-                     arg.attribute_.str(), arg.wait_type_))) {
-    LOG_WARN("failed to alter storage", K(ret), K(arg));
+  } else if (OB_UNLIKELY(arg.alter_storage_options_.has_member(obrpc::ObAdminStorageArg::ALTER_STORAGE_ACCESS_INFO) &&
+                         arg.alter_storage_options_.has_member(obrpc::ObAdminStorageArg::ALTER_STORAGE_ATTRIBUTE))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter storage does not support changing access_info and attribute at the same time", KR(ret), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "changing access_info and attribute in one command is");
+  } else if (OB_FAIL(zone_storage_manager_.reload())) {
+    LOG_WARN("failed to reload zone storage manager", KR(ret));
   } else {
+    const ObString access_info = arg.alter_storage_options_.has_member(obrpc::ObAdminStorageArg::ALTER_STORAGE_ACCESS_INFO)
+                                 ? arg.access_info_.str()
+                                 : ObString();
+    const ObString attribute = arg.alter_storage_options_.has_member(obrpc::ObAdminStorageArg::ALTER_STORAGE_ATTRIBUTE)
+                               ? arg.attribute_.str()
+                               : ObString();
+    if (OB_FAIL(zone_storage_manager_.alter_storage(arg.path_.str(), access_info, attribute, arg.wait_type_))) {
+      LOG_WARN("failed to alter storage", KR(ret), K(arg));
+    }
+  }
+  if (OB_SUCC(ret)) {
     LOG_INFO("alter storage ok", K(arg));
   }
   return ret;

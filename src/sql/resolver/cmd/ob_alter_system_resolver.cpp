@@ -1802,20 +1802,16 @@ int ObAdminStorageResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "fail to set attribute", KR(ret), K(attribute));
             }
           }
-        } else {
-          int64_t max_iops = 0;
-          int64_t max_bandwidth = 0;
-          char attribute_str[OB_MAX_STORAGE_ATTRIBUTE_LENGTH] = {0};
-          if (OB_FAIL(databuff_printf(attribute_str, sizeof(attribute_str), "%s%ld&%s%ldB",
-                      STORAGE_MAX_IOPS, max_iops, STORAGE_MAX_BANDWIDTH, max_bandwidth))) {
-            SQL_RESV_LOG(WARN, "fail to databuff printf", KR(ret));
-          } else {
-            attribute.assign_ptr(attribute_str, strlen(attribute_str));
-            if (OB_FAIL(admin_storage_stmt->set_attribute(attribute))) {
-              SQL_RESV_LOG(WARN, "fail to set attribute", KR(ret), K(attribute));
-            }
-          }
+        } else if (ObAdminStorageArg::ADD == op) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "attribute is required for add storage");
         }
+      }
+      if (OB_SUCC(ret) && ObAdminStorageArg::CHANGE == op &&
+          admin_storage_stmt->has_alter_accessinfo_option() &&
+          admin_storage_stmt->has_alter_attribute_option()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "changing access_info and attribute in one command is");
       }
       if (OB_SUCC(ret) && NULL != use_for_info) {
         use_for = ObStorageUsedType::get_type(use_for_info->str_value_);

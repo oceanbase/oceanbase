@@ -730,7 +730,20 @@ int ObStorageInfoOperator::get_zone_storage_table_info(
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
     sqlclient::ObMySQLResult *result = NULL;
-    if (OB_FAIL(sql_string.assign_fmt("SELECT * FROM %s", OB_ALL_ZONE_STORAGE_TNAME))) {
+    // Need sub_op_id for in-progress operations (e.g. CHANGING). sub_op_id is stored in
+    // __all_zone_storage_operation, not in __all_zone_storage, so we query it here to make
+    // reload() able to continue state transition checks after RS reload.
+    if (OB_FAIL(sql_string.assign_fmt(
+        "SELECT A.*, "
+        "IFNULL((SELECT MAX(B.%s) FROM %s AS B "
+        "        WHERE B.%s = A.%s AND B.%s = A.%s AND B.%s = A.%s), 0) AS %s "
+        "FROM %s AS A",
+        OB_STR_STORAGE_SUB_OP_ID, OB_ALL_ZONE_STORAGE_OPERATION_TNAME,
+        OB_STR_STORAGE_ID, OB_STR_STORAGE_ID,
+        OB_STR_STORAGE_OP_ID, OB_STR_STORAGE_OP_ID,
+        OB_STR_STORAGE_ZONE, OB_STR_STORAGE_ZONE,
+        OB_STR_STORAGE_SUB_OP_ID,
+        OB_ALL_ZONE_STORAGE_TNAME))) {
       LOG_WARN("assign sql string failed", KR(ret));
     } else if (OB_FAIL(proxy.read(res, sql_string.ptr()))) {
       LOG_WARN("query zone storage record failed", KR(ret), K(sql_string));
@@ -769,6 +782,8 @@ int ObStorageInfoOperator::get_zone_storage_table_info(
           EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_STORAGE_STATE, state,
                                      OB_MAX_STORAGE_STATE_LENGTH, tmp_str_len);
           EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_STORAGE_OP_ID, storage_table_info.op_id_,
+                                  uint64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_STORAGE_SUB_OP_ID, storage_table_info.sub_op_id_,
                                   uint64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_STORAGE_MAX_IOPS, storage_table_info.max_iops_,
                                   uint64_t);
