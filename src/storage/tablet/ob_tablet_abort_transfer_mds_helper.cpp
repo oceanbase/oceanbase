@@ -128,11 +128,12 @@ int ObTabletAbortTransferHelper::check_transfer_in_tablet_aborted_(
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet should not be NULL", K(ret), K(tablet_info));
-      } else if (tablet->is_empty_shell()) {
-        //do nothing
       } else if (for_replay && tablet->get_tablet_meta().transfer_info_.transfer_start_scn_ > scn) {
         LOG_INFO("tablet is new, skip wait transfer in abort tablet", KPC(tablet), K(scn));
       } else {
+        //TODO(muwei.ym) now cannot cover empty shell because cover empty shell will delete empty shell first
+        //It make restart cannot find right filter condition
+        //Now disable cover empty shell
         ret = OB_EAGAIN;
         LOG_WARN("tablet still exist, need retry", K(ret), K(tablet_info), KPC(tablet));
       }

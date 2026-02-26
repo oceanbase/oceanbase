@@ -2404,7 +2404,14 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_tablets_()
         LOG_WARN("dest ls in start status should not exist transfer tablet, need retry", K(ret), KPC(tablet), K(tablet_info));
       } else if (tablet->get_tablet_meta().transfer_info_.transfer_seq_ > tablet_info.transfer_seq_ + 1) {
         ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
-        LOG_WARN("tablet is in empty shell but transfer seq not match", K(ret), KPC(tablet), K(tablet_info));
+        LOG_WARN("tablet transfer seq is not match", K(ret), KPC(tablet), K(tablet_info));
+      } else {
+        //TODO(muwei.ym) now cannot cover empty shell because cover empty shell will delete empty shell first
+        //It make restart cannot find right filter condition
+        //Now disable cover empty shell
+        ret = OB_EAGAIN;
+        LOG_WARN("This tablet should not exist, need wait finish gc", K(ret), KPC(tablet),
+          K(tablet_info));
       }
     }
   }
