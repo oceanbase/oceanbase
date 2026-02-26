@@ -400,7 +400,7 @@ int ObTableLoadService::check_support_direct_load(
     const ObDirectLoadLevel::Type load_level,
     const ObLoadDupActionType dup_action,
     const ObIArray<uint64_t> &column_ids,
-    bool enable_inc_major)
+    const bool enable_inc_major)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -428,7 +428,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                                                   const ObDirectLoadLevel::Type load_level,
                                                   const ObLoadDupActionType dup_action,
                                                   const ObIArray<uint64_t> &column_ids,
-                                                  bool enable_inc_major)
+                                                  const bool enable_inc_major)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -459,7 +459,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                                                   const ObDirectLoadLevel::Type load_level,
                                                   const ObLoadDupActionType dup_action,
                                                   const ObIArray<uint64_t> &column_ids,
-                                                  bool enable_inc_major)
+                                                  const bool enable_inc_major)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == table_schema ||
@@ -655,6 +655,10 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with check constraints", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with check constraints");
+      } else if (enable_inc_major && table_schema->has_ttl_definition()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("incremental major direct-load does not support table with ttl definition", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "incremental major direct-load does not support table with ttl definition");
       }
     }
     // full direct-load

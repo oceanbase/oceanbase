@@ -184,16 +184,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(ObExecContext *exec_ctx, ObLo
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(check_semantics())) {
         LOG_WARN("fail to check semantics", K(ret));
-      } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(
-                    *exec_ctx->get_sql_ctx()->schema_guard_,
-                    table_id_,
-                    load_method_,
-                    insert_mode_,
-                    load_mode_,
-                    load_level_,
-                    dup_action_,
-                    column_ids_,
-                    enable_inc_major_))) {
+      } else if (OB_FAIL(check_support_direct_load(exec_ctx))) {
         LOG_WARN("fail to check support direct load", K(ret));
       } else {
         can_use_direct_load_ = true;
@@ -309,16 +300,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(check_transaction(session_info))) {
         LOG_WARN("fail to get auto commit", KR(ret));
-      } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(
-                                                    *exec_ctx->get_sql_ctx()->schema_guard_,
-                                                    table_id_,
-                                                    load_method_,
-                                                    insert_mode_,
-                                                    load_mode_,
-                                                    load_level_,
-                                                    dup_action_,
-                                                    column_ids_,
-                                                    enable_inc_major_))) {
+      } else if (OB_FAIL(check_support_direct_load(exec_ctx))) {
         LOG_WARN("fail to check support direct load", K(ret));
       } else {
         can_use_direct_load_ = true;
@@ -473,6 +455,43 @@ int ObDirectLoadOptimizerCtx::check_support_insert_overwrite(const ObGlobalHint 
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with append hint");
     LOG_WARN("insert overwrite stmt with append hint is not support", KR(ret));
+  }
+  return ret;
+}
+
+int ObDirectLoadOptimizerCtx::check_support_direct_load(ObExecContext *exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTableLoadService::check_support_direct_load(
+        *exec_ctx->get_sql_ctx()->schema_guard_,
+        table_id_,
+        load_method_,
+        insert_mode_,
+        load_mode_,
+        load_level_,
+        dup_action_,
+        column_ids_,
+        enable_inc_major_))) {
+    LOG_WARN("fail to check support direct load", K(ret), KPC(this));
+    // inc major fallback to inc minor
+    if (OB_LIKELY(OB_NOT_SUPPORTED == ret) && ObDirectLoadMethod::is_incremental(load_method_) &&
+        enable_inc_major_) {
+      const bool enable_inc_major = false;
+      if (OB_FAIL(ObTableLoadService::check_support_direct_load(
+            *exec_ctx->get_sql_ctx()->schema_guard_,
+            table_id_,
+            load_method_,
+            insert_mode_,
+            load_mode_,
+            load_level_,
+            dup_action_,
+            column_ids_,
+            enable_inc_major))) {
+        LOG_WARN("fail to check support direct load fallback inc minor", K(ret), KPC(this));
+      } else {
+        enable_inc_major_ = enable_inc_major;
+      }
+    }
   }
   return ret;
 }

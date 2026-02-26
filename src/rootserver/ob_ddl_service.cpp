@@ -15157,9 +15157,9 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           ((MOCK_DATA_VERSION_4_2_3_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) /* ([4.2.3, 4.3.0)) */
             || DATA_VERSION_4_3_2_0 <= tenant_data_version  /* [4.3.2, ~) */ );  // need table lock and rw defense;
 
-      bool is_change_to_compaction_scn_ttl_di_table = check_change_to_compaction_scn_ttl_di_table(alter_table_schema, *orig_table_schema);
+      bool is_change_to_compaction_scn_ttl_table = check_change_to_compaction_scn_ttl_table(alter_table_schema, *orig_table_schema);
 
-      bool need_table_lock = is_rename_and_need_table_lock || is_change_to_compaction_scn_ttl_di_table;
+      bool need_table_lock = is_rename_and_need_table_lock || is_change_to_compaction_scn_ttl_table;
       if (OB_FAIL(ret)) {
         //do nothing
       } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
@@ -15192,7 +15192,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                     alter_table_arg.lock_priority_,
                                     timeout_us))) {
         LOG_WARN("failed to get the table_lock of origin table schema for rename op", K(ret), KPC(orig_table_schema));
-      } else if (is_change_to_compaction_scn_ttl_di_table && OB_FAIL(lock_table(trans, *orig_table_schema))) {
+      } else if (is_change_to_compaction_scn_ttl_table && OB_FAIL(lock_table(trans, *orig_table_schema))) {
         LOG_WARN("failed to get the table lock of origin table schema for alter ttl definition", K(ret), KPC(orig_table_schema));
       } else {
         ObArray<ObTableSchema> global_idx_schema_array;
@@ -15215,7 +15215,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           }
         }
         //table options
-        if (OB_SUCC(ret) && is_change_to_compaction_scn_ttl_di_table && OB_FAIL(update_being_scn_ttl_time(new_table_schema))) {
+        if (OB_SUCC(ret) && is_change_to_compaction_scn_ttl_table && OB_FAIL(update_being_scn_ttl_time(new_table_schema))) {
           LOG_WARN("failed to update merge engine upper version", K(ret), K(new_table_schema));
         }
         // if there is no auto-increment column, ignore table option auto_increment
@@ -40061,11 +40061,11 @@ int ObDDLService::update_being_scn_ttl_time(ObTableSchema &new_table_schema)
   return ret;
 }
 
-bool ObDDLService::check_change_to_compaction_scn_ttl_di_table(
+bool ObDDLService::check_change_to_compaction_scn_ttl_table(
     const AlterTableSchema &alter_table_schema,
     const ObTableSchema &orig_table_schema) const
 {
-  // If a table is transformed to a ora_rowscn ttl delete-insert table,
+  // If a table is transformed to a ora_rowscn ttl table,
   // we should lock the table to make sure all DML before this ddl to be committed, and all DML
   // after this ddl should use this new schema. DML that use the new shcema will update all aux
   // tables even if the index table is not affected by the DML itself. For example, main table: pk1,
@@ -40077,7 +40077,6 @@ bool ObDDLService::check_change_to_compaction_scn_ttl_di_table(
   return alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)
          && alter_table_schema.get_ttl_flag().ttl_type_ == share::ObTTLDefinition::COMPACTION
          && alter_table_schema.get_ttl_flag().ttl_column_type_ == ObTTLFlag::TTLColumnType::ROWSCN
-         && orig_table_schema.is_delete_insert_merge_engine() // TODO: recheck this logic after merge-engine ddl
          && orig_table_schema.get_ttl_flag().ttl_column_type_ != ObTTLFlag::TTLColumnType::ROWSCN;
 }
 

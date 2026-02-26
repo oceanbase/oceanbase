@@ -85,6 +85,7 @@ private:
   int check_semantics();
   int check_transaction(ObSQLSessionInfo *session_info);
   int check_support_insert_overwrite(const ObGlobalHint &global_hint);
+  int check_support_direct_load(ObExecContext *exec_ctx);
 public:
   uint64_t table_id_;
   storage::ObDirectLoadMethod::Type load_method_;
