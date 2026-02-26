@@ -1,0 +1,25 @@
+# CI：在 self-hosted 上跑，所有步骤在指定 Docker 容器内执行。
+# 使用 job 级 container：GitHub 会在 self-hosted runner 上启动该镜像，step 均在容器内执行。
+# 替换 container.image 为你的镜像（如 ghcr.io/org/ci-image:latest 或 ubuntu:22.04）。
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  ci:
+    runs-on: self-hosted
+    container:
+      image: ubuntu:22.04
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (example)
+        run: |
+          sleep 1000
