@@ -15094,7 +15094,8 @@ int ObPLResolver::resolve_var(ObQualifiedName &q_name, ObPLBlockNS &ns,
     LOG_IN_CHECK_MODE("failed to resolve symbol", K(q_name), K(ret));
     ret = (OB_ERR_SP_DOES_NOT_EXIST == ret
             || OB_ERR_FUNCTION_UNKNOWN == ret
-            || OB_ERR_SP_WRONG_ARG_NUM == ret) ? OB_ERR_SP_UNDECLARED_VAR : ret;
+            || OB_ERR_SP_WRONG_ARG_NUM == ret
+            || OB_ERR_CALL_WRONG_ARG == ret) ? OB_ERR_SP_UNDECLARED_VAR : ret;
   } else if (!ObObjAccessIdx::is_local_variable(access_idxs)
              && !ObObjAccessIdx::is_function_return_variable(access_idxs)
              && !ObObjAccessIdx::is_package_variable(access_idxs)
