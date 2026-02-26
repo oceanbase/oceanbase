@@ -232,7 +232,7 @@ int ObExprLoadFile::read_file_from_location(const ObString &location_name,
     LOG_WARN("fail to get session priv info", K(ret));
   } else if (OB_FAIL(schema_guard.check_location_access(session_priv,
                                                         session_info->get_enable_role_array(),
-                                                        location_name,
+                                                        location_schema->get_location_name_str(),
                                                         false /* is_need_write_priv: read only */))) {
     LOG_WARN("location access denied", K(ret), K(location_name));
   } else {
