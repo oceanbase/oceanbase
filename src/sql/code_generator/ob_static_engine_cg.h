@@ -653,6 +653,7 @@ private:
   int check_refreshing_mview_session_var(ObSchemaGetterGuard &schema_guard,
                                          ObSQLSessionInfo &session,
                                          const ObDMLStmt *dml_stmt);
+   int generate_backup_exprs(ObMergeGroupBySpec &spec);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)
