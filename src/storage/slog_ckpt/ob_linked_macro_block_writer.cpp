@@ -97,10 +97,11 @@ int ObLinkedMacroBlockWriter::write_block(
   } else {
     switch (type_) {
       case WriteType::PRIV_SLOG_CKPT: {
-        if (OB_NOT_NULL(fd_dispenser_)) {
-          opt.set_private_ckpt_opt(tenant_id_, tenant_epoch_id_, fd_dispenser_->acquire_new_file_id());
+        int64_t file_id = 0;
+        if (OB_NOT_NULL(fd_dispenser_) && OB_FAIL(fd_dispenser_->acquire_new_file_id(file_id))) {
+          LOG_WARN("failed to acquire new file id", K(ret), KPC(fd_dispenser_));
         } else {
-          opt.set_private_ckpt_opt(tenant_id_, tenant_epoch_id_, 0);
+          opt.set_private_ckpt_opt(tenant_id_, tenant_epoch_id_, file_id);
         }
         break;
       }

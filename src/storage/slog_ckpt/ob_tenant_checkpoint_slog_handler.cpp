@@ -472,23 +472,46 @@ int ObTenantCheckpointSlogHandler::replay_new_checkpoint(const ObTenantSuperBloc
     LOG_WARN("fail to add ls linked blocks", K(ret), K(ls_block_list));
   } else if (OB_FAIL(tablet_block_handle_.add_macro_blocks(tablet_block_list))) {
     LOG_WARN("fail to add tablet linked blocks", K(ret), K(tablet_block_list));
-  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(ObTenantStorageCheckpointReader::iter_read_meta_item(
+  }
+#ifdef OB_BUILD_SHARED_STORAGE
+  else if (!GCTX.is_shared_storage_mode()) {
+    // all done here in SN mode
+  } else if (OB_FAIL(ObTenantStorageCheckpointReader::iter_read_meta_item(
           super_block.wait_gc_tablet_entry_, replay_wait_gc_tablet_op, wait_gc_tablet_block_list))) {
     LOG_WARN("fail to iter replay wait gc tablet array", K(ret));
   } else {
-    omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
-    const int64_t blk_cnt = ls_block_list.count() + tablet_block_list.count() + wait_gc_tablet_block_list.count();
+    // recover min/max file id
     int64_t min_file_id = INT64_MAX;
     int64_t max_file_id = INT64_MIN;
-    UPDATE_MIN_MAX_FILE_ID(ls_block_list);
-    UPDATE_MIN_MAX_FILE_ID(tablet_block_list);
-    UPDATE_MIN_MAX_FILE_ID(wait_gc_tablet_block_list);
+    if (need_recover_file_id_range_by_list_(super_block)) {
+      ObSArray<int64_t> file_ids;
+      ObTenantFileManager *tfm = nullptr;
+
+      if (OB_ISNULL(tfm = MTL(ObTenantFileManager *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ObTenantFileManager", K(ret), KP(tfm));
+      } else if (OB_FAIL(tfm->list_private_ckpt_file(MTL_ID(), MTL_EPOCH_ID(), file_ids))) {
+        LOG_WARN("failed to list private ckpt file", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && file_ids.count(); ++i) {
+        min_file_id = MIN(min_file_id, file_ids.at(i));
+        max_file_id = MAX(max_file_id, file_ids.at(i));
+      }
+      LOG_INFO("list ckpt files finished", K(ret), K(file_ids), K(min_file_id), K(max_file_id),
+        K(super_block));
+    } else {
+      UPDATE_MIN_MAX_FILE_ID(ls_block_list);
+      UPDATE_MIN_MAX_FILE_ID(tablet_block_list);
+      UPDATE_MIN_MAX_FILE_ID(wait_gc_tablet_block_list);
+    }
+
     if (OB_SUCC(ret)) {
-      if (0 == blk_cnt) { // nothing to do.
+      omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
+      if (INT64_MIN == max_file_id && INT64_MAX == min_file_id) { // nothing to do.
       } else if (OB_UNLIKELY(max_file_id < min_file_id || min_file_id < 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, min/max file id is invalid", K(ret), K(min_file_id), K(max_file_id));
-      } else if (GCTX.is_shared_storage_mode()) {
+      } else {
         HEAP_VAR(ObTenantSuperBlock, super_block) {
           lib::ObMutexGuard guard(super_block_mutex_);
           super_block = tenant->get_super_block();
@@ -500,6 +523,7 @@ int ObTenantCheckpointSlogHandler::replay_new_checkpoint(const ObTenantSuperBloc
       }
     }
   }
+#endif
 #undef UPDATE_MIN_MAX_FILE_ID
   return ret;
 }
@@ -1572,6 +1596,8 @@ int ObTenantCheckpointSlogHandler::update_real_sys_tenant_super_block_to_hidden(
           super_block.auto_inc_ls_epoch_ = old_tenant_super_block.auto_inc_ls_epoch_;
           super_block.preallocated_seqs_ = old_tenant_super_block.preallocated_seqs_;
           if (GCTX.is_shared_storage_mode()) {
+            // should inherit wait_gc_tablet_entry to avoid leaking
+            super_block.wait_gc_tablet_entry_ = old_tenant_super_block.wait_gc_tablet_entry_;
             super_block.min_file_id_ = old_tenant_super_block.min_file_id_;
             super_block.max_file_id_ = old_tenant_super_block.max_file_id_;
           }
@@ -1793,5 +1819,17 @@ int ObTenantCheckpointSlogHandler::update_tenant_preallocated_seqs(
   return ret;
 }
 
+/// COMMONT: Might returns true if sys tenant recovered from hidden status
+/*static*/bool ObTenantCheckpointSlogHandler::need_recover_file_id_range_by_list_(const ObTenantSuperBlock &super_block)
+{
+  bool b_ret = false;
+  if (is_sys_tenant(MTL_ID())) {
+    ObLogCursor first_valid_cursor;
+    SET_FIRST_VALID_SLOG_CURSOR(first_valid_cursor);
+    b_ret = super_block.replay_start_point_.newer_than(first_valid_cursor)
+            && IS_EMPTY_BLOCK_LIST(super_block.ls_meta_entry_);
+  }
+  return b_ret;
+}
 }  // end namespace storage
 }  // namespace oceanbase

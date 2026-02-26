@@ -222,6 +222,8 @@ private:
       const char *buf,
       const int64_t buf_len,
       bool allow_override /* allow to overwrite the map's element or not */);
+private:
+  static bool need_recover_file_id_range_by_list_(const ObTenantSuperBlock &super_block);
 
 private:
   const static int64_t BUCKET_NUM = 109;

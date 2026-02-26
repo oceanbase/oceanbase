@@ -362,11 +362,12 @@ int ObObjectManager::update_super_block(
       tmp_super_block.body_.replay_start_point_ = replay_start_point;
       tmp_super_block.body_.tenant_meta_entry_ = tenant_meta_entry;
       tmp_super_block.construct_header();
-      tmp_super_block.min_file_id_ = fd_dispenser.get_min_file_id();
-      tmp_super_block.max_file_id_ = fd_dispenser.get_max_file_id();
       if (is_shared_storage_) {
 #ifdef OB_BUILD_SHARED_STORAGE
-        if (OB_FAIL(ss_write_super_block_(tmp_super_block))) {
+        if (OB_FAIL(fd_dispenser.assign_to(/*out*/tmp_super_block.min_file_id_,
+                                           /*out*/tmp_super_block.max_file_id_))) {
+          LOG_WARN("fd_dispenser fail to do assign", K(ret), K(fd_dispenser));
+        } else if (OB_FAIL(ss_write_super_block_(tmp_super_block))) {
           LOG_WARN("fail to ss write super block", K(ret));
         }
 #endif
