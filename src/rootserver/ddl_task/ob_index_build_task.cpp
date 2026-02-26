@@ -2070,9 +2070,9 @@ int ObIndexBuildTask::deserialize_params_from_message(const uint64_t tenant_id, 
 int64_t ObIndexBuildTask::get_serialize_param_size() const
 {
   return create_index_arg_.get_serialize_size()
-      + serialization::encoded_length_i64(check_unique_snapshot_)
+      + serialization::encoded_length_vi64(check_unique_snapshot_)
       + ObDDLTask::get_serialize_param_size()
-      + serialization::encoded_length_i64(target_cg_cnt_)
+      + serialization::encoded_length_vi64(target_cg_cnt_)
       + serialization::encoded_length_i8(is_retryable_ddl_)
       + tablet_scheduler_.get_serialize_size();
 }
