@@ -249,13 +249,13 @@ int ObMvccRowFilter::read_row_and_check(
       TRANS_LOG(WARN, "failed to check filter row complete", KR(ret), K_(datum_row), K(complete));
     }
     if (OB_FAIL(ret) || !complete) {
-      ObTaskController::get().allow_next_syslog();
-      TRANS_LOG(TRACE, "not complete", KR(ret), K_(datum_row), K(filtered), K(complete)); // DEBUG log, remove later
+      ObTaskController::get().allow_next_syslog(); // just a thread_local variable increment, don't worry about performance
+      TRANS_LOG(TRACE, "not complete", KR(ret), K_(datum_row), K(filtered), K(complete));
     } else if (OB_FAIL(mds_filter_.truncate_part_filter_->filter(datum_row_, filtered, true/*check_filter*/, true/*check_version*/))) {
       TRANS_LOG(WARN, "failed to check filtered by truncate_filter", KR(ret), K_(datum_row), K_(mds_filter));
     } else {
       ObTaskController::get().allow_next_syslog();
-      TRANS_LOG(INFO, "success to check trans node filtered", KR(ret), K_(datum_row), K(filtered)); // DEBUG log, remove later
+      TRANS_LOG(TRACE, "success to check trans node filtered", KR(ret), K_(datum_row), K(filtered));
     }
   }
   return ret;
