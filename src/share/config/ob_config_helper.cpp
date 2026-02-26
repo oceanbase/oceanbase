@@ -1523,9 +1523,9 @@ bool ObSSLocalCacheControlParser::parse(const char *str, uint8_t *arr, int64_t l
     // do nothing
   } else {
     int tmp_ret = OB_SUCCESS;
-    ObSEArray<std::pair<ObString, ObString>, 3> kv_list;
+    ObSEArray<std::pair<ObString, ObString>, 4> kv_list;
     int64_t str_len = strlen(str);
-    const int64_t buf_len = 3 * str_len; // need replace ',' to ' , '
+    const int64_t buf_len = 3 * str_len; // fixed value, checked in 'format_mode_str'
     char buf[buf_len];
     MEMSET(buf, 0, sizeof(buf));
     MEMCPY(buf, str, str_len);
@@ -1535,14 +1535,21 @@ bool ObSSLocalCacheControlParser::parse(const char *str, uint8_t *arr, int64_t l
     } else if (OB_TMP_FAIL(ObModeConfigParserUitl::get_kv_list(buf, kv_list, ":"))) {
       bret = false;
       OB_LOG_RET(WARN, tmp_ret, "fail to get kv list", K(str));
-    } else if (OB_UNLIKELY(kv_list.count() != 3)) {
+    } else if (OB_UNLIKELY(kv_list.count() != 4)) {
       bret = false;
-      OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid str, please set 3 cache config, only support ss_micro_cache、"
-        "ss_macro_read_cache and ss_macro_write_cache", K(str), K(kv_list.count()));
+      OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid str, need 4 cache config, include ss_micro_cache, "
+        "ss_macro_read_cache, ss_macro_write_cache and ss_mem_macro_cache", K(str), K(kv_list.count()));
     } else {
       const uint16_t MODE_DEFAULT = ObSSLocalCacheControlMode::MODE_DEFAULT;
       const uint16_t MODE_ON = ObSSLocalCacheControlMode::MODE_ON;
       const uint16_t MODE_OFF = ObSSLocalCacheControlMode::MODE_OFF;
+
+      // use bitmask to record the keys that have been set, to avoid duplicate cache_name
+      uint8_t key_set_flags = 0;
+      const uint8_t MICRO_CACHE_FLAG = 0x01;
+      const uint8_t MACRO_READ_CACHE_FLAG = 0x02;
+      const uint8_t MACRO_WRITE_CACHE_FLAG = 0x04;
+      const uint8_t MEM_MACRO_CACHE_FLAG = 0x08;
 
       for (int64_t i = 0; bret && i < kv_list.count(); ++i) {
         uint16_t mode = MODE_DEFAULT;
@@ -1556,15 +1563,49 @@ bool ObSSLocalCacheControlParser::parse(const char *str, uint8_t *arr, int64_t l
         }
         if (!bret) {
         } else if (kv_list.at(i).first.case_compare("ss_micro_cache") == 0) {
-          cache_mode.set_micro_cache_mode(mode);
+          if (key_set_flags & MICRO_CACHE_FLAG) {
+            bret = false;
+            OB_LOG_RET(WARN, OB_INVALID_CONFIG, "duplicate key ss_micro_cache in config", K(str));
+          } else {
+            cache_mode.set_micro_cache_mode(mode);
+            key_set_flags |= MICRO_CACHE_FLAG;
+          }
         } else if (kv_list.at(i).first.case_compare("ss_macro_read_cache") == 0) {
-          cache_mode.set_macro_read_cache_mode(mode);
+          if (key_set_flags & MACRO_READ_CACHE_FLAG) {
+            bret = false;
+            OB_LOG_RET(WARN, OB_INVALID_CONFIG, "duplicate key ss_macro_read_cache in config", K(str));
+          } else {
+            cache_mode.set_macro_read_cache_mode(mode);
+            key_set_flags |= MACRO_READ_CACHE_FLAG;
+          }
         } else if (kv_list.at(i).first.case_compare("ss_macro_write_cache") == 0) {
-          cache_mode.set_macro_write_cache_mode(mode);
+          if (key_set_flags & MACRO_WRITE_CACHE_FLAG) {
+            bret = false;
+            OB_LOG_RET(WARN, OB_INVALID_CONFIG, "duplicate key ss_macro_write_cache in config", K(str));
+          } else {
+            cache_mode.set_macro_write_cache_mode(mode);
+            key_set_flags |= MACRO_WRITE_CACHE_FLAG;
+          }
+        } else if (kv_list.at(i).first.case_compare("ss_mem_macro_cache") == 0) {
+          if (key_set_flags & MEM_MACRO_CACHE_FLAG) {
+            bret = false;
+            OB_LOG_RET(WARN, OB_INVALID_CONFIG, "duplicate key ss_mem_macro_cache in config", K(str));
+          } else {
+            cache_mode.set_mem_macro_cache_mode(mode);
+            key_set_flags |= MEM_MACRO_CACHE_FLAG;
+          }
         } else {
           bret = false;
-          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "only support ss_micro_cache、ss_macro_read_cache and ss_macro_write_cache",
-            K(kv_list.at(i).first));
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "only support ss_micro_cache, ss_macro_read_cache, ss_macro_write_cache"
+            "and ss_mem_macro_cache", K(kv_list.at(i).first));
+        }
+      }
+
+      if (bret) {
+        const uint8_t REQUIRED_FLAGS = MICRO_CACHE_FLAG | MACRO_READ_CACHE_FLAG | MACRO_WRITE_CACHE_FLAG | MEM_MACRO_CACHE_FLAG;
+        if ((key_set_flags & REQUIRED_FLAGS) != REQUIRED_FLAGS) {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "should include 4 types ss_cache", K(str), K(key_set_flags));
         }
       }
     }
