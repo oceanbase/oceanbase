@@ -15430,12 +15430,19 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
                 (! enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_3_5_3)) {
       // if vector 2.0 is not enable  can not storage pushdown for rb agg
       can_push = false;
-    } else if (T_FUN_SYS_COUNT_INROW == cur_aggr->get_expr_type() && !enable_rich_vector_format) {
+    } else if (T_FUN_SYS_COUNT_INROW == cur_aggr->get_expr_type() && (!enable_rich_vector_format ||
+                                                                      GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0)) {
       // if rich vector format is not enable, can not storage pushdown for sys_count_inrow
+      can_push = false;
+    } else if (T_FUN_SUM == cur_aggr->get_expr_type() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) {
+      can_push = false;
+    } else if ((T_FUN_SUM_OPNSIZE == cur_aggr->get_expr_type() ||
+                T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == cur_aggr->get_expr_type()) &&
+                GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) {
       can_push = false;
     } else if (1 < cur_aggr->get_real_param_count()) {
       can_push = false;
-            } else if (cur_aggr->get_real_param_exprs().empty()) {
+    } else if (cur_aggr->get_real_param_exprs().empty()) {
       /* do nothing */
     } else if (OB_ISNULL(first_param = cur_aggr->get_param_expr(0))) {
       ret = OB_ERR_UNEXPECTED;
