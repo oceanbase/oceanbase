@@ -19026,12 +19026,8 @@ def_table_schema(
                          when -1 then 'NONE'
                          else concat(u.user_name, '@', u.host) end) as CHAR(288)) as DEFINER,
                    cast('NONE' as CHAR(7)) AS SECURITY_TYPE,
-                   cast((case t.collation_type
-                         when 45 then 'utf8mb4'
-                         else 'NONE' end) as CHAR(64)) AS CHARACTER_SET_CLIENT,
-                   cast((case t.collation_type
-                         when 45 then 'utf8mb4_general_ci'
-                         else 'NONE' end) as CHAR(64)) AS COLLATION_CONNECTION
+                   cast(collation_type_to_charset(t.collation_type) as CHAR(64)) AS CHARACTER_SET_CLIENT,
+                   cast(collation_type_to_collation(case when t.collation_connection = 0 then t.collation_type else t.collation_connection end) as CHAR(64)) AS COLLATION_CONNECTION
                    from oceanbase.__all_table as t
                    join oceanbase.__all_database as d
                      on t.tenant_id = d.tenant_id and t.database_id = d.database_id

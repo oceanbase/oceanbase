@@ -924,6 +924,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprConnectionId, EAGER_EVALUATION);
     REG_OP(ObExprCharset, EAGER_EVALUATION);
     REG_OP(ObExprCollation, EAGER_EVALUATION);
+    REG_OP(ObExprCollationTypeToCharset, EAGER_EVALUATION);
+    REG_OP(ObExprCollationTypeToCollation, EAGER_EVALUATION);
     REG_OP(ObExprCoercibility, EAGER_EVALUATION);
     REG_OP(ObExprConvertTZ, EAGER_EVALUATION);
     REG_OP(ObExprSetCollation, EAGER_EVALUATION);

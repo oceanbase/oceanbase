@@ -1098,6 +1098,8 @@ typedef enum ObItemType
   T_FUN_WINDOW_FUNNEL = 2100,
   T_FUN_SYS_EXT_MIN = 2101,
   T_FUN_SYS_EXT_MAX = 2102,
+  T_FUN_SYS_INNER_COLLATION_TYPE_TO_CHARSET = 2103,
+  T_FUN_SYS_INNER_COLLATION_TYPE_TO_COLLATION = 2104,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id

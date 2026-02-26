@@ -489,6 +489,7 @@
 #include "ob_expr_to_days.h"
 #include "ob_expr_md5_concat_ws.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
+#include "ob_expr_collation.h"
 
 namespace oceanbase
 {
@@ -1499,6 +1500,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // calc_cbrt_expr_mysql,                                      /* 899 */
   NULL, // ObExprE::eval_e,                                           /* 900 */
   NULL, // ObExprCountSubstrings::eval_count_substrings,              /* 901 */
+  ObExprCollationTypeToCharset::eval_collation_type_to_charset,       /* 902 */
+  ObExprCollationTypeToCollation::eval_collation_type_to_collation,   /* 903 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
