@@ -2800,20 +2800,16 @@ DEF_STR_WITH_CHECKER(plugins_load, OB_CLUSTER_PARAMETER, "",
 DEF_BOOL(ob_enable_java_env, OB_CLUSTER_PARAMETER, "False",
         "Enable or disable java env for external table.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR_WITH_CHECKER(ob_java_home, OB_CLUSTER_PARAMETER, "",
-                     common::ObConfigJavaParamsChecker,
+DEF_STR(ob_java_home, OB_CLUSTER_PARAMETER, "",
                      "specifies the java home path for external table with enabled option: ob_enable_java_env",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR_WITH_CHECKER(ob_java_opts, OB_CLUSTER_PARAMETER, "",
-                     common::ObConfigJavaParamsChecker,
+DEF_STR(ob_java_opts, OB_CLUSTER_PARAMETER, "",
                      "specifies the java opts path for external table with enabled option: ob_enable_java_env",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR_WITH_CHECKER(ob_java_connector_path, OB_CLUSTER_PARAMETER, "",
-                     common::ObConfigJavaParamsChecker,
+DEF_STR(ob_java_connector_path, OB_CLUSTER_PARAMETER, "",
                      "specifies the connector path for external table with enabled option: ob_enable_java_env",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR_WITH_CHECKER(_ob_additional_lib_path, OB_CLUSTER_PARAMETER, "/usr/local/oceanbase/deps/devel/lib",
-                     common::ObConfigJavaParamsChecker,
+DEF_STR(_ob_additional_lib_path, OB_CLUSTER_PARAMETER, "/usr/local/oceanbase/deps/devel/lib",
                      "specifies the needed libs path for external table with enabled option: ob_enable_java_env",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(_ob_java_odps_data_transfer_mode, OB_CLUSTER_PARAMETER, "arrowTable",
