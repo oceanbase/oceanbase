@@ -69,10 +69,19 @@ TEST_F(TestAutoExpandDisk, test_auto_expand_disk_task)
 {
   int ret = OB_SUCCESS;
   ObTenantDiskSpaceManager* tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
-  int64_t total_disk_size = 17L * 1024L * 1024L * 1024L; // 17GB
+  int64_t total_disk_size = 15L * 1024L * 1024L * 1024L; // 15GB
   int64_t datafile_size = OB_SERVER_DISK_SPACE_MGR.get_total_disk_size(); // 20GB
   bool succ_resize = false;
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(total_disk_size, succ_resize));
+  int64_t delta_capacity = tenant_disk_space_mgr->get_disk_size_capacity_nolock_() - OB_SERVER_DISK_SPACE_MGR.get_share_tenant_total_size(MTL_ID());
+  delta_capacity = (delta_capacity > 0 ? delta_capacity : -delta_capacity);
+  ASSERT_LT(delta_capacity, 10);
+  total_disk_size = 17L * 1024L * 1024L * 1024L; // 17GB;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(total_disk_size, succ_resize));
+  delta_capacity = tenant_disk_space_mgr->get_disk_size_capacity_nolock_() - OB_SERVER_DISK_SPACE_MGR.get_share_tenant_total_size(MTL_ID());
+  delta_capacity = (delta_capacity > 0 ? delta_capacity : -delta_capacity);
+  ASSERT_LT(delta_capacity, 10);
+
   omt::ObTenant *tenant = nullptr;
   ASSERT_EQ(OB_SUCCESS, GCTX.omt_->get_tenant(1, tenant));
   share::ObUnitInfoGetter::ObTenantConfig new_unit;
