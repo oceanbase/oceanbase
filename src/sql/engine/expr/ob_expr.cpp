@@ -980,11 +980,21 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
 {
   int ret = OB_SUCCESS;
   VectorHeader &vec_header = get_vector_header(ctx);
+
+  // 1. static const expr has no eval_func, only init vector once
+  // 2. static const expr has eval_func like '1 + 1', only init vector where evaluated_ is false
+  if (OB_UNLIKELY(is_static_const_ && vec_header.format_ != VEC_INVALID
+                  && (get_eval_info(ctx).evaluated_ || NULL == eval_func_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("const expr should not init vector twice", K(ret), K(format), KPC(this), K(lbt()));
+  }
   vec_header.set_format(format);
   char *vector_buf = vec_header.vector_buf_;
   const VecValueTypeClass value_tc = get_vec_value_tc();
   common::ObIVector *vec = NULL;
-  if (OB_UNLIKELY(!batch_result_ && format != VEC_UNIFORM_CONST)) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_UNLIKELY(!batch_result_ && format != VEC_UNIFORM_CONST)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected format", K(ret), K(format), KPC(this));
   } else if (VEC_FIXED == format) {

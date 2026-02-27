@@ -2174,6 +2174,8 @@ int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
       if (expr.is_const_expr()
           && UINT32_MAX != expr.vector_header_off_
           && T_OP_ROW != expr.type_) {
+        // set const expr vector format to VEC_INVALID to avoid const expr check failed
+        expr.get_vector_header(eval_ctx).format_ = VEC_INVALID;
         ret = expr.init_vector(eval_ctx, VEC_UNIFORM_CONST, 1/*size*/);
       }
     }
