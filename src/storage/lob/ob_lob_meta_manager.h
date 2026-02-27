@@ -45,6 +45,9 @@ public:
   int rebuild(ObLobAccessParam& param);
   // specified range LobMeta scan
   int scan(ObLobAccessParam& param, ObLobMetaScanIter &iter);
+  // scan raw lob meta
+  int scan(ObLobAccessParam& param, ObLobMetaIterator *&iter);
+  int revert_scan_iter(ObLobMetaIterator *iter);
   // specified range erase
   int erase(ObLobAccessParam& param, ObLobMetaInfo& in_row);
   // specified range update

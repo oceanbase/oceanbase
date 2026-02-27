@@ -48,6 +48,18 @@ int ObLobMetaBaseIterator::build_rowkey_range(ObLobAccessParam &param, ObObj key
   return build_rowkey_range(param, min_row_key, max_row_key, range);
 }
 
+int ObLobMetaBaseIterator::build_full_table_range(ObLobAccessParam &param, ObObj key_objs[4], ObNewRange &range)
+{
+  key_objs[0] = ObObj::make_min_obj(); // lob_id set min
+  key_objs[1] = ObObj::make_min_obj(); // seq_id set min
+  ObRowkey min_row_key(key_objs, 2);
+
+  key_objs[2] = ObObj::make_max_obj(); // lob_id set max
+  key_objs[3] = ObObj::make_max_obj(); // seq_id set max
+  ObRowkey max_row_key(key_objs + 2, 2);
+  return build_rowkey_range(param, min_row_key, max_row_key, range);
+}
+
 int ObLobMetaBaseIterator::build_rowkey(ObLobAccessParam &param, ObObj key_objs[4], ObString &seq_id, ObNewRange &range)
 {
   int ret = OB_SUCCESS;
@@ -84,7 +96,13 @@ int ObLobMetaBaseIterator::build_rowkey(ObLobAccessParam &param, ObObj key_objs[
 int ObLobMetaBaseIterator::build_range(ObLobAccessParam &param, ObObj key_objs[4], ObNewRange &range)
 {
   int ret = OB_SUCCESS;
-  if (param.has_single_chunk()) {
+  if (param.is_full_table_scan_) {
+    if (OB_FAIL(build_full_table_range(param, key_objs, range))) {
+      LOG_WARN("build_full_table_range fail", K(ret));
+    } else {
+      LOG_INFO("full scan lob meta table", K(param));
+    }
+  } else if (param.has_single_chunk()) {
     if (OB_FAIL(build_rowkey(param, key_objs, range))) {
       LOG_WARN("build_rowkey fail", K(ret));
     }
