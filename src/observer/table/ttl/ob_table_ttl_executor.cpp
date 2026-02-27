@@ -226,9 +226,7 @@ int ObTableApiTTLExecutor::do_delete()
       const ObTableDelCtDef &del_ctdef = ttl_ctdef->del_ctdef_;
       ObExpr *calc_part_id_expr = is_primary_table ? conflict_checker_.checker_ctdef_.calc_part_id_expr_
                                                     : del_ctdef.old_part_id_expr_;
-      if (OB_FAIL(delete_row_to_das(is_primary_table,
-                                    calc_part_id_expr,
-                                    conflict_checker_.checker_ctdef_.part_id_dep_exprs_,
+      if (OB_FAIL(delete_row_to_das(calc_part_id_expr,
                                     del_ctdef,
                                     del_rtdef))) {
         LOG_WARN("fail to delete row to das", K(ret), K(del_ctdef), K(del_rtdef), K(i));
@@ -354,7 +352,11 @@ int ObTableApiTTLExecutor::update_row_to_das()
           for (int i = 0; i < ttl_rtdefs_.count() && OB_SUCC(ret); i++) {
             const ObTableUpdCtDef &upd_ctdef = ttl_spec_.get_ctdefs().at(i)->upd_ctdef_;
             ObTableUpdRtDef &upd_rtdef = ttl_rtdefs_.at(i).upd_rtdef_;
-            if (OB_FAIL(ObTableApiModifyExecutor::update_row_to_das(upd_ctdef, upd_rtdef, dml_rtctx_))) {
+            // 对于主表(i==0)，使用 conflict_checker_ 中的 calc_part_id_expr_ 计算旧行的分区ID
+            // 确保删除操作在正确的分区执行, upd_rtdef 上可能没有构造旧行分区计算表达式
+            // 如果 old_row_calc_part_id_expr 为空，则 update_row_to_das 内会使用 upd_ctdef.old_part_id_expr_ 计算旧行的分区ID
+            ObExpr *old_row_calc_part_id_expr = (i == 0) ? conflict_checker_.checker_ctdef_.calc_part_id_expr_ : nullptr;
+            if (OB_FAIL(ObTableApiModifyExecutor::update_row_to_das(upd_ctdef, upd_rtdef, dml_rtctx_, old_row_calc_part_id_expr))) {
               LOG_WARN("fail to update row", K(ret));
             }
           }
