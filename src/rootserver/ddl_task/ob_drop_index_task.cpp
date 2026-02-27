@@ -263,6 +263,7 @@ int ObDropIndexTask::drop_index_impl()
     drop_index_arg.ddl_stmt_str_      = drop_index_sql.string();
     drop_index_arg.is_add_to_scheduler_ = false;
     drop_index_arg.task_id_           = task_id_;
+    drop_index_arg.is_hidden_         = drop_index_arg_.is_hidden_;
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", K(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {
