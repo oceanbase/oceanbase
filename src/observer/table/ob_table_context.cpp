@@ -380,6 +380,7 @@ int ObTableCtx::init_common_without_check(ObTableApiCredential &credential,
     tablet_id_ = arg_tablet_id;
     index_tablet_id_ = tablet_id_;
     exec_ctx_.set_my_session(&get_session_info());
+    get_session_info().set_query_start_time(ObTimeUtility::current_time());
     typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
     MyExecCtxSessionRegister ctx_register(get_session_info(), &exec_ctx_);
   }
