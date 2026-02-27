@@ -640,10 +640,13 @@ int ObVectorIndexRefresher::do_rebuild() {
                                                                  job_info))) {
     LOG_WARN("fail to get dbms_vector job info", K(ret), K(tenant_id), K(domain_table_schema->get_table_id()));
   } else {
-    refresh_ctx_->tmp_repeat_interval_ = job_info.get_repeat_interval();
-    refresh_ctx_->domain_index_name_ = domain_table_schema->get_table_name_str();
-    refresh_ctx_->database_id_ = domain_table_schema->get_database_id();
-    LOG_WARN("get last repeat interval and database_id", K(ret), K(*refresh_ctx_));
+    if (OB_FAIL(ob_write_string(refresh_ctx_->allocator_, domain_table_schema->get_table_name_str(), refresh_ctx_->domain_index_name_))) {
+      LOG_WARN("fail to write string", K(ret), K(domain_table_schema->get_table_name_str()));
+    } else {
+      refresh_ctx_->tmp_repeat_interval_ = job_info.get_repeat_interval();
+      refresh_ctx_->database_id_ = domain_table_schema->get_database_id();
+      LOG_WARN("get last repeat interval and database_id", K(ret), K(*refresh_ctx_));
+    }
   }
 
   if (OB_FAIL(ret)) {
