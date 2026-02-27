@@ -2362,11 +2362,12 @@ bool ObCOMajorMergePolicy::whether_to_build_row_store(
 
 bool ObCOMajorMergePolicy::whether_to_rebuild_column_store(
     const ObMajorSSTableStatus current_status,
+    const ObStorageSchema &schema,
     const int64_t estimate_row_cnt,
     const int64_t column_cnt)
 {
   bool bret = false;
-  if (current_status == ALL_CG || current_status == ALL_EACH_CG) {
+  if ((current_status == ALL_CG && schema.has_all_column_group()) || current_status == ALL_EACH_CG) {
     // Current has redundant ALL CG (row store), use higher threshold
     bret = column_cnt > COL_CNT_THRESHOLD_REBUILD_COLUMN_STORE || estimate_row_cnt > ROW_CNT_THRESHOLD_REBUILD_COLUMN_STORE;
   } else {
@@ -2447,7 +2448,7 @@ int ObCOMajorMergePolicy::decide_merge_strategy(
       } else {
         strategy.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
       }
-    } else if (!build_row_store_flag && whether_to_rebuild_column_store(current_status, physical_row_cnt, column_cnt)) {
+    } else if (!build_row_store_flag && whether_to_rebuild_column_store(current_status, target_schema, physical_row_cnt, column_cnt)) {
       strategy.set(false/*build_all_cg_only*/, true/*only_use_row_store*/);
     } else {
       strategy.set(true/*build_all_cg_only*/, false/*only_use_row_store*/);

@@ -54,6 +54,7 @@ public:
   virtual void reset() override;
   virtual int get_next_log(ObMergeLog &mergelog, const blocksstable::ObDatumRow *&row) override;
   virtual int close() override;
+  virtual int get_major_sstable_merge_iters_for_check(common::ObIArray<ObPartitionMergeIter *> &iters) override;
   VIRTUAL_TO_STRING_KV(KP_(cmp), K_(need_replay_base_cg), KP_(base_writer));
 private:
   int inner_init();
