@@ -995,7 +995,6 @@ public:
   }
     void set_pl_cur_query_start_time_bak(int64_t time)
   {
-    LockGuard lock_guard(thread_data_mutex_);
     thread_data_.pl_cur_query_start_time_bak_ = time;
   }
   void set_pl_spi_query_info(int64_t time) {
@@ -1004,7 +1003,6 @@ public:
     thread_data_.pl_internal_time_split_point_ = time;
   }
   void set_pl_internal_time_split_point(int64_t time) {
-    LockGuard lock_guard(thread_data_mutex_);
     thread_data_.pl_internal_time_split_point_ = time;
   }
   int64_t get_pl_internal_time_split_point() const { return thread_data_.pl_internal_time_split_point_; }
@@ -1105,6 +1103,20 @@ public:
                          obmysql::ObMySQLCmd cmd);
   int set_session_active();
   const common::ObString get_current_query_string() const;
+  void swap_query_string(common::ObString &sql, int64_t buf_len, bool free_old_query = false)
+  {
+    if (free_old_query) {
+      if (thread_data_.cur_query_ != nullptr) {
+        ob_free(thread_data_.cur_query_);
+        thread_data_.cur_query_ = nullptr;
+        thread_data_.cur_query_buf_len_ = 0;
+      }
+    }
+    thread_data_.cur_query_ = sql.ptr();
+    thread_data_.cur_query_len_ = sql.length();
+    thread_data_.cur_query_buf_len_ = buf_len;
+  }
+  int64_t get_cur_query_buf_len() const { return thread_data_.cur_query_buf_len_; }
   const common::ObString get_top_query_string() const;
   void set_sql_mem_used(int64_t mem_used) { ATOMIC_STORE(&sql_mem_used_, mem_used); }
   int64_t get_sql_mem_used() const { return ATOMIC_LOAD(&sql_mem_used_); }
