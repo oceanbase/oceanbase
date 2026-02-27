@@ -251,9 +251,14 @@ int SSObjUtil::get_open_flag_for_read(const ObStorageObjectType type)
 {
   return STI(type).get_open_flag_for_read();
 }
-int SSObjUtil::local_path_to_macro_id(const ObStorageObjectType type,const char *path, MacroBlockId &macro_id)
+int SSObjUtil::local_path_to_macro_id(const ObStorageObjectType type, const char *path, MacroBlockId &macro_id)
 {
   return STI(type).local_path_to_macro_id(path, macro_id);
+}
+
+int SSObjUtil::remote_path_to_macro_id(const ObStorageObjectType type, const char *path, MacroBlockId &macro_id)
+{
+  return STI(type).remote_path_to_macro_id(path, macro_id);
 }
 int SSObjUtil::aio_write(const ObStorageObjectWriteInfo &write_info, ObStorageObjectHandle &object_handle)
 {

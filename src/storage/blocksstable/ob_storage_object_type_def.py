@@ -216,6 +216,12 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  return local_path_to_macro_id(path, macro_id);
+}
+''',
     get_parent_dir = '''
 int get_parent_dir(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
@@ -368,6 +374,12 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
     LOG_WARN("fail to databuff printf", KR(ret));
   }
   return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  return local_path_to_macro_id(path, macro_id);
 }
 ''',
     get_parent_dir = '''
@@ -584,6 +596,71 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  bool is_inner_tablet = false;
+  int64_t tablet_id = 0;
+  int64_t reorganization_scn = 0;
+  int64_t ls_id = 0;
+  char tablet_name[512] = {0};
+  int64_t op_id = 0;
+  int64_t macro_seq_id = 0;
+  const char *judge_path = nullptr;
+  // inner_tablet: /ls/ls_id/tablet_name/mini/sstable/op_id/data/seq%ld
+  // user_tablet: /tablet/tablet_id/reorganization_scn/mini/sstable/op_id/data/seq%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 8))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (NULL != STRSTR(judge_path, LS_DIR_STR)) {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%[^/]/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                       LS_DIR_STR, MINI_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, DATA_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &ls_id, tablet_name, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else if (OB_FAIL(get_ls_inner_tablet_id_(tablet_name, tablet_id))) {
+      LOG_WARN("fail to get ls inner tablet id", KR(ret), K(tablet_name));
+    } else {
+      is_inner_tablet = true;
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%%ld/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                TABLET_DIR_STR, MINI_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, DATA_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else {
+      is_inner_tablet = false;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_inner_tablet) {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_meta_ls_id(ls_id);
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_reorganization_scn(reorganization_scn);
+    }
+  }
+  return ret;
+}
+''',
     create_parent_dir = '''
 int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
@@ -642,7 +719,7 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 )
 
 def_storage_object_type_cfg(
-    obj_type = 'SHARED_MINI_META_MACRO',  #ObSharedMiniDataMacroType
+    obj_type = 'SHARED_MINI_META_MACRO',  #ObSharedMiniMetaMacroType
     id = 3,
     owner = 'zhaomiao',
     access_mode = 'shared',
@@ -778,6 +855,71 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
                 file_id.second_id(), file_id.reorganization_scn(), MINI_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR,
                 (file_id.third_id() >> 32)/*op_id*/, META_MACRO_DIR_STR, SEQ_KEY_STR, (file_id.third_id() & 0xFFFFFFFF) /*macro_seq_id*/))) {
       LOG_WARN("fail to databuff printf", KR(ret));
+    }
+  }
+  return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  bool is_inner_tablet = false;
+  int64_t tablet_id = 0;
+  int64_t reorganization_scn = 0;
+  int64_t ls_id = 0;
+  char tablet_name[512] = {0};
+  int64_t op_id = 0;
+  int64_t macro_seq_id = 0;
+  const char *judge_path = nullptr;
+  // inner_tablet: /ls/ls_id/tablet_name/mini/sstable/op_id/meta/seq%ld
+  // user_tablet: /tablet/tablet_id/reorganization_scn/mini/sstable/op_id/meta/seq%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 8))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (NULL != STRSTR(judge_path, LS_DIR_STR)) {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%[^/]/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                       LS_DIR_STR, MINI_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, META_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &ls_id, tablet_name, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else if (OB_FAIL(get_ls_inner_tablet_id_(tablet_name, tablet_id))) {
+      LOG_WARN("fail to get ls inner tablet id", KR(ret), K(tablet_name));
+    } else {
+      is_inner_tablet = true;
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%%ld/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                TABLET_DIR_STR, MINI_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, META_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else {
+      is_inner_tablet = false;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_inner_tablet) {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_meta_ls_id(ls_id);
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_reorganization_scn(reorganization_scn);
     }
   }
   return ret;
@@ -974,6 +1116,71 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
                 file_id.second_id(), file_id.reorganization_scn(), MINOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR,
                 (file_id.third_id() >> 32)/*op_id*/, DATA_MACRO_DIR_STR, SEQ_KEY_STR, (file_id.third_id() & 0xFFFFFFFF) /*macro_seq_id*/))) {
       LOG_WARN("fail to databuff printf", KR(ret));
+    }
+  }
+  return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  bool is_inner_tablet = false;
+  int64_t tablet_id = 0;
+  int64_t reorganization_scn = 0;
+  int64_t ls_id = 0;
+  char tablet_name[512] = {0};
+  int64_t op_id = 0;
+  int64_t macro_seq_id = 0;
+  const char *judge_path = nullptr;
+  // inner_tablet: /ls/ls_id/tablet_name/minor/sstable/op_id/data/seq%ld
+  // user_tablet: /tablet/tablet_id/reorganization_scn/minor/sstable/op_id/data/seq%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 8))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (NULL != STRSTR(judge_path, LS_DIR_STR)) {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%[^/]/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                       LS_DIR_STR, MINOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, DATA_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &ls_id, tablet_name, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else if (OB_FAIL(get_ls_inner_tablet_id_(tablet_name, tablet_id))) {
+      LOG_WARN("fail to get ls inner tablet id", KR(ret), K(tablet_name));
+    } else {
+      is_inner_tablet = true;
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%%ld/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                TABLET_DIR_STR, MINOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, DATA_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else {
+      is_inner_tablet = false;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_inner_tablet) {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_meta_ls_id(ls_id);
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_reorganization_scn(reorganization_scn);
     }
   }
   return ret;
@@ -1176,6 +1383,71 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  bool is_inner_tablet = false;
+  int64_t tablet_id = 0;
+  int64_t reorganization_scn = 0;
+  int64_t ls_id = 0;
+  char tablet_name[512] = {0};
+  int64_t op_id = 0;
+  int64_t macro_seq_id = 0;
+  const char *judge_path = nullptr;
+  // inner_tablet: /ls/ls_id/tablet_name/minor/sstable/op_id/meta/seq%ld
+  // user_tablet: /tablet/tablet_id/reorganization_scn/minor/sstable/op_id/meta/seq%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 8))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (NULL != STRSTR(judge_path, LS_DIR_STR)) {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%[^/]/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                       LS_DIR_STR, MINOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, META_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &ls_id, tablet_name, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else if (OB_FAIL(get_ls_inner_tablet_id_(tablet_name, tablet_id))) {
+      LOG_WARN("fail to get ls inner tablet id", KR(ret), K(tablet_name));
+    } else {
+      is_inner_tablet = true;
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%%ld/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                TABLET_DIR_STR, MINOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, META_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else {
+      is_inner_tablet = false;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_inner_tablet) {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_meta_ls_id(ls_id);
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_reorganization_scn(reorganization_scn);
+    }
+  }
+  return ret;
+}
+''',
     create_parent_dir = '''
 int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
@@ -1313,6 +1585,44 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  const char *sub_path = nullptr;
+  // /tablet_id/reorganization_scn/major/sstable/cg_id/data/seq%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 7))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else {
+    int64_t tablet_id = 0;
+    int64_t reorganization_scn = 0;
+    int64_t cg_id = 0;
+    int64_t macro_seq_id = 0;
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%ld/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                MAJOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, COLUMN_GROUP_STR, DATA_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &cg_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_column_group_id(cg_id);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id(macro_seq_id);
+      macro_id.set_reorganization_scn(reorganization_scn);
+    }
+  }
+  return ret;
+}
+''',
     get_effective_tablet_id = '''
 int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const
 {
@@ -1438,6 +1748,44 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  const char *sub_path = nullptr;
+  // /tablet_id/reorganization_scn/major/sstable/cg_id/meta/seq%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 7))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else {
+    int64_t tablet_id = 0;
+    int64_t reorganization_scn = 0;
+    int64_t cg_id = 0;
+    int64_t macro_seq_id = 0;
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%ld/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                MAJOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, COLUMN_GROUP_STR, META_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &cg_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_column_group_id(cg_id);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id(macro_seq_id);
+      macro_id.set_reorganization_scn(reorganization_scn);
+    }
+  }
+  return ret;
+}
+''',
     get_effective_tablet_id = '''
 int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const
 {
@@ -1555,6 +1903,12 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
     LOG_WARN("fail to databuff printf", KR(ret));
   }
   return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  return local_path_to_macro_id(path, macro_id);
 }
 ''',
     get_parent_dir = '''
@@ -1749,6 +2103,45 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  const char *sub_path = nullptr;
+  // /ls_id_epoch_id/tablet_meta/tablet_id/transfer_seq/ver%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 5))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else {
+    int64_t ls_id = 0;
+    int64_t tablet_id = 0;
+    int64_t meta_transfer_seq = 0;
+    int64_t meta_version_id = 0;
+    int64_t ls_epoch_id = 0;
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld_%%ld/%s/%%ld/%%ld/%s%%ld.T%hhu",
+                TABLET_META_DIR_STR, VER_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(sub_path, format, &ls_id, &ls_epoch_id, &tablet_id, &meta_transfer_seq, &meta_version_id))) {
+    } else if (OB_UNLIKELY(5 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(ls_id);
+      macro_id.set_third_id(tablet_id);
+      macro_id.set_meta_transfer_seq(meta_transfer_seq);
+      macro_id.set_meta_version_id(meta_version_id);
+    }
+  }
+  return ret;
+}
+''',
     get_parent_dir = '''
 int get_parent_dir(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
@@ -1908,6 +2301,69 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  // /tenant_id_epoch_id/slog/seq%ld or /server_id/server_slog/seq%ld
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  char tablet_name[512] = {0};
+  int64_t macro_seq_id = 0;
+  int64_t third_id = 0;
+  const char *judge_path = nullptr;
+  bool is_500_tenant = false;
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 3))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (NULL != STRSTR(judge_path, SERVER_DIR_STR)) { // 500 tenant
+    const char *sub_path = nullptr;
+    if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 2))) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+    } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s_%s/%s%%ld.T%hhu",
+                       SERVER_DIR_STR, SLOG_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(sub_path, format, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(1 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+    } else {
+      is_500_tenant = true;
+    }
+  } else {
+    int64_t tenant_id = 0;
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%lu_%%ld/%s/%s%%ld.T%hhu",
+                SLOG_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &tenant_id, &third_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(3 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else {
+      is_500_tenant = false;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_500_tenant) {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(OB_SERVER_TENANT_ID);
+      macro_id.set_fourth_id(macro_seq_id);
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(0);
+      macro_id.set_third_id(third_id);
+      macro_id.set_fourth_id(macro_seq_id);
+    }
+  }
+  return ret;
+}
+''',
     get_parent_dir = '''
 int get_parent_dir(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
@@ -1980,6 +2436,69 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  // /tenant_id_epoch_id/ckpt/object_id or /server_id/server_ckpt/object_id
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  char tablet_name[512] = {0};
+  int64_t ckpt_id = 0;
+  int64_t third_id = 0;
+  const char *judge_path = nullptr;
+  bool is_500_tenant = false;
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 3))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (NULL != STRSTR(judge_path, SERVER_DIR_STR)) { // 500 tenant
+    const char *sub_path = nullptr;
+    if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 2))) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+    } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s_%s/%%ld.T%hhu",
+                       SERVER_DIR_STR, CKPT_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(sub_path, format, &ckpt_id))) {
+    } else if (OB_UNLIKELY(1 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+    } else {
+      is_500_tenant = true;
+    }
+  } else {
+    int64_t tenant_id = 0;
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%lu_%%ld/%s/%%ld.T%hhu",
+                CKPT_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &tenant_id, &third_id, &ckpt_id))) {
+    } else if (OB_UNLIKELY(3 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else {
+      is_500_tenant = false;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_500_tenant) {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(OB_SERVER_TENANT_ID);
+      macro_id.set_fourth_id(ckpt_id);
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(0);
+      macro_id.set_third_id(third_id);
+      macro_id.set_fourth_id(ckpt_id);
+    }
+  }
+  return ret;
+}
+''',
     get_object_id = '''
 int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 {
@@ -2015,15 +2534,15 @@ bool is_valid(const MacroBlockId &file_id) const
     to_remote_path_format = '''
 int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const
 {
-  int ret = OB_SUCCESS;
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/prewarm_info/scn%ld
-  if (OB_FAIL(databuff_printf(path, length, pos, "%s/%s_%ld/%s_%lu/%s/%lu/%lu/%s/%s/%s%ld",
-              object_storage_root_dir, CLUSTER_DIR_STR, cluster_id,
-              TENANT_DIR_STR, tenant_id, TABLET_DIR_STR, file_id.second_id(),
-              file_id.fourth_id(), MAJOR_DIR_STR, PREWARM_INFO_DIR_STR, SCN_KEY_STR, file_id.third_id()))) {
-    LOG_WARN("fail to databuff printf", KR(ret));
-  }
-  return ret;
+  return prewarm_file_to_remote_path_format(path, length, pos, file_id, object_storage_root_dir, cluster_id, tenant_id,
+                                            tenant_epoch_id, server_id);
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  return prewarm_file_remote_path_to_macro_id(path, type_, macro_id);
 }
 ''',
     get_object_id = '''
@@ -2061,15 +2580,15 @@ bool is_valid(const MacroBlockId &file_id) const
     to_remote_path_format = '''
 int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const
 {
-  int ret = OB_SUCCESS;
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/prewarm_info/scn%ld
-  if (OB_FAIL(databuff_printf(path, length, pos, "%s/%s_%ld/%s_%lu/%s/%lu/%lu/%s/%s/%s%ld",
-              object_storage_root_dir, CLUSTER_DIR_STR, cluster_id,
-              TENANT_DIR_STR, tenant_id, TABLET_DIR_STR, file_id.second_id(),
-              file_id.fourth_id(), MAJOR_DIR_STR, PREWARM_INFO_DIR_STR, SCN_KEY_STR, file_id.third_id()))) {
-    LOG_WARN("fail to databuff printf", KR(ret));
-  }
-  return ret;
+  return prewarm_file_to_remote_path_format(path, length, pos, file_id, object_storage_root_dir, cluster_id, tenant_id,
+                                            tenant_epoch_id, server_id);
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  return prewarm_file_remote_path_to_macro_id(path, type_, macro_id);
 }
 ''',
     get_object_id = '''
@@ -2107,15 +2626,15 @@ bool is_valid(const MacroBlockId &file_id) const
     to_remote_path_format = '''
 int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const
 {
-  int ret = OB_SUCCESS;
-  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/prewarm_info/scn%ld
-  if (OB_FAIL(databuff_printf(path, length, pos, "%s/%s_%ld/%s_%lu/%s/%lu/%lu/%s/%s/%s%ld",
-              object_storage_root_dir, CLUSTER_DIR_STR, cluster_id,
-              TENANT_DIR_STR, tenant_id, TABLET_DIR_STR, file_id.second_id(),
-              file_id.fourth_id(), MAJOR_DIR_STR, PREWARM_INFO_DIR_STR, SCN_KEY_STR, file_id.third_id()))) {
-    LOG_WARN("fail to databuff printf", KR(ret));
-  }
-  return ret;
+// cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/prewarm_info/scn%ld
+  return prewarm_file_to_remote_path_format(path, length, pos, file_id, object_storage_root_dir, cluster_id, tenant_id,
+                                            tenant_epoch_id, server_id);
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  return prewarm_file_remote_path_to_macro_id(path, type_, macro_id);
 }
 ''',
     get_object_id = '''
@@ -2153,15 +2672,15 @@ bool is_valid(const MacroBlockId &file_id) const
     to_remote_path_format = '''
 int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const
 {
-  int ret = OB_SUCCESS;
   // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/prewarm_info/scn%ld
-  if (OB_FAIL(databuff_printf(path, length, pos, "%s/%s_%ld/%s_%lu/%s/%lu/%lu/%s/%s/%s%ld",
-              object_storage_root_dir, CLUSTER_DIR_STR, cluster_id,
-              TENANT_DIR_STR, tenant_id, TABLET_DIR_STR, file_id.second_id(),
-              file_id.fourth_id(), MAJOR_DIR_STR, PREWARM_INFO_DIR_STR, SCN_KEY_STR, file_id.third_id()))) {
-    LOG_WARN("fail to databuff printf", KR(ret));
-  }
-  return ret;
+  return prewarm_file_to_remote_path_format(path, length, pos, file_id, object_storage_root_dir, cluster_id, tenant_id,
+                                            tenant_epoch_id, server_id);
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  return prewarm_file_remote_path_to_macro_id(path, type_, macro_id);
 }
 ''',
     get_object_id = '''
@@ -2273,10 +2792,39 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
 {
   int ret = OB_SUCCESS;
   // cluster_id/tenant_id/is_shared_tenant_deleted
-  if (OB_FAIL(databuff_printf(path, length, pos, "%s/%s_%ld/%s_%lu/%s",
+  if (OB_FAIL(databuff_printf(path, length, pos, "%s/%s_%ld/%s_%ld/%s",
               object_storage_root_dir, CLUSTER_DIR_STR, cluster_id, TENANT_DIR_STR,
               file_id.second_id(), get_type_str()))) {
     LOG_WARN("fail to databuff printf", KR(ret));
+  }
+  return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  int64_t tenant_id = 0;
+  const char *sub_path = nullptr;
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 2))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s_%%ld/%s.T%hhu",
+              TENANT_DIR_STR, get_type_str(), (uint8_t)type_))) {
+    LOG_WARN("fail to databuff printf", KR(ret));
+  } else if (FALSE_IT(num = sscanf(sub_path, format, &tenant_id))) {
+  } else if (OB_UNLIKELY(1 != num)) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+  } else {
+    macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+    macro_id.set_storage_object_type((uint64_t)type_);
+    macro_id.set_second_id(tenant_id);
   }
   return ret;
 }
@@ -2352,6 +2900,40 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
               SERVER_DIR_STR, server_id, tenant_id, tenant_epoch_id,
               TMP_DATA_DIR_STR, file_id.second_id(), SEG_KEY_STR, file_id.third_id(), LEN_KEY_STR, file_id.fourth_id()))) {
     LOG_WARN("fail to databuff printf", KR(ret));
+  }
+  return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  // /tmp_file_id/seg%ldlen%ld
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  int64_t second_id = 0;
+  int64_t segment_id = 0;
+  int64_t len_id = 0;
+  const char *sub_path = nullptr;
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 2))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%s%%ld%s%%ld.T%hhu",
+                    SEG_KEY_STR, LEN_KEY_STR, (uint8_t)type_))) {
+    LOG_WARN("fail to databuff printf", KR(ret));
+  } else if (FALSE_IT(num = sscanf(sub_path, format, &second_id, &segment_id, &len_id))) {
+  } else if (OB_UNLIKELY(3 != num)) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+  } else {
+    macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+    macro_id.set_storage_object_type((uint64_t)type_);
+    macro_id.set_second_id(second_id);
+    macro_id.set_third_id(segment_id);
+    macro_id.set_fourth_id(len_id);
   }
   return ret;
 }
@@ -2435,6 +3017,41 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
              (file_id.third_id() >> 32)/*op_id*/, DATA_MACRO_DIR_STR, SEQ_KEY_STR,
              (file_id.third_id() & 0xFFFFFFFF) /*macro_seq_id*/))) {
     LOG_WARN("fail to databuff printf", KR(ret));
+  }
+  return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+// /tablet_id/reorganization_scn/mds/mini/sstable/op_id/data/seq%ld
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  int64_t tablet_id = 0;
+  int64_t reorganization_scn = 0;
+  int64_t op_id = 0;
+  int64_t macro_seq_id = 0;
+  const char *sub_path = nullptr;
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 8))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%ld/mds/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                     MINI_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, DATA_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+    LOG_WARN("fail to databuff printf", KR(ret));
+  } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) {
+  } else if (OB_UNLIKELY(4 != num)) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+  } else {
+    macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+    macro_id.set_storage_object_type((uint64_t)type_);
+    macro_id.set_second_id(tablet_id);
+    macro_id.set_third_id((op_id << 32) + macro_seq_id);
+    macro_id.set_reorganization_scn(reorganization_scn);
   }
   return ret;
 }
@@ -2568,6 +3185,41 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  int64_t tablet_id = 0;
+  int64_t reorganization_scn = 0;
+  int64_t op_id = 0;
+  int64_t macro_seq_id = 0;
+  const char *sub_path = nullptr;
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mds/mini/sstable/op_id/meta/seq%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 8))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%ld/mds/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                     MINI_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, META_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+    LOG_WARN("fail to databuff printf", KR(ret));
+  } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) {
+  } else if (OB_UNLIKELY(4 != num)) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+  } else {
+    macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+    macro_id.set_storage_object_type((uint64_t)type_);
+    macro_id.set_second_id(tablet_id);
+    macro_id.set_third_id((op_id << 32) + macro_seq_id);
+    macro_id.set_reorganization_scn(reorganization_scn);
+  }
+  return ret;
+}
+''',
     get_effective_tablet_id = '''
 int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const
 {
@@ -2691,6 +3343,41 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
              (file_id.third_id() >> 32)/*op_id*/, DATA_MACRO_DIR_STR, SEQ_KEY_STR,
              (file_id.third_id() & 0xFFFFFFFF) /*macro_seq_id*/))) {
     LOG_WARN("fail to databuff printf", KR(ret));
+  }
+  return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  int64_t tablet_id = 0;
+  int64_t reorganization_scn = 0;
+  int64_t op_id = 0;
+  int64_t macro_seq_id = 0;
+  const char *sub_path = nullptr;
+  // /tablet_id/reorganization_scn/mds/minor/sstable/op_id/data/seq%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 8))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%ld/mds/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                     MINOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, DATA_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+    LOG_WARN("fail to databuff printf", KR(ret));
+  } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) {
+  } else if (OB_UNLIKELY(4 != num)) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+  } else {
+    macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+    macro_id.set_storage_object_type((uint64_t)type_);
+    macro_id.set_second_id(tablet_id);
+    macro_id.set_third_id((op_id << 32) + macro_seq_id);
+    macro_id.set_reorganization_scn(reorganization_scn);
   }
   return ret;
 }
@@ -2822,6 +3509,41 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  int64_t tablet_id = 0;
+  int64_t reorganization_scn = 0;
+  int64_t op_id = 0;
+  int64_t macro_seq_id = 0;
+  const char *sub_path = nullptr;
+  // /tablet_id/reorganization_scn/mds/minor/sstable/op_id/meta/seq%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 8))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%ld/mds/%s/%s/%s_%%ld/%s/%s%%ld.T%hhu",
+                     MINOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, OP_KEY_STR, META_MACRO_DIR_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+    LOG_WARN("fail to databuff printf", KR(ret));
+  } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) {
+  } else if (OB_UNLIKELY(4 != num)) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+  } else {
+    macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+    macro_id.set_storage_object_type((uint64_t)type_);
+    macro_id.set_second_id(tablet_id);
+    macro_id.set_third_id((op_id << 32) + macro_seq_id);
+    macro_id.set_reorganization_scn(reorganization_scn);
+  }
+  return ret;
+}
+''',
     get_effective_tablet_id = '''
 int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const
 {
@@ -2935,6 +3657,71 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
                 file_id.second_id()/*tablet_id*/, file_id.reorganization_scn(), META_MACRO_DIR_STR, OP_KEY_STR,
                 (file_id.third_id() >> 32)/*op_id*/, SEQ_KEY_STR, (file_id.third_id() & 0xFFFFFFFF) /*macro_seq_id*/))) {
       LOG_WARN("failed to format path", K(ret), K(file_id));
+    }
+  }
+  return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  // inner_tablet: /ls/ls_id/tablet_name/meta/op%ldseq%lu -- 5
+  // user_tablet: /tablet/tablet_id/reorganization_scn/meta/op%ldseq%lu -- 5
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  bool is_inner_tablet = false;
+  int64_t tablet_id = 0;
+  int64_t reorganization_scn = 0;
+  int64_t ls_id = 0;
+  char tablet_name[512] = {0};
+  int64_t op_id = 0;
+  int64_t macro_seq_id = 0;
+  const char *judge_path = nullptr;
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 5))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (NULL != STRSTR(judge_path, LS_DIR_STR)) {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%[^/]/%s/%s%%ld%s%%lu.T%hhu",
+                       LS_DIR_STR, META_MACRO_DIR_STR, OP_KEY_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &ls_id, tablet_name, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else if (OB_FAIL(get_ls_inner_tablet_id_(tablet_name, tablet_id))) {
+      LOG_WARN("fail to get ls inner tablet id", KR(ret), K(tablet_name));
+    } else {
+      is_inner_tablet = true;
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s/%%ld/%%ld/%s/%s%%ld%s%%lu.T%hhu",
+                TABLET_DIR_STR, META_MACRO_DIR_STR, OP_KEY_STR, SEQ_KEY_STR, (uint8_t)type_))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(judge_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) {
+    } else if (OB_UNLIKELY(4 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(judge_path), K(path), K(format), K(num));
+    } else {
+      is_inner_tablet = false;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_inner_tablet) {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_meta_ls_id(ls_id);
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type_);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id((op_id << 32) + macro_seq_id);
+      macro_id.set_reorganization_scn(reorganization_scn);
     }
   }
   return ret;
@@ -3165,6 +3952,37 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
   return ret;
 }
 ''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  // /version_id/seq_id
+  char format[512] = {0};
+  int num = 0;
+  const char *sub_path = nullptr;
+  int64_t second_id = 0;
+  int64_t seq_id = 0;
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 2))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%lu/%s%%lu.T%hhu", SEQ_KEY_STR, (uint8_t)type_))) {
+    LOG_WARN("fail to databuff printf", KR(ret));
+  } else if (FALSE_IT(num = sscanf(sub_path, format, &second_id, &seq_id))) {
+  } else if (OB_UNLIKELY(2 != num)) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+  } else {
+    macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+    macro_id.set_storage_object_type((uint64_t)type_);
+    macro_id.set_second_id(second_id);
+    macro_id.set_third_id(seq_id);
+  }
+  return ret;
+}
+''',
     opt_to_string = '''
 int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const
 {
@@ -3214,6 +4032,35 @@ int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const 
               tenant_id, tenant_epoch_id, MACRO_CACHE_CKPT_DIR_STR, META_MACRO_DIR_STR,
               VER_KEY_STR, file_id.second_id()))) {
     LOG_WARN("failed to format path", K(ret), K(file_id));
+  }
+  return ret;
+}
+''',
+    remote_path_to_macro_id = '''
+int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const
+{
+  int ret = OB_SUCCESS;
+  // /version_id
+  char format[512] = {0};
+  int num = 0;
+  const char *sub_path = nullptr;
+  int64_t version_id = 0;
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s%%lu.T%hhu", VER_KEY_STR, (uint8_t)type_))) {
+    LOG_WARN("fail to databuff printf", KR(ret));
+  } else if (FALSE_IT(num = sscanf(sub_path, format, &version_id))) {
+  } else if (OB_UNLIKELY(1 != num)) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+  } else {
+    macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+    macro_id.set_storage_object_type((uint64_t)type_);
+    macro_id.set_second_id(version_id);
   }
   return ret;
 }

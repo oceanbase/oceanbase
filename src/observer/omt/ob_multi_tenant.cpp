@@ -1568,14 +1568,12 @@ int ObMultiTenant::update_ss_garbage_collection_service_config()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant config is invalid", KR(ret));
   } else {
-    const int64_t exec_interval = tenant_config->_ss_garbage_collect_interval;
-    if (exec_interval != ss_gc_service->exec_interval) {
-      if (exec_interval < 10_s || exec_interval > 12_hour) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("the execution interval of gabage colletion service on shared-stroage is invalid", KR(ret));
-      } else {
-        ss_gc_service->update_exec_interval(exec_interval);
-      }
+    const int64_t ss_gc_task_exec_interval = tenant_config->_ss_garbage_collect_interval;
+    const int64_t block_check_interval = tenant_config->_ss_macro_block_check_interval;
+    if (OB_FAIL(ss_gc_service->update_ss_gc_task_exec_interval(ss_gc_task_exec_interval))) {
+      LOG_WARN("update_ss_gc_task_exec_interval failed", KR(ret));
+    } else if (OB_FAIL(ss_gc_service->update_block_check_interval(block_check_interval))) {
+      LOG_WARN("update_block_check_interval failed", KR(ret));
     }
   }
 
