@@ -45,6 +45,11 @@
           "name": "_object_storage_io_timeout",
           "value": "300s",
           "comment": "default value of object storage io timeout"
+        },
+        {
+          "name": "_ss_micro_cache_memory_percentage",
+          "value": 10,
+          "comment": "the percentage of tenant memory size used by micro_cache in ss mode"
         }
       ]
     }
@@ -95,6 +100,11 @@
           "name": "_object_storage_io_timeout",
           "value": "300s",
           "comment": "default value of object storage io timeout"
+        },
+        {
+          "name": "_ss_micro_cache_memory_percentage",
+          "value": 10,
+          "comment": "the percentage of tenant memory size used by micro_cache in ss mode"
         }
       ]
     }
@@ -150,6 +160,11 @@
           "name": "ha_high_thread_score",
           "value": 20,
           "comment":"ha high thread number"
+        },
+        {
+          "name": "_ss_micro_cache_memory_percentage",
+          "value": 10,
+          "comment": "the percentage of tenant memory size used by micro_cache in ss mode"
         }
       ]
     }
@@ -200,6 +215,11 @@
           "name": "_object_storage_io_timeout",
           "value": "300s",
           "comment": "default value of object storage io timeout"
+        },
+        {
+          "name": "_ss_micro_cache_memory_percentage",
+          "value": 10,
+          "comment": "the percentage of tenant memory size used by micro_cache in ss mode"
         }
       ]
     }
@@ -250,6 +270,11 @@
           "name": "_object_storage_io_timeout",
           "value": "300s",
           "comment": "default value of object storage io timeout"
+        },
+        {
+          "name": "_ss_micro_cache_memory_percentage",
+          "value": 10,
+          "comment": "the percentage of tenant memory size used by micro_cache in ss mode"
         }
       ]
     }
@@ -300,6 +325,11 @@
           "name": "_object_storage_io_timeout",
           "value": "300s",
           "comment": "default value of object storage io timeout"
+        },
+        {
+          "name": "_ss_micro_cache_memory_percentage",
+          "value": 10,
+          "comment": "the percentage of tenant memory size used by micro_cache in ss mode"
         }
       ]
     }
