@@ -586,7 +586,7 @@ public:
   uint64_t get_rowkey_vid_table_id() { return rowkey_vid_table_id_; }
   uint64_t get_vid_rowkey_table_id() { return vid_rowkey_table_id_; }
   void set_snap_data_has_complete() {
-    if (is_mem_data_init_atomic(VIRT_SNAP)) {
+    if (OB_NOT_NULL(snap_data_)) {
       snap_data_->has_complete_ = true;
     }
   }
@@ -802,6 +802,7 @@ public:
   void reset_complete();
   bool check_bitmap_is_delta_bitmap_subset(roaring::api::roaring64_bitmap_t *bitmap);
   bool check_index_bitmap_is_delta_bitmap_subset();
+  void set_index_statistics_updated(bool value) { index_statistics_updated_ = value; }
 
   TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),
               KP_(incr_data), KP_(snap_data), KP_(vbitmap_data), K_(tenant_id),
@@ -898,6 +899,7 @@ private:
   common::ObSpinLock reload_lock_;  // lock for reload from table
   RWLock query_lock_;// lock for async task and query
   bool reload_finish_;
+  bool index_statistics_updated_;
 
   // for vid opt
   bool is_need_vid_;
