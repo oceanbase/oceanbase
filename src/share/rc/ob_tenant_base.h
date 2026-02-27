@@ -190,8 +190,6 @@ namespace compaction
   class ObTenantMediumChecker;
   class ObTenantTabletScheduler;
   class ObTenantCompactionObjMgr;
-  class ObTenantLSMergeScheduler;
-  class ObTenantLSMergeChecker;
 }
 namespace memtable
 {
@@ -315,9 +313,6 @@ namespace detector
 #define SSLocalCachePrewarmService storage::ObSSLocalCachePrewarmService*,
 #define SSMicroCache storage::ObSSMicroCache*,
 #define SSLocalCacheService storage::ObSSLocalCacheService*,
-#define TenantCompactionObjMgr compaction::ObTenantCompactionObjMgr*,
-#define TenantLSMergeScheduler compaction::ObTenantLSMergeScheduler*,
-#define TenantLSMergeChecker compaction::ObTenantLSMergeChecker*,
 #define SSWriterService storage::ObSSWriterService*,
 #define AtomicFileMgr storage::ObAtomicFileMgr*,
 #define SSMetaService storage::ObSSMetaService*,
@@ -336,12 +331,8 @@ namespace detector
 #define SSLocalCachePrewarmService
 #define SSMicroCache
 #define SSLocalCacheService
-#define TenantCompactionObjMgr
-#define TenantLSMergeScheduler
-#define TenantLSMergeChecker
 #define SSWriterService
 #define AtomicFileMgr
-#define SharedSSTableService
 #define SSMetaService
 #define SSGarbageCollectorService
 #define OBSSLOGNOTIFYSERVICE
@@ -451,13 +442,10 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       compaction::ObTenantTabletScheduler*,          \
       compaction::ObTenantMediumChecker*,            \
       storage::ObTenantCompactionMemPool*,           \
-      TenantCompactionObjMgr                         \
       storage::ObTenantDirectLoadMgr*,              \
       share::ObTenantDagScheduler*,                  \
       storage::ObStorageHAService*,                  \
       storage::ObTenantFreezeInfoMgr*,               \
-      TenantLSMergeScheduler                         \
-      TenantLSMergeChecker                           \
       transaction::ObTxLoopWorker *,                 \
       storage::ObAccessService*,                     \
       storage::ObTransferService*,                   \
