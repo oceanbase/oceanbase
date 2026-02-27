@@ -390,6 +390,90 @@ TEST_F(TestSSMemMacroCache, test_evict_blk_for_high_memory_usage)
   }
 }
 
+TEST_F(TestSSMemMacroCache, test_clear_and_add_parallel)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_clear_and_add_parallel");
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ASSERT_NE(nullptr, mem_macro_cache);
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->clear_mem_macro_cache());
+
+  ObSSMemMacroCacheStat &cache_stat = mem_macro_cache->cache_stat_;
+  ObSSMacroCacheMemBlockPool &mem_blk_pool = mem_macro_cache->buf_mgr_.mem_blk_pool_;
+  const int64_t total_blk_cnt = mem_blk_pool.total_blk_cnt_;
+
+  int32_t blk_size = mem_macro_cache->blk_size_;
+  const int64_t macro_blk_size = 256 * 1024;
+  const int64_t align_size = 4 * 1024;
+  ObArenaAllocator allocator;
+  char * buf = static_cast<char *>(allocator.alloc(macro_blk_size));
+  ASSERT_NE(nullptr, buf);
+
+  const int64_t macro_blk_cnt = total_blk_cnt / 2 * blk_size / macro_blk_size;
+  int64_t cost_time_us = 0;
+  {
+    ASSERT_EQ(0, cache_stat.mem_usage_stat().macro_meta_cnt_);
+    const int64_t start_time_us = ObTimeUtility::current_time_us();
+    for (int64_t i = 0; i < macro_blk_cnt; ++i) {
+      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100 + i);
+      const uint64_t effective_tablet_id = macro_id.second_id();
+      char c = macro_id.hash() % 26 + 'a';
+      MEMSET(buf, c, macro_blk_size);
+      int32_t offset = -1;
+      if (OB_FAIL(mem_macro_cache->put(macro_id, effective_tablet_id, buf, macro_blk_size))) {
+        LOG_WARN("fail to put macro_block", KR(ret), K(i), K(macro_id));
+      }
+    }
+    cost_time_us = ObTimeUtility::current_time_us() - start_time_us;
+    ASSERT_LT(0, cache_stat.mem_usage_stat().macro_meta_cnt_);
+  }
+
+  {
+    // clear mem_macro_cache parallelly
+    const int64_t thread_num = 2;
+    ObTenantBase *tenant_base = MTL_CTX();
+    int64_t unexpected_cnt = 0;
+    auto clear_func = [&](const int64_t idx) {
+      ObTenantEnv::set_tenant(tenant_base);
+      ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+      ASSERT_NE(nullptr, mem_macro_cache);
+      const int64_t sleep_time_us = ObRandom::rand(0, cost_time_us);
+      int tmp_ret = mem_macro_cache->clear_mem_macro_cache();
+      if (OB_SUCCESS != tmp_ret && OB_EAGAIN != tmp_ret) {
+        ATOMIC_INC(&unexpected_cnt);
+      }
+    };
+    std::vector<std::thread> ths;
+    for (int64_t i = 0; i < thread_num; ++i) {
+      std::thread th(clear_func, i);
+      ths.push_back(std::move(th));
+    }
+
+    for (int64_t i = macro_blk_cnt; i < macro_blk_cnt * 2; ++i) {
+      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100 + i);
+      const uint64_t effective_tablet_id = macro_id.second_id();
+      char c = macro_id.hash() % 26 + 'a';
+      MEMSET(buf, c, macro_blk_size);
+      int32_t offset = -1;
+      if (OB_FAIL(mem_macro_cache->put(macro_id, effective_tablet_id, buf, macro_blk_size))) {
+        LOG_WARN("fail to put macro_block", KR(ret), K(i), K(macro_id));
+      }
+    }
+
+    for (int64_t i = 0; i < thread_num; ++i) {
+      ths[i].join();
+    }
+    ASSERT_EQ(0, unexpected_cnt);
+
+    // check cache_stat
+    ASSERT_LE(0, cache_stat.mem_usage_stat().macro_meta_cnt_);
+    ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+    ASSERT_NE(nullptr, mem_macro_cache);
+    ASSERT_EQ(OB_SUCCESS, mem_macro_cache->clear_mem_macro_cache());
+    ASSERT_EQ(0, cache_stat.mem_usage_stat().macro_meta_cnt_);
+  }
+}
+
 }  // namespace storage
 }  // namespace oceanbase
 
