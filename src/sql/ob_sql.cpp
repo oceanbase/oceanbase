@@ -1839,7 +1839,7 @@ int ObSql::handle_sql_execute(const ObString &sql,
   }
 
   ObString raw_sql = sql;
-  if (!context.raw_sql_.empty()) {
+  if (!context.raw_sql_.empty() && context.enable_pl_sql_parameterize_) {
     raw_sql = context.raw_sql_;
   }
   if (OB_FAIL(ret)) {
@@ -1879,7 +1879,7 @@ int ObSql::handle_sql_execute(const ObString &sql,
 
   if (OB_SUCC(ret)) {
     if (!result.get_is_from_plan_cache()) {
-      if (mode == PC_PS_MODE) {
+      if (mode == PC_PS_MODE || (mode == PC_PL_MODE && !context.enable_pl_sql_parameterize_)) {
         pctx->get_param_store_for_update().reset();
       }
       if (OB_FAIL(handle_physical_plan(raw_sql, context, result, pc_ctx, get_plan_err))) {
@@ -5213,7 +5213,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
         ParamStore &param_store = pctx->get_param_store_for_update();
         if (OB_NOT_NULL(ps_params)) {
           //本地是ps协议，远端依然走ps接口
-          int64_t initial_param_count = (PC_PL_MODE == pc_ctx.mode_) ?
+          int64_t initial_param_count = (PC_PL_MODE == pc_ctx.mode_ && pc_ctx.sql_ctx_.enable_pl_sql_parameterize_) ?
                                       pc_ctx.sql_ctx_.origin_pl_param_count_ : ps_params->count();
           //对于ps协议为什么不使用用户传递下来的ps_params?因为对于Oracle模式下''等价于NULL
           //这里需要做一次转换，而param store里的param是转换后的，因此不需要再去转换
@@ -5224,7 +5224,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
           pctx->get_remote_sql_info().use_ps_ = true;
           pctx->get_remote_sql_info().is_original_ps_mode_ = true;
           //从ps sql info中取出要执行的sql
-          if (PC_PL_MODE == pc_ctx.mode_ && !pc_ctx.sql_ctx_.raw_sql_.empty()) {
+          if (PC_PL_MODE == pc_ctx.mode_ && pc_ctx.sql_ctx_.enable_pl_sql_parameterize_ && !pc_ctx.sql_ctx_.raw_sql_.empty()) {
             pctx->get_remote_sql_info().remote_sql_ = pc_ctx.sql_ctx_.raw_sql_;
           } else {
             pctx->get_remote_sql_info().remote_sql_ = pc_ctx.sql_ctx_.cur_sql_;

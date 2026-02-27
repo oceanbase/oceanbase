@@ -773,7 +773,8 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
   if (OB_ISNULL(session) || OB_ISNULL(phy_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret), KP(session), KP(phy_ctx));
-  } else if (obj_params == NULL || PC_PS_MODE == pc_ctx.mode_) {
+  } else if (obj_params == NULL || PC_PS_MODE == pc_ctx.mode_ ||
+              (PC_PL_MODE == pc_ctx.mode_ && !pc_ctx.sql_ctx_.enable_pl_sql_parameterize_)) {
     /* do nothing */
   } else if (PC_PL_MODE == pc_ctx.mode_) {
     // For PL mode, perform parameter constraint checks
