@@ -3930,8 +3930,8 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
             LOG_INFO("query result need refresh adapter",
                 K(ret), K(ls_id), K(ctx->get_ls_leader()), K(snapshot_tablet_id_), K(get_snapshot_key_prefix()), K(row->storage_datums_[0].get_string()),
                 KP(this), K(meta_scn), K(snap_data_->meta_.header_.scn_));
-          } else if (OB_FAIL(deserialize_snap_data(ls_id, query_cond, meta_data, meta_scn))) {
-            LOG_WARN("failed to deserialize snap data", K(ret));
+          } else if (OB_FAIL(deserialize_snap_data(query_cond))) {
+            LOG_WARN("failed to deserialize snap data", K(ret), KP(this), K(meta_scn), K(snap_data_->meta_.header_.scn_));
           }
         }
       } else if (OB_NOT_NULL(row) && row->get_column_count() == 3 && !row->storage_datums_[2].get_bool()) {
@@ -4035,25 +4035,23 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(
   return ret;
 }
 
-int ObPluginVectorIndexAdaptor::deserialize_snap_data(
-    const ObLSID &ls_id, ObVectorQueryConditions *query_cond,
-    const ObString &meta_data, const int64_t meta_scn)
+int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *query_cond)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
   TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
-  if (meta_scn <= snap_data_->meta_.header_.scn_ && !snap_data_->rb_flag_) {
-    // skip deserialize, already been deserialized by other concurrent thread
-    LOG_INFO("skip deserialize", K(meta_scn), K(snap_data_), K(ls_id));
-  } else if (OB_FALSE_IT(snap_data_->free_memdata_resource(get_allocator(), tenant_id_))) {
-  } else if (OB_FAIL(deserialize_snap_meta(meta_data))) {
-    LOG_WARN("deserialize snap meta fail", K(ret), K(meta_scn), K(snap_data_), K(ls_id), K(meta_data.length()));
+  if (! snap_data_->is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("snap is not inited", K(ret), KPC(this));
+  } else if (! snap_data_->rb_flag_) {
+    // skip load, already been load by other concurrent thread
+    LOG_INFO("has_complete, so skip load", KP(this), K(snap_data_));
   } else if (OB_FAIL(snap_data_->load_persist_segments(this, tmp_allocator,
       *query_cond->scan_param_, static_cast<ObTableScanIterator *>(query_cond->row_iter_)))) {
-    LOG_WARN("load persist segments fail", K(ret), K(meta_scn));
+    LOG_WARN("load persist segments fail", K(ret), KPC(this));
   } else {
-    snap_data_->set_inited();
     close_snap_data_rb_flag();
+    LOG_INFO("load snap data success when query", KP(this), K(snap_data_));
   }
   return ret;
 }

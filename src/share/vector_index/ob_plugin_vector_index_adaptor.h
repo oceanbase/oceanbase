@@ -937,9 +937,7 @@ public:
   int deserialize_snap_data(
       const ObLSID &ls_id, const share::SCN &scn,
       const ObString &meta_data, const int64_t meta_scn);
-  int deserialize_snap_data(
-      const ObLSID &ls_id, ObVectorQueryConditions *query_cond,
-      const ObString &meta_data, const int64_t meta_scn);
+  int deserialize_snap_data(ObVectorQueryConditions *query_cond);
   int deserialize_snap_data(ObHNSWDeserializeCallback::CbParam &param, ObString &row_key);
   int deserialize_snap_data(ObHNSWDeserializeCallback::CbParam &param);
 
