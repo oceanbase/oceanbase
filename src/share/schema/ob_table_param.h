@@ -22,6 +22,7 @@
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "src/storage/meta_mem/ob_fixed_meta_obj_array.h"
 #include "src/storage/access/ob_table_read_info.h"
+#include "share/schema/ob_schema_struct_fts.h"
 
 namespace oceanbase
 {
@@ -430,6 +431,7 @@ private:
   Projector rowid_projector_;
   ObString parser_name_;
   ObString parser_properties_;
+  ObFTSIndexType fts_index_type_;
   // if min cluster version < 4.1 use lob locator v1, else use lob locator v2.
   // use enable_lob_locator_v2_ to avoid locator type sudden change while table scan is running
   bool enable_lob_locator_v2_;

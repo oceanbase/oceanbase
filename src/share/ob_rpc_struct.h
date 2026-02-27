@@ -3030,7 +3030,8 @@ public:
         data_version_(0),
         generated_column_names_(),
         def_index_id_(common::OB_INVALID_ID),
-        is_table_restore_(false)
+        is_table_restore_(false),
+        is_partition_local_ddl_(false)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -3071,6 +3072,7 @@ public:
     generated_column_names_.reset();
     def_index_id_ = common::OB_INVALID_ID;
     is_table_restore_ = false;
+    is_partition_local_ddl_ = false;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -3202,6 +3204,7 @@ public:
   common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM> generated_column_names_;
   uint64_t def_index_id_;
   bool is_table_restore_;
+  bool is_partition_local_ddl_;
 };
 
 struct ObIndexOfflineDdlArg : ObDDLArg

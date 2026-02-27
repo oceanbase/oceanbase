@@ -624,6 +624,7 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     rowid_projector_(allocator),
     parser_name_(),
     parser_properties_(),
+    fts_index_type_(OB_FTS_INDEX_TYPE_INVALID),
     enable_lob_locator_v2_(false),
     is_spatial_index_(false),
     is_fts_index_(false),
@@ -664,6 +665,7 @@ void ObTableParam::reset()
   rowid_projector_.reset();
   parser_name_.reset();
   parser_properties_.reset();
+  fts_index_type_ = OB_FTS_INDEX_TYPE_INVALID;
   main_read_info_.reset();
   enable_lob_locator_v2_ = false;
   is_spatial_index_ = false;
@@ -746,6 +748,9 @@ OB_DEF_SERIALIZE(ObTableParam)
     OB_UNIS_ENCODE(plan_enable_rich_format_);
     OB_UNIS_ENCODE(table_type_);
     OB_UNIS_ENCODE(merge_engine_type_);
+  }
+  if (OB_SUCC(ret) && is_fts_index_) {
+    OB_UNIS_ENCODE(fts_index_type_);
   }
   return ret;
 }
@@ -868,6 +873,9 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE, table_type_);
     LST_DO_CODE(OB_UNIS_DECODE, merge_engine_type_);
   }
+  if (OB_SUCC(ret) && is_fts_index_ && pos < data_len) {
+    OB_UNIS_DECODE(fts_index_type_);
+  }
   return ret;
 }
 
@@ -941,6 +949,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
                 plan_enable_rich_format_,
                 table_type_,
                 merge_engine_type_);
+  }
+  if (OB_SUCC(ret) && is_fts_index_) {
+    OB_UNIS_ADD_LEN(fts_index_type_);
   }
   return len;
 }
