@@ -30,14 +30,8 @@ namespace oceanbase
 using namespace share::schema;
 using namespace share;
 using namespace common;
-int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
-{
-  data_version = DATA_VERSION_4_3_2_0;
-  return OB_SUCCESS;
-}
 namespace storage
 {
-
 class TestLSTabletService : public ::testing::Test
 {
 public:
@@ -1249,7 +1243,7 @@ TEST_F(TestLSTabletService, test_new_tablet_has_backup_table_with_ha_status)
 int main(int argc, char **argv)
 {
   system("rm -f test_ls_tablet_service.log*");
-  OB_LOGGER.set_file_name("test_ls_tablet_service.log", true);
+  OB_LOGGER.set_file_name("test_ls_tablet_service.log");
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

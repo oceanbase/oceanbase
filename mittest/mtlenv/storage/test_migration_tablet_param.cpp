@@ -30,11 +30,6 @@ using namespace oceanbase::storage;
 
 namespace oceanbase
 {
-int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
-{
-  data_version = DATA_VERSION_4_3_2_0;
-  return OB_SUCCESS;
-}
 namespace unittest
 {
 class TestMigrationTabletParam : public ::testing::Test

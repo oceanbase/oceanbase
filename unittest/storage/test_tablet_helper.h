@@ -27,9 +27,20 @@
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/init_basic_struct.h"
+#include "share/ob_upgrade_utils.h"
+#include "common/ob_version_def.h"
 
 namespace oceanbase
 {
+namespace common
+{
+// for unittest, return the current data version
+int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
+{
+  data_version = DATA_CURRENT_VERSION;
+  return OB_SUCCESS;
+}
+}
 namespace storage
 {
 class TestTabletHelper

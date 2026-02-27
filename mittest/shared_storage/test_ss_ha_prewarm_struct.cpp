@@ -18,6 +18,7 @@
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "mittest/shared_storage/test_ss_common_util.h"
 #include "unittest/storage/init_basic_struct.h"
+#include "unittest/storage/test_tablet_helper.h"
 #undef private
 #undef protected
 

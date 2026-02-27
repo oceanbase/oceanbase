@@ -14,6 +14,7 @@
 #define private public
 #define protected public
 #include "unittest/storage/test_dml_common.h"
+#include "unittest/storage/test_tablet_helper.h"
 namespace oceanbase
 {
 using namespace common;
