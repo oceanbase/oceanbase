@@ -284,11 +284,13 @@ TEST_F(ObSharedStorageTest, test_ls_gc_)
   sleep(10);
 
   int64_t affected_rows = 0;
+  ObSqlString change_tenant_str;
   ObSqlString sql_str;
   ObSqlString sql;
 
   ASSERT_EQ(OB_SUCCESS, sql_str.assign_fmt("delete from __all_ls_status where tenant_id = %lu and ls_id=%ld;", RunCtx.tenant_id_, RunCtx.ls_id_.id()));
-  SYS_EXE_SQL("alter system change tenant tenant_id=1001");
+  ASSERT_EQ(OB_SUCCESS, change_tenant_str.assign_fmt("alter system change tenant tenant_id = %ld", RunCtx.tenant_id_ - 1));
+  SYS_EXE_SQL(change_tenant_str);
   SYS_EXE_SQL(sql_str);
   SYS_EXE_SQL("alter system change tenant tenant_id=1");
 
