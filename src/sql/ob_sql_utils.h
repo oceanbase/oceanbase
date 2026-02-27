@@ -172,6 +172,9 @@ public:
   static bool is_trans_commit_need_disconnect_err(int err);
 
   static int check_enable_decimalint(const sql::ObSQLSessionInfo *session, bool &enable_decimalint);
+  static int check_rowsets_enabled(const sql::ObSQLSessionInfo *session,
+                                   const ObGlobalHint &global_hint,
+                                   bool &rowsets_enabled);
 
   static void check_if_need_disconnect_after_end_trans(const int end_trans_err,
                                                        const bool is_rollback,

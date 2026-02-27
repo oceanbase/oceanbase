@@ -574,7 +574,7 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
     // situation happens
     bool disable_during_upgrade = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0
                                    && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0);
-    bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
+    bool rowsets_enabled = true;
     enable_hash_rollup = has_rollup_opt_param ?
                                 (hash_rollup_policy.get_string().case_compare("auto") == 0
                                  || hash_rollup_policy.get_string().case_compare("forced") == 0) :
@@ -583,8 +583,8 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
                                  || (tenant_config.is_valid()
                                      && tenant_config->_use_hash_rollup.case_compare("forced") == 0));
     if (!enable_hash_rollup) {
-    } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
-      LOG_WARN("get bool opt param failed", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_rowsets_enabled(session, query_ctx->get_global_hint(), rowsets_enabled))) {
+      LOG_WARN("check rowsets enabled failed", K(ret));
     } else {
       // use hash rollup in priviledge, force_use_hash_rollup is abandoned
       enable_hash_rollup = rowsets_enabled

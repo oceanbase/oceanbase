@@ -8001,5 +8001,10 @@ bool ObBasicSessionInfo::get_extend_sql_plan_monitor_metrics() const
   return inf_pc_configs_.extend_sql_plan_monitor_metrics_;
 }
 
+bool ObBasicSessionInfo::get_rowsets_enabled() const
+{
+  return inf_pc_configs_.rowsets_enabled_;
+}
+
 }//end of namespace sql
 }//end of namespace oceanbase

@@ -118,14 +118,15 @@ int ObCodeGenerator::detect_batch_size(
     double scan_cardinality = 0;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     // TODO bin.lb: move to optimizer and more sophisticated rules
-    bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
+    bool rowsets_enabled = true;
     // if tenant config is invalid, use 8 as lob_rowsets_max_rows, compatible to origin behavior
     int64_t lob_rowsets_max_rows = tenant_config.is_valid() ? tenant_config->_lob_rowsets_max_rows : 8;
     const ObOptParamHint *opt_params = &log_plan.get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
     if (OB_FAIL(opt_params->get_integer_opt_param(ObOptParamHint::LOB_ROWSETS_MAX_ROWS, lob_rowsets_max_rows))) {
       LOG_WARN("get integer opt param failed", K(ret));
-    } else if (OB_FAIL(opt_params->get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
-      LOG_WARN("fail to check rowsets enabled", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_rowsets_enabled(static_cast<ObSQLSessionInfo *>(session), log_plan.get_stmt()->get_query_ctx()->get_global_hint(),
+                                                         rowsets_enabled))) {
+      LOG_WARN("check rowsets enabled failed", K(ret));
     } else if (rowsets_enabled) {
       // TODO bin.lb; check all sub plans
       OZ(ObStaticEngineCG::check_vectorize_supported(vectorize,

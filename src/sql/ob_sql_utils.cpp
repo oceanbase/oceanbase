@@ -94,6 +94,25 @@ int ObSQLUtils::check_enable_decimalint(const ObSQLSessionInfo *session, bool &e
   return ret;
 }
 
+int ObSQLUtils::check_rowsets_enabled(const ObSQLSessionInfo *session,
+                                      const ObGlobalHint &global_hint,
+                                      bool &rowsets_enabled)
+{
+  int ret = OB_SUCCESS;
+  rowsets_enabled = true;
+  if (OB_ISNULL(session)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session is null", K(ret));
+  } else {
+    rowsets_enabled = session->get_rowsets_enabled();
+    if (OB_FAIL(global_hint.opt_params_.get_bool_opt_param(
+          ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
+      LOG_WARN("fail to get rowsets enabled hint", K(ret));
+    }
+  }
+  return ret;
+}
+
 bool ObSQLUtils::is_trans_commit_need_disconnect_err(int err)
 {
   bool bool_ret = true;
