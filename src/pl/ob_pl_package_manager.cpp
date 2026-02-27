@@ -1277,12 +1277,12 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
     if (package_spec_info.is_invoker_right()) {
       OX (package_spec_ast.get_compile_flag().add_invoker_right());
     }
-    OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
-          tmp_alloc, resolve_ctx.session_info_.get_dtc_params(), source));
     {
       bool is_wrap = false;
       ObPLCompilerEnvGuard guard(
         package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_spec_ast, ret);
+      OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
+            tmp_alloc, resolve_ctx.session_info_.get_dtc_params(), source));
       OZ (compiler.analyze_package(source, null_parent_ns,
                                    package_spec_ast, package_spec_info.is_for_trigger(), is_wrap));
     }
