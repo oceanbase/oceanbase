@@ -1675,6 +1675,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   int64_t vector_data_col_idx = -1;
   int64_t vector_vid_col_idx = -1;
   int64_t vector_col_idx = -1;
+  int64_t pk_increment_col_idx = -1;
   ObSEArray<int64_t, 4> extra_column_idxs;
   int64_t key_col_id = -1;
   int64_t data_col_id = -1;
@@ -1712,7 +1713,9 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
       } else {
         for (uint64_t i = 0; i < all_column_ids.count() && OB_SUCC(ret); i++) {
           const ObColumnSchemaV2 *column_schema;
-          if (OB_ISNULL(column_schema = data_table_schema->get_column_schema(all_column_ids.at(i)))) {
+          if (OB_FAIL(dml_column_ids.push_back(all_column_ids.at(i)))) {
+            LOG_WARN("fail to push back column id", K(ret), K(all_column_ids.at(i)));
+          } else if (OB_ISNULL(column_schema = data_table_schema->get_column_schema(all_column_ids.at(i)))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get column schema", K(ret), K(all_column_ids.at(i)));
           } else if (column_schema->is_vec_hnsw_vid_column() ) {
@@ -1725,40 +1728,37 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
                 ret = OB_NOT_SUPPORTED;
                 LOG_INFO("vector index created before 4.3.5.2 do not support vector index optimize task, please rebuild vector index.", K(ret), K(index_name));
               }
-            } else if (OB_FAIL(dml_column_ids.push_back(all_column_ids.at(i)))) {
-              LOG_WARN("fail to push back column id", K(ret), K(all_column_ids.at(i)));
             }
           } else if (column_schema->is_hidden_pk_column_id(all_column_ids.at(i))) {
-            vector_vid_col_idx = i;
-            if (OB_FAIL(dml_column_ids.push_back(all_column_ids.at(i)))) {
-              LOG_WARN("fail to push back column id", K(ret), K(all_column_ids.at(i)));
-            }
+            pk_increment_col_idx = i;
           } else if (column_schema->is_vec_hnsw_vector_column()) {
             vector_col_idx = i;
-            if (OB_FAIL(dml_column_ids.push_back(all_column_ids.at(i)))) {
-              LOG_WARN("fail to push back column id", K(ret), K(all_column_ids.at(i)));
-            }
           } else if (column_schema->is_vec_hnsw_key_column()) {
             vector_key_col_idx = i;
             key_col_id = all_column_ids.at(i);
-            if (OB_FAIL(dml_column_ids.push_back(all_column_ids.at(i)))) {
-              LOG_WARN("fail to push back column id", K(ret), K(all_column_ids.at(i)));
-            }
           } else if (column_schema->is_vec_hnsw_data_column()) {
             vector_data_col_idx = i;
             data_col_id = all_column_ids.at(i);
             cs_type = column_schema->get_collation_type();
-            if (OB_FAIL(dml_column_ids.push_back(all_column_ids.at(i)))) {
-              LOG_WARN("fail to push back column id", K(ret), K(all_column_ids.at(i)));
-            }
           } else { // set extra column id
             if (OB_FAIL(extra_column_idxs.push_back(i))) {
               LOG_WARN("failed to push back extra column idx", K(ret), K(i));
-            } else if (OB_FAIL(dml_column_ids.push_back(all_column_ids.at(i)))) {
-              LOG_WARN("fail to push back column id", K(ret), K(all_column_ids.at(i)));
             }
           }
         } // end for.
+        if (OB_SUCC(ret)) {
+          if (vector_vid_col_idx == -1 && pk_increment_col_idx == -1) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get valid vector index col idx", K(ret), K(vector_vid_col_idx), K(pk_increment_col_idx), K(all_column_ids));
+          } else if (vector_vid_col_idx == -1 && pk_increment_col_idx != -1) {
+            vector_vid_col_idx = pk_increment_col_idx;
+          } else if (vector_vid_col_idx != -1 && pk_increment_col_idx != -1) {
+            if (OB_FAIL(extra_column_idxs.push_back(pk_increment_col_idx))) {
+              LOG_WARN("failed to push back extra column idx", K(ret), K(pk_increment_col_idx));
+            }
+          }
+        }
+
         if (OB_SUCC(ret)) {
           if (vector_vid_col_idx == -1 || vector_col_idx == -1 || vector_key_col_idx == -1 || vector_data_col_idx == -1) {
             ret = OB_ERR_UNEXPECTED;
