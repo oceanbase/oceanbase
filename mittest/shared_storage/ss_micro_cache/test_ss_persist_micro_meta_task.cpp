@@ -435,6 +435,257 @@ TEST_F(TestSSPersistMicroMetaTask, test_persist_micro_meta)
   }
 }
 
+/*
+  Test case to reproduce OB_ENTRY_EXIST issue when loading persisted meta:
+  Scenario:
+  1. Create a meta and evict it to B2 Ghost state
+  2. Serialize meta to disk (disk has old B2 Ghost state), then trigger hit_ghost before deletion
+     (add_micro_block_cache moves meta from B2 to T2, making it valid)
+  3. Complete persistence (handle_persisted_sub_ranges), try to delete ghost meta but fail
+     because meta is now valid
+  4. Simulate next persistence - load stale ghost meta from disk via inner_add_persisted_micro_metas
+  5. Result: OB_ENTRY_EXIST because memory meta is valid but disk meta is still old ghost state
+  6. stat has been changed (entry_exist_persisted_cnt increased)
+  7. arc_info remains the same (because OB_ENTRY_EXIST prevents arc_info adjustment)
+*/
+TEST_F(TestSSPersistMicroMetaTask, test_entry_exist_when_load_meta)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_entry_exist_when_load_meta");
+  ObArenaAllocator allocator;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  micro_cache->stop();
+  micro_cache->wait();
+  micro_cache->destroy();
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30), 8/*micro_split_cnt*/)); // 8G
+  ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  ObSSPersistMicroMetaTask &persist_meta_task = micro_cache->task_runner_.persist_meta_task_;
+  ObSSReleaseCacheTask &release_cache_task = micro_cache->task_runner_.release_cache_task_;
+  release_cache_task.is_inited_ = false;
+
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSMicroRangeManager &micro_range_mgr = micro_cache->micro_range_mgr_;
+  ObSSARCInfo &arc_info = micro_meta_mgr.arc_info_;
+  ASSERT_LT(0, arc_info.p_);
+
+  // Stop meta ckpt
+  persist_meta_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(1000 * 1000);
+
+  // Step 1: add micro blocks to cache
+  const int32_t target_micro_cnt = micro_range_mgr.init_range_cnt_ * 100; // avg 100 micros per init_range
+  const int32_t block_size = phy_blk_mgr.block_size_;
+  const int32_t payload_offset = sizeof(ObSSMicroDataBlockHeader) + sizeof(ObSSPhyBlockCommonHeader);
+  const int64_t micro_cnt_per_blk = 500;
+  const int64_t micro_size = 4 * 1024; // 4KB
+  const int64_t max_micro_cnt = phy_blk_mgr.blk_cnt_info_.micro_data_blk_max_cnt() * micro_cnt_per_blk;
+  const int64_t micro_cnt = MIN(target_micro_cnt, max_micro_cnt);
+  int64_t add_cnt = 0;
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::batch_add_micro_block(100 /*tablet_id*/, micro_cnt,
+      micro_size, micro_size, add_cnt));
+  ASSERT_LT(0, add_cnt);
+  LOG_INFO("TEST STEP 1: finish adding micro blocks to cache", "init_range_cnt", micro_range_mgr.init_range_cnt_,
+    "add_micro_cnt", micro_cnt, "success_add_cnt", add_cnt);
+
+  // Step 2: wait for data persistence
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  LOG_INFO("TEST STEP 2: finish data persistence");
+
+  // Step 3: Find a sub_range with at least 2 persisted metas
+  bool is_find = false;
+  ObSSMicroInitRangeInfo *init_range = nullptr;
+  ObSSMicroSubRangeInfo *sub_range = nullptr;
+  ObSSMicroBlockMetaInfo target_meta_info; // used to evict and test
+  ObSSMicroBlockMetaHandle target_meta_handle;
+  ObSSMicroBlockMetaInfo tmp_meta_info; // used to evict
+  ObSSMicroBlockMetaHandle tmp_meta_handle;
+  const int64_t total_init_range_cnt = micro_range_mgr.get_init_range_cnt();
+  ObSSMicroInitRangeInfo **init_range_arr = micro_range_mgr.get_init_range_arr();
+  LOG_INFO("TEST STEP 3: start finding sub_range with at least 2 data persisted metas",
+    "total_init_range_cnt", total_init_range_cnt,
+    "sub_range_cnt", cache_stat.range_stat().sub_range_cnt_,
+    "total_micro_cnt", cache_stat.micro_stat().total_micro_cnt_);
+
+  for (int64_t i = 0; (!is_find) && (i < total_init_range_cnt); ++i) {
+    ASSERT_NE(nullptr, init_range_arr[i]);
+    init_range = init_range_arr[i];
+    ObSSMicroSubRangeInfo *cur_sub_range = init_range->get_first_sub_range();
+    if (OB_ISNULL(cur_sub_range)) {
+      continue;
+    }
+    uint32_t sub_range_iter_cnt = 0;
+    while ((!is_find) && (cur_sub_range != nullptr) && (sub_range_iter_cnt < UINT32_MAX)) {
+      ++sub_range_iter_cnt;
+      int64_t p_meta_cnt = 0;
+      if (cur_sub_range->has_micro_meta()) {
+        ObSSMicroBlockMeta *cur_meta = cur_sub_range->get_first_micro_meta();
+        ObSSMicroBlockMetaInfo cur_meta_info;
+        uint32_t meta_iter_cnt = 0;
+        while ((!is_find) && (cur_meta != nullptr) && (meta_iter_cnt < UINT32_MAX)) {
+          ++meta_iter_cnt;
+          cur_meta->get_micro_meta_info(cur_meta_info);
+          if (cur_meta_info.is_data_persisted()) {
+            p_meta_cnt++;
+            if (1 == p_meta_cnt) {
+              const ObSSMicroBlockCacheKey &micro_key = cur_meta_info.get_micro_key();
+              ret = micro_meta_mgr.micro_meta_map_.get(&micro_key, target_meta_handle);
+              if (OB_SUCC(ret) && target_meta_handle.is_valid()) {
+                target_meta_info = cur_meta_info;
+              }
+            } else if (2 == p_meta_cnt) {
+              const ObSSMicroBlockCacheKey &micro_key = cur_meta_info.get_micro_key();
+              ret = micro_meta_mgr.micro_meta_map_.get(&micro_key, tmp_meta_handle);
+              if (OB_SUCC(ret) && tmp_meta_handle.is_valid()) {
+                tmp_meta_info = cur_meta_info;
+                sub_range = cur_sub_range;
+                is_find = true;
+              }
+            }
+          }
+          cur_meta = cur_meta->get_next_micro();
+        }
+      }
+      cur_sub_range = cur_sub_range->get_next_range();
+    }
+  }
+  LOG_INFO("TEST STEP 3: finish scanning", "is_find", is_find);
+
+  // Verify prerequisites before proceeding
+  bool can_proceed = is_find && target_meta_handle.is_valid() && tmp_meta_handle.is_valid();
+  if (!can_proceed) {
+    LOG_WARN("TEST STEP 3: failed to find target sub_range , skip test");
+    return;
+  }
+
+  // Step 4: Read data before evicting meta (data may not be in memory after evict)
+  const ObSSMicroBlockId &micro_id = target_meta_info.micro_key_.get_micro_id();
+  char *add_buf = static_cast<char*>(allocator.alloc(target_meta_info.size_));
+  ASSERT_NE(nullptr, add_buf);
+
+  ObStorageObjectHandle object_handle;
+  ObIOInfo io_info;
+  io_info.tenant_id_ = MTL_ID();
+  io_info.offset_ = micro_id.offset_;
+  io_info.size_ = target_meta_info.size_;
+  io_info.flag_.set_wait_event(1);
+  io_info.timeout_us_ = 5 * 1000 * 1000;
+  io_info.buf_ = add_buf;
+  io_info.user_data_buf_ = add_buf;
+  io_info.effective_tablet_id_ = micro_id.macro_id_.second_id();
+
+  // Read data and verify
+  bool hit_cache = false;
+  ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(target_meta_info.micro_key_, micro_id,
+      ObSSMicroCacheGetType::FORCE_GET_DATA, io_info, object_handle,
+      ObSSMicroCacheAccessType::COMMON_IO_TYPE, hit_cache));
+  ASSERT_EQ(OB_SUCCESS, object_handle.wait());
+  ASSERT_EQ(io_info.size_, object_handle.get_data_size());
+
+  // Refresh meta info before evict (get_micro_block_cache may update meta state like access_time)
+  ObSSMicroBlockMetaHandle latest_target_meta_handle;
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&target_meta_info.micro_key_, latest_target_meta_handle));
+  ASSERT_EQ(true, latest_target_meta_handle.is_valid());
+  latest_target_meta_handle()->get_micro_meta_info(target_meta_info);
+
+  // Step 5: Evict both metas to ghost state
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_evict_micro_block_meta(target_meta_info));
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_evict_micro_block_meta(tmp_meta_info));
+
+  // Verify both metas are still in memory and in ghost state
+  ObSSMicroBlockMetaHandle check_target_meta_handle;
+  ObSSMicroBlockMetaHandle check_meta_handle;
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&target_meta_info.micro_key_, check_target_meta_handle));
+  ASSERT_EQ(true, check_target_meta_handle.is_valid());
+  ASSERT_EQ(true, check_target_meta_handle()->is_in_ghost_);
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&tmp_meta_info.micro_key_, check_meta_handle));
+  ASSERT_EQ(true, check_meta_handle.is_valid());
+  ASSERT_EQ(true, check_meta_handle()->is_in_ghost_);
+  check_target_meta_handle()->get_micro_meta_info(target_meta_info);
+
+  // Step 6: Serialize meta to disk, then trigger hit_ghost before deletion
+  // After serialization but before deletion, add_micro_block_cache triggers hit_ghost,
+  // making meta valid and preventing deletion. Next persistence will load stale meta from disk,
+  // causing OB_ENTRY_EXIST when trying to add it.
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+  persist_meta_task.persist_meta_op_.enable_save_meta_memory_ = true;
+  ObSSCkptPhyBlockItemWriter item_writer;
+  ObCompressorType compressor_type = ObCompressorType::INVALID_COMPRESSOR;
+  ASSERT_EQ(OB_SUCCESS, item_writer.init(MTL_ID(), phy_blk_mgr, ObSSPhyBlockType::SS_MICRO_META_BLK, compressor_type));
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.write_single_range_micro_meta(item_writer, init_range, sub_range));
+  ASSERT_EQ(OB_SUCCESS, item_writer.close());
+
+  // Trigger hit_ghost: add_micro_block_cache moves meta from B2 to T2
+  ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(target_meta_info.micro_key_, add_buf, target_meta_info.size_,
+    micro_id.macro_id_.second_id(), ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+  {
+    ObSSMicroBlockMetaHandle read_meta_handle;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(target_meta_info.micro_key_, read_meta_handle,
+                      micro_id.macro_id_.second_id(), false));
+    ASSERT_EQ(true, read_meta_handle.is_valid());
+    ASSERT_EQ(false, read_meta_handle()->is_in_ghost_); // meta should be in T2
+    ASSERT_EQ(false, read_meta_handle()->is_in_l1_);
+    ASSERT_EQ(false, read_meta_handle()->is_data_persisted_);
+    ASSERT_EQ(false, read_meta_handle()->is_meta_persisted_);
+    ASSERT_EQ(true, read_meta_handle()->is_meta_serialized_); // meta has been serialized
+    ASSERT_EQ(true, read_meta_handle()->is_meta_dirty_); // meta is updated after serialize
+  }
+
+  // Step 7: Complete persistence and try to delete ghost meta (will fail because meta is now valid)
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.handle_persisted_sub_ranges(item_writer));
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.handle_block_id_list(item_writer));
+
+  // Verify meta is still in memory (hit_ghost made it valid, preventing deletion)
+  {
+    ObSSMicroBlockMetaHandle read_meta_handle;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(target_meta_info.micro_key_, read_meta_handle,
+                      micro_id.macro_id_.second_id(), false));
+    ASSERT_EQ(true, read_meta_handle.is_valid());
+    ASSERT_EQ(false, read_meta_handle()->is_in_ghost_);
+    ASSERT_EQ(false, read_meta_handle()->is_in_l1_);
+    ASSERT_EQ(false, read_meta_handle()->is_data_persisted_);
+    ASSERT_EQ(true, read_meta_handle()->is_meta_persisted_); // meta has been persisted
+    ASSERT_EQ(false, read_meta_handle()->is_meta_serialized_);
+    ASSERT_EQ(true, read_meta_handle()->is_meta_dirty_);
+  }
+
+  // Step 8: Simulate next persistence - load stale meta from disk, causing OB_ENTRY_EXIST
+  LOG_INFO("TEST STEP 8: before inner_obtain_persisted_micro_metas",
+    "T1_cnt", arc_info.seg_info_arr_[SS_ARC_T1].cnt_,
+    "B1_cnt", arc_info.seg_info_arr_[SS_ARC_B1].cnt_,
+    "T2_cnt", arc_info.seg_info_arr_[SS_ARC_T2].cnt_,
+    "B2_cnt", arc_info.seg_info_arr_[SS_ARC_B2].cnt_,
+    "entry_exist_persisted_cnt", cache_stat.task_stat().entry_exist_persisted_cnt_);
+  const int64_t ori_exist_cnt = cache_stat.task_stat().entry_exist_persisted_cnt_;
+  ASSERT_EQ(ori_exist_cnt, 0);
+  const int64_t ori_b1_cnt = arc_info.seg_info_arr_[SS_ARC_B1].cnt_;
+  const int64_t ori_b2_cnt = arc_info.seg_info_arr_[SS_ARC_B2].cnt_;
+  ObSEArray<ObSSMicroBlockMetaInfo, SS_DEF_ARRAY_CNT> parsed_micro_infos;
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.inner_obtain_persisted_micro_metas(init_range, sub_range, parsed_micro_infos));
+  const int64_t micro_info_cnt = parsed_micro_infos.count();
+  ASSERT_GT(micro_info_cnt, 0);
+  ObSSMicroBlockMetaHandle micro_meta_handle;
+  ObSSMicroBlockMetaInfo micro_meta_info;
+  int64_t micro_info_idx = 0;
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.inner_add_persisted_micro_metas(parsed_micro_infos, micro_info_idx, micro_meta_handle,
+      micro_meta_info));
+
+  LOG_INFO("TEST STEP 8: after inner_obtain_persisted_micro_metas",
+    "T1_cnt", arc_info.seg_info_arr_[SS_ARC_T1].cnt_,
+    "B1_cnt", arc_info.seg_info_arr_[SS_ARC_B1].cnt_,
+    "T2_cnt", arc_info.seg_info_arr_[SS_ARC_T2].cnt_,
+    "B2_cnt", arc_info.seg_info_arr_[SS_ARC_B2].cnt_,
+    "entry_exist_persisted_cnt", cache_stat.task_stat().entry_exist_persisted_cnt_);
+  const int64_t cur_exist_cnt = cache_stat.task_stat().entry_exist_persisted_cnt_;
+  ASSERT_EQ(cur_exist_cnt, 1);
+  const int64_t cur_b1_cnt = arc_info.seg_info_arr_[SS_ARC_B1].cnt_;
+  const int64_t cur_b2_cnt = arc_info.seg_info_arr_[SS_ARC_B2].cnt_;
+  ASSERT_EQ(ori_b1_cnt + ori_b2_cnt, cur_b1_cnt + cur_b2_cnt);
+  LOG_INFO("TEST_CASE: finish test_entry_exist_when_load_meta");
+}
+
 }  // namespace storage
 }  // namespace oceanbase
 int main(int argc, char **argv)
