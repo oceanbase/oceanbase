@@ -122,10 +122,9 @@ int ObTTLFilterInfo::to_filter_col_type(const ObObjType &obj_type, ObTTLFilterCo
     filter_col_type = ObTTLFilterColType::INT64;
     break;
   case ObTimestampType:
-  case ObDateTimeType:
     filter_col_type = ObTTLFilterColType::TIMESTAMP;
     break;
-  case ObDateType:
+  case ObDateTimeType:
     filter_col_type = ObTTLFilterColType::DATE;
     break;
   case ObTimestampTZType:

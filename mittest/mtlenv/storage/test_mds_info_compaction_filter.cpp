@@ -74,10 +74,10 @@ TEST_F(TestMdsInfoCompactionFilter, test_get_ttl_filter_op)
   int ret = OB_SUCCESS;
 
   const char *key_data = "tx_id    commit_ver  filter_type   filter_value   filter_col\n"
-                         "4        1000         0           1              1          \n"
-                         "3        2000         0           1000           1          \n"
-                         "2        3000         0           2000           1          \n"
-                         "1        6000         0           4000           1          \n";
+                         "4        1000         1           1              1          \n"
+                         "3        2000         1           1000           1          \n"
+                         "2        3000         1           2000           1          \n"
+                         "1        6000         1           4000           1          \n";
   // create tablet
   const ObTabletID tablet_id(ObTimeUtility::fast_current_time() % 10000000000000);
   ObTabletHandle tablet_handle;

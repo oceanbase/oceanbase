@@ -28,7 +28,8 @@ int ObSSTableIndexFilter::init(
     const bool is_cg,
     const ObITableReadInfo* read_info,
     sql::ObPushdownFilterExecutor &pushdown_filter,
-    common::ObIAllocator *allocator)
+    common::ObIAllocator *allocator,
+    const int64_t batch_size)
 {
   int ret = OB_SUCCESS;
   is_cg_ = is_cg;
@@ -40,7 +41,7 @@ int ObSSTableIndexFilter::init(
     LOG_WARN("Unexpected nullptr read_info", K(ret), KP(read_info), K(is_cg));
   } else if (OB_FAIL(build_skipping_filter_nodes(read_info, pushdown_filter))) {
     LOG_WARN("Fail to build skipping filter node", K(ret));
-  } else if (OB_FAIL(skip_filter_executor_.init(MAX(1, pushdown_filter.get_op().get_batch_size()), allocator))) {
+  } else if (OB_FAIL(skip_filter_executor_.init(MAX(1, batch_size), allocator))) {
     LOG_WARN("Failed to init skip filter executor", K(ret));
   } else {
     pushdown_filter_ = &pushdown_filter;
@@ -263,7 +264,7 @@ int ObSSTableIndexFilter::find_useful_skipping_filter(
 
 int ObSSTableIndexFilterFactory::build_sstable_index_filter(
     const bool is_cg,
-    const ObITableReadInfo* read_info,
+    const ObTableIterParam* iter_param,
     sql::ObPushdownFilterExecutor &pushdown_filter,
     common::ObIAllocator *allocator,
     ObSSTableIndexFilter *&index_filter)
@@ -271,13 +272,18 @@ int ObSSTableIndexFilterFactory::build_sstable_index_filter(
   int ret = OB_SUCCESS;
   ObSSTableIndexFilter *tmp_index_filter = nullptr;
   index_filter = nullptr;
-  if (OB_ISNULL(allocator)) {
+  if (OB_ISNULL(allocator) || OB_ISNULL(iter_param)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected nullptr allocator", K(ret), KP(allocator));
+    LOG_WARN("Unexpected nullptr allocator or iter_param", K(ret), KP(allocator), KP(iter_param));
   } else if (OB_ISNULL(tmp_index_filter = OB_NEWx(ObSSTableIndexFilter, allocator))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to new ObSSTableIndexFilter", K(ret));
-  } else if (OB_FAIL(tmp_index_filter->init(is_cg, read_info, pushdown_filter, allocator))) {
+  } else if (OB_FAIL(tmp_index_filter->init(
+                 is_cg,
+                 iter_param->get_read_info(),
+                 pushdown_filter,
+                 allocator,
+                 iter_param->op_ != nullptr ? iter_param->op_->get_batch_size() : pushdown_filter.get_op().get_batch_size()))) {
     LOG_WARN("Fail to init ObSSTableIndexFilter", K(ret), K(is_cg));
   }
   if (OB_SUCC(ret) && tmp_index_filter->can_use_skipping_index()) {

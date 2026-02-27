@@ -45,9 +45,9 @@ ObPushdownFilterFactory::PDFilterAllocFunc ObPushdownFilterFactory::PD_FILTER_AL
   ObPushdownFilterFactory::alloc<ObTruncateOrFilterNode, TRUNCATE_OR_FILTER>,
   ObPushdownFilterFactory::alloc<ObTruncateAndFilterNode, TRUNCATE_AND_FILTER>,
   ObPushdownFilterFactory::alloc<ObSemiStructWhiteFilterNode, SEMISTRUCT_FILTER>,
+  ObPushdownFilterFactory::alloc<ObBaseVersionFilterNode, BASE_VERSION_FILTER>,
   ObPushdownFilterFactory::alloc<ObTTLWhiteFilterNode, TTL_WHITE_FILTER>,
   ObPushdownFilterFactory::alloc<ObTTLAndFilterNode, TTL_AND_FILTER>,
-  ObPushdownFilterFactory::alloc<ObBaseVersionFilterNode, BASE_VERSION_FILTER>,
 };
 
 ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER_EXECUTOR_ALLOC[PushdownExecutorType::MAX_EXECUTOR_TYPE] =
@@ -64,9 +64,9 @@ ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER
   ObPushdownFilterFactory::alloc<ObTruncateOrFilterExecutor, ObTruncateOrFilterNode, TRUNCATE_OR_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObTruncateAndFilterExecutor, ObTruncateAndFilterNode, TRUNCATE_AND_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObSemiStructWhiteFilterExecutor, ObSemiStructWhiteFilterNode, SEMISTRUCT_FILTER_EXECUTOR>,
+  ObPushdownFilterFactory::alloc<ObBaseVersionFilterExecutor, ObBaseVersionFilterNode, BASE_VERSION_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObTTLWhiteFilterExecutor, ObTTLWhiteFilterNode, TTL_WHITE_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObTTLAndFilterExecutor, ObTTLAndFilterNode, TTL_AND_FILTER_EXECUTOR>,
-  ObPushdownFilterFactory::alloc<ObBaseVersionFilterExecutor, ObBaseVersionFilterNode, BASE_VERSION_FILTER_EXECUTOR>,
 };
 
 ObDynamicFilterExecutor::PreparePushdownDataFunc ObDynamicFilterExecutor::PREPARE_PD_DATA_FUNCS

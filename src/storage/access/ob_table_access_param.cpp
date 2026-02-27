@@ -198,7 +198,7 @@ int ObTableIterParam::build_index_filter_for_row_store(common::ObIAllocator *all
   if (enable_pd_blockscan() && enable_pd_filter() && enable_base_skip_index() && nullptr != pd_filter) {
     if (OB_FAIL(ObSSTableIndexFilterFactory::build_sstable_index_filter(
                 false,
-                get_read_info(),
+                this,
                 *pd_filter,
                 allocator,
                 sstable_index_filter_))) {
