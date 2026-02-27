@@ -28,6 +28,8 @@ int ObTableApiCacheKey::deep_copy(common::ObIAllocator &allocator, const ObILibC
   flags_ = table_key.flags_;
   operation_type_ = table_key.operation_type_;
   namespace_ = table_key.namespace_;
+  io_read_batch_size_ = table_key.io_read_batch_size_;
+  io_read_gap_size_ = table_key.io_read_gap_size_;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_key.op_column_ids_.count(); i++) {
     if (OB_FAIL(op_column_ids_.push_back(table_key.op_column_ids_.at(i)))) {
       LOG_WARN("fail to push back column id ", K(ret));
@@ -47,6 +49,8 @@ uint64_t ObTableApiCacheKey::hash() const
   for (int64_t i = 0; i < op_column_ids_.count(); i++) {
     hash_val = murmurhash(&(op_column_ids_.at(i)), sizeof(uint64_t), hash_val);
   }
+  hash_val = murmurhash(&io_read_batch_size_, sizeof(io_read_batch_size_), hash_val);
+  hash_val = murmurhash(&io_read_gap_size_, sizeof(io_read_gap_size_), hash_val);
   return hash_val;
 }
 
@@ -59,7 +63,9 @@ bool ObTableApiCacheKey::is_equal(const ObILibCacheKey &other) const
                  flags_ == table_key.flags_ &&
                  operation_type_ == table_key.operation_type_ &&
                  namespace_ == table_key.namespace_ &&
-                 op_column_ids_.count() == table_key.op_column_ids_.count();
+                 op_column_ids_.count() == table_key.op_column_ids_.count() &&
+                 io_read_batch_size_ == table_key.io_read_batch_size_ &&
+                 io_read_gap_size_ == table_key.io_read_gap_size_;
   for (int64_t i = 0; (cmp_ret == true) && i < op_column_ids_.count(); i++) {
     if (op_column_ids_.at(i) != table_key.op_column_ids_.at(i)) {
       cmp_ret = false;
@@ -75,6 +81,8 @@ void ObTableApiCacheKey::reset()
   schema_version_ = -1;
   flags_ = 0;
   namespace_ = ObLibCacheNameSpace::NS_TABLEAPI;
+  io_read_batch_size_ = 0;
+  io_read_gap_size_ = 0;
 }
 
 int ObTableApiCacheNode::inner_get_cache_obj(ObILibCacheCtx &ctx,
@@ -159,6 +167,8 @@ int ObTableApiCacheGuard::create_cache_key(ObTableCtx *tb_ctx)
         LOG_WARN("fail to add select column id", K(ret), K(i));
       }
     }
+    cache_key_.io_read_batch_size_ = tb_ctx->get_io_read_batch_size();
+    cache_key_.io_read_gap_size_ = tb_ctx->get_io_read_gap_size();
   }
   return ret;
 }

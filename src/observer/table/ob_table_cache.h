@@ -35,7 +35,9 @@ struct ObTableApiCacheKey: public ObILibCacheKey
         index_table_id_(common::OB_INVALID_ID),
         schema_version_(-1),
         operation_type_(ObTableOperationType::Type::INVALID),
-        flags_(0)
+        flags_(0),
+        io_read_batch_size_(0),
+        io_read_gap_size_(0)
   {}
   void reset();
   virtual int deep_copy(common::ObIAllocator &allocator, const ObILibCacheKey &other);
@@ -48,7 +50,9 @@ struct ObTableApiCacheKey: public ObILibCacheKey
               K_(index_table_id),
               K_(op_column_ids),
               K_(namespace),
-              K_(flags));
+              K_(flags),
+              K_(io_read_batch_size),
+              K_(io_read_gap_size));
 
   common::ObTableID table_id_;
   common::ObTableID index_table_id_;
@@ -65,6 +69,8 @@ struct ObTableApiCacheKey: public ObILibCacheKey
       uint64_t reserved_          : 60;
     };
   };
+  int64_t io_read_batch_size_;
+  int64_t io_read_gap_size_;
 };
 
 class ObTableApiCacheNode: public ObILibCacheNode
