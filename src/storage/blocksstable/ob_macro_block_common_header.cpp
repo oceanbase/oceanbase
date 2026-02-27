@@ -59,12 +59,17 @@ int ObMacroBlockCommonHeader::build_serialized_header(char *buf, const int64_t l
   return ret;
 }
 
+bool ObMacroBlockCommonHeader::is_integrity() const
+{
+  return header_size_ == get_serialize_size()
+         && version_ == MACRO_BLOCK_COMMON_HEADER_VERSION
+         && magic_ == MACRO_BLOCK_COMMON_HEADER_MAGIC;
+}
+
 int ObMacroBlockCommonHeader::check_integrity() const
 {
   int ret =OB_SUCCESS;
-  if (header_size_ != get_serialize_size()
-      || version_ != MACRO_BLOCK_COMMON_HEADER_VERSION
-      || magic_ != MACRO_BLOCK_COMMON_HEADER_MAGIC) {
+  if (!is_integrity()) {
     ret = OB_INVALID_DATA;
     LOG_WARN("invalid common header", K(ret), K(*this));
   }
