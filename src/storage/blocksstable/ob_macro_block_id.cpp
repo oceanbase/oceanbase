@@ -255,8 +255,7 @@ bool MacroBlockId::is_shared_data_or_meta() const
 bool MacroBlockId::is_shared_sub_meta() const
 {
   return is_id_mode_share()
-         && SSObjUtil::is_shared(storage_object_type())
-         && SSObjUtil::is_tablet_meta(storage_object_type());
+         && SSObjUtil::is_shared_tablet_sub_meta(storage_object_type());
 }
 
 /*
@@ -291,7 +290,6 @@ bool MacroBlockId::is_shared_data_block_or_meta_block() const
   SHARED_INC_MAJOR_DATA_MACRO
   SHARED_INC_MAJOR_META_MACRO
   SHARED_TABLET_SUB_META
-  SHARED_TABLET_SUB_META_IN_TABLE
 */
 bool MacroBlockId::is_transfer_out_non_gc_block() const
 {

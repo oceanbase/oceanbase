@@ -231,6 +231,21 @@ bool SSObjUtil::can_append_write(const MacroBlockId &macro_id)
   return STI(macro_id.storage_object_type()).can_append_write();
 }
 
+bool SSObjUtil::is_tablet_meta(const MacroBlockId &macro_id)
+{
+  return STI(macro_id.storage_object_type()).is_tablet_meta();
+}
+
+bool SSObjUtil::is_shared_tablet_sub_meta(const ObStorageObjectType type)
+{
+  return STI(type).is_shared_tablet_sub_meta();
+}
+
+bool SSObjUtil::is_shared_tablet_sub_meta(const MacroBlockId &macro_id)
+{
+  return is_shared_tablet_sub_meta(macro_id.storage_object_type());
+}
+
 #ifdef OB_BUILD_SHARED_STORAGE
 int SSObjUtil::get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id)
 {
