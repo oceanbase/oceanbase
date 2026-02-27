@@ -58,6 +58,7 @@ int ObReorgInfoMinorFilter::filter(
     LOG_WARN("uncommitted row in trans state table or multi version row", K(ret), K(row));
   } else if (row.is_uncommitted_row()) {
     // not filter uncommitted row
+    filter_ret = FILTER_RET_NOT_CHANGE;
   } else {
     const int64_t commit_version = -row.storage_datums_[filter_col_idx_].get_int();
     SCN commit_scn;
