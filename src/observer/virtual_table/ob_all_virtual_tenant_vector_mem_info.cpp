@@ -115,6 +115,10 @@ int ObAllVirtualTenantVectorMemInfo::inner_get_next_row(ObNewRow *&row)
           } else if (OB_FAIL(ObPluginVectorIndexUtils::get_mem_context_detail_info(service, complete_tablet_ids_,
              partial_tablet_ids_, cache_tablet_ids_, vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos))) {
             SERVER_LOG(WARN, "failed to print vector mem usage detail", K(ret), K(vector_hold));
+            if (ret == OB_SIZE_OVERFLOW) {
+              // ignore the size overflow error to avoid the row add failed case by the vector_used_str_ is too long
+              ret = OB_SUCCESS;
+            }
           } else if (OB_FAIL(databuff_printf(vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos, "}"))) {
             SERVER_LOG(WARN, "failed to print total vector mem usage", K(ret));
           }
