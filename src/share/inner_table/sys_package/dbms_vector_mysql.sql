@@ -46,4 +46,10 @@ CREATE OR REPLACE PACKAGE dbms_vector AUTHID CURRENT_USER
     IN     idx_parameters    LONGTEXT DEFAULT NULL)
   RETURN VARCHAR(65535);
 
+  PROCEDURE set_attribute(
+    IN     idx_name                VARCHAR(65535),
+    IN     table_name              VARCHAR(65535),
+    IN     item                    VARCHAR(65535),
+    IN     value                   VARCHAR(65535));
+
 END dbms_vector;

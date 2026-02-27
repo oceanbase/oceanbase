@@ -66,7 +66,8 @@ public:
   static int add_vector_index_rebuild_job(common::ObISQLClient &sql_client,
                                           const uint64_t tenant_id,
                                           const uint64_t vidx_table_id,
-                                          const common::ObString &exec_env);
+                                          const common::ObString &exec_env,
+                                          const uint64_t paralellism);
 
   static int remove_vector_index_rebuild_job(common::ObISQLClient &sql_client,
                                              const uint64_t tenant_id,
