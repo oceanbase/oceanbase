@@ -1942,4 +1942,65 @@ DEF_COMMAND(SERVER, push_ss_gc_last_succ_scn, 1, "tenant_id:succ_scn # push ss g
   COMMON_LOG(INFO, "push_ss_gc_last_succ_scn finished", KR(ret), K(arg));
   return ret;
 }
+
+// set_storage_cache_policy_status
+// @params [in]  tenant_id, which tenant to modify
+// @params [in]  tablet_id, which tablet to modify
+// @params [in]  policy_status, 'hot' or 'auto'
+DEF_COMMAND(SERVER, set_storage_cache_policy_status, 1, "tenant_id:tablet_id:policy_status # set storage cache policy status (hot/auto)")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  obrpc::ObTriggerStorageCacheArg arg;
+  int64_t tenant_id = OB_INVALID_TENANT_ID;
+  int64_t tablet_id = 0;
+  char policy_status_str[64] = {0};
+
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id:tablet_id:policy_status (hot/auto)");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (3 != sscanf(arg_str.c_str(), "%ld:%ld:%s", &tenant_id, &tablet_id, policy_status_str)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
+    ADMIN_WARN("invalid argument format, should be tenant_id:tablet_id:policy_status");
+  } else {
+    int8_t policy_status = -1;
+    if (0 == strcasecmp(policy_status_str, "hot")) {
+      policy_status = 0; // HOT
+    } else if (0 == strcasecmp(policy_status_str, "auto")) {
+      policy_status = 1; // AUTO
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      ADMIN_WARN("policy_status must be 'hot' or 'auto'");
+    }
+
+    if (OB_SUCC(ret)) {
+      arg.set_op(obrpc::ObTriggerStorageCacheArg::SET_STATUS);
+      arg.set_tenant_id(tenant_id);
+      arg.set_tablet_id(tablet_id);
+      arg.set_policy_status(policy_status);
+
+      if (!arg.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        COMMON_LOG(WARN, "argument is invalid", K(ret), K(arg));
+      } else if (OB_FAIL(client_->trigger_storage_cache(arg))) {
+        COMMON_LOG(ERROR, "send req fail", K(ret), K(arg));
+      } else {
+        fprintf(stdout, "Successfully set storage cache policy status [tenant_id:%ld, tablet_id:%ld, status:%s]\n",
+                tenant_id, tablet_id, policy_status_str);
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to set_storage_cache_policy_status, ret=%s\n", ob_error_name(ret));
+  }
+  COMMON_LOG(INFO, "set_storage_cache_policy_status", K(ret), K(arg));
+  return ret;
+}
 #endif

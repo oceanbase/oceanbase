@@ -14,6 +14,7 @@
 #include "ob_trigger_storage_cache_executor.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "sql/resolver/cmd/ob_trigger_storage_cache_stmt.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 
 namespace oceanbase
@@ -30,6 +31,7 @@ int ObTriggerStorageCacheExecutor::execute(ObExecContext &ctx, ObTriggerStorageC
 #ifdef OB_BUILD_SHARED_STORAGE
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   ObCommonRpcProxy *common_proxy = NULL;
+  obrpc::ObTriggerStorageCacheArg &arg = stmt.get_rpc_arg();
   if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("trigger storage cache is not supported if version is less than 4.3.5.2", K(ret));
@@ -43,15 +45,17 @@ int ObTriggerStorageCacheExecutor::execute(ObExecContext &ctx, ObTriggerStorageC
     ObArray<ObAddr> server_list;
     ObArray<ObUnit> tenant_units;
     ObUnitTableOperator unit_op;
-    ObTriggerStorageCacheArg &arg = stmt.get_rpc_arg();
     uint64_t tenant_id = arg.get_tenant_id();
+    // For meta tenant, use its corresponding user tenant's units
+    // Meta tenant shares units with user tenant
+    uint64_t unit_tenant_id = is_meta_tenant(tenant_id) ? gen_user_tenant_id(tenant_id) : tenant_id;
     if (OB_FAIL(unit_op.init(*GCTX.sql_proxy_))) {
       LOG_WARN("failed to init unit op", KR(ret));
-    } else if (OB_FAIL(unit_op.get_units_by_tenant(tenant_id, tenant_units))) {
-      LOG_WARN("failed to get tenant units", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(unit_op.get_units_by_tenant(unit_tenant_id, tenant_units))) {
+      LOG_WARN("failed to get tenant units", KR(ret), K(tenant_id), K(unit_tenant_id));
     } else if (OB_UNLIKELY(0 == tenant_units.count())) {
       ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant not exist", KR(ret), K(tenant_id));
+      LOG_WARN("tenant not exist", KR(ret), K(tenant_id), K(unit_tenant_id));
     } else {
       FOREACH_X(unit, tenant_units, OB_SUCC(ret)) {
         bool is_alive = false;
@@ -87,6 +91,13 @@ int ObTriggerStorageCacheExecutor::execute(ObExecContext &ctx, ObTriggerStorageC
           }
         }
       }
+    }
+    // record event to __all_server_event_history
+    if (ObTriggerStorageCacheArg::TRIGGER == arg.get_op()) {
+      SERVER_EVENT_ADD("storage_cache_policy", "trigger_executor",
+          "tenant_id", arg.get_tenant_id(),
+          "ret", ret,
+          "trace_id", *ObCurTraceId::get_trace_id());
     }
   }
 #endif

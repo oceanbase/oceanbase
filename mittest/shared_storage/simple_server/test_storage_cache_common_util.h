@@ -384,7 +384,7 @@ void ObStorageCachePolicyPrewarmerTest::check_macro_cache_exist()
   for (int i = 0; i < data_block_ids.count(); i++) {
     is_exist = false;
     FLOG_INFO("[TEST] macro id", K(data_block_ids.at(i)), K(i));
-    if (data_block_ids.at(i).is_data()) {
+    if (data_block_ids.at(i).is_data() && data_block_ids.at(i).is_shared_data_or_meta()) {
       OK(ss_cache_mgr->exist(data_block_ids.at(i), is_exist));
       if (!is_exist) {
         FLOG_INFO("macro is not exist", K(i), K(run_ctx_), K(data_block_ids.at(i)));

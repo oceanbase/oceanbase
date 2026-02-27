@@ -2327,7 +2327,7 @@ void exhaust_macro_file_disk_size(int64_t &avail_size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  avail_size = disk_space_manager->get_macro_cache_free_size();
+  avail_size = disk_space_manager->get_shared_macro_cache_free_size();
   ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size,
             ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
   ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,

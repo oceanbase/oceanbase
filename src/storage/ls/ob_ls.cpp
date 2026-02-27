@@ -549,6 +549,9 @@ int ObLS::check_has_cs_replica(bool &has_cs_replica) const
 int ObLS::start()
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(tx_table_.start())) {
+    LOG_WARN("start tx table failed", KR(ret), K(ls_meta_));
+  }
   return ret;
 }
 

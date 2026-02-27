@@ -13,6 +13,7 @@
 
 #define protected public
 #define private public
+#include "lib/utility/ob_test_util.h"
 #include "mittest/shared_storage/test_ss_common_util.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
@@ -183,10 +184,19 @@ void TestSSReaderWriter::TearDown()
   if (OB_NOT_NULL(disk_space_manager)) {
     // Try to release a large amount of disk space to reset state
     // This handles cases where tests exhaust disk space but fail before cleanup
-    int64_t large_size = 100 * 1024 * 1024; // 100MB
-    disk_space_manager->free_file_size(large_size, ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE);
-    disk_space_manager->free_file_size(large_size, ObSSMacroCacheType::META_FILE, ObDiskSpaceType::FILE);
-    disk_space_manager->free_file_size(large_size, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE);
+    ObSSMacroCacheStat cache_stat;
+    OK(disk_space_manager->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+    if (cache_stat.used_ > 0) {
+      OK(disk_space_manager->free_file_size(cache_stat.used_, ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE));
+    }
+    OK(disk_space_manager->get_macro_cache_stat(ObSSMacroCacheType::META_FILE, cache_stat));
+    if (cache_stat.used_ > 0) {
+      OK(disk_space_manager->free_file_size(cache_stat.used_, ObSSMacroCacheType::META_FILE, ObDiskSpaceType::FILE));
+    }
+    OK(disk_space_manager->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, cache_stat));
+    if (cache_stat.used_ > 0) {
+      OK(disk_space_manager->free_file_size(cache_stat.used_, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
+    }
     LOG_INFO("TearDown: attempted to release disk space for next test");
   }
 
@@ -200,7 +210,7 @@ void TestSSReaderWriter::exhaust_tmp_file_disk_size(int64_t &avail_size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  avail_size = disk_space_manager->get_macro_cache_free_size();
+  avail_size = disk_space_manager->get_shared_macro_cache_free_size();
   ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size,
             ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
   ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,
@@ -235,7 +245,7 @@ void TestSSReaderWriter::check_tmp_file_disk_size_enough(const int64_t size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  ASSERT_LT(size, disk_space_manager->get_macro_cache_free_size()) << "call_times: " << call_times;
+  ASSERT_LT(size, disk_space_manager->get_shared_macro_cache_free_size()) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::write_tmp_file_data(

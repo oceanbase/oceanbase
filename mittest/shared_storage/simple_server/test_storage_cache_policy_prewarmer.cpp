@@ -417,9 +417,9 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
 
   // Case 1
   // 1. Simulate hot tablet macro cache is full to get a skipped tablet task
-  int64_t max_tablet_size = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t max_tablet_size = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
-  int64_t after_alloc_tablet_size1 = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t after_alloc_tablet_size1 = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_tablet_size1);
 
   OK(exe_sql("insert into test_incremental_trigger values (7)"));
@@ -438,9 +438,9 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
                                                            ObDiskSpaceType::FILE));
 
   // 2. The total macro cache is full, but HOT_TABLET_MACRO_BLOCK is below min value
-  int64_t max_tablet_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t max_tablet_size2 = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size2, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
-  int64_t after_alloc_tablet_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t after_alloc_tablet_size2 = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_tablet_size2);
 
   ASSERT_EQ(OB_SUCCESS, policy_service->trigger_or_refresh_tablet(ObStorageCachePolicyRefreshType::REFRESH_TYPE_NORMAL));
@@ -455,9 +455,9 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   // Case 2
   // 1. Simulate hot tablet macro cache is full to get a skipped tablet task
   FLOG_INFO("[TEST] start case2 in test_incremental_trigger");
-  int64_t max_tablet_size3 = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t max_tablet_size3 = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size3, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
-  int64_t after_alloc_tablet_size3 = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t after_alloc_tablet_size3 = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_tablet_size3);
 
   OK(exe_sql("create table test_incremental_trigger2 (a int)"));
@@ -480,7 +480,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
                                                            ObDiskSpaceType::FILE));
 
   // 2. Free space is below free threshold while hot tablet space is exceed min value
-  int64_t max_tablet_size4 = tnt_disk_space_mgr->get_macro_cache_size();
+  int64_t max_tablet_size4 = tnt_disk_space_mgr->get_shared_macro_cache_size();
   // hot tablet macro cache: 75%
   const int64_t alloc_hot_tablet_perc = (hot_tablet_macro_cache_min_threshold + 5);
   int64_t alloc_size1 = (max_tablet_size4 * alloc_hot_tablet_perc) / 100;
@@ -488,14 +488,14 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   ObSSMacroCacheStat macro_cache_stat1;
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, macro_cache_stat1));
   ASSERT_GT(macro_cache_stat1.used_, (max_tablet_size4 * hot_tablet_macro_cache_min_threshold) / 100);
-  int64_t alloc_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t alloc_size2 = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   alloc_size2 -= (max_tablet_size4 * (ObStorageCachePolicyService::MACRO_CACHE_FREE_SPACE_THRESHOLD + 2)) / 100;
 
   OK(tnt_disk_space_mgr->alloc_file_size(alloc_size2, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
   for (int i=0; i<SS_MACRO_CACHE_MAX_TYPE_VAL; i++) {
     FLOG_INFO("[TEST] print macro cache all stats444", K(tnt_disk_space_mgr->macro_cache_stats_[i]));
   }
-  int64_t after_alloc_tablet_size4 = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t after_alloc_tablet_size4 = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   FLOG_INFO("[TEST] max_tablet_size4", K(alloc_hot_tablet_perc), K(max_tablet_size4), K(alloc_size1), K(alloc_size2),
       K(macro_cache_stat1.used_), K(after_alloc_tablet_size4), K((max_tablet_size4 * ObStorageCachePolicyService::MACRO_CACHE_FREE_SPACE_THRESHOLD) / 100));
   ASSERT_GT(after_alloc_tablet_size4, (max_tablet_size4 * ObStorageCachePolicyService::MACRO_CACHE_FREE_SPACE_THRESHOLD) / 100);
@@ -533,7 +533,6 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_force_refresh_policy_task)
   policy_service->refresh_policy_scheduler_.force_refresh_policy_task_.runTimerTask();
   ASSERT_EQ(OB_SUCCESS, policy_service->tablet_status_map_.get_refactored(run_ctx_.tablet_id_.id(), policy_status));
   ASSERT_EQ(PolicyStatus::HOT, policy_status);
-  ASSERT_TRUE(policy_service->get_need_generate_cache_task());
   FLOG_INFO("[TEST] finish test_force_refresh_policy_task");
 }
 

@@ -99,13 +99,13 @@ int ObAllVirtualTabletLocalCache::process_curr_tenant(common::ObNewRow *&row)
   } else {
     if (MTL_ID() != tenant_id_) {
       tenant_id_ = MTL_ID();
-      if (is_user_tenant(tenant_id_)) {
+      if (is_valid_tenant_id(tenant_id_)) {
         const hash::ObHashMap<int64_t, PolicyStatus> &tablet_status_map =
             scp_service->get_tablet_status_map();
         if (OB_FAIL(copy_tablet_status_map_(tablet_status_map))) {
           SERVER_LOG(WARN, "fail to copy tablet status", KR(ret), KPC(scp_service));
         }
-      } else {  // only process user tenant
+      } else {  // only process valid tenant
         ret = OB_ITER_END;
       }
     }

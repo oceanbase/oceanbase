@@ -194,7 +194,7 @@ bool ObUnitResource::is_data_disk_size_valid_for_unit() const
 {
   bool b_ret = false;
   if (GCTX.is_shared_storage_mode()) {
-    b_ret = 0 == data_disk_size_ || data_disk_size_ >= UNIT_MIN_DATA_DISK_SIZE;
+    b_ret = data_disk_size_ >= UNIT_MIN_DATA_DISK_SIZE;
   } else {
     b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
   }
@@ -205,8 +205,7 @@ bool ObUnitResource::is_data_disk_size_valid_for_meta_tenant() const
 {
   bool b_ret = false;
   if (GCTX.is_shared_storage_mode()) {
-    b_ret = 0 == data_disk_size_ ||
-            (data_disk_size_ >= META_TENANT_MIN_DATA_DISK_SIZE
+    b_ret = (data_disk_size_ >= META_TENANT_MIN_DATA_DISK_SIZE
             && data_disk_size_ <= META_TENANT_MAX_DATA_DISK_SIZE);
   } else {
     b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
@@ -218,7 +217,7 @@ bool ObUnitResource::is_data_disk_size_valid_for_user_tenant() const
 {
   bool b_ret = false;
   if (GCTX.is_shared_storage_mode()) {
-    b_ret = 0 == data_disk_size_ || data_disk_size_ >= USER_TENANT_MIN_DATA_DISK_SIZE;
+    b_ret = data_disk_size_ >= USER_TENANT_MIN_DATA_DISK_SIZE;
   } else {
     b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
   }
@@ -343,16 +342,11 @@ int ObUnitResource::init_update_and_check_data_disk_(const ObUnitResource &user_
       // for upgrade compatability in shared-nothing mode
       data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
     } else {
-      uint64_t sys_data_version = 0;
-      // user specifying data_disk_size = 0 is supported in 4.3.5.2 and above
-      if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
-        LOG_WARN("failed to get sys tenant min data version", KR(ret));
-      } else if (sys_data_version < DATA_VERSION_4_3_5_2) {
-        ret = common::OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "SYS tenant data version is below 4.3.5.2, DATA_DISK_SIZE being 0");
-      } else {
-        data_disk_size_ = user_spec.data_disk_size();
-      }
+      // NOTE: "DATA_DISK_SIZE = 0" was a test-only knob and has never been intended to be
+      // supported/exposed for production users. It is planned to be deprecated, so we reject
+      // it unconditionally here instead of keeping a version-gated compatibility path.
+      ret = common::OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "DATA_DISK_SIZE being 0");
     }
   } else if (user_spec.data_disk_size() > 0) {
     // user specify data_disk_size

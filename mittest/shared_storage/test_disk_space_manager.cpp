@@ -124,7 +124,7 @@ TEST_F(TestDiskSpaceManager, test_tmp_file_space_manager)
                                                                                ObDiskSpaceType::FILE));
 
   // 4.alloc max_available_disk_size
-  const int64_t macro_cache_free_size = tenant_disk_space_mgr->get_macro_cache_free_size();
+  const int64_t macro_cache_free_size = tenant_disk_space_mgr->get_shared_macro_cache_free_size();
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::TMP_FILE,
                                                                ObDiskSpaceType::FILE));
   disk_size = 1L * 1024L * 1024L; // 1MB
@@ -165,7 +165,7 @@ TEST_F(TestDiskSpaceManager, test_meta_file_space_manager)
   ASSERT_EQ(ori_used_size, cache_stat.used_);
 
   // 3.alloc max_available_disk_size
-  const int64_t macro_cache_free_size = tenant_disk_space_mgr->get_macro_cache_free_size();
+  const int64_t macro_cache_free_size = tenant_disk_space_mgr->get_shared_macro_cache_free_size();
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::META_FILE,
                                                                ObDiskSpaceType::FILE));
   disk_size = 1L * 1024L * 1024L; // 1MB

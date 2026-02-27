@@ -203,7 +203,7 @@ TEST_F(TestSSObjectAccessUtil, test_tmp_file)
   // check local cache tmp file free size is enough, so as to ensure write local cache, instead of object storage
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
-  ASSERT_LT(8192, disk_space_mgr->get_macro_cache_free_size());
+  ASSERT_LT(8192, disk_space_mgr->get_shared_macro_cache_free_size());
 
   MacroBlockId macro_id;
   macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);

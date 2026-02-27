@@ -4409,9 +4409,6 @@ int ObTriggerStorageCacheP::process()
   } else if (!common::is_valid_tenant_id(tenant_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid tenant id to switch", K(ret), K(tenant_id));
-  } else if (!is_user_tenant(tenant_id)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_ERROR("can't trigger non-user tenant for storage cache", K(ret), K(tenant_id));
   } else {
     MTL_SWITCH(tenant_id)
     {
@@ -4419,9 +4416,29 @@ int ObTriggerStorageCacheP::process()
       if (OB_ISNULL(storage_cache_service = MTL(ObStorageCachePolicyService *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("storage_cache_service is nullptr", KR(ret));
-      } else if (FALSE_IT(storage_cache_service->set_trigger_status(true))) {
+      } else if (obrpc::ObTriggerStorageCacheArg::TRIGGER == arg_.get_op()) {
+        if (OB_FAIL(storage_cache_service->schedule_refresh_policy_task())) {
+          LOG_WARN("fail to schedule refresh policy task", KR(ret));
+        }
+        FLOG_INFO("[SCP] succeed to trigger storage cache", K_(arg));
+      } else if (obrpc::ObTriggerStorageCacheArg::SET_STATUS == arg_.get_op()) {
+        const uint64_t tablet_id = arg_.get_tablet_id();
+        const storage::PolicyStatus policy_status = static_cast<storage::PolicyStatus>(arg_.get_policy_status());
+        if (OB_FAIL(storage_cache_service->update_status_and_generate_task(tablet_id, policy_status))) {
+          LOG_WARN("fail to update tablet status", KR(ret), K(tablet_id), K(policy_status));
+        } else {
+          FLOG_INFO("[SCP] succeed to set storage cache policy status", K_(arg), K(tablet_id), K(policy_status));
+        }
+        // record event to __all_server_event_history for ob_admin command
+        SERVER_EVENT_ADD("storage_cache_policy", "set_status",
+            "tenant_id", tenant_id,
+            "ret", ret,
+            "trace_id", *ObCurTraceId::get_trace_id(),
+            "tablet_id", arg_.get_tablet_id(),
+            "policy_status", arg_.get_policy_status() == 0 ? "HOT" : "AUTO");
       } else {
-        LOG_INFO("succeed to trigger storage cache", K_(arg));
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown storage cache op", K(ret), K_(arg));
       }
     }
   }

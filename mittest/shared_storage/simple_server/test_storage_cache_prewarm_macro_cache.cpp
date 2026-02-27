@@ -182,23 +182,38 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_space_occupy)
 
   ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
   ASSERT_NE(tnt_disk_space_mgr, nullptr);
-  OK(exe_sql("create table test_space_occupy (a int)"));
-  set_ls_and_tablet_id_for_run_ctx("test_space_occupy");
+  ObSSMacroCacheStat original_macro_cache_stat;
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, original_macro_cache_stat));
+  ObSSMacroCacheStat original_hot_macro_cache_stat;
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, original_hot_macro_cache_stat));
+  LOG_INFO("[TEST] 111check original macro cache stat", K(original_macro_cache_stat), K(original_hot_macro_cache_stat));
+  OK(exe_sql("create table test_space_occupy_auto (a varchar(1000), b varchar(8000), c varchar(8000))"));
+
+  OK(exe_sql("insert into test_space_occupy_auto select randstr(1000, random()), randstr(8000, random()), randstr(8000, random()) from table(generator(16000))"));
+  OK(exe_sql("alter system major freeze;"));
+  wait_major_finish();
 
   // 6. test whether occupy space happens when hot tablet macro block space is not enough
-  const int64_t macro_free_size = tnt_disk_space_mgr->get_macro_cache_free_size();
+  ObSSMacroCacheStat macro_cache_stat_before;
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, macro_cache_stat_before));
+  ObSSMacroCacheStat hot_macro_cache_stat_before;
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, hot_macro_cache_stat_before));
+  LOG_INFO("[TEST] check macro cache stat before", K(macro_cache_stat_before), K(hot_macro_cache_stat_before));
+  const int64_t macro_free_size = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   OK(tnt_disk_space_mgr->alloc_file_size((macro_free_size), ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
-
+  ObSSMacroCacheStat macro_cache_stat_after;
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, macro_cache_stat_after));
+  ObSSMacroCacheStat hot_macro_cache_stat_after;
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, hot_macro_cache_stat_after));
+  LOG_INFO("[TEST] check macro cache stat after", K(macro_cache_stat_after), K(hot_macro_cache_stat_after));
 
   ObSSMacroCacheStat macro_cache_stat1;
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, macro_cache_stat1));
   ObSSMacroCacheStat hot_macro_cache_stat1;
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, hot_macro_cache_stat1));
-
-  OK(exe_sql("insert into test_space_occupy values (7)"));
-  OK(exe_sql("insert into test_space_occupy values (8)"));
-  OK(exe_sql("insert into test_space_occupy values (9)"));
-
+  OK(exe_sql("create table test_space_occupy (a varchar(1000))"));
+  OK(exe_sql("insert into test_space_occupy select randstr(1000, random(10)) from table(generator(16000))"));
+  set_ls_and_tablet_id_for_run_ctx("test_space_occupy");
   OK(medium_compact(run_ctx_.tablet_id_.id()));
   OK(exe_sql("alter table test_space_occupy storage_cache_policy (global = 'auto');"));
   OK(exe_sql("alter table test_space_occupy storage_cache_policy (global = 'hot');"));
@@ -215,7 +230,27 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_space_occupy)
 
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(macro_free_size, ObSSMacroCacheType::MACRO_BLOCK,
                                                            ObDiskSpaceType::FILE));
-  FLOG_INFO("[TEST] test_macro_cache_space_occupy end", K(tnt_disk_space_mgr->get_macro_cache_free_size()));
+  FLOG_INFO("[TEST] test_macro_cache_space_occupy end", K(tnt_disk_space_mgr->get_shared_macro_cache_free_size()));
+}
+
+TEST_F(ObStorageCachePolicyPrewarmerTest, test_hot_inner_table) {
+  share::ObTenantSwitchGuard tguard;
+  OK(tguard.switch_to(run_ctx_.tenant_id_));
+  exe_prepare_sql();
+  FLOG_INFO("[TEST] start test_hot_inner_table");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  micro_cache->clear_micro_cache();
+  run_ctx_.ls_id_ = ObLSID(1);
+  run_ctx_.tablet_id_ = ObTabletID(100001);
+  ObSSMicroCacheStat &before_cache_stat = micro_cache->cache_stat_;
+  int64_t total_micro_size_before = before_cache_stat.micro_stat().total_micro_size_;
+  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  check_macro_cache_exist();
+  ObSSMicroCacheStat &after_cache_stat = micro_cache->cache_stat_;
+  int64_t total_micro_size_after = after_cache_stat.micro_stat().total_micro_size_;
+  ASSERT_GE(total_micro_size_after, total_micro_size_before);
+  FLOG_INFO("[TEST] finish test_hot_inner_table", K(total_micro_size_before), K(total_micro_size_after));
 }
 
 TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
@@ -238,17 +273,16 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
   ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
   ASSERT_NE(tnt_disk_space_mgr, nullptr);
   macro_cache_mgr->evict_task_.is_inited_ = false;
-  OK(exe_sql("create table test_macro_cache_full (a int)"));
+  OK(exe_sql("create table test_macro_cache_full (a varchar(1000))"));
   set_ls_and_tablet_id_for_run_ctx("test_macro_cache_full");
 
   // 7. Test if the space of hot tablet macro cache is full
-  int64_t max_hot_tablet_size = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t max_hot_tablet_size = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   OK(tnt_disk_space_mgr->alloc_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
-  int64_t after_alloc_hot_tablet_size = tnt_disk_space_mgr->get_macro_cache_free_size();
+  int64_t after_alloc_hot_tablet_size = tnt_disk_space_mgr->get_shared_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_hot_tablet_size);
-  OK(exe_sql("insert into test_macro_cache_full values (7)"));
-  OK(exe_sql("insert into test_macro_cache_full values (8)"));
-  OK(exe_sql("insert into test_macro_cache_full values (9)"));
+  OK(exe_sql("insert into test_macro_cache_full select randstr(1000, random(10)) from table(generator(16000))"));
+
 
   OK(medium_compact(run_ctx_.tablet_id_.id()));
   OK(exe_sql("alter table test_macro_cache_full storage_cache_policy (global = 'auto');"));
@@ -295,7 +329,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
   ASSERT_NE(nullptr, strstr(task2->get_comment().ptr(), size_comment));
   ASSERT_TRUE(data_block_ids.count() + meta_block_ids.count() > second_stat.macro_block_num_ + second_stat.macro_block_hit_cnt_);
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
-  FLOG_INFO("[TEST] test_prewarm_macro_block end", K(tnt_disk_space_mgr->get_macro_cache_free_size()));
+  FLOG_INFO("[TEST] test_prewarm_macro_block end", K(tnt_disk_space_mgr->get_shared_macro_cache_free_size()));
 }
 
 TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
@@ -306,10 +340,10 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
   OK(tguard.switch_to(run_ctx_.tenant_id_));
   exe_prepare_sql();
 
-  OK(exe_sql("create table test_micro_cache (a int)"));
+  OK(exe_sql("create table test_micro_cache (a bigint)"));
   set_ls_and_tablet_id_for_run_ctx("test_micro_cache");
-  OK(exe_sql("insert into test_micro_cache values (1)"));
-  OK(exe_sql("insert into test_micro_cache values (2)"));
+  OK(exe_sql("insert into test_micro_cache select random(100) from table(generator(262144))"));
+
   OK(medium_compact(run_ctx_.tablet_id_.id()));
   FLOG_INFO("[TEST] finish to wait major freeze");
 

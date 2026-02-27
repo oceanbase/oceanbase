@@ -451,8 +451,7 @@ int ObStorageObjectTypeBase::get_macro_cache_type(const uint64_t effective_table
       // ObIndexBlockScanEstimator and ObSSTableSecMetaIterator do not fill effective_tablet_id.
       // preread io triggered by these routes has no effective_tablet_id.
       // treat these macros as ObSSMacroCacheType::MACRO_BLOCK.
-    } else if (use_effective_tablet_id && is_user_tenant(MTL_ID())) {
-      // 1. is_user_tenant, only user tenant has ObStorageCachePolicyService.
+    } else if (use_effective_tablet_id && is_valid_tenant_id(MTL_ID())) {
       // both oracle mode and mysql mode user tenants have ObStorageCachePolicyService,
       // although oracle mode user tenant's ObStorageCachePolicyService is empty.
       bool is_hot = false;

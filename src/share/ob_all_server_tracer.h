@@ -105,6 +105,11 @@ public:
       const uint64_t tenant_id,
       common::ObIArray<common::ObAddr> &alive_servers,
       int64_t &renew_time) const;
+  int get_all_tenant_servers(
+      const uint64_t tenant_id,
+      common::ObIArray<common::ObAddr> &all_servers,
+      int64_t &renew_time) const;
+
 private:
   /*
     set new tenant_servers to tenant_map_,
@@ -270,6 +275,27 @@ public:
   int get_alive_tenant_servers(const uint64_t tenant_id,
                                common::ObIArray<common::ObAddr> &servers,
                                int64_t &renew_time) const;
+
+  /*
+    retrieve the address of all servers corresponding to the tenant
+    based on the tenant_id（If a meta tenant is entered,
+    it will be converted to the corresponding user tenant）
+
+    @param[in] tenant_id          The tenant_id to be obtained
+    @param[out] servers           The machine where the tenant unit is located
+                                  This may return empty (When the return ret is OB_SUCCESS,
+                                  it applies to the following situations):
+                                    1. The tenant does not exist (including being deleted).
+                                    2. The tenant was just created and has not yet been refreshed.
+    @param[out] renew_time        The time to get the servers from the table
+                                  Effective only if server_list is not empty
+    @return
+      - other
+  */
+  int get_all_tenant_servers(const uint64_t tenant_id,
+                             common::ObIArray<common::ObAddr> &servers,
+                             int64_t &renew_time) const;
+
   /*
     Refresh the server of the corresponding tenant
     according to tenant_id（If a meta tenant is entered,

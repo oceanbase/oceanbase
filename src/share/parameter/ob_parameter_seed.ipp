@@ -3051,7 +3051,7 @@ DEF_BOOL(ob_enable_python_udf, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
          "controls whether UTL_HTTP is enabled",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "True",
+DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "False",
          "Enable or disable defensive checks for garbage collection on shared storage.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_ss_garbage_collect_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
@@ -3060,7 +3060,6 @@ DEF_INT(_ss_garbage_collect_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
         "If set to 0, the system auto-calculates the worker count as the tenant’s max_cpu divided by 4; otherwise, the worker count is set to the specified value."
         "Range: [0, 100] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_INT(_max_access_entries_for_external_table_partition, OB_TENANT_PARAMETER, "1000000", "[1,)",
         "max number of entries accessed in a single partition for external table, including directories and files.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3068,3 +3067,9 @@ DEF_TIME(_ss_macro_block_check_interval, OB_TENANT_PARAMETER, "1d", "[30s,365d]"
          "Control the period of macro block check in shared dir."
          "Range: [30s, 365d]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "100", "[0,)",
+        "Controls the write throttling mechanism based on the percentage of the sslog table occupying the meta tenant disk. "
+        "If set to 0, write throttling caused by sslog table size is disabled; Otherwise, if the size of sslog table is "
+        "larger than (meta tenant disk limit * threshold), write throttling is triggered to slow down incoming write requests."
+        "Range: [0, )",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

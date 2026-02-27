@@ -140,7 +140,7 @@ TEST_F(TestSSWriteCacheCtrlTask, write_cache_threshold)
   // 2. simulate reach write cache threshold
   ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, tnt_disk_space_mgr);
-  const int64_t write_cache_threshold_size = tnt_disk_space_mgr->get_macro_cache_size()
+  const int64_t write_cache_threshold_size = tnt_disk_space_mgr->get_tenant_macro_cache_size_by_usage_ratio()
                                              * ObSSMacroCacheMgr::WRITE_CACHE_THRESHOLD / 100;
   macro_cache_mgr->inc_write_cache_size(last_private_macro, write_cache_threshold_size);
 

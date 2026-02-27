@@ -22870,6 +22870,7 @@ tenant_name
 }
 ;
 
+
 opt_tenant_info:
 TENANT_ID opt_equal_mark INTNUM
 {
@@ -26550,8 +26551,8 @@ ACCESS_INFO
 |       HMS_CATALOG_NAME
 |       HOST
 |       HOSTS
-|       HOUR
 |       HOT_RETENTION
+|       HOUR
 |       HYBRID
 |       HYBRID_HIST
 |       HYBRID_SEARCH

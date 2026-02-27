@@ -135,7 +135,10 @@ public:
         recycle_record_(),
         ctx_min_start_scn_info_()
 #ifdef OB_BUILD_SHARED_STORAGE
-        ,ss_upload_scn_cache_()
+        ,ss_upload_scn_cache_(),
+        recycle_scn_from_all_cn_(),
+        collect_recycle_scn_timer_(),
+        collect_recycle_scn_task_(*this)
 #endif
 	{}
 
@@ -154,7 +157,10 @@ public:
         recycle_record_(),
         ctx_min_start_scn_info_()
 #ifdef OB_BUILD_SHARED_STORAGE
-        ,ss_upload_scn_cache_()
+        ,ss_upload_scn_cache_(),
+        recycle_scn_from_all_cn_(),
+        collect_recycle_scn_timer_(),
+        collect_recycle_scn_task_(*this)
 #endif
 	{}
 
@@ -464,19 +470,56 @@ private:
                  K(update_ts_));
   };
 
+  class CollectRecycleSCNTask : public common::ObTimerTask {
+  public:
+    CollectRecycleSCNTask(ObTxTable &host_tx_table) : host_tx_table_(host_tx_table) {}
+    virtual void runTimerTask();
+
+  private:
+    int do_collect_recycle_scn_(share::SCN &min_tx_recycle_scn);
+
+  private:
+    ObTxTable &host_tx_table_;
+  };
+
 public:
   /**
    * @brief only used for shared storage tx_data recycle
    *
    */
   int get_ss_recycle_scn(share::SCN &recycle_scn);
+  /**
+   * @brief Get the aggregated recycle_scn from all CNs (compute nodes).
+   *
+   * Semantics:
+   * - This value is advanced only when the collection from all CNs succeeds
+   *   and the newly aggregated value (min across CNs) is strictly greater than
+   *   the currently cached one.
+   * - Monotonically non-decreasing in shared-storage mode.
+   */
+  share::SCN get_recycle_scn_from_all_cn() const { return recycle_scn_from_all_cn_; }
+  /**
+   * @brief Set the aggregated recycle_scn collected from all CNs.
+   *
+   * Contract:
+   * - The caller must ensure this is invoked only after successfully collecting
+   *   from all CNs, and the provided SCN is strictly greater than the cached value.
+   * - This guarantees monotonic increase and correctness of the global recycle_scn.
+   */
+  void set_recycle_scn_from_all_cn(const share::SCN &scn) { recycle_scn_from_all_cn_.inc_update(scn); }
 
 private:
   int resolve_shared_storage_upload_info_(share::SCN &tablet_recycle_scn);
+  int init_and_start_timer_task_();
 
 private:
   // The shared storage upload info cache
   SSUploadSCNCache ss_upload_scn_cache_;
+  // Aggregated recycle_scn across all CNs; only advanced on successful full-collection
+  // and strictly increasing updates (i.e., when the new min across CNs > current cache).
+  share::SCN recycle_scn_from_all_cn_;
+  common::ObTimer collect_recycle_scn_timer_;
+  CollectRecycleSCNTask collect_recycle_scn_task_;
 #endif
 };
 }  // namespace storage

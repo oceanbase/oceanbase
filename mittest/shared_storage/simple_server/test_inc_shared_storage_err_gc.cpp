@@ -167,14 +167,11 @@ public:
           tenant_gc_scn = SCN::min(tenant_gc_scn, ls_gc_scn);
         }
         if (OB_SUCC(ret) && !ls_results.empty()) {
-          if (OB_FAIL(process_ls_results_(ls_results, last_succ_scns))) {
-            LOG_WARN("process ls results failed", KR(ret), K(ls_id));
-          } else {
-            for (int64_t j = 0; OB_SUCC(ret) && j < ls_results.count(); j++) {
-              if (OB_FAIL(tenant_results.push_back(ls_results.at(j)))) {
-                LOG_WARN("push ls result to all results failed", KR(ret), K(ls_id));
-                break;
-              }
+          // Merge only successful results into tenant_results (all have been validated in gc_tablets_in_ss_)
+          for (int64_t j = 0; OB_SUCC(ret) && j < ls_results.count(); j++) {
+            if (OB_FAIL(tenant_results.push_back(ls_results.at(j)))) {
+              LOG_WARN("push ls result to all results failed", KR(ret), K(ls_id));
+              break;
             }
           }
           ls_results.reset();

@@ -87,6 +87,8 @@ int ObAllVirtualSSGCDetectInfo::process_curr_tenant(ObNewRow *&row)
 #ifndef OB_BUILD_SHARED_STORAGE
   ret = OB_ITER_END;
 #else
+  const common::hash::ObHashMap<ObSSPreciseGCTablet, share::SCN> &gc_start_scn_map =
+    MTL(ObSSGarbageCollectorService *)->get_gc_start_scn_map();
   if (!GCTX.is_shared_storage_mode()) {
     ret = OB_ITER_END;
   } else if (!start_to_read_ && OB_FAIL(prepare_start_to_read())) {

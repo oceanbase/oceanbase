@@ -156,11 +156,11 @@ CREATE RESOURCE UNIT box_for_unit_config_test MAX_CPU 1, MEMORY_SIZE '1G', DATA_
 CREATE RESOURCE UNIT box_for_unit_config_test MAX_CPU 1, MEMORY_SIZE '1G', DATA_DISK_SIZE=2147483647;
 
 create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', DATA_DISK_SIZE='2G';
+--error 1210
 create resource unit box_for_unit_config_test1 MAX_CPU=1, MEMORY_SIZE='1G', DATA_DISK_SIZE=0;
 --replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
 select * from DBA_OB_UNIT_CONFIGS where name like 'box_for_unit_config_test%';
 drop resource unit box_for_unit_config_test;
-drop resource unit box_for_unit_config_test1;
 }
 
 if($startup_mode!="shared_storage")
@@ -435,6 +435,7 @@ alter resource unit box_for_unit_config_test IOPS_WEIGHT=100.90;
 if($startup_mode=="shared_storage")
 {
 --echo ====   shared_storage模式, 最小值
+--error 1210
 alter RESOURCE UNIT box_for_unit_config_test DATA_DISK_SIZE=0;
 --replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
 select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';

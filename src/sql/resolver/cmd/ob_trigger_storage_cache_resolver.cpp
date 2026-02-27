@@ -46,62 +46,72 @@ int ObTriggerStorageCacheResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children should not be null", K(ret));
-  } else if (OB_UNLIKELY(2 != parse_tree.num_child_) ||
-             OB_ISNULL(parse_tree.children_[0])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("children num not match or the children is null", K(ret), "num_child",
-        parse_tree.num_child_, K(parse_tree.children_[0]));
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info should not be null", K(ret));
+  } else if (OB_UNLIKELY(2 != parse_tree.num_child_) || OB_ISNULL(parse_tree.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match or the children is null", K(ret), "num_child",
+        parse_tree.num_child_, K(parse_tree.children_[0]));
   } else {
     stmt_ = stmt;
     obrpc::ObTriggerStorageCacheArg::ObStorageCacheOp op = static_cast<obrpc::ObTriggerStorageCacheArg::ObStorageCacheOp>(parse_tree.children_[0]->value_);
     stmt->set_storage_cache_op(op);
-    ParseNode *name = parse_tree.children_[1];
-    const uint64_t tenant_id = session_info_->get_login_tenant_id();
-    if (OB_SYS_TENANT_ID == tenant_id) {
-      if (OB_ISNULL(name)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("To trigger storage cache, the tenant_name must be given", K(ret), K(tenant_id));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "trigger storage cache in sys tenant without specified tenant");
+    if (obrpc::ObTriggerStorageCacheArg::TRIGGER == op) {
+      // TRIGGER operation: ALTER SYSTEM TRIGGER STORAGE_CACHE_POLICY_EXECUTOR [TENANT = tenant_name]
+      // parse_tree has 2 children: [action_type, tenant_name]
+      if (OB_FAIL(resolve_tenant_name_(stmt, parse_tree.children_[1]))) {
+        LOG_WARN("fail to resolve tenant name", K(ret));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unknown storage cache op", K(ret), K(op));
+    }
+  }
+  return ret;
+}
+
+int ObTriggerStorageCacheResolver::resolve_tenant_name_(ObTriggerStorageCacheStmt *stmt, ParseNode *name)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = session_info_->get_login_tenant_id();
+  if (OB_ISNULL(session_info_) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info or stmt should not be null", K(ret));
+  } else if (OB_SYS_TENANT_ID == tenant_id) {
+    if (OB_NOT_NULL(name)) {
+      uint64_t specified_tenant_id = OB_INVALID_ID;
+      ObSchemaGetterGuard schema_guard;
+      if (OB_ISNULL(name->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children should not be null", K(ret));
       } else {
-        uint64_t specified_tenant_id = OB_INVALID_ID;
-        ObSchemaGetterGuard schema_guard;
-        if (OB_ISNULL(name->children_[0])) {
+        ObString tenant_name(name->children_[0]->str_len_, name->children_[0]->str_value_);
+        if (tenant_name.empty()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("tenant name is invalid", K(ret), K(name), K(tenant_name));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant name is invalid");
+        } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+          LOG_WARN("get_schema_guard failed", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, specified_tenant_id))) {
+          LOG_WARN("fail to get tenant id with the given tenant name", K(ret), K(tenant_name), K(specified_tenant_id));
+        } else if (!is_valid_tenant_id(specified_tenant_id)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("children should not be null", K(ret));
+          LOG_ERROR("invalid tenant id to switch", K(ret), K(specified_tenant_id));
         } else {
-          ObString tenant_name(name->children_[0]->str_len_, name->children_[0]->str_value_);
-          if (tenant_name.empty()) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("tenant name is invalid", K(ret), K(name), K(tenant_name));
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant name is invalid");
-          } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-            LOG_WARN("get_schema_guard failed", K(ret), K(tenant_id));
-          } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, specified_tenant_id))) {
-            LOG_WARN("fail to get tenant id with the given tenant name", K(ret), K(tenant_name), K(specified_tenant_id));
-          } else if (!is_valid_tenant_id(specified_tenant_id)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("invalid tenant id to switch", K(ret), K(specified_tenant_id));
-          } else if (!is_user_tenant(specified_tenant_id)) {
-            ret = OB_OP_NOT_ALLOW;
-            LOG_ERROR("can't trigger non-user tenant for storage cache", K(ret), K(specified_tenant_id), K(tenant_name));
-            LOG_USER_ERROR(OB_OP_NOT_ALLOW, "can't trigger non-user tenant for storage cache");
-          } else {
-            stmt->set_tenant_id(specified_tenant_id);
-          }
-          LOG_TRACE("[SCP]trigger storage cache", K(ret), K(op), K(tenant_name));
+          stmt->set_tenant_id(specified_tenant_id);
         }
       }
-    } else { // OB_SYS_TENANT_ID != tenant_id
-      if (OB_ISNULL(name)){
-        stmt->set_tenant_id(tenant_id);
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("user tenant cannot specify tenant name", K(ret), K(tenant_id));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "user tenant cannot specify tenant names");
-      }
+    } else {
+      stmt->set_tenant_id(tenant_id);
+    }
+  } else { // OB_SYS_TENANT_ID != tenant_id
+    if (OB_ISNULL(name)) {
+      stmt->set_tenant_id(tenant_id);
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("user tenant cannot specify tenant name", K(ret), K(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "user tenant cannot specify tenant names");
     }
   }
   return ret;
