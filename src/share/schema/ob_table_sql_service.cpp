@@ -2288,8 +2288,9 @@ int ObTableSqlService::update_table_options(ObISQLClient &sql_client,
         || new_table_schema.is_aux_vp_table()
         || new_table_schema.is_aux_lob_table()
         || new_table_schema.is_mlog_table()) {
+      // use new_table_schema.get_in_offline_ddl_white_list() here for drop index when offline ddl failed, there is no foreign key on index table.
       if (OB_FAIL(update_data_table_schema_version(sql_client, tenant_id,
-                  new_table_schema.get_data_table_id(), table_schema.get_in_offline_ddl_white_list()))) {
+                  new_table_schema.get_data_table_id(), new_table_schema.get_in_offline_ddl_white_list()))) {
         LOG_WARN("update data table schema version failed", K(ret));
       }
     }

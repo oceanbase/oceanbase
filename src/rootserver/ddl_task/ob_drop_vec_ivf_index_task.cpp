@@ -458,6 +458,15 @@ int ObDropVecIVFIndexTask::drop_aux_index_table(const share::ObDDLTaskStatus &ne
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected ddl task type", K(ret), K(task_type_));
   }
+
+  // state machine processing: directly switch status if success, otherwise retry if failed
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(switch_status(new_status, true, ret))) {
+    LOG_WARN("switch status failed", K(ret), K(new_status), K(task_status_));
+  } else {
+    LOG_INFO("drop_aux_index_table success", K(ret), K(parent_task_id_), K(task_id_), K(*this));
+  }
+  
   return ret;
 }
 
@@ -717,6 +726,7 @@ int ObDropVecIVFIndexTask::create_drop_index_task(
     arg.ddl_stmt_str_        = drop_index_sql.string();
     arg.is_add_to_scheduler_ = true;
     arg.task_id_             = task_id_;
+    arg.is_hidden_           = drop_index_arg_.is_hidden_;
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(
             index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout_us))) {
       LOG_WARN("fail to get ddl rpc timeout", K(ret));
