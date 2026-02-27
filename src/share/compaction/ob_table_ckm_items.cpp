@@ -623,6 +623,54 @@ void ObTableCkmItems::reset()
   ckm_sum_array_.reset();
 }
 
+int ObTableCkmItems::check_tablet_ids_differ(
+    const share::schema::ObTableSchema *old_table_schema,
+    const ObTableCkmItems &data_ckm,
+    bool &tablet_ids_differ)
+{
+  int ret = OB_SUCCESS;
+  tablet_ids_differ = false;
+  ObSEArray<ObTabletID, 16> old_tablet_ids;
+  if (OB_ISNULL(old_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(old_table_schema));
+  } else if (OB_FAIL(old_table_schema->get_tablet_ids(old_tablet_ids))) {
+    LOG_WARN("fail to get old tablet ids", KR(ret), KPC(old_table_schema));
+  } else if (old_tablet_ids.count() != data_ckm.tablet_pairs_.count()) {
+    tablet_ids_differ = true;
+    FLOG_INFO("[IGNORE CHECKSUM_ERROR] partition num changed in data table", KR(ret), K(data_ckm),
+        "old_partition_num", old_tablet_ids.count(), "new_partition_num", data_ckm.tablet_pairs_.count());
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "ignore_checksum_error", K(data_ckm.tenant_id_), "reason", "partition_num_changed");
+#endif
+  } else {
+    ObSEArray<ObTabletID, 16> new_tablet_ids;
+    if (OB_FAIL(new_tablet_ids.reserve(data_ckm.tablet_pairs_.count()))) {
+      LOG_WARN("fail to reserve new tablet ids", KR(ret), K(data_ckm.tablet_pairs_.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < data_ckm.tablet_pairs_.count(); ++i) {
+      if (OB_FAIL(new_tablet_ids.push_back(data_ckm.tablet_pairs_.at(i).get_tablet_id()))) {
+        LOG_WARN("fail to push back new tablet_id", KR(ret), K(i));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      lib::ob_sort(old_tablet_ids.begin(), old_tablet_ids.end());
+      lib::ob_sort(new_tablet_ids.begin(), new_tablet_ids.end());
+      for (int64_t i = 0; i < old_tablet_ids.count(); ++i) {
+        if (old_tablet_ids.at(i) != new_tablet_ids.at(i)) {
+          tablet_ids_differ = true;
+#ifdef ERRSIM
+          SERVER_EVENT_SYNC_ADD("merge_errsim", "ignore_checksum_error", K(data_ckm.tenant_id_), "reason", "tablet_ids_differ");
+#endif
+          FLOG_INFO("[IGNORE CHECKSUM_ERROR] tablet id mismatch", KR(ret), K(old_tablet_ids.at(i)), K(new_tablet_ids.at(i)), K(tablet_ids_differ), K(i));
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableCkmItems::check_schema_change_after_major_freeze(
     const share::ObFreezeInfo &freeze_info,
     ObTableCkmItems &data_ckm,
@@ -633,6 +681,7 @@ int ObTableCkmItems::check_schema_change_after_major_freeze(
   const uint64_t tenant_id = data_ckm.tenant_id_;
   const ObTableSchema *old_table_schema = nullptr;
   const ObTableSchema *old_index_schema = nullptr;
+  bool tablet_ids_differ = false;
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
           tenant_id, schema_guard, freeze_info.schema_version_, OB_INVALID_VERSION,
           ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_LAZY))) {
@@ -646,23 +695,13 @@ int ObTableCkmItems::check_schema_change_after_major_freeze(
     } else {
       LOG_WARN("fail to get table schema", KR(ret), K(index_ckm));
     }
+  } else if (OB_FAIL(check_tablet_ids_differ(old_table_schema, data_ckm, tablet_ids_differ))) {
+    LOG_WARN("fail to check tablet ids differ", KR(ret), KPC(old_table_schema), K(data_ckm));
+  } else if (tablet_ids_differ) {
+    FLOG_INFO("[IGNORE CHECKSUM_ERROR] tablet_ids differ, ignore checksum error", KR(ret), K(data_ckm));
   } else {
-    const int64_t old_part_num = old_table_schema->get_all_part_num();
-    if (OB_UNLIKELY(-1 == old_part_num)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("get_all_part_num returned unexpected value", KR(ret), K(old_part_num), K(data_ckm));
-    } else if (old_part_num != data_ckm.tablet_pairs_.count()) {
-      FLOG_INFO("[IGNORE CHECKSUM_ERROR] partition num changed in data table", KR(ret),
-        "old_partition_num", old_part_num,
-        "new_partition_num", data_ckm.tablet_pairs_.count(),
-        K(data_ckm));
-#ifdef ERRSIM
-      SERVER_EVENT_SYNC_ADD("merge_errsim", "ignore_checksum_error", K(tenant_id), "reason", "partition_num_changed");
-#endif
-    } else {
-      ret = OB_CHECKSUM_ERROR;
-      LOG_WARN("schema not changed after major freeze", KR(ret), K(data_ckm), K(index_ckm));
-    }
+    ret = OB_CHECKSUM_ERROR;
+    LOG_WARN("schema not changed after major freeze", KR(ret), K(data_ckm), K(index_ckm));
   }
   return ret;
 }
