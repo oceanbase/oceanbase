@@ -414,6 +414,7 @@ int ObVectorIndexRefresher::do_refresh() {
     // do refresh
     if (OB_SUCC(ret)) {
       int64_t affected_rows = 0;
+      refresh_ctx_->need_major_merge_ = (domain_table_schema->get_table_mode_flag() != share::schema::TABLE_MODE_QUEUING_EXTREME);
       // 1. insert into index_id_table select ... from delta_buf_table
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = nullptr;
@@ -485,67 +486,6 @@ int ObVectorIndexRefresher::do_refresh() {
                    K(tenant_id), K(delete_sql));
         } else {
           FLOG_INFO("[VEC_INDEX][REFRESH] execute delete sql success", K(affected_rows), K(delete_sql));
-        }
-      }
-    }
-
-    // freeze major tablet
-    ObArray<uint64_t> tablet_ids;
-    if (OB_SUCC(ret)) {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        common::sqlclient::ObMySQLResult *result = nullptr;
-        ObSqlString select_sql;
-        if (OB_FAIL(select_sql.append_fmt(
-                "select tablet_id from oceanbase.DBA_OB_TABLE_LOCATIONS where table_id = %lu",
-                domain_table_schema->get_table_id()))) {
-          LOG_WARN("fail to assign sql", KR(ret));
-        } else if (OB_FAIL(refresh_ctx_->trans_->read(
-                       res, domain_table_schema->get_tenant_id(), select_sql.ptr()))) {
-          LOG_WARN("fail to execute select sql", KR(ret),
-                   K(tenant_id), K(delete_sql));
-        } else if (OB_ISNULL(result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("result is NULL", K(ret));
-        } else {
-          while (OB_SUCC(ret)) {
-            uint64_t tablet_id = 0;
-            if (OB_FAIL(result->next())) {
-              if (OB_ITER_END != ret) {
-                LOG_WARN("next failed", K(ret));
-              }
-            } else {
-              EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", tablet_id, uint64_t);
-              if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-                LOG_WARN("failed to store tablet id", K(ret));
-              }
-            }
-          }
-
-          if (OB_ITER_END == ret) {
-            ret = OB_SUCCESS;
-          }
-        }
-      }
-    }
-
-    if (OB_SUCC(ret) && tablet_ids.count() > 0) {
-      FLOG_INFO("get freeze tablet id", K(tablet_ids));
-      for (int i = 0 ; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-        int64_t affected_rows = 0;
-        uint64_t tablet_id = tablet_ids.at(i);
-        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-          common::sqlclient::ObMySQLResult *result = nullptr;
-          ObSqlString freeze_sql;
-          if (OB_FAIL(freeze_sql.append_fmt(
-                "alter system major freeze tablet_id = %lu", tablet_id))) {
-            LOG_WARN("fail to assign sql", KR(ret));
-          } else if (OB_FAIL(refresh_ctx_->trans_->write(tenant_id, freeze_sql.ptr(), affected_rows))) {
-            ret = OB_SUCCESS;
-            LOG_WARN("fail to execute major freeze sql, continue other tablet id", K(tablet_id),
-                      K(tenant_id), K(freeze_sql));
-          } else {
-            LOG_INFO("execute major freeze success", K(tablet_id), K(affected_rows));
-          }
         }
       }
     }
