@@ -341,7 +341,7 @@ int ObTableInsertUpOp::set_heap_table_new_pk(const ObUpdCtDef &upd_ctdef,
   ObDASTabletLoc *new_tablet_loc = nullptr;
   if (OB_FAIL(calc_update_tablet_loc(upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc))) {
     LOG_WARN("calc update tablet_loc failed", K(ret), K(upd_ctdef));
-  } else if (old_tablet_loc != new_tablet_loc) {
+  } else if (old_tablet_loc != new_tablet_loc || upd_ctdef.is_vec_hnsw_index_vid_opt_) {
     if (OB_FAIL(ObDMLService::set_update_hidden_pk(eval_ctx_,
                                                    upd_ctdef,
                                                    new_tablet_loc->tablet_id_))) {

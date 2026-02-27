@@ -232,6 +232,10 @@ public:
                                 IndexDMLInfo*& index_dml_info) const;
   int check_update_part_key(const ObTableSchema* index_schema,
                             IndexDMLInfo*& index_dml_info) const;
+  int check_vec_hnsw_index_vid_opt(ObSchemaGetterGuard &schema_guard,
+                                   const ObDelUpdStmt *stmt,
+                                   const ObTableSchema* index_schema,
+                                   IndexDMLInfo*& index_dml_info) const;
   int check_update_primary_key(ObSchemaGetterGuard &schema_guard,
                                const ObTableSchema* index_schema,
                                IndexDMLInfo*& index_dml_info) const;
