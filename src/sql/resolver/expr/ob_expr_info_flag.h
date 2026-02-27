@@ -58,6 +58,7 @@ DEF_EXPR_INFO_FLAG(IS_ASSOCIATED_FLAG_END) //add IS_xxx flag before me
   //IS_CONST_EXPR and CNT_CONST_EXPR are not in the flag of associated extraction
 DEF_EXPR_INFO_FLAG(IS_CONST_EXPR)   // expression contains calculable expression
 DEF_EXPR_INFO_FLAG(CNT_CONST_EXPR)    // IS_CONST_EXPR and CNT_CONST_EXPR at most one is true
+DEF_EXPR_INFO_FLAG(CNT_PL_UDT_CONSTRUCT)
 
 DEF_EXPR_INFO_FLAG(CNT_CONST)        // expression contains const
 DEF_EXPR_INFO_FLAG(CNT_COLUMN)       // expression contains column

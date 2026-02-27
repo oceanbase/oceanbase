@@ -52,6 +52,7 @@
 | cnt_flag |
 | --- |
 | CNT_CONST_EXPR |
+| CNT_PL_UDT_CONSTRUCT |
 | CNT_CONST |
 | CNT_COLUMN |
 | CNT_STATIC_PARAM |
