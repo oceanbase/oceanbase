@@ -95,7 +95,7 @@ public:
   void* Reallocate(void* p, size_t size) override;
 
   int64_t hold() {
-    int res = 0;
+    int64_t res = 0;
     if (mem_context_.ref_context() != NULL) {
       res = mem_context_->hold();
     }
@@ -103,7 +103,7 @@ public:
   }
 
   int64_t used() {
-    int res = 0;
+    int64_t res = 0;
     if (mem_context_.ref_context() != NULL) {
       res = mem_context_->used();
     }
@@ -134,7 +134,7 @@ public:
   void* Allocate(size_t size);
   void Deallocate(void* p);
   int64_t hold() {
-    int res = 0;
+    int64_t res = 0;
     if (mem_context_.ref_context() != NULL) {
       res = mem_context_->hold();
     }
@@ -142,7 +142,7 @@ public:
   }
 
   int64_t used() {
-    int res = 0;
+    int64_t res = 0;
     if (mem_context_.ref_context() != NULL) {
       res = mem_context_->used();
     }
