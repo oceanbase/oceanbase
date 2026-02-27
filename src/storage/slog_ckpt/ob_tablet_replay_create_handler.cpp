@@ -496,6 +496,8 @@ int ObTabletReplayCreateHandler::replay_create_tablet(const ObTabletReplayItem &
   const ObTabletMapKey &key = replay_item.info_.key_;
   const ObUpdateTabletPointerParam param(replay_item);
   ObLSRestoreStatus ls_restore_status;
+  ObUpdateTabletPointerParam tablet_ptr_param = param;
+  tablet_ptr_param.refresh_tablet_cache();
 
   if (OB_FAIL(get_tablet_svr_(key.ls_id_, ls_tablet_svr, ls_handle))) {
     LOG_WARN("fail to get ls tablet service", K(ret));
@@ -505,8 +507,8 @@ int ObTabletReplayCreateHandler::replay_create_tablet(const ObTabletReplayItem &
     LOG_INFO("the ls is_in_clone_and_tablet_meta_incomplete", K(key), K(ls_restore_status));
   } else if (OB_FAIL(ls_tablet_svr->replay_create_tablet(param, buf, buf_len, key.tablet_id_, tablet_transfer_info))) {
     LOG_WARN("fail to create tablet for replay", K(ret), K(key), K(param));
-  } else if (tablet_transfer_info.has_transfer_table() &&
-      OB_FAIL(record_ls_transfer_info_(ls_handle, key.tablet_id_, tablet_transfer_info))) {
+  } else if (tablet_transfer_info.has_transfer_table() && !tablet_ptr_param.is_empty_shell()
+      && OB_FAIL(record_ls_transfer_info_(ls_handle, key.tablet_id_, tablet_transfer_info))) {
     LOG_WARN("fail to record_ls_transfer_info", K(ret), K(key), K(tablet_transfer_info));
   }
   return ret;
