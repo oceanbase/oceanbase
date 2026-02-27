@@ -340,7 +340,8 @@ int ObTenantIOSchedulerV2::schedule_request(ObIORequest &req)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret), K(req));
   } else if (OB_UNLIKELY(is_default_q)) {
-    if (0 != qsched_submit(root, &req.qsched_req_, assign_chan_id())) {
+    if (FALSE_IT(req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time())) {
+    } else if (0 != qsched_submit(root, &req.qsched_req_, assign_chan_id())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("qsched_submit fail", K(ret), K(req));
     }

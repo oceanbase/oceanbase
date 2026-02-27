@@ -3055,13 +3055,14 @@ int ObIORunner::push(ObIORequest &req)
     LOG_WARN("runner is quit, stop accept new req", K(ret), K(req));
   } else {
     req.inc_ref("cb_inc"); // ref for callback queue
-    if (OB_FAIL(queue_.push(&req))) {
+    if (OB_ISNULL(req.io_result_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("io result is null", K(ret), K(req));
+    } else if (FALSE_IT(req.io_result_->time_log_.callback_enqueue_ts_ = ObTimeUtility::fast_current_time())){
+    } else if (OB_FAIL(queue_.push(&req))) {
+      req.io_result_->time_log_.callback_enqueue_ts_ = 0;
       LOG_WARN("Fail to enqueue callback", K(ret));
-      req.dec_ref("cb_dec"); // ref for callback queue
     } else {
-      if (OB_NOT_NULL(req.io_result_)) {
-        req.io_result_->time_log_.callback_enqueue_ts_ = ObTimeUtility::fast_current_time();
-      }
       // the request has been pushed in queue, not set return code anymore
       int tmp_ret = OB_SUCCESS;
       ObThreadCondGuard guard(cond_);
@@ -3070,6 +3071,9 @@ int ObIORunner::push(ObIORequest &req)
       } else if (OB_SUCCESS != (tmp_ret = cond_.signal())) {
         LOG_ERROR("fail to signal callback condition", K(tmp_ret), K(req));
       }
+    }
+    if (OB_FAIL(ret)) {
+      req.dec_ref("cb_dec"); // ref for callback queue
     }
   }
   return ret;
