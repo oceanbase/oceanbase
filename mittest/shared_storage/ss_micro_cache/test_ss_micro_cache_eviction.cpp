@@ -339,6 +339,126 @@ TEST_F(TestSSMicroCacheEviction, test_delete_all_persisted_micro)
   }
 }
 
+TEST_F(TestSSMicroCacheEviction, test_readd_ghost_persisted_meta)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_readd_ghost_persisted_meta");
+  ObArenaAllocator allocator;
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache_->micro_meta_mgr_;
+  ObSSARCInfo &arc_info = micro_meta_mgr.arc_info_;
+  ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache_->phy_blk_mgr_;
+  ObSSMemBlockManager &mem_blk_mgr = micro_cache_->mem_blk_mgr_;
+  ObSSPersistMicroMetaTask &persist_meta_task = micro_cache_->task_runner_.persist_meta_task_;
+  ObSSReleaseCacheTask &release_cache_task = micro_cache_->task_runner_.release_cache_task_;
+  release_cache_task.is_inited_ = false;
+
+  const int64_t payload_offset = ObSSMemBlock::get_reserved_size();
+  const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
+  const int32_t micro_cnt = 50;
+  const int32_t micro_size = (DEFAULT_BLOCK_SIZE - payload_offset) / micro_cnt - micro_index_size;
+  char *data_buf = nullptr;
+  char *read_buf = nullptr;
+  data_buf = static_cast<char *>(allocator.alloc(micro_size));
+  read_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  ASSERT_NE(nullptr, read_buf);
+  MEMSET(data_buf, 'a', micro_size);
+
+  // 1. write 2 macro_blocks
+  for (int64_t i = 0; i < 2; ++i) {
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(1000 + i + 1);
+    for (int64_t j = 0; j < micro_cnt; ++j) {
+      const int32_t offset = payload_offset + j * micro_size;
+      const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ASSERT_EQ(OB_SUCCESS, add_single_micro_block(micro_key, data_buf, micro_size));
+    }
+    ASSERT_EQ(OB_SUCCESS,TestSSCommonUtil::wait_for_persist_task());
+  }
+
+  // 2. mark the first macro_blocks' micro_blocks as ghost
+  {
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(1001);
+    for (int64_t j = 0; j < micro_cnt; ++j) {
+      const int32_t offset = payload_offset + j * micro_size;
+      const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ObSSMicroBlockMetaHandle micro_meta_handle;
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(micro_key, micro_meta_handle, ObTabletID::INVALID_TABLET_ID, false));
+      ASSERT_EQ(true, micro_meta_handle.is_valid());
+      ASSERT_EQ(true, micro_meta_handle()->is_data_persisted_);
+      ASSERT_EQ(true, micro_meta_handle()->is_in_l1_);
+      micro_meta_handle()->is_in_ghost_ = true;
+      micro_meta_handle()->mark_invalid();
+    }
+    arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = micro_cnt;
+    arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_cnt * micro_size;
+    arc_info.seg_info_arr_[SS_ARC_B1].cnt_ = micro_cnt;
+    arc_info.seg_info_arr_[SS_ARC_B1].size_ = micro_cnt * micro_size;
+  }
+
+  // 3. execute micro_meta checkpoint
+  ASSERT_EQ(0, cache_stat.task_stat_.erase_persisted_cnt_);
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+  persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+  ASSERT_EQ(micro_cnt, cache_stat.task_stat_.erase_persisted_cnt_);
+  ASSERT_EQ(0, cache_stat.task_stat_.readd_persisted_cnt_);
+
+  // 4.1 readd one ghost micro_meta
+  {
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(1001);
+    const bool execute_parallel = (ObTimeUtility::current_time() % 2 == 0);
+    if (!execute_parallel) {
+      const int32_t offset = payload_offset + micro_size;
+      const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      const uint64_t effective_tablet_id = micro_key.get_macro_tablet_id().id();
+      ASSERT_EQ(OB_SUCCESS, micro_cache_->add_micro_block_cache(micro_key, data_buf, micro_size, effective_tablet_id,
+                ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+      ASSERT_LT(0, cache_stat.task_stat_.readd_persisted_cnt_);
+      ASSERT_EQ(micro_cnt, arc_info.seg_info_arr_[SS_ARC_T1].cnt_);
+      ASSERT_EQ(micro_cnt * micro_size, arc_info.seg_info_arr_[SS_ARC_T1].size_);
+      ASSERT_EQ(1, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
+      ASSERT_EQ(micro_size, arc_info.seg_info_arr_[SS_ARC_T2].size_);
+      ASSERT_EQ(micro_cnt - 1, arc_info.seg_info_arr_[SS_ARC_B1].cnt_);
+      ASSERT_EQ((micro_cnt - 1) * micro_size, arc_info.seg_info_arr_[SS_ARC_B1].size_);
+    } else {
+      // 4.2 readd several ghost micro_meta parallelly
+      const int64_t thread_num = 15;
+      const int64_t mask = (thread_num + 1) / 2;
+      ObTenantBase *tenant_base = MTL_CTX();
+      auto add_func = [&] (const int64_t idx) {
+        int tmp_ret = OB_SUCCESS;
+        ObTenantEnv::set_tenant(tenant_base);
+        const int32_t offset = payload_offset + (idx % mask) * micro_size;
+        const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+        const uint64_t effective_tablet_id = micro_key.get_macro_tablet_id().id();
+        if (OB_TMP_FAIL(micro_cache_->add_micro_block_cache(micro_key, data_buf, micro_size, effective_tablet_id,
+            ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
+          LOG_WARN("fail to add micro_block", KR(tmp_ret), K(idx), K(offset), K(micro_key));
+        }
+      };
+
+      std::vector<std::thread> ths;
+      for (int64_t i = 0; i <= thread_num; ++i) {
+        std::thread th(add_func, i);
+        ths.push_back(std::move(th));
+      }
+      for (int64_t i = 0; i <= thread_num; ++i) {
+        ths[i].join();
+      }
+
+      ASSERT_EQ(micro_cnt, arc_info.seg_info_arr_[SS_ARC_T1].cnt_);
+      ASSERT_EQ(micro_cnt * micro_size, arc_info.seg_info_arr_[SS_ARC_T1].size_);
+      ASSERT_EQ(mask, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);
+      ASSERT_EQ(mask * micro_size, arc_info.seg_info_arr_[SS_ARC_T2].size_);
+      ASSERT_EQ(micro_cnt - mask, arc_info.seg_info_arr_[SS_ARC_B1].cnt_);
+      ASSERT_EQ((micro_cnt - mask) * micro_size, arc_info.seg_info_arr_[SS_ARC_B1].size_);
+      ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B2].cnt_);
+      ASSERT_EQ(0, arc_info.seg_info_arr_[SS_ARC_B2].size_);
+    }
+  }
+}
+
 } // namespace storage
 } // namespace oceanbase
 
