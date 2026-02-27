@@ -511,5 +511,27 @@ int ObLogExpand::unshare_constraints(ObRawExprCopier &copier, ObIArray<ObExprCon
   }
   return ret;
 }
+
+int ObLogExpand::check_need_dup_expr(const ObIArray<ObRawExpr *> &rollup_exprs,
+                                     const ObIArray<ObAggFunRawExpr *> &aggr_items, bool &need_dup)
+{
+  int ret = OB_SUCCESS;
+  need_dup = false;
+  ObSEArray<ObRawExpr *, 8> uniq_rollup_exprs;
+  if (OB_FAIL(append_array_no_dup(uniq_rollup_exprs, rollup_exprs))) {
+    LOG_WARN("failed to append array", K(ret));
+  }
+  for (int i = 0; OB_SUCC(ret) && !need_dup && i < uniq_rollup_exprs.count(); i++) {
+    for (int j = 0; OB_SUCC(ret) && !need_dup && j < aggr_items.count(); j++) {
+      if (aggr_items.at(j)->get_expr_type() == T_FUN_GROUPING
+          || aggr_items.at(j)->get_expr_type() == T_FUN_GROUPING_ID) {
+        // do nothing
+      } else if (OB_FAIL(find_expr_within_aggr_item(aggr_items.at(j), uniq_rollup_exprs.at(i), need_dup))) {
+        LOG_WARN("find expr failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 } // end sql
 } // end oceanbase

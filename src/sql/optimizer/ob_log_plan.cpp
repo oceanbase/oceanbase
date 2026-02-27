@@ -5961,6 +5961,7 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   ObObj hash_rollup_policy;
   ObQueryCtx *query_ctx = nullptr;
   bool rowsets_enabled = true;
+  bool need_dup_rollup_expr_= false;
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
   } else if (OB_ISNULL(best_plan) ||
@@ -5990,10 +5991,17 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
       && (has_rollup_opt_param ? hash_rollup_policy.get_string().case_compare("forced") == 0 :
                                  tenant_config->_use_hash_rollup.case_compare("forced") == 0);
   }
+  if (OB_SUCC(ret) && rollup_exprs.count() > 0
+      && OB_FAIL(ObLogExpand::check_need_dup_expr(rollup_exprs, aggr_items, need_dup_rollup_expr_))) {
+    LOG_WARN("failed to check need dup rollup expr", K(ret));
+  }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(query_ctx->query_hint_.global_hint_.opt_params_.get_bool_opt_param(
                ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
     LOG_WARN("check rowsets enabled in opt_param failed", K(ret));
+  } else if (need_dup_rollup_expr_ && !force_hash_rollup) {
+    groupby_helper.enable_hash_rollup_ = false;
+    groupby_helper.force_hash_rollup_ = false;
   } else if (FALSE_IT(
                groupby_helper.enable_hash_rollup_ =
                  (rowsets_enabled
@@ -6003,6 +6011,8 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
                   && enable_hash_rollup
                   && !get_optimizer_context().is_cost_evaluation()))) { // TODO: adjust expr replacement in ObLogExpand and remove this
   } else if (FALSE_IT(groupby_helper.force_hash_rollup_ = (groupby_helper.enable_hash_rollup_ && force_hash_rollup))) {
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(append(group_rollup_exprs, group_exprs))
              || OB_FAIL(append(group_rollup_exprs, rollup_exprs))) {
     LOG_WARN("failed to append group rollup exprs", K(ret));
