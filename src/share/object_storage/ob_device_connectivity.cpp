@@ -15,6 +15,7 @@
 #include "share/object_storage/ob_device_connectivity.h"
 #include "share/config/ob_server_config.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "lib/restore/ob_i_storage.h"
 
 namespace oceanbase
 {
@@ -40,7 +41,6 @@ int ObDeviceConnectivityCheckManager::check_device_connectivity(const ObBackupDe
 }
 
 /****************************** ObDeviceCheckFile ******************************/
-const char ObDeviceCheckFile::OB_STR_CONNECTIVITY_CHECK[] = "connectivity_check";
 const char ObDeviceCheckFile::OB_SS_SUFFIX[] = ".obss";
 
 int ObDeviceCheckFile::delete_permission_check_file(const ObBackupDest &storage_dest)
@@ -161,7 +161,7 @@ int ObDeviceCheckFile::get_check_file_path_(const ObBackupDest &storage_dest, ch
     LOG_WARN("invalid argument", KR(ret), K(storage_dest), K(path));
   } else if (OB_FAIL(databuff_printf(path, OB_MAX_BACKUP_DEST_LENGTH, "%s/%s_%ld/%s_%lu/%s",
              storage_dest.get_root_path().ptr(), "cluster", cluster_id, "server", server_id,
-             OB_STR_CONNECTIVITY_CHECK))) {
+             ObObjectStorageGuard::OB_STR_CONNECTIVITY_CHECK))) {
     LOG_WARN("fail to construct check file path", KR(ret), K(storage_dest));
   }
   return ret;

@@ -59,7 +59,6 @@ private:
                                 const char concat);
 
 private:
-  static const char OB_STR_CONNECTIVITY_CHECK[];
   static const char OB_SS_SUFFIX[];
   static constexpr int64_t OB_MAX_DEVICE_CHECK_FILE_NAME_LENGTH = 256;
   static constexpr int64_t OB_STORAGE_MAX_TIME_STR_LEN = 50; // time string max length
