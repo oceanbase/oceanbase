@@ -1520,6 +1520,7 @@ int ObJoinOrder::check_exec_force_use_das(const uint64_t table_id,
   create_basic_path = false;
   const TableItem *table_item = nullptr;
   ObSQLSessionInfo *session_info = NULL;
+  const ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1527,19 +1528,49 @@ int ObJoinOrder::check_exec_force_use_das(const uint64_t table_id,
   } else if (OB_ISNULL(table_item = get_plan()->get_stmt()->get_table_item_by_id(table_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_item is null", K(ret), K(table_id));
+  } else if (OB_ISNULL(query_ctx = get_plan()->get_optimizer_context().get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query_ctx is null", K(ret));
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     // TODO: access virtual table by remote das task is not supported, it will report 4016 error in execute server
     // Ensure that the following scenarios will not combined with virtual table
-    bool force_das_tsc = opt_ctx.in_nested_sql() || //contain nested sql(pl udf or in nested sql), trigger or foreign key in the top sql not force to use DAS TSC
-                         opt_ctx.has_pl_udf() ||
-                         opt_ctx.has_dblink() ||
-                         opt_ctx.has_subquery_in_function_table() ||  //has function table
-                         opt_ctx.has_cursor_expression() ||
-                         (opt_ctx.has_var_assign() && session_info->is_var_assign_use_das_enabled()) ||
-                         (opt_ctx.is_batched_multi_stmt() && table_item->is_basic_table()) || //batch update table(multi queries or arraybinding)
-                         (table_item->for_update_ && table_item->skip_locked_ && session_info->get_pl_context()) // select for update skip locked stmt in PL use das force
-                         ;
+    bool force_das_only = opt_ctx.has_pl_udf() ||
+                          opt_ctx.has_dblink() ||
+                          opt_ctx.has_subquery_in_function_table() ||  //has function table
+                          opt_ctx.has_cursor_expression() ||
+                          (opt_ctx.has_var_assign() && session_info->is_var_assign_use_das_enabled()) ||
+                          (opt_ctx.is_batched_multi_stmt() && table_item->is_basic_table()) || //batch update table(multi queries or arraybinding)
+                          (table_item->for_update_ && table_item->skip_locked_ && session_info->get_pl_context()); // select for update skip locked stmt in PL use das force
+    bool force_das_tsc = false;
+    if (opt_ctx.in_nested_sql()) {
+      LOG_TRACE("[NESTED_SQL_DEBUG] check_exec_force_use_das entry",
+                K(table_id), K(opt_ctx.enable_nested_sql_local_optimize()),
+                K(opt_ctx.is_nested_sql_try_basic_first()), K(force_das_only),
+                K(opt_ctx.has_pl_udf()), K(opt_ctx.has_dblink()), K(opt_ctx.has_cursor_expression()),
+                K(opt_ctx.has_subquery_in_function_table()), K(opt_ctx.has_var_assign()),
+                K(query_ctx->has_dml_write_stmt_), K(query_ctx->is_contain_select_for_update_));
+
+      if (opt_ctx.enable_nested_sql_local_optimize() && !opt_ctx.is_nested_sql_try_basic_first()) {
+        // Second generation: force DAS for nested SQL
+        force_das_tsc = true;
+      } else if (opt_ctx.enable_nested_sql_local_optimize() && opt_ctx.is_nested_sql_try_basic_first()) {
+        // First generation: try basic plan for nested SELECT, DAS for DML/for_update
+        force_das_tsc = force_das_only ||
+                         (opt_ctx.in_nested_sql() &&
+                          (query_ctx->has_dml_write_stmt_ ||
+                           (get_plan()->get_stmt()->is_select_stmt() &&
+                            query_ctx->is_contain_select_for_update_))); //DML write stmt or select stmt with for_update in nested sql force to use DAS
+        if (!force_das_tsc) {
+          opt_ctx.set_need_retry_plan(true);
+        }
+      } else {
+        // Optimization disabled: always force DAS for nested SQL
+        force_das_tsc = true;
+      }
+    } else {
+      force_das_tsc = force_das_only;
+    }
     bool is_select_sample_scan = get_plan()->get_stmt()->is_select_stmt()
                                 && ((NULL != table_item->sample_info_ && !table_item->sample_info_->is_no_sample()) //block(row) sample scan do not support DAS TSC
                                     || (opt_ctx.is_online_ddl() && opt_ctx.get_root_stmt()->is_insert_stmt()) // online ddl plan use sample table scan, create index not support DAS TSC

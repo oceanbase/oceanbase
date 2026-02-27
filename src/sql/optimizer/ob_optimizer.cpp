@@ -42,17 +42,43 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
     LOG_WARN("invalid arguments", K(ret), K(query_ctx), K(session), K(target_stmt));
   } else if (OB_FAIL(init_env_info(*target_stmt))) {
     LOG_WARN("failed to init px info", K(ret));
-  } else if (!target_stmt->is_reverse_link() &&
-             OB_FAIL(generate_plan_for_temp_table(*target_stmt))) {
-    LOG_WARN("failed to generate plan for temp table", K(ret));
-  } else if (OB_ISNULL(plan = ctx_.get_log_plan_factory().create(ctx_, stmt))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create plan", K(ret));
-  } else if (OB_FAIL(plan->generate_plan())) {
-    LOG_WARN("failed to perform optimization", K(ret));
-  } else if (OB_FAIL(plan->add_extra_dependency_table())) {
-    LOG_WARN("failed to add extra dependency tables", K(ret));
   }
+  if (OB_SUCC(ret)) {
+    bool need_retry = false;
+    int64_t retry_count = 0;
+    const int64_t MAX_RETRY_COUNT = 1; // Only retry once for nested SQL optimization
+    do {
+      need_retry = false;
+
+      // Clean up temp table infos when retrying
+      if (retry_count > 0) {
+        ctx_.get_temp_table_infos().reuse();
+      }
+      if (!target_stmt->is_reverse_link() &&
+                OB_FAIL(generate_plan_for_temp_table(*target_stmt))) {
+        LOG_WARN("failed to generate plan for temp table", K(ret));
+      } else if (OB_ISNULL(plan = ctx_.get_log_plan_factory().create(ctx_, stmt))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to create plan", K(ret));
+      } else if (OB_FAIL(plan->generate_plan())) {
+        LOG_WARN("failed to perform optimization", K(ret));
+      } else if (ctx_.need_retry_plan() && retry_count < MAX_RETRY_COUNT) {
+        // Check if plan needs to be regenerated (set by LogPlan)
+        // Skip add_extra_dependency_table() since current plan will be discarded
+        need_retry = true;
+        retry_count++;
+
+        // Clear retry flag and set flag to disable basic-first strategy for retry
+        ctx_.set_need_retry_plan(false);
+        ctx_.set_nested_sql_try_basic_first(false);
+
+        LOG_TRACE("[NESTED_SQL_DEBUG] Plan needs regeneration, retrying with DAS", K(retry_count));
+      } else if (OB_FAIL(plan->add_extra_dependency_table())) {
+        LOG_WARN("failed to add extra dependency tables", K(ret));
+      }
+    } while (need_retry && OB_SUCC(ret));
+  }
+
   if (OB_SUCC(ret)) {
     if (ctx_.get_exec_ctx()->get_sql_ctx()->is_remote_sql_ &&
         ctx_.get_phy_plan_type() != OB_PHY_PLAN_LOCAL) {
@@ -960,6 +986,9 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     }
     if (session.is_enable_new_query_range() && ObSQLUtils::is_min_cluster_version_ge_425_or_435()) {
       ctx_.set_enable_new_query_range(true);
+    }
+    if (tenant_config.is_valid()) {
+      ctx_.set_enable_nested_sql_local_optimize(tenant_config->_enable_nested_sql_local_optimize);
     }
   }
   return ret;

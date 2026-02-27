@@ -1215,6 +1215,7 @@ public:
     extend_sql_plan_monitor_metrics_(false),
     enable_mysql_compatible_dates_(false),
     enable_px_task_rebalance_(false),
+    enable_nested_sql_local_optimize_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1277,7 +1278,7 @@ public:
   bool extend_sql_plan_monitor_metrics_;
   bool enable_mysql_compatible_dates_;
   bool enable_px_task_rebalance_;
-
+  bool enable_nested_sql_local_optimize_;
 private:
   // current cluster config version_
   int64_t cluster_config_version_;

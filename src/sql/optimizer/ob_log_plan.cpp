@@ -14590,11 +14590,16 @@ int ObLogPlan::generate_plan()
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
+  bool need_retry = false;
+
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(generate_raw_plan())) {
     LOG_WARN("fail to generate raw plan", K(ret));
+  } else if (OB_FAIL(need_regenerate_plan_for_nested_sql(need_retry))) {
+    LOG_WARN("failed to check regenerate plan for nested SQL", K(ret));
+  } else if (need_retry) {
   } else if (stmt->is_explain_stmt() || stmt->is_help_stmt()) {
     /*do nothing*/
   } else if (OB_FAIL(do_post_plan_processing())) {
@@ -14638,6 +14643,76 @@ int ObLogPlan::generate_raw_plan()
     LOG_WARN("failed to init equal_sets");
   } else if (OB_FAIL(generate_normal_raw_plan())) {
     LOG_WARN("fail to generate normal raw plan", K(ret));
+  }
+  return ret;
+}
+
+int ObLogPlan::need_regenerate_plan_for_nested_sql(bool &need_retry)
+{
+  int ret = OB_SUCCESS;
+  need_retry = false;
+  const ObDMLStmt *stmt = get_stmt();
+  const ObQueryCtx *query_ctx = optimizer_context_.get_query_ctx();
+
+  // Check if need to regenerate with DAS for nested SQL optimization
+  // This function is called after generate_raw_plan() completes
+  // Only check at outermost level (when plan_root is set):
+  // 1. First plan generation for nested SELECT without for_update (tried basic plan)
+  // 2. If first generation already is local, use it directly
+  // 3. If first generation is not local, set need_retry = true to trigger retry at optimizer level
+
+  if (OB_ISNULL(stmt) || OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt or query ctx", K(ret), K(stmt), K(query_ctx));
+  } else {
+    LOG_TRACE("[NESTED_SQL_DEBUG] need_regenerate_plan_for_nested_sql entry",
+              K(optimizer_context_.enable_nested_sql_local_optimize()),
+              K(optimizer_context_.in_nested_sql()),
+              K(optimizer_context_.is_nested_sql_try_basic_first()),
+              K(stmt->is_select_stmt()),
+              K(query_ctx->is_contain_select_for_update_),
+              K(query_ctx->has_dml_write_stmt_));
+
+    if (optimizer_context_.enable_nested_sql_local_optimize()
+        && optimizer_context_.in_nested_sql()
+        && optimizer_context_.is_nested_sql_try_basic_first()
+        && optimizer_context_.need_retry_plan()) {
+      ObLogicalOperator *plan_root = get_plan_root();
+      if (OB_ISNULL(plan_root)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null plan root", K(ret));
+      } else if (OB_PHY_PLAN_LOCAL == optimizer_context_.get_phy_plan_type()) {
+        // First generation is local plan (from compute_plan_type), use it directly (best case)
+        LOG_TRACE("[NESTED_SQL_DEBUG] First generation is already local, use it directly",
+                  K(optimizer_context_.get_phy_plan_type()));
+        need_retry = false;
+      } else {
+        // Check if there are normal tables (support DAS) not using DAS
+        // If so, need to retry to use DAS for these tables
+        bool has_non_das_normal_table = false;
+        if (OB_FAIL(check_all_table_scans_use_das(plan_root, has_non_das_normal_table))) {
+          LOG_WARN("failed to check if all table scans use DAS", K(ret));
+        } else if (!has_non_das_normal_table) {
+          // All tables already use DAS, or all non-DAS tables are unsupported DAS tables (virtual table, external table, or sample scan)
+          // Retry won't help
+          LOG_TRACE("[NESTED_SQL_DEBUG] No need to retry - all tables use DAS or all non-DAS tables are unsupported",
+                    K(optimizer_context_.get_phy_plan_type()));
+          need_retry = false;
+        } else {
+          // First generation is not local and has normal tables not using DAS, need to regenerate with DAS
+          LOG_TRACE("[NESTED_SQL_DEBUG] First generation is not local, has normal tables not using DAS, need regenerate with DAS",
+                    K(optimizer_context_.get_phy_plan_type()), K(plan_root->get_type()));
+          need_retry = true;
+          optimizer_context_.set_nested_sql_try_basic_first(false);
+        }
+      }
+    } else {
+      LOG_TRACE("[NESTED_SQL_DEBUG] Skipping regeneration - conditions not met");
+      need_retry = false;
+    }
+    if (OB_SUCC(ret)) {
+      optimizer_context_.set_need_retry_plan(need_retry);
+    }
   }
   return ret;
 }
@@ -15886,6 +15961,33 @@ int ObLogPlan::build_location_related_tablet_ids()
                OB_FAIL(ObPhyLocationGetter::build_related_tablet_info(
                        table_part_info->get_table_location(), *optimizer_context_.get_exec_ctx(), map))) {
       LOG_WARN("rebuild related tablet info failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_all_table_scans_use_das(ObLogicalOperator *op, bool &has_non_das_normal_table)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret));
+  } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
+    ObLogTableScan *scan = static_cast<ObLogTableScan*>(op);
+    if (!scan->use_das()) {
+      // Check if this table scan cannot use DAS (virtual table, external table, or sample scan)
+      // If it's a normal table (supports DAS) but not using DAS, mark has_non_das_normal_table = true
+      // We should retry to use DAS for normal tables
+      if (share::schema::EXTERNAL_TABLE != scan->get_table_type()
+          && !is_virtual_table(scan->get_ref_table_id())
+          && !scan->is_sample_scan()) {
+        has_non_das_normal_table = true;
+      }
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && !has_non_das_normal_table && i < op->get_num_of_child(); ++i) {
+    if (OB_FAIL(SMART_CALL(check_all_table_scans_use_das(op->get_child(i), has_non_das_normal_table)))) {
+      LOG_WARN("failed to check if all table scans use DAS", K(ret));
     }
   }
   return ret;

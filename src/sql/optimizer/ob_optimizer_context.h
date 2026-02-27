@@ -318,6 +318,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     rowsets_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
     enable_delete_insert_scan_(false),
+    enable_nested_sql_local_optimize_(false),
+    nested_sql_try_basic_first_(true),
+    need_retry_plan_(false),
     min_cluster_version_(GET_MIN_CLUSTER_VERSION())
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
@@ -832,6 +835,12 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
   inline bool enable_delete_insert_scan() const { return enable_delete_insert_scan_; }
   inline void set_enable_delete_insert_scan(bool enabled) { enable_delete_insert_scan_ = enabled; }
+  inline bool enable_nested_sql_local_optimize() const { return enable_nested_sql_local_optimize_; }
+  inline void set_enable_nested_sql_local_optimize(bool enabled) { enable_nested_sql_local_optimize_ = enabled; }
+  inline bool is_nested_sql_try_basic_first() const { return nested_sql_try_basic_first_; }
+  inline void set_nested_sql_try_basic_first(bool is_first) { nested_sql_try_basic_first_ = is_first; }
+  inline bool need_retry_plan() const { return need_retry_plan_; }
+  inline void set_need_retry_plan(bool need_retry) { need_retry_plan_ = need_retry; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -967,6 +976,9 @@ private:
   bool rowsets_enabled_;
   bool extend_sql_plan_monitor_metrics_;
   bool enable_delete_insert_scan_;
+  bool enable_nested_sql_local_optimize_;
+  bool nested_sql_try_basic_first_; // Flag for nested SQL local optimization: try basic plan first, fallback to DAS if not local
+  bool need_retry_plan_; // Flag to indicate if plan needs to be regenerated (set by LogPlan, checked by Optimizer)
   uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
 };
 }

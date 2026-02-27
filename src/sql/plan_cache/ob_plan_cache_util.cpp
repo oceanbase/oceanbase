@@ -542,6 +542,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
     extend_sql_plan_monitor_metrics_ = tenant_config->_extend_sql_plan_monitor_metrics;
     enable_mysql_compatible_dates_ = tenant_config->_enable_mysql_compatible_dates;
     enable_px_task_rebalance_ = tenant_config->_enable_px_task_rebalance;
+    enable_nested_sql_local_optimize_ = tenant_config->_enable_nested_sql_local_optimize;
   }
 
   return ret;
@@ -643,6 +644,8 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(extend_sql_plan_monitor_metrics_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", enable_px_task_rebalance_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_px_task_rebalance_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", enable_nested_sql_local_optimize_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_nested_sql_local_optimize_));
   } else {
     // do nothing
   }

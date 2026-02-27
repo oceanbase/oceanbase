@@ -393,6 +393,9 @@ public:
 
   int generate_raw_plan();
 
+  int need_regenerate_plan_for_nested_sql(bool &need_retry);
+  int check_all_table_scans_use_das(ObLogicalOperator *op, bool &has_non_das_normal_table);
+
   virtual int generate_plan();
 
   int do_post_plan_processing();
