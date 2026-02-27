@@ -2967,7 +2967,7 @@ DEF_CAP(load_data_diagnosis_log_max_size, OB_TENANT_PARAMETER, "256M", "[0,)"
          "it will be renamed and a new diagnosis log file using is opened, range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "20000",
+DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "1000",
                     common::ObHNSWIterFilterScanNumChecker,
                     "The upper limit of hnsw iter-filter search nums. Range: [0,)",
                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3073,3 +3073,12 @@ DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "100", "[0
         "larger than (meta tenant disk limit * threshold), write throttling is triggered to slow down incoming write requests."
         "Range: [0, )",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR(ob_vector_search_strategy, OB_TENANT_PARAMETER, "RECALL_FIRST",
+        "The strategy of vector index searching. If it is set to RECALL_FIRST, which is default value, the search strategy is deep-search mode."
+        "If it is set to LATENCY_FIRST, the search strategy is response-first mode.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "RECALL_FIRST, LATENCY_FIRST");
+DEF_TIME(_vector_pre_filtering_timeout, OB_TENANT_PARAMETER, "50ms", "[10ms,)",
+        "Control the period of pre-filtering stage in vector index search. Range: [10ms, )",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

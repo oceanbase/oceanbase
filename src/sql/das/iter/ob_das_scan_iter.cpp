@@ -77,6 +77,7 @@ int ObDASScanIter::do_table_scan()
   } else if (OB_UNLIKELY(nullptr != result_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected not null result iter ptr before do table scan", K(ret), KP_(result));
+  } else if (is_vec_pre_filtering_timeout_set() && OB_FALSE_IT(vec_start_scan_ts_us_ = common::ObClockGenerator::getClock())) {
   } else if (OB_FAIL(tsc_service_->table_scan(*scan_param_, result_))) {
     if (OB_SNAPSHOT_DISCARDED == ret && scan_param_->fb_snapshot_.is_valid()) {
       ret = OB_INVALID_QUERY_TIMESTAMP;
@@ -95,6 +96,7 @@ int ObDASScanIter::rescan()
   if (OB_ISNULL(scan_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr scan param", K(ret));
+  } else if (is_vec_pre_filtering_timeout_set() && OB_FALSE_IT(vec_start_scan_ts_us_ = common::ObClockGenerator::getClock())) {
   } else if (OB_FAIL(tsc_service_->table_rescan(*scan_param_, result_))) {
       if (OB_SNAPSHOT_DISCARDED == ret && scan_param_->fb_snapshot_.is_valid()) {
         ret = OB_INVALID_QUERY_TIMESTAMP;
@@ -121,6 +123,10 @@ int ObDASScanIter::inner_get_next_row()
     if (ret != OB_ITER_END) {
       LOG_WARN("failed to get next row", K(ret));
     }
+  } else if (is_vec_pre_filtering_timeout_set() && OB_FAIL(try_check_vec_pre_filter_status())) {
+    if (ret != OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY) {
+      LOG_WARN("failed to try check vector pre-filter timeout", K(ret));
+    }
   }
   return ret;
 }
@@ -136,6 +142,10 @@ int ObDASScanIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   } else if (OB_FAIL(result_->get_next_rows(count, capacity))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("failed to get next row", K(ret));
+    }
+  } else if (is_vec_pre_filtering_timeout_set() && OB_FAIL(try_check_vec_pre_filter_status(count))) {
+    if (ret != OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY) {
+      LOG_WARN("failed to try check vector pre-filter timeout", K(ret));
     }
   }
   LOG_TRACE("[DAS ITER] scan iter get next rows", K(count), K(capacity), KPC_(scan_param), K(ret));
@@ -202,6 +212,44 @@ int ObDASScanIter::set_scan_rowkey(ObEvalCtx *eval_ctx,
   }
   LOG_DEBUG("set scan iter scan rowkey", K(range), K(ret));
 
+  return ret;
+}
+
+int ObDASScanIter::try_check_vec_pre_filter_status(const int64_t row_count /* default 1 */)
+{
+  int ret = OB_SUCCESS;
+  try_check_tick_rows_ += row_count;
+  ++try_check_tick_;
+  bool need_check = false;
+  if (try_check_tick_rows_ >= CHECK_STATUS_ROWS) {
+    try_check_tick_rows_ = 0;
+    need_check = true;
+  }
+  if (!need_check && (try_check_tick_ % CHECK_STATUS_TRY_TIMES) == 0) {
+    need_check = true;
+  }
+  if (need_check && OB_FAIL(check_vec_pre_filter_status())) {
+    LOG_INFO("vector pre-filter search timeout", K(ret));
+  }
+
+  return ret;
+}
+
+int ObDASScanIter::check_vec_pre_filter_status()
+{
+  int ret = OB_SUCCESS;
+  if (is_vec_pre_filtering_timeout_set() && vec_start_scan_ts_us_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector pre-filtering timeout is set but scan start timestamp is not set", K(ret), K(vec_pre_filtering_timeout_us_), K(vec_start_scan_ts_us_));
+  } else {
+    int64_t cur_ts = common::ObClockGenerator::getClock();
+    int64_t timeout_ts = vec_start_scan_ts_us_ + vec_pre_filtering_timeout_us_;
+    int64_t timeout_remain = timeout_ts - cur_ts;
+    if (timeout_remain <= 0) {
+      ret = OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY; // to trigger pre-filter -> post_iteration transition
+      LOG_INFO("vector pre-filter scan timeout", K(ret), K(timeout_remain), K(cur_ts), K(vec_start_scan_ts_us_), K(vec_pre_filtering_timeout_us_));
+    }
+  }
   return ret;
 }
 

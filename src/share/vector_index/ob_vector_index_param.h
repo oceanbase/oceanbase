@@ -20,6 +20,13 @@ namespace oceanbase
 namespace share
 {
 
+enum ObVecIdxQueryStrategy
+{
+  LATENCY_FIRST = 0, // FARM COMPAT WHITELIST FOR RESPONSE_FIRST
+  RECALL_FIRST = 1, // FARM COMPAT WHITELIST FOR DEEP_SEARCH
+  STRATEGY_MAX
+};
+
 struct ObVectorIndexQueryParam
 {
 public:
@@ -30,7 +37,8 @@ public:
     flags_(0),
     ef_search_(0),
     refine_k_(0),
-    ob_sparse_drop_ratio_search_(0)
+    ob_sparse_drop_ratio_search_(0),
+    strategy_(ObVecIdxQueryStrategy::RECALL_FIRST)
   {}
   virtual ~ObVectorIndexQueryParam() {}
   int assign(const ObVectorIndexQueryParam &other);
@@ -43,16 +51,18 @@ public:
       uint64_t is_set_refine_k_             : 1;
       uint64_t is_set_drop_ratio_search_    : 1;
       uint64_t is_set_similarity_threshold_ : 1;
-      uint64_t reserved_                    : 60;
+      uint64_t is_set_strategy_             : 1; // FARM COMPAT WHITELIST
+      uint64_t reserved_                    : 59;
     };
   };
   int32_t ef_search_;
   float refine_k_;
   float ob_sparse_drop_ratio_search_;
   float similarity_threshold_;
+  ObVecIdxQueryStrategy strategy_; // from sql query parameter
 
   TO_STRING_KV(K_(is_set_ef_search), K_(ef_search),
-      K_(is_set_refine_k), K_(refine_k), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(reserved));
+      K_(is_set_refine_k), K_(refine_k), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(is_set_strategy), K_(strategy), K_(reserved));
 
 };
 
