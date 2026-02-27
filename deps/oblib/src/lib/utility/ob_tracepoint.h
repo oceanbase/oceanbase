@@ -252,7 +252,7 @@ struct EventItem
     cond_ = other.cond_;
   }
 
-  int call(const int64_t v) { return cond_ == v ? call() : 0; }
+  int call(const int64_t v) { return (cond_ && cond_ != v) ? 0 : call(); }
   int call() {
     if (OB_LIKELY(0 == trigger_freq_ && 0 == occur_)) {
       return 0;
@@ -333,6 +333,7 @@ struct NamedEventItem : public ObDLinkBase<NamedEventItem>
     l.add_last(this);
   }
   operator int(void) { return item_.call(); }
+  int test(int64_t v) { return item_.call(v); }
   EventItem item_;
 };
 
