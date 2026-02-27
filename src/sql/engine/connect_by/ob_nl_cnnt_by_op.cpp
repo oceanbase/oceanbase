@@ -63,7 +63,9 @@ OB_SERIALIZE_MEMBER((ObNLConnectBySpecBase, ObOpSpec),
                     is_nocycle_,
                     has_prior_);
 
-OB_SERIALIZE_MEMBER((ObNLConnectBySpec, ObNLConnectBySpecBase));
+OB_SERIALIZE_MEMBER((ObNLConnectBySpec, ObNLConnectBySpecBase),
+                    hash_key_exprs_,
+                    hash_probe_exprs_);
 
 // swap left and right, so left row is prior row, all is null, and right row is cur_row
 // if left_root_exprs has duplicate row, so set null after assign all right row are assigned
