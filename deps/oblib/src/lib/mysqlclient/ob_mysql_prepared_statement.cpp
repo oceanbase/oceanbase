@@ -15,6 +15,7 @@
 #include "lib/mysqlclient/ob_mysql_prepared_statement.h"
 #include "share/schema/ob_routine_info.h"
 #include "pl/ob_pl_user_type.h"
+#include "lib/wide_integer/ob_wide_integer.h"
 
 namespace oceanbase
 {
@@ -423,6 +424,34 @@ int ObBindParamEncode::encode_number_float(ENCODE_FUNC_ARG_DECL)
   return ret;
 }
 
+int ObBindParamEncode::encode_decimal_int(ENCODE_FUNC_ARG_DECL)
+{
+  UNUSEDx(is_output_param, tz_info);
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  char *buf = nullptr;
+  number::ObNumber num;
+  const int64_t buf_len = OB_CAST_TO_VARCHAR_MAX_LENGTH;
+  const ObObjType obj_type = param.get_type();
+  bind_param.col_idx_ = col_idx;
+  bind_param.buffer_type_ = buffer_type;
+
+  if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret), K(buf_len));
+  } else if (OB_FAIL(wide::to_number(param.get_decimal_int(), param.get_int_bytes(),
+                                      param.get_scale(), allocator, num))) {
+    LOG_WARN("fail to convert decimal int to number", K(ret), K(param));
+  } else if (OB_FAIL(num.format(buf, buf_len, pos, param.get_scale()))) {
+    LOG_WARN("fail to convert number to string", K(ret));
+  } else {
+    bind_param.buffer_ = buf;
+    bind_param.buffer_len_ = buf_len;
+    bind_param.length_ = pos;
+  }
+  return ret;
+}
+
 int ObBindParamEncode::encode_not_supported(ENCODE_FUNC_ARG_DECL)
 {
   UNUSEDx(col_idx, is_output_param, tz_info, bind_param, allocator);
@@ -430,6 +459,30 @@ int ObBindParamEncode::encode_not_supported(ENCODE_FUNC_ARG_DECL)
   int ret = OB_SUCCESS;
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("not supported type", K(ret), K(obj_type));
+  return ret;
+}
+
+int ObBindParamEncode::encode_obobj(const ObObjType obj_type,
+                                    const int64_t col_idx,
+                                    const bool is_output_param,
+                                    const ObTimeZoneInfo &tz_info,
+                                    ObObj &param,
+                                    ObBindParam &bind_param,
+                                    ObIAllocator &allocator,
+                                    enum_field_types buffer_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(encode_map_[obj_type])) {
+    // Check if encode function exists for this type to prevent crash
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported type", K(ret), K(col_idx), K(obj_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink encode type");
+  } else {
+    ret = encode_map_[obj_type](col_idx, is_output_param, tz_info, param, bind_param, allocator, buffer_type);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to encode param", K(ret), K(obj_type), K(col_idx), K(param));
+    }
+  }
   return ret;
 }
 
@@ -484,6 +537,12 @@ const ObBindParamEncode::EncodeFunc ObBindParamEncode::encode_map_[ObMaxType + 1
   ObBindParamEncode::encode_not_supported,           // ObLobType
   ObBindParamEncode::encode_not_supported,           // ObJsonType
   ObBindParamEncode::encode_not_supported,           // ObGeometryType
+  ObBindParamEncode::encode_not_supported,           // ObUserDefinedSQLType
+  ObBindParamEncode::encode_decimal_int,             // ObDecimalIntType
+  ObBindParamEncode::encode_not_supported,           // ObCollectionSQLType
+  ObBindParamEncode::encode_not_supported,           // ObMySQLDateType
+  ObBindParamEncode::encode_not_supported,           // ObMySQLDateTimeType
+  ObBindParamEncode::encode_not_supported,           // ObRoaringBitmapType
   ObBindParamEncode::encode_not_supported            // ObMaxType
 };
 
@@ -782,12 +841,71 @@ int ObBindParamDecode::decode_number_float(DECODE_FUNC_ARG_DECL)
   return ret;
 }
 
+int ObBindParamDecode::decode_decimal_int(DECODE_FUNC_ARG_DECL)
+{
+  UNUSEDx(field_type, tz_info);
+  int ret = OB_SUCCESS;
+  number::ObNumber nb;
+  ObDecimalInt *decint = nullptr;
+  int32_t int_bytes = 0;
+  int16_t precision = 0;
+  int16_t scale = 0;
+
+  // First, decode string to ObNumber
+  if (OB_FAIL(nb.from(reinterpret_cast<char *>(bind_param.buffer_),
+                      bind_param.length_,
+                      allocator,
+                      &precision,
+                      &scale))) {
+    LOG_WARN("decode param to number failed", K(ret), K(bind_param));
+  } else {
+    // Then convert ObNumber to ObDecimalInt
+    ObScale in_scale = nb.get_scale();
+    // Use a simple cast params for conversion
+    ObObjCastParams cast_params;
+    cast_params.allocator_v2_ = &allocator;
+    ObAccuracy accuracy;
+    accuracy.set_precision(precision > 0 ? precision : OB_MAX_DECIMAL_PRECISION);
+    accuracy.set_scale(in_scale);
+    cast_params.res_accuracy_ = &accuracy;
+
+    if (OB_FAIL(wide::from_number(nb, cast_params, in_scale, decint, int_bytes))) {
+      LOG_WARN("failed to convert number to decimal int", K(ret), K(nb));
+    } else {
+      param.set_decimal_int(int_bytes, in_scale, decint);
+    }
+  }
+  return ret;
+}
+
 int ObBindParamDecode::decode_not_supported(DECODE_FUNC_ARG_DECL)
 {
   UNUSEDx(tz_info, bind_param, param, allocator);
   int ret = OB_SUCCESS;
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("not supported type", K(ret), K(field_type));
+  return ret;
+}
+
+int ObBindParamDecode::decode_obobj(const ObObjType obj_type,
+                                    const enum_field_types field_type,
+                                    const ObTimeZoneInfo &tz_info,
+                                    const ObBindParam &bind_param,
+                                    ObObj &param,
+                                    ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(decode_map_[obj_type])) {
+    // Check if decode function exists for this type to prevent crash
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported type", K(ret), K(obj_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink decode type");
+  } else {
+    ret = decode_map_[obj_type](field_type, tz_info, bind_param, param, allocator);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to decode param", K(ret), K(obj_type), K(field_type));
+    }
+  }
   return ret;
 }
 
@@ -842,6 +960,12 @@ const ObBindParamDecode::DecodeFunc ObBindParamDecode::decode_map_[ObMaxType + 1
   ObBindParamDecode::decode_not_supported,           // ObLobType
   ObBindParamDecode::decode_not_supported,           // ObJsonType
   ObBindParamDecode::decode_not_supported,           // ObGeometryType
+  ObBindParamDecode::decode_not_supported,           // ObUserDefinedSQLType
+  ObBindParamDecode::decode_decimal_int,             // ObDecimalIntType
+  ObBindParamDecode::decode_not_supported,           // ObCollectionSQLType
+  ObBindParamDecode::decode_not_supported,           // ObMySQLDateType
+  ObBindParamDecode::decode_not_supported,           // ObMySQLDateTimeType
+  ObBindParamDecode::decode_not_supported,           // ObRoaringBitmapType
   ObBindParamDecode::decode_not_supported            // ObMaxType
 };
 
@@ -1310,14 +1434,15 @@ int ObMySQLProcStatement::bind_param(const int64_t col_idx,
     } else if (OB_ISNULL(bind_param)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get bind param by idx", K(ret), K(col_idx), K(stmt_param_count_));
-    } else if (OB_FAIL(ObBindParamEncode::encode_map_[obj_type](col_idx,
-                                                                is_output_param,
-                                                                *tz_info,
-                                                                param,
-                                                                *bind_param,
-                                                                allocator,
-                                                                buffer_type))) {
-      LOG_WARN("fail to encode param", K(ret));
+    } else if (OB_FAIL(ObBindParamEncode::encode_obobj(obj_type,
+                                                        col_idx,
+                                                        is_output_param,
+                                                        *tz_info,
+                                                        param,
+                                                        *bind_param,
+                                                        allocator,
+                                                        buffer_type))) {
+      LOG_WARN("fail to encode param", K(ret), K(obj_type), K(col_idx));
     } else if (OB_FAIL(param_.bind_param(*bind_param))) {
       LOG_WARN("failed to bind param", K(ret), KPC(bind_param));
     }
@@ -1683,14 +1808,15 @@ int ObMySQLProcStatement::build_record_element(int64_t position,
     } else if (OB_ISNULL(bind_param)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("bind param is NULL", K(ret), K(position), K(pl_type));
-    } else if (OB_FAIL(ObBindParamEncode::encode_map_[obj_type](position,
-                                                                is_out,
-                                                                *tz_info,
-                                                                current_obj,
-                                                                *bind_param,
-                                                                allocator,
-                                                                buffer_type))) {
-      LOG_WARN("encode param failed", K(ret));
+    } else if (OB_FAIL(ObBindParamEncode::encode_obobj(obj_type,
+                                                        position,
+                                                        is_out,
+                                                        *tz_info,
+                                                        current_obj,
+                                                        *bind_param,
+                                                        allocator,
+                                                        buffer_type))) {
+      LOG_WARN("encode param failed", K(ret), K(obj_type), K(position));
     } else if (OB_FAIL(param_.bind_param(*bind_param))) {
       LOG_WARN("bind param failed", K(ret));
     }
@@ -1997,11 +2123,12 @@ int ObMySQLProcStatement::convert_proc_output_param_result(int64_t out_param_idx
         }
         if (FAILEDx(get_ob_type(obj_type, static_cast<obmysql::EMySQLFieldType>(bind_param.buffer_type_)))) {
           LOG_WARN("fail to get ob type", K(ret), K(bind_param));
-        } else if (OB_FAIL(ObBindParamDecode::decode_map_[obj_type](bind_param.buffer_type_,
-                                                                    tz_info,
-                                                                    bind_param,
-                                                                    *param,
-                                                                    allocator))) {
+        } else if (OB_FAIL(ObBindParamDecode::decode_obobj(obj_type,
+                                                            bind_param.buffer_type_,
+                                                            tz_info,
+                                                            bind_param,
+                                                            *param,
+                                                            allocator))) {
           LOG_WARN("failed to decode param", K(ret));
         }
       }
@@ -2290,11 +2417,12 @@ int ObMySQLProcStatement::process_record_out_param(const pl::ObRecordType *recor
     } else if (bind_param->is_null_) {
       element->set_null();
     } else {
-      OZ (ObBindParamDecode::decode_map_[obj_type](bind_param->buffer_type_,
-                                                  *tz_info,
-                                                  *bind_param,
-                                                  *element,
-                                                  *record->get_allocator()));
+      OZ (ObBindParamDecode::decode_obobj(obj_type,
+                                          bind_param->buffer_type_,
+                                          *tz_info,
+                                          *bind_param,
+                                          *element,
+                                          *record->get_allocator()));
     }
     if (OB_SUCC(ret) && !element->is_null()) {
       CK (element->get_type() == record_type->get_record_member_type(i)->get_obj_type());
@@ -2386,11 +2514,12 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
     ObBindParam *bind_param = NULL;
     CK (!com_data.is_assoc_array());
     CK (OB_NOT_NULL(bind_param = com_data.get_data_array().at(0)));
-    OZ (ObBindParamDecode::decode_map_[ObObjType::ObIntType](bind_param->buffer_type_,
-                                                              *tz_info,
-                                                              *bind_param,
-                                                              isnull_obj,
-                                                              allocator));
+    OZ (ObBindParamDecode::decode_obobj(ObObjType::ObIntType,
+                                        bind_param->buffer_type_,
+                                        *tz_info,
+                                        *bind_param,
+                                        isnull_obj,
+                                        allocator));
     OX (is_null = (isnull_obj.get_int() == OUT_VALUE_ISNULL));
   }
   if (OB_FAIL(ret)) {

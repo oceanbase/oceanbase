@@ -129,7 +129,16 @@ public:
   DEF_ENCODE_FUNC(year);
   DEF_ENCODE_FUNC(string);
   DEF_ENCODE_FUNC(number_float);
+  DEF_ENCODE_FUNC(decimal_int);
   static int encode_not_supported(ENCODE_FUNC_ARG_DECL);
+  static int encode_obobj(const ObObjType obj_type,
+                          const int64_t col_idx,
+                          const bool is_output_param,
+                          const ObTimeZoneInfo &tz_info,
+                          ObObj &param,
+                          ObBindParam &bind_param,
+                          ObIAllocator &allocator,
+                          enum_field_types buffer_type);
 
 public:
   static const EncodeFunc encode_map_[ObMaxType + 1];
@@ -162,7 +171,15 @@ public:
   DEF_DECODE_FUNC(year);
   DEF_DECODE_FUNC(string);
   DEF_DECODE_FUNC(number_float);
+  DEF_DECODE_FUNC(decimal_int);
   static int decode_not_supported(DECODE_FUNC_ARG_DECL);
+
+  static int decode_obobj(const ObObjType obj_type,
+                          const enum_field_types field_type,
+                          const ObTimeZoneInfo &tz_info,
+                          const ObBindParam &bind_param,
+                          ObObj &param,
+                          ObIAllocator &allocator);
 
 public:
   static const DecodeFunc decode_map_[ObMaxType + 1];
