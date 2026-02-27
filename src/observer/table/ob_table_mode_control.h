@@ -30,6 +30,7 @@ class ObTableModeCtrl
 {
 public:
   static int check_mode(ObKvModeType tenant_mode, ObTableEntityType entity_type);
+  static bool is_hbase_entity_type(ObTableEntityType entity_type);
 };
 
 } // end namespace table
