@@ -35,55 +35,56 @@ public:
     is_storage_layer_row_(true),
     col_obj_types_(nullptr),
     col_count_(0),
+    rowkey_count_(0),
     allocator_(ObMemAttr(MTL_ID(), "BRSGEN")),
     char_data_(nullptr),
     cols_desc_(),
     vec_convertor_() { }
   ~ObBatchRowsGen() = default;
   int init(ObObjType *col_obj_types, int64_t col_count, int64_t rowkey_col_count_, bool is_storage_layer_row = true);
-  int get_batch_rows(blocksstable::ObBatchDatumRows &batch_rows, int64_t batch_size);
+  int get_batch_rows(blocksstable::ObBatchDatumRows &batch_rows, int64_t batch_size, ObIAllocator *allocator = nullptr);
   int set_vector_type_column(common::ObDatum &res_datum);
 
 private:
-  OB_INLINE bool is_str_type(const ObObjType obj_type)
-  {
-    bool is_str_type = false;
-    if (ObVarcharType == obj_type || ObCharType == obj_type || ObHexStringType == obj_type ||
-        ObNVarchar2Type == obj_type || ObNCharType == obj_type || ObTextType == obj_type) {
-      is_str_type = true;
-    }
-    return is_str_type;
-  }
-  OB_INLINE bool is_integer_type(const ObObjType obj_type)
-  {
-    bool is_integer_type = false;
-    if (ObTinyIntType == obj_type || ObSmallIntType == obj_type || ObMediumIntType == obj_type ||
-        ObInt32Type == obj_type || ObIntType == obj_type || ObUTinyIntType == obj_type ||
-        ObUSmallIntType == obj_type || ObUMediumIntType == obj_type || ObUInt32Type == obj_type || ObUInt64Type == obj_type) {
-      is_integer_type = true;
-    }
-    return is_integer_type;
-  }
-  OB_INLINE bool is_vec_type(const ObObjType obj_type)
-  {
-    bool is_vec_type = false;
-    if (ObCollectionSQLType == obj_type) {
-      is_vec_type = true;
-    }
-    return is_vec_type;
-  }
-  OB_INLINE bool is_support_type(ObObjType *col_obj_types, int64_t col_count)
-  {
-    bool is_support = true;
-    for (int64_t i = 0; is_support && i < col_count; ++i) {
-      ObObjType obj_type = col_obj_types[i];
-      if (!(is_integer_type(obj_type) || is_str_type(obj_type) || is_vec_type(obj_type))) {
-        is_support = false;
-        break;
-      }
-    }
-    return is_support;
-  }
+ OB_INLINE bool is_str_type(const ObObjType obj_type)
+ {
+   bool is_str_type = false;
+   if (ObVarcharType == obj_type || ObCharType == obj_type || ObHexStringType == obj_type ||
+       ObNVarchar2Type == obj_type || ObNCharType == obj_type || ObTextType == obj_type) {
+     is_str_type = true;
+   }
+   return is_str_type;
+ }
+ OB_INLINE bool is_integer_type(const ObObjType obj_type)
+ {
+   bool is_integer_type = false;
+   if (ObTinyIntType == obj_type || ObSmallIntType == obj_type || ObMediumIntType == obj_type ||
+       ObInt32Type == obj_type || ObIntType == obj_type || ObUTinyIntType == obj_type ||
+       ObUSmallIntType == obj_type || ObUMediumIntType == obj_type || ObUInt32Type == obj_type || ObUInt64Type == obj_type) {
+     is_integer_type = true;
+   }
+   return is_integer_type;
+ }
+ OB_INLINE bool is_vec_type(const ObObjType obj_type)
+ {
+   bool is_vec_type = false;
+   if (ObCollectionSQLType == obj_type) {
+     is_vec_type = true;
+   }
+   return is_vec_type;
+ }
+ OB_INLINE bool is_support_type(ObObjType *col_obj_types, int64_t col_count)
+ {
+   bool is_support = true;
+   for (int64_t i = 0; is_support && i < col_count; ++i) {
+     ObObjType obj_type = col_obj_types[i];
+     if (!(is_integer_type(obj_type) || is_str_type(obj_type) || is_vec_type(obj_type))) {
+       is_support = false;
+       break;
+     }
+   }
+   return is_support;
+ }
 
 private:
   bool is_inited_;
@@ -91,6 +92,7 @@ private:
   ObObjType *col_obj_types_;
   int64_t col_count_;
   int64_t rowkey_col_count_;
+  int64_t rowkey_count_;
   ObArenaAllocator allocator_;
   char *char_data_;
   common::ObArray<share::schema::ObColDesc> cols_desc_;
@@ -123,12 +125,13 @@ int ObBatchRowsGen::init(ObObjType *col_obj_types, int64_t col_count, int64_t ro
       col_count_ = col_count;
       rowkey_col_count_ = rowkey_col_count;
       is_inited_ = true;
+      rowkey_count_ = 0;
     }
   }
   return ret;
 }
 
-int ObBatchRowsGen::get_batch_rows(blocksstable::ObBatchDatumRows &batch_rows, int64_t batch_size)
+int ObBatchRowsGen::get_batch_rows(blocksstable::ObBatchDatumRows &batch_rows, int64_t batch_size, ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   ObArray<VectorFormat> vec_formats;
@@ -157,7 +160,14 @@ int ObBatchRowsGen::get_batch_rows(blocksstable::ObBatchDatumRows &batch_rows, i
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate memory", K(ret));
       } else {
-        MEMSET(char_data_, 0x7F, char_data_size);
+        // 使用 OB 的随机库生成可打印随机字符串
+        static const char charset[] =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const int64_t charset_len = static_cast<int64_t>(sizeof(charset) - 1);
+        for (int64_t k = 0; k < char_data_size; ++k) {
+          const int64_t idx = common::ObRandom::rand(0, charset_len - 1);
+          char_data_[k] = charset[idx];
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -182,7 +192,7 @@ int ObBatchRowsGen::get_batch_rows(blocksstable::ObBatchDatumRows &batch_rows, i
           } else if (is_storage_layer_row_ && rowkey_col_count_ + 1 == j) {
             row->storage_datums_[j].set_int(0);
           } else if (is_integer_type(col_obj_types_[j])) {
-            row->storage_datums_[j].set_int(i);
+            row->storage_datums_[j].set_int(rowkey_count_++);
           } else if (is_str_type(col_obj_types_[j])) {
             row->storage_datums_[j].set_string(char_data_, char_data_size);
           } else if (is_vec_type(col_obj_types_[j])) {
@@ -201,7 +211,7 @@ int ObBatchRowsGen::get_batch_rows(blocksstable::ObBatchDatumRows &batch_rows, i
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("the vec convertor is not full", K(ret));
         } else {
-          if (OB_FAIL(vec_convertor_.get_batch_datums(batch_rows))) {
+          if (OB_FAIL(vec_convertor_.get_batch_datums(batch_rows, allocator))) {
             LOG_WARN("fail to get batch rows", K(ret));
           }
         }

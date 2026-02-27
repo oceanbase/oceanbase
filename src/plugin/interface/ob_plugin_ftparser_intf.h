@@ -13,16 +13,12 @@
 #pragma once
 
 #include "plugin/interface/ob_plugin_intf.h"
+#include "storage/fts/ob_fts_struct.h"
 
 struct ObCharsetInfo;
 
 namespace oceanbase
 {
-
-namespace storage
-{
-class ObAddWordFlag;
-}
 namespace plugin
 {
 
@@ -77,6 +73,8 @@ public:
   {
   }
 
+  TO_STRING_KV(K_(mode), K_(main_dict), K_(quan_dict), K_(stopword_dict));
+
 public:
   Mode mode_;
   common::ObString main_dict_;
@@ -97,6 +95,9 @@ public:
 public:
   ObFTParserParam()
       : ObFTParserParamExport(),
+        metadata_alloc_(nullptr),
+        scratch_alloc_(nullptr),
+        ik_param_(),
         ngram_token_size_(NGRAM_TOKEN_SIZE),
         min_ngram_size_(NGRAM_TOKEN_SIZE),
         max_ngram_size_(NGRAM_TOKEN_SIZE)
@@ -107,16 +108,18 @@ public:
   inline void reset()
   {
     ObFTParserParamExport::reset();
-    allocator_ = nullptr;
+    metadata_alloc_ = nullptr;
+    scratch_alloc_ = nullptr;
     ngram_token_size_ = NGRAM_TOKEN_SIZE;
   }
 
-  INHERIT_TO_STRING_KV("base", ObFTParserParamExport, KP_(allocator), K_(ngram_token_size));
+  INHERIT_TO_STRING_KV("ObFTParserParamExport", ObFTParserParamExport,
+      KP_(metadata_alloc), KP_(scratch_alloc), K_(ngram_token_size),
+      K_(min_ngram_size), K_(max_ngram_size), K_(ik_param));
 
 public:
-  common::ObIAllocator *allocator_ = nullptr;
-
-  // ik parser params
+  common::ObIAllocator *metadata_alloc_;
+  common::ObIAllocator *scratch_alloc_;
   ObFTIKParam ik_param_;
   int64_t ngram_token_size_;
   int64_t min_ngram_size_;
@@ -133,6 +136,7 @@ public:
       int64_t &word_len,
       int64_t &char_cnt,
       int64_t &word_freq) = 0;
+
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -171,7 +175,7 @@ public:
   /**
    * get AddWordFlag
    * @details ref to ObAddWordFlag for more details
-   * @param[out] flag the AddWordFlag
+   * @param[out] flag the ObAddWordFlag
    */
   virtual int get_add_word_flag(storage::ObAddWordFlag &flag) const = 0;
 

@@ -43,12 +43,14 @@ int ObFTDocWordScanIterator::init(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
     const transaction::ObTxReadSnapshot *snapshot,
-    const int64_t schema_version)
+    const int64_t schema_version,
+    const share::schema::ObFTSIndexType fts_index_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init fulltext doc word scan iterator twice", K(ret), K(is_inited_));
+  } else if (FALSE_IT(fts_index_type_ = fts_index_type)) {
   } else if (OB_FAIL(init_scan_param(table_id, ls_id, tablet_id, snapshot, schema_version))) {
     LOG_WARN("fail to init scan param", K(ret), K(table_id), K(ls_id), K(tablet_id), K(snapshot), K(schema_version));
   } else {
@@ -223,6 +225,7 @@ int ObFTDocWordScanIterator::build_table_param(
   share::schema::ObSchemaGetterGuard schema_guard;
   const share::schema::ObTableSchema *table_schema = nullptr;
   uint64_t generated_doc_id_col = OB_INVALID_ID;
+  const bool need_position = (share::schema::OB_FTS_INDEX_TYPE_PHRASE_MATCH == fts_index_type_);
   column_ids.reset();
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -236,9 +239,9 @@ int ObFTDocWordScanIterator::build_table_param(
     LOG_WARN("unexpected error, table scheam is nullptr", K(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(table_schema->get_column_ids(column_ids))) {
     LOG_WARN("fail to get all column ids", K(ret), KPC(table_schema));
-  } else if (OB_UNLIKELY(4 != column_ids.count())) {
+  } else if (OB_UNLIKELY(need_position ? 5 != column_ids.count() : 4 != column_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, column count isn't 4 for fts doc word", K(ret), K(column_ids));
+    LOG_WARN("unexpected error, column count isn't expected for fts doc word", K(ret), K(need_position), K(column_ids));
   } else if (OB_FAIL(table_param.convert(*table_schema, column_ids, sql::ObStoragePushdownFlag()))) {
     LOG_WARN("fail to convert table param", K(ret), K(column_ids), KPC(table_schema));
   } else {

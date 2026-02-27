@@ -83,7 +83,7 @@ class ObOrderPerservingEncoder {
 public:
   //
   static int make_order_perserving_encode_from_object(
-    ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param);
+    const ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param);
 
   static int encode_from_string_fixlen(
     ObString val, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param);
@@ -161,7 +161,7 @@ private:
 class ObSortkeyConditioner {
 public:
   static int process_key_conditioning(
-    ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param);
+    const ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param);
   // adds null position flag
   static void process_decrease(unsigned char *to, int64_t to_len);
   // static int process_compare_by_combined_bytes()

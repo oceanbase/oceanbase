@@ -5354,11 +5354,13 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
         new_index_schema.set_table_mode_flag(share::schema::TABLE_MODE_QUEUING_EXTREME);
       }
       if (!new_index_params.empty()) {
-        new_index_schema.set_index_params(new_index_params);
+        if (OB_FAIL(new_index_schema.set_index_params(new_index_params))) {
+          LOG_WARN("fail to set index params", K(ret), K(new_index_params));
+        }
         // only vec_delta_buffer_type\vec_index_id_type may need update extra_info columns.
         if (new_index_schema.is_vec_delta_buffer_type() || new_index_schema.is_vec_index_id_type()) {
           ObVectorIndexParam new_vec_param;
-          if (OB_FAIL(parser_params_from_string(new_index_params, ObVectorIndexType::VIT_HNSW_INDEX,
+          if (FAILEDx(parser_params_from_string(new_index_params, ObVectorIndexType::VIT_HNSW_INDEX,
                                                        new_vec_param))) {
             LOG_WARN("fail to parse new index parsm", K(ret), K(new_index_params));
           } else if (new_vec_param.extra_info_actual_size_ > 0) {

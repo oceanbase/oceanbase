@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_subplan_scan.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "sql/optimizer/ob_log_granule_iterator.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
@@ -36,6 +37,25 @@ int ObLogSubPlanScan::generate_access_exprs()
       } else { /*do nothing*/ }
     }
   }
+
+  // Add ddl_slice_id_expr_ from child operator to access_exprs_ if exists
+  if (OB_SUCC(ret) && get_num_of_child() > 0) {
+    ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
+    ObRawExpr *ddl_slice_id_expr = NULL;
+    if (OB_NOT_NULL(child)) {
+      if (log_op_def::LOG_GRANULE_ITERATOR == child->get_type()) {
+        ObLogGranuleIterator *gi_op = static_cast<ObLogGranuleIterator *>(child);
+        ddl_slice_id_expr = gi_op->get_ddl_slice_id_expr();
+      }
+
+      if (OB_NOT_NULL(ddl_slice_id_expr)) {
+        if (OB_FAIL(add_var_to_array_no_dup(access_exprs_, ddl_slice_id_expr))) {
+          LOG_WARN("failed to add ddl_slice_id_expr to access_exprs_", K(ret));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

@@ -824,6 +824,7 @@ int ObDDLScheduler::DDLScanTask::schedule()
 void ObDDLScheduler::DDLScanTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
+  ddl_scheduler_.inc_rs_epoch();
   if (OB_FAIL(ObSysDDLSchedulerUtil::recover_task())) {
     LOG_WARN("failed to recover ddl tasks", K(ret));
   }
@@ -924,7 +925,8 @@ ObDDLScheduler::ObDDLScheduler()
     idler_(is_stop_),
     scan_task_(*this),
     heart_beat_check_task_(*this),
-    ddl_builder_()
+    ddl_builder_(),
+    rs_epoch_(0)
 {
 
 }
@@ -1023,6 +1025,11 @@ int ObDDLScheduler::switch_to_leader()
       task_queue_.set_stop(false);
       is_stop_ = false;
     }
+  }
+  // record RS epoch once leader switch is done (monotonic increasing local counter)
+  if (OB_SUCC(ret)) {
+    rs_epoch_++;
+    FLOG_INFO("[SYS_DDL_SCHEDULER] increase local RS epoch on switch_to_leader", K(rs_epoch_));
   }
   FLOG_INFO("[SYS_DDL_SCHEDULER] ObDDLScheduler switch leader finish",
             KR(ret), "tenant_id", MTL_ID(), K_(is_inited), K_(is_stop),
@@ -4121,6 +4128,8 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task,
     int tmp_ret = OB_SUCCESS;
     bool longops_added = true;
     ddl_task->set_gmt_create(task_record.gmt_create_);
+    // snapshot scheduler RS epoch for this task
+    ddl_task->set_rs_epoch_snapshot(get_rs_epoch());
     if (OB_TMP_FAIL(add_task_to_longops_mgr(ddl_task))) {
       longops_added = false;
       LOG_WARN("add task to longops mgr failed", K(tmp_ret));

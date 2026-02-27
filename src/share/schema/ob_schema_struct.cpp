@@ -21,6 +21,7 @@
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/engine/cmd/ob_interval_partition_utils.h"
+#include "share/ob_fts_index_builder_util.h"
 
 namespace oceanbase
 {

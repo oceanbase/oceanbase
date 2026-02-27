@@ -1749,6 +1749,13 @@ int ObTableParam::convert_fulltext_index_info(const ObTableSchema &table_schema)
     LOG_WARN("failed to set parser name from table schema", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_, table_schema.get_parser_property_str(), parser_properties_))) {
     LOG_WARN("fail to set parser properties from table schema", K(ret));
+  } else {
+    share::schema::ObFTSIndexParams fts_index_params;
+    if (OB_FAIL(table_schema.get_fts_params_from_index_params(fts_index_params))) {
+      LOG_WARN("failed to get fts index params from table schema", K(ret), K(table_schema));
+    } else {
+      fts_index_type_ = fts_index_params.fts_index_type_;
+    }
   }
   return ret;
 }
@@ -1806,6 +1813,7 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_fts_index),
        K_(parser_name),
        K_(parser_properties),
+       K_(fts_index_type),
        K_(is_vec_index),
        K_(is_column_replica_table),
        K_(is_normal_cgs_at_the_end),

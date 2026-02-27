@@ -19,14 +19,50 @@ namespace oceanbase
 {
 namespace sql
 {
+
+// Helper function to extract information from ObExpr array
+static int extract_expr_infos(const ObExprPtrIArray &exprs,
+                              common::ObIArray<ColMetaInfo> &expr_infos)
+{
+  int ret = OB_SUCCESS;
+  // expr_infos should be already initialized with proper size
+  for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
+    ObExpr *expr = exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is null", K(ret));
+    } else if (OB_FAIL(expr_infos.push_back(ColMetaInfo(expr->is_fixed_length_data_, expr->get_fixed_length())))) {
+      LOG_WARN("push back expr info failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int RowMeta::init(const ObExprPtrIArray &exprs,
                   const int32_t extra_size,
                   const bool enable_reorder_expr /*ture*/,
                   common::ObIAllocator *allocator /*NULL*/)
 {
   int ret = OB_SUCCESS;
+  common::ObArray<ColMetaInfo> expr_infos;
+  if (OB_FAIL(expr_infos.reserve(exprs.count()))) {
+    LOG_WARN("failed to reserve expr_infos", K(ret), K(exprs.count()));
+  } else if (OB_FAIL(extract_expr_infos(exprs, expr_infos))) {
+    LOG_WARN("failed to extract expr infos", K(ret));
+  } else if (OB_FAIL(init(expr_infos, extra_size, enable_reorder_expr, allocator))) {
+    LOG_WARN("failed to init row meta with expr infos", K(ret));
+  }
+  return ret;
+}
+
+int RowMeta::init(const common::ObIArray<ColMetaInfo> &expr_infos,
+                  const int32_t extra_size,
+                  const bool reorder_fixed_expr /*ture*/,
+                  common::ObIAllocator *allocator /*NULL*/)
+{
+  int ret = OB_SUCCESS;
   reset();
-  col_cnt_ = exprs.count();
+  col_cnt_ = expr_infos.count();
   extra_size_ = extra_size;
   fixed_cnt_ = 0;
   fixed_offsets_ = NULL;
@@ -34,13 +70,10 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
   nulls_off_ = 0;
   allocator_ = allocator;
   var_offsets_off_ = nulls_off_ + ObTinyBitVector::memory_size(col_cnt_);
-  if (enable_reorder_expr) {
-    for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
-      ObExpr *expr = exprs.at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null", K(ret));
-      } else if (expr->is_fixed_length_data_) {
+  if (reorder_fixed_expr) {
+    for (int64_t i = 0; i < expr_infos.count() && OB_SUCC(ret); ++i) {
+      const ColMetaInfo &info = expr_infos.at(i);
+      if (info.is_fixed_) {
         fixed_cnt_++;
       }
     }
@@ -73,10 +106,10 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
       int64_t project_idx = fixed_cnt_;
       int64_t fixed_idx = 0;
       fixed_offsets_[0] = fix_data_off_;
-      for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
-        ObExpr *expr = exprs.at(i);
-        if (expr->is_fixed_length_data_) {
-          fixed_offsets_[fixed_idx + 1] = fixed_offsets_[fixed_idx] + expr->get_fixed_length();
+      for (int64_t i = 0; i < expr_infos.count() && OB_SUCC(ret); ++i) {
+        const ColMetaInfo &info = expr_infos.at(i);
+        if (info.is_fixed_) {
+          fixed_offsets_[fixed_idx + 1] = fixed_offsets_[fixed_idx] + info.fixed_length_;
           projector_[i] = fixed_idx++;
         } else {
           projector_[i] = project_idx++;

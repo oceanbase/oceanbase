@@ -209,7 +209,10 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
     user_parallelism_ = arg.parallelism_;
     is_no_logging_ = arg.is_no_logging_;
     direct_load_type_ = ObDirectLoadMgrUtil::ddl_get_direct_load_type(GCTX.is_shared_storage_mode(), data_format_version_);
-    if (OB_FAIL(ObDDLTableSchema::fill_ddl_table_schema(dest_tenant_id_, dest_table_id_, data_format_version_, allocator_, ddl_table_schema_))) {
+    ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(dest_tenant_id_, schema_guard))) {
+      LOG_WARN("get tenant schema failed", K(ret), K(dest_tenant_id_));
+    } else if (OB_FAIL(ObDDLTableSchema::fill_ddl_table_schema(schema_guard, dest_tenant_id_, dest_table_id_, data_format_version_, allocator_, ddl_table_schema_))) {
       LOG_WARN("fill ddl table schema failed", K(ret));
     } else if (FALSE_IT(ddl_table_schema_.src_tenant_id_ = orig_tenant_id)) {
     } else if (OB_FAIL(fill_tablet_param())) {
@@ -1245,7 +1248,7 @@ int ObComplementWriteTask::get_next_chunk(ObChunk *&next_chunk)
     LOG_WARN("table scan has not been inited", K(ret));
   } else if (OB_FAIL(slice_row_iter_.get_next_row(row))) {
     if (OB_ITER_END != ret) {
-      LOG_WARN("get next row failed", K(ret));
+      LOG_WARN("get next row failed", K(ret), KPC(param_));
     } else {
       chunk_.set_end_chunk();
       next_chunk = &chunk_;

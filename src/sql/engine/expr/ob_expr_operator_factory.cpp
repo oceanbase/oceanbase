@@ -533,6 +533,7 @@
 #include "sql/engine/expr/ob_expr_edit_distance.h"
 #include "sql/engine/expr/ob_expr_md5_concat_ws.h"
 #include "sql/engine/expr/ob_expr_collect_file_list.h"
+#include "sql/engine/expr/ob_expr_pos_list.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
 
 
@@ -1006,6 +1007,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprDocLength, EAGER_EVALUATION);
     REG_OP(ObExprWordSegment, EAGER_EVALUATION);
     REG_OP(ObExprWordCount, EAGER_EVALUATION);
+    REG_OP(ObExprPosList, EAGER_EVALUATION);
     REG_OP(ObExprObjAccess, EAGER_EVALUATION);
     REG_OP(ObExprEnumToStr, EAGER_EVALUATION);
     REG_OP(ObExprSetToStr, EAGER_EVALUATION);
@@ -1892,6 +1894,8 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
       alias_name = ObString::make_string(N_WORD_COUNT);
     } else if (0 == origin_name.case_compare("DOC_LENGTH")) {
       alias_name = ObString::make_string(N_DOC_LENGTH);
+    } else if (0 == origin_name.case_compare("POS_LIST")) {
+      alias_name = ObString::make_string(N_POS_LIST);
     } else if (0 == origin_name.case_compare("inet_ntoa")) {
       // inet_ntoa is synonym for int2ip
       alias_name = ObString::make_string(N_INT2IP);

@@ -253,7 +253,7 @@ ob_set_subtarget(ob_storage fts
   fts/ob_fts_doc_word_iterator.cpp
   fts/ob_fts_parser_property.cpp
   fts/ob_fts_plugin_helper.cpp
-  fts/ob_fts_stop_word.cpp
+  fts/ob_fts_stop_token_check.cpp
   fts/ob_fts_struct.cpp
   fts/ob_ngram_ft_parser.cpp
   fts/ob_whitespace_ft_parser.cpp
@@ -264,6 +264,7 @@ ob_set_subtarget(ob_storage fts
   fts/ob_fts_builtin_parser_register.cpp
   fts/utils/unicode_utils.cpp
   fts/utils/ob_ft_ngram_impl.cpp
+  fts/ob_ft_token_processor.cpp
 )
 
 ob_set_subtarget(ob_storage ik
@@ -283,6 +284,7 @@ ob_set_subtarget(ob_storage ik
   fts/dict/ob_ft_range_dict.cpp
   fts/dict/ob_ft_dict_table_iter.cpp
   fts/dict/ob_ft_cache.cpp
+  fts/ik/ob_ik_char_util.cpp
 )
 
 
@@ -763,10 +765,22 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_ddl_merge_helper.cpp
   ddl/ob_inc_ddl_merge_helper.cpp
   ddl/ob_group_write_macro_block_task.cpp
+  ddl/ob_fts_sample_task.cpp
+  ddl/ob_full_text_index_write_task.cpp
+  ddl/ob_fts_sample_pipeline.cpp
+  ddl/ob_merge_sort_prepare_task.cpp
+  ddl/ob_ddl_merge_sort_task.cpp
+  ddl/ob_ddl_sort_provider.cpp
   ddl/ob_inc_ddl_merge_task_utils.cpp
   ddl/ob_ddl_merge_schedule.cpp
   ddl/ob_ddl_inc_merge_schedule.cpp
   ddl/ob_hnsw_embedmgr.cpp
+  ddl/ob_fts_macro_block_write_op.cpp
+  ddl/ob_final_merge_sort_write_task.cpp
+  ddl/ob_ddl_encode_sortkey_utils.cpp
+  ddl/ob_ddl_dag_monitor_entry.cpp
+  ddl/ob_ddl_dag_monitor_mgr.cpp
+  ddl/ob_ddl_dag_monitor_node.cpp
 )
 
 ob_set_subtarget(ob_storage common

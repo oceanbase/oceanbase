@@ -7353,21 +7353,26 @@ int ObDDLService::create_aux_index(
       LOG_WARN("parser properties isn't supported before version 4.3.5.1", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "parser properties before version 4.3.5.1 is");
     /* is_fts_index means: rowkey-doc, doc-rowkey, fts, word-doc multivalue-index, fts-index all run here*/
+    } else if (tenant_data_version < MIN_DATA_VERSION_FOR_FTS_INDEX_TYPE
+               && create_index_arg.index_option_.fts_index_type_ != share::schema::OB_FTS_INDEX_TYPE_INVALID) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("fts index type isn't supported before version 4.5.1.0", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "fts index type before version 4.5.1.0 is");
     } else if (share::schema::is_fts_index(create_index_arg.index_type_)
-      && OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(create_index_arg,
+               && OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(create_index_arg,
                                                         nonconst_data_schema,
                                                         allocator,
                                                         gen_columns))) {
       LOG_WARN("fail to adjust create index args", K(ret), K(create_index_arg));
     } else if (share::schema::is_multivalue_index_aux(create_index_arg.index_type_) /* only multivalue index 3rd table run here */
-      && OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(create_index_arg,
+               && OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(create_index_arg,
                                                                         nonconst_data_schema,
                                                                         allocator,
                                                                         gen_columns))) {
       LOG_WARN("fail to adjust create index args", K(ret), K(create_index_arg));
     } else if (!create_index_arg.is_rebuild_index_
               && (ObIndexBuilderUtil::is_do_create_dense_vec_index(create_index_arg.index_type_) || is_vec_spiv_index_aux(create_index_arg.index_type_))
-              && OB_FAIL(ObVecIndexBuilderUtil::adjust_vec_args(create_index_arg,
+               && OB_FAIL(ObVecIndexBuilderUtil::adjust_vec_args(create_index_arg,
                                                                 nonconst_data_schema,
                                                                 allocator,
                                                                 gen_columns))) {
@@ -21647,6 +21652,15 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_tabl
         }
       }
     }
+
+    if (OB_SUCC(ret) && index_schema.is_fts_index()) {
+      share::schema::ObFTSIndexParams fts_index_params;
+      if (OB_FAIL(index_schema.get_fts_params_from_index_params(fts_index_params))) {
+        LOG_WARN("fail to get fts params from index params", K(ret), K(index_schema));
+      } else if (FALSE_IT(create_index_arg.index_option_.fts_index_type_ = fts_index_params.fts_index_type_)) {
+      }
+    }
+
     if (OB_SUCC(ret)) {
       index_schema.reset_column_info();
       create_index_arg.index_type_ = index_schema.get_index_type();
@@ -28940,8 +28954,8 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
           if (OB_FAIL(new_index_table_schema.assign(*index_table_schema))) {
             // do nothing
             LOG_WARN("fail to assign schema", K(ret));
-          } else if (OB_SUCC(ret)) {
-            new_index_table_schema.set_index_params(arg.vidx_refresh_info_.index_params_);
+          } else if ( OB_FAIL(new_index_table_schema.set_index_params(arg.vidx_refresh_info_.index_params_))) {
+            LOG_WARN("fail to set index params", K(ret), K(arg.vidx_refresh_info_.index_params_));
           }
           if (OB_SUCC(ret)) {
             if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {

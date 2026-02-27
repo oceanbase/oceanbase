@@ -105,6 +105,7 @@ public:
   static bool is_word_segment_column(const uint64_t flag);
   static bool is_word_count_column(const uint64_t flag);
   static bool is_doc_length_column(const uint64_t flag);
+  static bool is_pos_list_column(const uint64_t flag);
   static bool is_multivalue_generated_column(uint64_t flag);
   static bool is_multivalue_generated_array_column(uint64_t flag);
   static bool is_spatial_generated_column(uint64_t flag);

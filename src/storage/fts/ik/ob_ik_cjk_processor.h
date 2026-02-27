@@ -26,7 +26,7 @@ class ObIKCJKProcessor : public ObIIKProcessor
 {
 public:
   ObIKCJKProcessor(const ObIFTDict &dict_main, ObIAllocator &alloc)
-      : hits_(alloc), dict_main_(dict_main), cjk_start_(-1), cjk_end_(-1)
+      : hits_(alloc), dict_main_(dict_main)
   {
   }
   ~ObIKCJKProcessor() override { hits_.reset(); }
@@ -37,11 +37,11 @@ public:
                  const uint8_t char_len,
                  const ObFTCharUtil::CharType type) override;
 
+  void reuse() override { hits_.clear(); }
+
 private:
   ObList<ObDATrieHit, ObIAllocator> hits_;
   const ObIFTDict &dict_main_;
-  int64_t cjk_start_;
-  int64_t cjk_end_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIKCJKProcessor);

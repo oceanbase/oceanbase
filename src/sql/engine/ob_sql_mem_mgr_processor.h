@@ -209,7 +209,7 @@ public:
   ObSqlWorkAreaProfile &get_profile() const { return profile_; }
 
   int alloc_dir_id(int64_t &dir_id);
-  int64_t get_dir_id()
+  int64_t get_dir_id() const
   {
     if (dir_id_ < -1) {
       SQL_ENG_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "get unexpected dir id", K(dir_id_));

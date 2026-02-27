@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_ddl_task.h"
+#include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "rootserver/ob_root_service.h"
 #include "storage/ob_common_id_utils.h"
@@ -117,12 +118,22 @@ void ObDDLSliceInfo::reset()
 {
   autoinc_range_interval_ = 0;
   part_ranges_.reset();
+  inverted_part_ranges_.reset();
 }
 
 int ObDDLSliceInfo::assign(const ObDDLSliceInfo &other)
 {
+  int ret = OB_SUCCESS;
   autoinc_range_interval_ = other.autoinc_range_interval_;
-  return part_ranges_.assign(other.part_ranges_);
+  if (!other.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(other));
+  } else if (OB_FAIL(part_ranges_.assign(other.part_ranges_))) {
+    LOG_WARN("assign part_ranges failed", K(ret));
+  } else if (OB_FAIL(inverted_part_ranges_.assign(other.inverted_part_ranges_))) {
+    LOG_WARN("assign inverted_part_ranges failed", K(ret));
+  }
+  return ret;
 }
 
 int ObDDLSliceInfo::deep_copy(const ObDDLSliceInfo &other, ObIAllocator &allocator)
@@ -140,6 +151,16 @@ int ObDDLSliceInfo::deep_copy(const ObDDLSliceInfo &other, ObIAllocator &allocat
       LOG_WARN("deep copy tablet ranges failed", K(ret), K(other.part_ranges_.at(i)), K(i));
     } else if (OB_FAIL(part_ranges_.push_back(cur_tablet_range))) {
       LOG_WARN("push back tablet range failed", K(ret), K(cur_tablet_range));
+    }
+  }
+  // deep copy inverted ranges
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.inverted_part_ranges_.count(); ++i) {
+    ObPxTabletRange cur_tablet_range;
+    if (OB_FAIL(cur_tablet_range.deep_copy_from<true/*use allocator*/>(other.inverted_part_ranges_.at(i), allocator,
+            dummy_buf, dummy_size, dummy_pos))) {
+      LOG_WARN("deep copy inverted tablet ranges failed", K(ret), K(other.inverted_part_ranges_.at(i)), K(i));
+    } else if (OB_FAIL(inverted_part_ranges_.push_back(cur_tablet_range))) {
+      LOG_WARN("push back inverted tablet range failed", K(ret), K(cur_tablet_range));
     }
   }
   return ret;
@@ -1283,6 +1304,21 @@ int ObDDLTask::refresh_status()
   int ret = OB_SUCCESS;
   if (OB_FAIL(switch_status(task_status_, false, OB_SUCCESS))) {
     LOG_WARN("refresh status failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLTask::check_and_refresh_status_if_rs_epoch_changed()
+{
+  int ret = OB_SUCCESS;
+  rootserver::ObDDLScheduler *sched = MTL(rootserver::ObDDLScheduler*);
+  const int64_t current_epoch = (nullptr == sched) ? rs_epoch_snapshot_ : sched->get_rs_epoch();
+  if (rs_epoch_snapshot_ != current_epoch) {
+    if (OB_FAIL(refresh_status())) {
+      LOG_WARN("refresh status on rs epoch change failed", K(ret), K(rs_epoch_snapshot_), K(current_epoch));
+    } else {
+      rs_epoch_snapshot_ = current_epoch;
+    }
   }
   return ret;
 }
@@ -3362,18 +3398,63 @@ int ObDDLTaskRecordOperator::update_schedule_info(
   return ret;
 }
 
+int ObDDLTaskRecordOperator::insert_if_not_exist_tablet_ranges(
+    const common::Ob2DArray<sql::ObPxTabletRange> &input_ranges,
+    const common::hash::ObHashMap<int64_t, sql::ObPxTabletRange*> &tablet_id_map,
+    common::Ob2DArray<sql::ObPxTabletRange> &output_ranges,
+    common::Ob2DArray<sql::ObPxTabletRange> &total_ranges,
+    bool &is_update)
+{
+  int ret = OB_SUCCESS;
+  is_update = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < input_ranges.count(); ++i) {
+    const ObPxTabletRange &input_tablet_range = input_ranges.at(i);
+    bool is_found = false;
+    sql::ObPxTabletRange *persistent_tablet_range = nullptr;
+    if (tablet_id_map.created()) {
+      if (OB_FAIL(tablet_id_map.get_refactored(input_tablet_range.tablet_id_, persistent_tablet_range))) {
+        if (ret == OB_HASH_NOT_EXIST) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to check element exist", K(ret));
+        }
+      } else {
+        if (OB_FAIL(output_ranges.push_back(*persistent_tablet_range))) {
+          LOG_WARN("push back tablet range failed", K(ret), K(*persistent_tablet_range));
+        } else {
+          is_found = true;
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !is_found) {
+      is_update = true;
+      if (OB_FAIL(output_ranges.push_back(input_tablet_range))) {
+        LOG_WARN("push back input tablet range into output slice info failed", K(ret), K(input_tablet_range));
+      } else if (OB_FAIL(total_ranges.push_back(input_tablet_range))) {
+        LOG_WARN("push back input tablet range into total slice info failed", K(ret), K(input_tablet_range));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLTaskRecordOperator::get_or_insert_schedule_info(
     const uint64_t tenant_id,
     const int64_t task_id,
     ObIAllocator &allocator,
     ObDDLSliceInfo &ddl_slice_info,
-    bool &is_idempotent_mode)
+    bool &is_idempotent_mode,
+    bool &is_update)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena(ObMemAttr(tenant_id, "put_ddl_slice"));
   ObDDLSliceInfo persistent_slice_info;
   ObMySQLTransaction trans;
   is_idempotent_mode = false;
+  is_update = false;
+  common::hash::ObHashMap<int64_t, sql::ObPxTabletRange*> part_ranges_tablet_id_map;
+  common::hash::ObHashMap<int64_t, sql::ObPxTabletRange*> inverted_part_ranges_tablet_id_map;
 
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || task_id <= 0 || !ddl_slice_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -3382,7 +3463,26 @@ int ObDDLTaskRecordOperator::get_or_insert_schedule_info(
     LOG_WARN("start transaction failed", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(get_schedule_info(trans, tenant_id, task_id, arena, true/*is_for_update*/, persistent_slice_info, is_idempotent_mode))) {
     LOG_WARN("get schedule info failed", K(ret), K(tenant_id), K(task_id));
+  } else if (persistent_slice_info.is_valid()) {
+    if (OB_FAIL(part_ranges_tablet_id_map.create(persistent_slice_info.part_ranges_.count(), "schedule_info"))) {
+      LOG_WARN("create part ranges tablet id map failed", K(ret));
+    } else if (OB_FAIL(inverted_part_ranges_tablet_id_map.create(persistent_slice_info.part_ranges_.count(), "schedule_info"))) {
+      LOG_WARN("create inverted part ranges tablet id map failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < persistent_slice_info.part_ranges_.count(); ++i) {
+      const int64_t tablet_id = persistent_slice_info.part_ranges_.at(i).tablet_id_;
+      if (OB_FAIL(part_ranges_tablet_id_map.set_refactored(tablet_id, &persistent_slice_info.part_ranges_.at(i)))) {
+        LOG_WARN("set part ranges tablet id failed", K(ret), K(tablet_id));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < persistent_slice_info.inverted_part_ranges_.count(); ++i) {
+      const int64_t tablet_id = persistent_slice_info.inverted_part_ranges_.at(i).tablet_id_;
+      if (OB_FAIL(inverted_part_ranges_tablet_id_map.set_refactored(tablet_id, &persistent_slice_info.inverted_part_ranges_.at(i)))) {
+        LOG_WARN("set part ranges tablet id failed", K(ret), K(tablet_id));
+      }
+    }
   }
+
   if (OB_SUCC(ret) && is_idempotent_mode) {
     // merge slice info from input params and the persistent one
     ObArenaAllocator arena(ObMemAttr(MTL_ID(),"ddl_sched_info"));
@@ -3394,26 +3494,20 @@ int ObDDLTaskRecordOperator::get_or_insert_schedule_info(
     } else if (persistent_slice_info.is_valid() && OB_FAIL(total_slice_info.assign(persistent_slice_info))) {
       LOG_WARN("assign persistent slice info failed", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < copied_input_slice_info.part_ranges_.count(); ++i) {
-      const ObPxTabletRange &input_tablet_range = copied_input_slice_info.part_ranges_.at(i);
-      bool is_found = false;
-      for (int64_t j = 0; OB_SUCC(ret) && !is_found && persistent_slice_info.is_valid() && j < persistent_slice_info.part_ranges_.count(); ++j) {
-        const ObPxTabletRange &persistent_tablet_range = persistent_slice_info.part_ranges_.at(j);
-        if (persistent_tablet_range.tablet_id_ == input_tablet_range.tablet_id_) {
-          if (OB_FAIL(output_slice_info.part_ranges_.push_back(persistent_tablet_range))) {
-            LOG_WARN("push back persistent tablet range failed", K(ret), K(input_tablet_range));
-          } else {
-            is_found = true;
-          }
-        }
-      }
-      if (OB_SUCC(ret) && !is_found) {
-        if (OB_FAIL(output_slice_info.part_ranges_.push_back(input_tablet_range))) {
-          LOG_WARN("push back input tablet range into output slice info failed", K(ret), K(input_tablet_range));
-        } else if (OB_FAIL(total_slice_info.part_ranges_.push_back(input_tablet_range))) {
-          LOG_WARN("push back input tablet range into total slice info failed", K(ret), K(input_tablet_range));
-        }
-      }
+    // Process part ranges
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(insert_if_not_exist_tablet_ranges(copied_input_slice_info.part_ranges_,
+                                                         part_ranges_tablet_id_map,
+                                                         output_slice_info.part_ranges_,
+                                                         total_slice_info.part_ranges_,
+                                                         is_update))) {
+      LOG_WARN("failed to merge part ranges", K(ret));
+    } else if (OB_FAIL(insert_if_not_exist_tablet_ranges(copied_input_slice_info.inverted_part_ranges_,
+                                                         inverted_part_ranges_tablet_id_map,
+                                                         output_slice_info.inverted_part_ranges_,
+                                                         total_slice_info.inverted_part_ranges_,
+                                                         is_update))) {
+      LOG_WARN("failed to merge inverted part ranges", K(ret));
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(update_schedule_info(trans, tenant_id, task_id, total_slice_info))) {

@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/ob_fts_index_builder_util.h"
 #define USING_LOG_PREFIX SQL_ENG
 
 
@@ -737,7 +738,8 @@ DEF_TO_STRING(ObTableScanSpec)
        K_(parser_properties),
        K_(lob_inrow_threshold),
        K_(lake_table_format),
-       K_(ft_doc_id_expr_idx));
+       K_(ft_doc_id_expr_idx),
+       K_(fts_index_type));
   J_OBJ_END();
   return pos;
 }
@@ -905,7 +907,7 @@ ObTableScanOp::ObTableScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     report_checksum_(false),
     in_rescan_(false),
     domain_index_(),
-    fts_index_(),
+    ft_index_row_cache_(),
     output_   (nullptr),
     fold_iter_(nullptr),
     iter_tree_(nullptr),
@@ -1992,18 +1994,56 @@ int ObTableScanOp::inner_open()
     LOG_WARN("prepare scan param failed", K(ret));
   } else if (MY_SPEC.is_vt_mapping_ && OB_FAIL(init_converter())) {
     LOG_WARN("failed to init converter", K(ret));
-  } else if (MY_SPEC.is_fts_ddl_ && OB_FAIL(fts_index_.init(MY_SPEC.is_fts_index_aux_, MY_SPEC.parser_name_,
-          MY_SPEC.parser_properties_))) {
-    LOG_WARN("fail to init fts index cache", K(ret));
-  } else {
-    if (MY_SPEC.report_col_checksum_) {
-      if (PHY_TABLE_SCAN == MY_SPEC.get_type()) {
-        // heap table ddl doesn't have sample scan, report checksum directly
-        report_checksum_ = true;
-      } else if (IS_SAMPLE_SCAN(MY_SPEC.get_type())) {
-        // normal ddl need sample scan first, report_cheksum_ will be marked as true when rescan
-        report_checksum_ = false;
+  } else if (MY_SPEC.is_fts_ddl_) {
+    ObSEArray<ObExpr *, 4> all_ft_exprs;
+    ObSEArray<ObExpr *, 4> other_exprs;
+    const ObExprOperatorType *expr_types = ObFTIndexRowCache::FTS_DOC_WORD_EXPR_TYPE;
+    const int64_t col_cnt = ObFTSIndexType::OB_FTS_INDEX_TYPE_PHRASE_MATCH == MY_SPEC.fts_index_type_
+        ? ObFTSConstants::FT_WORD_DOC_COL_CNT_WITH_POS
+        : ObFTSConstants::FT_WORD_DOC_COL_CNT_WITHOUT_POS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
+      ObExpr *expr = nullptr;
+      if (OB_FAIL(get_output_fts_col_expr_by_type(expr_types[i], expr))) {
+        LOG_WARN("fail to get expr by type", K(ret), K(i), K(expr_types[i]));
+      } else if (OB_FAIL(all_ft_exprs.push_back(expr))) {
+        LOG_WARN("fail to push back expr", K(ret), KP(expr));
       }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.output_.count(); ++i) {
+      ObExpr *expr = MY_SPEC.output_.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret), K(i));
+      } else {
+        bool is_ft_expr = false;
+        for (int64_t j = 0; j < all_ft_exprs.count(); ++j) {
+          if (all_ft_exprs.at(j) == expr) {
+            is_ft_expr = true;
+            break;
+          }
+        }
+        if (!is_ft_expr && OB_FAIL(other_exprs.push_back(expr))) {
+          LOG_WARN("fail to push back expr", K(ret), KP(expr));
+        }
+      }
+    }
+    if (FAILEDx(ft_index_row_cache_.init(MY_SPEC.is_fts_index_aux_,
+                                         MY_SPEC.ft_doc_token_need_sort_,
+                                         MY_SPEC.parser_name_,
+                                         MY_SPEC.parser_properties_,
+                                         all_ft_exprs,
+                                         other_exprs,
+                                         MY_SPEC.fts_index_type_))) {
+      LOG_WARN("fail to initialize ft index row cache", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && MY_SPEC.report_col_checksum_) {
+    if (PHY_TABLE_SCAN == MY_SPEC.get_type()) {
+      // heap table ddl doesn't have sample scan, report checksum directly
+      report_checksum_ = true;
+    } else if (IS_SAMPLE_SCAN(MY_SPEC.get_type())) {
+      // normal ddl need sample scan first, report_cheksum_ will be marked as true when rescan
+      report_checksum_ = false;
     }
   }
   if (OB_SUCC(ret)) {
@@ -2096,7 +2136,7 @@ int ObTableScanOp::inner_close()
     }
   }
   if (OB_SUCC(ret)) {
-    fts_index_.reuse();
+    ft_index_row_cache_.reuse();
     iter_end_ = false;
     need_init_before_get_row_ = true;
     rand_scan_processor_.reset();
@@ -2166,6 +2206,7 @@ void ObTableScanOp::destroy()
   domain_index_.~ObDomainIndexCache();
   das_tasks_key_.reset();
   rand_scan_processor_.reset();
+  ft_index_row_cache_.reset();
 }
 
 void ObTableScanOp::init_scan_monitor_info()
@@ -2893,6 +2934,10 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
   if (OB_UNLIKELY(rand_scan_processor_.use_rand_scan())) {
     if (OB_FAIL(rand_scan_processor_.inner_get_next_batch(max_row_cnt))) {
       LOG_WARN("random table scan failed", K(ret));
+    }
+  } else if (OB_UNLIKELY(MY_SPEC.is_fts_ddl_)) {
+    if (OB_FAIL(inner_ft_get_next_batch(max_row_cnt))) {
+      LOG_WARN("fail to get next batch fts index rows", K(ret));
     }
   } else if (OB_FAIL(inner_get_next_batch_for_tsc(max_row_cnt))) {
     LOG_WARN("failed to get next batch", K(ret));
@@ -3914,7 +3959,7 @@ int ObTableScanOp::inner_get_next_row()
         LOG_WARN("spatial index ddl : get next spatial index row failed", K(ret));
       }
     }
-  } else if (OB_UNLIKELY(MY_SPEC.is_fts_ddl_ && nullptr == tsc_rtdef_.scan_rtdef_.sample_info_)) {
+  } else if (OB_UNLIKELY(MY_SPEC.is_fts_ddl_)) {
     if (OB_FAIL(inner_get_next_fts_index_row())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next fts index row", K(ret));
@@ -4624,14 +4669,14 @@ int ObTableScanOp::inner_get_next_fts_index_row()
 {
   int ret = OB_SUCCESS;
   blocksstable::ObDatumRow *row = nullptr;
-  if (OB_FAIL(fts_index_.get_next_row(row))) {
+  if (OB_FAIL(ft_index_row_cache_.get_next_row(row))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to get next row from fts index cache", K(ret));
     } else if (OB_FAIL(fetch_next_fts_index_rows())) { // need overwrite return code
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to fetch next fts index rows", K(ret));
       }
-    } else if (OB_FAIL(fts_index_.get_next_row(row))) {
+    } else if (OB_FAIL(ft_index_row_cache_.get_next_row(row))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next row from fts index cache", K(ret));
       }
@@ -4680,7 +4725,7 @@ int ObTableScanOp::fetch_next_fts_index_rows()
                                                             ft_expr->obj_meta_.has_lob_header(),
                                                             ft))) {
         LOG_WARN("fail to read real string data", K(ret));
-      } else if (OB_FAIL(fts_index_.segment(ft_expr->obj_meta_, *doc_id_datum, ft)) &&OB_ITER_END != ret) {
+      } else if (OB_FAIL(ft_index_row_cache_.segment(ft_expr->obj_meta_, *doc_id_datum, ft)) &&OB_ITER_END != ret) {
         LOG_WARN("fail to segment fulltext", K(ret), K(doc_id_datum), K(ft));
       } else if (OB_ITER_END == ret) {
         has_segment_word = false;
@@ -4696,25 +4741,23 @@ int ObTableScanOp::fetch_next_fts_index_rows()
 int ObTableScanOp::fill_generated_fts_cols(blocksstable::ObDatumRow *row)
 {
   int ret = OB_SUCCESS;
-  const ObObjDatumMapType *types = MY_SPEC.is_fts_index_aux_ ? ObFTIndexRowCache::FTS_INDEX_TYPES : ObFTIndexRowCache::FTS_DOC_WORD_TYPES;
+  const ObObjDatumMapType *types = MY_SPEC.is_fts_index_aux_ ? ObFTIndexRowCache::FTS_INDEX_OBJ_TYPES : ObFTIndexRowCache::FTS_DOC_WORD_OBJ_TYPES;
   const ObExprOperatorType *expr_types = MY_SPEC.is_fts_index_aux_ ? ObFTIndexRowCache::FTS_INDEX_EXPR_TYPE : ObFTIndexRowCache::FTS_DOC_WORD_EXPR_TYPE;
   if (OB_ISNULL(row)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, row is nullptr", K(ret), KP(row));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < share::ObFtsIndexBuilderUtil::OB_FTS_INDEX_OR_DOC_WORD_TABLE_COL_CNT; ++i) {
-      ObExpr *expr = nullptr;
-      if (OB_FAIL(get_output_fts_col_expr_by_type(expr_types[i], expr))) {
-        LOG_WARN("fail to get fts column expr", K(ret), K(i), K(expr_types[i]));
+    const ObObjDatumMapType *col_types = ObFTIndexRowCache::FTS_INDEX_OBJ_TYPES;
+    ObSEArray<ObExpr *, ObFTIndexRowCache::ALL_EXPR_COUNT> &exprs = ft_index_row_cache_.get_all_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+      ObExpr *expr = exprs.at(i);
+      ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
+      ObEvalInfo &eval_info = expr->get_eval_info(eval_ctx_);
+      if (OB_FAIL(datum.from_storage_datum(row->storage_datums_[i], col_types[i]))) {
+        LOG_WARN("fail to fill fulltext index row", K(ret), K(i), K(MY_SPEC.output_), KPC(row));
       } else {
-        ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
-        ObEvalInfo &eval_info = expr->get_eval_info(eval_ctx_);
-        if (OB_FAIL(datum.from_storage_datum(row->storage_datums_[i], types[i]))) {
-          LOG_WARN("fail to fill fulltext index row", K(ret), K(i), K(MY_SPEC.output_), KPC(row));
-        } else {
-          eval_info.set_evaluated(true);
-          eval_info.set_projected(true);
-        }
+        eval_info.set_evaluated(true);
+        eval_info.set_projected(true);
       }
     }
   }
@@ -4730,39 +4773,171 @@ int ObTableScanOp::get_output_fts_col_expr_by_type(
   if (OB_UNLIKELY(T_FUN_SYS_WORD_SEGMENT != type
                && T_FUN_SYS_DOC_ID != type
                && T_FUN_SYS_WORD_COUNT != type
-               && T_FUN_SYS_DOC_LENGTH != type)) {
+               && T_FUN_SYS_DOC_LENGTH != type
+               && T_FUN_SYS_POS_LIST != type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid fts column expr type", K(ret), "type", get_type_name(type));
   } else if (T_FUN_SYS_DOC_ID == type) {
-    for (int64_t i = 0; OB_SUCC(ret) && OB_ISNULL(expr) && i < MY_SPEC.output_.count(); ++i) {
-      ObExpr *tmp_expr = MY_SPEC.output_.at(i);
-      if (OB_ISNULL(tmp_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, expr in output is nullptr", K(ret), K(i));
-      } else if (T_FUN_SYS_WORD_SEGMENT == tmp_expr->type_) {
-        const int64_t idx = MY_SPEC.is_fts_index_aux_ ? i+1 : i-1;
-        if (OB_UNLIKELY(idx < 0 || idx >= MY_SPEC.output_.count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error, invalid doc id idx", K(ret), K(idx), K(i), K(MY_SPEC.output_));
-        } else {
-          expr = MY_SPEC.output_.at(idx);
-        }
-      }
+    if (OB_UNLIKELY(MY_SPEC.ft_doc_id_expr_idx_ < 0 ||
+                    MY_SPEC.ft_doc_id_expr_idx_ >= MY_SPEC.output_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ft doc id expr idx is invalid",
+          K(ret), K(MY_SPEC.ft_doc_id_expr_idx_), K(MY_SPEC.output_));
+    } else {
+      expr = MY_SPEC.output_.at(MY_SPEC.ft_doc_id_expr_idx_);
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && OB_ISNULL(expr) && i < MY_SPEC.output_.count(); ++i) {
-      ObExpr *tmp_expr = MY_SPEC.output_.at(i);
-      if (OB_ISNULL(tmp_expr)) {
+      ObExpr *output_expr = MY_SPEC.output_.at(i);
+      if (OB_ISNULL(output_expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, expr in output is nullptr", K(ret), K(i));
-      } else if (type == tmp_expr->type_) {
-        expr = tmp_expr;
+        LOG_WARN("output expr is null", K(ret), K(i));
+      } else if (type == output_expr->type_) {
+        expr = output_expr;
       }
     }
   }
   if (OB_SUCC(ret) && OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, fts column expr isn't found", K(ret), "type", get_type_name(type), K(MY_SPEC.output_));
+    LOG_WARN("unexpected error, ft index column expr isn't found", K(ret), "type", get_type_name(type), K(MY_SPEC.output_));
+  }
+  return ret;
+}
+
+int ObTableScanOp::inner_ft_get_next_batch(const int64_t max_batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (iter_end_) {
+    brs_.size_ = 0;
+    brs_.end_ = true;
+  } else {
+    const int64_t batch_size = min(max_batch_size, MY_SPEC.max_batch_size_);
+    int64_t curr_idx = 0;
+    clear_evaluated_flag();
+    brs_.size_ = 0;
+    brs_.end_ = false;
+    while (OB_SUCC(ret) && curr_idx < batch_size && !iter_end_) {
+      blocksstable::ObDatumRow *row = nullptr;
+      if (OB_FAIL(ft_index_row_cache_.get_next_row(row))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to get ft next row from ft index row cache", K(ret));
+        } else if (0 < curr_idx) {
+          // a batch only include a doc
+          ret = OB_SUCCESS;
+          break;
+        } else if (OB_FAIL(fetch_next_batch_ft_data_table_row(batch_size))) {
+          // overwrite return code
+          LOG_WARN("fail to fetch next batch ft row", K(ret));
+        } else if (OB_FAIL(ft_index_row_cache_.get_next_row(row))) {
+          if (OB_LIKELY(OB_ITER_END == ret)) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next row from fts index cache", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
+        batch_info_guard.set_batch_idx(curr_idx);
+        if (OB_FAIL(fill_generated_fts_cols(row))) {
+          LOG_WARN("fail to fill generated fts cols", K(ret), KPC(row));
+        } else {
+          ++curr_idx;
+        }
+      }
+    }
+    if (FAILEDx(fill_partition_key_col(curr_idx))) {
+      LOG_WARN("fail to fill partition key col", K(ret));
+    } else {
+      brs_.size_ = curr_idx;
+      brs_.reset_skip(curr_idx);
+      brs_.all_rows_active_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObTableScanOp::fetch_next_batch_ft_data_table_row(const int64_t max_batch_size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t data_table_batch_size = 1;
+  while (OB_SUCC(ret) && !iter_end_) {
+    if (OB_FAIL(inner_get_next_batch_for_tsc(data_table_batch_size))) {
+      LOG_WARN("fail to get next batch for tsc", K(ret));
+    } else if (iter_end_) {
+      // iter end
+    } else if (OB_UNLIKELY(brs_.size_ <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("brs size is invalid", K(ret), K(brs_.size_));
+    } else if ((OB_UNLIKELY(nullptr != brs_.skip_ && brs_.skip_->at(0)))) {
+      // skip current data table row
+    } else {
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
+      batch_info_guard.set_batch_idx(0);
+      ObExpr *doc_id_expr = ft_index_row_cache_.get_doc_id_expr();
+      ObExpr *ft_expr = ft_index_row_cache_.get_ft_expr();
+      ObDatum *doc_id_datum = nullptr;
+      ObDatum *ft_datum = nullptr;
+      if (OB_FAIL(doc_id_expr->eval(eval_ctx_, doc_id_datum))) {
+        LOG_WARN("fail to evaluate doc id expr", K(ret));
+      } else if (OB_FAIL(ft_expr->eval(eval_ctx_, ft_datum))) {
+        LOG_WARN("fail to evaluate ft expr", K(ret));
+      } else if (OB_ISNULL(ft_datum) || OB_ISNULL(doc_id_datum)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ft or doc id datum is null", K(ret), KP(ft_datum), KP(doc_id_datum));
+      } else {
+        ObString ft = ft_datum->get_string();
+        ObArenaAllocator ft_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(ft_allocator,
+                                                              *ft_datum,
+                                                              ft_expr->datum_meta_,
+                                                              ft_expr->obj_meta_.has_lob_header(),
+                                                              ft))) {
+          LOG_WARN("fail to read real string data", K(ret));
+        } else if (OB_FAIL(ft_index_row_cache_.segment(ft_expr->obj_meta_, *doc_id_datum, ft))) {
+          if (OB_LIKELY(OB_ITER_END == ret)) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to segment ft index row cache", K(ret));
+          }
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableScanOp::fill_partition_key_col(const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(batch_size <= 0)) {
+    // by pass
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ft_index_row_cache_.get_other_exprs().count(); ++i) {
+      ObExpr *expr = ft_index_row_cache_.get_other_exprs().at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret), K(i));
+      } else {
+        ObDatum *partition_key_datum = nullptr;
+        int64_t curr_idx = 0;
+        ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
+        guard.set_batch_idx(curr_idx++);
+        guard.set_batch_size(batch_size);
+        if (OB_FAIL(expr->eval(eval_ctx_, partition_key_datum))) {
+          LOG_WARN("fail to evaluate partition key expr", K(ret));
+        } else {
+          ObDatum *datums = expr->locate_batch_datums(eval_ctx_);
+          for (; curr_idx < batch_size; ++curr_idx) {
+            datums[curr_idx] = datums[0];
+          }
+          expr->set_evaluated_projected(eval_ctx_);
+        }
+      }
+    }
   }
   return ret;
 }

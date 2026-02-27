@@ -15,6 +15,7 @@
 
 #include "share/scn.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
+#include "share/scheduler/ob_independent_dag.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
@@ -39,10 +40,10 @@ class ObIDDLMergeHelper;
 /*
  * Base Task: provide unified process/inner_process and failure callback
  */
-class ObDDLMergeBaseTask : public share::ObITask
+class ObDDLMergeBaseTask : public share::ObITaskWithMonitor
 {
 public:
-  explicit ObDDLMergeBaseTask(const ObITaskType type) : ObITask(type), fail_cb_(nullptr) {}
+  explicit ObDDLMergeBaseTask(const ObITaskType type) : ObITaskWithMonitor(type), fail_cb_(nullptr) {}
   virtual ~ObDDLMergeBaseTask()
   {
     fail_cb_ = nullptr;
@@ -102,10 +103,10 @@ two major class are build to fullfil the dag progress
    Guard Task is a task that used for holding tablet merge guard
 2. Heper Class, which real execute those actions, since too many diffrent type need to be supported
 */
-class ObDDLMergeGuardTask: public share::ObITask
+class ObDDLMergeGuardTask: public share::ObITaskWithMonitor
 {
 public:
-  ObDDLMergeGuardTask(): ObITask(ObITaskType::TASK_TYPE_DDL_MERGE_GUARD), tablet_id_(), is_inited_(false) {}
+  ObDDLMergeGuardTask(): ObITaskWithMonitor(ObITaskType::TASK_TYPE_DDL_MERGE_GUARD), tablet_id_(), is_inited_(false) {}
   ~ObDDLMergeGuardTask();
   int init(const bool for_replay, const ObTabletID &tablet_id, bool retry_uitl_get = false);
   int process();
@@ -135,10 +136,10 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLMergePrepareTask);
 };
 
-class ObDDLScheduleAnotherMergeTask: public share::ObITask
+class ObDDLScheduleAnotherMergeTask: public share::ObITaskWithMonitor
 {
 public:
-  ObDDLScheduleAnotherMergeTask() : ObITask(ObITaskType::TASK_TYPE_DDL_SCHEDULE_ANOTHER_MERGE), ls_id_(), tablet_id_(), is_inited_(false) {}
+  ObDDLScheduleAnotherMergeTask() : ObITaskWithMonitor(ObITaskType::TASK_TYPE_DDL_SCHEDULE_ANOTHER_MERGE), ls_id_(), tablet_id_(), is_inited_(false) {}
   int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
   int process() override;
   virtual void task_debug_info_to_string(char *buf, const int64_t buf_len, int64_t &pos) const override;

@@ -40,7 +40,8 @@ struct InnerDDLInfo final
 public:
   InnerDDLInfo() : is_ddl_(false), is_source_table_hidden_(false), is_dest_table_hidden_(false), is_heap_table_ddl_(false),
   is_ddl_check_default_value_bit_(false), is_mview_complete_refresh_(false), is_refreshing_mview_(false),
-  is_retryable_ddl_(false), is_dummy_ddl_for_inner_visibility_(false), is_major_refreshing_mview_(false), is_vec_tablet_rebuild_(false), reserved_bit_(0)
+  is_retryable_ddl_(false), is_dummy_ddl_for_inner_visibility_(false), is_major_refreshing_mview_(false), is_vec_tablet_rebuild_(false),
+  is_partition_local_ddl_(false), reserved_bit_(0)
   {
   }
   void set_is_ddl(const bool is_ddl) { is_ddl_ = is_ddl; }
@@ -65,6 +66,8 @@ public:
   bool is_major_refreshing_mview() const { return is_major_refreshing_mview_; }
   void set_is_vec_tablet_rebuild(const bool flag) { is_vec_tablet_rebuild_ = flag; }
   bool is_vec_tablet_rebuild() const { return is_vec_tablet_rebuild_; }
+  void set_is_partition_local_ddl(const bool flag) { is_partition_local_ddl_ = flag; }
+  bool is_partition_local_ddl() const { return is_partition_local_ddl_; }
   inline void reset() { ddl_info_ = 0; }
   TO_STRING_KV(K_(ddl_info));
   OB_UNIS_VERSION(1);
@@ -80,7 +83,8 @@ public:
   static const int64_t IS_VEC_TABLET_REBUILD_BIT = 1;
   static const int64_t IS_MAJOR_REFRESHING_MVIEW_BIT = 1;
   static const int64_t IS_SEARCH_INDEX_DDL_BIT = 1;
-  static const int64_t RESERVED_BIT = 64 - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT - IS_REFRESHING_MVIEW_BIT - IS_RETRYABLE_DDL_BIT - IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT - IS_MAJOR_REFRESHING_MVIEW_BIT - IS_VEC_TABLET_REBUILD_BIT - IS_SEARCH_INDEX_DDL_BIT;
+  static const int64_t IS_PARTITION_LOCAL_DDL_BIT = 1;
+  static const int64_t RESERVED_BIT = 64 - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT - IS_REFRESHING_MVIEW_BIT - IS_RETRYABLE_DDL_BIT - IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT - IS_MAJOR_REFRESHING_MVIEW_BIT - IS_VEC_TABLET_REBUILD_BIT - IS_SEARCH_INDEX_DDL_BIT - IS_PARTITION_LOCAL_DDL_BIT;
   union {
     uint64_t ddl_info_;
     struct {
@@ -101,6 +105,7 @@ public:
       uint64_t is_major_refreshing_mview_ : IS_MAJOR_REFRESHING_MVIEW_BIT;
       uint64_t is_vec_tablet_rebuild_ : IS_VEC_TABLET_REBUILD_BIT;
       uint64_t is_search_index_ddl_ : IS_SEARCH_INDEX_DDL_BIT;
+      uint64_t is_partition_local_ddl_ : IS_PARTITION_LOCAL_DDL_BIT;
       uint64_t reserved_bit_ : RESERVED_BIT;
     };
   };
@@ -129,6 +134,7 @@ public:
   void set_is_dummy_ddl_for_inner_visibility(const bool flag) { ddl_info_.set_is_dummy_ddl_for_inner_visibility(flag); }
   void set_major_refreshing_mview(const bool flag) { ddl_info_.set_major_refreshing_mview(flag); }
   void set_is_vec_tablet_rebuild(const bool flag) { ddl_info_.set_is_vec_tablet_rebuild(flag); }
+  void set_partition_local_ddl(const bool flag) { ddl_info_.set_is_partition_local_ddl(flag); }
 
   bool is_ddl() const { return ddl_info_.is_ddl(); }
   bool is_source_table_hidden() const { return ddl_info_.is_source_table_hidden(); }
@@ -141,6 +147,7 @@ public:
   bool is_dummy_ddl_for_inner_visibility() const { return ddl_info_.is_dummy_ddl_for_inner_visibility(); }
   bool is_major_refreshing_mview() const { return ddl_info_.is_major_refreshing_mview(); }
   bool is_vec_tablet_rebuild() const { return ddl_info_.is_vec_tablet_rebuild(); }
+  bool is_partition_local_ddl() const { return ddl_info_.is_partition_local_ddl(); }
   inline uint64_t get_session_id() const { return session_id_;}
   inline void reset() { session_id_ = OB_INVALID_ID;
                         ddl_info_.reset();}

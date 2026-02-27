@@ -366,11 +366,33 @@ public:
   int64_t row_count_;
 };
 
+struct ObFTSBuildStat final
+{
+public:
+  ObFTSBuildStat() : tokenized_word_cnt_(0), forward_written_row_cnt_(0),
+                     inverted_sorted_row_cnt_(0), inverted_written_row_cnt_(0) {}
+  ~ObFTSBuildStat() {}
+  void reset()
+  {
+    tokenized_word_cnt_ = 0;
+    forward_written_row_cnt_ = 0;
+    inverted_sorted_row_cnt_ = 0;
+    inverted_written_row_cnt_ = 0;
+  }
+  TO_STRING_KV(K_(tokenized_word_cnt), K_(forward_written_row_cnt),
+               K_(inverted_sorted_row_cnt), K_(inverted_written_row_cnt));
+public:
+  int64_t tokenized_word_cnt_;
+  int64_t forward_written_row_cnt_;
+  int64_t inverted_sorted_row_cnt_;
+  int64_t inverted_written_row_cnt_;
+};
+
 struct ObDDLTaskParam
 {
 public:
   ObDDLTaskParam() : tenant_data_version_(0), snapshot_version_(0), schema_version_(0), ddl_task_id_(0), execution_id_(0),
-    target_table_id_(0),  is_no_logging_(false), max_batch_size_(0), is_offline_index_rebuild_(false) {}
+    target_table_id_(0),  is_no_logging_(false), max_batch_size_(0), is_offline_index_rebuild_(false), is_partition_local_(false) {}
   void reset()
   {
     tenant_data_version_ = 0;
@@ -382,12 +404,13 @@ public:
     is_no_logging_ = false;
     max_batch_size_ = 0;
     is_offline_index_rebuild_ = false;
+    is_partition_local_ = false;
   }
   bool is_valid() const { return ddl_task_id_ > 0 && execution_id_ >= 0 && tenant_data_version_ > 0 && snapshot_version_ >= 0 && target_table_id_ > 0 && schema_version_ > 0; }
-  TO_STRING_KV(K_(ddl_task_id), K_(execution_id), K_(tenant_data_version), K_(snapshot_version), K_(target_table_id), K_(schema_version), K_(is_no_logging), K_(max_batch_size), K_(is_offline_index_rebuild));
+  TO_STRING_KV(K_(ddl_task_id), K_(execution_id), K_(tenant_data_version), K_(snapshot_version), K_(target_table_id), K_(schema_version), K_(is_no_logging), K_(max_batch_size), K_(is_offline_index_rebuild), K_(is_partition_local));
 public:
   /* necessary param */
-  int64_t tenant_data_version_;
+  uint64_t tenant_data_version_;
   int64_t snapshot_version_;
 
   /* optional param only used for leader major merge */
@@ -398,6 +421,7 @@ public:
   bool is_no_logging_;
   int64_t max_batch_size_; // for batch rows when load data, from hint named load_batch_size
   bool is_offline_index_rebuild_;
+  bool is_partition_local_;
 };
 
 struct ObDDLAutoincParam
@@ -513,7 +537,8 @@ public:
 struct ObDDLTableSchema
 {
 public:
-  static int fill_ddl_table_schema(const uint64_t tenant_id,
+  static int fill_ddl_table_schema(ObSchemaGetterGuard &schema_guard,
+                                   const uint64_t tenant_id,
                                    const uint64_t table_id,
                                    const uint64_t tenant_data_version,
                                    common::ObArenaAllocator &allocator,
@@ -528,11 +553,12 @@ private:
 
 public:
   ObDDLTableSchema() : storage_schema_(nullptr), lob_meta_storage_schema_(nullptr), src_tenant_id_(MTL_ID()), dst_tenant_id_(MTL_ID()) {}
-  TO_STRING_KV(K_(src_tenant_id), K_(dst_tenant_id), K_(table_id), K_(table_item), KPC_(storage_schema), KPC_(lob_meta_storage_schema), K_(reshape_column_idxs), K_(lob_column_idxs), K_(column_items));
+  TO_STRING_KV(K_(src_tenant_id), K_(dst_tenant_id), K_(data_table_id), K_(table_id), K_(table_item), KPC_(storage_schema), KPC_(lob_meta_storage_schema), K_(reshape_column_idxs), K_(lob_column_idxs), K_(column_items));
   void reset();
   int assign(const ObDDLTableSchema &other);
 
 public:
+  ObTableID data_table_id_;
   ObTableID table_id_;
   // sql layer table level schema
   ObTableSchemaItem table_item_;
@@ -623,7 +649,9 @@ public:
   int64_t get_logic_parallel_count() const { return slice_count_ > 0 ? slice_count_ : ddl_thread_count_; }
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), K_(tenant_data_version), K_(is_no_logging), KP_(macro_meta_store_mgr),
       K_(schema_version), K_(slice_idx), K_(slice_count), K_(ddl_thread_count), K_(snapshot_version), K_(direct_load_type),
-      K_(task_id), K_(is_index_table), K_(ddl_table_schema), K_(tablet_param), K_(lob_meta_tablet_param), KP_(tablet_context),
+      K_(task_id), K_(is_index_table), K_(tx_info),
+      K_(ddl_table_schema), K_(tablet_param), K_(lob_meta_tablet_param), K_(cg_idx), KP(ddl_dag_), KP_(tablet_context),
+      K_(max_batch_size), K_(start_sequence), K_(row_offset),
       K_(is_sorted_table_load));
 public:
   share::ObLSID ls_id_;

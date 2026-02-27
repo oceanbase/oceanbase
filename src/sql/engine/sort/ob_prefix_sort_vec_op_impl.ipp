@@ -10,6 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/ob_define.h"
+#include "lib/ob_errno.h"
+#include "lib/utility/ob_unify_serialize.h"
+#include "lib/utility/ob_print_utils.h"
+#include "lib/oblog/ob_log.h"
+#include "sql/engine/ob_operator.h"
+#include "lib/container/ob_array.h"
+#include "sql/engine/basic/ob_compact_row.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -197,7 +206,7 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::add_immediate_prefix(
   if (OB_FAIL(add_immediate_prefix_store(pos, selector, row_size))) {
     SQL_ENG_LOG(WARN, "failed to add immediate prefix store", K(ret));
   } else if (!comp_.is_inited()
-             && OB_FAIL(comp_.init(cmp_sk_exprs_, sk_row_meta_, addon_row_meta_,
+             && OB_FAIL(comp_.init(cmp_sk_exprs_, store_mgr_.get_sk_row_meta(), store_mgr_.get_addon_row_meta(),
                                    cmp_sort_collations_, exec_ctx_,
                                    enable_encode_sortkey_ && !(part_cnt_ > 0)))) {
     SQL_ENG_LOG(WARN, "init compare failed", K(ret));
@@ -325,7 +334,7 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::fetch_rows_batch()
         if (new_prefix < 0) {
           bool is_same = false;
           if (nullptr != prev_row_
-              && OB_FAIL(is_same_prefix(prev_row_, *sk_row_meta_, *sk_exprs_, i, is_same))) {
+              && OB_FAIL(is_same_prefix(prev_row_, *store_mgr_.get_sk_row_meta(), *sk_exprs_, i, is_same))) {
             SQL_ENG_LOG(WARN, "check same prefix failed", K(ret));
           } else if (nullptr == prev_row_ && OB_FAIL(is_same_prefix(*sk_exprs_, 0, i, is_same))) {
             SQL_ENG_LOG(WARN, "check same prefix failed", K(ret));

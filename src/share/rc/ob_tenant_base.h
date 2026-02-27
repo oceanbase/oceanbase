@@ -32,6 +32,9 @@
 #include "share/resource_manager/ob_tenant_thread_group_statistic.h"
 namespace oceanbase
 {
+namespace storage {
+  class ObDDLDagMonitorMgr;
+}
 namespace common {
   class ObLDHandle;
   class ObTenantIOManager;
@@ -456,6 +459,7 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       sql::ObTenantSqlMemoryManager*,                \
       sql::dtl::ObDTLIntermResultManager*,           \
       sql::ObPlanMonitorNodeList*,                   \
+      storage::ObDDLDagMonitorMgr*,          \
       sql::ObDataAccessService*,                     \
       sql::ObDASIDService*,                          \
       share::schema::ObTenantSchemaService*,         \

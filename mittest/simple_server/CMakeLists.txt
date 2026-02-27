@@ -123,6 +123,8 @@ ob_unittest_observer(test_memtable_new_safe_to_destroy test_memtable_new_safe_to
 ob_unittest_observer(test_tablet_to_ls_cache test_tablet_to_ls_cache.cpp)
 ob_unittest_observer(test_update_tablet_directly_when_mini test_update_tablet_directly_when_mini.cpp)
 ob_unittest_observer(test_ai_service test_ai_service.cpp)
+ob_unittest_observer(test_fulltext_index_create test_fulltext_index_create.cpp)
+ob_unittest_observer(test_fts_sample_pipeline test_fts_sample_pipeline.cpp)
 
 ####### freeze case #######
 #ob_freeze_observer(test_frequently_freeze freeze/test_frequently_freeze.cpp)
@@ -193,6 +195,10 @@ ob_truncate_case(test_mds_cache_valid test_mds_cache_valid.cpp)
 ob_truncate_case(test_min_merged_trans_version test_min_merged_trans_version.cpp)
 ####### truncate case #########
 
+####### sort case #########
+add_subdirectory(sort)
+ob_unittest_observer(test_merge_sort_op test_merge_sort_op.cpp)
+####### sort case #########
 ####### vector index case #########
 set(VECTOR_INDEX_TEST_SHARE
         vector_index/test_vector_index_utils.cpp

@@ -24,6 +24,7 @@
 #include "rootserver/ob_split_partition_helper.h"
 #include "share/table/ob_ttl_util.h"
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
+#include "share/schema/ob_schema_struct_fts.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
@@ -2121,9 +2122,14 @@ int ObIndexBuilder::generate_schema(
                  OB_FAIL(set_global_index_auto_partition_infos(data_schema, schema))) {
         LOG_WARN("fail to set auto partition infos", KR(ret), K(data_schema), K(schema));
       } else {
-        if (!share::schema::is_built_in_vec_index(arg.index_type_) && !share::schema::is_local_vec_hnsw_index(arg.index_type_)) {
-          // only ivf centroid_table set vector_index_param
-          schema.set_index_params(arg.index_schema_.get_index_params());
+        if (!share::schema::is_built_in_vec_index(arg.index_type_)
+            && !share::schema::is_local_vec_hnsw_index(arg.index_type_)
+            && !schema.is_fts_index_aux()
+            && !schema.is_fts_doc_word_aux()) {
+          // only ivf centroid_table set and fts index type set vector_index_params
+          if (OB_FAIL(schema.set_index_params(arg.index_schema_.get_index_params()))) {
+            LOG_WARN("fail to set index params", K(ret), K(arg.index_schema_.get_index_params()));
+          }
         }
         schema.set_name_generated_type(arg.index_schema_.get_name_generated_type());
         LOG_INFO("finish generate index schema", K(schema), K(arg), K(need_generate_index_schema_column), K(global_index_without_column_info));
@@ -2240,6 +2246,31 @@ int ObIndexBuilder::create_index_column_group(const obrpc::ObCreateIndexArg &arg
   return ret;
 }
 
+/* for fulltext index of heap table,using csencoding */
+int ObIndexBuilder::get_index_row_store_type(const share::schema::ObIndexType index_type,
+                                             const share::schema::ObTableSchema &data_schema,
+                                             share::schema::ObTableSchema &index_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  common::ObDocIDType doc_id_type = ObDocIDType::INVALID;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(data_schema.get_tenant_id()));
+  } else if (!data_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(index_type), K(data_schema));
+  } else if (OB_FAIL(ObFtsIndexBuilderUtil::determine_docid_type(data_schema, doc_id_type))) {
+    LOG_WARN("fail to determine docid type", K(ret), K(data_schema));
+  } else if ((tenant_data_version >= ObDDLFTSUtils::DDL_FTS_DAG_DATA_FORMAT_VERSION) &&
+             (share::schema::is_fts_index_aux(index_type) || share::schema::is_fts_doc_word_aux(index_type)) &&
+             (ObDocIDType::HIDDEN_INC_PK == doc_id_type)) {
+    index_schema.set_row_store_type(ObRowStoreType::CS_ENCODING_ROW_STORE);
+  } else {
+    index_schema.set_row_store_type(data_schema.get_row_store_type());
+  }
+  return ret;
+}
+
 int ObIndexBuilder::set_basic_infos(const ObCreateIndexArg &arg,
                                     const ObTableSchema &data_schema,
                                     ObTableSchema &schema)
@@ -2301,11 +2332,12 @@ int ObIndexBuilder::set_basic_infos(const ObCreateIndexArg &arg,
       } else {} // partition level is filled during resolve stage for global index
       schema.set_charset_type(data_schema.get_charset_type());
       schema.set_collation_type(data_schema.get_collation_type());
-      schema.set_row_store_type(data_schema.get_row_store_type());
       schema.set_store_format(data_schema.get_store_format());
       schema.set_storage_format_version(data_schema.get_storage_format_version());
       schema.set_tablespace_id(arg.index_schema_.get_tablespace_id());
-      if (OB_FAIL(schema.set_encryption_str(arg.index_schema_.get_encryption_str()))) {
+      if (OB_FAIL(get_index_row_store_type(arg.index_type_, data_schema, schema))) {
+        LOG_WARN("fail to get index row store type", K(ret), K(arg), K(data_schema), K(schema));
+      } else if (OB_FAIL(schema.set_encryption_str(arg.index_schema_.get_encryption_str()))) {
         LOG_WARN("fail to set set_encryption_str", K(ret), K(arg));
       }
 
@@ -2454,11 +2486,11 @@ int ObIndexBuilder::set_index_table_options(const obrpc::ObCreateIndexArg &arg,
     schema.set_is_use_bloomfilter(arg.index_option_.use_bloom_filter_);
     //schema.set_progressive_merge_num(arg.index_option_.progressive_merge_num_);
     schema.set_index_using_type(arg.index_using_type_);
-    schema.set_row_store_type(data_schema.get_row_store_type());
-    schema.set_store_format(data_schema.get_store_format());
     // set dop for index table
     schema.set_dop(arg.index_schema_.get_dop());
-    if (OB_FAIL(schema.set_compress_func_name(data_schema.get_compress_func_name()))) {
+    if (OB_FAIL(get_index_row_store_type(arg.index_type_, data_schema, schema))) {
+      LOG_WARN("fail to get index row store type", K(ret), K(arg), K(data_schema), K(schema));
+    } else if (OB_FAIL(schema.set_compress_func_name(data_schema.get_compress_func_name()))) {
       LOG_WARN("set_compress_func_name failed", K(ret),
                "compress method", data_schema.get_compress_func_name());
     } else if (OB_FAIL(schema.set_comment(arg.index_option_.comment_))) {
@@ -2473,9 +2505,20 @@ int ObIndexBuilder::set_index_table_options(const obrpc::ObCreateIndexArg &arg,
         LOG_WARN("fail to set parser name and properties", K(ret), "parser_name", arg.index_option_.parser_name_,
             "parser_properties", arg.index_option_.parser_properties_);
       }
+      // handle fts index type
+      if (OB_SUCC(ret) && (schema.is_fts_index_aux() || schema.is_fts_doc_word_aux())) {
+        share::schema::ObFTSIndexParams fts_index_params;
+        fts_index_params.fts_index_type_ = arg.index_option_.fts_index_type_;
+        if (tenant_data_version < MIN_DATA_VERSION_FOR_FTS_INDEX_TYPE) {
+          if (OB_FAIL(schema.set_index_params(""))) {
+            LOG_WARN("fail to set index params", K(ret));
+          }
+        } else if (OB_FAIL(schema.set_fts_params_to_index_params(fts_index_params))) {
+          LOG_WARN("fail to set fts index params to index params", K(ret), K(fts_index_params));
+        }
+      }
     } else if (is_vec_ivf_index(schema.get_index_type()) && FALSE_IT(schema.set_lob_inrow_threshold(OB_MAX_LOB_INROW_THRESHOLD))) {
-    }
-    else if (OB_FAIL(schema.set_storage_cache_policy(arg.index_option_.storage_cache_policy_))) {
+    } else if (OB_FAIL(schema.set_storage_cache_policy(arg.index_option_.storage_cache_policy_))) {
       LOG_WARN("set storage cache policy failed", K(ret), "storage_cache_policy", arg.index_option_.storage_cache_policy_);
     }
   }

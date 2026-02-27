@@ -2151,18 +2151,9 @@ int ObJoinOrder::init_sample_info_for_access_path(AccessPath *ap,
     // do nothing
     // sample scan doesn't support DML other than SELECT.
   } else {
-    const ObSelectStmt *stmt = static_cast<const ObSelectStmt *>(get_plan()->get_stmt());
     const SampleInfo *sample_info = table_item->sample_info_;
-
     if (sample_info != NULL) {
       ap->sample_info_ = *sample_info;
-      ap->sample_info_.table_id_ = ap->get_index_table_id();
-    } else if (get_plan()->get_optimizer_context().is_online_ddl() &&
-               get_plan()->get_optimizer_context().get_root_stmt()->is_insert_stmt() &&
-               !get_plan()->get_optimizer_context().is_heap_table_ddl()) {
-      ap->sample_info_.method_ = SampleInfo::SampleMethod::DDL_BLOCK_SAMPLE;
-      ap->sample_info_.scope_ = SampleInfo::SAMPLE_ALL_DATA;
-      ap->sample_info_.percent_ = (double)get_plan()->get_optimizer_context().get_px_object_sample_rate() / 1000;
       ap->sample_info_.table_id_ = ap->get_index_table_id();
     }
     ap->est_cost_info_.sample_info_ = ap->sample_info_;
@@ -22692,13 +22683,13 @@ int ObJoinOrder::get_query_tokens(ObMatchFunRawExpr *match_expr,
     const ObString &parser_properties = index_schema->get_parser_property_str();
     const ObObjMeta &key_meta = match_expr->get_search_key()->get_result_meta();
     storage::ObFTParseHelper tokenize_helper;
-    common::ObSEArray<ObFTWord, 16> tokens;
-    hash::ObHashMap<ObFTWord, int64_t> token_map;
+    common::ObSEArray<ObFTToken, 16> tokens;
+    ObFTTokenMap token_map;
     int64_t doc_length = 0;
     const int64_t ft_word_bkt_cnt = MAX(search_text_string.length() / 10, 2);
     if (search_text_string.length() == 0) {
       // do nothing
-    } else if (OB_FAIL(tokenize_helper.init(allocator_, parser_name, parser_properties))) {
+    } else if (OB_FAIL(tokenize_helper.init(allocator_, parser_name, parser_properties, share::schema::OB_FTS_INDEX_TYPE_MATCH))) {
       LOG_WARN("failed to init tokenize helper", K(ret));
     } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
       LOG_WARN("failed to create token map", K(ret));
@@ -22708,15 +22699,16 @@ int ObJoinOrder::get_query_tokens(ObMatchFunRawExpr *match_expr,
                            search_text_string.length(),
                            doc_length,
                            token_map))) {
-      LOG_WARN("failed to segment");
+      LOG_WARN("failed to segment",
+          K(ret), K(key_meta), K(search_text_string));
     } else {
-      for (hash::ObHashMap<ObFTWord, int64_t>::const_iterator iter = token_map.begin();
+      for (ObFTTokenMap::const_iterator iter = token_map.begin();
           OB_SUCC(ret) && iter != token_map.end();
           ++iter) {
-        const ObFTWord &token = iter->first;
+        const ObFTToken &token = iter->first;
         ObString token_string;
         ObConstRawExpr *token_expr = NULL;
-        if (OB_FAIL(ob_write_string(*allocator_, token.get_word().get_string(), token_string))) {
+        if (OB_FAIL(ob_write_string(*allocator_, token.get_token().get_string(), token_string))) {
           LOG_WARN("failed to deep copy query token", K(ret));
         } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(
                                *OPT_CTX.get_exec_ctx()->get_expr_factory(),

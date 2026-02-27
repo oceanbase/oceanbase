@@ -360,8 +360,8 @@ int ObTabletDDLCompleteMdsHelper::record_ddl_complete_arg_to_mds(
   const uint64_t tenant_id = MTL_ID();
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   const int64_t SLEEP_INTERVAL = 100 * 1000L; // 100ms
-  ObTimeoutCtx ctx;
-  const int64_t default_timeout_ts = GCONF.rpc_timeout;
+  ObTimeoutCtx timeout_ctx;
+  const int64_t ddl_inner_sql_timeout_us = max(GCONF.internal_sql_execute_timeout, ObTabletDDLCompleteMdsHelper::DEFAULT_DDL_COMPLETE_MDS_TIMEOUT_US);
 
   if (OB_UNLIKELY(!complete_arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -375,8 +375,10 @@ int ObTabletDDLCompleteMdsHelper::record_ddl_complete_arg_to_mds(
   } else if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null sql proxy", KR(ret), KP(sql_proxy));
-  } else if (OB_FAIL(share::ObShareUtil::set_default_timeout_ctx(ctx, default_timeout_ts))) {
-    LOG_WARN("fail to set timeout ctx", KR(ret), K(default_timeout_ts));
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(ddl_inner_sql_timeout_us))) {
+    LOG_WARN("set trx timeout failed", KR(ret), K(ddl_inner_sql_timeout_us), K(complete_arg));
+  } else if (OB_FAIL(timeout_ctx.set_timeout(ddl_inner_sql_timeout_us))) {
+    LOG_WARN("set timeout failed", KR(ret), K(ddl_inner_sql_timeout_us), K(complete_arg));
   } else {
     ObMySQLTransaction trans;
     ObInnerSQLConnection *conn = nullptr;
@@ -387,9 +389,9 @@ int ObTabletDDLCompleteMdsHelper::record_ddl_complete_arg_to_mds(
       LOG_WARN("unexpected null connection", KR(ret), KP(conn));
     } else {
       do {
-        if (ctx.is_timeouted()) {
+        if (timeout_ctx.is_timeouted()) {
           ret = OB_TIMEOUT;
-          LOG_WARN("already timeout", KR(ret), K(ctx));
+          LOG_WARN("already timeout", KR(ret), K(timeout_ctx), K(complete_arg));
         } else if (OB_FAIL(conn->register_multi_data_source(tenant_id, complete_arg.ls_id_,
                                 transaction::ObTxDataSourceType::DDL_COMPLETE_MDS, buf, buf_len))) {
           LOG_WARN("fail to register_tx_data", KR(ret), K(complete_arg), K(buf), K(buf_len));

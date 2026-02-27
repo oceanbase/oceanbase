@@ -16,29 +16,21 @@ namespace oceanbase
 {
 namespace storage
 {
-int ObFTSingleWord::hash(uint64_t &hash_value) const
-{
-  hash_value = get_word().hash();
-  return OB_SUCCESS;
-}
 
-common::ObString ObFTSingleWord::get_word() const { return ObString(word_len, word); }
-bool ObFTSingleWord::operator==(const ObFTSingleWord &other) const
+bool ObFTSingleToken::operator==(const ObFTSingleToken &other) const
 {
   return (this == &other)
-         || (word_len == other.word_len && 0 == memcmp(word, other.word, word_len));
+         || (token_char_len_ == other.token_char_len_ && 0 == memcmp(token_, other.token_, token_char_len_));
 }
 
-int32_t ObFTSingleWord::set_word(const char *word, int32_t word_len)
+int ObFTSingleToken::set_token(const char *token, int32_t token_len)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(word)) {
+  if (OB_UNLIKELY(nullptr == token || token_len <= 0 || token_len > ObCharset::MAX_MB_LEN)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (word_len > ObCharset::MAX_MB_LEN) {
-    ret = OB_SIZE_OVERFLOW;
   } else {
-    memcpy(this->word, word, word_len);
-    this->word_len = word_len;
+    memcpy(this->token_, token, token_len);
+    this->token_char_len_ = token_len;
   }
   return ret;
 }

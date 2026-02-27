@@ -137,11 +137,11 @@ int ObTableLoadDagInsertSSTableTaskBase::handle_merge_task_finish(
       FLOG_INFO("tablet merge task all finished", K(tablet_merge_ctx->get_tablet_id()),
                K(tablet_id), K(insert_table_result));
 
-      ObArray<ObITask *> write_macro_block_tasks;
-      if (OB_FAIL(dag_->generate_tablet_write_macro_block_tasks(
-                   tablet_id, write_macro_block_tasks, parent_task))) {
+      ObArray<ObITask *> need_schedule_tasks;
+      if (OB_FAIL(dag_->generate_finish_tasks(
+                   tablet_id, need_schedule_tasks, parent_task))) {
         LOG_WARN("fail to generate tablet write macro block tasks", K(ret));
-      } else if (OB_FAIL(dag_->batch_add_task(write_macro_block_tasks))) {
+      } else if (OB_FAIL(dag_->batch_add_task(need_schedule_tasks))) {
         LOG_WARN("fail to batch add task", K(ret));
       }
     }
@@ -449,9 +449,7 @@ int ObTableLoadMacroBlockWriteTask::process()
     const int64_t slice_idx = row_iter->get_slice_idx();
     ObWriteMacroParam writer_param;
     writer_param.is_sorted_table_load_ = true;
-    if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id, slice_idx, -1 /*cg_idx*/, dag_,
-                                             ObTabletSliceBufferTempFileWriter::ObDDLRowBuffer::DEFAULT_MAX_BATCH_SIZE,
-                                             writer_param))) {
+    if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id, slice_idx, -1 /*cg_idx*/, dag_, writer_param))) {
       LOG_WARN("fail to fill writer param", K(ret), K(tablet_id), K(slice_idx), K(dag_));
     } else if (OB_FAIL(ObDDLUtil::alloc_storage_macro_block_writer(writer_param, allocator,
                                                                    storage_writer))) {

@@ -67,6 +67,9 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     use_bloom_filter_(false),
     expire_info_(),
     compress_method_(),
+    parser_name_(),
+    parser_properties_(),
+    fts_index_type_(share::schema::OB_FTS_INDEX_TYPE_INVALID),
     comment_(),
     tablegroup_name_(),
     primary_zone_(),
@@ -1866,6 +1869,35 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                                                                                *allocator_,
                                                                                parser_properties_))) {
           LOG_WARN("fail to resolve parser properties", K(ret));
+        }
+        break;
+      }
+      case T_FTS_INDEX_TYPE: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < MIN_DATA_VERSION_FOR_FTS_INDEX_TYPE) { // version check 4.5.1.0
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("fts index type isn't supported before version 4.5.1.0", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "enable phrase match before version 4.5.1.0 is");
+        } else {
+          ParseNode *type_node = option_node->children_[0];
+          if (OB_ISNULL(type_node)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fts type node should not be nullptr", K(ret));
+          } else if (T_FTS_INDEX_FILTER == type_node->type_) {
+            fts_index_type_ = OB_FTS_INDEX_TYPE_FILTER;
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("filter fts index type is not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "filter fts index type");
+          } else if (T_FTS_INDEX_MATCH == type_node->type_) {
+            fts_index_type_ = OB_FTS_INDEX_TYPE_MATCH;
+          } else if (T_FTS_INDEX_PHRASE_MATCH == type_node->type_) {
+            fts_index_type_ = OB_FTS_INDEX_TYPE_PHRASE_MATCH;
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected fts index type", K(type_node->type_), K(ret));
+          }
         }
         break;
       }
@@ -5758,6 +5790,7 @@ void ObDDLResolver::reset() {
   compress_method_.reset();
   parser_name_.reset();
   parser_properties_.reset();
+  fts_index_type_ = OB_FTS_INDEX_TYPE_INVALID;
   comment_.reset();
   tablegroup_name_.reset();
   primary_zone_.reset();
@@ -5805,6 +5838,7 @@ void ObDDLResolver::reset_index()
 {
   index_scope_ = NOT_SPECIFIED;
   parser_name_.reset();
+  fts_index_type_ = OB_FTS_INDEX_TYPE_INVALID;
   parser_properties_.reset();
   comment_.reset();
   // default

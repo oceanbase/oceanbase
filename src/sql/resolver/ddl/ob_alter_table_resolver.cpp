@@ -2836,6 +2836,8 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_option_.parser_name_ = parser_name_;
     index_arg.index_option_.parser_properties_ = parser_properties_;
+    index_arg.index_option_.fts_index_type_ = (fts_index_type_ == share::schema::OB_FTS_INDEX_TYPE_INVALID) ? share::schema::DEFAULT_FTS_INDEX_TYPE : fts_index_type_;
+
     if (OB_SUCC(ret)) {
       ObIndexType type = INDEX_TYPE_IS_NOT;
       if (OB_NOT_NULL(table_schema_) && (table_schema_->is_oracle_tmp_table() || table_schema_->is_oracle_tmp_table_v2())) {

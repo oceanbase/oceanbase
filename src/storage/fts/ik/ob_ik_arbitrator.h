@@ -33,23 +33,23 @@ public:
   int process(TokenizeContext &ctx);
 
   int output_result(TokenizeContext &ctx);
+  void reuse();
+  int prepare();
 
 private:
-  int prepare(TokenizeContext &ctx);
-
   int add_chain(ObIKTokenChain *chain);
 
   int optimize(TokenizeContext &ctx,
                ObIKTokenChain *option,
-               ObFTSortList::CellIter iter,
+               ObFTLightSortList::CellIter iter,
                int64_t fulltext_len,
                ObIKTokenChain *&best);
 
   int try_add_next_words(ObIKTokenChain *chain,
-                         ObFTSortList::CellIter iter,
+    ObFTLightSortList::CellIter iter,
                          ObIKTokenChain *option,
                          bool need_conflict,
-                         ObList<ObFTSortList::CellIter, ObIAllocator> &conflict_stack);
+                         ObList<ObFTLightSortList::CellIter, ObIAllocator> &conflict_stack);
 
   int remove_conflict(const ObIKToken &token, ObIKTokenChain *option);
 
@@ -57,7 +57,16 @@ private:
 
 private:
   ObArenaAllocator alloc_;
-  hash::ObHashMap<int64_t, ObIKTokenChain *> chains_;
+  hash::ObHashMap<
+      int64_t,
+      ObIKTokenChain *,
+      common::hash::NoPthreadDefendMode,
+      common::hash::hash_func<int64_t>,
+      common::hash::equal_to<int64_t>,
+      common::hash::SimpleAllocer<
+          typename common::hash::HashMapTypes<int64_t, ObIKTokenChain *>::AllocType,
+          common::hash::NodeNumTraits<typename common::hash::HashMapTypes<int64_t, ObIKTokenChain *>::AllocType>::NODE_NUM,
+          common::hash::NoPthreadDefendMode>> chains_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIKArbitrator);

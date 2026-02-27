@@ -1609,7 +1609,7 @@ int ObDDLRedefinitionTask::check_health()
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl service not started", KR(ret));
     need_retry_ = false;
-  } else if (OB_FAIL(refresh_status())) { // refresh task status
+  } else if (OB_FAIL(check_and_refresh_status_if_rs_epoch_changed())) { // refresh if RS epoch changed
     LOG_WARN("refresh status failed", K(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));

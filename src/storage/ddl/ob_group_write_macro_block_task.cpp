@@ -26,7 +26,7 @@ using namespace oceanbase::blocksstable;
 using namespace oceanbase::sql;
 
 ObGroupWriteMacroBlockTask::ObGroupWriteMacroBlockTask()
-  : ObITask(TASK_TYPE_DDL_GROUP_WRITE_TASK), ddl_dag_(nullptr)
+  : ObITaskWithMonitor(TASK_TYPE_DDL_GROUP_WRITE_TASK), ddl_dag_(nullptr), tablet_ids_()
 {
 
 }
@@ -44,21 +44,36 @@ int ObGroupWriteMacroBlockTask::init(ObDDLIndependentDag *ddl_dag)
     LOG_WARN("invalid argument", K(ret));
   } else {
     ddl_dag_ = ddl_dag;
+    tablet_ids_.reset();
   }
   return ret;
 }
 
-int ObGroupWriteMacroBlockTask::init(ObDDLIndependentDag *ddl_dag, const ObTabletID &tablet_id)
+int ObGroupWriteMacroBlockTask::init(ObDDLIndependentDag *ddl_dag, const ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == ddl_dag || !tablet_id.is_valid())) {
+  if (OB_UNLIKELY(nullptr == ddl_dag || tablet_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(ddl_dag), K(tablet_id));
+    LOG_WARN("invalid argument", K(ret), KP(ddl_dag), K(tablet_ids));
+  } else if (OB_FAIL(tablet_ids_.assign(tablet_ids))) {
+    LOG_WARN("failed to assign", K(ret));
   } else {
     ddl_dag_ = ddl_dag;
-    tablet_id_ = tablet_id;
   }
   return ret;
+}
+
+ObITask::ObITaskPriority ObGroupWriteMacroBlockTask::get_priority()
+{
+  int ret = OB_SUCCESS;
+  ObITask::ObITaskPriority priority = ObITask::get_priority();
+  if (OB_ISNULL(ddl_dag_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ddl dag is null", K(ret), KP(ddl_dag_));
+  } else {
+    priority = ddl_dag_->is_scan_finished() && 0 == ddl_dag_->get_pipeline_count() ? ObITask::TASK_PRIO_2 : ObITask::TASK_PRIO_0;
+  }
+  return priority;
 }
 
 int ObGroupWriteMacroBlockTask::process()
@@ -67,9 +82,11 @@ int ObGroupWriteMacroBlockTask::process()
   if (OB_ISNULL(ddl_dag_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ddl dag is null", K(ret), KP(ddl_dag_));
-  } else if (tablet_id_.is_valid()) {
-    if (OB_FAIL(group_write_macro_block(tablet_id_))) {
-      LOG_WARN("group write macro block failed", K(ret));
+  } else if (!tablet_ids_.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids_.count(); ++i) {
+      if (OB_FAIL(group_write_macro_block(tablet_ids_.at(i)))) {
+        LOG_WARN("group write macro block failed", K(ret), K(i), K(tablet_ids_.at(i)));
+      }
     }
   } else {
     const ObIArray<std::pair<ObLSID, ObTabletID>> &ls_tablet_ids = ddl_dag_->get_ls_tablet_ids();
@@ -221,7 +238,7 @@ void ObGroupWriteMacroBlockTask::task_debug_info_to_string(char *buf, const int6
 }
 
 ObGroupCGBlockFileWriteTask::ObGroupCGBlockFileWriteTask()
-  : ObITask(TASK_TYPE_DDL_CG_GROUP_WRITE_TASK), is_inited_(false), ddl_dag_(nullptr), slice_idx_(-1), cg_idx_(-1), block_files_()
+  : ObITaskWithMonitor(TASK_TYPE_DDL_CG_GROUP_WRITE_TASK), is_inited_(false), ddl_dag_(nullptr), slice_idx_(-1), cg_idx_(-1), block_files_()
 {
   block_files_.set_attr(ObMemAttr(MTL_ID(), "GCGBlockFileArr"));
 }
@@ -284,7 +301,7 @@ int ObGroupCGBlockFileWriteTask::process()
     int64_t row_offset = 0;
     ObWriteMacroParam write_param;
     HEAP_VAR(ObDAGCGMacroBlockWriter, cg_writer) {
-    if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id_, slice_idx_, cg_idx_, ddl_dag_, 0/*max_batch_size*/, write_param))) {
+    if (OB_FAIL(ObDDLUtil::fill_writer_param(tablet_id_, slice_idx_, cg_idx_, ddl_dag_, write_param))) {
       LOG_WARN("fill write param failed", K(ret));
     } else if (OB_FAIL(ObDDLUtil::init_macro_block_seq(write_param.direct_load_type_,
                                                        write_param.tablet_id_,

@@ -13,11 +13,13 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_granule_iterator_op.h"
+#include "ob_granule_fts_util.h"
 #include "src/sql/engine/dml/ob_table_modify_op.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
+#include "storage/ddl/ob_column_clustered_dag.h"
 
 namespace oceanbase
 {
@@ -415,6 +417,9 @@ ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec
   tablet2part_id_map_(),
   real_child_(NULL),
   is_parallel_runtime_filtered_(false),
+  is_fts_sample_done_(false),
+  current_slice_idx_(-1),
+  total_slice_count_(0),
   is_parallel_rf_qr_extracted_(false),
   splitter_type_(GIT_UNINITIALIZED),
   has_add_to_finished_worker_(false),
@@ -651,16 +656,21 @@ int ObGranuleIteratorOp::rescan()
     all_task_fetched_ = false;
     pwj_rescan_task_infos_.reset();
     pruning_tablet_ids_.reset();
-    while (OB_SUCC(get_next_granule_task(false /* prepare */, true /* round_robin */))) {}
-    if (ret != OB_ITER_END) {
-      LOG_WARN("failed to get all granule task", K(ret));
-    } else {
-      ret = OB_SUCCESS;
-    }
-    if (OB_SUCC(ret)) {
-      is_rescan_ = true;
-      rescan_task_idx_ = 0;
+    if (ObGranuleUtil::is_partition_local_fts_task(ctx_)) {
+      is_fts_sample_done_ = true;
       state_ = GI_GET_NEXT_GRANULE_TASK;
+    } else {
+      while (OB_SUCC(get_next_granule_task(false /* prepare */, true /* round_robin */))) {}
+      if (ret != OB_ITER_END) {
+        LOG_WARN("failed to get all granule task", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+      if (OB_SUCC(ret)) {
+        is_rescan_ = true;
+        rescan_task_idx_ = 0;
+        state_ = GI_GET_NEXT_GRANULE_TASK;
+      }
     }
     LOG_TRACE("gi end rescan");
   } else if (is_child_sample_scan) {
@@ -670,7 +680,26 @@ int ObGranuleIteratorOp::rescan()
     pruning_tablet_ids_.reset();
     rescan_task_idx_ = 0;
     state_ = GI_GET_NEXT_GRANULE_TASK;
-    OZ(const_cast<ObGranulePump *>(pump_)->reset_gi_task());
+    if (ObGranuleUtil::is_partition_local_fts_task(ctx_)) {
+      // FTS task: regenerate GI tasks with sampled ranges after sampling finished
+      is_rescan_ = true;
+      ObGranulePumpArgs *args = pump_arg_;
+      if (OB_ISNULL(args)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pump arg is null", K(ret));
+      } else {
+        rescan_tasks_info_.reset();
+        rescan_taskset_ = NULL;
+        if (OB_FAIL(lucky_one_regenerate(args))) {
+          LOG_WARN("failed to do FTS lucky one regenerate", K(ret), KP(args));
+        } else {
+          is_rescan_ = false;
+          is_fts_sample_done_ = true;
+        }
+      }
+    } else {
+      OZ(const_cast<ObGranulePump *>(pump_)->reset_gi_task());
+    }
     LOG_TRACE("gi end rescan");
   } else {
     if (GI_UNINITIALIZED == state_) {
@@ -703,6 +732,48 @@ int ObGranuleIteratorOp::rescan()
   OX(OB_ASSERT(false == brs_.end_));
 #endif
 
+  return ret;
+}
+
+// Handle FTS lucky one regenerate: only one thread executes regenerate, others wait
+int ObGranuleIteratorOp::lucky_one_regenerate(ObGranulePumpArgs *args)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(args)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pump arg is null", K(ret));
+  } else {
+    // Use atomic CAS operation to ensure only one thread executes regenerate
+    bool is_lucky_one = ATOMIC_CAS(&args->lucky_one_regenerate_, true, false);
+    if (is_lucky_one) {
+      if (OB_FAIL(const_cast<ObGranulePump *>(pump_)->regenerate_gi_task(*args))) {
+        LOG_WARN("failed to regenerate gi task for FTS", K(ret));
+      } else {
+        // Reset pump state after regenerate: reset no_more_task_from_shared_pool_ flag and cur_pos_
+        // This must be done by lucky one thread after regenerate_gi_task
+        if (OB_FAIL(const_cast<ObGranulePump *>(pump_)->reset_gi_task())) {
+          LOG_WARN("failed to reset gi task after regenerate", K(ret));
+        }
+      }
+      pump_->set_fetch_task_ret(ret);
+      args->regenerate_finished_ = true;
+    } else {
+      // Other threads wait for the lucky one to finish
+      while (!args->regenerate_finished_ && OB_SUCC(ret)) {
+        if (OB_FAIL(ctx_.fast_check_status())) {
+          LOG_WARN("fail to fast check status", K(ret));
+        } else {
+          ob_usleep(100);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ret = pump_->get_fetch_task_ret();
+      }
+    }
+    if (OB_SUCC(ret)) {
+      pump_version_ = args->pump_version_;
+    }
+  }
   return ret;
 }
 
@@ -877,6 +948,23 @@ int ObGranuleIteratorOp::inner_get_next_row()
 int ObGranuleIteratorOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = try_get_rows(std::min(max_row_cnt, MY_SPEC.max_batch_size_));
+
+  // Set DDL slice_id pseudo column for batch
+  if (OB_SUCC(ret) && brs_.size_ > 0 && is_fts_sample_done_ && nullptr != MY_SPEC.ddl_slice_id_expr_) {
+    if (current_slice_idx_ >= 0 && total_slice_count_ > 0) {
+      storage::ObTabletSliceParam slice_param(static_cast<int16_t>(total_slice_count_), static_cast<int16_t>(current_slice_idx_));
+      if (get_spec().use_rich_format_ && OB_FAIL(MY_SPEC.ddl_slice_id_expr_->init_vector(eval_ctx_, VEC_UNIFORM, brs_.size_))) {
+        LOG_WARN("init vector failed", K(ret), K(MY_SPEC.ddl_slice_id_expr_));
+      } else {
+        ObDatum *ddl_slice_id_datums = MY_SPEC.ddl_slice_id_expr_->locate_datums_for_update(eval_ctx_, brs_.size_);
+        for (int64_t i = 0; i < brs_.size_; ++i) {
+          ddl_slice_id_datums[i].set_int(slice_param.slice_id_);
+        }
+        MY_SPEC.ddl_slice_id_expr_->set_evaluated_projected(eval_ctx_);
+      }
+    }
+  }
+
   if (OB_ITER_END == ret) {
     brs_.size_ = 0;
     brs_.end_ = true;
@@ -1245,7 +1333,10 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning, bool 
       } else if (!partition_pruning && OB_FAIL(do_dynamic_partition_pruning(gi_task_info, partition_pruning))) {
         LOG_WARN("fail to do dynamic partition pruning", K(ret));
       } else if (!partition_pruning) {
-        if (enable_single_runtime_filter_extract_query_range()
+        if (is_fts_sample_done_ && OB_FAIL(ObGranuleFtsUtil::calculate_fts_slice_idx_for_task(
+                ctx_, gi_task_info, current_slice_idx_, total_slice_count_))) {
+          LOG_WARN("failed to calculate fts slice idx for task", K(ret), K(gi_task_info));
+        } else if (enable_single_runtime_filter_extract_query_range()
             && OB_FAIL(do_single_runtime_filter_extract_query_range(gi_task_info))) {
           LOG_WARN("failed to do single runtime filter extract_query_range");
         } else if (OB_FAIL(gi_prepare_map->set_refactored(tsc_op_id_, gi_task_info))) {
@@ -1283,7 +1374,6 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning, bool 
       }
     }
   }
-
   if (OB_LIKELY(GI_END != state_)) {
     total_count_++;
   }
@@ -1984,6 +2074,7 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_extract_query_range(
       if (OB_FAIL(ret)) {
       } else if (has_extrct) {
         if (need_regenerate_gi_task) {
+          FLOG_INFO("lucky one regenerate gi task");
           OZ(pump_->regenerate_gi_task(*args));
         }
       }
@@ -2045,6 +2136,7 @@ int ObGranuleIteratorOp::init_rescan_tasks_info()
   }
   return ret;
 }
+
 
 } // end namespace sql
 } // end namespace oceanbase

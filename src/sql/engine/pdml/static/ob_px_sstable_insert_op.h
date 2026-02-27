@@ -85,6 +85,33 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertVecSpec);
 };
 
+struct DocidCompare
+{
+public:
+  DocidCompare(ObDatumCmpFuncType func) : cmp_func_(func), ret_(OB_SUCCESS) {}
+
+  bool operator()(const sql::ObPxTabletRange::DatumKey &l,
+                  const sql::ObPxTabletRange::DatumKey &r)
+  {
+    bool is_less = false;
+    if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
+    } else if (OB_UNLIKELY(l.count() < 1 || r.count() < 1)) {
+      ret_ = OB_ERR_UNEXPECTED;
+    } else {
+      // Compare only first datum (docid column)
+      int cmp_ret = 0;
+      ret_ = cmp_func_(l.at(0), r.at(0), cmp_ret);
+      if (OB_SUCCESS == ret_) {
+        is_less = (cmp_ret < 0);
+      }
+    }
+    return is_less;
+  }
+public:
+  ObDatumCmpFuncType cmp_func_;
+  int ret_;
+};
+
 class ObPxMultiPartSSTableInsertOp : public ObPxMultiPartInsertOp
 {
 public:
@@ -103,7 +130,8 @@ public:
       ddl_dag_(nullptr),
       need_idempotent_tablet_autoinc_(false),
       need_idempotent_table_autoinc_(false),
-      need_idempotent_doc_id_(false)
+      need_idempotent_doc_id_(false),
+      need_update_tablet_range_count_(true)
   {}
   virtual ~ObPxMultiPartSSTableInsertOp() { destroy(); }
   const ObPxMultiPartSSTableInsertSpec &get_spec() const;
@@ -141,7 +169,7 @@ protected:
                            ObISliceWriter *&slice_writer, ObDDLAutoincParam *autoinc_param = nullptr);
   int get_continue_slice(const ObIVector *tablet_id_vector, const ObIVector *slice_info_vector_, const ObBatchRows &brs,
                          ObTabletID &tablet_id, int64_t &slice_idx, int64_t &offset, int64_t &row_count);
-
+  int dynamic_sample_if_need(const int64_t max_row_cnt);
 protected:
   static const uint64_t MAP_HASH_BUCKET_NUM = 1543L;
   common::ObArenaAllocator allocator_;
@@ -162,6 +190,7 @@ protected:
   bool need_idempotent_tablet_autoinc_;
   bool need_idempotent_table_autoinc_;
   bool need_idempotent_doc_id_;
+  bool need_update_tablet_range_count_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertOp);
 };
 

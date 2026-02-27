@@ -18,6 +18,7 @@
 #include "lib/string/ob_string.h"
 #include "object/ob_object.h"
 #include "share/ob_plugin_helper.h"
+#include "share/schema/ob_schema_struct_fts.h"
 #include "storage/fts/ob_fts_parser_property.h"
 #include "storage/fts/ob_fts_struct.h"
 
@@ -37,9 +38,9 @@ class ObPluginParam;
 namespace storage
 {
 
-class ObStopWordChecker;
+class ObStopTokenCheckerGen;
+class ObStopTokenChecker;
 class ObFTDictHub;
-class ObAddWord;
 
 #define FTS_BUILD_IN_PARSER_LIST                                                                   \
   FT_PARSER_TYPE(FTP_SPACE, space)                                                                 \
@@ -78,6 +79,10 @@ public:
   OB_INLINE int64_t get_parser_version() const { return parser_version_; }
   OB_INLINE bool is_valid() const { return parser_name_.is_valid() && parser_version_ >= 0; }
   OB_INLINE bool is_type_before_4_3_5_1() const { return is_space() || is_beng() || is_ngram(); }
+  OB_INLINE bool is_builtin_parser() const
+  {
+    return is_space() || is_ngram() || is_beng() || is_ik() || is_ngram2();
+  }
   OB_INLINE void set_name_and_version(const share::ObPluginName &name, const int64_t version)
   {
     parser_name_ = name;
@@ -101,7 +106,8 @@ private:
 class ObFTParsePluginData final
 {
 public:
-  ObFTParsePluginData() = default;
+  ObFTParsePluginData() :
+      stop_token_checker_gen_(nullptr), dict_hub_(nullptr), handler_allocator_(), is_inited_(false) { }
   ~ObFTParsePluginData();
 
   /**
@@ -115,18 +121,19 @@ public:
   void destroy();
 
 public:
-  ObStopWordChecker *stop_word_checker() const { return stop_word_checker_; }
+  int get_stop_token_checker(const ObCollationType coll,
+                             ObStopTokenChecker &stop_token_checker);
   int get_dict_hub(ObFTDictHub *&hub);
 
 private:
-  int init_and_set_stopword_list();
+  int init_stop_token_checker_gen();
   int init_dict_hub();
 
 private:
-  ObStopWordChecker *     stop_word_checker_ = nullptr;
-  ObFTDictHub *           dict_hub_          = nullptr;
+  ObStopTokenCheckerGen *stop_token_checker_gen_;
+  ObFTDictHub *dict_hub_;
   common::ObFIFOAllocator handler_allocator_;
-  bool                    is_inited_         = false;
+  bool is_inited_;
 };
 
 class ObFTParseHelper final
@@ -152,13 +159,15 @@ public:
    *                                 "dict_table":"none",
    *                                 "quanitfier_table":"none"
    *                               }
+   * @param[in] fts_index_type, the type of fulltext index
    *
    * @return error code
    */
   int init(
       common::ObIAllocator *allocator,
       const common::ObString &plugin_name,
-      const common::ObString &plugin_properties);
+      const common::ObString &plugin_properties,
+      const share::schema::ObFTSIndexType fts_index_type);
   /**
    * Split document into multiple words
    *
@@ -173,10 +182,11 @@ public:
       const char *fulltext,
       const int64_t fulltext_len,
       int64_t &doc_length,
-      ObFTWordMap &words) const;
+      ObFTTokenMap &ft_token_map) const;
   int check_is_the_same(
       const common::ObString &plugin_name,
       const common::ObString &plugin_properties,
+      const share::schema::ObFTSIndexType fts_index_type,
       bool &is_same) const;
   /**
    * Make json document for fulltext search
@@ -186,7 +196,7 @@ public:
    * @param[out] json_root, json document
    */
   int make_detail_json(
-      const ObFTWordMap &words,
+      const ObFTTokenMap &ft_token_map,
       const int64_t doc_length,
       common::ObIJsonBase *&json_root);
 
@@ -197,32 +207,36 @@ public:
    * @param[out] json_root, json document
    */
   int make_token_array_json(
-      const ObFTWordMap &words,
+      const ObFTTokenMap &ft_token_map,
       common::ObIJsonBase *&json_root);
 
   void reset();
 
-  TO_STRING_KV(KP_(allocator), K_(parser_name), KP_(parser_desc), K_(is_inited));
+  OB_INLINE const ObFTParser &get_parser_name() const { return parser_name_; }
+
+  OB_INLINE plugin::ObPluginParam *get_plugin_param() const { return plugin_param_; }
+
+  OB_INLINE const ObFTParserProperty &get_parser_property() const { return parser_property_; }
+
+  OB_INLINE const plugin::ObIFTParserDesc *get_parser_desc() const { return parser_desc_; }
+
+  OB_INLINE const ObProcessTokenFlag &get_process_token_flags() const { return process_token_flag_; }
+
+  OB_INLINE bool is_builtin_parser() const { return parser_name_.is_builtin_parser(); }
+
+  TO_STRING_KV(KP_(allocator), K_(parser_name), KP_(parser_desc), K_(is_inited), K_(fts_index_type));
 
 private:
-  static int segment(
-      const ObFTParserProperty &property,
-      const int64_t parser_version,
-      const plugin::ObIFTParserDesc *parser_desc,
-      plugin::ObPluginParam *plugin_param,
-      const ObCharsetInfo *cs,
-      const char *fulltext,
-      const int64_t fulltext_len,
-      common::ObIAllocator &allocator,
-      ObAddWord &add_word);
-  int set_add_word_flag(const plugin::ObIFTParserDesc &ftparser_desc);
+  int set_process_token_flag(const plugin::ObIFTParserDesc &ftparser_desc);
+
 private:
   common::ObIAllocator *allocator_;
   plugin::ObIFTParserDesc *parser_desc_;
   plugin::ObPluginParam *plugin_param_;
   ObFTParser parser_name_;
-  ObAddWordFlag add_word_flag_;
+  ObProcessTokenFlag process_token_flag_;
   ObFTParserProperty parser_property_;
+  share::schema::ObFTSIndexType fts_index_type_;
   bool is_inited_;
 
 private:

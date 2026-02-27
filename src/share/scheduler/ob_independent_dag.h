@@ -17,8 +17,31 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObDDLDagMonitorNode;
+class ObDDLDagMonitorInfo;
+} // namespace storage
+
 namespace share
 {
+
+// Provide a base task that can be monitored by independent dag monitor.
+// Derived task only needs to implement inner_add_monitor_info() to allocate its concrete monitor info.
+class ObITaskWithMonitor : public ObITask
+{
+public:
+  explicit ObITaskWithMonitor(const ObITaskType type) : ObITask(type), monitor_info_(nullptr) {}
+  virtual ~ObITaskWithMonitor();
+  int add_monitor_info() override;
+  int update_monitor_info(const int ret_code, const int64_t exec_time_us) override;
+  storage::ObDDLDagMonitorInfo *get_monitor_info() const { return monitor_info_; }
+protected:
+  // Default implementation allocates a plain ObDDLDagMonitorInfo which provides basic fields.
+  virtual int inner_add_monitor_info(storage::ObDDLDagMonitorNode &node);
+protected:
+  storage::ObDDLDagMonitorInfo *monitor_info_;
+};
 
 class ObIndependentDag : public ObIDag
 {
@@ -43,6 +66,7 @@ public:
   int process();
   void dump_dag_status(const char *log_info = "Print the status of independent dag");
   void post_signal();
+  storage::ObDDLDagMonitorNode *get_monitor_node() const { return monitor_node_; }
   OB_INLINE void set_compat_mode(lib::Worker::CompatMode mode) { compat_mode_ = mode; }
   VIRTUAL_TO_STRING_KV(KP(this), K_(id), "type", get_dag_type_str(type_),
       K_(is_inited), K_(is_stop), K_(dag_status), K_(start_time), K_(dag_ret),
@@ -55,6 +79,7 @@ protected:
   virtual void clear_task_list() override final;
   virtual void reset() override final;
   virtual int check_cycle() override final;
+  virtual int init_monitor_node();
 private:
   int update_ready_task_list();
   int try_get_next_ready_task(ObITask *&task);
@@ -72,6 +97,8 @@ private:
   lib::Worker::CompatMode compat_mode_;
   common::ObThreadCond cond_;
   TaskList waiting_task_list_; // for independent dag, task added into waiting task list firstly
+protected:
+  storage::ObDDLDagMonitorNode *monitor_node_; // Independent dag monitor node (one node per independent DAG execution).
 };
 
 class ObDagExecutor

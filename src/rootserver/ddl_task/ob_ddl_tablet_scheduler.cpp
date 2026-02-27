@@ -30,9 +30,10 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
 ObDDLTabletScheduler::ObDDLTabletScheduler()
-  : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), table_id_(OB_INVALID_ID), ref_data_table_id_(OB_INVALID_ID),
-    task_id_(OB_INVALID_ID), parallelism_(0), snapshot_version_(0),
-    lock_(common::ObLatchIds::OB_DDL_TABLET_SCHEDULER_LOCK), root_service_(nullptr)
+  : is_inited_(false), need_single_partition_build_(false), tenant_id_(OB_INVALID_TENANT_ID),
+    table_id_(OB_INVALID_ID), ref_data_table_id_(OB_INVALID_ID), task_id_(OB_INVALID_ID),
+    parallelism_(0), snapshot_version_(0), lock_(common::ObLatchIds::OB_DDL_TABLET_SCHEDULER_LOCK),
+    root_service_(nullptr)
 {
 
 }
@@ -49,7 +50,8 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
                                const int64_t  snapshot_version,
                                const common::ObCurTraceId::TraceId &trace_id,
                                const ObIArray<ObTabletID> &tablets,
-                               const uint64_t data_version)
+                               const uint64_t data_version,
+                               const bool need_single_partition_build)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena("tblt_sched_init");
@@ -200,6 +202,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
     }
   }
   if (OB_SUCC(ret)) {
+    need_single_partition_build_ = need_single_partition_build;
     tenant_id_ = tenant_id;
     table_id_ = table_id;
     ref_data_table_id_ = ref_data_table_id;
@@ -575,6 +578,9 @@ int ObDDLTabletScheduler::get_unfinished_tablets(const share::ObDDLType task_typ
     LOG_WARN("fail to get ls host left disk space", K(ret), K(tenant_id_), K(ls_id), K(leader_addr), K(left_space_size));
   } else if (OB_FAIL(calculate_candidate_tablets(left_space_size, leader_addr, tablet_queue, tablets))) {
     LOG_WARN("fail to use strategy to get tablets", K(ret), K(left_space_size), K(tablet_queue), K(tablets));
+  } else if (need_single_partition_build_ && tablets.count() > 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("single partition build should only have one tablet", K(ret), K(tablets));
   } else if (OB_FAIL(push_tablet_execution_id(task_type, ddl_can_retry, data_format_version, tablets, new_execution_id))) {
     LOG_WARN("failed to push tablet execution id", K(ret), K(task_type), K(ddl_can_retry), K(data_format_version), K(tablets), K(new_execution_id));
   } else {
@@ -670,9 +676,11 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
       int64_t pre_vec_construct_mem = 0;  // accumulated vector index construct memory
       int64_t tablet_data_size = 0;
       int64_t tablet_data_row_cnt = 0;
-      uint64_t task_max_data_size = 0;
-      const int64_t task_max_data_row_cnt = 50000000;
-      if (left_space_size > 0) {
+      int64_t task_max_data_size = 0;
+      const int64_t task_max_data_row_cnt = need_single_partition_build_ ? -1L : 50000000L;
+      if (need_single_partition_build_) {
+        task_max_data_size = -1L;
+      } else if (left_space_size > 0) {
         task_max_data_size = left_space_size / 30; // according to the estimated maximum temporary space amplification factor 30, ensure that the current remaining disk space can complete index construction
       } else {
         task_max_data_size = 5368709120; // 5GB
@@ -716,7 +724,7 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
                                                             in_tablets.count())) {
               satisfied_built_vec_index_if_need = false;
             }
-            if ( 0 >= out_tablets.count() || ((tablet_data_row_cnt + pre_data_row_cnt) <= task_max_data_row_cnt && (tablet_data_size + pre_data_size) <= task_max_data_size && satisfied_built_vec_index_if_need)) {
+            if (0 >= out_tablets.count() || ((tablet_data_row_cnt + pre_data_row_cnt) <= task_max_data_row_cnt && (tablet_data_size + pre_data_size) <= task_max_data_size && satisfied_built_vec_index_if_need)) {
               if (OB_FAIL(out_tablets.push_back(in_tablets.at(i)))) {
                 LOG_WARN("fail to push back", K(ret), K(in_tablets.at(i)));
               } else {

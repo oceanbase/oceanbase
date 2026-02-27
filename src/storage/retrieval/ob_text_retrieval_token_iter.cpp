@@ -15,6 +15,7 @@
 #include "ob_text_retrieval_token_iter.h"
 #include "sql/engine/expr/ob_expr_bm25.h"
 #include "sql/das/iter/sparse_retrieval/ob_das_tr_merge_iter.h"
+#include "share/ob_fts_index_builder_util.h"
 
 namespace oceanbase
 {

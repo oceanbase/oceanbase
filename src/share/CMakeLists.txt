@@ -216,6 +216,7 @@ ob_set_subtarget(ob_share common
   ob_i_tablet_scan.cpp
   ob_index_builder_util.cpp
   ob_fts_index_builder_util.cpp
+  ob_fts_pos_list_codec.cpp
   ob_inner_config_root_addr.cpp
   ob_io_device_helper.cpp
   ob_kv_parser.cpp
@@ -615,10 +616,12 @@ ob_set_subtarget(ob_share schema
   schema/ob_schema_getter_guard_ccl_rule.cpp
   schema/ob_schema_getter_guard_sensitive_rule.cpp
   schema/ob_schema_struct.cpp
+  schema/ob_schema_struct_fts.cpp
   schema/ob_sequence_sql_service.cpp
   schema/ob_server_schema_service.cpp
   schema/ob_table_schema.cpp
   schema/ob_table_schema_vec_index.cpp
+  schema/ob_table_schema_fts_index.cpp
   schema/ob_iceberg_table_schema.cpp
   schema/ob_latest_schema_guard.cpp
   schema/ob_mlog_info.cpp

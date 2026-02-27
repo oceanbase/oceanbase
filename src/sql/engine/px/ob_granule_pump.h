@@ -85,7 +85,9 @@ public :
       query_range_by_runtime_filter_(),
       extract_finished_(false),
       gi_op_id_(common::OB_INVALID_ID),
-      pump_version_(0) {}
+      pump_version_(0),
+      lucky_one_regenerate_(true),
+      regenerate_finished_(false) {}
   virtual ~ObGranulePumpArgs() { reset(); };
 
   TO_STRING_KV(K(px_tablets_info_),
@@ -106,6 +108,8 @@ public :
     external_table_files_.reset();
     query_range_by_runtime_filter_.reset();
     locations_order_.reset();
+    lucky_one_regenerate_ = true;
+    regenerate_finished_ = false;
   }
 
   int assign(const ObGranulePumpArgs &rhs);
@@ -143,6 +147,8 @@ public :
   // %task_version_ is increased when task regenerated.
   // Used to help detecting taskset change in GI.
   int64_t pump_version_;
+  bool lucky_one_regenerate_; // atomic, indicatee which thread is luckly to do regenerate gi task
+  bool regenerate_finished_;
   //-----end
 };
 

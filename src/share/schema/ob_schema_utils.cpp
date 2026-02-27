@@ -155,6 +155,8 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
         column.add_column_flag(GENERATED_FTS_WORD_COUNT_COLUMN_FLAG);
       } else if (T_FUN_SYS_DOC_LENGTH == root_expr_type) {
         column.add_column_flag(GENERATED_FTS_DOC_LENGTH_COLUMN_FLAG);
+      } else if (T_FUN_SYS_POS_LIST == root_expr_type) {
+        column.add_column_flag(GENERATED_FTS_POS_LIST_COLUMN_FLAG);
       } else if (T_FUN_SYS_HYBRID_VEC_CHUNK == root_expr_type) {
         column.add_column_flag(GENERATED_HYBRID_VEC_CHUNK_COLUMN_FLAG);
       } else if (T_FUN_SYS_SPATIAL_CELLID == root_expr_type || T_FUN_SYS_SPATIAL_MBR == root_expr_type) {
@@ -370,7 +372,8 @@ bool ObSchemaUtils::is_fulltext_column(const uint64_t flag)
   return is_doc_id_column(flag)
       || is_word_segment_column(flag)
       || is_word_count_column(flag)
-      || is_doc_length_column(flag);
+      || is_doc_length_column(flag)
+      || is_pos_list_column(flag);
 }
 
 bool ObSchemaUtils::is_doc_id_column(const uint64_t flag)
@@ -391,6 +394,11 @@ bool ObSchemaUtils::is_word_count_column(const uint64_t flag)
 bool ObSchemaUtils::is_doc_length_column(const uint64_t flag)
 {
   return flag & GENERATED_FTS_DOC_LENGTH_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_pos_list_column(const uint64_t flag)
+{
+  return flag & GENERATED_FTS_POS_LIST_COLUMN_FLAG;
 }
 
 bool ObSchemaUtils::is_spatial_generated_column(uint64_t flag)

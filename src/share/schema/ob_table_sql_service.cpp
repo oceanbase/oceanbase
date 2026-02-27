@@ -3402,7 +3402,7 @@ int ObTableSqlService::gen_table_dml_without_check(
            || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
            || (data_version >= DATA_VERSION_4_5_1_0))
           && OB_FAIL(dml.add_column("mview_expand_definition", ObHexEscapeSqlStr(table.get_view_schema().get_expand_view_definition_for_mv()))))
-        ) {
+      ) {
         LOG_WARN("add column failed", K(ret));
       }
   return ret;

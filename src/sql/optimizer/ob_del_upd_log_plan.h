@@ -21,6 +21,7 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObLogStatCollector;
 class ObDelUpdLogPlan: public ObLogPlan
 {
 public:
@@ -274,6 +275,10 @@ protected:
 private:
   int get_parallel_info_from_direct_load(int64_t &dml_parallel) const;
   int check_dml_table_write_dependency(const uint64_t table_id, const ObTableSchema &index_schema) const;
+  int prepare_inverted_sort_keys(ObLogStatCollector &stat_collector);
+  int build_rowkey_sort_keys_from_schema(const ObTableSchema &index_schema,
+                                         const ObInsertStmt &insert_stmt,
+                                         ObIArray<OrderItem> &sort_keys);
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
 protected:

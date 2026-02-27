@@ -13,11 +13,7 @@
 #pragma once
 
 #include "oceanbase/ob_plugin_ftparser.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "plugin/adaptor/ob_plugin_adaptor.h"
 #include "plugin/interface/ob_plugin_ftparser_intf.h"
 
 class ObCharsetInfo;
@@ -59,7 +55,7 @@ public:
 
   virtual int segment(ObFTParserParam *param, ObITokenIterator *&iter) const override;
   virtual void free_token_iter(ObFTParserParam *param, ObITokenIterator *&iter) const override;
-  virtual int get_add_word_flag(storage::ObAddWordFlag &flag) const override;
+  virtual int get_add_word_flag(storage::ObProcessTokenFlag &flag) const override;
   virtual int check_if_charset_supported(const ObCharsetInfo *cs) const override;
 
 private:

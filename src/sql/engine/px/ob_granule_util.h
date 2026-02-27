@@ -303,7 +303,7 @@ public:
    * pkeys                      IN  partition keys
    * das                        IN  data access service
    * parallelism                IN  the parallelism from hint or optimizer
-   * tablet_size                IN  the tablet size will deside the workload
+   * tablet_size                IN  the tablet size will decide the workload
    * force_partition_granule    IN  force to be partition granule iterator
    * granule_pkeys              OUT the pkey info of granule_ranges
    * granule_ranges             OUT the ranges info include ranges
@@ -323,6 +323,15 @@ public:
                                 common::ObIArray<common::ObNewRange> &granule_ranges,
                                 common::ObIArray<int64_t> &granule_idx,
                                 bool range_independent);
+  static int split_fts_granule_ranges(ObExecContext &exec_ctx,
+                                      common::ObIAllocator &allocator,
+                                      const common::ObIArray<ObDASTabletLoc*> &tablets,
+                                      common::ObIArray<ObDASTabletLoc*> &granule_tablets,
+                                      common::ObIArray<common::ObNewRange> &granule_ranges,
+                                      common::ObIArray<int64_t> &granule_idx,
+                                      bool &range_independent);
+
+  static bool is_partition_local_fts_task(ObExecContext &exec_ctx);
 
   static int use_partition_granule(ObGranulePumpArgs &args, bool &partition_granule);
   static bool use_partition_granule(int64_t partition_count,

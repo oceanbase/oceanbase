@@ -555,6 +555,7 @@ protected:
                             TableItem &table_item);
 
   int check_pivot_aggr_expr(ObRawExpr *expr) const;
+  int generate_ddl_sample_info_if_needed(TableItem &table_item);
 public:
   int resolve_transpose_table(const ParseNode &parse_tree, TableItem *&table_item);
 protected:

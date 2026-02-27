@@ -961,7 +961,7 @@ int ObBuildMViewTask::check_health()
   if (IS_NOT_INIT || OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), KP(GCTX.schema_service_));
-  } else if (OB_FAIL(refresh_status())) {
+  } else if (OB_FAIL(check_and_refresh_status_if_rs_epoch_changed())) {
     LOG_WARN("failed to refresh status", KR(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("failed to refresh schema version", KR(ret));

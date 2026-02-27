@@ -21,6 +21,7 @@
 #include "rootserver/ob_root_service.h"
 #include "share/schema/ob_mlog_info.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "sql/engine/expr/ob_expr_ai/ob_ai_func_utils.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -172,13 +173,11 @@ int ObIndexSSTableBuildTask::process()
       } else {
         common::ObCommonSqlProxy *user_sql_proxy = nullptr;
         int64_t affected_rows = 0;
-
         common::ObAddr *sql_exec_addr = nullptr;
         if (inner_sql_exec_addr_.is_valid()) {
           sql_exec_addr = &inner_sql_exec_addr_;
           LOG_INFO("inner sql execute addr" , K(*sql_exec_addr));
         }
-        int tmp_ret = OB_SUCCESS;
         if (oracle_mode) {
           user_sql_proxy = GCTX.ddl_oracle_sql_proxy_;
         } else {
@@ -199,6 +198,7 @@ int ObIndexSSTableBuildTask::process()
         ddl_info.set_source_table_hidden(data_schema->is_user_hidden_table());
         ddl_info.set_dest_table_hidden(index_schema->is_user_hidden_table());
         ddl_info.set_retryable_ddl(is_retryable_ddl_);
+        ddl_info.set_is_partition_local_ddl(is_partition_local_ddl_);
         session_param.nls_formats_[ObNLSFormatEnum::NLS_DATE] = nls_date_format_;
         session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format_;
         session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format_;
@@ -286,7 +286,8 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
         is_partitioned_local_index_task_,
         root_service_,
         inner_sql_exec_addr_,
-        is_retryable_ddl_);
+        is_retryable_ddl_,
+        is_partition_local_ddl_);
     if (OB_SUCCESS != (task->set_nls_format(nls_date_format_, nls_timestamp_format_, nls_timestamp_tz_format_))) {
       task->~ObIndexSSTableBuildTask();
       task = nullptr;
@@ -614,7 +615,7 @@ int ObIndexBuildTask::check_health()
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl service not started", KR(ret));
     need_retry_ = false;
-  } else if (OB_FAIL(refresh_status())) { // refresh task status
+  } else if (OB_FAIL(check_and_refresh_status_if_rs_epoch_changed())) { // refresh if RS epoch changed
     LOG_WARN("refresh status failed", K(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
@@ -961,7 +962,7 @@ int ObIndexBuildTask::reap_old_replica_build_task(bool &need_exec_new_inner_sql)
 int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partitioned_local_index_task, const int64_t &parallelism, const int64_t &task_execution_id, const share::ObLSID &ls_id, const common::ObAddr &leader_addr, const ObIArray<ObTabletID> &index_partition_ids)
 {
   int ret = OB_SUCCESS;
-  int64_t new_task_execution_id = task_execution_id;
+  int64_t next_task_execution_id = task_execution_id;
   common::ObAddr ls_leader_addr = leader_addr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -977,8 +978,8 @@ int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partition
       ret = OB_SUCCESS; // ingore ret
     }
     if (!is_partitioned_local_index_task) {
-      if (OB_FAIL(ObDDLTask::push_task_execution_id(tenant_id_, task_id_, task_type_, is_retryable_ddl_, data_format_version_, new_task_execution_id))) {
-        LOG_WARN("failed to fetch new execution id", K(ret), K(tenant_id_), K(task_id_), K(task_type_), K(data_format_version_), K(new_task_execution_id));
+      if (OB_FAIL(ObDDLTask::push_task_execution_id(tenant_id_, task_id_, task_type_, is_retryable_ddl_, data_format_version_, next_task_execution_id))) {
+        LOG_WARN("failed to fetch new execution id", K(ret), K(tenant_id_), K(task_id_), K(task_type_), K(data_format_version_), K(next_task_execution_id));
       } else {
         ls_leader_addr = create_index_arg_.inner_sql_exec_addr_;
       }
@@ -986,7 +987,7 @@ int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partition
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("array size less than 1", K(ret), K(index_partition_ids));
     }
-    execution_id_ = new_task_execution_id;
+    execution_id_ = next_task_execution_id;
     if (OB_SUCC(ret)) {
       ObIndexSSTableBuildTask task(
           task_id_,
@@ -995,14 +996,15 @@ int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partition
           target_object_id_,
           schema_version_,
           snapshot_version_,
-          new_task_execution_id,
+          next_task_execution_id,
           consumer_group_id_,
           trace_id_,
           parallelism,
           is_partitioned_local_index_task,
           root_service_,
           ls_leader_addr,
-          is_retryable_ddl_);
+          is_retryable_ddl_,
+          create_index_arg_.is_partition_local_ddl_);
       if (OB_FAIL(set_sql_exec_addr(ls_leader_addr))) {
         LOG_WARN("failed to set sql execute addr", K(ret), K(ls_leader_addr));
       } else if (OB_FAIL(task.set_nls_format(create_index_arg_.nls_date_format_,
@@ -1322,6 +1324,7 @@ int ObIndexBuildTask::create_schedule_queue()
 {
   int ret = OB_SUCCESS;
   common::ObArray<ObTabletID> index_tablet_ids;
+  bool need_single_partition_build = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1343,7 +1346,8 @@ int ObIndexBuildTask::create_schedule_queue()
     snapshot_version_,
     trace_id_,
     index_tablet_ids,
-    data_format_version_))) {
+    data_format_version_,
+    create_index_arg_.is_partition_local_ddl_))) {
     LOG_WARN("failed to init tablet scheduler", K(ret), K(tenant_id_), K(index_table_id_), K(index_tablet_ids));
   } else {
     is_sstable_complete_task_submitted_ = true;
@@ -1913,8 +1917,16 @@ int ObIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   const ObDDLTaskStatus status = static_cast<ObDDLTaskStatus>(task_status_);
-  databuff_printf(stat_info_.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos, "TENANT_ID: %ld, TASK_ID: %ld, ", tenant_id_, task_id_);
-  switch(status) {
+  if (create_index_arg_.is_partition_local_ddl_) {
+    if (OB_FAIL(databuff_printf(stat_info_.op_name_, common::MAX_LONG_OPS_NAME_LENGTH, "create fulltext index"))) {
+      LOG_WARN("failed to print op name", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(databuff_printf(stat_info_.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos, "TENANT_ID: %ld, TASK_ID: %ld, ", tenant_id_, task_id_))) {
+    LOG_WARN("failed to print message header", K(ret));
+  } else switch(status) {
     case ObDDLTaskStatus::PREPARE: {
       if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
@@ -1960,8 +1972,14 @@ int ObIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
           LOG_WARN("failed to init ObSqlMonitorStats", K(ret), K(tenant_id_), K(task_id_), K(task_type_));
         } else if (OB_FAIL(sql_monitor_stats_collector.get_next_sql_plan_monitor_stat(sql_monitor_stats))) {
           LOG_WARN("failed to get next sql plan monitor stats", K(ret));
-        } else if (OB_FAIL(diagnose_info.process_sql_monitor_and_generate_longops_message(sql_monitor_stats, target_cg_cnt_, stat_info_, pos))) {
-          LOG_WARN("failed to process sql monitor and generate longops message", K(ret), K(sql_monitor_stats), K(target_cg_cnt_), K(stat_info_), K(pos));
+        } else if (create_index_arg_.is_partition_local_ddl_) {
+          if (OB_FAIL(build_partitioned_local_fts_replica_build_longops_message(sql_monitor_stats, pos))) {
+            LOG_WARN("failed to build fulltext replica build longops message", K(ret));
+          }
+        } else {
+          if (OB_FAIL(diagnose_info.process_sql_monitor_and_generate_longops_message(sql_monitor_stats, target_cg_cnt_, stat_info_, pos))) {
+            LOG_WARN("failed to process sql monitor and generate longops message", K(ret), K(sql_monitor_stats), K(target_cg_cnt_), K(stat_info_), K(pos));
+          }
         }
       }
       break;
@@ -2109,6 +2127,75 @@ int ObIndexBuildTask::update_mlog_last_purge_scn()
         LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
         ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
+    }
+  }
+  return ret;
+}
+
+// Fulltext index new build flow: build longops message with SQL monitor + independent dag monitor VT.
+int ObIndexBuildTask::build_partitioned_local_fts_replica_build_longops_message(
+    const ObSqlMonitorStats &sql_monitor_stats,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t tokenized_word_count = 0;
+  int64_t forward_written_row_count = 0;
+  int64_t inverted_sorted_row_count = 0;
+  int64_t inverted_written_row_count = 0;
+
+  // Collect task-level aggregated stats from independent dag monitor virtual table.
+  // NOTE: The virtual table may return multiple rows (per server). We sum up all values.
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", K(ret), KP(GCTX.sql_proxy_));
+  } else {
+    ObSqlString sql;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = nullptr;
+      if (OB_FAIL(sql.append_fmt(
+              "SELECT "
+              "  CAST(IFNULL(SUM(JSON_VALUE(message, '$.tokenized_word_count' RETURNING SIGNED)), 0) AS SIGNED) AS tokenized_word_count, "
+              "  CAST(IFNULL(SUM(JSON_VALUE(message, '$.forward_written_row_count' RETURNING SIGNED)), 0) AS SIGNED) AS forward_written_row_count, "
+              "  CAST(IFNULL(SUM(JSON_VALUE(message, '$.inverted_sorted_row_count' RETURNING SIGNED)), 0) AS SIGNED) AS inverted_sorted_row_count, "
+              "  CAST(IFNULL(SUM(JSON_VALUE(message, '$.inverted_written_row_count' RETURNING SIGNED)), 0) AS SIGNED) AS inverted_written_row_count "
+              "FROM oceanbase.__all_virtual_ddl_dag_monitor "
+              "WHERE tenant_id = %ld "
+              "  AND task_info = 'DAG_ROOT' "
+              "  AND JSON_VALUE(message, '$.ddl_task_id' RETURNING SIGNED) = %ld",
+              tenant_id_,
+              task_id_))) {
+        LOG_WARN("failed to build sql", K(ret));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id_, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("get next result failed", K(ret));
+        }
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "tokenized_word_count", tokenized_word_count, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "forward_written_row_count", forward_written_row_count, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "inverted_sorted_row_count", inverted_sorted_row_count, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "inverted_written_row_count", inverted_written_row_count, int64_t);
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                MAX_LONG_OPS_MESSAGE_LENGTH,
+                                pos,
+                                "STATUS: REPLICA BUILD, TOKENIZED_WORD_COUNT: %ld, "
+                                "FORWARD_ROW_WRITTEN: %ld, INVERTED_ROW_SORTED: %ld, INVERTED_ROW_WRITTEN: %ld",
+                                tokenized_word_count,
+                                forward_written_row_count,
+                                inverted_sorted_row_count,
+                                inverted_written_row_count))) {
+      LOG_WARN("failed to print fulltext longops message", K(ret));
     }
   }
   return ret;

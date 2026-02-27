@@ -310,7 +310,7 @@ END_P SET_VAR DELIMITER
 
         FAILOVER FAST FAULTS FILE_BLOCK_SIZE FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FREQ_THRESHOLD FROZEN FILE_ID FILTER
-        FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION
+        FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION FTS_INDEX_TYPE
 
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUPCONCAT GROUP_CONCAT GROUPING GROUPING_ID GTS
         GLOBAL_NAME GLOBAL_ALIAS
@@ -350,7 +350,7 @@ END_P SET_VAR DELIMITER
         LOGSERVICE_ACCESS_POINT
 
         PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARSER_PROPERTIES PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PAXOS_REPLICA_NUM PER PERCENTAGE
-        PERCENT_RANK PERCENTILE_CONT PHASE PHRASE PHYSICAL PLAN PLAINACCESS PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
+        PERCENT_RANK PERCENTILE_CONT PHASE PHRASE PHRASE_MATCH PHYSICAL PLAN PLAINACCESS PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PREFIX PARALLEL_PARSE_FILE_SIZE_THRESHOLD PARALLEL_PARSE_ON_SINGLE_FILE PRINCIPAL PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROCTIME PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
         PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE FILES PARTIAL_UPDATE PRECREATE_TIME ON_ERROR
@@ -524,7 +524,7 @@ END_P SET_VAR DELIMITER
 %type <node> namespace_expr opt_namespace
 %type <node> server_action server_list opt_server_list
 %type <node> zone_action upgrade_action
-%type <node> opt_index_name opt_key_or_index opt_index_options opt_fulltext_index_options fulltext_parser_properties_list fulltext_parser_properties opt_primary  opt_all
+%type <node> opt_index_name opt_key_or_index opt_index_options opt_fulltext_index_options fulltext_parser_properties_list fulltext_parser_properties fts_index_type_value opt_primary  opt_all
 %type <node> charset_key database_key charset_name charset_name_or_default collation_name compression_key databases_or_schemas trans_param_name trans_param_value
 %type <node> charset_introducer complex_string_literal literal number_literal now_or_signed_literal signed_literal
 %type <node> create_tablegroup_stmt drop_tablegroup_stmt alter_tablegroup_stmt default_tablegroup
@@ -11101,6 +11101,20 @@ fulltext_index_option
 }
 ;
 
+fts_index_type_value:
+FILTER
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_FTS_INDEX_FILTER);
+}
+| MATCH
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_FTS_INDEX_MATCH);
+}
+| PHRASE_MATCH
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_FTS_INDEX_PHRASE_MATCH);
+}
+;
 
 fulltext_index_option:
 index_option
@@ -11115,6 +11129,11 @@ index_option
 {
   (void)($2) ; /* make bison mute */
   merge_nodes($$, result, T_PARSER_PROPERTIES, $4);
+}
+| FTS_INDEX_TYPE opt_equal_mark fts_index_type_value
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FTS_INDEX_TYPE, 1, $3);
 }
 ;
 
@@ -28065,6 +28084,7 @@ ACCESS_INFO
 |       FREEZE
 |       FREQUENCY
 |       FREQ_THRESHOLD
+|       FTS_INDEX_TYPE
 |       FUNCTION
 |       FULL %prec HIGHER_PARENS
 |       GENERAL
@@ -28341,6 +28361,7 @@ ACCESS_INFO
 |       PERCENTAGE
 |       PHASE
 |       PHRASE
+|       PHRASE_MATCH
 |       PHYSICAL
 |       PL
 |       PLANREGRESS

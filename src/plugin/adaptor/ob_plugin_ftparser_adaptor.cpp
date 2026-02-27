@@ -83,19 +83,22 @@ int ObFtParserAdaptor::segment(ObFTParserParam *param, ObITokenIterator *&iter) 
 {
   int ret = OB_SUCCESS;
   ObTokenIteratorAdaptor *iter_adaptor = nullptr;
-  if (!inited_) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(param) || OB_ISNULL(param->allocator_)) {
+    LOG_WARN("ft parser adaptor hasn't been initialized", K(ret));
+  } else if (OB_ISNULL(param) || OB_ISNULL(param->metadata_alloc_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KPC(param));
+    LOG_WARN("there are invalid arguments", K(ret), KPC(param));
   } else if (OB_ISNULL(ftparser_.scan_begin) || OB_ISNULL(ftparser_.next_token)) {
     ret = OB_NOT_SUPPORTED;
   } else if (OB_FAIL(ftparser_.scan_begin(param))) {
     LOG_WARN("failed to call ftparser.init", K(ret));
-  } else if (OB_ISNULL(iter_adaptor = static_cast<ObTokenIteratorAdaptor *>(param->allocator_->alloc(sizeof(ObTokenIteratorAdaptor))))) {
+  } else if (OB_ISNULL(iter_adaptor = static_cast<ObTokenIteratorAdaptor *>(param->metadata_alloc_->alloc(sizeof(ObTokenIteratorAdaptor))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (FALSE_IT(new (iter_adaptor) ObTokenIteratorAdaptor(ftparser_, param))) {
-  } else if (FALSE_IT(iter = iter_adaptor)) {
+    LOG_WARN("fail to allocate token iterator adaptor", K(ret));
+  } else {
+    new (iter_adaptor) ObTokenIteratorAdaptor(ftparser_, param);
+    iter = iter_adaptor;
   }
   return ret;
 }
@@ -105,7 +108,7 @@ void ObFtParserAdaptor::free_token_iter(ObFTParserParam *param, ObITokenIterator
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(param) || OB_ISNULL(iter)) {
+  } else if (OB_ISNULL(param) || OB_ISNULL(param->metadata_alloc_) || OB_ISNULL(iter)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_NOT_NULL(ftparser_.scan_end)) {
     int tmp_ret = ftparser_.scan_end(param);
@@ -115,12 +118,12 @@ void ObFtParserAdaptor::free_token_iter(ObFTParserParam *param, ObITokenIterator
   } else {
     ObTokenIteratorAdaptor *iter_adaptor = static_cast<ObTokenIteratorAdaptor *>(iter);
     iter_adaptor->~ObTokenIteratorAdaptor();
-    param->allocator_->free(iter_adaptor);
+    param->metadata_alloc_->free(iter_adaptor);
     iter = nullptr;
   }
 }
 
-int ObFtParserAdaptor::get_add_word_flag(ObAddWordFlag &flag) const
+int ObFtParserAdaptor::get_add_word_flag(ObProcessTokenFlag &flag) const
 {
   int ret = OB_SUCCESS;
   uint64_t iflag = 0;
@@ -129,7 +132,7 @@ int ObFtParserAdaptor::get_add_word_flag(ObAddWordFlag &flag) const
   } else if (OB_ISNULL(ftparser_.get_add_word_flag)) {
     ret = OB_NOT_SUPPORTED;
   } else if (OB_FAIL(ftparser_.get_add_word_flag(&iflag))) {
-    LOG_WARN("failed to get add_word_flag", K(ret));
+    LOG_WARN("failed to get process token flag", K(ret));
   } else {
     flag.set_flag(iflag);
   }

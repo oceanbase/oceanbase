@@ -80,7 +80,7 @@ public:
   }
   int init();
 
-  static int parser_name_without_version(const ObString &parser_name, ObString &no_version_parser_name);
+  static int parser_name_without_version(const ObString &parser_name, ObString &parser_name_without_version);
 
   int get_dic_loader(const uint64_t tenant_id,
                      const ObString &parser_name_without_version,

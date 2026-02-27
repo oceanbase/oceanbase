@@ -58,6 +58,7 @@ public:
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   virtual void set_need_sample(bool flag) override
   {
+    ObTableScanOp::set_need_sample(flag);
     need_sample_ = flag;
     tsc_rtdef_.scan_rtdef_.sample_info_ = need_sample_ ? &(MY_SPEC.get_sample_info()) : nullptr;
   }

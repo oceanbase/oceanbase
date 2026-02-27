@@ -36,7 +36,8 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const transaction::ObTxReadSnapshot *snapshot,
-      const int64_t schema_version);
+      const int64_t schema_version,
+      const share::schema::ObFTSIndexType fts_index_type);
   int do_scan(const uint64_t table_id, const ObDatum &row_mapping_id);
   int get_next_row(blocksstable::ObDatumRow *&datum_row);
 
@@ -68,6 +69,7 @@ private:
   storage::ObTableScanParam scan_param_;
   common::ObNewRowIterator *doc_word_iter_;
   ObDocIDType docid_type_;
+  share::schema::ObFTSIndexType fts_index_type_;
   bool is_inited_;
 
   DISALLOW_COPY_AND_ASSIGN(ObFTDocWordScanIterator);

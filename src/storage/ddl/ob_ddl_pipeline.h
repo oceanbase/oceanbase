@@ -66,6 +66,9 @@ public:
   {}
   virtual ~ObIDDLPipeline() = default;
   int init(const ObTabletID &tablet_id, const int64_t slice_idx);
+  // Accessors for monitoring / debugging.
+  const ObTabletID &get_tablet_id() const { return tablet_id_; }
+  int64_t get_slice_idx() const { return slice_idx_; }
   virtual int preprocess() { return OB_SUCCESS; }
   virtual void postprocess(int &ret_code) { UNUSED(ret_code); }
   virtual int get_next_chunk(ObChunk *&chunk) = 0;

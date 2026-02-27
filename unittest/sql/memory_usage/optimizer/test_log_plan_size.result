@@ -38,7 +38,7 @@
 | ObLogForUpdate | 1088 |
 | ObLogInsertAll | 1504 |
 | ObLogErrLog | 1168 |
-| ObLogStatCollector | 1080 |
+| ObLogStatCollector | 1416 |
 | ObLogOptimizerStatsGathering | 1184 |
 | ObLogValuesTableAccess | 1112 |
 | ObLogExpand | 1048 |

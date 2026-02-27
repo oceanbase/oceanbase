@@ -29,6 +29,12 @@ public:
                  const char *ch,
                  const uint8_t char_len,
                  const ObFTCharUtil::CharType type) override;
+  void reuse() override
+  {
+    reset_english_state();
+    reset_arabic_state();
+    reset_mix_state();
+  }
 
 private:
   int process_english_letter(TokenizeContext &ctx,

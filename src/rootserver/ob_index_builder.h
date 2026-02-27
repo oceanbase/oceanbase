@@ -130,6 +130,9 @@ public:
                                 ObDDLTaskRecord &task_record);
   int drop_index_on_failed(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
 private:
+  int get_index_row_store_type(const share::schema::ObIndexType index_type,
+                               const share::schema::ObTableSchema &data_schema,
+                               share::schema::ObTableSchema &index_schema);
   int recognize_vec_hnsw_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
       const bool is_vec_inner_drop,

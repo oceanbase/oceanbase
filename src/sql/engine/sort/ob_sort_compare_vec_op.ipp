@@ -55,7 +55,7 @@ bool GeneralCompare<Store_Row, has_addon>::operator()(Store_Row **l, Store_Row *
   if (OB_UNLIKELY(OB_SUCCESS != ret)) {
   } else if (OB_ISNULL(l) || OB_ISNULL(r)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(l), KP(r));
+    SQL_ENG_LOG(WARN, "invalid argument", K(ret), KP(l), KP(r));
   } else {
     // Return the reverse order since the heap top is the maximum element.
     // NOTE: can not return !(*this)(l->row_, r->row_)
@@ -74,7 +74,7 @@ bool GeneralCompare<Store_Row, has_addon>::operator()(const SortVecOpChunk *l,
   if (OB_UNLIKELY(OB_SUCCESS != ret)) {
   } else if (OB_ISNULL(l) || OB_ISNULL(r)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(l), KP(r));
+    SQL_ENG_LOG(WARN, "invalid argument", K(ret), KP(l), KP(r));
   } else {
     // Return the reverse order since the heap top is the maximum element.
     // NOTE: can not return !(*this)(l->row_, r->row_)
@@ -373,7 +373,7 @@ bool SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::operato
   if (OB_UNLIKELY(OB_SUCCESS != ret)) {
   } else if (OB_ISNULL(l) || OB_ISNULL(r)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(l), KP(r));
+    SQL_ENG_LOG(WARN, "invalid argument", K(ret), KP(l), KP(r));
   } else {
     // Return the reverse order since the heap top is the maximum element.
     // NOTE: can not return !(*this)(l->row_, r->row_)
@@ -392,7 +392,7 @@ bool SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::operato
   if (OB_UNLIKELY(OB_SUCCESS != ret)) {
   } else if (OB_ISNULL(l) || OB_ISNULL(r)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(l), KP(r));
+    SQL_ENG_LOG(WARN, "invalid argument", K(ret), KP(l), KP(r));
   } else {
     // Return the reverse order since the heap top is the maximum element.
     // NOTE: can not return !(*this)(l->row_, r->row_)
@@ -698,7 +698,7 @@ bool FixedCompare<Store_Row, has_addon>::operator()(Store_Row **l, Store_Row **r
   if (OB_UNLIKELY(OB_SUCCESS != ret)) {
   } else if (OB_ISNULL(l) || OB_ISNULL(r)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(l), KP(r));
+    SQL_ENG_LOG(WARN, "invalid argument", K(ret), KP(l), KP(r));
   } else {
     // Return the reverse order since the heap top is the maximum element.
     // NOTE: can not return !(*this)(l->row_, r->row_)
@@ -717,7 +717,7 @@ bool FixedCompare<Store_Row, has_addon>::operator()(const SortVecOpChunk *l,
   if (OB_UNLIKELY(OB_SUCCESS != ret)) {
   } else if (OB_ISNULL(l) || OB_ISNULL(r)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(l), KP(r));
+    SQL_ENG_LOG(WARN, "invalid argument", K(ret), KP(l), KP(r));
   } else {
     // Return the reverse order since the heap top is the maximum element.
     // NOTE: can not return !(*this)(l->row_, r->row_)

@@ -2945,6 +2945,7 @@ int ObCreateTableResolver::set_index_option_to_arg()
     } else {
       index_arg_.index_option_.parser_name_ = parser_name_;
       index_arg_.index_option_.parser_properties_ = parser_properties_;
+      index_arg_.index_option_.fts_index_type_ = (fts_index_type_ == share::schema::OB_FTS_INDEX_TYPE_INVALID) ? share::schema::DEFAULT_FTS_INDEX_TYPE : fts_index_type_;
       index_arg_.index_option_.row_store_type_  = row_store_type_;
       index_arg_.index_option_.store_format_ = store_format_;
       index_arg_.with_rowid_ = with_rowid_;

@@ -99,6 +99,7 @@
 #include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
 #include "share/schema/ob_catalog_schema_struct.h"
 #include "share/schema/ob_ccl_schema_struct.h"
+#include "share/schema/ob_schema_struct_fts.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
 #include "ob_ddl_args.h"
 #include "ob_mview_args.h"
@@ -2976,8 +2977,8 @@ public:
     ObTableOption(),
     parser_name_(),
     parser_properties_(),
-    index_attributes_set_(common::OB_DEFAULT_INDEX_ATTRIBUTES_SET),
-    fts_index_type_(share::schema::OB_FTS_INDEX_TYPE_INVALID)
+    fts_index_type_(share::schema::OB_FTS_INDEX_TYPE_INVALID),
+    index_attributes_set_(common::OB_DEFAULT_INDEX_ATTRIBUTES_SET)
   { }
 
   bool is_valid() const;
@@ -2992,8 +2993,8 @@ public:
 
   common::ObString parser_name_;
   common::ObString parser_properties_;
-  uint64_t index_attributes_set_;//flags, one bit for one attribute
   share::schema::ObFTSIndexType fts_index_type_;
+  uint64_t index_attributes_set_;//flags, one bit for one attribute
 };
 
 struct ObCreateIndexArg : public ObIndexArg
@@ -3125,6 +3126,9 @@ public:
         } else if (OB_FAIL(generated_column_names_.push_back(column_name))) {
           SHARE_LOG(WARN, "failed to push back genearete column name", K(ret), K(column_name), K(generated_column_names_));
         }
+      }
+      if (OB_SUCC(ret)) {
+        is_partition_local_ddl_ = other.is_partition_local_ddl_;
       }
     }
     return ret;

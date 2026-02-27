@@ -3341,7 +3341,9 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(is_offline_rebuild),
        K_(index_key),
        K_(data_version),
-       K_(generated_column_names));
+       K_(generated_column_names),
+       K_(def_index_id),
+       K_(is_partition_local_ddl));
   J_OBJ_END();
   return pos;
 }

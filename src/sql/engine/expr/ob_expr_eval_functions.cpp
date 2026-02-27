@@ -488,6 +488,7 @@
 #include "ob_expr_is_nan.h"
 #include "ob_expr_to_days.h"
 #include "ob_expr_md5_concat_ws.h"
+#include "ob_expr_pos_list.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
 #include "ob_expr_collation.h"
 
@@ -1482,7 +1483,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprEditDistanceUTF8::calc_edit_distance_utf8,                    /* 881 */
   ObExprDateAddClickhouse::calc_date_add_ck,                          /* 882 */
   ObExprDateSubClickhouse::calc_date_sub_ck,                          /* 883 */
-  NULL, // ObExprPosList::generate_pos_list,                          /* 884 */
+  ObExprPosList::generate_pos_list,                                   /* 884 */
   ObExprMonthsAdd::calc_months_add,                                   /* 885 */
   NULL, // ObExprParseDateTime::calc_parse_date_time                  /* 886 */
   ObExprIsNan::eval_is_nan,                                           /* 887 */

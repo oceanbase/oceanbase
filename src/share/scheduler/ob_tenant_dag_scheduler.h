@@ -345,6 +345,10 @@ public:
     TASK_TYPE_BACKUP_VALIDATE_BASIC = 183,
     TASK_TYPE_BACKUP_VALIDATE_BACKUPSET_PHYSICAL = 184,
     TASK_TYPE_BACKUP_VALIDATE_ARCHIVE_PIECE_PHYSICAL = 185,
+    TASK_TYPE_DDL_FTS_SAMPLE_TASK = 186,
+    TASK_TYPE_DDL_MERGE_SORT_PREPARE_TASK = 187,
+    TASK_TYPE_DDL_MERGE_SORT_TASK = 188,
+    TASK_TYPE_DDL_MERGE_SORT_WRITE_TASK = 189,
     TASK_TYPE_MAX,
   };
 
@@ -413,6 +417,8 @@ public:
   virtual void task_debug_info_to_string(char *buf, const int64_t buf_len, int64_t &pos) const { BUF_PRINTF("Impl for task info"); }
   virtual int reset_status_for_suspend() { return common::OB_SUCCESS; }
   int copy_children_to(ObITask &next_task) const;
+  virtual int add_monitor_info() { return common::OB_SUCCESS; } // for independent dag task
+  virtual int update_monitor_info(const int ret_code, const int64_t exec_time_us) { UNUSEDx(ret_code, exec_time_us); return common::OB_SUCCESS; }
   static const char *get_task_status_str(enum ObITaskStatus status);
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(type), K_(status), K_(dag));

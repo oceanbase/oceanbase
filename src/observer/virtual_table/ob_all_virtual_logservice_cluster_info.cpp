@@ -12,6 +12,7 @@
 
 #include "ob_all_virtual_logservice_cluster_info.h"
 #include "share/config/ob_server_config.h"
+#include "src/logservice/ipalf/ipalf_env.h"
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 #include "close_modules/shared_log_service/logservice/libpalf/libpalf_env_ffi_instance.h"
 #include "close_modules/shared_log_service/logservice/libpalf/libpalf_common_define.h"

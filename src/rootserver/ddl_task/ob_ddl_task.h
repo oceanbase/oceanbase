@@ -128,8 +128,9 @@ struct ObDDLSliceInfo final
 public:
   ObDDLSliceInfo() : autoinc_range_interval_(AUTOINC_RANGE_INTERVAL) {}
   ~ObDDLSliceInfo() {}
-  TO_STRING_KV(K_(part_ranges), K_(autoinc_range_interval));
+  TO_STRING_KV(K_(part_ranges), K_(inverted_part_ranges), K_(autoinc_range_interval));
   bool is_valid() const { return part_ranges_.count() > 0; }
+  bool is_inverted_valid() const { return inverted_part_ranges_.count() > 0; }
   int assign(const ObDDLSliceInfo &other);
   int deep_copy(const ObDDLSliceInfo &other, ObIAllocator &allocator);
   void reset();
@@ -400,12 +401,20 @@ public:
       const int64_t task_id,
       const ObDDLSliceInfo &ddl_slice_info);
 
+  static int insert_if_not_exist_tablet_ranges(
+      const common::Ob2DArray<sql::ObPxTabletRange> &input_ranges,
+      const common::hash::ObHashMap<int64_t, sql::ObPxTabletRange*> &tablet_id_map,
+      common::Ob2DArray<sql::ObPxTabletRange> &output_ranges,
+      common::Ob2DArray<sql::ObPxTabletRange> &total_ranges,
+      bool &is_update);
+
   static int get_or_insert_schedule_info(
       const uint64_t tenant_id,
       const int64_t task_id,
       ObIAllocator &allocator,
       ObDDLSliceInfo &ddl_slice_info,
-      bool &is_idempotence_mode);
+      bool &is_idempotence_mode,
+      bool &is_update);
 
   static int transform_tablet_ranges(
       const common::ObTabletID &tablet_id,
@@ -823,6 +832,10 @@ public:
   int64_t get_consensus_schema_version() { return consensus_schema_version_; }
   bool get_is_no_logging() const { return is_no_logging_; }
   int64_t get_target_cg_cnt() const { return target_cg_cnt_; }
+  // RS epoch gating for status refresh
+  void set_rs_epoch_snapshot(const int64_t epoch) { rs_epoch_snapshot_ = epoch; }
+  int64_t get_rs_epoch_snapshot() const { return rs_epoch_snapshot_; }
+  int check_and_refresh_status_if_rs_epoch_changed();
   #ifdef ERRSIM
   int check_errsim_error();
   #endif
@@ -901,6 +914,7 @@ protected:
   int64_t consensus_schema_version_;
   bool is_no_logging_;
   int64_t target_cg_cnt_; // only use for 4.3.x recover table
+  int64_t rs_epoch_snapshot_ = 0; // in-memory, not persisted
 };
 
 enum ColChecksumStat

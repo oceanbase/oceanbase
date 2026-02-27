@@ -10,30 +10,48 @@
  * See the Mulan PubL v2 for more details.
  */
 
- #ifndef _OB_OCEANBASE_SCHEMA_SCHEMA_STRUCT_FTS_H
- #define _OB_OCEANBASE_SCHEMA_SCHEMA_STRUCT_FTS_H
+#ifndef _OB_OCEANBASE_SCHEMA_SCHEMA_STRUCT_FTS_H
+#define _OB_OCEANBASE_SCHEMA_SCHEMA_STRUCT_FTS_H
 
- #include <cstdint>
- #include "lib/utility/ob_print_utils.h"
+#include <cstdint>
+#include "lib/utility/ob_print_utils.h"
 
- namespace oceanbase
- {
- namespace share
- {
- namespace schema
- {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 
- enum ObFTSIndexType : uint8_t
- {
-   OB_FTS_INDEX_TYPE_INVALID = 0,
-   OB_FTS_INDEX_TYPE_FILTER = 1,
-   OB_FTS_INDEX_TYPE_MATCH = 2,
-   OB_FTS_INDEX_TYPE_PHRASE_MATCH = 3,
-   OB_FTS_INDEX_TYPE_MAX
- };
+enum ObFTSIndexType : uint8_t {
+  OB_FTS_INDEX_TYPE_INVALID = 0,
+  OB_FTS_INDEX_TYPE_FILTER = 1,
+  OB_FTS_INDEX_TYPE_MATCH = 2,
+  OB_FTS_INDEX_TYPE_PHRASE_MATCH = 3,
+  OB_FTS_INDEX_TYPE_MAX
+};
 
- } // namespace schema
- } // namespace share
- } // namespace oceanbase
+inline constexpr ObFTSIndexType DEFAULT_FTS_INDEX_TYPE = OB_FTS_INDEX_TYPE_MATCH;
 
-  #endif // _OB_OCEANBASE_SCHEMA_SCHEMA_STRUCT_FTS_H
+struct ObFTSIndexParams {
+  ObFTSIndexParams()
+      : fts_index_type_(OB_FTS_INDEX_TYPE_INVALID)
+  {
+  }
+  ~ObFTSIndexParams() { }
+  TO_STRING_KV(K_(fts_index_type));
+
+  static int from_param_str(const common::ObString &param_str, ObFTSIndexParams &params);
+  int append_param_str(char *buf, const int64_t buf_len, int64_t &pos) const;
+
+  bool is_valid() const { return fts_index_type_ != OB_FTS_INDEX_TYPE_INVALID; }
+
+  void reset() { fts_index_type_ = OB_FTS_INDEX_TYPE_INVALID; }
+  ObFTSIndexType fts_index_type_;
+};
+
+} // namespace schema
+} // namespace share
+} // namespace oceanbase
+
+ #endif // _OB_OCEANBASE_SCHEMA_SCHEMA_STRUCT_FTS_H

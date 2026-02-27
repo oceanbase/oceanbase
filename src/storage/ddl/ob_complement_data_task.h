@@ -159,7 +159,7 @@ public:
       K_(orig_table_id), K_(dest_table_id), K_(orig_tablet_id), K_(dest_tablet_id), K_(orig_schema_version),
       K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(task_id),
       K_(execution_id), K_(compat_mode), K_(data_format_version), K_(orig_schema_tablet_size),K_(user_parallelism),
-      K_(concurrent_cnt), K_(ranges), K_(is_no_logging), K_(direct_load_type), K_(tablet_param), K_(lob_meta_tablet_param));
+      K_(concurrent_cnt), K_(ranges), K_(is_no_logging), K_(direct_load_type), K_(tablet_param), K_(lob_meta_tablet_param), K(ddl_table_schema_));
 private:
   int fill_tablet_param();
   int get_complement_parallel_mode(

@@ -18053,6 +18053,32 @@ def_table_schema(
 # 12597: __all_virtual_object_storage_stat
 # 12598: __all_virtual_object_storage_error_record
 
+def_table_schema(
+  owner = 'jianyun.sjy',
+  table_name = '__all_virtual_ddl_dag_monitor',
+  table_id = '12591',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns    = [
+    ('svr_ip',    'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',  'int'),
+    ('tenant_id', 'int'),
+    ('dag_id', 'varchar:64'),
+    ('dag_info', 'varchar:256'),
+    ('task_id', 'varchar:64'),
+    ('task_info', 'varchar:256'),
+    ('format_version', 'int'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+    ('create_time', 'timestamp'),
+    ('finish_time', 'timestamp'),
+    ('message', 'longtext'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################

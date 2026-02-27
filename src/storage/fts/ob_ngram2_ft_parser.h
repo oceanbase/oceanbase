@@ -13,14 +13,14 @@
 #ifndef _OCEANBASE_STORAGE_FTS_OB_NGRAM2_FT_PARSER_H_
 #define _OCEANBASE_STORAGE_FTS_OB_NGRAM2_FT_PARSER_H_
 
-#include "plugin/interface/ob_plugin_ftparser_intf.h"
 #include "storage/fts/utils/ob_ft_ngram_impl.h"
+#include "storage/fts/ob_i_ft_parser.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-class ObNgram2FTParser final : public plugin::ObITokenIterator
+class ObNgram2FTParser final : public ObIFTParser
 {
 public:
   ObNgram2FTParser();
@@ -32,6 +32,7 @@ public:
                              int64_t &word_len,
                              int64_t &char_len,
                              int64_t &word_freq) override;
+  virtual int reuse_parser(const char *fulltext, const int64_t fulltext_len) override;
 
   VIRTUAL_TO_STRING_KV(K_(is_inited));
 
@@ -54,7 +55,7 @@ public:
                       plugin::ObITokenIterator *&iter) const override;
   virtual void free_token_iter(plugin::ObFTParserParam *param,
                                plugin::ObITokenIterator *&iter) const override;
-  virtual int get_add_word_flag(ObAddWordFlag &flag) const override;
+  virtual int get_add_word_flag(ObProcessTokenFlag &flag) const override;
   OB_INLINE void reset() { is_inited_ = false; }
 
 private:

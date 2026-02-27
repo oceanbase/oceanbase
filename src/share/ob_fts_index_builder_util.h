@@ -31,6 +31,7 @@ namespace share
 class ObMulValueIndexBuilderUtil;
 
 static constexpr int64_t MIN_DATA_VERSION_FOR_DOC_ID_OPT = DATA_VERSION_4_4_1_0;
+static constexpr int64_t MIN_DATA_VERSION_FOR_FTS_INDEX_TYPE = DATA_VERSION_4_5_1_0;
 
 class ObDocIDUtils
 {
@@ -57,15 +58,45 @@ public:
   }
 };
 
-class ObFtsIndexBuilderUtil
+
+class ObFTSConstants
 {
-  friend class ObMulValueIndexBuilderUtil;
 public:
   static constexpr const char *DOC_ROWKEY_NAME = "fts_doc_rowkey";
   static constexpr const char *ROWKEY_DOC_NAME = "fts_rowkey_doc";
-  static const int64_t OB_FTS_INDEX_TABLE_INDEX_COL_CNT = 2;
-  static const int64_t OB_FTS_DOC_WORD_TABLE_INDEX_COL_CNT = 2;
-  static const int64_t OB_FTS_INDEX_OR_DOC_WORD_TABLE_COL_CNT = 4;
+  static constexpr const char *DOC_WORD_SUFFIX = "_fts_doc_word";
+
+  // FTS_INDEX table has 2 index columns: [WORD], [DOC_ID]
+  static const int64_t INVERTED_TABLE_INDEX_COL_CNT = 2;
+  // FTS_DOC_WORD table has 2 index columns: [DOC_ID], [WORD]
+  static const int64_t DOC_WORD_INDEX_COL_CNT = 2;
+
+  static constexpr const int64_t MAX_POSITION_LIST_COUNT = 512;
+  static constexpr const double POSITION_LIST_SAFE_COMPACTION_RATIO = 2.0;
+
+  // FTS_DOC_WORD table has 4 or 5 columns: [DOC_ID], [WORD], [WORD_COUNT], [DOC_LENGTH], [POS_LIST]
+  static constexpr const int64_t FT_WORD_DOC_COL_CNT_WITH_POS = 5;
+  static constexpr const int64_t FT_WORD_DOC_COL_CNT_WITHOUT_POS = 4;
+
+  // FTS_INDEX table has 4 or 5 columns: [WORD], [DOC_ID], [WORD_COUNT], [DOC_LENGTH], [POS_LIST]
+  static constexpr const int64_t INVERTED_COL_CNT_WITH_POS = 5;
+  static constexpr const int64_t INVERTED_COL_CNT_WITHOUT_POS = 4;
+
+  OB_INLINE static int64_t get_fts_index_col_cnt(const bool is_fts_index_aux, const bool need_pos_list)
+  {
+    int64_t col_cnt = 0;
+    if (is_fts_index_aux) {
+      col_cnt = need_pos_list ? INVERTED_COL_CNT_WITH_POS : INVERTED_COL_CNT_WITHOUT_POS;
+    } else {
+      col_cnt = need_pos_list ? FT_WORD_DOC_COL_CNT_WITH_POS : FT_WORD_DOC_COL_CNT_WITHOUT_POS;
+    }
+    return col_cnt;
+  }
+};
+
+class ObFtsIndexBuilderUtil
+{
+  friend class ObMulValueIndexBuilderUtil;
 public:
   // Check if we can use rowkey instead of doc id.
   // if we want to add more types, make this one condition of them.
@@ -252,6 +283,11 @@ private:
       const uint64_t col_id,
       ObTableSchema &data_schema, // not const since will add column to data schema
       ObColumnSchemaV2 *&doc_length_col);
+  static int generate_pos_list_column(
+      const obrpc::ObCreateIndexArg *index_arg,
+      const uint64_t col_id,
+      ObTableSchema &data_schema, // not const since will add column to data schema
+      ObColumnSchemaV2 *&pos_list_col);
   static int construct_doc_id_col_name(
       char *col_name_buf,
       const int64_t buf_len,
@@ -277,6 +313,13 @@ private:
       const int64_t buf_len,
       int64_t &name_pos,
       const uint64_t col_id);
+  static int construct_pos_list_col_name(
+      const obrpc::ObCreateIndexArg *index_arg,
+      const ObTableSchema &data_schema,
+      char *col_name_buf,
+      const int64_t buf_len,
+      int64_t &name_pos,
+      const uint64_t col_id);
   static int check_fts_gen_col(
       const ObTableSchema &data_schema,
       const uint64_t col_id,
@@ -295,6 +338,9 @@ private:
       const ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg *index_arg,
       const ObColumnSchemaV2 *&doc_len_col);
+  static int get_pos_list_col(const ObTableSchema &data_schema,
+                              const obrpc::ObCreateIndexArg *index_arg,
+                              const ObColumnSchemaV2 *&pos_col);
   static int push_back_gen_col(
       ObIArray<const ObColumnSchemaV2 *> &cols,
       const ObColumnSchemaV2 *existing_col,
@@ -323,6 +369,29 @@ private:
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator &allocator);
   static int add_skip_index_for_index_column(schema::ObColumnSchemaV2 &column_schema);
+
+private:
+  enum class FTSColumnType {
+    INVALID = 0,
+    WORD_SEGMENT,
+    WORD_COUNT,
+    DOC_LENGTH,
+    POS_LIST,
+  };
+  static int construct_fts_col_name_with_ts_by_type(
+      const obrpc::ObCreateIndexArg *index_arg,
+      const ObTableSchema &data_schema,
+      const FTSColumnType column_type,
+      char *col_name_buf,
+      const int64_t buf_len,
+      int64_t &name_pos,
+      const uint64_t col_id);
+
+  static int get_fts_column_by_type(
+      const ObTableSchema &data_schema,
+      const obrpc::ObCreateIndexArg *index_arg,
+      FTSColumnType column_type,
+      const ObColumnSchemaV2 *&column);
 };
 
 class ObMulValueIndexBuilderUtil
@@ -400,10 +469,22 @@ public:
    const share::schema::ObColumnSchemaV2 &budy_column_schema);
 };
 
+class ObFtsIndexTypePrinter
+{
+public:
+  static int fts_index_type_to_string(const ObFTSIndexType fts_index_type, ObString &fts_index_type_str);
+};
 class ObFtsIndexSchemaPrinter
 {
 public:
   static int print_fts_parser_info(
+      const ObTableSchema &table_schema,
+      const bool strict_compat,
+      char *&buf,
+      const int64_t &buf_len,
+      int64_t &pos);
+
+  static int print_fts_index_params_info(
       const ObTableSchema &table_schema,
       const bool strict_compat,
       char *&buf,

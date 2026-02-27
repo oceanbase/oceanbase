@@ -22,14 +22,12 @@ using namespace sql;
 int ObDDLBlockSampleScanOp::inner_open()
 {
   int ret = OB_SUCCESS;
+  set_need_sample(!MY_SPEC.get_sample_info().is_no_sample());
   if (OB_FAIL(ObTableScanOp::inner_open())) {
     LOG_WARN("fail to inner open", K(ret));
   } else if (MY_SPEC.use_dist_das()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Block Sample Scan with dist DAS");
-  } else {
-    need_sample_ = !MY_SPEC.get_sample_info().is_no_sample();
-    tsc_rtdef_.scan_rtdef_.sample_info_ = need_sample_ ? &(MY_SPEC.get_sample_info()) : nullptr;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ddl block sample scan with dist das");
   }
   return ret;
 }
@@ -37,7 +35,13 @@ int ObDDLBlockSampleScanOp::inner_open()
 int ObDDLBlockSampleScanOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableScanOp::inner_get_next_row())) {
+  if (MY_SPEC.is_fts_ddl_ && need_sample_) {
+    if (OB_FAIL(ObTableScanOp::inner_get_next_fts_index_row())) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get next fts sample row failed", K(ret), "op", op_name());
+      }
+    }
+  } else if (OB_FAIL(ObTableScanOp::inner_get_next_row())) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next row failed", K(ret), "op", op_name());
     }

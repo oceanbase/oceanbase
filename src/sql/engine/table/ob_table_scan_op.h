@@ -490,7 +490,8 @@ public:
       uint64_t is_scan_resumable_               : 1; // FARM COMPAT WHITELIST, compact with can_be_paused_
       uint64_t need_check_outrow_lob_           : 1;
       uint64_t is_spiv_ddl_                     : 1;
-      uint64_t reserved_                        : 47;
+      uint64_t ft_doc_token_need_sort_          : 1;
+      uint64_t reserved_                        : 46;
     };
   };
   int64_t tenant_id_col_idx_;
@@ -544,6 +545,7 @@ class ObTableScanOp : public ObOperator
   friend class ObDASScanOp;
   friend class ObGlobalIndexLookupOpImpl;
   friend class ObRandScanProcessor;
+  friend class ObDDLBlockSampleScanOp;
 public:
   static constexpr int64_t CHECK_STATUS_ROWS_INTERVAL =  1 << 13;
 
@@ -565,7 +567,7 @@ public:
 
   void set_report_checksum(bool flag) { report_checksum_ = flag; }
   int reset_sample_scan() { tsc_rtdef_.scan_rtdef_.sample_info_ = nullptr; return close_and_reopen(); }
-  virtual void set_need_sample(bool flag) { UNUSED(flag); }
+  virtual void set_need_sample(bool flag) { ft_index_row_cache_.set_need_sample(flag); }
   static int transform_physical_rowid(common::ObIAllocator &allocator,
                                       const common::ObTabletID &scan_tablet_id,
                                       const common::ObArrayWrap<share::schema::ObColDesc> &rowkey_descs,
@@ -802,7 +804,11 @@ private:
   int fetch_next_fts_index_rows();
   int fill_generated_fts_cols(ObDatumRow *row);
   int get_output_fts_col_expr_by_type(const ObExprOperatorType &type, ObExpr *&expr);
+  int inner_ft_get_next_batch(const int64_t max_batch_size);
+  int fetch_next_batch_ft_data_table_row(const int64_t max_batch_size);
   bool is_resume_point_saved();
+  int fill_partition_key_col(const int64_t batch_size);
+
 protected:
   DASOpResultIter scan_result_;
   ObTableScanRtDef tsc_rtdef_;
@@ -831,7 +837,7 @@ protected:
   bool report_checksum_;
   bool in_rescan_;
   ObDomainIndexCache domain_index_;
-  ObFTIndexRowCache fts_index_;
+  ObFTIndexRowCache ft_index_row_cache_;
 
   // output_ is used to output data, TSC operator directly invokes output_::get_next_row(s),
   // it points to fold_iter_ in group rescan and iter_tree_ in normal scan.

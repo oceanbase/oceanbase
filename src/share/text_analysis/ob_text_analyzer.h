@@ -24,7 +24,7 @@ struct ObTextAnalysisCtx final
 public:
   ObTextAnalysisCtx()
     : cs_(nullptr),
-      filter_stopword_(true),
+      filter_stop_token_(false),
       need_grouping_(false)
   {}
   ~ObTextAnalysisCtx() = default;
@@ -32,17 +32,14 @@ public:
   void reset()
   {
     cs_ = nullptr;
-    filter_stopword_ = true;
+    filter_stop_token_ = false;
     need_grouping_ = false;
   }
-  TO_STRING_KV(KP_(cs), K_(filter_stopword), K_(need_grouping));
+  TO_STRING_KV(KP_(cs), K_(filter_stop_token), K_(need_grouping));
 public:
   const ObCharsetInfo *cs_;
-  bool filter_stopword_;
+  bool filter_stop_token_;
   bool need_grouping_;
-  // language type
-  // word segment plugin type
-  // specified normalization tricks
 };
 
 class ObITextAnalyzer

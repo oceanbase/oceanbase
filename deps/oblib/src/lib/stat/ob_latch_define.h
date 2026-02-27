@@ -985,7 +985,10 @@ LATCH_DEF(OB_LOG_SUBMIT_LOG_RATE_LIMITER_RTO_KEEPER_LOCK, 951, "ob log submit lo
 LATCH_DEF(OB_LOG_REPLAY_REPORTER_RWLOCK, 952, "ob log replay reporter rwlock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_LOG_FOLLOWER_REPLAY_PROCESS_CACHE_RWLOCK, 953, "ob log follower replay process cache rwlock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_LOG_FOLLOWER_REPLAY_PROCESS_CACHE_VALIDITY_CHECK_LOCK, 954, "ob log follower replay proc cache valid check lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 955, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_FTS_STOP_TOKEN_CHECKER_GEN_LOCK, 955, "ob fts stop token checker gen lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DDL_DAG_MONITOR_LOCK, 956, "ob ddl dag monitor lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DDL_SORT_PROVIDER_LOCK, 957, "ob ddl sort provider lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 958, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

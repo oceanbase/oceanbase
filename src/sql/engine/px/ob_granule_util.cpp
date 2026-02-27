@@ -16,9 +16,11 @@
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/ob_granule_pump.h"
 #include "src/sql/engine/px/ob_dfo.h"
+#include "src/sql/engine/px/ob_px_sqc_handler.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "sql/das/ob_das_simple_op.h"
+#include "storage/ddl/ob_column_clustered_dag.h"
 #include "src/sql/engine/px/ob_granule_iterator_op.h"
 
 using namespace oceanbase::common;
@@ -920,6 +922,10 @@ int ObGranuleUtil::split_block_ranges(ObExecContext &exec_ctx,
   if (tablets.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ranges/tablets is empty", K(in_ranges), K(tablets), K(ret));
+  } else if (is_partition_local_fts_task(exec_ctx)) {
+    if (OB_FAIL(split_fts_granule_ranges(exec_ctx, allocator, tablets, granule_tablets, granule_ranges, granule_idx, range_independent))) {
+      LOG_WARN("failed to split FTS granule ranges", K(ret));
+    }
   } else if (in_ranges.empty()) {
     int64_t pk_idx = 0;
     FOREACH_CNT_X(tablet, tablets, OB_SUCC(ret)) {
@@ -1381,6 +1387,84 @@ ObGranuleSplitterType ObGranuleUtil::calc_split_type(uint64_t gi_attr_flag)
     res = GIT_RANDOM;
   }
   return res;
+}
+
+bool ObGranuleUtil::is_partition_local_fts_task(ObExecContext &exec_ctx)
+{
+  bool is_fts = false;
+  if (OB_NOT_NULL(exec_ctx.get_sqc_handler())) {
+    storage::ObDDLIndependentDag *dag = exec_ctx.get_sqc_handler()->get_sub_coord().get_ddl_dag();// when the fisrt split_block_ranges called, dag will be nullptr,so only rescan may return true
+    if (OB_NOT_NULL(dag)) {
+      oceanbase::storage::ObColumnClusteredDag *column_dag = dynamic_cast<oceanbase::storage::ObColumnClusteredDag*>(dag);
+      if (OB_NOT_NULL(column_dag)) {
+        const share::schema::ObIndexType index_type = column_dag->get_ddl_table_schema().table_item_.index_type_;
+        if (exec_ctx.get_my_session()->get_ddl_info().is_partition_local_ddl() && share::schema::is_fts_doc_word_aux(index_type)) {
+          is_fts = true;
+        }
+      }
+    }
+  }
+  return is_fts;
+}
+
+int ObGranuleUtil::split_fts_granule_ranges(ObExecContext &exec_ctx,
+                                            ObIAllocator &allocator,
+                                            const ObIArray<ObDASTabletLoc*> &tablets,
+                                            ObIArray<ObDASTabletLoc*> &granule_tablets,
+                                            ObIArray<ObNewRange> &granule_ranges,
+                                            ObIArray<int64_t> &granule_idx,
+                                            bool &range_independent)
+{
+  int ret = OB_SUCCESS;
+  storage::ObColumnClusteredDag *dag = nullptr;
+  if (!range_independent) { // range_independent must be true for fts doc word table complement inner sql
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(range_independent));
+  } else if (tablets.count() != 1) { // fts doc word table complement inner sql only support one tablet right now
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablets.count()));
+  } else if (OB_ISNULL(exec_ctx.get_sqc_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sqc handler is null", K(ret));
+  } else {
+    dag = static_cast<storage::ObColumnClusteredDag*>(exec_ctx.get_sqc_handler()->get_sub_coord().get_ddl_dag());
+    if (OB_ISNULL(dag)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column clustered dag is null", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const ObIArray<std::pair<share::ObLSID, ObTabletID>> &ls_tablet_ids = dag->get_ls_tablet_ids();
+    common::ObSEArray<common::ObNewRange, 64> all_ranges;
+    if (ls_tablet_ids.count() != 1) { // fts doc word table complement inner sql only support one tablet right now
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(ls_tablet_ids.count()));
+    } else {
+      const ObTabletID &aux_tablet_id = ls_tablet_ids.at(0).second;
+      if (OB_FAIL(dag->get_tablet_forward_sample_ranges(aux_tablet_id, allocator, all_ranges))) {
+        LOG_WARN("failed to get tablet forward sample ranges", K(ret), K(aux_tablet_id));
+      }
+    }
+
+    // partition granule mode
+    int64_t pk_idx = 0;
+    FOREACH_CNT_X(tablet, tablets, OB_SUCC(ret)) {
+      FOREACH_CNT_X(range, all_ranges, OB_SUCC(ret)) {
+        if (OB_FAIL(granule_tablets.push_back(*tablet))) {
+          LOG_WARN("failed to push back tablet", K(ret));
+        } else if (OB_FAIL(granule_ranges.push_back(*range))) {
+          LOG_WARN("failed to push back range", K(ret));
+        } else if (OB_FAIL(granule_idx.push_back(pk_idx))) {
+          LOG_WARN("failed to push back idx", K(ret), K(pk_idx));
+        } else {
+          pk_idx++;
+        }
+      }
+      FLOG_INFO("fts task assigned ranges to main tablet", K(ret), K(all_ranges.count()), K(pk_idx),
+                "granule_ranges_count", granule_ranges.count(), "granule_tablets_count", granule_tablets.count());
+    }
+  }
+  return ret;
 }
 
 }

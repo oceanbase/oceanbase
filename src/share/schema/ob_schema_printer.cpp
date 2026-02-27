@@ -1834,6 +1834,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       && !is_no_key_options(sql_mode) && !table_schema.get_parser_name_str().empty()) {
     if (OB_FAIL(ObFtsIndexSchemaPrinter::print_fts_parser_info(table_schema, strict_compat_, buf, buf_len, pos))) {
       LOG_WARN("fail to print fts parser info", K(ret), K(table_schema));
+    } else if (OB_FAIL(ObFtsIndexSchemaPrinter::print_fts_index_params_info(table_schema, strict_compat_, buf, buf_len, pos))) {
+      LOG_WARN("fail to print fts index params info", K(ret), K(table_schema));
     }
   }
   if (OB_SUCC(ret) && table_schema.is_vec_index()) {
@@ -2497,8 +2499,11 @@ int ObSchemaPrinter::print_table_definition_table_options(
       // do nothing
     } else if (OB_FAIL(ObFtsIndexSchemaPrinter::print_fts_parser_info(table_schema, strict_compat_, buf, buf_len, pos))) {
       LOG_WARN("fail to print fts parser info", K(ret), K(table_schema));
+    } else if (OB_FAIL(ObFtsIndexSchemaPrinter::print_fts_index_params_info(table_schema, strict_compat_, buf, buf_len, pos))) {
+      LOG_WARN("fail to print fts index params info", K(ret), K(table_schema));
     }
   }
+
   if (OB_SUCC(ret) && !is_index_tbl) {
     if (OB_FAIL(print_table_definition_store_format(table_schema, buf, buf_len, pos))) {
       OB_LOG(WARN, "fail to print store format", K(ret), K(table_schema));
@@ -2507,8 +2512,7 @@ int ObSchemaPrinter::print_table_definition_table_options(
   if (OB_SUCC(ret) && !is_index_tbl && table_schema.get_expire_info().length() > 0
       && NULL != table_schema.get_expire_info().ptr()) {
     const ObString expire_str = table_schema.get_expire_info();
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "EXPIRE_INFO = (%.*s) ",
-                                expire_str.length(), expire_str.ptr()))) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "EXPIRE_INFO = (%.*s) ", expire_str.length(), expire_str.ptr()))) {
       OB_LOG(WARN, "fail to print expire info", K(ret), K(expire_str));
     }
   }

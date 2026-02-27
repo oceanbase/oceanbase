@@ -71,8 +71,7 @@ int ObDirectLoadDagLobBuilder::switch_slice(const int64_t slice_idx)
     if (nullptr != lob_writer_ && OB_FAIL(lob_writer_->close())) {
       LOG_WARN("fail to close lob writer", KR(ret));
     } else if (OB_FAIL(ObDDLUtil::fill_writer_param(insert_tablet_ctx_->get_tablet_id(), slice_idx,
-                                                    -1 /*cg_idx*/, insert_tablet_ctx_->get_dag(),
-                                                    0 /*max_batch_size*/, write_param_))) {
+                                                    -1 /*cg_idx*/, insert_tablet_ctx_->get_dag(), write_param_))) {
       LOG_WARN("fail to fill writer param", K(ret));
     } else {
       slice_idx_ = slice_idx;

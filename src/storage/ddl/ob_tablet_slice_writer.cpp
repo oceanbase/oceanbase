@@ -9,6 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
+#define USING_LOG_PREFIX STORAGE
+
 #include "storage/ddl/ob_tablet_slice_writer.h"
 #include "storage/ddl/ob_ddl_tablet_context.h"
 #include "storage/ddl/ob_ddl_independent_dag.h"
@@ -16,12 +19,12 @@
 #include "sql/das/ob_das_utils.h"
 #include "storage/ddl/ob_direct_load_struct.h"
 #include "storage/ddl/ob_cg_macro_block_writer.h"
+#include "storage/ddl/ob_cg_micro_block_write_op.h"
 #include "storage/ddl/ob_lob_macro_block_writer.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "sql/engine/ob_batch_rows.h"
 #include "share/ob_tablet_autoincrement_service.h"
 
-#define USING_LOG_PREFIX STORAGE
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -208,6 +211,95 @@ int ObTabletSliceWriter::close()
   return ret;
 }
 
+int ObTabletSliceWriter::close_and_set_remain_block(
+    const ObIArray<int64_t> &start_seqs,
+    ObDDLIndependentDag *ddl_dag)
+{
+  return close_and_set_remain_block(tablet_id_, slice_idx_, cg_macro_block_writers_, start_seqs, ddl_dag);
+}
+
+int ObTabletSliceWriter::close_and_set_remain_block(
+    const ObTabletID &tablet_id,
+    const int64_t slice_idx,
+    const ObIArray<ObCgMacroBlockWriter *> &cg_macro_block_writers,
+    const ObIArray<int64_t> &start_seqs,
+    ObDDLIndependentDag *ddl_dag)
+{
+  int ret = OB_SUCCESS;
+  ObDDLTabletContext *tablet_context = nullptr;
+  ObDDLSlice *ddl_slice = nullptr;
+  bool is_new_slice = false;
+  const ObMemAttr mem_attr(MTL_ID(), "DdlSliceSRB");
+  if (OB_ISNULL(ddl_dag) || OB_UNLIKELY(start_seqs.count() != cg_macro_block_writers.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tablet_id), K(slice_idx), KP(ddl_dag), K(cg_macro_block_writers.count()), K(start_seqs.count()));
+  } else if (OB_FAIL(ddl_dag->get_tablet_context(tablet_id, tablet_context))) {
+    LOG_WARN("get tablet context failed", K(ret), K(tablet_id), K(slice_idx));
+  } else if (OB_ISNULL(tablet_context)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tablet context", K(ret), K(tablet_id), K(slice_idx));
+  } else if (OB_FAIL(tablet_context->get_or_create_slice(slice_idx, ddl_slice, is_new_slice))) {
+    LOG_WARN("get ddl slice failed", K(ret), K(tablet_id), K(slice_idx));
+  }
+  for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_macro_block_writers.count(); ++cg_idx) {
+    ObCgMacroBlockWriter *cg_macro_block_writer = cg_macro_block_writers.at(cg_idx);
+    const int64_t start_seq = start_seqs.at(cg_idx);
+    if (OB_ISNULL(cg_macro_block_writer)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid cg macro block writer", K(ret), K(cg_idx));
+    } else if (OB_FAIL(cg_macro_block_writer->try_finish_last_micro_block())) {
+      LOG_WARN("failed to try finish", K(ret), K(tablet_id), K(slice_idx), K(cg_idx));
+    } else if (start_seq == cg_macro_block_writer->get_last_macro_seq()
+        && cg_macro_block_writer->get_macro_data_size() < ObTabletSliceWriter::GROUP_WRITE_MACRO_THRESHOLD) {
+      ObCGBlockFileWriter temp_file_writer;
+      ObDagSliceMacroFlusher flusher(temp_file_writer);
+      ObCGBlockFile *block_file = OB_NEW(ObCGBlockFile, mem_attr);
+      if (OB_UNLIKELY(nullptr == block_file)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new cg block file", K(ret), K(tablet_id), K(slice_idx), K(cg_idx));
+      } else if (OB_FAIL(block_file->open(tablet_id, slice_idx, 0/*scan_idx*/, cg_idx))) {
+        LOG_WARN("fail to open cg block file", K(ret), K(tablet_id), K(slice_idx), K(cg_idx));
+      } else if (OB_FAIL(temp_file_writer.init(block_file))) {
+        LOG_WARN("failed to init", K(ret), K(tablet_id), K(slice_idx), K(cg_idx), KPC(block_file));
+      } else if (OB_FAIL(cg_macro_block_writer->close(&flusher))) {
+        LOG_WARN("failed to close writer", K(ret), K(tablet_id), K(slice_idx), K(cg_idx));
+      } else if (OB_FAIL(ddl_slice->set_remain_block(cg_idx, block_file))) {
+        LOG_WARN("set remain block file into ddl slice failed", K(ret), K(tablet_id), K(slice_idx), K(cg_idx), KPC(block_file));
+      }
+      if (OB_FAIL(ret)) {
+        OB_DELETE(ObCGBlockFile, mem_attr, block_file);
+      }
+    } else {
+      if (OB_FAIL(cg_macro_block_writer->close())) {
+        LOG_WARN("fail to close macro block writer", K(ret), K(tablet_id), K(slice_idx), KPC(cg_macro_block_writer));
+      } else if (OB_FAIL(ddl_slice->set_block_flushed(cg_idx))) {
+        LOG_WARN("set block flushed failed", K(ret), K(tablet_id), K(slice_idx), K(cg_idx));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletSliceWriter::get_last_macro_seqs(ObIArray<int64_t> &last_macro_seqs)
+{
+  int ret = OB_SUCCESS;
+  last_macro_seqs.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  }
+  for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_macro_block_writers_.count(); ++cg_idx) {
+    ObCgMacroBlockWriter *cg_macro_block_writer = cg_macro_block_writers_.at(cg_idx);
+    if (OB_ISNULL(cg_macro_block_writer)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid writer", K(ret), K(tablet_id_), K(slice_idx_), K(cg_idx), K(cg_macro_block_writers_));
+    } else if (OB_FAIL(last_macro_seqs.push_back(cg_macro_block_writer->get_last_macro_seq()))) {
+      LOG_WARN("failed to get last macro seq", K(ret), K(tablet_id_), K(slice_idx_), K(cg_idx));
+    }
+  }
+  return ret;
+}
+
 /**
  ********************************************    ObTabletSliceIncWriter    *******************************************
  */
@@ -308,7 +400,7 @@ int ObTabletSliceIncWriter::close()
 
 ObRsSliceWriter::ObRsSliceWriter()
   : is_inited_(false), rowkey_column_count_(0), sql_column_count_(0), lob_writer_(nullptr), storage_slice_writer_(nullptr),
-    row_arena_(ObMemAttr(MTL_ID(), "slice_row_arena")), current_row_()
+    row_arena_(ObMemAttr(MTL_ID(), "slice_row_arena")), current_row_(), enable_group_write_(false), start_seq_(0)
 {
 
 }
@@ -325,6 +417,8 @@ ObRsSliceWriter::~ObRsSliceWriter()
   free_lob_writer();
   current_row_.reset();
   row_arena_.reset();
+  enable_group_write_ = false;
+  start_seq_ = 0;
 }
 
 int ObRsSliceWriter::init(const ObWriteMacroParam &write_param)
@@ -349,14 +443,23 @@ int ObRsSliceWriter::init(const ObWriteMacroParam &write_param)
         LOG_WARN("allocate memory failed", K(ret));
       } else if (OB_FAIL(static_cast<ObTabletSliceWriter *>(storage_slice_writer_)->init(writer_param_))) {
         LOG_WARN("init storage slice writer failed", K(ret), K(writer_param_));
+      } else if (is_ddl_direct_load(write_param.direct_load_type_) && DATA_VERSION_4_5_1_0 <= writer_param_.tenant_data_version_) {
+        ObSEArray<int64_t, 1> last_macro_seqs;
+        enable_group_write_ = true;
+        if (OB_FAIL(static_cast<ObTabletSliceWriter *>(storage_slice_writer_)->get_last_macro_seqs(last_macro_seqs))) {
+          LOG_WARN("failed to get last macro seqs", K(ret), K(writer_param_));
+        } else if (OB_UNLIKELY(1 != last_macro_seqs.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected cg count", K(ret), K(last_macro_seqs));
+        } else {
+          start_seq_ = last_macro_seqs.at(0);
+        }
       }
     } else {
-      ObWriteMacroParam &write_param = const_cast<ObWriteMacroParam &>(writer_param_);
-      write_param.max_batch_size_ = ObTabletSliceBufferTempFileWriter::ObDDLRowBuffer::DEFAULT_MAX_BATCH_SIZE;
       if (OB_ISNULL(storage_slice_writer_ = OB_NEW(ObCsReplicaTabletSliceWriter, ObMemAttr(MTL_ID(), "stor_slice_wrt")))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate  memory", K(ret));
-      } else if (OB_FAIL(static_cast<ObCsReplicaTabletSliceWriter *>(storage_slice_writer_)->init(write_param))) {
+      } else if (OB_FAIL(static_cast<ObCsReplicaTabletSliceWriter *>(storage_slice_writer_)->init(writer_param_))) {
         LOG_WARN("init storage slice writer failed", K(ret), K(writer_param_));
       }
     }
@@ -390,14 +493,32 @@ int ObRsSliceWriter::append_current_row(const ObIArray<ObDatum *> &datums)
   return ret;
 }
 
+int ObRsSliceWriter::get_row_count(int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  row_count = OB_NOT_NULL(storage_slice_writer_) ? storage_slice_writer_->get_row_count() : 0;
+  return ret;
+}
+
 int ObRsSliceWriter::close()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_FAIL(storage_slice_writer_->close())) {
-    LOG_WARN("close storage slice writer failed", K(ret));
+  } else if (enable_group_write_) {
+    ObSEArray<int64_t, 1> start_seqs;
+    if (OB_FAIL(start_seqs.push_back(start_seq_))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(static_cast<ObTabletSliceWriter *>(storage_slice_writer_)->close_and_set_remain_block(start_seqs, writer_param_.ddl_dag_))) {
+      LOG_WARN("close storage slice writer failed", K(ret));
+    }
+  } else {
+    if (OB_FAIL(storage_slice_writer_->close())) {
+      LOG_WARN("close storage slice writer failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (nullptr != lob_writer_) {
     if (OB_FAIL(lob_writer_->close())) {
       LOG_WARN("lob writer close failed", K(ret));
@@ -648,7 +769,10 @@ int ObTabletSliceBufferTempFileWriter::init(const ObWriteMacroParam &param)
   } else if (OB_UNLIKELY(nullptr == ddl_dag)) {
     ret = OB_ERR_SYS;
     LOG_WARN("the ddl dag is null", K(ret));
-  } else if (OB_FAIL(buffer_.init(ddl_dag->get_ddl_table_schema().column_items_))) {
+  } else if (0 == param.max_batch_size_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid batch size", K(ret), K(param));
+  } else if (OB_FAIL(buffer_.init(ddl_dag->get_ddl_table_schema().column_items_, param.max_batch_size_))) {
     LOG_WARN("fail to initialize the ddl row buffer", K(ret));
   } else {
     is_inited_ = true;
@@ -785,7 +909,7 @@ void ObCsReplicaTabletSliceWriter::reset()
 
 ObCsSliceWriter::ObCsSliceWriter()
   : arena_(ObMemAttr(MTL_ID(), "ddl_cs_writer")),
-    need_convert_storage_column_(false), direct_write_macro_block_(false), row_buffer_size_(256),
+    need_convert_storage_column_(false), direct_write_macro_block_(false),
     need_check_rowkey_order_(true), rowkey_arena_(ObMemAttr(MTL_ID(), "ddl_ck_rowkey"))
 {
 
@@ -806,8 +930,7 @@ ObCsSliceWriter::~ObCsSliceWriter()
 int ObCsSliceWriter::init(
     const ObWriteMacroParam &write_param,
     const bool direct_write_macro_block,
-    const bool is_append_batch,
-    const int64_t max_batch_size)
+    const bool is_append_batch)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -818,7 +941,8 @@ int ObCsSliceWriter::init(
     LOG_WARN("invalid argument", K(ret), K(write_param));
   } else {
     writer_param_ = write_param;
-    writer_param_.max_batch_size_ = OB_MAX(max_batch_size, row_buffer_size_);
+    writer_param_.max_batch_size_ = ObDDLIndependentDag::DEFAULT_ROW_BUFFER_SIZE;
+
     tablet_id_ = writer_param_.tablet_id_;
     slice_idx_ = writer_param_.slice_idx_;
     rowkey_column_count_ = writer_param_.ddl_table_schema_.table_item_.rowkey_column_num_;
@@ -843,9 +967,9 @@ int ObCsSliceWriter::init(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(init_storage_batch_rows())) {
+    } else if (OB_FAIL(init_storage_batch_rows(arena_, buffer_batch_rows_))) {
       LOG_WARN("init storage batch rows failed", K(ret));
-    } else if (row_buffer_size_ > 0 && OB_FAIL(init_row_buffer(row_buffer_size_))) {
+    } else if (OB_FAIL(init_row_buffer())) {
       LOG_WARN("init row buffer failed", K(ret));
     } else if (need_check_rowkey_order_ || (!is_append_batch && need_convert_storage_column_)) {
       if (OB_FAIL(ObDDLUtil::init_datum_row_with_snapshot(
@@ -860,18 +984,29 @@ int ObCsSliceWriter::init(
   return ret;
 }
 
+int ObCsSliceWriter::get_row_buffer(ObDirectLoadBatchRows *&row_buffer, blocksstable::ObBatchDatumRows *&buffer_batch_rows)
+{
+  row_buffer = &row_buffer_;
+  buffer_batch_rows = &buffer_batch_rows_;
+  return OB_SUCCESS;
+}
+
 // row -> buffer -> macro block
 int ObCsSliceWriter::append_current_row(const ObIArray<ObDatum *> &datums)
 {
   int ret = OB_SUCCESS;
+  ObDirectLoadBatchRows *row_buffer = nullptr;
+  ObBatchDatumRows *buffer_batch_rows = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(datums.count() != sql_column_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(datums.count()), K(sql_column_count_));
+  } else if (OB_FAIL(get_row_buffer(row_buffer, buffer_batch_rows))) {
+    LOG_WARN("failed to get row buffer", K(ret), KPC(this));
   } else if (!need_convert_storage_column_) {
-    if (OB_FAIL(row_buffer_.append_row(datums))) {
+    if (OB_FAIL(row_buffer->append_row(datums))) {
       LOG_WARN("append sql datums failed", K(ret), K(datums));
     }
   } else {
@@ -896,15 +1031,15 @@ int ObCsSliceWriter::append_current_row(const ObIArray<ObDatum *> &datums)
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(row_buffer_.append_row(storage_datums))) {
+        if (OB_FAIL(row_buffer->append_row(storage_datums))) {
           LOG_WARN("append converted datums failed", K(ret));
         }
       }
     }
   }
 
-  if (OB_SUCC(ret) && OB_UNLIKELY(row_buffer_.full())) {
-    if (OB_FAIL(flush_row_buffer())) {
+  if (OB_SUCC(ret) && OB_UNLIKELY(row_buffer->full())) {
+    if (OB_FAIL(flush_row_buffer(false/*is_end*/))) {
       LOG_WARN("flush row buffer failed", K(ret));
     }
   }
@@ -938,16 +1073,35 @@ int ObCsSliceWriter::append_current_batch(const ObIArray<ObIVector *> &vectors, 
     int64_t remain_row_count = selector.size();
     int64_t current_offset = selector.get_offset();
     while (OB_SUCC(ret) && remain_row_count > 0) {
-      const int64_t append_size = min(row_buffer_.remain_size(), remain_row_count);
-      if (OB_FAIL(row_buffer_.append_batch(*ready_vectors, current_offset, append_size))) {
-        LOG_WARN("append batch failed", K(ret), K(current_offset), K(append_size));
-      } else if (row_buffer_.full() && OB_FAIL(flush_row_buffer())) {
-        LOG_WARN("flush row buffer failed", K(ret));
+      ObDirectLoadBatchRows *row_buffer = nullptr;
+      ObBatchDatumRows *buffer_batch_rows = nullptr;
+      if (OB_FAIL(get_row_buffer(row_buffer, buffer_batch_rows))) {
+        LOG_WARN("failed to get row buffer", K(ret), KPC(this));
       } else {
-        remain_row_count -= append_size;
-        current_offset += append_size;
+        const int64_t append_size = min(row_buffer->remain_size(), remain_row_count);
+        if (OB_FAIL(row_buffer->append_batch(*ready_vectors, current_offset, append_size))) {
+          LOG_WARN("append batch failed", K(ret), K(current_offset), K(append_size));
+        } else if (row_buffer->full() && OB_FAIL(flush_row_buffer(false/*is_end*/))) {
+          LOG_WARN("flush row buffer failed", K(ret));
+        } else {
+          remain_row_count -= append_size;
+          current_offset += append_size;
+        }
       }
     }
+  }
+  return ret;
+}
+
+int ObCsSliceWriter::get_row_count(int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  ObDirectLoadBatchRows *row_buffer = nullptr;
+  ObBatchDatumRows *buffer_batch_rows = nullptr;
+  if (OB_FAIL(get_row_buffer(row_buffer, buffer_batch_rows))) {
+    LOG_WARN("failed to get row buffer", K(ret), KPC(this));
+  } else {
+    row_count = row_buffer->size() + (OB_NOT_NULL(storage_slice_writer_) ? storage_slice_writer_->get_row_count() : 0);
   }
   return ret;
 }
@@ -958,7 +1112,7 @@ int ObCsSliceWriter::close()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(flush_row_buffer())) {
+  } else if (OB_FAIL(flush_row_buffer(true/*is_end*/))) {
     LOG_WARN("flush row buffer failed", K(ret));
   } else if (OB_FAIL(ObRsSliceWriter::close())) {
     LOG_WARN("close writer failed", K(ret));
@@ -1168,7 +1322,7 @@ int ObCsSliceWriter::check_order(const blocksstable::ObBatchDatumRows &batch_row
   return ret;
 }
 
-int ObCsSliceWriter::init_storage_batch_rows()
+int ObCsSliceWriter::init_storage_batch_rows(ObIAllocator &allocator, blocksstable::ObBatchDatumRows &buffer_batch_rows)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!writer_param_.is_valid())) {
@@ -1180,26 +1334,26 @@ int ObCsSliceWriter::init_storage_batch_rows()
     const int64_t storage_column_count = writer_param_.ddl_table_schema_.column_items_.count();
     ObIVector *snapshot_version_vector;
     ObIVector *sql_seq_vector;
-    if (OB_FAIL(ObDirectLoadVectorUtils::make_const_multi_version_vector(-snapshot_version, arena_, snapshot_version_vector))) {
+    if (OB_FAIL(ObDirectLoadVectorUtils::make_const_multi_version_vector(-snapshot_version, allocator, snapshot_version_vector))) {
       LOG_WARN("init const vector for snapshot version failed", K(ret), K(snapshot_version));
-    } else if (OB_FAIL(ObDirectLoadVectorUtils::make_const_multi_version_vector(0, arena_, sql_seq_vector))) {
+    } else if (OB_FAIL(ObDirectLoadVectorUtils::make_const_multi_version_vector(0, allocator, sql_seq_vector))) {
       LOG_WARN("init const vector for sql sequence failed", K(ret));
     } else {
-      buffer_batch_rows_.row_flag_ = ObDmlFlag::DF_INSERT;
+      buffer_batch_rows.row_flag_ = ObDmlFlag::DF_INSERT;
       for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_count_; ++i) {
-        if (OB_FAIL(buffer_batch_rows_.vectors_.push_back(nullptr))) {
+        if (OB_FAIL(buffer_batch_rows.vectors_.push_back(nullptr))) {
           LOG_WARN("push back vector failed", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(buffer_batch_rows_.vectors_.push_back(snapshot_version_vector))) {
+        if (OB_FAIL(buffer_batch_rows.vectors_.push_back(snapshot_version_vector))) {
           LOG_WARN("push back snapshot version vector failed", K(ret));
-        } else if (OB_FAIL(buffer_batch_rows_.vectors_.push_back(sql_seq_vector))) {
+        } else if (OB_FAIL(buffer_batch_rows.vectors_.push_back(sql_seq_vector))) {
           LOG_WARN("push back sql sequence vector failed", K(ret));
         }
       }
       for (int64_t i = rowkey_column_count_ + multi_version_col_cnt; OB_SUCC(ret) && i < storage_column_count; ++i) {
-        if (OB_FAIL(buffer_batch_rows_.vectors_.push_back(nullptr))) {
+        if (OB_FAIL(buffer_batch_rows.vectors_.push_back(nullptr))) {
           LOG_WARN("push back vector failed", K(ret));
         }
       }
@@ -1208,9 +1362,11 @@ int ObCsSliceWriter::init_storage_batch_rows()
   return ret;
 }
 
-int ObCsSliceWriter::init_row_buffer(const int64_t buffer_row_count)
+int ObCsSliceWriter::init_row_buffer()
 {
   int ret = OB_SUCCESS;
+  /* using a fixed size row buffer to guarantee the idempotence */
+  const int64_t buffer_row_count = ObDDLIndependentDag::DEFAULT_ROW_BUFFER_SIZE;
   if (row_buffer_.is_inited()) {
     // do nothing
   } else if (OB_UNLIKELY(buffer_row_count <= 0)) {
@@ -1220,7 +1376,7 @@ int ObCsSliceWriter::init_row_buffer(const int64_t buffer_row_count)
     const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     if (OB_FAIL(ObDDLUtil::init_batch_rows(writer_param_.ddl_table_schema_, buffer_row_count, row_buffer_))) {
       LOG_WARN("init row buffer failed", K(ret));
-    } else if (buffer_batch_rows_.vectors_.empty() && OB_FAIL(init_storage_batch_rows())) {
+    } else if (buffer_batch_rows_.vectors_.empty() && OB_FAIL(init_storage_batch_rows(arena_, buffer_batch_rows_))) {
       LOG_WARN("init storage batch rows failed", K(ret));
     } else {
       const ObIArray<ObDirectLoadVector *> &vectors = row_buffer_.get_vectors();
@@ -1235,28 +1391,41 @@ int ObCsSliceWriter::init_row_buffer(const int64_t buffer_row_count)
   return ret;
 }
 
-int ObCsSliceWriter::flush_row_buffer()
+int ObCsSliceWriter::flush_row_buffer(const bool is_end)
 {
   int ret = OB_SUCCESS;
+  ObDirectLoadBatchRows *row_buffer = nullptr;
+  ObBatchDatumRows *buffer_batch_rows = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_LIKELY(row_buffer_.size() > 0)) {
-    buffer_batch_rows_.row_count_ = row_buffer_.size();
+  } else if (OB_FAIL(get_row_buffer(row_buffer, buffer_batch_rows))) {
+    LOG_WARN("failed to get row buffer", K(ret), KPC(this));
+  } else if (OB_LIKELY(row_buffer->size() > 0)) {
+    buffer_batch_rows->row_count_ = row_buffer->size();
     const ObDDLTableSchema &ddl_table_schema = writer_param_.ddl_table_schema_;
     if (OB_FAIL(ObDDLUtil::check_null_and_length(ddl_table_schema.table_item_.is_index_table_,
                                                  ddl_table_schema.table_item_.has_lob_rowkey_,
                                                  ddl_table_schema.table_item_.is_table_with_clustering_key_,
                                                  ddl_table_schema.table_item_.rowkey_column_num_,
-                                                 buffer_batch_rows_))) {
+                                                 *buffer_batch_rows))) {
       LOG_WARN("check null and length failed", K(ret));
-    } else if (need_check_rowkey_order_ && OB_FAIL(check_order(buffer_batch_rows_))) {
+    } else if (need_check_rowkey_order_ && OB_FAIL(check_order(*buffer_batch_rows))) {
       LOG_WARN("check order failed", K(ret));
-    } else if (OB_FAIL(storage_slice_writer_->append_batch(buffer_batch_rows_))) {
-      LOG_WARN("append batch failed", K(ret), K(buffer_batch_rows_));
-    } else {
-      row_buffer_.reuse();
+    } else if (OB_FAIL(output_row_buffer(is_end))) {
+      LOG_WARN("output row buffer failed", K(ret), KPC(buffer_batch_rows));
     }
+  }
+  return ret;
+}
+
+int ObCsSliceWriter::output_row_buffer(const bool is_end)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(storage_slice_writer_->append_batch(buffer_batch_rows_))) {
+    LOG_WARN("append batch failed", K(ret), K(buffer_batch_rows_));
+  } else {
+    row_buffer_.reuse();
   }
   return ret;
 }
@@ -1281,7 +1450,7 @@ int ObHeapCsSliceWriter::init(
     LOG_WARN("invalid argument", K(ret), K(write_param), K(parallel_count), K(autoinc_column_idx), K(max_batch_size));
   } else {
     need_check_rowkey_order_ = false;
-    if (OB_FAIL(ObCsSliceWriter::init(write_param, direct_write_macro_block, max_batch_size > 1/*is_append_batch*/, max_batch_size))) {
+    if (OB_FAIL(ObCsSliceWriter::init(write_param, direct_write_macro_block, max_batch_size > 1/*is_append_batch*/))) {
       LOG_WARN("init column store slice writer failed", K(ret), K(write_param));
     } else {
       heap_info_.set_parallel_count(parallel_count);
@@ -1370,7 +1539,7 @@ int ObHeapCsSliceWriter::append_current_batch(const ObIArray<ObIVector *> &vecto
     while (OB_SUCC(ret) && OB_SUCC(selector.get_next(i))) {
       if (OB_FAIL(row_buffer_.append_batch(*ready_vectors, i, 1))) {
         LOG_WARN("append row buffer failed", K(ret));
-      } else if (row_buffer_.full() && OB_FAIL(flush_row_buffer())) {
+      } else if (row_buffer_.full() && OB_FAIL(flush_row_buffer(false/*is_end*/))) {
         LOG_WARN("flush row buffer failed", K(ret));
       }
     }
@@ -1408,7 +1577,7 @@ int ObTabletSliceTempFileWriter::init(const ObWriteMacroParam &param)
                          nullptr == param.ddl_dag_ ||
                          param.max_batch_size_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("the are invalid argument", K(ret), K(param));
+    LOG_WARN("the are invalid argument", K(ret), KP(param.ddl_dag_), K(param));
   } else {
     ddl_dag_ = param.ddl_dag_;
     ObStorageSchema *storage_schema = param.tablet_param_.with_cs_replica_ ?
@@ -1478,6 +1647,110 @@ int ObTabletSliceTempFileWriter::close()
     if (OB_FAIL(ddl_dag_->add_scan_chunk(output_ddl_chunk))) {
       LOG_WARN("fail to add scan chunk", K(ret), K(output_ddl_chunk));
     }
+  }
+  return ret;
+}
+
+ObFtsSliceWriter::ObFtsSliceWriter() : ObCsSliceWriter(), fts_row_buffer_(nullptr)
+{
+}
+
+ObFtsSliceWriter::~ObFtsSliceWriter()
+{
+  if (OB_NOT_NULL(fts_row_buffer_)) {
+    fts_row_buffer_->~ObDirectLoadBatchDatumRows();
+    ob_free(fts_row_buffer_);
+    fts_row_buffer_ = nullptr;
+  }
+}
+
+int ObFtsSliceWriter::get_row_buffer(ObDirectLoadBatchRows *&row_buffer, blocksstable::ObBatchDatumRows *&buffer_batch_rows)
+{
+  int ret = OB_SUCCESS;
+  row_buffer = nullptr;
+  buffer_batch_rows = nullptr;
+  if (OB_ISNULL(fts_row_buffer_)) {
+    const ObMemAttr mem_attr(MTL_ID(), "FtsSWRows");
+    const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    ObDirectLoadBatchDatumRows *fts_row_buffer = OB_NEW(ObDirectLoadBatchDatumRows, mem_attr);
+    if (OB_ISNULL(fts_row_buffer)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret), KPC(this));
+    } else if (OB_FAIL(ObDDLUtil::init_batch_rows(writer_param_.ddl_table_schema_, writer_param_.max_batch_size_, fts_row_buffer->batch_rows_))) {
+      LOG_WARN("init row buffer failed", K(ret));
+    } else if (OB_FAIL(init_storage_batch_rows(fts_row_buffer->allocator_, fts_row_buffer->datum_rows_))) {
+      LOG_WARN("init storage batch rows failed", K(ret));
+    } else {
+      const ObIArray<ObDirectLoadVector *> &vectors = fts_row_buffer->batch_rows_.get_vectors();
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_count_; ++i) {
+        fts_row_buffer->datum_rows_.vectors_.at(i) = vectors.at(i)->get_vector();
+      }
+      for (int64_t i = rowkey_column_count_; OB_SUCC(ret) && i < vectors.count(); ++i) {
+        fts_row_buffer->datum_rows_.vectors_.at(i + multi_version_col_cnt) = vectors.at(i)->get_vector();
+      }
+      fts_row_buffer_ = fts_row_buffer;
+    }
+    if (OB_FAIL(ret)) {
+      OB_DELETE(ObDirectLoadBatchDatumRows, mem_attr, fts_row_buffer);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    row_buffer = &fts_row_buffer_->batch_rows_;
+    buffer_batch_rows = &fts_row_buffer_->datum_rows_;
+  }
+  return ret;
+}
+
+int ObFtsSliceWriter::output_row_buffer(const bool is_end)
+{
+  int ret = OB_SUCCESS;
+  const ObMemAttr mem_attr(MTL_ID(), "FtsSWChunk");
+  ObDDLChunk output_ddl_chunk;
+  ObChunk *chunk_data = nullptr;
+  if (OB_ISNULL(fts_row_buffer_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid row buffer", K(ret));
+  } else if (OB_ISNULL(chunk_data = OB_NEW(ObChunk, mem_attr))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret), KP(chunk_data));
+  } else {
+    chunk_data->type_ = ObChunk::DIRECT_LOAD_BATCH_DATUM_ROWS;
+    chunk_data->direct_load_batch_rows_ = fts_row_buffer_;
+    output_ddl_chunk.tablet_id_ = tablet_id_;
+    output_ddl_chunk.slice_idx_ = slice_idx_;
+    output_ddl_chunk.is_slice_end_ = false;
+    output_ddl_chunk.chunk_data_ = chunk_data;
+    fts_row_buffer_ = nullptr;
+    if (OB_FAIL(writer_param_.ddl_dag_->add_scan_chunk(output_ddl_chunk))) {
+      LOG_WARN("fail to add scan chunk", K(ret), K(output_ddl_chunk));
+    }
+  }
+  return ret;
+}
+
+int ObFtsSliceWriter::output_end_chunk()
+{
+  int ret = OB_SUCCESS;
+  ObDDLChunk output_ddl_chunk;
+  output_ddl_chunk.tablet_id_ = tablet_id_;
+  output_ddl_chunk.slice_idx_ = slice_idx_;
+  output_ddl_chunk.is_slice_end_ = true;
+  if (OB_FAIL(writer_param_.ddl_dag_->add_scan_chunk(output_ddl_chunk))) {
+    LOG_WARN("fail to add scan chunk", K(ret), K(output_ddl_chunk));
+  }
+  return ret;
+}
+
+int ObFtsSliceWriter::close()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ObCsSliceWriter::close())) {
+    LOG_WARN("flush row buffer failed", K(ret));
+  } else if (OB_FAIL(output_end_chunk())) {
+    LOG_WARN("output row buffer failed", K(ret), KPC(this));
   }
   return ret;
 }

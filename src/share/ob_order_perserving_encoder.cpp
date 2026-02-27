@@ -58,7 +58,7 @@ inline bool check_terminator_simd(unsigned char *data, int64_t len, char ch)
 )
 
 int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
-  ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param)
+  const ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param)
 {
   int ret = OB_SUCCESS;
   switch (param.type_) {
@@ -793,7 +793,7 @@ int ObOrderPerservingEncoder::encode_tails(unsigned char *to, int64_t max_buf_le
 }
 
 int ObSortkeyConditioner::process_key_conditioning(
-  ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param)
+  const ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param)
 {
   int ret = OB_SUCCESS;
   // process null pos

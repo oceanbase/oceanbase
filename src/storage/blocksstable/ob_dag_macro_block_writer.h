@@ -38,7 +38,7 @@ public:
   int try_finish_last_micro_block();
   int close(ObDagSliceMacroFlusher *macro_block_flusher);
 protected:
-  virtual bool use_external_flusher() const override { return true; }
+  virtual bool allow_use_external_flusher() const override { return true; }
 };
 
 /**
@@ -70,7 +70,7 @@ public:
 protected:
   virtual bool is_alloc_block_needed() const override { return false; }
   virtual bool need_write_macro_meta() const override { return false; }
-  virtual bool use_external_flusher() const override { return true; }
+  virtual bool allow_use_external_flusher() const override { return true; }
 private:
   ObDagTempMacroFlusher dag_temp_macro_flusher_;
 };

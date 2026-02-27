@@ -45,6 +45,18 @@ public:
   };
 };
 
+struct ColMetaInfo {
+public:
+  ColMetaInfo() : is_fixed_(false), fixed_length_(0) {}
+  ColMetaInfo(bool is_fixed, uint32_t fixed_length)
+      : is_fixed_(is_fixed), fixed_length_(fixed_length) {}
+  TO_STRING_KV(K_(is_fixed), K_(fixed_length));
+public:
+  bool is_fixed_;
+  uint32_t fixed_length_;
+
+};
+
 struct RowMeta {
   OB_UNIS_VERSION_V(1);
   static const int64_t MAX_LOCAL_BUF_LEN = 128;
@@ -59,6 +71,10 @@ public:
     reset();
   }
   int init(const ObExprPtrIArray &exprs, const int32_t extra_size,
+           const bool reorder_fixed_expr = true,
+           common::ObIAllocator *allocator = NULL);
+  // New init function that depends on extracted expr information
+  int init(const common::ObIArray<ColMetaInfo> &expr_infos, const int32_t extra_size,
            const bool reorder_fixed_expr = true,
            common::ObIAllocator *allocator = NULL);
   int assign(const RowMeta &row_meta, common::ObIAllocator *allocator = NULL);

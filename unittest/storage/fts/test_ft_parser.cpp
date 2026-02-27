@@ -133,14 +133,16 @@ TEST(FTWordTest, test_hash)
   default_meta.set_varchar();
   default_meta.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
 
-  ObFTWord word_origin(5, "hello", default_meta);
+  ObFTToken word_origin;
+  ASSERT_EQ(OB_SUCCESS, word_origin.init("hello", 5, default_meta, nullptr, nullptr));
 
   uint64_t hash_val = 0;
   int ret = word_origin.hash(hash_val);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   {
-    ObFTWord word2(5, "hello", default_meta);
+    ObFTToken word2;
+    ASSERT_EQ(OB_SUCCESS, word2.init("hello", 5, default_meta, nullptr, nullptr));
     uint64_t hash_val2 = 0;
     ret = word2.hash(hash_val2);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -149,7 +151,8 @@ TEST(FTWordTest, test_hash)
 
   {
     // case insensitive
-    ObFTWord word2(5, "hellO", default_meta);
+    ObFTToken word2;
+    ASSERT_EQ(OB_SUCCESS, word2.init("hellO", 5, default_meta, nullptr, nullptr));
     uint64_t hash_val2 = 0;
     ret = word2.hash(hash_val2);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -157,7 +160,8 @@ TEST(FTWordTest, test_hash)
   }
 
   {
-    ObFTWord word2(5, "hell0", default_meta);
+    ObFTToken word2;
+    ASSERT_EQ(OB_SUCCESS, word2.init("hell0", 5, default_meta, nullptr, nullptr));
     uint64_t hash_val2 = 0;
     ret = word2.hash(hash_val2);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -165,7 +169,8 @@ TEST(FTWordTest, test_hash)
   }
 
   {
-    ObFTWord word2(4, "hell", default_meta);
+    ObFTToken word2;
+    ASSERT_EQ(OB_SUCCESS, word2.init("hell", 4, default_meta, nullptr, nullptr));
     uint64_t hash_val2 = 0;
     ret = word2.hash(hash_val);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -173,7 +178,8 @@ TEST(FTWordTest, test_hash)
   }
 
   {
-    ObFTWord word2(5, "he1lo", default_meta);
+    ObFTToken word2;
+    ASSERT_EQ(OB_SUCCESS, word2.init("he1lo", 5, default_meta, nullptr, nullptr));
     uint64_t hash_val2 = 0;
     ret = word2.hash(hash_val2);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -323,21 +329,19 @@ TEST_F(FTParserTest, test_trie)
     }
 
     ObArenaAllocator allocator(ObModIds::TEST);
-    size_t size = ObArrayHashMap::estimate_size(words.size());
+    size_t size = ObArrayHashMap::calc_memory_size(words.size());
     ObArrayHashMap *map = static_cast<ObArrayHashMap *>(allocator.alloc(size));
     map->init(words.size());
     for (int i = 0; i < words.size(); i++) {
       ObString str(words[i].size(), words[i].data());
-      ObFTWordCode code = i;
+      ObFTTokenCode code = i;
       ret = map->insert(str, code);
     }
 
     for (int i = 0; i < words.size(); i++) {
       ObString str(words[i].size(), words[i].data());
-      ObFTWordCode code;
-      ObFTSingleWord word;
-      word.set_word(str.ptr(), str.length());
-      ret = map->find(word, code);
+      ObFTTokenCode code;
+      ret = map->find(str, code);
       ASSERT_EQ(ret, OB_SUCCESS);
       ASSERT_EQ(code, i);
     }
@@ -403,7 +407,8 @@ TEST_F(FTParserTest, IK_LLT)
     ObFTParserParam param;
     param.cs_ = &cs;
     ObITokenIterator *iter = nullptr;
-    param.allocator_ = &allocator;
+    param.metadata_alloc_ = &allocator;
+    param.scratch_alloc_ = &allocator;
     // param.cs_ = CS_TYPE_UTF8MB4_BIN;
     param.fulltext_ = word;
     param.ft_length_ = len;
@@ -566,17 +571,6 @@ TEST_F(FTParserTest, IK_LLT)
   }
 }
 
-TEST_F(FTParserTest, test_char_util)
-{
-  const char *eng = "ab";
-  const char *cjk = u8"你好啊，世界！";
-
-  ObFTCharUtil::CharType type;
-  ObFTCharUtil::classify_first_char(common::CS_TYPE_UTF8MB4_BIN, cjk, 3, type);
-  ASSERT_EQ(type, ObFTCharUtil::CharType::CHINESE);
-  ObFTCharUtil::classify_first_char(common::CS_TYPE_UTF8MB4_BIN, eng, 1, type);
-}
-
 TEST_F(FTParserTest, test_lex_container)
 {
   char buf[] = "abcdefghijklmnopqrstuvwxyz";
@@ -593,7 +587,7 @@ TEST_F(FTParserTest, test_lex_container)
   {
     // add repeated lexeme
     ObArenaAllocator alloc;
-    ObFTSortList list(alloc);
+    ObFTLightSortList list(alloc);
     ret = list.add_token(gen_lexeme(1, 4));
     ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -606,7 +600,7 @@ TEST_F(FTParserTest, test_lex_container)
     // making sure the lexeme is correctly inserted.
     // 1-3 6-9 11-15 10-16
     ObArenaAllocator alloc;
-    ObFTSortList list(alloc);
+    ObFTLightSortList list(alloc);
 
     ret = list.add_token(gen_lexeme(1, 3));
     ASSERT_EQ(ret, OB_SUCCESS);
@@ -622,7 +616,7 @@ TEST_F(FTParserTest, test_lex_container)
 
     ASSERT_EQ(list.tokens().size(), 4);
 
-    ObFTSortList::CellIter iter = list.tokens().begin();
+    ObFTLightSortList::CellIter iter = list.tokens().begin();
     ASSERT_EQ(iter->offset_, 1);
     ASSERT_EQ(iter->length_, 2);
 
@@ -719,7 +713,8 @@ TEST_F(FTParserTest, DISABLED_benchmark)
     ObFTParserParam param;
     param.cs_ = &cs;
     ObITokenIterator *iter = nullptr;
-    param.allocator_ = &allocator;
+    param.metadata_alloc_ = &allocator;
+    param.scratch_alloc_ = &allocator;
     // param.cs_ = CS_TYPE_UTF8MB4_BIN;
     param.fulltext_ = word;
     param.ft_length_ = len;

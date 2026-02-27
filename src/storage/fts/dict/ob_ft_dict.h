@@ -37,25 +37,25 @@ public:
   {
   }
 
-  bool is_match() const { return is_match_; }
+  inline bool is_match() const { return is_match_; }
 
-  bool is_prefix() const { return is_prefix_; }
+  inline bool is_prefix() const { return is_prefix_; }
 
-  bool is_unmatch() const
+  inline bool is_unmatch() const
   {
     bool unmatch = (!is_match_) && (!is_prefix_);
     return unmatch;
   }
 
-  void set_unmatch()
+  inline void set_unmatch()
   {
     is_match_ = false;
     is_prefix_ = false;
   }
 
-  void set_match() { is_match_ = true; }
+  inline void set_match() { is_match_ = true; }
 
-  void set_prefix() { is_prefix_ = true; }
+  inline void set_prefix() { is_prefix_ = true; }
 
   ObDATrieHit &operator=(const ObDATrieHit &other)
   {
@@ -69,7 +69,7 @@ public:
     return *this;
   }
 
-  bool operator==(const ObDATrieHit &other) const
+  inline bool operator==(const ObDATrieHit &other) const
   {
     return start_pos_ == other.start_pos_ && end_pos_ == other.end_pos_
            && base_idx_ == other.base_idx_ && current_check_ == other.current_check_;

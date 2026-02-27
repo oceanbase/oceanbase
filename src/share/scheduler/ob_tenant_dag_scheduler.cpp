@@ -490,6 +490,10 @@ const char *ObITask::ObITaskTypeStr[] = {
   "BACKUP_VALIDATE_BASIC",
   "BACKUP_VALIDATE_BACKUPSET_PHYSICAL",
   "BACKUP_VALIDATE_ARCHIVE_PIECE_PHYSICAL",
+  "DDL_FTS_SAMPLE_TASK",
+  "DDL_MERGE_SORT_PREPARE_TASK",
+  "DDL_MERGE_SORT_TASK",
+  "DDL_MERGE_SORT_WRITE_TASK",
   "MAX"
 };
 
@@ -564,6 +568,8 @@ int ObITask::do_work(bool is_sys_task)
     THIS_WORKER.set_curr_request_level(saved_request_level);
     const int64_t end_time = ObTimeUtility::fast_current_time();
     if (dag_->is_independent()) {
+      // NOTE: For independent dag, task may be executed multiple times (suspend/resume).
+      IGNORE_RETURN update_monitor_info(ret, end_time - start_time);
       COMMON_LOG(INFO, "task finish process", K(ret), K(start_time), K(end_time), "runtime", end_time-start_time, KP(this), K_(type), K_(status), KP_(dag));
     } else {
       COMMON_LOG(INFO, "task finish process", K(ret), K(start_time), K(end_time), "runtime", end_time-start_time, K(*this));
