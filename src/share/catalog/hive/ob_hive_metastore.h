@@ -75,7 +75,7 @@ struct ObHiveBasicStats
   }
 
   bool is_valid() const {
-    return num_files_ >= 0 && num_rows_ >= 0 && total_size_ >= 0;
+    return num_files_ > 0 && num_rows_ > 0 && total_size_ > 0;
   }
 
   TO_STRING_KV(K(num_files_), K(num_rows_), K(total_size_));

@@ -689,7 +689,7 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
     }
 
     // Create final table statistics and column statistics
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && merged_basic_stats.is_valid()) {
       if (OB_FAIL(create_external_table_stat(table_metadata, merged_basic_stats, ObString(""),
                                              partition_names.size(), external_table_stat))) {
         LOG_WARN("failed to create external table stat", K(ret));
@@ -736,17 +736,21 @@ int ObHiveCatalogStatHelper::convert_hive_table_stats_to_external_stats(
   external_table_stat = nullptr;
   external_column_stats.reset();
 
-  // Create table statistics
-  if (OB_FAIL(create_external_table_stat(
-          table_metadata, basic_stats, ObString(""), 1, external_table_stat))) {
-    LOG_WARN("failed to create external table stat", K(ret));
-  }
-
-  // Create column statistics
-  if (OB_SUCC(ret) && !table_stats_result.tableStats.empty()) {
-    if (OB_FAIL(create_external_column_stats(
-            table_metadata, table_stats_result.tableStats, column_names,
-            ObString(""), basic_stats.num_rows_, external_column_stats))) {
+  if (basic_stats.is_valid()) {
+    // Create table statistics and column statistics
+    if (OB_FAIL(create_external_table_stat(table_metadata,
+                                           basic_stats,
+                                           ObString(""),
+                                           1,
+                                           external_table_stat))) {
+      LOG_WARN("failed to create external table stat", K(ret));
+    } else if (!table_stats_result.tableStats.empty() &&
+               OB_FAIL(create_external_column_stats(table_metadata,
+                                                    table_stats_result.tableStats,
+                                                    column_names,
+                                                    ObString(""),
+                                                    basic_stats.num_rows_,
+                                                    external_column_stats))) {
       LOG_WARN("failed to create external column stats", K(ret));
     }
   }
@@ -818,22 +822,6 @@ int ObHiveCatalogStatHelper::create_external_column_stats(
       non_part_column_stat_builders.at(i)->~ObOptExternalColumnStatBuilder();
     }
   }
-  return ret;
-}
-
-int ObHiveCatalogStatHelper::merge_partition_basic_stats(
-    const std::vector<ObHiveBasicStats> &partition_basic_stats,
-    ObHiveBasicStats &merged_stats) {
-  int ret = OB_SUCCESS;
-
-  merged_stats.reset();
-
-  for (const ObHiveBasicStats &partition_stat : partition_basic_stats) {
-    merged_stats.num_files_ += partition_stat.num_files_;
-    merged_stats.num_rows_ += partition_stat.num_rows_;
-    merged_stats.total_size_ += partition_stat.total_size_;
-  }
-
   return ret;
 }
 
