@@ -212,14 +212,14 @@ int ObDynamicPartitionManager::build_add_partition_sql_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("database schema is null", KR(ret));
     } else {
-      const char *quote = is_oracle_mode_ ? "\"" : "`";
-      if (OB_FAIL(sql.append_fmt("ALTER TABLE %s%s%s.%s%s%s ADD %s%.*s%s",
-                                 quote, database_schema->get_database_name(), quote,
-                                 quote, table_schema_->get_table_name(), quote,
-                                 is_oracle_mode_ ? "" : "PARTITION (",
+      const char *template_str = is_oracle_mode_
+                                 ? "ALTER TABLE \"%s\".\"%s\" ADD %.*s"
+                                 : "ALTER TABLE `%s`.`%s` ADD PARTITION (%.*s)";
+      if (OB_FAIL(sql.append_fmt(template_str,
+                                 database_schema->get_database_name(),
+                                 table_schema_->get_table_name(),
                                  static_cast<int32_t>(part_def_list.length()),
-                                 part_def_list.ptr(),
-                                 is_oracle_mode_ ? "" : ")"))) {
+                                 part_def_list.ptr()))) {
         LOG_WARN("fail to append sql", KR(ret));
       }
     }
@@ -252,10 +252,12 @@ int ObDynamicPartitionManager::build_drop_partition_sql_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("database schema is null", KR(ret));
     } else {
-      const char *quote = is_oracle_mode_ ? "\"" : "`";
-      if (OB_FAIL(sql.append_fmt("ALTER TABLE %s%s%s.%s%s%s DROP PARTITION %.*s",
-                                 quote, database_schema->get_database_name(), quote,
-                                 quote, table_schema_->get_table_name(), quote,
+      const char *template_str = is_oracle_mode_
+                                 ? "ALTER TABLE \"%s\".\"%s\" DROP PARTITION %.*s"
+                                 : "ALTER TABLE `%s`.`%s` DROP PARTITION %.*s";
+      if (OB_FAIL(sql.append_fmt(template_str,
+                                 database_schema->get_database_name(),
+                                 table_schema_->get_table_name(),
                                  static_cast<int32_t>(part_name_list.length()),
                                  part_name_list.ptr()))) {
         LOG_WARN("fail to append sql", KR(ret));
@@ -287,6 +289,9 @@ int ObDynamicPartitionManager::build_precreate_partition_definition_list_(
       LOG_WARN("fail to get start precreate timestamp", KR(ret));
     } else {
       int64_t part_cnt = 0;
+      const char *template_str = is_oracle_mode_
+                                 ? "%sPARTITION \"%.*s\" VALUES LESS THAN (%.*s)"
+                                 : "%sPARTITION `%.*s` VALUES LESS THAN (%.*s)";
       while (OB_SUCC(ret) && low_bound_val_timestamp <= target_precreate_timestamp) {
         ObSqlString part_name;
         ObSqlString high_bound_val;
@@ -295,21 +300,28 @@ int ObDynamicPartitionManager::build_precreate_partition_definition_list_(
           LOG_WARN("fail to add timestamp", KR(ret), K(time_unit));
         } else if (OB_FAIL(build_part_name_(low_bound_val_timestamp, part_name))) {
           LOG_WARN("fail to convert timestamp to part_name", KR(ret), K(low_bound_val_timestamp));
-        } else if (OB_FAIL(build_high_bound_val_(high_bound_val_timestamp, high_bound_val))) {
-          LOG_WARN("fail to convert timestamp to obj", KR(ret), K(high_bound_val_timestamp));
         } else {
-          part_cnt++;
-          if (part_cnt > MAX_PRECREATE_PART_NUM) {
-            // too much precreate partition at a time, cut off
-            LOG_INFO("too much precreate partitition", KR(ret), K(part_cnt));
-            break;
-          } else if (OB_FAIL(part_def_list.append_fmt("%sPARTITION %.*s VALUES LESS THAN (%.*s)",
-                                                      1 == part_cnt ? "" : ", ",
-                                                      static_cast<int32_t>(part_name.length()),
-                                                      part_name.ptr(),
-                                                      static_cast<int32_t>(high_bound_val.length()),
-                                                      high_bound_val.ptr()))) {
-            LOG_WARN("fail to append sql", KR(ret));
+          bool part_name_exists = false;
+          if (OB_FAIL(check_partition_name_exists_(part_name.string(), part_name_exists))) {
+            LOG_WARN("fail to check partition name exists", KR(ret), K(part_name));
+          } else if (part_name_exists) {
+            LOG_INFO("partition already exists, skip this partition", K(part_name));
+          } else if (OB_FAIL(build_high_bound_val_(high_bound_val_timestamp, high_bound_val))) {
+            LOG_WARN("fail to convert timestamp to obj", KR(ret), K(high_bound_val_timestamp));
+          } else {
+            part_cnt++;
+            if (part_cnt > MAX_PRECREATE_PART_NUM) {
+              // too much precreate partition at a time, cut off
+              LOG_INFO("too much precreate partitition", KR(ret), K(part_cnt));
+              break;
+            } else if (OB_FAIL(part_def_list.append_fmt(template_str,
+                                                        1 == part_cnt ? "" : ", ",
+                                                        static_cast<int32_t>(part_name.length()),
+                                                        part_name.ptr(),
+                                                        static_cast<int32_t>(high_bound_val.length()),
+                                                        high_bound_val.ptr()))) {
+              LOG_WARN("fail to append sql", KR(ret));
+            }
           }
         }
         low_bound_val_timestamp = high_bound_val_timestamp;
@@ -339,7 +351,7 @@ int ObDynamicPartitionManager::build_expired_partition_name_list_(
       LOG_WARN("fail to add timestamp", KR(ret), K(-expire_time_num), K(expire_time_unit));
     } else {
       // keep at least one partition
-      const char *quote = is_oracle_mode_ ? "\"" : "`";
+      const char *template_str = is_oracle_mode_ ? "%s\"%.*s\"" : "%s`%.*s`";
       for (int64_t i = 0; OB_SUCC(ret) && i < table_schema_->get_partition_num() - 1; i++) {
         const ObPartition *part = table_schema_->get_part_array()[i];
         int64_t high_bound_val_timestamp = 0;
@@ -351,12 +363,10 @@ int ObDynamicPartitionManager::build_expired_partition_name_list_(
         } else if (high_bound_val_timestamp >= expire_timestamp) {
           // subsequent partitions are not expired
           break;
-        } else if (OB_FAIL(part_name_list.append_fmt("%s%s%.*s%s",
+        } else if (OB_FAIL(part_name_list.append_fmt(template_str,
                                                      0 == i ? "" : ", ",
-                                                     quote,
                                                      part->get_part_name().length(),
-                                                     part->get_part_name().ptr(),
-                                                     quote))) {
+                                                     part->get_part_name().ptr()))) {
           LOG_WARN("fail to append sql", KR(ret));
         }
       }
@@ -407,7 +417,6 @@ int ObDynamicPartitionManager::build_part_name_(const int64_t timestamp, ObSqlSt
       int64_t pos = 0;
       bool res_null = false;
       ObString locale;
-      const char *quote = is_oracle_mode_ ? "\"" : "`";
       if (FAILEDx(ObTimeConverter::datetime_to_ob_time(timestamp, time_zone_info_wrap.get_time_zone_info(), ob_time))) {
         LOG_WARN("fail to convert timestamp to ob time", KR(ret), K(timestamp));
       } else if (OB_FAIL(ObTimeConverter::ob_time_to_str_format(ob_time,
@@ -421,7 +430,7 @@ int ObDynamicPartitionManager::build_part_name_(const int64_t timestamp, ObSqlSt
       } else if (OB_UNLIKELY(res_null)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to convert ob time to str", KR(ret), K(ob_time), K(format));
-      } else if (OB_FAIL(str.append_fmt("%sP%.*s%s", quote, static_cast<int32_t>(pos), buf, quote))) {
+      } else if (OB_FAIL(str.append_fmt("P%.*s", static_cast<int32_t>(pos), buf))) {
         LOG_WARN("fail to assign str", KR(ret));
       }
     }
@@ -511,6 +520,31 @@ int ObDynamicPartitionManager::build_high_bound_val_(const int64_t timestamp, Ob
           LOG_WARN("fail to assign str", KR(ret));
         }
         } // end SMART_VAR
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDynamicPartitionManager::check_partition_name_exists_(const ObString &part_name, bool &exists)
+{
+  int ret = OB_SUCCESS;
+  exists = false;
+
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(part_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("part name is empty", KR(ret));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(table_schema_->check_partition_duplicate_with_name(part_name))) {
+      if (OB_DUPLICATE_OBJECT_NAME_EXIST == tmp_ret) {
+        exists = true;
+      } else {
+        ret = tmp_ret;
+        LOG_WARN("fail to check partition duplicate with name", KR(ret), K(part_name));
       }
     }
   }
@@ -651,8 +685,7 @@ int ObDynamicPartitionManager::fetch_timestamp_from_part_key_(
         case ObObjType::ObDateTimeType:
         case ObObjType::ObMySQLDateTimeType:
         case ObObjType::ObTimestampType:
-        case ObObjType::ObTimestampNanoType:
-        case ObObjType::ObTimestampTZType: {
+        case ObObjType::ObTimestampNanoType: {
           ObObj datetime_obj;
           // oracle time type can not cast to ObTimestampType, so first cast to ObDateTimeType
           if (OB_FAIL(ObObjCaster::to_type(ObDateTimeType, cast_ctx, *high_bound_val_obj, datetime_obj))) {
@@ -662,6 +695,12 @@ int ObDynamicPartitionManager::fetch_timestamp_from_part_key_(
                                                                     timestamp))) {
             LOG_WARN("fail to convert datetime to timestamp", KR(ret), K(datetime_obj));
           }
+          break;
+        }
+        case ObObjType::ObTimestampTZType: {
+          // cast ObTimestampTZType to datetime will lose timezone information, so we convert it to timestamp manually
+          ObOTimestampData ot_data = high_bound_val_obj->get_otimestamp_value();
+          timestamp = ot_data.time_us_;
           break;
         }
         case ObObjType::ObYearType: {
@@ -754,6 +793,20 @@ int ObDynamicPartitionManager::add_timestamp_(const int64_t num, const ObDateUni
       LOG_WARN("fail to adjust date", KR(ret), K(timestamp), K(interval_str), K(time_unit));
     } else if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(datetime, time_zone_info_wrap.get_time_zone_info(), timestamp))) {
       LOG_WARN("fail to convert datetime to timestamp", KR(ret), K(datetime), K(time_zone_info_wrap.get_time_zone_info()));
+      if (OB_ERR_FIELD_NOT_FOUND_IN_DATETIME_OR_INTERVAL == ret // oracle mode error code
+          || OB_ERR_UNEXPECTED_TZ_TRANSITION == ret ) {  // mysql mode error code
+        // hit the gap of timezone transition, temporarily reduce one us to avoid the gap
+        // e.g. datetime is 2025-03-09 02:00:00.000000, time zone is America/New_York,
+        //      [2025-03-09 02:00:00.000000, 2025-03-09 03:00:00.000000) is gap of timezone transition,
+        //      so we reduce one us to avoid the gap, and after convert to timestamp, add one us back to get the correct timestamp
+        datetime -= 1;
+        // overwrite ret
+        if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(datetime, time_zone_info_wrap.get_time_zone_info(), timestamp))) {
+          LOG_WARN("fail to convert datetime to timestamp", KR(ret), K(datetime), K(time_zone_info_wrap.get_time_zone_info()));
+        } else {
+          timestamp += 1;
+        }
+      }
     }
   }
 
@@ -778,6 +831,8 @@ int ObDynamicPartitionManager::floor_timestamp_(const ObDateUnitType time_unit, 
       LOG_WARN("tz info is null", KR(ret));
     } else if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(timestamp, tz_info, ob_time))) {
       LOG_WARN("fail to convert timestamp to ob time", KR(ret), K(timestamp));
+    } else if (OB_FAIL(tz_info->get_timezone_offset(USEC_TO_SEC(timestamp), sec_offset))) {
+      LOG_WARN("fail to get timezone offset", KR(ret), K(timestamp));
     } else {
       // To floor a datetime:
       //
@@ -796,7 +851,6 @@ int ObDynamicPartitionManager::floor_timestamp_(const ObDateUnitType time_unit, 
       //
       // Finally, add time zone offset to get timestamp.
 
-      int32_t sec_offset = tz_info->get_offset();
       int32_t day_offset = 0;
       int32_t day_count = ob_time.parts_[DT_DATE];
       int32_t hour_count = ObDateUnitType::DATE_UNIT_HOUR == time_unit ? ob_time.parts_[DT_HOUR] : 0;

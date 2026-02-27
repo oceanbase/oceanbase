@@ -93,6 +93,7 @@ private:
   int build_expired_partition_name_list_(ObSqlString &part_name_list);
   int build_part_name_(const int64_t timestamp, ObSqlString &str);
   int build_high_bound_val_(const int64_t timestamp, ObSqlString &str);
+  int check_partition_name_exists_(const ObString &part_name, bool &exists);
   int get_start_precreate_timestamp_(int64_t &timestamp);
   int get_target_precreate_timestamp_(const ObString &specified_precreate_time, int64_t &timestamp);
   int get_table_time_zone_wrap_(ObTimeZoneInfoWrap &tz_info_wrap);
