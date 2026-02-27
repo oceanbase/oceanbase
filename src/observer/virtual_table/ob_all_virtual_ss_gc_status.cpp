@@ -73,7 +73,7 @@ int ObAllVirtualSSGCStatus::get_next_last_succ_scn(LastSuccSCN &last_succ_scn)
   } else if (OB_FAIL(last_succ_scn_iter_.get_next(last_succ_scn))) {
     if (OB_ITER_END == ret) {
       // get is_for_sslog_table iter
-      if (MTL_ID() == OB_SYS_TENANT_ID && !is_for_sslog_table_) {
+      if ((is_sys_tenant(MTL_ID()) || is_meta_tenant(MTL_ID())) && !is_for_sslog_table_) {
         is_for_sslog_table_ = true;
         ret = OB_SUCCESS;
         if (OB_FAIL(prepare_start_to_read())) {
