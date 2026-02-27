@@ -25,11 +25,15 @@
 #include "ob_storage_ha_struct.h"
 #include "storage/high_availability/ob_transfer_struct.h"
 
-
 namespace oceanbase
 {
+namespace common
+{
+class ObTimeoutCtx;
+}
 namespace storage
 {
+using common::ObTimeoutCtx;
 
 class ObTransferParallelBuildTabletDag : public share::ObIDag
 {
@@ -50,7 +54,8 @@ public:
 
   int init(
       const share::ObLSID &ls_id,
-      ObTransferBuildTabletInfoCtx *ctx);
+      ObTransferBuildTabletInfoCtx *ctx,
+      ObTimeoutCtx *timeout_ctx);
   int get_ls(ObLS *&ls);
 
 protected:
@@ -58,6 +63,7 @@ protected:
   share::ObLSID ls_id_;
   ObLSHandle ls_handle_;
   ObTransferBuildTabletInfoCtx *ctx_;
+  ObTimeoutCtx *timeout_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferParallelBuildTabletDag);
 };
 
@@ -68,7 +74,8 @@ public:
   virtual ~ObTransferParallelBuildTabletTask();
   int init(
       const share::ObTransferTabletInfo &first_tablet_info,
-      ObTransferBuildTabletInfoCtx *ctx);
+      ObTransferBuildTabletInfoCtx *ctx,
+      ObTimeoutCtx *timeout_ctx);
   virtual int process() override;
   virtual int generate_next_task(share::ObITask *&next_task) override;
   VIRTUAL_TO_STRING_KV(K("ObTransferParallelBuildTabletTask"), KP(this), KPC(ctx_));
@@ -81,6 +88,7 @@ private:
   share::ObTransferTabletInfo first_tablet_info_;
   ObTransferBuildTabletInfoCtx *ctx_;
   ObLS *ls_;
+  ObTimeoutCtx *timeout_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferParallelBuildTabletTask);
 };
 
