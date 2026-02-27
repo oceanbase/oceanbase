@@ -193,6 +193,9 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_bl
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("fail to insert row", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(!micro_block_desc.is_complete_micro_block_memory())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid micro_block_desc argument, header does not point to a complete micro block buffer", K(ret), K(micro_block_desc));
   } else if (OB_UNLIKELY(!micro_block_desc.is_valid() || !micro_index_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to insert micro block, invalid argument",
