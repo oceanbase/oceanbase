@@ -3261,6 +3261,36 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareCursorStmt &s)
 
   OZ (generator_.generate_spi_pl_profiler_before_record(s));
   OZ (generator_.generate_declare_cursor(s, s.get_cursor_index()));
+
+  if (OB_SUCC(ret) && OB_INVALID_INDEX != s.get_default()) {
+    const ObPLVar *var = s.get_var();
+    CK (OB_NOT_NULL(var));
+    if (OB_SUCC(ret) && var->get_type().is_ref_cursor_type()) {
+      ObLLVMValue p_result_obj, into_obj, src_datum, dest_datum;
+      ObPLCGBufferGuard default_value_guard(generator_);
+
+      OZ (default_value_guard.get_objparam_buffer(p_result_obj));
+      OZ (generator_.generate_expr(s.get_default(), s, OB_INVALID_ID, p_result_obj));
+      CK (OB_NOT_NULL(s.get_default_expr()));
+
+      OZ (generator_.generate_check_not_null(s, var->is_not_null(), p_result_obj));
+
+      OZ (generator_.extract_objparam_from_context(generator_.get_vars().at(generator_.CTX_IDX),
+                                                   s.get_index(), into_obj));
+
+      ObLLVMValue allocator;
+      OZ (generator_.generate_null(ObIntType, allocator));
+      OZ (generator_.extract_obobj_ptr_from_objparam(p_result_obj, src_datum));
+      OZ (generator_.extract_obobj_ptr_from_objparam(into_obj, dest_datum));
+      OZ (var->get_type().generate_copy(generator_, *s.get_namespace(),
+                                        allocator, src_datum, dest_datum,
+                                        s.get_location(),
+                                        s.get_block()->in_notfound(),
+                                        s.get_block()->in_warning(),
+                                        OB_INVALID_ID, false));
+    }
+  }
+
   OZ (generator_.generate_spi_pl_profiler_after_record(s));
   OZ (generator_.register_dispatch_map(s.get_stmt_id(), generator_.get_current()), s);
 

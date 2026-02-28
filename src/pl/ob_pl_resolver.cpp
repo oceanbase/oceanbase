@@ -9030,10 +9030,15 @@ int ObPLResolver::resolve_declare_ref_cursor(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("parse_tree is NULL", K(parse_tree), K(stmt), K(current_block_), K(ret));
   } else {
+    bool not_null = parse_tree->int32_values_[0] == 1;
+    bool constant = parse_tree->int32_values_[1] == 1;
+
     const ObStmtNodeTree *name_node = parse_tree->children_[0];
     const ObStmtNodeTree *type_node = parse_tree->children_[1];
+    const ObStmtNodeTree *default_node = parse_tree->children_[2];
     ObPLDataType data_type;
     ObString ident_name;
+    ObRawExpr *default_expr = NULL;
     CK (OB_NOT_NULL(type_node));
     OZ (resolve_sp_data_type(type_node, ident_name, func, data_type));
     CK (data_type.is_cursor_type());
@@ -9045,6 +9050,51 @@ int ObPLResolver::resolve_declare_ref_cursor(
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "name list for ref cursor");
       } else {
         OZ (resolve_ident(name_node->children_[0], ident_name));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (data_type.is_not_null() && -1 == parse_tree->int32_values_[0]) {
+        ret = OB_ERR_SUBTYPE_NOTNULL_MISMATCH;
+        LOG_WARN("PLS-00366: subtype of a not null type must also be not null", K(ret));
+      } else {
+        OX (not_null = not_null || data_type.get_not_null());
+      }
+    }
+    OX (data_type.set_not_null(not_null));
+
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(default_node)) {
+        if (constant) {
+          ret = OB_ERR_INIT_CONST_ILLEGAL;
+          LOG_WARN("PLS-00322: Constant declarations should contain initialization assignments",
+                   K(ret), K(constant), K(default_node));
+          LOG_USER_ERROR(OB_ERR_INIT_CONST_ILLEGAL, ident_name.length(), ident_name.ptr());
+        } else if (not_null) {
+          ret = OB_ERR_INIT_NOTNULL_ILLEGAL;
+          LOG_WARN("PLS-00218: a variable declared NOT NULL must have an initialization assignment",
+                   K(ret), K(not_null), K(default_node));
+        }
+      }
+    }
+
+    // resolve default value
+    if (OB_SUCC(ret) && OB_NOT_NULL(default_node)) {
+      CK (OB_LIKELY(T_SP_DECL_DEFAULT == default_node->type_));
+      CK (OB_NOT_NULL(default_node->children_[0]));
+
+      if (OB_SUCC(ret) && not_null && T_NULL == default_node->children_[0]->type_) {
+        ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+        LOG_WARN("PLS-00382: expression is of wrong type", K(ret));
+      }
+
+      OZ (resolve_expr(default_node->children_[0], func, default_expr,
+                       combine_line_and_col(default_node->children_[0]->stmt_loc_),
+                       true, &data_type));
+      if (OB_SUCC(ret)) {
+        OZ (check_assign_type(data_type, default_expr));
+        OZ (func.add_expr(default_expr));
+        OX (stmt->set_default(func.get_expr_count() - 1));
       }
     }
 
