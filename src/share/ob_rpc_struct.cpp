@@ -3345,7 +3345,10 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     is_index_scope_specified_,
                     is_offline_rebuild_,
                     index_key_,
-                    data_version_);
+                    data_version_,
+                    generated_column_names_,
+                    def_index_id_,
+                    is_table_restore_);
 
 OB_SERIALIZE_MEMBER((ObIndexOfflineDdlArg, ObDDLArg),
                     arg_,

@@ -2163,9 +2163,6 @@ int ObDDLScheduler::create_build_fts_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema), K(tenant_data_version), KP(GCTX.sql_proxy_));
-    } else if (OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(
-                   data_table_schema, index_schema, parent_task_id, *create_index_arg, snapshot_version))) {
-      LOG_WARN("fail to update domain index share table snapshot", K(ret));
     } else if (OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(data_table_schema, create_index_arg))) {
       LOG_WARN("fail to check supportability for building index", K(ret));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, data_table_schema->get_tenant_id(), task_id))) {
@@ -2272,9 +2269,6 @@ int ObDDLScheduler::create_build_vec_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema));
-    } else if (OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(
-                   data_table_schema, index_schema, parent_task_id, *create_index_arg, snapshot_version))) {
-      LOG_WARN("fail to update domain index share table snapshot", K(ret));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, data_table_schema->get_tenant_id(), task_id))) {
       LOG_WARN("fetch new task id failed", K(ret));
     } else if (OB_FAIL(index_task.init(data_table_schema->get_tenant_id(),
@@ -2321,7 +2315,7 @@ int ObDDLScheduler::create_build_index_task(
   int64_t task_id = 0;
 
   share::ObDDLTaskStatus task_status =
-    (index_schema->is_rowkey_doc_id() || index_schema->is_vec_rowkey_vid_type()) && !create_index_arg->is_offline_rebuild_ ?
+    (index_schema->is_rowkey_doc_id() || index_schema->is_vec_rowkey_vid_type()) && !create_index_arg->is_offline_or_restore() ?
     share::ObDDLTaskStatus::REDEFINITION : share::ObDDLTaskStatus::PREPARE;
 
   SMART_VAR(ObIndexBuildTask, index_task) {

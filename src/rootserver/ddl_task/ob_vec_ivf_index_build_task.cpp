@@ -1843,7 +1843,7 @@ int ObVecIVFIndexBuildTask::submit_drop_vec_index_task()
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(object_id_));
   } else if (OB_ISNULL(data_table_schema)) {
-    if (create_index_arg_.is_offline_rebuild_) {
+    if (create_index_arg_.is_offline_or_restore()) {
       drop_index_task_submitted_ = true;
       LOG_INFO("hidden data_table maybe removed when offline ddl is failed, skip submit drop", K(ret), K(object_id_));
     } else {
@@ -1869,7 +1869,7 @@ int ObVecIVFIndexBuildTask::submit_drop_vec_index_task()
     drop_index_arg.table_name_        = data_table_schema->get_table_name();
     drop_index_arg.database_name_     = database_schema->get_database_name_str();
     drop_index_arg.is_vec_inner_drop_ = true;  // if want to drop only one index, is_vec_inner_drop_ should be false, else should be true.
-    drop_index_arg.is_hidden_         = create_index_arg_.is_offline_rebuild_;
+    drop_index_arg.is_hidden_         = create_index_arg_.is_offline_or_restore();
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(data_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", KR(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {

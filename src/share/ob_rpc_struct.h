@@ -2884,7 +2884,10 @@ public:
         is_index_scope_specified_(false),
         is_offline_rebuild_(false),
         index_key_(-1),
-        data_version_(0)
+        data_version_(0),
+        generated_column_names_(),
+        def_index_id_(common::OB_INVALID_ID),
+        is_table_restore_(false)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2916,7 +2919,10 @@ public:
         is_index_scope_specified_(false),
         is_offline_rebuild_(false),
         index_key_(-1),
-        data_version_(0)
+        data_version_(0),
+        generated_column_names_(),
+        def_index_id_(common::OB_INVALID_ID),
+        is_table_restore_(false)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2954,6 +2960,9 @@ public:
     is_offline_rebuild_ = false;
     index_key_ = -1;
     data_version_ = 0;
+    generated_column_names_.reset();
+    def_index_id_ = common::OB_INVALID_ID;
+    is_table_restore_ = false;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2997,6 +3006,7 @@ public:
       is_offline_rebuild_ = other.is_offline_rebuild_;
       index_key_ = other.index_key_;
       data_version_ = other.data_version_;
+      is_table_restore_ = other.is_table_restore_;
     }
     return ret;
   }
@@ -3009,6 +3019,7 @@ public:
   inline bool is_spatial_index() const { return ObSimpleTableSchemaV2::is_spatial_index(index_type_); }
   inline bool is_multivalue_index() const { return is_multivalue_index_aux(index_type_); }
   inline bool is_vec_index() const { return ObSimpleTableSchemaV2::is_vec_index(index_type_); }
+  inline bool is_offline_or_restore() const { return is_offline_rebuild_ || is_table_restore_; }
 
 //todo @qilu:only for each_cg now, when support customized cg ,refine this
   typedef common::ObSEArray<uint64_t, common::DEFAULT_CUSTOMIZED_CG_NUM> ObCGColumnList;
@@ -3071,6 +3082,9 @@ public:
   bool is_offline_rebuild_;
   int64_t index_key_;
   uint64_t data_version_;
+  common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM> generated_column_names_;
+  uint64_t def_index_id_;
+  bool is_table_restore_;
 };
 
 struct ObIndexOfflineDdlArg : ObDDLArg
