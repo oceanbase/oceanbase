@@ -227,6 +227,8 @@ STAT_EVENT_ADD_DEF(SQL_INNER_LOCAL_TIME, "inner sql local execute time", ObStatC
 STAT_EVENT_ADD_DEF(SQL_INNER_REMOTE_TIME, "inner sql remote execute time", ObStatClassIds::SQL, 40124, false, true, false, "Deprecated since V4.4.1.")
 STAT_EVENT_ADD_DEF(SQL_INNER_DISTRIBUTED_TIME, "inner sql distributed execute time", ObStatClassIds::SQL, 40125, false, true, false, "Deprecated since V4.4.1.")
 STAT_EVENT_ADD_DEF(SQL_INSERT_DUPLICATE_COUNT, "try insert duplicate count", ObStatClassIds::SQL, 40126, true, true, true, "Total number of actual conflicting rows in insertup or replace statements. If actual conflicts occur in insertup or replace statements, performance may be affected.")
+STAT_EVENT_ADD_DEF(DAS_WAIT_REMOTE_RESPONSE_TIME, "das wait remote response time", ObStatClassIds::SQL, 40127, true, true, true, "Total time (in microseconds) spent waiting for DAS remote task responses. When executing distributed queries, this metric accumulates the time spent waiting for remote DAS task execution results.")
+STAT_EVENT_ADD_DEF(TMP_FILE_WRITE_BYTES, "tmp file write bytes", ObStatClassIds::SQL, 40128, true, true, true, "Cumulative size (in bytes) of tmp file writes during SQL execution. Each time FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(...) is called, the write size is added to this total.")
 
 // CACHE
 STAT_EVENT_ADD_DEF(ROW_CACHE_HIT, "row cache hit", ObStatClassIds::CACHE, 50000, true, true, true, "Number of cache hits when the TABLE GET operator prefetches data rows. In the lookup_in_cache function, the system checks if the data row is in the cache when prefetching. If a cache hit occurs, this count is incremented by 1.")
