@@ -1974,9 +1974,12 @@ int ObTabletTableStore::get_recycle_version(
     LOG_WARN("failed to get major tables from old store", K(ret), KPC(this));
   } else if (OB_FAIL(ObTableStoreUtil::sort_major_tables(major_tables))) {
     LOG_WARN("failed to sort major tables", K(ret));
-  } else if (1 == major_tables.count() || major_tables.at(major_tables.count() - 2)->get_snapshot_version() <= multi_version_start) {
-    // only one major table or the second last major table is before multi_version_start, use the last major table
-    recycle_version = major_tables.at(major_tables.count() - 1)->get_snapshot_version();
+  } else {
+    const int64_t last_major_table_snapshot_version = major_tables.at(major_tables.count() - 1)->get_snapshot_version();
+    if (last_major_table_snapshot_version > 1
+      && last_major_table_snapshot_version <= multi_version_start) {
+      recycle_version = last_major_table_snapshot_version;
+    }
   }
 #ifdef ERRSIM
   if (OB_FAIL(ret)) {
