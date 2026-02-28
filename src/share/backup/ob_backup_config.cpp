@@ -445,7 +445,7 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       LOG_WARN("fail to check dest checksum type", K(ret), K(backup_dest));
     } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest, trans))) {
       LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id), K(backup_dest));
-    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
+    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/, true/*need_check_permission*/))) {
       if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, 
                           "set backup dest: parameter enable_worm=true is required for bucket with worm.");
@@ -669,7 +669,7 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "archive_lag_target is smaller than 60s, set log_archive_dest to S3 is");
     } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
       LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id)); 
-    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
+    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/, true/*need_check_permission*/))) {
       if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, 
                           "set backup dest: parameter enable_worm=true is required for bucket with worm.");
@@ -973,7 +973,7 @@ int ChangeExternalStorageDestMgr::update_and_validate_authorization(const char *
     LOG_WARN("fail to get backup dest str", K(ret));
   } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type_, backup_dest_str, *sql_proxy_))) {
     LOG_WARN("failed to init dest mgr", K(ret), K(tenant_id_), K(backup_dest_str));
-  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy, true/*need_format_file*/))) {
+  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy, true/*need_format_file*/, true/*need_check_permission*/))) {
     LOG_WARN("fail to check archive dest validity", K(ret), K(tenant_id_), K(backup_dest_str));
   } else {
     LOG_INFO("succeed to check archive dest validity", K(tenant_id_), K(backup_dest_str));

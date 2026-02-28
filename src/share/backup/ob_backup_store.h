@@ -166,7 +166,7 @@ public:
       const share::ObBackupPathString &backup_dest_str,
       common::ObISQLClient &sql_proxy);
   int check_dest_connectivity(obrpc::ObSrvRpcProxy &rpc_proxy);
-  int check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file);
+  int check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file, const bool need_check_permission);
   int write_format_file();
   void reset();
 private:

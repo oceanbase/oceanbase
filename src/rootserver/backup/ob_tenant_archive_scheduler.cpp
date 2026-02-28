@@ -509,7 +509,7 @@ int ObArchiveHandler::check_archive_dest_validity_(const int64_t dest_no)
     LOG_WARN("fail to get archive path", K(ret), K(tenant_id_));
   } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, dest_str,  *sql_proxy_))) {
     LOG_WARN("fail to init dest manager", K(ret), K(tenant_id_), K(dest_str));
-  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
+  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, true/*need_check_permission*/))) {
     LOG_WARN("fail to check archive dest validity", K(ret), K(tenant_id_), K(dest_str));
   }
 
