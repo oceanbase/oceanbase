@@ -423,7 +423,7 @@ int ObBackupDestMgr::check_dest_connectivity(obrpc::ObSrvRpcProxy &rpc_proxy)
   return ret;
 }
 
-int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file)
+int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file, const bool need_check_permission)
 {
   int ret = OB_SUCCESS;
   share::ObBackupStore store;
@@ -437,7 +437,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
     LOG_WARN("fail to init store", K(ret), K_(backup_dest));
   } else if (OB_FAIL(store.dest_is_empty_directory(is_empty))) {
     LOG_WARN("fail to check dest is empty dirctory", K(ret), K_(backup_dest));
-  } else if (OB_FAIL(check_dest_connectivity(rpc_proxy))) {
+  } else if (need_check_permission && OB_FAIL(check_dest_connectivity(rpc_proxy))) {
     LOG_WARN("fail to check dest connectivity", K(ret), K_(backup_dest));
   } else if (!is_empty) {
     if (OB_FAIL(store.is_format_file_exist(is_exist))) {
