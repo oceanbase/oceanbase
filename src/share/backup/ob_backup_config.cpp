@@ -459,7 +459,7 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
         LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
       } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest, trans))) {
         LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id), K(backup_dest));
-      } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
+      } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/, true/*need_check_permission*/))) {
         LOG_WARN("fail to check dest validity", K(ret), K_(tenant_id), K(backup_dest));
       } else {
         LOG_INFO("succ to check data dest config", K_(tenant_id), K(backup_dest));
@@ -696,7 +696,7 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "archive_lag_target is smaller than 60s, set log_archive_dest to S3 is");
     } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
       LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
-    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
+    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/, true/*need_check_permission*/))) {
       LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
     }
   }
