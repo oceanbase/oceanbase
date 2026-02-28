@@ -1081,12 +1081,6 @@ public:
   ObSysVarParallelServersTarget() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PARALLEL_SERVERS_TARGET; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(148); }
-  virtual int inner_to_select_obj(common::ObIAllocator &allocator,
-                                  const sql::ObBasicSessionInfo &session,
-                                  common::ObObj &select_obj) const override;
-  virtual int inner_to_show_str(common::ObIAllocator &allocator,
-                                const sql::ObBasicSessionInfo &session,
-                                common::ObString &show_str) const override;
 };
 class ObSysVarObEarlyLockRelease : public ObBoolSysVar
 {
@@ -6167,6 +6161,7 @@ private:
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
   const static int64_t OB_SYS_VARS_COUNT = 749;
+  const static int64_t OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT = 9;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

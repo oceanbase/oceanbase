@@ -1763,6 +1763,10 @@ public:
   inline void set_route_to_column_replica(bool v) { route_to_column_replica_ = v; }
   inline bool get_route_to_column_replica() const { return route_to_column_replica_; }
   int get_ob_route_policy(int64_t &route_policy) const;
+  // 初始化 default_value_changed_serialized 系统变量（default_value!=base_value 且包含 SESSION 或 NEED_SERIALIZE
+  // 或 QUERY_SENSITIVE 标记)。这些系统变量在 inner connection 复用 PX Worker 的 session 时，拿到的变量值是 base_value
+  // 而不是 default value。
+  int init_default_value_changed_serialized_variables(const bool is_sys_tenant);
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,

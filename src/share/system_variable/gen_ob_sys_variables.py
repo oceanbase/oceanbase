@@ -104,6 +104,20 @@ def parse_json(json_file_name):
   json_file.close()
   return (json_Dict, list_sorted_by_name, list_sorted_by_id)
 
+def get_default_value_changed_serialized_var_indices(list_sorted_by_id):
+  """Find indices (offsets in ObSysVars) of vars where default_value != base_value and flags has SESSION or NEED_SERIALIZE or QUERY_SENSITIVE."""
+  default_value_changed_serialized_var_indices = []
+  var_num = 0
+  for (name, attributes) in list_sorted_by_id:
+    default_value = attributes.get('default_value', '')
+    base_value = attributes.get('base_value', '')
+    flags = attributes.get('flags', '')
+    has_required_flag = ('SESSION' in flags or 'NEED_SERIALIZE' in flags or 'QUERY_SENSITIVE' in flags)
+    if default_value != base_value and has_required_flag:
+      default_value_changed_serialized_var_indices.append(var_num)
+    var_num += 1
+  return default_value_changed_serialized_var_indices
+
 def make_alias_file(pdir, alias_file_name, sorted_list):
   alias_file =open(alias_file_name,'w')
   alias_file.write(file_head_annotation);
@@ -216,6 +230,8 @@ def make_head_file(pdir, head_file_name, sorted_list):
   head_file.write("  static int set_base_value(const char *name, const char * new_value);\n");
   head_file.write("  static int set_base_value(const common::ObString &name, const common::ObString &new_value);\n");
   head_file.write("  static int init_default_values();\n");
+  head_file.write("  static int64_t get_default_value_changed_serialized_var_count();\n");
+  head_file.write("  static int64_t get_default_value_changed_serialized_var_idx(int64_t i);\n");
   head_file.write("};\n");
   head_file.write("\n");
   head_file.write("class ObSysVarsToIdxMap\n");
@@ -254,7 +270,7 @@ def make_flags_value(flags):
 def make_type_value(type):
   return type_dict[type.strip()]
 
-def make_cpp_file(pdir, cpp_file_name, sorted_list):
+def make_cpp_file(pdir, cpp_file_name, sorted_list, default_value_changed_serialized_var_indices):
   cpp_file =  open(cpp_file_name,'w')
   cpp_file.write(file_head_annotation)
   cpp_file.write("#define USING_LOG_PREFIX SHARE\n")
@@ -273,6 +289,11 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write("static ObObj ObSysVarBaseValues[ObSysVarFactory::ALL_SYS_VARS_COUNT];\n")
   cpp_file.write("static ObArenaAllocator ObBaseSysVarAllocator(ObModIds::OB_COMMON_SYS_VAR_DEFAULT_VALUE);\n")
   cpp_file.write("static int64_t ObSysVarsIdToArrayIdx[ObSysVarFactory::OB_MAX_SYS_VAR_ID];\n")
+  cpp_file.write("// default_value != base_value and variable flags has SESSION or NEED_SERIALIZE or QUERY_SENSITIVE\n")
+  cpp_file.write("static int64_t ObDefaultValueChangedSerializedVarIndices[ObSysVarFactory::OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT] = {\n")
+  if default_value_changed_serialized_var_indices:
+    cpp_file.write("  " + ", ".join(str(i) for i in default_value_changed_serialized_var_indices) + "\n")
+  cpp_file.write("};\n")
   cpp_file.write("// VarsInit中需要判断当前最大的SysVars对应的id，是否大于OB_MAX_SYS_VAR_ID\n")
   cpp_file.write("// 如果大于OB_MAX_SYS_VAR_ID表示存在无效的SysVarsId\n")
   cpp_file.write("static bool HasInvalidSysVar = false;\n")
@@ -345,6 +366,8 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write("const ObObj &ObSysVariables::get_default_value(int64_t i){ return ObSysVarDefaultValues[i];}\n")
   cpp_file.write("const ObObj &ObSysVariables::get_base_value(int64_t i){ return ObSysVarBaseValues[i];}\n")
   cpp_file.write("int64_t ObSysVariables::get_amount(){ return var_amount;}\n")
+  cpp_file.write("int64_t ObSysVariables::get_default_value_changed_serialized_var_count(){ return ObSysVarFactory::OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT;}\n")
+  cpp_file.write("int64_t ObSysVariables::get_default_value_changed_serialized_var_idx(int64_t i){ return ObDefaultValueChangedSerializedVarIndices[i];}\n")
   cpp_file.write("ObCollationType ObSysVariables::get_default_sysvar_collation() { return CS_TYPE_UTF8MB4_GENERAL_CI;}\n")
   cpp_file.write("\n")
   cpp_file.write("int ObSysVariables::set_value(const char *name, const char * new_value)\n")
@@ -485,7 +508,7 @@ def write_sys_var_classes(wfile, sorted_list):
         attributes["session_special_update_func"] if "session_special_update_func" in attributes.keys() else None)
     idx += 1
 
-def write_sys_var_fac_class(wfile, sorted_list):
+def write_sys_var_fac_class(wfile, sorted_list, default_value_changed_serialized_var_indices):
   mysql_sys_var_names_count = 0
   ob_sys_var_names_count = 0
   for (name, attributes) in sorted_list:
@@ -493,6 +516,7 @@ def write_sys_var_fac_class(wfile, sorted_list):
       mysql_sys_var_names_count += 1
     else:
       ob_sys_var_names_count += 1
+  ob_sys_default_value_changed_serialized_var_count = len(default_value_changed_serialized_var_indices)
   wfile.write("""
 class ObSysVarFactory
 {
@@ -519,6 +543,9 @@ public:
   wfile.write("""
   const static int64_t OB_SYS_VARS_COUNT = """)
   wfile.write(str(ob_sys_var_names_count) + ";")
+  wfile.write("""
+  const static int64_t OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT = """)
+  wfile.write(str(ob_sys_default_value_changed_serialized_var_count) + ";")
   wfile.write("""
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
@@ -643,7 +670,7 @@ namespace share
   wfile.write("#endif //" + file_def_str)
   print("Generate " + str(filename) + " successfully!\n");
 
-def make_sys_var_h(pdir, filename, sorted_list):
+def make_sys_var_h(pdir, filename, sorted_list, default_value_changed_serialized_var_indices):
   wfile = open(filename, 'w')
   wfile.write(file_head_annotation);
   suffix_idx = filename.find(".h")
@@ -664,7 +691,7 @@ namespace share
 """)
   write_sys_var_classes(wfile, sorted_list)
   wfile.write("\n")
-  write_sys_var_fac_class(wfile, sorted_list)
+  write_sys_var_fac_class(wfile, sorted_list, default_value_changed_serialized_var_indices)
   wfile.write("""
 }
 }
@@ -1198,13 +1225,14 @@ sys_var_fac_cpp_file_name = "ob_system_variable_factory.cpp"
 #sys_vars_dict_script_file_name = "../../../tools/upgrade/sys_vars_dict.py"
 
 (json_Dict, list_sorted_by_name, list_sorted_by_id) = parse_json(json_file_name)
+default_value_changed_serialized_var_indices = get_default_value_changed_serialized_var_indices(list_sorted_by_id)
 
 make_head_file(pdir, head_file_name, list_sorted_by_id)
-make_cpp_file(pdir, cpp_file_name, list_sorted_by_id)
+make_cpp_file(pdir, cpp_file_name, list_sorted_by_id, default_value_changed_serialized_var_indices)
 make_alias_file(pdir, alias_file_name, list_sorted_by_id)
 
 make_sys_var_class_type_h(pdir, sys_var_class_type_head_file_name, list_sorted_by_id)
-make_sys_var_h(pdir, sys_var_fac_head_file_name, list_sorted_by_id)
+make_sys_var_h(pdir, sys_var_fac_head_file_name, list_sorted_by_id, default_value_changed_serialized_var_indices)
 make_sys_var_cpp(pdir, sys_var_fac_cpp_file_name, list_sorted_by_name, list_sorted_by_id)
 
 # generate ESSENTIAL_SYS_VARS array in ob_system_variable_init.cpp
