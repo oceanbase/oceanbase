@@ -1667,7 +1667,7 @@ struct NoSpecialExprPredicate {
       } else if (OB_SUCC(ret)) {
         bool has_group_by = scannode->has_group_by_or_aggr();
         ObSEArray<ObRawExpr*, 4> groupby_keys;
-        if (OB_FAIL(scannode->get_pushdown_groupby_columns().assign(groupby_keys))) {
+        if (OB_FAIL(groupby_keys.assign(scannode->get_pushdown_groupby_columns()))) {
           LOG_WARN("failed to assign groupby columns", K(ret));
         }
         for (int i = 0; OB_SUCC(ret) && i < rtfs.count(); ++i) {
@@ -1677,6 +1677,7 @@ struct NoSpecialExprPredicate {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("pushed down rtf is invalid", K(ret), KP(rtf));
           } else if (has_group_by && !ObOptimizerUtil::find_equal_expr(groupby_keys, rtf->use_expr_)) {
+            // todo can pushdown for example use_expr is col1 and group by keys contains cast(col1 as xx) or func(col1)
           } else if (OB_FALSE_IT(pushdown_rtfs.push_back(rtf))) {
           }
         }
