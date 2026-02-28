@@ -1468,7 +1468,7 @@ int ObWaitDataReadyTask::wait_log_replay_sync_()
     LOG_WARN("failed to check need wait log replay", K(ret), KPC(ctx_));
   } else if (!need_wait) {
     FLOG_INFO("no need wait replay log sync", KPC(ctx_));
-  } else if (OB_FAIL(ObStorageHAUtils::get_readable_scn_with_retry(readable_scn))) {
+  } else if (!is_primay_tenant && OB_FAIL(ObStorageHAUtils::get_readable_scn_with_retry(readable_scn))) {
     LOG_WARN("failed to get readable scn", K(ret), KPC(ctx_));
   } else if (OB_FAIL(get_wait_timeout_(timeout))) {
     LOG_WARN("failed to get wait timeout", K(ret));
@@ -1500,6 +1500,12 @@ int ObWaitDataReadyTask::wait_log_replay_sync_()
           ret = OB_LS_NEED_REBUILD;
           LOG_WARN("ls need rebuild", K(ret), KPC(ls));
         }
+      } else if (OB_FAIL(log_replay_service->is_replay_done(ls->get_ls_id(), log_sync_lsn_, is_done))) {
+        LOG_WARN("failed to check is replay done", K(ret), KPC(ls), K(log_sync_lsn_));
+      } else if (is_done) {
+        wait_log_replay_success = true;
+        const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
+        LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts));
       } else if (OB_FAIL(ls->get_max_decided_scn(current_replay_scn))) {
         LOG_WARN("failed to get current replay log ts", K(ret), KPC(ctx_));
       } else if (!is_primay_tenant && current_replay_scn >= readable_scn) {
@@ -1507,12 +1513,6 @@ int ObWaitDataReadyTask::wait_log_replay_sync_()
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
         LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts),
             K(is_primay_tenant), K(current_replay_scn), K(readable_scn));
-      } else if (OB_FAIL(log_replay_service->is_replay_done(ls->get_ls_id(), log_sync_lsn_, is_done))) {
-        LOG_WARN("failed to check is replay done", K(ret), KPC(ls), K(log_sync_lsn_));
-      } else if (is_done && current_replay_scn >= readable_scn) {
-        wait_log_replay_success = true;
-        const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
-        LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts), K(current_replay_scn), K(readable_scn));
       }
 
       if (OB_SUCC(ret) && !wait_log_replay_success) {
