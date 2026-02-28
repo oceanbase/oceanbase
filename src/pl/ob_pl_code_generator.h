@@ -222,13 +222,12 @@ public:
     global_strings_(),
     int_buffer_(allocator),
     objparam_buffer_(allocator),
-    need_cg_(true),
     dispatch_map_()
     { }
 
   virtual ~ObPLCodeGenerator() {}
 
-  int init(bool is_package = false);
+  int init();
   int generate(ObPLFunction &pl_func);
   int generate(ObPLPackage &pl_package);
 
@@ -967,7 +966,6 @@ private:
 
   jit::ObLLVMValue argv_array_ptr_;
   int64_t argv_array_size_ = 0;
-  bool need_cg_;
 
   // continue handler
   using DispatchMap =

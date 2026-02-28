@@ -4082,155 +4082,150 @@ int ObPLCodeGenerator::build_opaque_type(const ObUserDefinedType &opaque_type,
 }
 #endif
 
-int ObPLCodeGenerator::init(bool is_package)
+int ObPLCodeGenerator::init()
 {
   int ret = OB_SUCCESS;
-  need_cg_ = true;
-  if (is_package && ast_.get_obj_access_exprs().empty()) {
-    need_cg_ = false;
+
+  // CG local types + external types at least, so pre-allocate doubled buckets
+  // bucket number will grow up automatically if udt_count_guess is not enough
+  int64_t udt_count_guess =
+      (ast_.get_user_type_table().get_count() +
+        ast_.get_user_type_table().get_external_types().count()) * 2;
+
+  // make udt_count_guess at least 64, to prevent size grow up frequently in bad case
+  if (udt_count_guess < 64) {
+    udt_count_guess = 64;
   }
 
-  if (need_cg_) {
-    // CG local types + external types at least, so pre-allocate doubled buckets
-    // bucket number will grow up automatically if udt_count_guess is not enough
-    int64_t udt_count_guess =
-        (ast_.get_user_type_table().get_count() +
-          ast_.get_user_type_table().get_external_types().count()) * 2;
+  int64_t goto_label_count_guess = 64;
+  if (OB_NOT_NULL(ast_.get_body()) &&
+      ast_.get_body()->get_stmts().count() > goto_label_count_guess) {
+    goto_label_count_guess = ast_.get_body()->get_stmts().count();
+  }
 
-    // make udt_count_guess at least 64, to prevent size grow up frequently in bad case
-    if (udt_count_guess < 64) {
-      udt_count_guess = 64;
-    }
+  if (OB_FAIL(user_type_map_.create(
+              udt_count_guess,
+              ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN))))){
+    LOG_WARN("failed to create user_type_map_", K(ret), K(udt_count_guess));
+  } else if (OB_FAIL(di_user_type_map_.create(
+                      udt_count_guess,
+                      ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN))))){
+    LOG_WARN("failed to create di_user_type_map_", K(ret), K(udt_count_guess));
+  } else if (OB_FAIL(goto_label_map_.create(
+                      goto_label_count_guess,
+                      ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN))))) {
+    LOG_WARN("failed to create goto_label_map_", K(ret), K(goto_label_count_guess));
+  } else if (OB_FAIL(global_strings_.create(
+                      128,
+                      ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN))))) {
+    LOG_WARN("failed to create global_strings_", K(ret));
+  } else if (OB_FAIL(dispatch_map_.create(
+                          128, ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN))))) {
+    LOG_WARN("failed to create dispatch_map_", K(ret));
+  } else if (debug_mode_ && OB_FAIL(di_helper_.init(helper_.get_jc()))) {
+    LOG_WARN("failed to init di helper", K(ret));
+  } else if (OB_FAIL(init_spi_service())) {
+    LOG_WARN("failed to init spi service", K(ret));
+  } else if (OB_FAIL(init_adt_service())) {
+    LOG_WARN("failed to init adt service", K(ret));
+  } else if (OB_FAIL(init_eh_service())) {
+    LOG_WARN("failed to init eh service", K(ret));
+  } else if (OB_FAIL(init_di_adt_service())) {
+    LOG_WARN("failed to init di service", K(ret));
+  } else {
+    ObSEArray<ObLLVMType, 8> arg_types;
+    ObLLVMFunctionType ft;
+    ObLLVMType pl_exec_context_type;
+    ObLLVMType pl_exec_context_pointer_type;
+    ObLLVMType int64_type;
+    ObLLVMType int64_pointer_type;
+    ObLLVMType int32_type;
+    ObLLVMType bool_type;
+    if (OB_FAIL(adt_service_.get_pl_exec_context(pl_exec_context_type))) {
+      LOG_WARN("failed to get argv type", K(ret));
+    } else if (OB_FAIL(pl_exec_context_type.get_pointer_to(pl_exec_context_pointer_type))) {
+      LOG_WARN("failed to get_pointer_to", K(ret));
+    } else if (OB_FAIL(helper_.get_llvm_type(ObIntType, int64_type))) {
+      LOG_WARN("failed to get_llvm_type", K(ret));
+    } else if (OB_FAIL(int64_type.get_pointer_to(int64_pointer_type))) {
+      LOG_WARN("failed to get_llvm_type", K(ret));
+    } else if (OB_FAIL(helper_.get_llvm_type(ObInt32Type, int32_type))) {
+      LOG_WARN("failed to get_llvm_type", K(ret));
+    } else if (OB_FAIL(helper_.get_llvm_type(ObTinyIntType, bool_type))) {
+      LOG_WARN("failed to get_llvm_type", K(ret));
+    } else { /*do nothing*/ }
 
-    int64_t goto_label_count_guess = 64;
-    if (OB_NOT_NULL(ast_.get_body()) &&
-        ast_.get_body()->get_stmts().count() > goto_label_count_guess) {
-      goto_label_count_guess = ast_.get_body()->get_stmts().count();
-    }
-
-    if (OB_FAIL(user_type_map_.create(
-                udt_count_guess,
-                ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN))))){
-      LOG_WARN("failed to create user_type_map_", K(ret), K(udt_count_guess));
-    } else if (OB_FAIL(di_user_type_map_.create(
-                        udt_count_guess,
-                        ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN))))){
-      LOG_WARN("failed to create di_user_type_map_", K(ret), K(udt_count_guess));
-    } else if (OB_FAIL(goto_label_map_.create(
-                        goto_label_count_guess,
-                        ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN))))) {
-      LOG_WARN("failed to create goto_label_map_", K(ret), K(goto_label_count_guess));
-    } else if (OB_FAIL(global_strings_.create(
-                        128,
-                        ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN))))) {
-      LOG_WARN("failed to create global_strings_", K(ret));
-    } else if (OB_FAIL(dispatch_map_.create(
-                           128, ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN))))) {
-      LOG_WARN("failed to create dispatch_map_", K(ret));
-    } else if (debug_mode_ && OB_FAIL(di_helper_.init(helper_.get_jc()))) {
-      LOG_WARN("failed to init di helper", K(ret));
-    } else if (OB_FAIL(init_spi_service())) {
-      LOG_WARN("failed to init spi service", K(ret));
-    } else if (OB_FAIL(init_adt_service())) {
-      LOG_WARN("failed to init adt service", K(ret));
-    } else if (OB_FAIL(init_eh_service())) {
-      LOG_WARN("failed to init eh service", K(ret));
-    } else if (OB_FAIL(init_di_adt_service())) {
-      LOG_WARN("failed to init di service", K(ret));
-    } else {
-      ObSEArray<ObLLVMType, 8> arg_types;
-      ObLLVMFunctionType ft;
-      ObLLVMType pl_exec_context_type;
-      ObLLVMType pl_exec_context_pointer_type;
-      ObLLVMType int64_type;
-      ObLLVMType int64_pointer_type;
-      ObLLVMType int32_type;
-      ObLLVMType bool_type;
-      if (OB_FAIL(adt_service_.get_pl_exec_context(pl_exec_context_type))) {
-        LOG_WARN("failed to get argv type", K(ret));
-      } else if (OB_FAIL(pl_exec_context_type.get_pointer_to(pl_exec_context_pointer_type))) {
-        LOG_WARN("failed to get_pointer_to", K(ret));
-      } else if (OB_FAIL(helper_.get_llvm_type(ObIntType, int64_type))) {
-        LOG_WARN("failed to get_llvm_type", K(ret));
-      } else if (OB_FAIL(int64_type.get_pointer_to(int64_pointer_type))) {
-        LOG_WARN("failed to get_llvm_type", K(ret));
-      } else if (OB_FAIL(helper_.get_llvm_type(ObInt32Type, int32_type))) {
-        LOG_WARN("failed to get_llvm_type", K(ret));
-      } else if (OB_FAIL(helper_.get_llvm_type(ObTinyIntType, bool_type))) {
-        LOG_WARN("failed to get_llvm_type", K(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) { //函数第一个参数必须是基础环境信息隐藏参数
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_type))) { //uint64_t package id
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_type))) { //uint64_t proc id
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_pointer_type))) { //int64_t* subprogram path
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t path length
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t line number
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t ArgC
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t[] ArgV
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_pointer_type))) { //int64_t* nocopy params
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t dblink id
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
+        LOG_WARN("failed to get function type", K(ret));
+      } else if (OB_FAIL(helper_.create_function(ObString("pl_execute"), ft, pl_execute_))) {
+        LOG_WARN("failed to create function", K(ret));
       } else { /*do nothing*/ }
+    }
 
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) { //函数第一个参数必须是基础环境信息隐藏参数
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_type))) { //uint64_t package id
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_type))) { //uint64_t proc id
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_pointer_type))) { //int64_t* subprogram path
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t path length
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t line number
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t ArgC
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t[] ArgV
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_pointer_type))) { //int64_t* nocopy params
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t dblink id
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
-          LOG_WARN("failed to get function type", K(ret));
-        } else if (OB_FAIL(helper_.create_function(ObString("pl_execute"), ft, pl_execute_))) {
-          LOG_WARN("failed to create function", K(ret));
-        } else { /*do nothing*/ }
-      }
-
-      //declare user type var addr
-      if (OB_SUCC(ret)) {
-        arg_types.reset();
-        if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) { //函数第一个参数必须是基础环境信息隐藏参数
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t var_index
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t var_addr
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(int32_type))) { //int32_t init_value
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
-          LOG_WARN("failed to get function type", K(ret));
-        } else if (OB_FAIL(helper_.create_function(ObString("set_user_type_var"), ft, set_user_type_var_))) {
-          LOG_WARN("failed to create function", K(ret));
-        } else { /*do nothing*/ }
-      }
-      // declare set_implicit_in_forall
-      if (OB_SUCC(ret)) {
-        arg_types.reset();
-        if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) { //函数第一个参数必须是基础环境信息隐藏参数
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(arg_types.push_back(bool_type))) {
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
-          LOG_WARN("failed to get function type", K(ret));
-        } else if (OB_FAIL(helper_.create_function(ObString("set_implicit_cursor_in_forall"), ft, set_implicit_cursor_in_forall_))) {
-          LOG_WARN("failed to create function", K(ret));
-        } else { /*do nothing*/ }
-      }
-      // declare unset_implicit_in_forall
-      if (OB_SUCC(ret)) {
-        arg_types.reset();
-        if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) {
-          LOG_WARN("push_back error", K(ret));
-        } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
-          LOG_WARN("failed to get function type", K(ret));
-        } else if (OB_FAIL(helper_.create_function(ObString("unset_implicit_cursor_in_forall"), ft, unset_implicit_cursor_in_forall_))) {
-          LOG_WARN("failed to create function", K(ret));
-        } else { /*do nothing*/ }
-      }
+    //declare user type var addr
+    if (OB_SUCC(ret)) {
+      arg_types.reset();
+      if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) { //函数第一个参数必须是基础环境信息隐藏参数
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t var_index
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t var_addr
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int32_type))) { //int32_t init_value
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
+        LOG_WARN("failed to get function type", K(ret));
+      } else if (OB_FAIL(helper_.create_function(ObString("set_user_type_var"), ft, set_user_type_var_))) {
+        LOG_WARN("failed to create function", K(ret));
+      } else { /*do nothing*/ }
+    }
+    // declare set_implicit_in_forall
+    if (OB_SUCC(ret)) {
+      arg_types.reset();
+      if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) { //函数第一个参数必须是基础环境信息隐藏参数
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(bool_type))) {
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
+        LOG_WARN("failed to get function type", K(ret));
+      } else if (OB_FAIL(helper_.create_function(ObString("set_implicit_cursor_in_forall"), ft, set_implicit_cursor_in_forall_))) {
+        LOG_WARN("failed to create function", K(ret));
+      } else { /*do nothing*/ }
+    }
+    // declare unset_implicit_in_forall
+    if (OB_SUCC(ret)) {
+      arg_types.reset();
+      if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) {
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
+        LOG_WARN("failed to get function type", K(ret));
+      } else if (OB_FAIL(helper_.create_function(ObString("unset_implicit_cursor_in_forall"), ft, unset_implicit_cursor_in_forall_))) {
+        LOG_WARN("failed to create function", K(ret));
+      } else { /*do nothing*/ }
     }
   }
+
   return ret;
 }
 
@@ -9402,26 +9397,26 @@ int ObPLCodeGenerator::generate_out_params(
 int ObPLCodeGenerator::generate(ObPLPackage &pl_package)
 {
   int ret = OB_SUCCESS;
-  if (need_cg_) {
-    OZ (prepare_external());
-    OZ (prepare_local_user_type());
-    OZ (generate_obj_access_expr());
 
-    if (OB_SUCC(ret)) {
-  #ifndef NDEBUG
-      LOG_INFO("================Original LLVM Module================", K(debug_mode_));
-      helper_.dump_module();
-  #endif
+  OZ (prepare_external());
+  OZ (prepare_local_user_type());
+  OZ (generate_obj_access_expr());
 
-      // set optimize_level to 1 if in debug mode, otherwise use PLSQL_OPTIMIZE_LEVEL in exec_env
-      int64_t optimize_level = debug_mode_ ? 1 : pl_package.get_exec_env().get_plsql_optimize_level();
+  if (OB_SUCC(ret)) {
+#ifndef NDEBUG
+    LOG_INFO("================Original LLVM Module================", K(debug_mode_));
+    helper_.dump_module();
+#endif
 
-      OZ (helper_.verify_module(), pl_package);
-      OZ (helper_.compile_module(static_cast<jit::ObPLOptLevel>(optimize_level)));
-    }
+    // set optimize_level to 1 if in debug mode, otherwise use PLSQL_OPTIMIZE_LEVEL in exec_env
+    int64_t optimize_level = debug_mode_ ? 1 : pl_package.get_exec_env().get_plsql_optimize_level();
 
-    OZ (final_expression(pl_package));
+    OZ (helper_.verify_module(), pl_package);
+    OZ (helper_.compile_module(static_cast<jit::ObPLOptLevel>(optimize_level)));
   }
+
+  OZ (final_expression(pl_package));
+
   return ret;
 }
 

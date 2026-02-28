@@ -5752,12 +5752,10 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
       stack_size_(OB_INVALID_SIZE),
       is_wrap_(false)
 {
-#ifndef USE_MCJIT
   int ret = OB_SUCCESS;
   if (OB_FAIL(helper_.init())) {
     LOG_WARN("failed to init llvm helper", K(ret), K(helper_.get_jc()));
   }
-#endif // USE_MCJIT
 }
 #ifdef OB_BUILD_ORACLE_PL
 int ObPLCompileUnit::add_vaild_rows_info(ObIArray<CoverageData> & vaild_row_info_array) {

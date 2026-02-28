@@ -252,9 +252,6 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
             OZ (ObPLCompiler::init_function(schema_guard, exec_env, *routine_info, *routine));
             if (OB_SUCC(ret)) {
 
-    #ifdef USE_MCJIT
-              HEAP_VAR(ObPLCodeGenerator, cg ,unit.get_allocator(), session_info) {
-    #else
               HEAP_VAR(ObPLCodeGenerator, cg, unit.get_allocator(),
                       session_info,
                       schema_guard,
@@ -263,7 +260,6 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
                       routine->get_helper(),
                       routine->get_di_helper(),
                       lib::is_oracle_mode()) {
-    #endif
                 int8_t cur_level = 0;
                 int16_t sub_id = 0;
                 OZ (cg.init());
