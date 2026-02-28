@@ -1474,13 +1474,18 @@ int ObDataMicroBlockCache::reserve_kvpair(
       kvpair->key_ = new (kvpair->key_) ObMicroBlockCacheKey();
       ObMicroBlockCacheValue *cache_value = new (kvpair->value_) ObMicroBlockCacheValue(block_buf, block_size);
       int64_t pos = 0;
+      ObMicroBlockHeader* header_in_cache = nullptr;
       if (ObStoreFormat::is_row_store_type_with_cs_encoding(row_store_type)) {
         if (OB_FAIL(transformer.full_transform(block_buf, block_size, pos))) {
           LOG_WARN("fail to full transform", K(ret), KP(block_buf), K(block_size));
         }
+      } else if (OB_FAIL(micro_block_desc.header_->deep_copy(block_buf, block_size, pos, header_in_cache))) {
+        LOG_WARN("Failed to deep copy micro block header", K(block_size), "header_size", micro_block_desc.header_->header_size_);
+      } else if (pos + micro_block_desc.buf_size_ > block_size) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("Block cache value buffer overflow!", K(pos), K(micro_block_desc.buf_size_), K(block_size));
       } else {
-        MEMCPY(block_buf, micro_block_desc.header_, micro_block_desc.header_->header_size_);
-        MEMCPY(block_buf + micro_block_desc.header_->header_size_, micro_block_desc.buf_, micro_block_desc.buf_size_);
+        MEMCPY(block_buf + pos, micro_block_desc.buf_, micro_block_desc.buf_size_);
       }
     }
   }
