@@ -408,28 +408,23 @@ int ObSessionTabletDeleteHelper::do_work()
   } else {
     common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_for_delete;
     common::ObSEArray<common::ObTabletID, 1> tablet_ids_for_delete;
+    share::schema::ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id_));
+    }
     ARRAY_FOREACH(tablet_infos_, idx) {
       const share::schema::ObTableSchema *table_schema = nullptr;
       observer::ObInnerSQLConnection *conn = NULL;
-      share::schema::ObSchemaGetterGuard schema_guard;
-      common::ObMySQLTransaction trans;
       common::ObSEArray<common::ObTabletID, 1> tablet_ids;
-
       ObSessionTabletInfo &tablet_info = *tablet_infos_.at(idx);
       if (!tablet_info.is_creator_) {
         ret = OB_SUCCESS;
-        if (OB_FAIL(table_schemas_for_delete.push_back(nullptr))) {
-          LOG_WARN("failed to push back table schema for delete", KR(ret));
-        } else {
-          LOG_INFO("not creator session, skip delete from oracle temporary table", KR(ret), K(tablet_info));
-        }
+        LOG_INFO("not creator session, skip delete from oracle temporary table", KR(ret), K(tablet_info));
       } else if (OB_FAIL(ret) || OB_ISNULL(trans_) || !trans_->is_started()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid transaction", KR(ret), K(tenant_id_), K(OB_ISNULL(trans_)));
       } else if (OB_FAIL(tablet_ids.push_back(tablet_info.tablet_id_))) {
         LOG_WARN("failed to push back tablet id", KR(ret));
-      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
-        LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id_));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, tablet_info.table_id_, table_schema))) {
         LOG_WARN("failed to get table schema", KR(ret), K(tablet_info.table_id_));
       } else if (OB_ISNULL(table_schema)) {
@@ -482,7 +477,10 @@ int ObSessionTabletDeleteHelper::do_work()
         ARRAY_FOREACH(table_schemas_for_delete, idx) {
           const share::schema::ObTableSchema *table_schema = table_schemas_for_delete.at(idx);
           if (OB_NOT_NULL(table_schema)) { // serialize inc schemas for cdc
-            if (OB_FAIL(serialize_inc_schema(tenant_id_, *trans_, *table_schema))) {
+            if (false == table_schema->is_valid()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid table schema", KR(ret), KPC(table_schema));
+            } else if (OB_FAIL(serialize_inc_schema(tenant_id_, *trans_, *table_schema))) {
               LOG_WARN("fail to serialize inc schemas", KR(ret), K(tenant_id_), KPC(table_schema));
             }
           }
