@@ -2473,6 +2473,7 @@ int ObTableSchema::check_valid(const bool for_create) const
       int64_t def_subpart_key_col = 0;
       int64_t varchar_col_total_length = 0;
       int64_t rowkey_varchar_col_length = 0;
+      bool rowkey_has_string_lob = false;
       ObColumnSchemaV2 *column = NULL;
 
       if (NULL == column_array_) {
@@ -2537,28 +2538,39 @@ int ObTableSchema::check_valid(const bool for_create) const
                 } else {
                   varchar_col_len = column->get_data_length();
                 }
-                varchar_col_total_length += varchar_col_len;
               }
               if (OB_FAIL(ret)) {
               } else if (column->is_rowkey_column() && !column->is_hidden()) {
                 if (is_index_table() && 0 == column->get_index_position()) {
                   // Non-user-created index columns in the index table are not counted in rowkey_varchar_col_length
+                  varchar_col_total_length += varchar_col_len;
                 } else {
                   rowkey_varchar_col_length += varchar_col_len;
                 }
+              } else {
+                varchar_col_total_length += varchar_col_len;
               }
             } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())
                        || ob_is_geometry_tc(column->get_data_type()) || ob_is_roaringbitmap_tc(column->get_data_type())) {
-              ObLength max_length = 0;
-              max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
-              if (max_length < column->get_data_length()) {
-                ret = OB_INVALID_ERROR;
-                LOG_WARN_RET(OB_INVALID_ERROR, "length of text/blob column is larger than the max allowed length, ",
-                    "data_length", column->get_data_length(), "column_name",
-                    column->get_column_name(), K(max_length));
-              } else if (!column->is_shadow_column()) {
-                // TODO @hanhui need seperate inline memtable length from store length
-                varchar_col_total_length += min(column->get_data_length(), get_lob_inrow_threshold());
+              if (column->is_rowkey_column()) {
+                if (column->is_string_lob()) {
+                  rowkey_has_string_lob = true;
+                } else {
+                  ret = OB_INVALID_ERROR;
+                  LOG_WARN_RET(OB_INVALID_ERROR, "invalid lob for rowkey column", KPC(column));
+                }
+              } else {
+                ObLength max_length = 0;
+                max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
+                if (max_length < column->get_data_length()) {
+                  ret = OB_INVALID_ERROR;
+                  LOG_WARN_RET(OB_INVALID_ERROR, "length of text/blob column is larger than the max allowed length, ",
+                      "data_length", column->get_data_length(), "column_name",
+                      column->get_column_name(), K(max_length));
+                } else if (!column->is_shadow_column()) {
+                  // TODO @hanhui need seperate inline memtable length from store length
+                  varchar_col_total_length += min(column->get_data_length(), get_lob_inrow_threshold());
+                }
               }
             }
           }
@@ -2594,18 +2606,21 @@ int ObTableSchema::check_valid(const bool for_create) const
                                                                 INT64_MAX : OB_MAX_USER_ROW_LENGTH;
         const int64_t max_rowkey_length = is_sys_table() || is_vir_table() || is_external_object ?
                                                 OB_MAX_ROW_KEY_LENGTH : OB_MAX_USER_ROW_KEY_LENGTH;
-        if (max_row_length < varchar_col_total_length) {
-          LOG_WARN_RET(OB_INVALID_ERROR, "total length of varchar columns is larger than the max allowed length",
-                   K(varchar_col_total_length), K(max_row_length));
-          const ObString &col_name = column->get_column_name_str();
-          ret = OB_INVALID_ERROR;
-          LOG_USER_ERROR(OB_ERR_VARCHAR_TOO_LONG,
-                         static_cast<int>(varchar_col_total_length), max_row_length, col_name.ptr());
-        } else if (max_rowkey_length < rowkey_varchar_col_length) {
+        if (max_rowkey_length < rowkey_varchar_col_length) {
           ret = OB_ERR_TOO_LONG_KEY_LENGTH;
           LOG_WARN_RET(OB_INVALID_ERROR, "total length of varchar primary key columns is larger than the max allowed length",
-                   K(rowkey_varchar_col_length), K(max_rowkey_length));
+                    K(rowkey_varchar_col_length), K(max_rowkey_length));
           LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, max_rowkey_length);
+        } else {
+          varchar_col_total_length += (rowkey_has_string_lob ? max_rowkey_length : rowkey_varchar_col_length);
+          if (max_row_length < varchar_col_total_length) {
+            LOG_WARN_RET(OB_INVALID_ERROR, "total length of varchar columns is larger than the max allowed length",
+                     K(varchar_col_total_length), K(max_row_length));
+            const ObString &col_name = column->get_column_name_str();
+            ret = OB_INVALID_ERROR;
+            LOG_USER_ERROR(OB_ERR_VARCHAR_TOO_LONG,
+                           static_cast<int>(varchar_col_total_length), max_row_length, col_name.ptr());
+          }
         }
       }
       if (OB_SUCC(ret)) {
